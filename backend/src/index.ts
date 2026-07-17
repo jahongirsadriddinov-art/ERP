@@ -12,6 +12,7 @@ import messageRoutes from './routes/messages';
 import groupRoutes from './routes/groups';
 import materialRoutes from './routes/materials';
 import companyRoutes from './routes/companies';
+import smetaRoutes from './routes/smeta';
 import { initSocket } from './services/socket';
 import { optionalAuth } from './middleware/auth';
 // Import bot to start it
@@ -45,6 +46,7 @@ app.use('/api/messages', optionalAuth, messageRoutes);
 app.use('/api/groups', optionalAuth, groupRoutes);
 app.use('/api/materials', optionalAuth, materialRoutes);
 app.use('/api/companies', optionalAuth, companyRoutes); // dasturchi (super-admin) only
+app.use('/api/smeta', optionalAuth, smetaRoutes); // deterministik smeta parser (AI'siz)
 
 const PORT = process.env.PORT || 5000;
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/erp_firma';

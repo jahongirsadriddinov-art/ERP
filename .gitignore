@@ -1,0 +1,39 @@
+# ─── Dependencies ────────────────────────────────────────────────
+node_modules/
+**/node_modules/
+
+# ─── Sirlar / env — HECH QACHON commit qilinmasin! ──────────────
+# (bot token, JWT secret, Gemini kalitlar, dasturchi paroli shu yerda)
+# Barcha .env* fayllar ignore (prod qiymatlar Vercel/Render panelидан beriladi),
+# faqat .env.example namuna sifatida commit qilinadi.
+.env
+.env.*
+**/.env
+**/.env.*
+!.env.example
+!**/.env.example
+
+# ─── Build natijalari ───────────────────────────────────────────
+dist/
+build/
+**/dist/
+**/build/
+
+# ─── Yuklangan fayllar (chat media, logolar — repoda saqlanmaydi) ─
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# ─── Loglar ─────────────────────────────────────────────────────
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ─── OS / muharrir ──────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# ─── Claude (lokal sozlamalar) ──────────────────────────────────
+.claude/

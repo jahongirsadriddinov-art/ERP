@@ -1,0 +1,34 @@
+# Render.com blueprint — backend (Express + Telegram bot + Socket.io)
+# Vercel serverless BOTni (long-polling) va Socket.io'ni qo'llab-quvvatlamaydi,
+# shuning uchun backend Render kabi DOIMIY jarayon hostида ishlaydi.
+#
+# Ishlatish: Render dashboard → New → Blueprint → repo'ni ulang.
+# So'ng Environment bo'limida sync:false o'zgaruvchilar qiymatini kiriting.
+services:
+  - type: web
+    name: qurilisherp-backend
+    runtime: node
+    rootDir: backend
+    plan: free
+    buildCommand: npm install --include=dev && npm run build
+    startCommand: npm run start:prod
+    healthCheckPath: /api/objects
+    envVars:
+      - key: MONGODB_URI
+        sync: false          # MongoDB Atlas ulanish satri
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true  # Render tasodifiy kuchli qiymat yaratadi
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_API_KEYS
+        sync: false
+      - key: SITE_URL
+        sync: false          # Vercel frontend URL (https://...)
+      - key: BOT_USERNAME
+        value: Erp_Firma_bot
+      - key: DEVELOPER_PHONE
+        sync: false
+      - key: DEVELOPER_PASSWORD
+        sync: false

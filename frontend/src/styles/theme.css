@@ -1,0 +1,180 @@
+@custom-variant dark (&:is(.dark *));
+
+/* ──────────────────────────────────────────────────────────────────────────
+   QurilishERP — Design tokens
+   Light (:root) va Dark (.dark) — brendga mos (navy/orange) standart palitra.
+   COLOR_THEMES effekti (App.tsx) bu qiymatlarni tanlangan tema × rejim
+   bo'yicha runtime'da qayta yozadi. Bular birinchi paint uchun fallback.
+   ────────────────────────────────────────────────────────────────────────── */
+:root {
+  --font-size: 15px;
+
+  --background: #F4F6FA;
+  --foreground: #0F1A2E;
+  --card: #FFFFFF;
+  --card-foreground: #0F1A2E;
+  --popover: #FFFFFF;
+  --popover-foreground: #0F1A2E;
+
+  --primary: #1B3A6B;
+  --primary-foreground: #FFFFFF;
+  --secondary: #E4EAF3;
+  --secondary-foreground: #1B3A6B;
+  --muted: #EAEEF5;
+  --muted-foreground: #5C6B84;
+  --accent: #D9460F;
+  --accent-foreground: #FFFFFF;
+  --destructive: #C0392B;
+  --destructive-foreground: #FFFFFF;
+
+  --border: rgba(15, 26, 46, 0.10);
+  --input: transparent;
+  --input-background: #EDF1F7;
+  --switch-background: #9BADC7;
+
+  --ring: #1B3A6B;
+
+  --font-weight-medium: 550;
+  --font-weight-normal: 400;
+
+  --chart-1: #D9460F;
+  --chart-2: #1B7A4B;
+  --chart-3: #1B3A6B;
+  --chart-4: #F0A500;
+  --chart-5: #7B2D8B;
+
+  /* Modernroq, izchil radius shkalasi */
+  --radius: 0.75rem;
+
+  --sidebar: #1B3A6B;
+  --sidebar-foreground: #FFFFFF;
+  --sidebar-primary: #D9460F;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #243F6E;
+  --sidebar-accent-foreground: #FFFFFF;
+  --sidebar-border: rgba(255, 255, 255, 0.1);
+  --sidebar-ring: #D9460F;
+
+  /* Yumshoq elevation (dark-aware) */
+  --shadow-color: 15, 26, 46;
+  --shadow-sm: 0 1px 2px rgba(var(--shadow-color), 0.06);
+  --shadow-md: 0 4px 16px rgba(var(--shadow-color), 0.08);
+  --shadow-lg: 0 12px 40px rgba(var(--shadow-color), 0.12);
+}
+
+.dark {
+  --background: #0B1220;
+  --foreground: #E6ECF5;
+  --card: #131C2E;
+  --card-foreground: #E6ECF5;
+  --popover: #131C2E;
+  --popover-foreground: #E6ECF5;
+
+  --primary: #3E6DB5;
+  --primary-foreground: #FFFFFF;
+  --secondary: #1E2A40;
+  --secondary-foreground: #CBD5E1;
+  --muted: #1A2436;
+  --muted-foreground: #8A9CB8;
+  --accent: #F26A3D;
+  --accent-foreground: #FFFFFF;
+  --destructive: #E5544A;
+  --destructive-foreground: #FFFFFF;
+
+  --border: rgba(255, 255, 255, 0.10);
+  --input: transparent;
+  --input-background: #1A2436;
+  --switch-background: #33415A;
+
+  --ring: #5B8DD6;
+
+  --chart-1: #F26A3D;
+  --chart-2: #34D399;
+  --chart-3: #5B8DD6;
+  --chart-4: #FBBF24;
+  --chart-5: #C084FC;
+
+  --sidebar: #131C2E;
+  --sidebar-foreground: #E6ECF5;
+  --sidebar-primary: #F26A3D;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #1E2A40;
+  --sidebar-accent-foreground: #E6ECF5;
+  --sidebar-border: rgba(255, 255, 255, 0.08);
+  --sidebar-ring: #5B8DD6;
+
+  --shadow-color: 0, 0, 0;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.30);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.40);
+  --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.55);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-input-background: var(--input-background);
+  --color-switch-background: var(--switch-background);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    /* Tema (light/dark) almashganida yumshoq o'tish */
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+
+  html {
+    font-size: var(--font-size);
+  }
+
+  /* Telefonda matnlar kattaroq va o'qilishi oson bo'lsin */
+  @media (max-width: 640px) {
+    :root { --font-size: 16.5px; }
+  }
+
+  h1 { font-size: 1.5rem;   font-weight: 650; line-height: 1.3;  letter-spacing: -0.02em; }
+  h2 { font-size: 1.25rem;  font-weight: 620; line-height: 1.35; letter-spacing: -0.015em; }
+  h3 { font-size: 1.075rem; font-weight: 600; line-height: 1.4;  letter-spacing: -0.01em; }
+  h4 { font-size: 0.95rem;  font-weight: 600; line-height: 1.45; }
+  label  { font-weight: var(--font-weight-medium); }
+  button { font-weight: var(--font-weight-medium); }
+  input  { font-weight: var(--font-weight-normal); }
+}

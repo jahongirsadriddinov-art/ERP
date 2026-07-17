@@ -12,7 +12,7 @@ services:
     plan: free
     buildCommand: npm install --include=dev && npm run build
     startCommand: npm run start:prod
-    healthCheckPath: /api/objects
+    healthCheckPath: /health
     envVars:
       - key: MONGODB_URI
         sync: false          # MongoDB Atlas ulanish satri

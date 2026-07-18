@@ -2998,7 +2998,7 @@ function LoginScreen({ onLogin, onRegister }: { onLogin: (u: any, company?: any)
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4 liquid-transition relative overflow-hidden">
+    <div className="min-h-[100dvh] bg-background flex flex-col items-center justify-center p-4 py-8 liquid-transition relative overflow-y-auto scrollbar-hide" style={{ paddingTop: "max(2rem, env(safe-area-inset-top))", paddingBottom: "max(2rem, env(safe-area-inset-bottom))" }}>
       {/* Background decorations */}
       <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/20 rounded-full blur-[100px]" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-accent/20 rounded-full blur-[100px]" />
@@ -3285,7 +3285,7 @@ function RegisterWizard({ onBack, onDone }: { onBack: () => void; onDone: (u: an
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col liquid-transition relative overflow-hidden" style={{ paddingTop: "env(safe-area-inset-top)", paddingBottom: "env(safe-area-inset-bottom)" }}>
+    <div className="h-[100dvh] bg-background flex flex-col liquid-transition relative overflow-hidden" style={{ paddingTop: "env(safe-area-inset-top)" }}>
       <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/20 rounded-full blur-[100px]" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-accent/20 rounded-full blur-[100px]" />
 
@@ -3346,23 +3346,34 @@ function RegisterWizard({ onBack, onDone }: { onBack: () => void; onDone: (u: an
                 <p className="text-sm text-muted-foreground">Botga o'ting, raqamingizni yuboring va rozilik bering. Bu sahifa avtomatik davom etadi.</p>
               </div>
               <a href={reg.deepLink} target="_blank" rel="noopener noreferrer"
-                className="w-full inline-flex items-center justify-center gap-2 bg-gradient-to-r from-primary to-primary/90 text-white text-sm font-semibold py-3.5 rounded-xl shadow-lg shadow-primary/25 min-h-[48px]">
-                <Send className="w-4 h-4" /> Telegram botga o'tish
+                className="w-full inline-flex items-center justify-center gap-2 bg-gradient-to-r from-primary to-primary/90 text-white text-base font-semibold py-4 rounded-xl shadow-lg shadow-primary/25 min-h-[54px] active:scale-[0.98] transition-transform">
+                <Send className="w-5 h-5" /> Telegram botga o'tish
               </a>
-              <div className="bg-white/50 dark:bg-black/20 rounded-xl p-3 border border-border/50">
-                <p className="text-[11px] text-muted-foreground mb-1">Agar tugma ishlamasa, botда quyidagini yuboring:</p>
-                <code className="text-xs break-all font-mono text-primary">/start {reg.token.slice(0, 16)}…</code>
-              </div>
+              {/* Bosib to'liq /start <token> nusxalanadi (kesilmaydi) */}
+              <button type="button" onClick={() => {
+                const txt = `/start ${reg.token}`;
+                const done = () => toast.success("Nusxalandi ✅ — botga joylab yuboring");
+                if (navigator.clipboard?.writeText) navigator.clipboard.writeText(txt).then(done).catch(()=>{});
+                else { try { const ta=document.createElement("textarea"); ta.value=txt; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta); done(); } catch {} }
+              }} className="w-full bg-white/50 dark:bg-black/20 rounded-xl p-3 border border-border/50 text-left active:scale-[0.99] transition-transform">
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-[11px] text-muted-foreground">Tugma ishlamasa — bosib nusxalang:</p>
+                  <span className="text-[11px] text-primary font-semibold whitespace-nowrap">📋 Nusxalash</span>
+                </div>
+                <code className="text-xs break-all font-mono text-primary block leading-relaxed">/start {reg.token}</code>
+              </button>
               <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="w-4 h-4 animate-spin" />
                 {botStatus === "PHONE_CONFIRMED" ? "Raqam tasdiqlandi, rozilik kutilmoqda…" : "Bot javobini kutmoqdamiz…"}
               </div>
-              <p className="text-xs text-muted-foreground">
-                Kod {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, "0")} amal qiladi ·{" "}
-                <button onClick={resend} disabled={resendCd > 0} className={resendCd > 0 ? "text-muted-foreground/50" : "text-primary font-semibold"}>
-                  {resendCd > 0 ? `Qayta yuborish (${resendCd})` : "Qayta yuborish"}
+              {/* Timer 2:00 → 0:00; "Qayta yuborish" FAQAT muddat tugagach chiqadi */}
+              {timeLeft > 0 ? (
+                <p className="text-sm text-muted-foreground">Kod <span className="font-mono font-semibold text-foreground">{Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, "0")}</span> amal qiladi</p>
+              ) : (
+                <button onClick={resend} disabled={resendCd > 0} className={`text-sm font-semibold min-h-[44px] px-4 rounded-lg ${resendCd > 0 ? "text-muted-foreground/50" : "text-primary hover:bg-primary/10"}`}>
+                  {resendCd > 0 ? `Qayta yuborish (${resendCd}s)` : "🔄 Kodni qayta yuborish"}
                 </button>
-              </p>
+              )}
             </div>
           )}
 
@@ -4041,7 +4052,7 @@ export default function App() {
   const currentProject = selProject ? (projects.find(p=>p.id===selProject.id)??selProject) : null;
 
   return (
-    <div className={`h-screen flex flex-col overflow-hidden font-['Inter',sans-serif] ${siteBg ? 'with-bg' : ''}`} style={(() => { if (!siteBg) return { background: 'var(--background)' }; const isImg = !siteBg.startsWith('linear-gradient') && !siteBg.startsWith('radial-gradient'); return isImg ? { backgroundImage: `url(${siteBg})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' } : { background: siteBg }; })()}>
+    <div className={`h-[100dvh] flex flex-col overflow-hidden font-['Inter',sans-serif] ${siteBg ? 'with-bg' : ''}`} style={(() => { if (!siteBg) return { background: 'var(--background)' }; const isImg = !siteBg.startsWith('linear-gradient') && !siteBg.startsWith('radial-gradient'); return isImg ? { backgroundImage: `url(${siteBg})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' } : { background: siteBg }; })()}>
       {/* Header — minimal, surface (yangi uslub) */}
       <header className="glass h-14 flex items-center gap-3 px-4 flex-shrink-0 border-b border-border z-50 sticky top-0">
         <div className="flex items-center gap-2.5 flex-shrink-0">

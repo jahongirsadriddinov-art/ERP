@@ -5,7 +5,8 @@ import { generateToken, hashToken } from '../utils/tokens';
 // Route (routes/register.ts) va bot scene (services/registrationScene.ts) ikkalasi
 // ham shu servisdan foydalanadi — eski bot handlerlariga tegilmaydi.
 
-const TTL_MS = 15 * 60 * 1000; // 15 daqiqa
+const TTL_MS = 2 * 60 * 1000;        // bot orqali tasdiqlash uchun 2 daqiqa (deep-link token)
+const CONFIRMED_TTL_MS = 20 * 60 * 1000; // tasdiqlangach firma formasini to'ldirishga vaqt
 
 export function newExpiry(): Date {
   return new Date(Date.now() + TTL_MS);
@@ -71,9 +72,11 @@ export async function confirmPhone(reg: IRegistration, telegramUserId: string, t
 }
 
 // Bot: roziliklar berildi → CONSENT_GIVEN. Sayt polling orqali oldinga o'tadi.
+// Tasdiqlangach muddatni uzaytiramiz — foydalanuvchi firma formasini to'ldirsin.
 export async function giveConsent(reg: IRegistration, consents: any) {
   reg.consents = { ...(reg.consents || {}), ...consents, consentGivenAt: new Date().toISOString() };
   reg.step = 'CONSENT_GIVEN';
+  reg.expiresAt = new Date(Date.now() + CONFIRMED_TTL_MS);
   await reg.save();
   return reg;
 }

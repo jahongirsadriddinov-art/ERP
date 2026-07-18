@@ -12,10 +12,19 @@ import { currentCompanyId, getTenant } from './tenantContext';
 
 // Mongoose find/update filtriga companyId qo'shadi (kontekst mavjud bo'lsa).
 // DASTURCHI (super-admin) uchun filtr QO'SHILMAYDI — u barcha firmalarni ko'radi.
+//
+// Izolyatsiya qat'iy:
+//  • dasturchi                → filtr yo'q (hammasini ko'radi)
+//  • companyId bor            → faqat o'z firmasi
+//  • autentifikatsiya bor,    → faqat LEGACY (companyId'siz, null) pool —
+//    lekin companyId yo'q       boshqa firmalarning ma'lumoti KO'RINMAYDI
+//  • autentifikatsiyasiz      → filtr yo'q (eski token yubormaydigan klient)
 export function scoped<T extends Record<string, any>>(filter: T = {} as T): T {
-  if (getTenant()?.isDeveloper) return filter;
-  const cid = currentCompanyId();
+  const t = getTenant();
+  if (t?.isDeveloper) return filter;
+  const cid = t?.companyId;
   if (cid) return { ...filter, companyId: cid };
+  if (t) return { ...filter, companyId: null as any }; // legacy user → faqat null-company
   return filter;
 }
 

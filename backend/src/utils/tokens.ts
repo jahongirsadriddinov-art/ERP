@@ -4,10 +4,12 @@ import { promisify } from 'util';
 const scrypt = promisify(crypto.scrypt) as (pw: string, salt: string, keylen: number) => Promise<Buffer>;
 
 // ─── Bir martalik tokenlar ───────────────────────────────────────────────────
-// Kriptografik random 32 bayt token. Xom (raw) qiymat foydalanuvchiga beriladi,
-// DB'da faqat HASH saqlanadi — shu tufayli baza o'g'irlansa ham token tiklanmaydi.
+// Kriptografik random 16 bayt = 32 belgili hex token. MUHIM: Telegram deep-link
+// `start` parametri MAKS 64 belgi — 64 belgili token ayni chegarада kesilib,
+// bot boshqa token oladi ("havola eskirgan" xatosi). 32 belgi xavfsiz oraliqда
+// (128-bit, bir martalik + 2 daqiqa). Xom qiymat foydalanuvchiga, DB'da faqat HASH.
 export function generateToken(): string {
-  return crypto.randomBytes(32).toString('hex');
+  return crypto.randomBytes(16).toString('hex');
 }
 
 export function hashToken(raw: string): string {

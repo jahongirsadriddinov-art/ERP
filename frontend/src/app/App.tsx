@@ -1546,34 +1546,29 @@ function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSe
             <div className="flex-1 overflow-y-auto scrollbar-hide p-4 pb-24 sm:pb-4 animate-slide-up-fade">
               <div className="glass-card rounded-lg overflow-hidden border border-border shadow-sm">
                 <div className="overflow-x-auto scrollbar-hide">
-                  <table className="w-full text-left border-collapse whitespace-nowrap">
+                  <table className="w-full text-left border-collapse">
                     <thead>
                       <tr>
-                        <th>Material nomi</th>
-                        <th>O'lchov</th>
-                        <th>Reja (Smeta)</th>
-                        <th>Yetkazildi</th>
-                        <th>Holat</th>
+                        <th>№</th>
+                        <th>Наименование</th>
+                        <th>Ед.изм</th>
+                        <th className="text-right">Количество</th>
+                        <th className="text-right">Цена</th>
+                        <th className="text-right">Сумма</th>
                       </tr>
                     </thead>
                     <tbody>
                       {project.requiredMaterials.filter(m => m.name.toLowerCase().includes(matSearch.toLowerCase())).map(m => {
-                        const sent = confT.filter(t=>t.materialName===m.name).reduce((a,t)=>a+t.quantity,0);
-                        const rawPct = m.quantity > 0 ? (sent/m.quantity*100) : 0;
-                        const pct = Math.round(rawPct);
-                        const wPct = Math.min(100, Math.max(0, pct));
+                        // Sumaa = narx × miqdor (narx bo'lsa). Progress bar/yetkazildi olib tashlandi.
+                        const total = m.price != null ? m.price * m.quantity : null;
                         return (
                           <tr key={m.id} onClick={() => setSelectedMat(m)} className="cursor-pointer liquid-transition hover:bg-muted/30 group">
-                            <td className="font-semibold text-primary group-hover:underline decoration-primary/30 underline-offset-2">{m.name}</td>
-                            <td className="text-muted-foreground">{m.unit}</td>
-                            <td className="font-mono">{fmtNum(m.quantity)}</td>
-                            <td className="font-mono">{sent.toLocaleString()}</td>
-                            <td>
-                              <div className="flex items-center gap-2">
-                                <div className="flex-1 h-1.5 min-w-[60px] max-w-[100px] bg-muted rounded-full overflow-hidden"><div className={`h-full rounded-full liquid-transition ${pct>=100?"bg-green-500":pct>50?"bg-primary":"bg-accent"}`} style={{width:`${wPct}%`}}/></div>
-                                <span className={`text-sm md:text-xs w-8 text-right ${pct>=100?"text-green-600 font-semibold":""}`}>{pct}%</span>
-                              </div>
-                            </td>
+                            <td className="text-muted-foreground text-sm md:text-xs">{m.id}</td>
+                            <td className="font-semibold text-primary whitespace-normal min-w-[200px] group-hover:underline decoration-primary/30 underline-offset-2" title={m.name}>{m.name}</td>
+                            <td className="text-muted-foreground whitespace-nowrap">{m.unit}</td>
+                            <td className="font-mono text-right whitespace-nowrap">{fmtNum(m.quantity)}</td>
+                            <td className="font-mono text-right whitespace-nowrap">{m.price != null ? fmtNum(m.price) : "-"}</td>
+                            <td className="font-mono text-right font-semibold whitespace-nowrap">{total != null ? fmtNum(total) : "-"}</td>
                           </tr>
                         );
                       })}

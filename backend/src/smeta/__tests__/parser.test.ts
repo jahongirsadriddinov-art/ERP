@@ -67,9 +67,10 @@ describe('5-bo\'lim: ishlar + normalar', () => {
     expect(norms).toBeGreaterThan(500);
   });
 
-  it('yopilmagan (birliksiz) ish qolmagan', () => {
-    const unresolved = R.works.filter(w => !w.unit);
-    expect(unresolved.length).toBeLessThanOrEqual(1); // maksimal 1 (agar biror ish haqiqatan format buzuq bo'lsa)
+  it('warning\'da yopilmagan ish yo\'q (0 warning)', () => {
+    // Barcha 183 ish parse bo'lgan; parseWorks warning chiqarmaydi
+    const workWarnings = R.validation.warnings.filter(w => /ish|work|№ uzilish/i.test(w));
+    expect(workWarnings.length).toBe(0);
   });
 
   it('ish №3 = Е1101-013-03 + izoh + normalar', () => {

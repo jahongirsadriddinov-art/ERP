@@ -59,10 +59,17 @@ describe('4-bo\'lim: resurslar (deterministik, aniq)', () => {
 });
 
 describe('5-bo\'lim: ishlar + normalar', () => {
-  it('ishlar va normalar bor', () => {
-    expect(R.works.length).toBeGreaterThan(150);
+  it('jami 183 ish (barcha, edge case yopilgan)', () => {
+    expect(R.works.length).toBe(183);
+    const idx = R.works.map(w => w.index);
+    expect(new Set(idx).size).toBe(183); // dublikat yo'q
     const norms = R.works.reduce((s, w) => s + w.norms.length, 0);
     expect(norms).toBeGreaterThan(500);
+  });
+
+  it('yopilmagan (birliksiz) ish qolmagan', () => {
+    const unresolved = R.works.filter(w => !w.unit);
+    expect(unresolved.length).toBeLessThanOrEqual(1); // maksimal 1 (agar biror ish haqiqatan format buzuq bo'lsa)
   });
 
   it('ish №3 = Е1101-013-03 + izoh + normalar', () => {

@@ -52,6 +52,12 @@ export async function parseSmeta(input: Buffer | string, filename = 'smeta.pdf')
   applyCategories(resources); // lug'at asosida kategoriya (parsing'ga daxlsiz)
   const { validation, totals } = validate(resources, works, declaredTotals, meta);
 
+  // Umumiy summa (ИТОГО ПО РЕСУРСНОМУ РАСЧЕТУ) — 5 guruh yig'indisi = byudjet manbai.
+  // Byudjet HAR DOIM shu yerdан olinadi (Gemini yoki noto'g'ri hisobdan emas).
+  const grandTotal = Math.round(totals.reduce((s, t) => s + t.computed, 0));
+  meta.totalWithoutVat = grandTotal;
+  if (meta.totalWithVat != null) meta.vatAmount = meta.totalWithVat - grandTotal;
+
   validation.warnings.push(...ex.warnings, ...rw, ...ww);
   if (sec.bounds.s4start < 0) validation.errors.push('4-bo\'lim (РЕСУРСНЫЙ РАСЧЕТ) topilmadi — noto\'g\'ri format?');
 

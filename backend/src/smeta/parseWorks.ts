@@ -152,7 +152,10 @@ export function parseWorks(section5: ExtractedLine[]): WorksParseResult {
       const tok2 = wm[2].split(/\s+/)[0];
       // Ish boshi: (a) normativ shifr (to'liq/bo'lingan) yoki С, YOKI
       // (b) shifrsiz ish — lekin shu qatorда birlik bor (masalan "103 ЩИТ ... ШТ").
-      const noShifrWork = /^\d+\s*\t/.test(line) && !isShifr(tok2) && !!findUnitInLine(line);
+      // Shifrsiz ish: № o'z ustunida (raqam+TAB), norma emas. Birlik shu qatorда
+      // bo'lmasligi mumkin (keyingi qatorда wrapped) — shuning uchun birlik talab
+      // qilinmaydi; buferлаш birlikni topguncha davom etadi. Section-6 S6_STOP bilan kesiladi.
+      const noShifrWork = /^\d+\s*\t/.test(line) && !isShifr(tok2);
       if (/^[А-ЯЁA-Z]?\d{3,4}-\d/.test(tok2) || /^С$/i.test(tok2) || noShifrWork) {
         started = true;
         finishNorm();

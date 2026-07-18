@@ -1459,6 +1459,8 @@ function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSe
   const confT = projT.filter(t => t.status === "confirmed");
   const foreman = users.find(u => u.id === project.foremanId);
   const [initialTransferData, setInitialTransferData] = useState<Partial<Transfer> | undefined>();
+  // Qidiruv (kiril+lotin) — real vaqtda material nomi bo'yicha filtr
+  const filteredMats = project.requiredMaterials.filter(m => m.name.toLowerCase().includes(matSearch.trim().toLowerCase()));
   
   return (
     <div className="flex flex-col flex-1 min-h-0 bg-background/50">
@@ -1535,49 +1537,47 @@ function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSe
       <div className="flex-1 flex flex-col min-h-0">
         {tab==="smeta" && project.smeta && <SmetaResultView smeta={project.smeta}/>}
         {tab==="required" && (
-          <>
-            <div className="flex-shrink-0 flex flex-col gap-2 glass px-4 py-3 border-b border-border/50 shadow-sm">
-              <p className="text-sm md:text-xs text-muted-foreground">Prorab: <span className="font-semibold text-foreground">{foreman?.name}</span> <span className="mx-2">•</span> Byudjet: <span className="font-semibold text-foreground">{fmt(project.budget)}</span></p>
-              <div className="relative">
-                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"/>
-                <input type="text" placeholder="Material qidirish..." value={matSearch} onChange={e=>setMatSearch(e.target.value)} className="w-full pl-9 pr-3 py-2 text-sm md:text-xs bg-input-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary liquid-transition"/>
+          <div className="flex-1 flex flex-col min-h-0">
+            {/* Kompakt tepa: qidiruv + soni + byudjet (bitta yupqa qator) */}
+            <div className="flex-shrink-0 flex items-center gap-2 px-2.5 py-1.5 border-b border-border/50 bg-muted/10">
+              <div className="relative flex-1 min-w-0">
+                <Search className="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground"/>
+                <input type="text" placeholder="Material qidirish..." value={matSearch} onChange={e=>setMatSearch(e.target.value)} className="w-full pl-7 pr-2 py-1 text-[11px] bg-input-background border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary"/>
               </div>
+              <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0">{filteredMats.length} ta · {fmt(project.budget)}</span>
             </div>
-            <div className="flex-1 overflow-y-auto scrollbar-hide p-4 pb-24 sm:pb-4 animate-slide-up-fade">
-              <div className="glass-card rounded-lg overflow-hidden border border-border shadow-sm">
-                <div className="overflow-x-auto scrollbar-hide">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr>
-                        <th>№</th>
-                        <th>Наименование</th>
-                        <th>Ед.изм</th>
-                        <th className="text-right">Количество</th>
-                        <th className="text-right">Цена</th>
-                        <th className="text-right">Сумма</th>
+            {/* Zich jadval — barcha materiallar minimal joyda */}
+            <div className="flex-1 overflow-y-auto scrollbar-hide pb-20 sm:pb-2">
+              <table className="w-full text-left border-collapse text-[11px] leading-tight">
+                <thead className="sticky top-0 z-10 bg-card">
+                  <tr className="border-b border-border">
+                    <th className="px-2 py-1 font-semibold">Material nomi</th>
+                    <th className="px-2 py-1 font-semibold whitespace-nowrap">O'lchov</th>
+                    <th className="px-2 py-1 font-semibold text-right whitespace-nowrap">Miqdor</th>
+                    <th className="px-2 py-1 font-semibold text-right whitespace-nowrap">Narx</th>
+                    <th className="px-2 py-1 font-semibold text-right whitespace-nowrap">Summa</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredMats.map(m => {
+                    const total = m.price != null ? m.price * m.quantity : null;
+                    return (
+                      <tr key={m.id} onClick={() => setSelectedMat(m)} className="cursor-pointer hover:bg-muted/30 border-b border-border/25">
+                        <td className="px-2 py-0.5 font-medium text-primary whitespace-normal leading-tight" title={m.name}>{m.name}</td>
+                        <td className="px-2 py-0.5 text-muted-foreground whitespace-nowrap">{m.unit}</td>
+                        <td className="px-2 py-0.5 font-mono text-right whitespace-nowrap">{fmtNum(m.quantity)}</td>
+                        <td className="px-2 py-0.5 font-mono text-right whitespace-nowrap">{m.price != null ? fmtNum(m.price) : "-"}</td>
+                        <td className="px-2 py-0.5 font-mono text-right font-semibold whitespace-nowrap">{total != null ? fmtNum(total) : "-"}</td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {project.requiredMaterials.filter(m => m.name.toLowerCase().includes(matSearch.toLowerCase())).map(m => {
-                        // Sumaa = narx × miqdor (narx bo'lsa). Progress bar/yetkazildi olib tashlandi.
-                        const total = m.price != null ? m.price * m.quantity : null;
-                        return (
-                          <tr key={m.id} onClick={() => setSelectedMat(m)} className="cursor-pointer liquid-transition hover:bg-muted/30 group">
-                            <td className="text-muted-foreground text-sm md:text-xs">{m.id}</td>
-                            <td className="font-semibold text-primary whitespace-normal min-w-[200px] group-hover:underline decoration-primary/30 underline-offset-2" title={m.name}>{m.name}</td>
-                            <td className="text-muted-foreground whitespace-nowrap">{m.unit}</td>
-                            <td className="font-mono text-right whitespace-nowrap">{fmtNum(m.quantity)}</td>
-                            <td className="font-mono text-right whitespace-nowrap">{m.price != null ? fmtNum(m.price) : "-"}</td>
-                            <td className="font-mono text-right font-semibold whitespace-nowrap">{total != null ? fmtNum(total) : "-"}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+                    );
+                  })}
+                  {filteredMats.length === 0 && (
+                    <tr><td colSpan={5} className="px-2 py-6 text-center text-muted-foreground">{project.requiredMaterials.length === 0 ? "Smeta yuklanmagan — 'Smeta yuklash' tugmasini bosing" : "Topilmadi"}</td></tr>
+                  )}
+                </tbody>
+              </table>
             </div>
-          </>
+          </div>
         )}
         {tab==="pending" && (
           <div className="flex-1 overflow-y-auto p-4 scrollbar-hide pb-24 sm:pb-4 space-y-2 animate-slide-up-fade">

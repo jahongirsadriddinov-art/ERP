@@ -56,7 +56,7 @@ git push origin main
    - `TELEGRAM_BOT_TOKEN` = `<BotFather'dan olingan token>`
    - `BOT_USERNAME` = `qurilish_erp_bot`
    - `SITE_URL` = `https://erp-firma.uz`
-   - `DEVELOPER_PHONE` = `+998770160054`
+   - `DEVELOPER_PHONE` = `+998900960890`
    - `DEVELOPER_PASSWORD` = kuchli parol
    - `DEVELOPER_CHAT_ID` = `<sizning Telegram chat ID>`
    - `GEMINI_API_KEY`, `GEMINI_API_KEYS`

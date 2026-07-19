@@ -25,6 +25,7 @@ type EStatus = "pending" | "confirmed";
 interface AppUser {
   id: string; name: string; role: Role; phone: string;
   avatar?: string; brigade?: string; projectIds: string[];
+  isOwner?: boolean; companyId?: string;
 }
 interface Project {
   id: string; name: string; location: string; foremanId: string;
@@ -60,6 +61,7 @@ interface Msg {
 interface Group {
   id: string; name: string; avatar?: string;
   memberIds: string[]; adminIds: string[]; createdBy: string;
+  devSupport?: boolean;
 }
 interface ActiveCall {
   direction: 'out'|'in';
@@ -115,7 +117,7 @@ const EXP_LABELS: Record<ExpType, string> = {
 const CHART_COLORS = ["#1B3A6B", "#D9460F", "#1B7A4B", "#F0A500", "#7B2D8B"];
 const fmt = (n?: number) => (n || 0).toLocaleString("uz-UZ") + " so'm";
 const isAdmin = (r: Role) => r === "direktor" || r === "orinbosar" || r === "dasturchi";
-const DEV_PHONE = "+998770160054"; // dasturchi raqami — parol bilan kiradi (Telegram kod emas)
+const DEV_PHONE = "+998900960890"; // dasturchi raqami — parol bilan kiradi (Telegram kod emas)
 
 // ─── Seed Data ────────────────────────────────────────────────────────────────
 const SEED_USERS: AppUser[] = [
@@ -1872,7 +1874,7 @@ function VoicePlayer({ src }: { src: string }) {
 }
 
 // ─── Chat Page ─────────────────────────────────────────────────────────────────
-function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, onMarkRead, onEdit, onDelete, onPin, onChatOpen, onCreateGroup, onStartCall }:
+function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, onMarkRead, onEdit, onDelete, onPin, onChatOpen, onCreateGroup, onStartCall, canModifyMessages, onGetDevSupport }:
   {
     currentUser: AppUser; users: AppUser[]; messages: Msg[];
     groups: Group[]; onlineUsers: string[];
@@ -1883,6 +1885,8 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
     onChatOpen: (open: boolean) => void;
     onCreateGroup: (name: string, memberIds: string[]) => Promise<any>;
     onStartCall: (mode: 'voice'|'video', target: { peer?: AppUser; group?: Group }) => void;
+    canModifyMessages?: boolean;
+    onGetDevSupport?: () => Promise<Group|null>;
   }
 ) {
   const [selUser, setSelUser] = useState<AppUser|null>(null);
@@ -2112,6 +2116,17 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
               </button>
             );
           })}
+          {/* Dasturchi virtual entry — only for company members who don't yet have devSupport group */}
+          {currentUser.role !== 'dasturchi' && currentUser.companyId && onGetDevSupport && !groups.some(g => g.devSupport) && (
+            <button onClick={async () => { const g = await onGetDevSupport(); if (g) { setSelGroup(g); setSelUser(null); } }}
+              className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-muted/40 transition-colors text-left border-b border-border/30">
+              <div className="w-9 h-9 rounded-full bg-orange-500/15 text-orange-500 flex items-center justify-center flex-shrink-0 text-lg">🛠</div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold truncate">Dasturchi</p>
+                <p className="text-xs text-muted-foreground truncate">Texnik yordam</p>
+              </div>
+            </button>
+          )}
           {contacts.length===0 && groups.length===0 && <p className="text-center text-xs text-muted-foreground py-8">Kontaktlar yo'q</p>}
           {contacts.map(u => {
             const th = messages.filter(m => !m.deleted && !m.groupId && ((m.fromUserId===u.id&&m.toUserId===currentUser.id)||(m.fromUserId===currentUser.id&&m.toUserId===u.id)));
@@ -2236,7 +2251,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
                   style={{top:Math.min(ctxMenu.y,window.innerHeight-260),left:ctxMenu.x>window.innerWidth-164?window.innerWidth-168:Math.max(4,ctxMenu.x)}}
                   onClick={e=>e.stopPropagation()}>
                   <div onClick={()=>{if(ctxMsg)setReplyTo(ctxMsg);setCtxMenu(null);}} className="flex items-center gap-2 px-3 py-2 hover:bg-muted/40 rounded-lg cursor-pointer text-xs"><CornerDownLeft className="w-3.5 h-3.5 text-blue-500"/>Reply</div>
-                  {ctxMine && !ctxMsg?.deleted && (
+                  {canModifyMessages && !ctxMsg?.deleted && (
                     <div onClick={()=>{if(ctxMsg){setEditingId(ctxMsg.id);setEditText(ctxMsg.text);}setCtxMenu(null);}} className="flex items-center gap-2 px-3 py-2 hover:bg-muted/40 rounded-lg cursor-pointer text-xs"><Edit className="w-3.5 h-3.5 text-green-500"/>Edit</div>
                   )}
                   <div onClick={()=>{if(ctxMsg)onPin(ctxMsg.id);setCtxMenu(null);}} className="flex items-center gap-2 px-3 py-2 hover:bg-muted/40 rounded-lg cursor-pointer text-xs">
@@ -2244,8 +2259,12 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
                   </div>
                   <div onClick={()=>{if(ctxMsg)setShowForward(ctxMsg);setCtxMenu(null);}} className="flex items-center gap-2 px-3 py-2 hover:bg-muted/40 rounded-lg cursor-pointer text-xs"><Share2 className="w-3.5 h-3.5 text-purple-500"/>Forward</div>
                   <div onClick={()=>{if(ctxMsg){setSelectMode(true);setSelected(new Set([ctxMsg.id]));}setCtxMenu(null);}} className="flex items-center gap-2 px-3 py-2 hover:bg-muted/40 rounded-lg cursor-pointer text-xs"><SquareCheck className="w-3.5 h-3.5 text-orange-500"/>Select</div>
-                  <div className="h-px bg-border/60 my-0.5"/>
-                  <div onClick={()=>{if(ctxMsg)onDelete(ctxMsg.id);setCtxMenu(null);}} className="flex items-center gap-2 px-3 py-2 hover:bg-red-500/10 text-red-500 rounded-lg cursor-pointer text-xs"><Trash2 className="w-3.5 h-3.5"/>Delete</div>
+                  {canModifyMessages && (
+                    <>
+                      <div className="h-px bg-border/60 my-0.5"/>
+                      <div onClick={()=>{if(ctxMsg)onDelete(ctxMsg.id);setCtxMenu(null);}} className="flex items-center gap-2 px-3 py-2 hover:bg-red-500/10 text-red-500 rounded-lg cursor-pointer text-xs"><Trash2 className="w-3.5 h-3.5"/>Delete</div>
+                    </>
+                  )}
                 </div>
               )}
             </div>
@@ -2651,8 +2670,8 @@ const COLOR_THEMES = [
     dark:  themeVars({ primary:"#1AA093", accent:"#14B8A6", secondary:"#0F2A28", secondaryFg:"#99F6E4", bg:"#051614", card:"#0D2422", fg:"#DDF3F0", muted:"#112B28", mutedFg:"#7BA9A3", border:DARK_BORDER, input:"#112B28", ring:"#2DD4BF" }) },
 ];
 
-function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdateUser, onCompanyNameChange, onCompanyLogoChange, onBgChange, onColorThemeChange, colorTheme, themeMode, onThemeModeChange }:
-  { currentUser: AppUser; projects: Project[]; onUpdateAvatar: (url: string) => void; onLogout: () => void; onUpdateUser: (u: AppUser) => void; onCompanyNameChange: (name: string) => void; onCompanyLogoChange: (logo: string) => void; onBgChange: (bg: string) => void; onColorThemeChange: (id: string) => void; colorTheme: string; themeMode: "light"|"dark"|"system"; onThemeModeChange: (m: "light"|"dark"|"system") => void }) {
+function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdateUser, onCompanyNameChange, onCompanyLogoChange, onBgChange, onColorThemeChange, colorTheme, themeMode, onThemeModeChange, canEditCompany }:
+  { currentUser: AppUser; projects: Project[]; onUpdateAvatar: (url: string) => void; onLogout: () => void; onUpdateUser: (u: AppUser) => void; onCompanyNameChange: (name: string) => void; onCompanyLogoChange: (logo: string) => void; onBgChange: (bg: string) => void; onColorThemeChange: (id: string) => void; colorTheme: string; themeMode: "light"|"dark"|"system"; onThemeModeChange: (m: "light"|"dark"|"system") => void; canEditCompany?: boolean }) {
   const [isEditing, setIsEditing] = useState(false);
   const [form, setForm] = useState({ name: currentUser.name, phone: currentUser.phone });
   const fileRef = useRef<HTMLInputElement>(null);
@@ -2729,25 +2748,29 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
       {/* ── Company Banner ─────────────────────────── */}
       <div className="relative overflow-hidden" style={{ ...bannerStyle, height: 210 }}>
         <div className="absolute inset-0" style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.12) 0%, rgba(0,0,0,0.58) 100%)" }}/>
-        <button onClick={() => bgRef.current?.click()}
-          className="absolute top-4 right-4 flex items-center gap-1.5 text-white text-xs px-3 py-2 rounded-full border border-white/25 liquid-transition hover:bg-white/20 active:scale-95"
-          style={{ background: "rgba(0,0,0,0.30)", backdropFilter: "blur(12px)" }}>
-          <Upload className="w-3.5 h-3.5"/>Rasm yuklash
-        </button>
+        {canEditCompany && (
+          <button onClick={() => bgRef.current?.click()}
+            className="absolute top-4 right-4 flex items-center gap-1.5 text-white text-xs px-3 py-2 rounded-full border border-white/25 liquid-transition hover:bg-white/20 active:scale-95"
+            style={{ background: "rgba(0,0,0,0.30)", backdropFilter: "blur(12px)" }}>
+            <Upload className="w-3.5 h-3.5"/>Rasm yuklash
+          </button>
+        )}
         <input ref={bgRef} type="file" accept="image/*" className="hidden" onChange={handleBgFile}/>
         <div className="absolute bottom-0 left-0 right-0 px-5 pb-5 flex items-end gap-4">
           <div className="relative flex-shrink-0">
             <div className="w-16 h-16 rounded-2xl border-2 border-white/80 shadow-2xl overflow-hidden bg-white flex items-center justify-center">
               {companyLogo ? <img src={companyLogo} alt="Logo" className="w-full h-full object-contain p-1"/> : <Building2 className="w-8 h-8 text-primary"/>}
             </div>
-            <button onClick={() => logoRef.current?.click()}
-              className="absolute -bottom-1.5 -right-1.5 w-6 h-6 bg-white text-primary rounded-full flex items-center justify-center border border-border shadow-lg hover:bg-primary hover:text-white liquid-transition">
-              <Camera className="w-3 h-3"/>
-            </button>
+            {canEditCompany && (
+              <button onClick={() => logoRef.current?.click()}
+                className="absolute -bottom-1.5 -right-1.5 w-6 h-6 bg-white text-primary rounded-full flex items-center justify-center border border-border shadow-lg hover:bg-primary hover:text-white liquid-transition">
+                <Camera className="w-3 h-3"/>
+              </button>
+            )}
             <input ref={logoRef} type="file" accept="image/*" className="hidden" onChange={handleLogoFile}/>
           </div>
           <div className="flex-1 pb-0.5">
-            {editingBrand ? (
+            {canEditCompany && editingBrand ? (
               <div className="flex items-center gap-2">
                 <input className="flex-1 text-white font-bold text-lg bg-transparent border-b-2 border-white/60 focus:border-white focus:outline-none pb-0.5"
                   value={brandInput} onChange={e => setBrandInput(e.target.value)} autoFocus onKeyDown={e => e.key === 'Enter' && saveBrand()}/>
@@ -2757,10 +2780,12 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
             ) : (
               <div className="flex items-center gap-2">
                 <p className="text-white font-bold text-xl drop-shadow-lg">{companyName}</p>
-                <button onClick={() => { setBrandInput(companyName); setEditingBrand(true); }}
-                  className="p-1 text-white/60 hover:text-white rounded-lg hover:bg-white/10 liquid-transition">
-                  <Edit className="w-3.5 h-3.5"/>
-                </button>
+                {canEditCompany && (
+                  <button onClick={() => { setBrandInput(companyName); setEditingBrand(true); }}
+                    className="p-1 text-white/60 hover:text-white rounded-lg hover:bg-white/10 liquid-transition">
+                    <Edit className="w-3.5 h-3.5"/>
+                  </button>
+                )}
               </div>
             )}
             <p className="text-white/65 text-xs mt-0.5">Qurilish kompaniyasi</p>
@@ -3026,7 +3051,9 @@ function LoginScreen({ onLogin, onRegister }: { onLogin: (u: any, company?: any)
         name: data.user.firstName + (data.user.lastName ? " " + data.user.lastName : ""),
         phone: data.user.phone,
         role: data.user.role,
-        projectIds: data.user.projectIds || []
+        projectIds: data.user.projectIds || [],
+        isOwner: data.user.isOwner || false,
+        companyId: data.user.companyId,
       };
       localStorage.setItem("token", data.token);
       localStorage.setItem("currentUser", JSON.stringify(u));
@@ -3053,7 +3080,9 @@ function LoginScreen({ onLogin, onRegister }: { onLogin: (u: any, company?: any)
         name: data.user.firstName + (data.user.lastName ? " " + data.user.lastName : ""),
         phone: data.user.phone,
         role: data.user.role,
-        projectIds: data.user.projectIds || []
+        projectIds: data.user.projectIds || [],
+        isOwner: false,
+        companyId: undefined,
       };
       localStorage.setItem("token", data.token);
       localStorage.setItem("currentUser", JSON.stringify(u));
@@ -3778,7 +3807,7 @@ const DEV_PLAN_CONFIG: Record<string, { label: string; days: number; amount: num
 };
 
 function DeveloperPanel({ currentUser, onLogout }: { currentUser: AppUser; onLogout: () => void }) {
-  const [tab, setTab] = useState<"firms" | "users" | "subscriptions">("subscriptions");
+  const [tab, setTab] = useState<"firms" | "users" | "subscriptions" | "messages">("subscriptions");
   const [companies, setCompanies] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [subs, setSubs] = useState<any[]>([]);
@@ -3786,6 +3815,13 @@ function DeveloperPanel({ currentUser, onLogout }: { currentUser: AppUser; onLog
   const [err, setErr] = useState("");
   const [subLoading, setSubLoading] = useState<string|null>(null);
   const [renewPlan, setRenewPlan] = useState<Record<string, string>>({}); // subId → selectedPlan
+  // Messages tab state
+  const [devGroups, setDevGroups] = useState<Group[]>([]);
+  const [selDevGroup, setSelDevGroup] = useState<Group|null>(null);
+  const [devMessages, setDevMessages] = useState<Msg[]>([]);
+  const [devMsgText, setDevMsgText] = useState("");
+  const [devMsgLoading, setDevMsgLoading] = useState(false);
+  const devMsgBottomRef = useRef<HTMLDivElement>(null);
 
   const token = localStorage.getItem("token") || "";
   const authHdr = { "Content-Type": "application/json", "Authorization": `Bearer ${token}` };
@@ -3806,6 +3842,64 @@ function DeveloperPanel({ currentUser, onLogout }: { currentUser: AppUser; onLog
     setLoading(false);
   };
   useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
+
+  // Load devSupport groups for developer
+  const loadDevGroups = async () => {
+    try {
+      const r = await fetch(`${API_BASE}/api/groups?userId=${currentUser.id}`, { headers: authHdr });
+      if (r.ok) {
+        const all = await r.json();
+        setDevGroups(all.filter((g: any) => g.devSupport).map((g: any) => ({ ...g, id: g.id || g._id })));
+      }
+    } catch {}
+  };
+
+  // Load messages for a devSupport group
+  const loadDevMessages = async (groupId: string) => {
+    try {
+      const r = await fetch(`${API_BASE}/api/messages?userId=${currentUser.id}`, { headers: authHdr });
+      if (r.ok) {
+        const all = await r.json();
+        setDevMessages(all.filter((m: any) => m.groupId === groupId && !m.deleted));
+      }
+    } catch {}
+  };
+
+  useEffect(() => { if (tab === 'messages') loadDevGroups(); /* eslint-disable-next-line */ }, [tab]);
+
+  useEffect(() => {
+    if (!selDevGroup) return;
+    loadDevMessages(selDevGroup.id);
+  // eslint-disable-next-line
+  }, [selDevGroup]);
+
+  // Socket for real-time messages in dev panel
+  useEffect(() => {
+    const sock = connectSocket(currentUser.id);
+    if (selDevGroup) sock.emit('join:group', selDevGroup.id);
+    const onNew = (m: any) => {
+      if (selDevGroup && m.groupId === selDevGroup.id && !m.deleted)
+        setDevMessages(prev => prev.some(x => x.id === (m.id || m._id)) ? prev : [...prev, { ...m, id: m.id || m._id }]);
+    };
+    sock.on('message:new', onNew);
+    return () => { sock.off('message:new', onNew); };
+  // eslint-disable-next-line
+  }, [currentUser.id, selDevGroup?.id]);
+
+  useEffect(() => { devMsgBottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [devMessages]);
+
+  const sendDevMsg = async () => {
+    if (!devMsgText.trim() || !selDevGroup) return;
+    setDevMsgLoading(true);
+    try {
+      await fetch(`${API_BASE}/api/messages`, {
+        method: 'POST', headers: authHdr,
+        body: JSON.stringify({ fromUserId: currentUser.id, groupId: selDevGroup.id, text: devMsgText.trim() }),
+      });
+      setDevMsgText('');
+    } catch {}
+    setDevMsgLoading(false);
+  };
 
   const approveSub = async (id: string) => {
     setSubLoading(id);
@@ -3870,12 +3964,15 @@ function DeveloperPanel({ currentUser, onLogout }: { currentUser: AppUser; onLog
         </button>
       </header>
 
-      <div className="px-4 pt-3 flex gap-2">
+      <div className="px-4 pt-3 flex gap-2 flex-wrap">
         <button onClick={() => setTab("subscriptions")} className={`flex-1 py-2.5 rounded-xl text-[13px] font-semibold ${tab === "subscriptions" ? "bg-primary text-white" : "surface"}`}>
           To'lovlar {subs.filter(s => s.status === "pending").length > 0 && <span className="ml-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{subs.filter(s => s.status === "pending").length}</span>}
         </button>
         <button onClick={() => setTab("firms")} className={`flex-1 py-2.5 rounded-xl text-[13px] font-semibold ${tab === "firms" ? "bg-primary text-white" : "surface"}`}>Firmalar ({companies.length})</button>
-        <button onClick={() => setTab("users")} className={`flex-1 py-2.5 rounded-xl text-[13px] font-semibold ${tab === "users" ? "bg-primary text-white" : "surface"}`}>Foydalanuvchilar ({users.length})</button>
+        <button onClick={() => setTab("users")} className={`flex-1 py-2.5 rounded-xl text-[13px] font-semibold ${tab === "users" ? "bg-primary text-white" : "surface"}`}>Foydalanuvchilar</button>
+        <button onClick={() => setTab("messages")} className={`flex-1 py-2.5 rounded-xl text-[13px] font-semibold ${tab === "messages" ? "bg-primary text-white" : "surface"}`}>
+          💬 Xabarlar {devGroups.length > 0 && <span className="ml-1 text-[10px] opacity-70">({devGroups.length})</span>}
+        </button>
       </div>
 
       {err && <div className="mx-4 mt-3 bg-red-500/10 text-red-600 dark:text-red-400 text-sm p-3 rounded-lg border border-red-500/20">{err}</div>}
@@ -3985,6 +4082,56 @@ function DeveloperPanel({ currentUser, onLogout }: { currentUser: AppUser; onLog
               </div>
             </div>
           ))
+        ) : tab === "messages" ? (
+          <div className="flex gap-3 h-[60vh] min-h-[320px]">
+            {/* Group list */}
+            <div className="w-40 shrink-0 flex flex-col gap-1 overflow-y-auto">
+              {devGroups.length === 0 && <p className="text-xs text-muted-foreground text-center py-6">Hali xabar yo'q</p>}
+              {devGroups.map(g => (
+                <button key={g.id} onClick={() => setSelDevGroup(g)}
+                  className={`w-full text-left px-3 py-2.5 rounded-xl text-xs font-semibold border border-border/40 ${selDevGroup?.id===g.id?'bg-primary text-white':'surface'}`}>
+                  <p className="truncate">{companies.find(c => (c.id || c._id) === (g as any).companyId)?.name || g.name}</p>
+                  <p className={`text-[10px] font-normal truncate ${selDevGroup?.id===g.id?'text-white/70':'text-muted-foreground'}`}>{g.memberIds.length} a'zo</p>
+                </button>
+              ))}
+            </div>
+            {/* Chat area */}
+            <div className="flex-1 flex flex-col surface rounded-2xl overflow-hidden">
+              {!selDevGroup ? (
+                <div className="flex-1 flex items-center justify-center text-xs text-muted-foreground">Guruh tanlang</div>
+              ) : (
+                <>
+                  <div className="px-3 py-2 border-b border-border/40 text-xs font-semibold">
+                    {companies.find(c => (c.id || c._id) === (selDevGroup as any).companyId)?.name || selDevGroup.name}
+                  </div>
+                  <div className="flex-1 overflow-y-auto p-3 space-y-2">
+                    {devMessages.map(m => {
+                      const mine = m.fromUserId === currentUser.id;
+                      return (
+                        <div key={m.id} className={`flex ${mine?'justify-end':'justify-start'}`}>
+                          <div className={`max-w-[75%] px-3 py-2 rounded-2xl text-xs ${mine?'bg-primary text-white':'bg-muted'}`}>
+                            {!mine && <p className="font-semibold text-[10px] mb-0.5 opacity-70">{(users.find((u: any) => u.id===m.fromUserId))?.name || 'Foydalanuvchi'}</p>}
+                            <p>{m.text}</p>
+                            <p className={`text-[9px] mt-0.5 ${mine?'text-white/60':'text-muted-foreground'}`}>{new Date(m.timestamp).toLocaleTimeString('uz-UZ',{hour:'2-digit',minute:'2-digit'})}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    <div ref={devMsgBottomRef}/>
+                  </div>
+                  <div className="flex items-center gap-2 px-3 py-2 border-t border-border/40">
+                    <input value={devMsgText} onChange={e => setDevMsgText(e.target.value)}
+                      onKeyDown={e => e.key==='Enter'&&!e.shiftKey&&sendDevMsg()}
+                      placeholder="Xabar yozing..." className="flex-1 text-xs bg-muted/50 rounded-xl px-3 py-2 focus:outline-none"/>
+                    <button onClick={sendDevMsg} disabled={devMsgLoading||!devMsgText.trim()}
+                      className="w-8 h-8 rounded-xl bg-primary text-white flex items-center justify-center disabled:opacity-40">
+                      {devMsgLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin"/> : <Send className="w-3.5 h-3.5"/>}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
         ) : (
           users.length === 0 ? <p className="text-center text-sm text-muted-foreground py-12">Foydalanuvchi yo'q</p> :
           users.map(u => (
@@ -4392,6 +4539,19 @@ export default function App() {
     } catch (err) { console.error(err); }
     return null;
   };
+  const handleGetDevSupport = async (): Promise<Group|null> => {
+    try {
+      const res = await fetch(`${API_BASE}/api/groups/dev-support`, { method: "POST" });
+      if (res.ok) {
+        const g = await res.json();
+        const gg = {...g, id: g.id || g._id};
+        setGroups(p => p.some(x=>x.id===gg.id)?p:[...p, gg]);
+        getSocket()?.emit("join:group", gg.id);
+        return gg;
+      }
+    } catch (err) { console.error(err); }
+    return null;
+  };
   const handleStartCall = (mode: 'voice'|'video', target: { peer?: AppUser; group?: Group }) => {
     if (target.group) setActiveCall({ direction: 'out', mode, groupId: target.group.id, memberIds: target.group.memberIds.filter(id => id !== liveUser.id) });
     else if (target.peer) setActiveCall({ direction: 'out', mode, peerId: target.peer.id });
@@ -4465,7 +4625,7 @@ export default function App() {
       </div>
 
       {/* Main */}
-      <main className="flex-1 overflow-hidden flex flex-col relative pb-20 md:pb-0">
+      <main className="flex-1 overflow-hidden flex flex-col relative main-pb-safe">
         {/* Admin dashboard */}
         {page==="dashboard" && admin && !selProject && (
           <AdminDashboard currentUser={liveUser} users={users} projects={projects} transfers={transfers}
@@ -4501,7 +4661,9 @@ export default function App() {
           <ChatPage currentUser={liveUser} users={users} messages={messages} groups={groups} onlineUsers={onlineUsers}
             onSend={handleSendMsg} onMarkRead={handleMarkRead}
             onEdit={handleEditMsg} onDelete={handleDeleteMsg} onPin={handlePinMsg}
-            onChatOpen={open => setChatIsOpen(open)} onCreateGroup={handleCreateGroup} onStartCall={handleStartCall}/>
+            onChatOpen={open => setChatIsOpen(open)} onCreateGroup={handleCreateGroup} onStartCall={handleStartCall}
+            canModifyMessages={liveUser.role === 'direktor' || liveUser.role === 'orinbosar'}
+            onGetDevSupport={handleGetDevSupport}/>
         )}
         {page==="profile" && (
           <div className="flex-1 overflow-y-auto scrollbar-hide">
@@ -4513,7 +4675,8 @@ export default function App() {
               colorTheme={colorTheme}
               onColorThemeChange={id => { setColorTheme(id); localStorage.setItem("erp_colorTheme", id); }}
               themeMode={themeMode}
-              onThemeModeChange={m => { setThemeMode(m); localStorage.setItem("erp_themeMode", m); }}/>
+              onThemeModeChange={m => { setThemeMode(m); localStorage.setItem("erp_themeMode", m); }}
+              canEditCompany={!!(liveUser.isOwner || liveUser.role === 'direktor')}/>
           </div>
         )}
       </main>

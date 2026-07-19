@@ -286,3 +286,8 @@ input:not([type=file]):not([type=checkbox]):not([type=radio]), select, textarea 
 /* Button press depth (for primary CTAs — pairs with btn:active scale) */
 .btn-primary:active { box-shadow: 0 2px 8px color-mix(in srgb, var(--primary) 30%, transparent) !important; }
 .btn-accent:active  { box-shadow: 0 2px 8px color-mix(in srgb, var(--accent)  30%, transparent) !important; }
+
+/* Mobil pastki navigatsiya uchun kontent maydoni pastki bo'sh joyi */
+/* ios-bottom-bar: height≈70px, bottom=env(safe-area)+14px → 70+14+16=100px base */
+.main-pb-safe { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 100px); }
+@media (min-width: 768px) { .main-pb-safe { padding-bottom: 0; } }

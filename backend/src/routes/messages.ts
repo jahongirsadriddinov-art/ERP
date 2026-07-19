@@ -101,9 +101,13 @@ router.patch('/read', async (req, res) => {
   }
 });
 
-// Tahrirlash / pin
+// Tahrirlash / pin — faqat direktor/o'rinbosar/dasturchi
 router.patch('/:id', async (req, res) => {
   try {
+    const u = req.user;
+    if (u && !u.isDeveloper && u.role !== 'direktor' && u.role !== 'orinbosar') {
+      return res.status(403).json({ error: 'Xabarni tahrirlash ruxsati yo\'q' });
+    }
     const { text, pinned } = req.body;
     const msg = await Message.findOne(scoped({ _id: req.params.id }));
     if (!msg) return res.status(404).json({ error: 'Xabar topilmadi' });
@@ -120,9 +124,13 @@ router.patch('/:id', async (req, res) => {
   }
 });
 
-// O'chirish (soft delete)
+// O'chirish (soft delete) — faqat direktor/o'rinbosar/dasturchi
 router.delete('/:id', async (req, res) => {
   try {
+    const u = req.user;
+    if (u && !u.isDeveloper && u.role !== 'direktor' && u.role !== 'orinbosar') {
+      return res.status(403).json({ error: 'Xabarni o\'chirish ruxsati yo\'q' });
+    }
     const msg = await Message.findOne(scoped({ _id: req.params.id }));
     if (!msg) return res.status(404).json({ error: 'Xabar topilmadi' });
     msg.deleted = true;

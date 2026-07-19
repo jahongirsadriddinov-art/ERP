@@ -7,6 +7,7 @@ export interface IGroup extends Document {
   adminIds: string[];
   createdBy: string;
   companyId?: string; // v1.2 multi-tenant (nullable)
+  devSupport?: boolean; // har firma uchun dasturchi-support chat
   createdAt: Date;
   updatedAt: Date;
 }
@@ -18,6 +19,7 @@ const GroupSchema: Schema = new Schema({
   adminIds: { type: [String], default: [] },
   createdBy: { type: String, required: true },
   companyId: { type: String, index: true }, // v1.2 multi-tenant
+  devSupport: { type: Boolean, default: false, index: true },
 }, { timestamps: true });
 
 export default mongoose.model<IGroup>('Group', GroupSchema);

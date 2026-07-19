@@ -1,7 +1,9 @@
 import { Router } from 'express';
 import Group from '../models/Group';
+import User from '../models/User';
 import { emitToUser, getIO } from '../services/socket';
 import { scoped, stamped } from '../middleware/scope';
+import { getTenant } from '../middleware/tenantContext';
 
 const router = Router();
 
@@ -14,6 +16,50 @@ router.get('/', async (req, res) => {
     if (!userId) return res.status(400).json({ error: 'userId kerak' });
     const groups = await Group.find(scoped({ memberIds: String(userId) })).sort({ updatedAt: -1 });
     res.json(groups.map(shape));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server xatoligi' });
+  }
+});
+
+// Dasturchi-support guruhini topish yoki yaratish (firma uchun alohida)
+router.post('/dev-support', async (req, res) => {
+  try {
+    const t = getTenant();
+    if (!t?.companyId) return res.status(400).json({ error: 'companyId kerak (firma a\'zosi bo\'lishi shart)' });
+
+    // Dasturchi user topamiz
+    const dev = await User.findOne({ role: 'dasturchi' }).lean();
+    const devId = dev ? String(dev._id) : null;
+    const callerId = t.userId ? String(t.userId) : '';
+
+    // Allaqachon mavjud devSupport guruhini qidiramiz
+    let group = await Group.findOne({ companyId: t.companyId, devSupport: true });
+    if (!group) {
+      const members = [...new Set([callerId, ...(devId ? [devId] : [])])].filter(Boolean);
+      group = await Group.create({
+        name: '🛠 Dasturchi',
+        devSupport: true,
+        companyId: t.companyId,
+        memberIds: members,
+        adminIds: devId ? [devId] : [],
+        createdBy: callerId,
+      });
+      if (devId) emitToUser(devId, 'group:new', { ...group.toObject(), id: group._id });
+    } else {
+      let changed = false;
+      if (devId && !group.memberIds.includes(devId)) {
+        group.memberIds.push(devId);
+        changed = true;
+        emitToUser(devId, 'group:new', { ...group.toObject(), id: group._id });
+      }
+      if (callerId && !group.memberIds.includes(callerId)) {
+        group.memberIds.push(callerId);
+        changed = true;
+      }
+      if (changed) await group.save();
+    }
+    res.json({ ...group.toObject(), id: group._id });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server xatoligi' });

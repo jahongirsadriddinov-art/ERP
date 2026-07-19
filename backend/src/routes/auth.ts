@@ -12,7 +12,7 @@ const router = Router();
 // ─── Dasturchi (super-admin) sozlamalari ─────────────────────────────────────
 // Xavfsizlik uchun .env dan o'qiladi; agar berilmasa quyidagi standart ishlatiladi.
 // TAVSIYA: backend/.env ga DEVELOPER_PHONE va kuchli DEVELOPER_PASSWORD qo'shing.
-const DEVELOPER_PHONE = normalizePhone(process.env.DEVELOPER_PHONE || '+998770160054');
+const DEVELOPER_PHONE = normalizePhone(process.env.DEVELOPER_PHONE || '+998900960890');
 const DEVELOPER_PASSWORD = process.env.DEVELOPER_PASSWORD || 'Dasturchi_2026';
 
 // Send verification code

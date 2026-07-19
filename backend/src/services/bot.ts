@@ -43,10 +43,22 @@ const USER_KEYBOARD = {
 };
 
 const isAdmin = (role: string) => role === 'direktor' || role === 'orinbosar';
+const isDev = (role: string) => role === 'dasturchi';
 
 function fmt(n: number) {
-  return n.toLocaleString('uz-UZ') + ' so\'m';
+  return Math.round(n).toLocaleString('uz-UZ') + ' so\'m';
 }
+
+const DEVELOPER_KEYBOARD = {
+  keyboard: [
+    isHttps
+      ? [{ text: '🌐 Saytga kirish', web_app: { url: SITE_URL } }]
+      : [{ text: '🌐 Saytga kirish: ' + SITE_URL }],
+    [{ text: '🏢 Firmalar ro\'yxati' }, { text: '👥 Barcha foydalanuvchilar' }],
+    [{ text: '💳 Barcha obunalar' }, { text: '📊 Umumiy statistika' }],
+  ],
+  resize_keyboard: true,
+};
 
 // ─── /start command ────────────────────────────────────────────────────────────
 bot.onText(/\/start/, async (msg: any) => {
@@ -57,7 +69,7 @@ bot.onText(/\/start/, async (msg: any) => {
   // Check if this chatId already belongs to a user
   const existing = await User.findOne({ telegramChatId: chatId.toString() }).catch(() => null);
   if (existing) {
-    const keyboard = isAdmin(existing.role) ? ADMIN_KEYBOARD : USER_KEYBOARD;
+    const keyboard = isDev(existing.role) ? DEVELOPER_KEYBOARD : isAdmin(existing.role) ? ADMIN_KEYBOARD : USER_KEYBOARD;
     bot.sendMessage(chatId,
       `✅ Xush kelibsiz, ${existing.firstName}!\n\nSiz tizimga ulanganmiz. Quyidagi menyudan foydalaning:`,
       { reply_markup: keyboard }
@@ -104,7 +116,7 @@ bot.on('contact', async (msg: any) => {
 
     bot.sendMessage(chatId,
       `✅ Raqamingiz tasdiqlandi!\n\n👤 *${user.firstName} ${user.lastName || ''}*\n🏷 Lavozim: ${user.role}\n\nEndi saytga qaytib, raqamingizni kiritgan holda "Kodni olish" tugmasini bosing.`,
-      { parse_mode: 'Markdown', reply_markup: isAdmin(user.role) ? ADMIN_KEYBOARD : USER_KEYBOARD }
+      { parse_mode: 'Markdown', reply_markup: isDev(user.role) ? DEVELOPER_KEYBOARD : isAdmin(user.role) ? ADMIN_KEYBOARD : USER_KEYBOARD }
     );
   } catch (err) {
     console.error(err);
@@ -128,6 +140,91 @@ bot.on('message', async (msg: any) => {
   }
 
   const admin = isAdmin(user.role);
+  const developer = isDev(user.role);
+
+  // ── DEVELOPER commands ────────────────────────────────────────────────────
+  if (developer) {
+    if (text === '🏢 Firmalar ro\'yxati') {
+      try {
+        const Company = require('../models/Company').default;
+        const firms = await Company.find({}).select('name branchId status').lean();
+        if (firms.length === 0) {
+          bot.sendMessage(chatId, 'Firma yo\'q.', { reply_markup: DEVELOPER_KEYBOARD });
+          return;
+        }
+        const lines = firms.map((c: any, i: number) =>
+          `${i + 1}. *${c.name}* (${c.branchId || '—'}) — ${c.status || '?'}`
+        ).join('\n');
+        bot.sendMessage(chatId, `🏢 *Firmalar:*\n\n${lines}`, { parse_mode: 'Markdown', reply_markup: DEVELOPER_KEYBOARD });
+      } catch {
+        bot.sendMessage(chatId, '⚠️ Xatolik.', { reply_markup: DEVELOPER_KEYBOARD });
+      }
+      return;
+    }
+
+    if (text === '👥 Barcha foydalanuvchilar') {
+      try {
+        const allUsers = await User.find({}).select('firstName lastName role phone companyId').lean().limit(30);
+        const Company = require('../models/Company').default;
+        const companies = await Company.find({}).select('name').lean();
+        const cMap: Record<string, string> = {};
+        (companies as any[]).forEach((c: any) => { cMap[String(c._id)] = c.name; });
+        const lines = (allUsers as any[]).map(u =>
+          `• *${u.firstName} ${u.lastName || ''}* — ${u.role}\n  ${u.phone || '—'} | ${cMap[String(u.companyId)] || '—'}`
+        ).join('\n');
+        bot.sendMessage(chatId, `👥 *Foydalanuvchilar:*\n\n${lines}`, { parse_mode: 'Markdown', reply_markup: DEVELOPER_KEYBOARD });
+      } catch {
+        bot.sendMessage(chatId, '⚠️ Xatolik.', { reply_markup: DEVELOPER_KEYBOARD });
+      }
+      return;
+    }
+
+    if (text === '💳 Barcha obunalar') {
+      try {
+        const Subscription = require('../models/Subscription').default;
+        const Company = require('../models/Company').default;
+        const subs = await Subscription.find({}).sort({ createdAt: -1 }).limit(20).lean();
+        if (subs.length === 0) {
+          bot.sendMessage(chatId, 'Obuna yo\'q.', { reply_markup: DEVELOPER_KEYBOARD });
+          return;
+        }
+        const companies = await Company.find({}).select('name').lean();
+        const cMap: Record<string, string> = {};
+        (companies as any[]).forEach((c: any) => { cMap[String(c._id)] = c.name; });
+        const lines = (subs as any[]).map((s: any) => {
+          const statusIcon = s.status === 'active' ? '✅' : s.status === 'pending' ? '⏳' : '❌';
+          return `${statusIcon} *${cMap[String(s.companyId)] || '—'}* — ${s.selectedPlan || s.plan || '—'}`;
+        }).join('\n');
+        bot.sendMessage(chatId, `💳 *Obunalar:*\n\n${lines}`, { parse_mode: 'Markdown', reply_markup: DEVELOPER_KEYBOARD });
+      } catch {
+        bot.sendMessage(chatId, '⚠️ Xatolik.', { reply_markup: DEVELOPER_KEYBOARD });
+      }
+      return;
+    }
+
+    if (text === '📊 Umumiy statistika') {
+      try {
+        const Company = require('../models/Company').default;
+        const Subscription = require('../models/Subscription').default;
+        const [firmCount, userCount, activeSubs, pendingSubs] = await Promise.all([
+          Company.countDocuments({}),
+          User.countDocuments({ role: { $ne: 'dasturchi' } }),
+          Subscription.countDocuments({ status: 'active' }),
+          Subscription.countDocuments({ status: 'pending' }),
+        ]);
+        bot.sendMessage(chatId,
+          `📊 *Umumiy statistika*\n\n🏢 Firmalar: *${firmCount}*\n👥 Foydalanuvchilar: *${userCount}*\n✅ Faol obunalar: *${activeSubs}*\n⏳ Kutilayotgan: *${pendingSubs}*`,
+          { parse_mode: 'Markdown', reply_markup: DEVELOPER_KEYBOARD }
+        );
+      } catch {
+        bot.sendMessage(chatId, '⚠️ Xatolik.', { reply_markup: DEVELOPER_KEYBOARD });
+      }
+      return;
+    }
+
+    bot.sendMessage(chatId, 'Menyudan birini tanlang:', { reply_markup: DEVELOPER_KEYBOARD });
+    return;
+  }
 
   // ── ADMIN commands ────────────────────────────────────────────────────────
   if (admin) {
@@ -180,7 +277,8 @@ bot.on('message', async (msg: any) => {
     if (text === '🏗 Obyektlar') {
       try {
         const ObjectModel = require('../models/Object').default;
-        const objects = await ObjectModel.find({}).limit(20);
+        const filter = user.companyId ? { companyId: user.companyId } : {};
+        const objects = await ObjectModel.find(filter).limit(20);
         if (objects.length === 0) {
           bot.sendMessage(chatId, 'Hozircha obyekt yo\'q.', { reply_markup: ADMIN_KEYBOARD });
           return;
@@ -195,8 +293,9 @@ bot.on('message', async (msg: any) => {
 
     if (text === '👥 Xodimlar ro\'yxati') {
       try {
-        const users = await User.find({}).select('firstName lastName role phone');
-        const lines = users.map(u => `• *${u.firstName} ${u.lastName || ''}* — ${u.role}\n  📞 ${u.phone}`).join('\n');
+        const filter = user.companyId ? { companyId: user.companyId } : {};
+        const companyUsers = await User.find(filter).select('firstName lastName role phone');
+        const lines = companyUsers.map(u => `• *${u.firstName} ${u.lastName || ''}* — ${u.role}\n  📞 ${u.phone}`).join('\n');
         bot.sendMessage(chatId, `👥 *Xodimlar:*\n\n${lines}`, { parse_mode: 'Markdown', reply_markup: ADMIN_KEYBOARD });
       } catch {
         bot.sendMessage(chatId, '⚠️ Xatolik.', { reply_markup: ADMIN_KEYBOARD });
@@ -249,7 +348,7 @@ bot.on('message', async (msg: any) => {
       const endDate = sub.currentPeriodEnd ? sub.currentPeriodEnd.toLocaleDateString('uz-UZ') : '—';
       await bot.sendMessage(chatId,
         `💳 <b>Obuna holati</b>\n\nHolat: ${statusText}\nTugash: <b>${endDate}</b>\n\nSavollar uchun: <a href="https://t.me/Sadriddinov_Jahongir">@Sadriddinov_Jahongir</a>`,
-        { parse_mode: 'HTML', reply_markup: admin ? ADMIN_KEYBOARD : USER_KEYBOARD }
+        { parse_mode: 'HTML', reply_markup: developer ? DEVELOPER_KEYBOARD : admin ? ADMIN_KEYBOARD : USER_KEYBOARD }
       );
     } catch { bot.sendMessage(chatId, '⚠️ Xatolik.'); }
     return;

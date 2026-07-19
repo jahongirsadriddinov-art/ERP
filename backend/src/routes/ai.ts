@@ -1,5 +1,4 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import Anthropic from '@anthropic-ai/sdk';
 import { requireAuth } from '../middleware/auth';
 import { getTenant } from '../middleware/tenantContext';
 import { scoped, stamped } from '../middleware/scope';
@@ -10,13 +9,59 @@ import { emitToUser } from '../services/socket';
 
 const router = Router();
 
-let anthropic: Anthropic | null = null;
-function getClient(): Anthropic {
-  if (!anthropic) {
-    if (!process.env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY env yo\'q');
-    anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+// ─── Gemini key rotation ──────────────────────────────────────────────────────
+const GEMINI_KEYS: string[] = (
+  process.env.GEMINI_API_KEYS || process.env.GEMINI_API_KEY || ''
+).split(',').map(k => k.trim()).filter(Boolean);
+
+let keyIdx = 0;
+function currentKey(): string { return GEMINI_KEYS[keyIdx] || ''; }
+function rotateKey(): boolean {
+  const next = (keyIdx + 1) % GEMINI_KEYS.length;
+  if (next === keyIdx) return false;
+  keyIdx = next;
+  console.warn(`[AI] Gemini key ${keyIdx + 1}/${GEMINI_KEYS.length} ga o'tildi`);
+  return true;
+}
+function isQuotaError(body: any, status: number): boolean {
+  if (status === 429) return true;
+  const msg = JSON.stringify(body || '');
+  return msg.includes('RESOURCE_EXHAUSTED') || msg.includes('quota') || msg.includes('rate limit');
+}
+
+async function geminiChat(systemPrompt: string, contents: Array<{ role: string; parts: Array<{ text: string }> }>): Promise<string> {
+  if (!GEMINI_KEYS.length) throw new Error('GEMINI_API_KEY env yo\'q');
+
+  for (let attempt = 0; attempt < GEMINI_KEYS.length; attempt++) {
+    const key = currentKey();
+    if (!key) throw new Error('Gemini API kaliti topilmadi');
+
+    const resp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: systemPrompt }] },
+          contents,
+          generationConfig: { maxOutputTokens: 512, temperature: 0.1 },
+        }),
+      }
+    );
+
+    const data = await resp.json();
+
+    if (!resp.ok && isQuotaError(data, resp.status)) {
+      if (rotateKey()) continue;
+      throw new Error('Barcha Gemini kalitlari limitga yetdi');
+    }
+
+    if (!resp.ok) throw new Error(`Gemini API xatosi: ${resp.status} — ${JSON.stringify(data)}`);
+
+    return (data?.candidates?.[0]?.content?.parts?.[0]?.text as string) || '';
   }
-  return anthropic;
+
+  throw new Error('Gemini API bilan ulanishda xatolik');
 }
 
 // Faqat direktor/orinbosar/isOwner — dasturchi emas
@@ -68,22 +113,17 @@ Oddiy javob uchun:
 Xabar yuborish uchun:
 {"type":"action","response":"Tasdiqni so'rash matni","action":{"type":"send_message","toUserId":"id","toUserName":"Ism","text":"xabar matni","description":"Qisqa tavsif"}}`;
 
-    const msgs = [
-      ...(history as any[]).slice(-8).map(h => ({
-        role: h.role as 'user' | 'assistant',
-        content: h.content,
+    // Map history to Gemini contents format (assistant → model)
+    const contents = [
+      ...(history as any[]).slice(-8).map((h: any) => ({
+        role: h.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: h.content }],
       })),
-      { role: 'user' as const, content: message.trim() },
+      { role: 'user', parts: [{ text: message.trim() }] },
     ];
 
-    const resp = await getClient().messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 512,
-      system: SYSTEM,
-      messages: msgs,
-    });
+    const raw = await geminiChat(SYSTEM, contents);
 
-    const raw = resp.content[0]?.type === 'text' ? resp.content[0].text.trim() : '{}';
     let parsed: any;
     try {
       const match = raw.match(/\{[\s\S]*\}/);
@@ -97,7 +137,7 @@ Xabar yuborish uchun:
     res.json(parsed);
   } catch (err: any) {
     console.error('[AI chat]', err.message);
-    if (err.message?.includes('API_KEY') || err.status === 401) {
+    if (err.message?.includes('API_KEY') || err.message?.includes('env yo\'q')) {
       return res.status(500).json({ error: 'AI API kaliti sozlanmagan' });
     }
     res.status(500).json({ error: 'AI xizmati bilan ulanishda xatolik' });

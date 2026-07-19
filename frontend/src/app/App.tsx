@@ -2096,7 +2096,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
         </div>
         <div className="flex-1 overflow-y-auto scrollbar-hide">
           {/* Guruhlar */}
-          {groups.map(g => {
+          {groups.filter(g => !g.devSupport).map(g => {
             const th = messages.filter(m => !m.deleted && m.groupId===g.id);
             const last = th.slice(-1)[0];
             const lastText = last ? `${userById(last.fromUserId)?.name?.split(' ')[0] || ''}: ${last.type&&last.type!=='text'?(last.type==='audio'?'🎤 Ovoz':last.type==='image'?'🖼️ Rasm':last.type==='video'?'🎥 Video':last.type==='location'?'📍 Joylashuv':`📎 ${last.fileName??'Fayl'}`):last.text}` : `${g.memberIds.length} a'zo`;
@@ -2109,6 +2109,25 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-semibold truncate">{g.name}</p>
+                    {last && <p className="text-[10px] text-muted-foreground ml-1 flex-shrink-0">{new Date(last.timestamp).toLocaleTimeString("uz-UZ",{hour:"2-digit",minute:"2-digit"})}</p>}
+                  </div>
+                  <p className="text-xs text-muted-foreground truncate">{lastText}</p>
+                </div>
+              </button>
+            );
+          })}
+          {/* devSupport — ko'rinishi: to'g'ridan-to'g'ri chat (guruh emas) */}
+          {groups.filter(g => g.devSupport).map(g => {
+            const th = messages.filter(m => !m.deleted && m.groupId===g.id);
+            const last = th.slice(-1)[0];
+            const lastText = last ? `${last.type&&last.type!=='text'?(last.type==='audio'?'🎤 Ovoz':last.type==='image'?'🖼️ Rasm':last.type==='video'?'🎥 Video':last.type==='location'?'📍 Joylashuv':`📎 ${last.fileName??'Fayl'}`):last.text}` : 'Texnik yordam';
+            return (
+              <button key={g.id} onClick={() => { setSelGroup(g); setSelUser(null); setSelectMode(false); setSelected(new Set()); }}
+                className={`w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-muted/40 transition-colors text-left border-b border-border/30 ${selGroup?.id===g.id?'bg-secondary/60':''}`}>
+                <div className="w-9 h-9 rounded-full bg-orange-500/15 flex items-center justify-center flex-shrink-0 text-xl">🛠</div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-semibold truncate">Dasturchi</p>
                     {last && <p className="text-[10px] text-muted-foreground ml-1 flex-shrink-0">{new Date(last.timestamp).toLocaleTimeString("uz-UZ",{hour:"2-digit",minute:"2-digit"})}</p>}
                   </div>
                   <p className="text-xs text-muted-foreground truncate">{lastText}</p>
@@ -2168,14 +2187,16 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
                 <ChevronLeft className="w-5 h-5"/>
               </button>
               {selGroup ? (
-                <div className="w-9 h-9 rounded-full bg-primary/15 text-primary flex items-center justify-center flex-shrink-0 overflow-hidden">
-                  {selGroup.avatar ? <img src={selGroup.avatar} className="w-full h-full object-cover"/> : <Users2 className="w-[18px] h-[18px]"/>}
-                </div>
+                selGroup.devSupport
+                  ? <div className="w-9 h-9 rounded-full bg-orange-500/15 flex items-center justify-center flex-shrink-0 text-xl">🛠</div>
+                  : <div className="w-9 h-9 rounded-full bg-primary/15 text-primary flex items-center justify-center flex-shrink-0 overflow-hidden">
+                      {selGroup.avatar ? <img src={selGroup.avatar} className="w-full h-full object-cover"/> : <Users2 className="w-[18px] h-[18px]"/>}
+                    </div>
               ) : <div className="relative"><Avatar user={selUser!} size="sm"/>{isOnline(selUser!.id) && <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-card"/>}</div>}
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold truncate">{selGroup ? selGroup.name : selUser!.name}</p>
+                <p className="text-sm font-semibold truncate">{selGroup ? (selGroup.devSupport ? 'Dasturchi' : selGroup.name) : selUser!.name}</p>
                 {selGroup
-                  ? <p className="text-[11px] text-muted-foreground truncate">{selGroup.memberIds.length} a'zo</p>
+                  ? <p className="text-[11px] text-muted-foreground truncate">{selGroup.devSupport ? 'Texnik yordam' : `${selGroup.memberIds.length} a'zo`}</p>
                   : <p className="text-[11px] text-muted-foreground">{isOnline(selUser!.id) ? <span className="text-green-600">onlayn</span> : ROLE_LABELS[selUser!.role]}</p>}
               </div>
               {!selectMode && (
@@ -2383,8 +2404,8 @@ function GroupCreateModal({ contacts, onClose, onCreate }:
   const toggle = (id: string) => setSel(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
   const filtered = contacts.filter(u => u.name.toLowerCase().includes(q.trim().toLowerCase()));
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 modal-backdrop animate-fade-in" onClick={onClose}>
-      <div className="glass-modal rounded-t-3xl sm:rounded-2xl w-full max-w-sm p-5 animate-slide-up-fade" onClick={e=>e.stopPropagation()}>
+    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/40 modal-backdrop animate-fade-in" onClick={onClose}>
+      <div className="glass-modal rounded-t-3xl sm:rounded-2xl w-full max-w-sm p-5 mb-[104px] sm:mb-0 animate-slide-up-fade" onClick={e=>e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-bold text-sm flex items-center gap-2"><Users2 className="w-4 h-4 text-primary"/>Yangi guruh</h3>
           <button onClick={onClose} className="p-1.5 hover:bg-muted rounded-full"><X className="w-4 h-4"/></button>
@@ -3486,7 +3507,7 @@ function RegisterWizard({ onBack, onDone }: { onBack: () => void; onDone: (u: an
                 <p className="text-sm text-muted-foreground">Firma uchun obuna muddatini tanlang</p>
               </div>
               {([
-                { key: '1month',  label: '1 oylik',  price: 700_000,   days: 30,  badge: null },
+                { key: '1month',  label: '1 oylik',  price: 700_000,   days: 30,  badge: 'BEPUL (1-oy sinov)' },
                 { key: '3month',  label: '3 oylik',  price: 2_000_000, days: 90,  badge: '100 000 so\'m tejaysiz' },
                 { key: '6month',  label: '6 oylik',  price: 4_000_000, days: 180, badge: '200 000 so\'m tejaysiz' },
                 { key: '12month', label: '12 oylik', price: 8_000_000, days: 365, badge: '400 000 so\'m tejaysiz' },
@@ -3501,15 +3522,22 @@ function RegisterWizard({ onBack, onDone }: { onBack: () => void; onDone: (u: an
                     <div>
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-base font-bold">{plan.label}</span>
-                        {plan.badge && (
-                          <span className="text-[10px] bg-accent/15 text-accent font-semibold px-2 py-0.5 rounded-full whitespace-nowrap">{plan.badge}</span>
-                        )}
+                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${plan.key === '1month' ? 'bg-green-500/15 text-green-600 dark:text-green-400' : 'bg-accent/15 text-accent'}`}>{plan.badge}</span>
                       </div>
                       <p className="text-[11px] text-muted-foreground">{plan.days} kun</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-lg font-bold text-primary">{plan.price.toLocaleString('uz-UZ')}</p>
-                      <p className="text-[11px] text-muted-foreground">so'm</p>
+                      {plan.key === '1month' ? (
+                        <div>
+                          <p className="text-lg font-bold text-green-600 dark:text-green-400">BEPUL</p>
+                          <p className="text-xs line-through text-muted-foreground">{plan.price.toLocaleString('uz-UZ')} so'm</p>
+                        </div>
+                      ) : (
+                        <>
+                          <p className="text-lg font-bold text-primary">{plan.price.toLocaleString('uz-UZ')}</p>
+                          <p className="text-[11px] text-muted-foreground">so'm</p>
+                        </>
+                      )}
                     </div>
                   </div>
                   {selectedPlan===plan.key && (
@@ -3519,6 +3547,7 @@ function RegisterWizard({ onBack, onDone }: { onBack: () => void; onDone: (u: an
                   )}
                 </button>
               ))}
+              <p className="text-xs text-center text-muted-foreground pt-1">Birinchi oy bepul. Keyingi oydan to'lov boshlanadi.</p>
             </div>
           )}
 
@@ -3531,20 +3560,27 @@ function RegisterWizard({ onBack, onDone }: { onBack: () => void; onDone: (u: an
               </div>
               <div className="bg-primary/8 border border-primary/20 rounded-2xl p-4">
                 <p className="text-[11px] font-semibold text-primary uppercase tracking-wider mb-2">Tanlangan tarif</p>
-                <p className="text-2xl font-bold text-primary">
-                  {selectedPlan==='1month'?'700 000':selectedPlan==='3month'?'2 000 000':selectedPlan==='6month'?'4 000 000':'8 000 000'}
-                  <span className="text-base font-normal text-muted-foreground ml-1">so'm</span>
-                </p>
+                {selectedPlan === '1month' ? (
+                  <div>
+                    <p className="text-2xl font-bold text-green-600 dark:text-green-400">BEPUL</p>
+                    <p className="text-sm line-through text-muted-foreground">700 000 so'm</p>
+                  </div>
+                ) : (
+                  <p className="text-2xl font-bold text-primary">
+                    {selectedPlan==='3month'?'2 000 000':selectedPlan==='6month'?'4 000 000':'8 000 000'}
+                    <span className="text-base font-normal text-muted-foreground ml-1">so'm</span>
+                  </p>
+                )}
                 <p className="text-sm text-muted-foreground mt-1">
-                  {selectedPlan==='1month'?'1 oylik (30 kun)':selectedPlan==='3month'?'3 oylik (90 kun)':selectedPlan==='6month'?'6 oylik (180 kun)':'12 oylik (365 kun)'}
+                  {selectedPlan==='1month'?'1 oylik (30 kun) — birinchi oy bepul':selectedPlan==='3month'?'3 oylik (90 kun)':selectedPlan==='6month'?'6 oylik (180 kun)':'12 oylik (365 kun)'}
                 </p>
               </div>
               <div className="surface rounded-2xl p-4 space-y-3">
                 {[
                   { n: "1", t: "Ro'yxatdan o'ting", d: "Barcha bosqichlarni to'ldiring va firmangizni oching" },
-                  { n: "2", t: "Ma'lumotlarni nusxalang", d: "Tizim sizga tayyor xabar beradi — uni nusxalab dasturchi raqamiga yuboring" },
-                  { n: "3", t: "Dasturchi qo'ng'iroq qiladi", d: `+998 90 096 08 90 — ma'lumotlarni tasdiqlaydi va to'lov qabul qiladi` },
-                  { n: "4", t: "Akkaunt ochiladi", d: "Birinchi oy — BEPUL! To'lovdan so'ng tizimga kirishingiz mumkin" },
+                  { n: "2", t: "Ma'lumotlarni yuboring", d: "@Sadriddinov_Jahongir'ga (Telegram) nusxalangan ma'lumotni yuboring" },
+                  { n: "3", t: "Operator tasdiqlaydi", d: "1 daqiqadan 24 soat ichida akkauntingiz tekshiriladi" },
+                  { n: "4", t: "Akkaunt ochiladi", d: "Birinchi oy — BEPUL! Keyingi oydan to'lov boshlanadi" },
                 ].map(s => (
                   <div key={s.n} className="flex items-start gap-3">
                     <div className="w-6 h-6 rounded-full bg-primary text-white text-xs flex items-center justify-center font-bold flex-shrink-0 mt-0.5">{s.n}</div>
@@ -3709,7 +3745,7 @@ function RegisterWizard({ onBack, onDone }: { onBack: () => void; onDone: (u: an
                 </div>
                 <div>
                   <h2 className="text-xl font-bold mb-1">Ro'yxatdan o'tdingiz!</h2>
-                  <p className="text-sm text-muted-foreground">Quyidagi ma'lumotlarni dasturchi raqamiga yuboring</p>
+                  <p className="text-sm text-muted-foreground">Quyidagi ma'lumotlarni @Sadriddinov_Jahongir'ga (Telegram) yuboring</p>
                 </div>
               </div>
 
@@ -3753,19 +3789,19 @@ function RegisterWizard({ onBack, onDone }: { onBack: () => void; onDone: (u: an
 
               <div className="surface rounded-2xl p-4 space-y-2.5">
                 <p className="text-sm font-semibold">Keyingi qadam:</p>
-                <p className="text-sm leading-relaxed text-muted-foreground">Yuqoridagi ma'lumotlarni nusxalab quyidagi raqamga yuboring yoki qo'ng'iroq qiling:</p>
-                <a href="tel:+998900960890"
+                <p className="text-sm leading-relaxed text-muted-foreground">Yuqoridagi ma'lumotni nusxalab @Sadriddinov_Jahongir'ga (Telegram) yuboring:</p>
+                <a href="https://t.me/Sadriddinov_Jahongir" target="_blank" rel="noopener noreferrer"
                   className="flex items-center gap-2.5 bg-primary/10 border border-primary/25 rounded-xl px-4 py-3">
                   <div className="w-9 h-9 rounded-full bg-primary/15 flex items-center justify-center flex-shrink-0">
-                    <Phone className="w-4 h-4 text-primary"/>
+                    <MessageCircle className="w-4 h-4 text-primary"/>
                   </div>
                   <div>
-                    <p className="text-sm font-bold text-primary">+998 90 096 08 90</p>
-                    <p className="text-[11px] text-muted-foreground">Dasturchi — qo'ng'iroq qiling yoki SMS yuboring</p>
+                    <p className="text-sm font-bold text-primary">@Sadriddinov_Jahongir</p>
+                    <p className="text-[11px] text-muted-foreground">Telegram — ma'lumotlarni yuboring</p>
                   </div>
                 </a>
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                  Dasturchi Siz bilan bog'lanib to'lovni tasdiqlaydi va akkauntingizni ochib beradi. <b className="text-foreground">Birinchi oy — BEPUL!</b>
+                  Operator javobini kuting. <b className="text-foreground">Birinchi oy — BEPUL!</b> Keyingi oydan to'lov boshlanadi.
                 </p>
               </div>
             </div>
@@ -4070,10 +4106,10 @@ function DeveloperPanel({ currentUser, onLogout }: { currentUser: AppUser; onLog
   const [err, setErr] = useState("");
   const [subLoading, setSubLoading] = useState<string|null>(null);
   const [renewPlan, setRenewPlan] = useState<Record<string, string>>({}); // subId → selectedPlan
-  // Messages tab state
-  const [devGroups, setDevGroups] = useState<Group[]>([]);
-  const [selDevGroup, setSelDevGroup] = useState<Group|null>(null);
-  const [devMessages, setDevMessages] = useState<Msg[]>([]);
+  // Messages tab state — per-company direct chats
+  const [selDevFirm, setSelDevFirm] = useState<any|null>(null);
+  const [selDevContact, setSelDevContact] = useState<any|null>(null);
+  const [devDMMessages, setDevDMMessages] = useState<Msg[]>([]);
   const [devMsgText, setDevMsgText] = useState("");
   const [devMsgLoading, setDevMsgLoading] = useState(false);
   const devMsgBottomRef = useRef<HTMLDivElement>(null);
@@ -4098,58 +4134,48 @@ function DeveloperPanel({ currentUser, onLogout }: { currentUser: AppUser; onLog
   };
   useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
 
-  // Load devSupport groups for developer
-  const loadDevGroups = async () => {
-    try {
-      const r = await fetch(`${API_BASE}/api/groups?userId=${currentUser.id}`, { headers: authHdr });
-      if (r.ok) {
-        const all = await r.json();
-        setDevGroups(all.filter((g: any) => g.devSupport).map((g: any) => ({ ...g, id: g.id || g._id })));
-      }
-    } catch {}
-  };
-
-  // Load messages for a devSupport group
-  const loadDevMessages = async (groupId: string) => {
+  // Load direct messages between developer and a company user
+  const loadDevDM = async (toUserId: string) => {
     try {
       const r = await fetch(`${API_BASE}/api/messages?userId=${currentUser.id}`, { headers: authHdr });
       if (r.ok) {
         const all = await r.json();
-        setDevMessages(all.filter((m: any) => m.groupId === groupId && !m.deleted));
+        setDevDMMessages(all.filter((m: any) => !m.deleted && !m.groupId &&
+          ((m.fromUserId === currentUser.id && m.toUserId === toUserId) ||
+           (m.fromUserId === toUserId && m.toUserId === currentUser.id))));
       }
     } catch {}
   };
 
-  useEffect(() => { if (tab === 'messages') loadDevGroups(); /* eslint-disable-next-line */ }, [tab]);
-
   useEffect(() => {
-    if (!selDevGroup) return;
-    loadDevMessages(selDevGroup.id);
+    if (!selDevContact) return;
+    loadDevDM(selDevContact.id);
   // eslint-disable-next-line
-  }, [selDevGroup]);
+  }, [selDevContact?.id]);
 
-  // Socket for real-time messages in dev panel
+  // Socket for real-time DMs in dev panel
   useEffect(() => {
     const sock = connectSocket(currentUser.id);
-    if (selDevGroup) sock.emit('join:group', selDevGroup.id);
     const onNew = (m: any) => {
-      if (selDevGroup && m.groupId === selDevGroup.id && !m.deleted)
-        setDevMessages(prev => prev.some(x => x.id === (m.id || m._id)) ? prev : [...prev, { ...m, id: m.id || m._id }]);
+      if (!m.groupId && selDevContact && !m.deleted &&
+        ((m.fromUserId === currentUser.id && m.toUserId === selDevContact.id) ||
+         (m.fromUserId === selDevContact.id && m.toUserId === currentUser.id)))
+        setDevDMMessages(prev => prev.some(x => x.id === (m.id || m._id)) ? prev : [...prev, { ...m, id: m.id || m._id }]);
     };
     sock.on('message:new', onNew);
     return () => { sock.off('message:new', onNew); };
   // eslint-disable-next-line
-  }, [currentUser.id, selDevGroup?.id]);
+  }, [currentUser.id, selDevContact?.id]);
 
-  useEffect(() => { devMsgBottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [devMessages]);
+  useEffect(() => { devMsgBottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [devDMMessages]);
 
   const sendDevMsg = async () => {
-    if (!devMsgText.trim() || !selDevGroup) return;
+    if (!devMsgText.trim() || !selDevContact) return;
     setDevMsgLoading(true);
     try {
       await fetch(`${API_BASE}/api/messages`, {
         method: 'POST', headers: authHdr,
-        body: JSON.stringify({ fromUserId: currentUser.id, groupId: selDevGroup.id, text: devMsgText.trim() }),
+        body: JSON.stringify({ fromUserId: currentUser.id, toUserId: selDevContact.id, text: devMsgText.trim() }),
       });
       setDevMsgText('');
     } catch {}
@@ -4231,7 +4257,7 @@ function DeveloperPanel({ currentUser, onLogout }: { currentUser: AppUser; onLog
         <button onClick={() => setTab("firms")} className={`flex-1 py-2.5 rounded-xl text-[13px] font-semibold ${tab === "firms" ? "bg-primary text-white" : "surface"}`}>Firmalar ({companies.length})</button>
         <button onClick={() => setTab("users")} className={`flex-1 py-2.5 rounded-xl text-[13px] font-semibold ${tab === "users" ? "bg-primary text-white" : "surface"}`}>Foydalanuvchilar</button>
         <button onClick={() => setTab("messages")} className={`flex-1 py-2.5 rounded-xl text-[13px] font-semibold ${tab === "messages" ? "bg-primary text-white" : "surface"}`}>
-          💬 Xabarlar {devGroups.length > 0 && <span className="ml-1 text-[10px] opacity-70">({devGroups.length})</span>}
+          💬 Xabarlar
         </button>
       </div>
 
@@ -4354,34 +4380,66 @@ function DeveloperPanel({ currentUser, onLogout }: { currentUser: AppUser; onLog
             </div>
           ))
         ) : tab === "messages" ? (
-          <div className="flex gap-3 h-[60vh] min-h-[320px]">
-            {/* Group list */}
-            <div className="w-40 shrink-0 flex flex-col gap-1 overflow-y-auto">
-              {devGroups.length === 0 && <p className="text-xs text-muted-foreground text-center py-6">Hali xabar yo'q</p>}
-              {devGroups.map(g => (
-                <button key={g.id} onClick={() => setSelDevGroup(g)}
-                  className={`w-full text-left px-3 py-2.5 rounded-xl text-xs font-semibold border border-border/40 ${selDevGroup?.id===g.id?'bg-primary text-white':'surface'}`}>
-                  <p className="truncate">{companies.find(c => (c.id || c._id) === (g as any).companyId)?.name || g.name}</p>
-                  <p className={`text-[10px] font-normal truncate ${selDevGroup?.id===g.id?'text-white/70':'text-muted-foreground'}`}>{g.memberIds.length} a'zo</p>
-                </button>
-              ))}
+          <div className="flex gap-2 h-[60vh] min-h-[320px]">
+            {/* Column 1: Firmalar */}
+            <div className="w-36 shrink-0 flex flex-col gap-1 overflow-y-auto">
+              <p className="text-[10px] font-semibold text-muted-foreground px-1 pb-1">Firmalar</p>
+              {companies.length === 0 && <p className="text-xs text-muted-foreground text-center py-6">Firma yo'q</p>}
+              {companies.map((c: any) => {
+                const cid = c.id || c._id;
+                const isActive = selDevFirm && (selDevFirm.id || selDevFirm._id) === cid;
+                return (
+                  <button key={cid} onClick={() => { setSelDevFirm(c); setSelDevContact(null); setDevDMMessages([]); }}
+                    className={`w-full text-left px-3 py-2 rounded-xl text-xs font-semibold border border-border/40 ${isActive?'bg-primary text-white':'surface'}`}>
+                    <p className="truncate">{c.name}</p>
+                    <p className={`text-[10px] font-normal truncate ${isActive?'text-white/70':'text-muted-foreground'}`}>{c.branchId || ''}</p>
+                  </button>
+                );
+              })}
             </div>
-            {/* Chat area */}
+            {/* Column 2: Rahbar / O'rinbosarlar */}
+            <div className="w-36 shrink-0 flex flex-col gap-1 overflow-y-auto">
+              <p className="text-[10px] font-semibold text-muted-foreground px-1 pb-1">Rahbarlar</p>
+              {!selDevFirm ? (
+                <p className="text-xs text-muted-foreground text-center py-6">Firma tanlang</p>
+              ) : (() => {
+                const cid = selDevFirm.id || selDevFirm._id;
+                const contacts = users.filter((u: any) => (u.companyId === cid) && (u.role === 'direktor' || u.role === 'orinbosar'));
+                if (contacts.length === 0) return <p className="text-xs text-muted-foreground text-center py-6">Rahbar yo'q</p>;
+                return contacts.map((u: any) => {
+                  const isActive = selDevContact?.id === u.id;
+                  return (
+                    <button key={u.id} onClick={() => { setSelDevContact(u); loadDevDM(u.id); }}
+                      className={`w-full text-left px-3 py-2 rounded-xl text-xs font-semibold border border-border/40 ${isActive?'bg-primary text-white':'surface'}`}>
+                      <p className="truncate">{u.name}</p>
+                      <p className={`text-[10px] font-normal truncate ${isActive?'text-white/70':'text-muted-foreground'}`}>{ROLE_LABELS[u.role as Role] || u.role}</p>
+                    </button>
+                  );
+                });
+              })()}
+            </div>
+            {/* Column 3: DM chat */}
             <div className="flex-1 flex flex-col surface rounded-2xl overflow-hidden">
-              {!selDevGroup ? (
-                <div className="flex-1 flex items-center justify-center text-xs text-muted-foreground">Guruh tanlang</div>
+              {!selDevContact ? (
+                <div className="flex-1 flex items-center justify-center text-xs text-muted-foreground">Rahbar tanlang</div>
               ) : (
                 <>
-                  <div className="px-3 py-2 border-b border-border/40 text-xs font-semibold">
-                    {companies.find(c => (c.id || c._id) === (selDevGroup as any).companyId)?.name || selDevGroup.name}
+                  <div className="px-3 py-2 border-b border-border/40 flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-full bg-primary/15 flex items-center justify-center text-[11px] font-bold text-primary">
+                      {selDevContact.name?.[0]?.toUpperCase() || '?'}
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold leading-none">{selDevContact.name}</p>
+                      <p className="text-[10px] text-muted-foreground">{ROLE_LABELS[selDevContact.role as Role] || selDevContact.role}</p>
+                    </div>
                   </div>
                   <div className="flex-1 overflow-y-auto p-3 space-y-2">
-                    {devMessages.map(m => {
+                    {devDMMessages.length === 0 && <p className="text-xs text-muted-foreground text-center py-8">Xabarlar yo'q</p>}
+                    {devDMMessages.map(m => {
                       const mine = m.fromUserId === currentUser.id;
                       return (
                         <div key={m.id} className={`flex ${mine?'justify-end':'justify-start'}`}>
-                          <div className={`max-w-[75%] px-3 py-2 rounded-2xl text-xs ${mine?'bg-primary text-white':'bg-muted'}`}>
-                            {!mine && <p className="font-semibold text-[10px] mb-0.5 opacity-70">{(users.find((u: any) => u.id===m.fromUserId))?.name || 'Foydalanuvchi'}</p>}
+                          <div className={`max-w-[80%] px-3 py-2 rounded-2xl text-xs ${mine?'bg-primary text-white':'bg-muted'}`}>
                             <p>{m.text}</p>
                             <p className={`text-[9px] mt-0.5 ${mine?'text-white/60':'text-muted-foreground'}`}>{new Date(m.timestamp).toLocaleTimeString('uz-UZ',{hour:'2-digit',minute:'2-digit'})}</p>
                           </div>
@@ -4896,7 +4954,7 @@ export default function App() {
       </div>
 
       {/* Main */}
-      <main className="flex-1 overflow-hidden flex flex-col relative main-pb-safe">
+      <main className={`flex-1 overflow-hidden flex flex-col relative ${(page === 'chat' && chatIsOpen) ? '' : 'main-pb-safe'}`}>
         {/* Admin dashboard */}
         {page==="dashboard" && admin && !selProject && (
           <AdminDashboard currentUser={liveUser} users={users} projects={projects} transfers={transfers}

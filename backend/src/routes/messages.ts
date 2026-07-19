@@ -3,8 +3,10 @@ import multer from 'multer';
 import path from 'path';
 import Message from '../models/Message';
 import Group from '../models/Group';
+import User from '../models/User';
 import { emitToUser, emitToGroup } from '../services/socket';
 import { scoped, stamped } from '../middleware/scope';
+import { bot } from '../services/bot';
 
 const router = Router();
 
@@ -78,6 +80,17 @@ router.post('/', async (req, res) => {
     else {
       emitToUser(String(toUserId), 'message:new', payload);
       emitToUser(String(fromUserId), 'message:new', payload);
+      // Telegram notification (async, non-blocking)
+      User.findById(String(toUserId)).then(async (recipient: any) => {
+        if (!recipient?.telegramChatId) return;
+        const sender = await User.findById(String(fromUserId)).catch(() => null);
+        const senderName = sender ? `${sender.firstName} ${sender.lastName || ''}`.trim() : 'Foydalanuvchi';
+        const preview = (text || '').trim() ? (text.trim().substring(0, 80) + (text.trim().length > 80 ? '…' : '')) : '📎 Fayl';
+        await bot.sendMessage(recipient.telegramChatId,
+          `💬 <b>${senderName}</b> xabar yubordi:\n\n${preview}\n\n<a href="${process.env.SITE_URL || 'http://localhost:5173'}">Saytda ko'rish</a>`,
+          { parse_mode: 'HTML' }
+        ).catch(() => {});
+      }).catch(() => {});
     }
     res.status(201).json(payload);
   } catch (err) {

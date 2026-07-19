@@ -4,7 +4,7 @@ export interface ISubscription extends Document {
   companyId: string;
   userId?: string;
   plan: 'FREE' | 'PRO' | 'ENTERPRISE';
-  selectedPlan?: '1month' | '3month' | '12month';
+  selectedPlan?: string;
   amount?: number;
   status: 'active' | 'trialing' | 'past_due' | 'canceled' | 'pending' | 'expired' | 'rejected';
   currentPeriodStart?: Date;
@@ -22,7 +22,7 @@ const SubscriptionSchema: Schema = new Schema({
   companyId: { type: String, required: true, index: true },
   userId: { type: String, index: true },
   plan: { type: String, enum: ['FREE', 'PRO', 'ENTERPRISE'], default: 'FREE' },
-  selectedPlan: { type: String, enum: ['1month', '3month', '12month'] },
+  selectedPlan: { type: String },
   amount: { type: Number },
   status: {
     type: String,

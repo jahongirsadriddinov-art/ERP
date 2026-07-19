@@ -7,13 +7,15 @@ import { bot } from '../services/bot';
 
 const router = Router();
 
-export const PLAN_CONFIG = {
-  '1month':  { label: '1 oylik',  days: 30,  amount: 1_200_000 },
-  '3month':  { label: '3 oylik',  days: 90,  amount: 3_000_000 },
-  '12month': { label: '12 oylik', days: 365, amount: 11_500_000 },
-} as const;
+export const PLAN_CONFIG: Record<string, { label: string; days: number; amount: number }> = {
+  'bepul':   { label: '1 oy bepul', days: 30,  amount: 0 },
+  '1month':  { label: '1 oylik',   days: 30,  amount: 700_000 },
+  '3month':  { label: '3 oylik',   days: 90,  amount: 2_000_000 },
+  '6month':  { label: '6 oylik',   days: 180, amount: 4_000_000 },
+  '12month': { label: '12 oylik',  days: 365, amount: 8_000_000 },
+};
 
-export type SelectedPlan = keyof typeof PLAN_CONFIG;
+export type SelectedPlan = string;
 
 const SITE_URL = process.env.SITE_URL || 'http://localhost:5173';
 
@@ -69,13 +71,18 @@ router.post('/:id/approve', requireDeveloper, async (req, res) => {
     const sub = await Subscription.findById(req.params.id);
     if (!sub) return res.status(404).json({ error: 'Obuna topilmadi' });
 
-    const planKey = (sub.selectedPlan || '1month') as SelectedPlan;
-    const planInfo = PLAN_CONFIG[planKey] || PLAN_CONFIG['1month'];
+    // Developer can override plan, days, amount from request body
+    const planKey = (req.body.selectedPlan || sub.selectedPlan || 'bepul') as SelectedPlan;
+    const planInfo = PLAN_CONFIG[planKey] || PLAN_CONFIG['bepul'];
+    const days = req.body.days ?? planInfo.days;
+    const amount = req.body.amount ?? planInfo.amount;
 
     const now = new Date();
-    const expiresAt = new Date(now.getTime() + planInfo.days * 86400000);
+    const expiresAt = new Date(now.getTime() + days * 86400000);
 
     sub.status = 'active';
+    sub.selectedPlan = planKey;
+    sub.amount = amount;
     sub.approvedAt = now;
     sub.approvedBy = String((req as any).user?.userId || '');
     sub.currentPeriodStart = now;
@@ -145,8 +152,8 @@ router.post('/:id/renew', requireDeveloper, async (req, res) => {
     const sub = await Subscription.findById(req.params.id);
     if (!sub) return res.status(404).json({ error: 'Obuna topilmadi' });
 
-    const planKey = ((selectedPlan || sub.selectedPlan || '1month') as SelectedPlan);
-    const planInfo = PLAN_CONFIG[planKey] || PLAN_CONFIG['1month'];
+    const planKey = ((selectedPlan || sub.selectedPlan || 'bepul') as SelectedPlan);
+    const planInfo = PLAN_CONFIG[planKey] || PLAN_CONFIG['bepul'];
 
     const base = (sub.currentPeriodEnd && sub.currentPeriodEnd > new Date()) ? sub.currentPeriodEnd : new Date();
     const expiresAt = new Date(base.getTime() + planInfo.days * 86400000);

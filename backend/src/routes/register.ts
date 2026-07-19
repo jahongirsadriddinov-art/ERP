@@ -227,7 +227,7 @@ router.post('/complete', async (req, res) => {
     await createdCompany.save();
 
     // Obuna: tanlangan tarif bilan, admin tasdiqini kutadi (PENDING)
-    const planKey = (selectedPlan && PLAN_CONFIG[selectedPlan as SelectedPlan]) ? (selectedPlan as SelectedPlan) : '1month';
+    const planKey = (selectedPlan && PLAN_CONFIG[selectedPlan as string]) ? (selectedPlan as SelectedPlan) : '1month';
     const planInfo = PLAN_CONFIG[planKey];
     const sub = await Subscription.create({
       companyId: String(createdCompany._id),

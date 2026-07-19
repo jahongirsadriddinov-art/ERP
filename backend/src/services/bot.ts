@@ -371,8 +371,8 @@ bot.on('callback_query', async (query: any) => {
       if (!sub) { await bot.answerCallbackQuery(query.id, { text: 'Obuna topilmadi!' }); return; }
       if (sub.status !== 'pending') { await bot.answerCallbackQuery(query.id, { text: 'Bu obuna allaqachon qayta ishlangan.' }); return; }
       if (isApprove) {
-        const planKey = sub.selectedPlan || '1month';
-        const planInfo = PLAN_CONFIG[planKey] || PLAN_CONFIG['1month'];
+        const planKey = sub.selectedPlan || 'bepul';
+        const planInfo = PLAN_CONFIG[planKey] || PLAN_CONFIG['bepul'] || PLAN_CONFIG['1month'];
         const now = new Date();
         const expiresAt = new Date(now.getTime() + planInfo.days * 86400000);
         sub.status = 'active'; sub.approvedAt = now; sub.currentPeriodStart = now; sub.currentPeriodEnd = expiresAt;

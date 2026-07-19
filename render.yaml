@@ -6,7 +6,7 @@
 # So'ng Environment bo'limida sync:false o'zgaruvchilar qiymatini kiriting.
 services:
   - type: web
-    name: qurilisherp-backend
+    name: erp-firma-backend
     runtime: node
     rootDir: backend
     plan: free
@@ -25,10 +25,12 @@ services:
       - key: GEMINI_API_KEYS
         sync: false
       - key: SITE_URL
-        sync: false          # Vercel frontend URL (https://...)
+        value: https://erp-firma.uz
       - key: BOT_USERNAME
-        value: Erp_Firma_bot
+        value: qurilish_erp_bot
       - key: DEVELOPER_PHONE
         sync: false
       - key: DEVELOPER_PASSWORD
+        sync: false
+      - key: DEVELOPER_CHAT_ID
         sync: false

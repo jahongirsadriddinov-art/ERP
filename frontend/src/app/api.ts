@@ -1,5 +1,5 @@
 // ─── API base ────────────────────────────────────────────────────────────────
-// Production (qurilisherp.uz) va local o'rtasida sozlanadigan baza.
+// Production (erp-firma.uz) va local o'rtasida sozlanadigan baza.
 // .env / .env.production dagi VITE_API_URL orqali boshqariladi.
 export const API_BASE: string =
   (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') ||

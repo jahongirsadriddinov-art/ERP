@@ -241,3 +241,48 @@ input:not([type=file]):not([type=checkbox]):not([type=radio]), select, textarea 
   .text-\[10px\] { font-size: 11.5px !important; line-height: 1.35; }
   .text-\[11px\] { font-size: 12.5px !important; }
 }
+
+/* ── BLOK C: Micro-interactions & Design polish ──────────────────────── */
+
+/* Card lift on hover — apply to .surface too (GPU-accelerated) */
+.surface:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); }
+/* Disable card lift inside lists / contact rows (avoid unintended shifts) */
+.no-lift:hover, .no-lift .surface:hover { transform: none !important; box-shadow: none !important; }
+
+/* Smooth page content entrance */
+@keyframes pageEnter { 0% { opacity:0; transform: translateY(14px); } 100% { opacity:1; transform: translateY(0); } }
+.page-enter { animation: pageEnter 0.3s cubic-bezier(0.16,1,0.3,1) both; }
+
+/* Accordion / collapsible slide */
+@keyframes accordionOpen  { from { opacity:0; transform: scaleY(0.94) translateY(-6px); } to { opacity:1; transform: scaleY(1) translateY(0); } }
+@keyframes accordionClose { from { opacity:1; transform: scaleY(1);   } to { opacity:0; transform: scaleY(0.94); } }
+.accordion-open  { transform-origin: top; animation: accordionOpen  0.22s cubic-bezier(0.16,1,0.3,1) forwards; }
+.accordion-close { transform-origin: top; animation: accordionClose 0.18s cubic-bezier(0.4,0,1,1)   forwards; }
+
+/* Pulse badge (unread count, pending badge) */
+@keyframes badgePulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.18); } }
+.badge-pulse { animation: badgePulse 2s ease-in-out infinite; }
+
+/* Skeleton shimmer loading card */
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+.skeleton {
+  border-radius: var(--radius);
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--foreground) 6%, transparent) 25%,
+    color-mix(in srgb, var(--foreground) 11%, transparent) 50%,
+    color-mix(in srgb, var(--foreground) 6%, transparent) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+
+/* Smooth tab/nav indicator slide */
+@keyframes tabSlideIn { from { opacity:0; transform:translateX(8px); } to { opacity:1; transform:translateX(0); } }
+.tab-enter { animation: tabSlideIn 0.2s cubic-bezier(0.16,1,0.3,1) both; }
+
+/* Button press depth (for primary CTAs — pairs with btn:active scale) */
+.btn-primary:active { box-shadow: 0 2px 8px color-mix(in srgb, var(--primary) 30%, transparent) !important; }
+.btn-accent:active  { box-shadow: 0 2px 8px color-mix(in srgb, var(--accent)  30%, transparent) !important; }

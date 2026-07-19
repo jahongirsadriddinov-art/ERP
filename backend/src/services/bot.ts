@@ -37,6 +37,7 @@ const USER_KEYBOARD = {
     [{ text: '📦 Menga kelgan yukxatlar' }],
     [{ text: '📤 Yuborgan yukxatlarim' }],
     [{ text: '📬 Menga kelgan to\'lovlar' }],
+    [{ text: '💳 Obuna holati' }],
   ],
   resize_keyboard: true,
 };
@@ -225,6 +226,35 @@ bot.on('message', async (msg: any) => {
     return;
   }
 
+  // ── Obuna holati (barcha foydalanuvchilar) ───────────────────────────────
+  if (text === '💳 Obuna holati') {
+    try {
+      const Subscription = require('../models/Subscription').default;
+      const sub = user.companyId ? await Subscription.findOne({ companyId: user.companyId }).sort({ createdAt: -1 }) : null;
+      if (!sub) {
+        bot.sendMessage(chatId, '📭 Obuna ma\'lumoti topilmadi.', { reply_markup: admin ? ADMIN_KEYBOARD : USER_KEYBOARD });
+        return;
+      }
+      const now = new Date();
+      let statusText = '';
+      if (sub.status === 'pending') statusText = '⏳ Admin tasdiqini kutmoqda';
+      else if (sub.status === 'active') {
+        const daysLeft = sub.currentPeriodEnd
+          ? Math.max(0, Math.ceil((sub.currentPeriodEnd.getTime() - now.getTime()) / 86400000))
+          : null;
+        statusText = daysLeft !== null ? `✅ Faol (${daysLeft} kun qoldi)` : '✅ Faol';
+      } else if (sub.status === 'expired') statusText = '🔴 Muddati tugagan';
+      else if (sub.status === 'rejected') statusText = '❌ Rad etilgan';
+      else statusText = sub.status;
+      const endDate = sub.currentPeriodEnd ? sub.currentPeriodEnd.toLocaleDateString('uz-UZ') : '—';
+      await bot.sendMessage(chatId,
+        `💳 <b>Obuna holati</b>\n\nHolat: ${statusText}\nTugash: <b>${endDate}</b>\n\nSavollar uchun: <a href="https://t.me/Sadriddinov_Jahongir">@Sadriddinov_Jahongir</a>`,
+        { parse_mode: 'HTML', reply_markup: admin ? ADMIN_KEYBOARD : USER_KEYBOARD }
+      );
+    } catch { bot.sendMessage(chatId, '⚠️ Xatolik.'); }
+    return;
+  }
+
   // ── NON-ADMIN commands ────────────────────────────────────────────────────
   if (text === '📦 Menga kelgan yukxatlar') {
     try {
@@ -328,6 +358,58 @@ bot.on('callback_query', async (query: any) => {
   const messageId = query.message?.message_id;
 
   const user = await User.findOne({ telegramChatId: chatId?.toString() }).catch(() => null);
+
+  // ── Obuna tasdiqlash/rad etish (dasturchi inline keyboard) ───────────────────
+  if (data.startsWith('sub_approve_') || data.startsWith('sub_reject_')) {
+    const isApprove = data.startsWith('sub_approve_');
+    const subId = data.replace('sub_approve_', '').replace('sub_reject_', '');
+    try {
+      const Subscription = require('../models/Subscription').default;
+      const Company = require('../models/Company').default;
+      const { PLAN_CONFIG } = require('../routes/subscriptions');
+      const sub = await Subscription.findById(subId);
+      if (!sub) { await bot.answerCallbackQuery(query.id, { text: 'Obuna topilmadi!' }); return; }
+      if (sub.status !== 'pending') { await bot.answerCallbackQuery(query.id, { text: 'Bu obuna allaqachon qayta ishlangan.' }); return; }
+      if (isApprove) {
+        const planKey = sub.selectedPlan || '1month';
+        const planInfo = PLAN_CONFIG[planKey] || PLAN_CONFIG['1month'];
+        const now = new Date();
+        const expiresAt = new Date(now.getTime() + planInfo.days * 86400000);
+        sub.status = 'active'; sub.approvedAt = now; sub.currentPeriodStart = now; sub.currentPeriodEnd = expiresAt;
+        await sub.save();
+        await Company.findByIdAndUpdate(sub.companyId, { status: 'ACTIVE' }).catch(() => {});
+        if (sub.userId) {
+          const notUser = await User.findById(sub.userId).catch(() => null);
+          if (notUser?.telegramChatId) {
+            const expStr = expiresAt.toLocaleDateString('uz-UZ', { day: '2-digit', month: '2-digit', year: 'numeric' });
+            await bot.sendMessage(notUser.telegramChatId,
+              `✅ <b>Tabriklaymiz!</b>\n\nSizning obunangiz tasdiqlandi!\n\n📦 Tarif: <b>${planInfo.label}</b>\n📅 Muddat: <b>${expStr}</b> gacha\n\nEndi tizimga kirishingiz mumkin:\n${process.env.SITE_URL || 'http://localhost:5173'}`,
+              { parse_mode: 'HTML' }
+            ).catch(() => {});
+          }
+        }
+        await bot.answerCallbackQuery(query.id, { text: '✅ Obuna tasdiqlandi!' });
+        await bot.editMessageText(`✅ Obuna tasdiqlandi (${planInfo.label})`, { chat_id: chatId, message_id: messageId }).catch(() => {});
+      } else {
+        sub.status = 'rejected'; sub.rejectedAt = new Date(); await sub.save();
+        if (sub.userId) {
+          const notUser = await User.findById(sub.userId).catch(() => null);
+          if (notUser?.telegramChatId) {
+            await bot.sendMessage(notUser.telegramChatId,
+              `❌ <b>Obuna rad etildi</b>\n\nTo'lov va savollar uchun: <a href="https://t.me/Sadriddinov_Jahongir">@Sadriddinov_Jahongir</a>`,
+              { parse_mode: 'HTML' }
+            ).catch(() => {});
+          }
+        }
+        await bot.answerCallbackQuery(query.id, { text: '❌ Obuna rad etildi.' });
+        await bot.editMessageText('❌ Obuna rad etildi', { chat_id: chatId, message_id: messageId }).catch(() => {});
+      }
+    } catch (err) {
+      console.error('Bot sub callback error:', err);
+      await bot.answerCallbackQuery(query.id, { text: '⚠️ Xatolik!' });
+    }
+    return;
+  }
 
   if (data.startsWith('confirm_') || data.startsWith('reject_')) {
     const isConfirm = data.startsWith('confirm_');

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import jwt from 'jsonwebtoken';
 import User from '../models/User';
 import Company from '../models/Company';
+import Subscription from '../models/Subscription';
 import { bot } from '../services/bot';
 import { scoped, stamped } from '../middleware/scope';
 import { normalizePhone } from '../utils/tokens';
@@ -81,8 +82,37 @@ router.post('/login', async (req, res) => {
     user.telegramVerificationCodeExpires = undefined;
     await user.save();
 
-    // Firma ma'lumotini olib kelamiz (agar bog'langan bo'lsa) — JWT va javob uchun.
-    const company = user.companyId ? await Company.findById(user.companyId) : null;
+    // Firma + obuna ma'lumotlarini parallel olamiz (DB round-trip kamaytirish)
+    const [company, sub] = await Promise.all([
+      user.companyId ? Company.findById(user.companyId) : Promise.resolve(null),
+      (user.companyId && user.role !== 'dasturchi')
+        ? Subscription.findOne({ companyId: user.companyId }).sort({ createdAt: -1 })
+        : Promise.resolve(null),
+    ]);
+
+    // Obuna holati tekshiruvi (dasturchi uchun o'tkazilmaydi, firmasiz eski user ham o'tadi)
+    if (user.companyId && user.role !== 'dasturchi') {
+      if (sub) {
+        const now = new Date();
+        // Muddati o'tgan active obunani expired deb belgilaymiz
+        if (sub.status === 'active' && sub.currentPeriodEnd && sub.currentPeriodEnd < now) {
+          sub.status = 'expired';
+          await sub.save();
+        }
+        if (sub.status === 'pending') {
+          return res.status(403).json({
+            subscriptionStatus: 'pending',
+            error: 'Obunangiz hali admin tomonidan tasdiqlanmagan. Iltimos kuting yoki @Sadriddinov_Jahongir bilan bog\'laning.',
+          });
+        }
+        if (sub.status === 'expired' || sub.status === 'rejected') {
+          return res.status(403).json({
+            subscriptionStatus: sub.status,
+            error: 'Obunangiz muddati tugagan yoki rad etilgan. To\'lovni yangilash uchun @Sadriddinov_Jahongir bilan bog\'laning.',
+          });
+        }
+      }
+    }
 
     const token = jwt.sign(
       {

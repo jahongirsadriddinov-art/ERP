@@ -1822,6 +1822,55 @@ function ReportsPage({ projects, expenses, users }:
   );
 }
 
+// ─── Voice Message Player ─────────────────────────────────────────────────────
+function VoicePlayer({ src }: { src: string }) {
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const [playing, setPlaying] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+
+  const toggle = () => {
+    const a = audioRef.current; if (!a) return;
+    if (playing) { a.pause(); } else { a.play().catch(() => {}); }
+    setPlaying(!playing);
+  };
+  const fmtTime = (s: number) => `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
+
+  return (
+    <div className="flex items-center gap-2 mb-1 min-w-[180px] max-w-[220px]">
+      <audio ref={audioRef} src={src} preload="metadata"
+        onLoadedMetadata={e => setDuration((e.target as HTMLAudioElement).duration)}
+        onTimeUpdate={e => { const a = e.target as HTMLAudioElement; setCurrentTime(a.currentTime); setProgress(a.duration ? a.currentTime/a.duration*100 : 0); }}
+        onEnded={() => { setPlaying(false); setProgress(0); setCurrentTime(0); if (audioRef.current) audioRef.current.currentTime=0; }}
+      />
+      <button onClick={toggle}
+        className="w-8 h-8 rounded-full bg-primary/20 text-primary flex items-center justify-center flex-shrink-0 hover:bg-primary/30 active:scale-95 transition-all">
+        {playing
+          ? <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+          : <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><polygon points="5,3 19,12 5,21"/></svg>
+        }
+      </button>
+      <div className="flex-1 flex flex-col gap-0.5">
+        <div className="relative h-1.5 bg-white/20 rounded-full overflow-hidden cursor-pointer"
+          onClick={e => {
+            const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+            const pct = (e.clientX - rect.left) / rect.width;
+            if (audioRef.current && audioRef.current.duration) {
+              audioRef.current.currentTime = pct * audioRef.current.duration;
+            }
+          }}>
+          <div className="absolute inset-y-0 left-0 bg-primary rounded-full transition-all" style={{ width: `${progress}%` }}/>
+        </div>
+        <div className="flex justify-between text-[9px] text-current/60">
+          <span>{fmtTime(currentTime)}</span>
+          <span>{duration > 0 ? fmtTime(duration) : '—'}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Chat Page ─────────────────────────────────────────────────────────────────
 function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, onMarkRead, onEdit, onDelete, onPin, onChatOpen, onCreateGroup, onStartCall }:
   {
@@ -2008,10 +2057,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
           <video src={m.mediaUrl} controls className="rounded-xl max-w-full max-h-52 mb-1"/>
         )}
         {m.type==='audio' && m.mediaUrl && (
-          <div className="flex items-center gap-2 mb-1 min-w-[160px]">
-            <Mic className="w-4 h-4 flex-shrink-0"/>
-            <audio src={m.mediaUrl} controls className="h-7 flex-1" style={{maxWidth:180}}/>
-          </div>
+          <VoicePlayer src={m.mediaUrl}/>
         )}
         {m.type==='file' && m.mediaUrl && (
           <a href={m.mediaUrl} download={m.fileName} className="flex items-center gap-2 mb-1 hover:opacity-75 transition-opacity">
@@ -2039,7 +2085,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
       <input ref={camRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFileChange}/>
 
       {/* Contacts List */}
-      <div className={`${(selUser||selGroup)?'hidden sm:flex':'flex'} w-full sm:w-64 flex-shrink-0 border-r border-border flex-col bg-card/60 backdrop-blur-xl`}>
+      <div className={`${(selUser||selGroup)?'hidden md:flex':'flex'} w-full md:w-64 flex-shrink-0 border-r border-border flex-col bg-card/60 backdrop-blur-xl`}>
         <div className="px-4 py-3 border-b border-border/50 flex items-center justify-between">
           <p className="text-base font-bold">Xabarlar</p>
           <button onClick={() => setShowNewGroup(true)} title="Yangi guruh" className="btn btn-primary w-8 h-8 p-0 rounded-full"><Users2 className="w-4 h-4"/></button>
@@ -2094,7 +2140,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
       </div>
 
       {/* Detail View */}
-      <div className={`${!(selUser||selGroup)?'hidden sm:flex':'flex'} flex-1 flex-col overflow-hidden bg-background/50`} onClick={e=>e.stopPropagation()}>
+      <div className={`${!(selUser||selGroup)?'hidden md:flex':'flex'} flex-1 flex-col overflow-hidden bg-background/50`} onClick={e=>e.stopPropagation()}>
         {!(selUser||selGroup) ? (
           <div className="flex-1 flex items-center justify-center text-muted-foreground">
             <div className="text-center animate-pop-in"><MessageCircle className="w-12 h-12 mx-auto mb-3 opacity-20"/><p className="text-sm">Suhbatdosh tanlang</p></div>
@@ -2103,7 +2149,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
           <>
             {/* Header */}
             <div className="glass border-b border-border px-4 py-3 flex items-center gap-3 flex-shrink-0 z-10">
-              <button onClick={closeChat} className="sm:hidden p-2 -ml-2 mr-1 text-muted-foreground hover:bg-muted rounded-full transition-colors">
+              <button onClick={closeChat} className="md:hidden p-2 -ml-2 mr-1 text-muted-foreground hover:bg-muted rounded-full transition-colors">
                 <ChevronLeft className="w-5 h-5"/>
               </button>
               {selGroup ? (
@@ -2360,6 +2406,9 @@ function CallOverlay({ currentUser, users, call, onClose }:
   const socket = getSocket();
   const localRef = useRef<HTMLVideoElement>(null);
   const localStream = useRef<MediaStream | null>(null);
+  // streamReady — accept() bu promise'ni kutib stream tayyor bo'lganini bildiradi
+  const streamReadyResolve = useRef<((s: MediaStream) => void) | null>(null);
+  const streamReady = useRef<Promise<MediaStream>>(new Promise(res => { streamReadyResolve.current = res; }));
   const pcs = useRef<Record<string, RTCPeerConnection>>({});
   const pendingIce = useRef<Record<string, RTCIceCandidateInit[]>>({});
   const [remote, setRemote] = useState<Record<string, MediaStream>>({});
@@ -2399,8 +2448,14 @@ function CallOverlay({ currentUser, users, call, onClose }:
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: call.mode === 'video' });
         if (cancelled) { stream.getTracks().forEach(t => t.stop()); return; }
         localStream.current = stream;
-        if (localRef.current) localRef.current.srcObject = stream;
-      } catch { toast("Kamera/mikrofon ruxsati kerak"); onClose(); return; }
+        if (localRef.current) { localRef.current.srcObject = stream; localRef.current.play().catch(()=>{}); }
+        // Re-add tracks to any peer connections created before stream was ready (race condition fix)
+        Object.values(pcs.current).forEach(pc => {
+          stream.getTracks().forEach(t => { try { pc.addTrack(t, stream); } catch {} });
+        });
+        // accept() shu promise'ni kutib turib stream tayyor bo'lgandan keyin createAnswer qiladi
+        streamReadyResolve.current?.(stream);
+      } catch (e: any) { toast("Kamera/mikrofon ruxsati kerak: " + (e?.message || '')); onClose(); return; }
       if (call.direction === 'out') {
         const targets = call.groupId ? (call.memberIds || []) : (call.peerId ? [call.peerId] : []);
         targets.forEach(t => offerTo(t));
@@ -2444,6 +2499,8 @@ function CallOverlay({ currentUser, users, call, onClose }:
 
   const accept = async () => {
     setStatus('ringing');
+    // Stream tayyor bo'lishini kutamiz (agar hali kamera/mikrofon ruxsati olinmagan bo'lsa)
+    await streamReady.current;
     const from = call.peerId!;
     const pc = makePC(from);
     await pc.setRemoteDescription(new RTCSessionDescription(call.offer));
@@ -2483,14 +2540,17 @@ function CallOverlay({ currentUser, users, call, onClose }:
             {remoteEntries.map(([pid, stream]) => <RemoteAudio key={pid} stream={stream}/>)}
           </div>
         )}
-        {/* Lokal PiP */}
+        {/* Lokal PiP (mirror + larger for readability) */}
         {call.mode === 'video' && (
-          <video ref={localRef} autoPlay muted playsInline className="absolute bottom-4 right-4 w-28 h-40 object-cover rounded-xl border-2 border-white/30 shadow-lg bg-black"/>
+          <video ref={localRef} autoPlay muted playsInline
+            className="absolute bottom-4 right-4 w-32 h-48 object-cover rounded-2xl border-2 border-white/30 shadow-xl bg-black"
+            style={{ transform: 'scaleX(-1)' }}
+          />
         )}
       </div>
 
       {/* Boshqaruv */}
-      <div className="flex-shrink-0 pb-8 pt-4 flex items-center justify-center gap-4">
+      <div className="flex-shrink-0 pt-4 flex items-center justify-center gap-4" style={{ paddingBottom: "max(2rem, calc(env(safe-area-inset-bottom) + 1rem))" }}>
         {status === 'incoming' ? (
           <>
             <button onClick={decline} className="w-16 h-16 rounded-full bg-red-500 text-white flex items-center justify-center active:scale-95 shadow-lg"><PhoneOff className="w-6 h-6"/></button>
@@ -2895,7 +2955,8 @@ function LoginScreen({ onLogin, onRegister }: { onLogin: (u: any, company?: any)
   const [phone, setPhone] = useState("+998 ");
   const [code, setCode] = useState("");
   const [password, setPassword] = useState("");
-  const [step, setStep] = useState<"phone" | "code" | "devpass">("phone");
+  const [step, setStep] = useState<"phone" | "code" | "devpass" | "blocked">("phone");
+  const [blockedReason, setBlockedReason] = useState<'pending'|'expired'|'rejected'|null>(null);
   const [error, setError] = useState("");
   const [timeLeft, setTimeLeft] = useState(0);
   const [loginCompanyName] = useState(() => localStorage.getItem("erp_companyName") || "QurilishERP");
@@ -2952,6 +3013,11 @@ function LoginScreen({ onLogin, onRegister }: { onLogin: (u: any, company?: any)
       });
       const data = await res.json();
       if (!res.ok) {
+        if (data.subscriptionStatus) {
+          setBlockedReason(data.subscriptionStatus);
+          setStep("blocked");
+          return;
+        }
         setError(data.error || "Xatolik yuz berdi");
         return;
       }
@@ -3037,6 +3103,40 @@ function LoginScreen({ onLogin, onRegister }: { onLogin: (u: any, company?: any)
               Kodni olish
             </button>
           </form>
+        ) : step === "blocked" ? (
+          <div className="space-y-4 text-center">
+            <div className="flex flex-col items-center gap-3">
+              {blockedReason === 'pending' ? (
+                <div className="w-14 h-14 rounded-full bg-amber-500/15 flex items-center justify-center">
+                  <Clock className="w-7 h-7 text-amber-500"/>
+                </div>
+              ) : (
+                <div className="w-14 h-14 rounded-full bg-red-500/15 flex items-center justify-center">
+                  <AlertCircle className="w-7 h-7 text-red-500"/>
+                </div>
+              )}
+              {blockedReason === 'pending' && (
+                <>
+                  <p className="text-sm font-semibold">Obuna tasdiqini kutmoqda</p>
+                  <p className="text-xs text-muted-foreground leading-relaxed">Adminningiz obunangizni hali tasdiqlamagan. Tasdiqlanganida Telegram orqali xabar olasiz.</p>
+                </>
+              )}
+              {(blockedReason === 'expired' || blockedReason === 'rejected') && (
+                <>
+                  <p className="text-sm font-semibold">{blockedReason === 'expired' ? 'Obuna muddati tugagan' : 'Obuna rad etilgan'}</p>
+                  <p className="text-xs text-muted-foreground leading-relaxed">To'lovni yangilash va kirish huquqini qayta olish uchun admin bilan bog'laning.</p>
+                </>
+              )}
+            </div>
+            <a href="https://t.me/Sadriddinov_Jahongir" target="_blank" rel="noopener noreferrer"
+              className="w-full inline-flex items-center justify-center gap-2 bg-blue-500 text-white text-sm font-semibold py-3 rounded-xl min-h-[44px] active:scale-[0.98] transition-transform">
+              <Send className="w-4 h-4"/> @Sadriddinov_Jahongir'ga yozish
+            </a>
+            <button type="button" onClick={() => { setStep("phone"); setBlockedReason(null); setError(""); }}
+              className="w-full text-sm text-muted-foreground hover:text-foreground py-2">
+              Orqaga
+            </button>
+          </div>
         ) : step === "devpass" ? (
           <form onSubmit={handleDevLogin} className="space-y-4">
             <div className="bg-slate-800/5 border border-slate-800/10 rounded-xl p-3 mb-2 text-center">
@@ -3098,7 +3198,7 @@ function LoginScreen({ onLogin, onRegister }: { onLogin: (u: any, company?: any)
 }
 
 // ─── Register Wizard (v1.2 self-signup) ────────────────────────────────────────
-type RegStep = "warn" | "phone" | "bot" | "owner" | "company" | "brand" | "summary";
+type RegStep = "warn" | "tarif" | "payment" | "phone" | "bot" | "owner" | "company" | "brand" | "summary" | "done";
 
 // Modul darajasida (render ichida emas) — aks holda input fokusini yo'qotadi
 function RegField({ label, children, hint }: { label: string; children: any; hint?: string }) {
@@ -3119,7 +3219,11 @@ function RegisterWizard({ onBack, onDone }: { onBack: () => void; onDone: (u: an
   // Qadam 1 — ogohlantirish
   const [ownerConfirm, setOwnerConfirm] = useState(false);
 
-  // Qadam 2 — telefon
+  // Qadam 2 — tarif tanlash
+  const [selectedPlan, setSelectedPlan] = useState<'1month'|'3month'|'12month'|null>(null);
+  const [regDoneInfo, setRegDoneInfo] = useState<{phone:string;planLabel:string;planAmount:number;companyName:string;branchId:string}|null>(null);
+
+  // Qadam 3 — telefon
   const [phone, setPhone] = useState("+998 ");
 
   // Ro'yxat sessiyasi (resume uchun localStorage'da saqlanadi)
@@ -3153,12 +3257,25 @@ function RegisterWizard({ onBack, onDone }: { onBack: () => void; onDone: (u: an
   const [currency, setCurrency] = useState<"UZS" | "USD">("UZS");
   const logoRef = useRef<HTMLInputElement>(null);
 
-  const saveReg = (r: any) => { setReg(r); try { localStorage.setItem("erp_reg", JSON.stringify(r)); } catch {} };
-  const clearReg = () => { setReg(null); try { localStorage.removeItem("erp_reg"); } catch {} };
+  const saveReg = (r: any, plan?: string) => {
+    setReg(r);
+    try { localStorage.setItem("erp_reg", JSON.stringify(r)); } catch {}
+    if (plan) try { localStorage.setItem("erp_reg_plan", plan); } catch {}
+  };
+  const clearReg = () => {
+    setReg(null);
+    try { localStorage.removeItem("erp_reg"); localStorage.removeItem("erp_reg_plan"); } catch {}
+  };
 
   // Resume: sahifa ochilganda faol sessiya bo'lsa botga/keyingi qadamга o'tamiz
   useEffect(() => {
-    if (reg && step === "warn") { setOwnerConfirm(true); setStep("bot"); }
+    if (reg && step === "warn") {
+      setOwnerConfirm(true);
+      // Saqlangan tarifni tiklaymiz
+      const savedPlan = localStorage.getItem("erp_reg_plan") as '1month'|'3month'|'12month'|null;
+      if (savedPlan) setSelectedPlan(savedPlan);
+      setStep("bot");
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -3213,7 +3330,11 @@ function RegisterWizard({ onBack, onDone }: { onBack: () => void; onDone: (u: an
       const d = await res.json();
       if (!res.ok) { setError(d.error || "Xatolik"); setLoading(false); return; }
       if (d.exists) { setError("Bu raqam bilan firma mavjud. Tizimga kiring."); setLoading(false); setTimeout(onBack, 1800); return; }
-      saveReg({ registrationId: d.registrationId, token: d.token, deepLink: d.deepLink, botUsername: d.botUsername, expiresAt: d.expiresAt });
+      // Tarifni ham saqlaymiz — resume qilganda tiklanadi
+      saveReg(
+        { registrationId: d.registrationId, token: d.token, deepLink: d.deepLink, botUsername: d.botUsername, expiresAt: d.expiresAt },
+        selectedPlan || '1month'
+      );
       setStep("bot");
     } catch { setError("Server bilan ulanishda xatolik"); }
     setLoading(false);
@@ -3250,6 +3371,7 @@ function RegisterWizard({ onBack, onDone }: { onBack: () => void; onDone: (u: an
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           token: reg.token,
+          selectedPlan: selectedPlan || '1month',
           owner: { firstName, lastName, middleName, email, position, password },
           company: { name: companyName, legalName, inn, activityType, region, employeeRange, currency },
           logoUrl,
@@ -3257,29 +3379,30 @@ function RegisterWizard({ onBack, onDone }: { onBack: () => void; onDone: (u: an
       });
       const d = await res.json();
       if (!res.ok) { setError(d.error || "Xatolik"); setLoading(false); return; }
-      const u = {
-        id: d.user.id || d.user._id,
-        name: d.user.firstName + (d.user.lastName ? " " + d.user.lastName : ""),
-        phone: d.user.phone, role: d.user.role, projectIds: d.user.projectIds || [],
-      };
-      localStorage.setItem("token", d.token);
-      localStorage.setItem("currentUser", JSON.stringify(u));
-      // Firma brendini darhol ko'rsatish uchun (Stage 8'da to'liq serverdan olinadi)
-      if (d.company?.name) localStorage.setItem("erp_companyName", d.company.name);
-      if (d.company?.logoUrl) localStorage.setItem("erp_companyLogo", d.company.logoUrl);
-      try { localStorage.setItem("erp_branchId", d.company?.branchId || ""); } catch {}
+      // Server endi JWT bermaydi — pending holatida admin tasdiqini kutamiz
       clearReg();
-      onDone(u, d.company);
+      setRegDoneInfo({
+        phone: d.phone || phone.replace(/\s/g,''),
+        planLabel: d.planLabel || '1 oylik',
+        planAmount: d.planAmount || 1_200_000,
+        companyName: d.company?.name || companyName,
+        branchId: d.company?.branchId || '',
+      });
+      setStep("done");
     } catch { setError("Server bilan ulanishda xatolik"); setLoading(false); }
+    setLoading(false);
   };
 
   // ── Kichik UI yordamchilar ──────────────────────────────────────────────────
-  const STEPS_ORDER: RegStep[] = ["phone", "bot", "owner", "company", "brand", "summary"];
+  const STEPS_ORDER: RegStep[] = ["tarif", "payment", "phone", "bot", "owner", "company", "brand", "summary"];
   const progress = Math.max(0, STEPS_ORDER.indexOf(step)) / (STEPS_ORDER.length - 1);
   const inputCls = "w-full text-base border border-border/50 rounded-xl px-4 py-3 bg-white/60 dark:bg-black/20 focus:bg-white dark:focus:bg-black/40 focus:outline-none focus:ring-2 focus:ring-primary/50 liquid-transition";
 
   const goBack = () => {
-    const map: Record<RegStep, RegStep | null> = { warn: null, phone: "warn", bot: "phone", owner: "bot", company: "owner", brand: "company", summary: "brand" };
+    const map: Record<RegStep, RegStep | null> = {
+      warn: null, tarif: "warn", payment: "tarif", phone: "payment",
+      bot: "phone", owner: "bot", company: "owner", brand: "company", summary: "brand", done: null
+    };
     const prev = map[step];
     if (prev) setStep(prev); else onBack();
   };
@@ -3299,7 +3422,8 @@ function RegisterWizard({ onBack, onDone }: { onBack: () => void; onDone: (u: an
         </div>
       </div>
 
-      <div className="relative z-10 flex-1 overflow-y-auto scrollbar-hide px-4 py-6 flex flex-col">
+      {/* pb-24 = sticky button height uchun joy qoldiradi — content uning ostiga tushib ketmaydi */}
+      <div className="relative z-10 flex-1 overflow-y-auto scrollbar-hide px-4 py-6 pb-24 flex flex-col">
         <div className="w-full max-w-md mx-auto flex-1 flex flex-col">
           {error && <div className="bg-red-500/10 text-red-600 dark:text-red-400 text-sm p-3 rounded-lg border border-red-500/20 text-center mb-4 animate-pop-in">{error}</div>}
 
@@ -3323,7 +3447,86 @@ function RegisterWizard({ onBack, onDone }: { onBack: () => void; onDone: (u: an
             </div>
           )}
 
-          {/* ── Qadam 2: Telefon ── */}
+          {/* ── Qadam 2: Tarif tanlash ── */}
+          {step === "tarif" && (
+            <div className="space-y-5 animate-slide-in-right">
+              <div>
+                <h2 className="text-xl font-bold mb-1">Tarif tanlang</h2>
+                <p className="text-sm text-muted-foreground">Firma uchun obuna muddatini tanlang</p>
+              </div>
+              {([
+                { key: '1month',  label: '1 oylik',  price: 1_200_000, days: 30,  badge: null },
+                { key: '3month',  label: '3 oylik',  price: 3_000_000, days: 90,  badge: '600 000 so\'m tejaysiz' },
+                { key: '12month', label: '12 oylik', price: 11_500_000,days: 365, badge: '2 900 000 so\'m tejaysiz' },
+              ] as const).map(plan => (
+                <button key={plan.key} type="button"
+                  onClick={() => setSelectedPlan(plan.key)}
+                  className={`w-full rounded-2xl border-2 p-4 text-left transition-all duration-200 active:scale-[0.98]
+                    ${selectedPlan===plan.key
+                      ? 'border-primary bg-primary/8 shadow-md shadow-primary/20'
+                      : 'border-border/50 bg-white/40 dark:bg-black/20 hover:border-primary/40'}`}>
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-base font-bold">{plan.label}</span>
+                        {plan.badge && (
+                          <span className="text-[10px] bg-accent/15 text-accent font-semibold px-2 py-0.5 rounded-full whitespace-nowrap">{plan.badge}</span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">{plan.days} kun</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-lg font-bold text-primary">{plan.price.toLocaleString('uz-UZ')}</p>
+                      <p className="text-[11px] text-muted-foreground">so'm</p>
+                    </div>
+                  </div>
+                  {selectedPlan===plan.key && (
+                    <div className="mt-2 flex items-center gap-1.5 text-primary">
+                      <Check className="w-4 h-4"/><span className="text-xs font-semibold">Tanlangan</span>
+                    </div>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* ── Qadam 3: To'lov tushuntirishi ── */}
+          {step === "payment" && selectedPlan && (
+            <div className="space-y-5 animate-slide-in-right">
+              <div>
+                <h2 className="text-xl font-bold mb-1">To'lov haqida</h2>
+                <p className="text-sm text-muted-foreground">To'lovni amalga oshirish uchun quyidagi ko'rsatmalarga amal qiling</p>
+              </div>
+              <div className="bg-primary/8 border border-primary/20 rounded-2xl p-4">
+                <p className="text-[11px] font-semibold text-primary uppercase tracking-wider mb-2">Tanlangan tarif</p>
+                <p className="text-2xl font-bold text-primary">
+                  {selectedPlan==='1month'?'1 200 000':selectedPlan==='3month'?'3 000 000':'11 500 000'}
+                  <span className="text-base font-normal text-muted-foreground ml-1">so'm</span>
+                </p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {selectedPlan==='1month'?'1 oylik (30 kun)':selectedPlan==='3month'?'3 oylik (90 kun)':'12 oylik (365 kun)'}
+                </p>
+              </div>
+              <div className="surface rounded-2xl p-4 space-y-3">
+                <p className="text-sm font-semibold">To'lov tartibi:</p>
+                <p className="text-sm leading-relaxed">
+                  To'lovni amalga oshirish uchun Telegram'da
+                  {' '}<a href="https://t.me/Sadriddinov_Jahongir" target="_blank" rel="noopener noreferrer"
+                    className="text-primary font-semibold underline">@Sadriddinov_Jahongir</a>{' '}
+                  ga yozing va tanlangan tarif hamda firma nomingizni bildiring.
+                </p>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  To'lov tasdiqlanganach, admin sizning akkauntingizni faollashtiradi va siz tizimga kirishingiz mumkin bo'ladi.
+                </p>
+              </div>
+              <a href="https://t.me/Sadriddinov_Jahongir" target="_blank" rel="noopener noreferrer"
+                className="w-full inline-flex items-center justify-center gap-2 bg-blue-500 text-white font-semibold py-3.5 rounded-xl min-h-[48px] active:scale-[0.98] transition-transform">
+                <Send className="w-4 h-4"/> @Sadriddinov_Jahongir'ga yozish
+              </a>
+            </div>
+          )}
+
+          {/* ── Qadam 4: Telefon ── */}
           {step === "phone" && (
             <div className="space-y-5 animate-slide-in-right">
               <div>
@@ -3448,11 +3651,12 @@ function RegisterWizard({ onBack, onDone }: { onBack: () => void; onDone: (u: an
             </div>
           )}
 
-          {/* ── Qadam 5.4: Yakuniy tasdiq ── */}
+          {/* ── Qadam 9: Yakuniy tasdiq ── */}
           {step === "summary" && (
             <div className="space-y-4 animate-slide-in-right">
               <div><h2 className="text-xl font-bold mb-1">Tekshirib tasdiqlang</h2></div>
               {[
+                { t: "Tarif", v: selectedPlan==='1month'?'1 oylik — 1 200 000 so\'m':selectedPlan==='3month'?'3 oylik — 3 000 000 so\'m':'12 oylik — 11 500 000 so\'m', go: "tarif" as RegStep },
                 { t: "Egasi", v: `${firstName} ${lastName}`, go: "owner" as RegStep },
                 { t: "Telefon", v: phone, go: "phone" as RegStep },
                 { t: "Firma", v: companyName, go: "company" as RegStep },
@@ -3466,6 +3670,40 @@ function RegisterWizard({ onBack, onDone }: { onBack: () => void; onDone: (u: an
               ))}
             </div>
           )}
+
+          {/* ── Qadam 10: Ro'yxatdan o'tdingiz (kutish ekrani) ── */}
+          {step === "done" && regDoneInfo && (
+            <div className="space-y-6 animate-slide-in-right text-center flex-1 flex flex-col justify-center">
+              <div className="flex flex-col items-center gap-4">
+                <div className="w-20 h-20 rounded-full bg-green-500/15 flex items-center justify-center">
+                  <CheckCircle className="w-10 h-10 text-green-500"/>
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold mb-1">Ro'yxatdan o'tdingiz!</h2>
+                  <p className="text-sm text-muted-foreground">{regDoneInfo.companyName}</p>
+                  {regDoneInfo.branchId && <p className="text-[11px] font-mono text-muted-foreground mt-0.5">{regDoneInfo.branchId}</p>}
+                </div>
+              </div>
+              <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 text-left">
+                <div className="flex items-center gap-2 mb-2 text-amber-600 dark:text-amber-300 font-semibold text-sm">
+                  <Clock className="w-4 h-4"/> Admin tasdiqini kutmoqda
+                </div>
+                <p className="text-sm leading-relaxed">
+                  Raqamingiz: <span className="font-mono font-semibold">{regDoneInfo.phone}</span>
+                </p>
+                <p className="text-sm leading-relaxed mt-1">
+                  Tarif: <b>{regDoneInfo.planLabel}</b> — {regDoneInfo.planAmount.toLocaleString('uz-UZ')} so'm
+                </p>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Admin tasdiqlagunicha tizimga kira olmaysiz. Tasdiqlanganida Telegram orqali xabar olasiz.
+                </p>
+              </div>
+              <a href="https://t.me/Sadriddinov_Jahongir" target="_blank" rel="noopener noreferrer"
+                className="inline-flex items-center justify-center gap-2 text-blue-500 font-semibold text-sm py-3 hover:underline">
+                <Send className="w-4 h-4"/> @Sadriddinov_Jahongir bilan bog'lanish
+              </a>
+            </div>
+          )}
         </div>
       </div>
 
@@ -3473,14 +3711,26 @@ function RegisterWizard({ onBack, onDone }: { onBack: () => void; onDone: (u: an
       <div className="relative z-10 px-4 pb-4 pt-2" style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 16px)" }}>
         <div className="w-full max-w-md mx-auto">
           {step === "warn" && (
-            <button disabled={!ownerConfirm} onClick={() => setStep("phone")}
-              className="w-full bg-primary text-white text-sm font-semibold py-3.5 rounded-xl min-h-[48px] disabled:opacity-40 disabled:cursor-not-allowed">
+            <button disabled={!ownerConfirm} onClick={() => setStep("tarif")}
+              className="w-full bg-primary text-white text-sm font-semibold py-3.5 rounded-xl min-h-[48px] disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98] transition-transform">
+              Davom etish
+            </button>
+          )}
+          {step === "tarif" && (
+            <button disabled={!selectedPlan} onClick={() => setStep("payment")}
+              className="w-full bg-primary text-white text-sm font-semibold py-3.5 rounded-xl min-h-[48px] disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98] transition-transform">
+              Davom etish
+            </button>
+          )}
+          {step === "payment" && (
+            <button onClick={() => setStep("phone")}
+              className="w-full bg-primary text-white text-sm font-semibold py-3.5 rounded-xl min-h-[48px] active:scale-[0.98] transition-transform">
               Davom etish
             </button>
           )}
           {step === "phone" && (
             <button disabled={loading} onClick={submitPhone}
-              className="w-full bg-primary text-white text-sm font-semibold py-3.5 rounded-xl min-h-[48px] disabled:opacity-60 flex items-center justify-center gap-2">
+              className="w-full bg-primary text-white text-sm font-semibold py-3.5 rounded-xl min-h-[48px] disabled:opacity-60 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform">
               {loading && <Loader2 className="w-4 h-4 animate-spin" />} Davom etish
             </button>
           )}
@@ -3504,8 +3754,14 @@ function RegisterWizard({ onBack, onDone }: { onBack: () => void; onDone: (u: an
           )}
           {step === "summary" && (
             <button disabled={loading} onClick={complete}
-              className="w-full bg-accent text-white text-sm font-semibold py-3.5 rounded-xl min-h-[48px] disabled:opacity-60 flex items-center justify-center gap-2">
+              className="w-full bg-accent text-white text-sm font-semibold py-3.5 rounded-xl min-h-[48px] disabled:opacity-60 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform">
               {loading && <Loader2 className="w-4 h-4 animate-spin" />} Firmani ochish
+            </button>
+          )}
+          {step === "done" && (
+            <button onClick={onBack}
+              className="w-full bg-primary text-white text-sm font-semibold py-3.5 rounded-xl min-h-[48px] active:scale-[0.98] transition-transform">
+              Tizimga kirish
             </button>
           )}
         </div>
@@ -3515,27 +3771,65 @@ function RegisterWizard({ onBack, onDone }: { onBack: () => void; onDone: (u: an
 }
 
 // ─── Developer (super-admin) Panel ─────────────────────────────────────────────
+const DEV_PLAN_CONFIG: Record<string, { label: string; days: number; amount: number }> = {
+  '1month':  { label: '1 oylik',  days: 30,  amount: 1_200_000 },
+  '3month':  { label: '3 oylik',  days: 90,  amount: 3_000_000 },
+  '12month': { label: '12 oylik', days: 365, amount: 11_500_000 },
+};
+
 function DeveloperPanel({ currentUser, onLogout }: { currentUser: AppUser; onLogout: () => void }) {
-  const [tab, setTab] = useState<"firms" | "users">("firms");
+  const [tab, setTab] = useState<"firms" | "users" | "subscriptions">("subscriptions");
   const [companies, setCompanies] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
+  const [subs, setSubs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
+  const [subLoading, setSubLoading] = useState<string|null>(null);
+  const [renewPlan, setRenewPlan] = useState<Record<string, string>>({}); // subId → selectedPlan
+
+  const token = localStorage.getItem("token") || "";
+  const authHdr = { "Content-Type": "application/json", "Authorization": `Bearer ${token}` };
 
   const load = async () => {
-    setErr("");
+    setErr(""); setLoading(true);
     try {
-      const [cr, ur] = await Promise.all([
-        fetch(`${API_BASE}/api/companies`),
-        fetch(`${API_BASE}/api/users`),
+      const [cr, ur, sr] = await Promise.all([
+        fetch(`${API_BASE}/api/companies`, { headers: authHdr }),
+        fetch(`${API_BASE}/api/users`, { headers: authHdr }),
+        fetch(`${API_BASE}/api/admin/subscriptions`, { headers: authHdr }),
       ]);
       if (!cr.ok) { setErr("Firmalarni olishda xatolik (ruxsat yo'q?)"); setLoading(false); return; }
       setCompanies(await cr.json());
       setUsers(ur.ok ? await ur.json() : []);
+      setSubs(sr.ok ? await sr.json() : []);
     } catch { setErr("Server bilan ulanishda xatolik"); }
     setLoading(false);
   };
   useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
+
+  const approveSub = async (id: string) => {
+    setSubLoading(id);
+    const res = await fetch(`${API_BASE}/api/admin/subscriptions/${id}/approve`, { method: "POST", headers: authHdr });
+    if (res.ok) { await load(); } else { setErr("Tasdiqlashda xatolik"); }
+    setSubLoading(null);
+  };
+  const rejectSub = async (id: string) => {
+    if (!window.confirm("Rad etilsinmi?")) return;
+    setSubLoading(id);
+    const res = await fetch(`${API_BASE}/api/admin/subscriptions/${id}/reject`, { method: "POST", headers: authHdr });
+    if (res.ok) { await load(); } else { setErr("Rad etishda xatolik"); }
+    setSubLoading(null);
+  };
+  const renewSub = async (id: string) => {
+    const plan = renewPlan[id] || '1month';
+    setSubLoading(id);
+    const res = await fetch(`${API_BASE}/api/admin/subscriptions/${id}/renew`, {
+      method: "POST", headers: authHdr,
+      body: JSON.stringify({ selectedPlan: plan }),
+    });
+    if (res.ok) { await load(); } else { setErr("Yangilashda xatolik"); }
+    setSubLoading(null);
+  };
 
   const companyName = (cid: string) => companies.find(c => c.id === cid)?.name || "—";
 
@@ -3577,8 +3871,11 @@ function DeveloperPanel({ currentUser, onLogout }: { currentUser: AppUser; onLog
       </header>
 
       <div className="px-4 pt-3 flex gap-2">
-        <button onClick={() => setTab("firms")} className={`flex-1 py-2.5 rounded-xl text-sm font-semibold ${tab === "firms" ? "bg-primary text-white" : "surface"}`}>Firmalar ({companies.length})</button>
-        <button onClick={() => setTab("users")} className={`flex-1 py-2.5 rounded-xl text-sm font-semibold ${tab === "users" ? "bg-primary text-white" : "surface"}`}>Foydalanuvchilar ({users.length})</button>
+        <button onClick={() => setTab("subscriptions")} className={`flex-1 py-2.5 rounded-xl text-[13px] font-semibold ${tab === "subscriptions" ? "bg-primary text-white" : "surface"}`}>
+          To'lovlar {subs.filter(s => s.status === "pending").length > 0 && <span className="ml-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{subs.filter(s => s.status === "pending").length}</span>}
+        </button>
+        <button onClick={() => setTab("firms")} className={`flex-1 py-2.5 rounded-xl text-[13px] font-semibold ${tab === "firms" ? "bg-primary text-white" : "surface"}`}>Firmalar ({companies.length})</button>
+        <button onClick={() => setTab("users")} className={`flex-1 py-2.5 rounded-xl text-[13px] font-semibold ${tab === "users" ? "bg-primary text-white" : "surface"}`}>Foydalanuvchilar ({users.length})</button>
       </div>
 
       {err && <div className="mx-4 mt-3 bg-red-500/10 text-red-600 dark:text-red-400 text-sm p-3 rounded-lg border border-red-500/20">{err}</div>}
@@ -3586,6 +3883,81 @@ function DeveloperPanel({ currentUser, onLogout }: { currentUser: AppUser; onLog
       <div className="p-4 space-y-3 pb-24">
         {loading ? (
           <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
+        ) : tab === "subscriptions" ? (
+          subs.length === 0 ? <p className="text-center text-sm text-muted-foreground py-12">Obuna so'rovi yo'q</p> :
+          subs.map(s => {
+            const isPending = s.status === "pending";
+            const isActive = s.status === "active";
+            const isExpired = s.status === "expired";
+            const isRejected = s.status === "rejected";
+            const expiryWarning = isActive && typeof s.daysLeft === "number" && s.daysLeft <= 3;
+            const statusLabel = isPending ? "Kutilmoqda" : isActive ? `Faol · ${s.daysLeft} kun` : isExpired ? "Muddati o'tgan" : "Rad etilgan";
+            const statusColor = isPending ? "text-yellow-600 bg-yellow-500/10" : isActive ? (expiryWarning ? "text-orange-600 bg-orange-500/10" : "text-green-600 bg-green-500/10") : "text-red-600 bg-red-500/10";
+            return (
+              <div key={s.id} className={`surface rounded-2xl p-4 ${expiryWarning ? "ring-1 ring-orange-500/40" : ""} ${isPending ? "ring-1 ring-yellow-500/40" : ""}`}>
+                <div className="flex items-start justify-between gap-2 mb-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold truncate">{s.companyName}</p>
+                    <p className="text-[11px] font-mono text-muted-foreground">{s.branchId} · {s.userPhone}</p>
+                    <p className="text-[11px] text-muted-foreground">{s.userName}</p>
+                  </div>
+                  <span className={`text-[11px] font-semibold px-2 py-1 rounded-lg shrink-0 ${statusColor}`}>{statusLabel}</span>
+                </div>
+                <div className="flex items-center justify-between text-[12px] text-muted-foreground mb-3">
+                  <span>📦 {s.selectedPlan === "1month" ? "1 oylik" : s.selectedPlan === "3month" ? "3 oylik" : s.selectedPlan === "12month" ? "12 oylik" : s.selectedPlan || "—"}</span>
+                  <span className="font-semibold text-foreground">{s.amount ? s.amount.toLocaleString() + " so'm" : "—"}</span>
+                </div>
+                {s.requestedAt && <p className="text-[11px] text-muted-foreground mb-3">So'rov: {new Date(s.requestedAt).toLocaleString("uz-UZ")}</p>}
+                {expiryWarning && (
+                  <div className="mb-3">
+                    <p className="text-[11px] text-orange-600 font-semibold mb-2">⚠️ Faqat {s.daysLeft} kun qoldi!</p>
+                    <div className="flex items-center gap-2">
+                      <select value={renewPlan[s.id] || s.selectedPlan || '1month'}
+                        onChange={e => setRenewPlan(prev => ({ ...prev, [s.id]: e.target.value }))}
+                        className="flex-1 text-xs border border-orange-400/40 rounded-lg px-2 py-1.5 bg-transparent">
+                        {Object.entries(DEV_PLAN_CONFIG).map(([k, v]) => (
+                          <option key={k} value={k}>{v.label} — {v.amount.toLocaleString()} so'm</option>
+                        ))}
+                      </select>
+                      <button onClick={() => renewSub(s.id)} disabled={subLoading === s.id}
+                        className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-orange-500 text-white disabled:opacity-60 flex items-center gap-1 shrink-0">
+                        {subLoading === s.id ? <Loader2 className="w-3 h-3 animate-spin" /> : "+"} Uzaytirish
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {isPending && (
+                  <div className="flex gap-2">
+                    <button onClick={() => approveSub(s.id)} disabled={subLoading === s.id}
+                      className="flex-1 py-2 rounded-xl text-xs font-bold bg-green-600 text-white hover:bg-green-700 disabled:opacity-60 flex items-center justify-center gap-1">
+                      {subLoading === s.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "✅"} Tasdiqlash
+                    </button>
+                    <button onClick={() => rejectSub(s.id)} disabled={subLoading === s.id}
+                      className="flex-1 py-2 rounded-xl text-xs font-bold border border-red-500/30 text-red-600 hover:bg-red-500/10 disabled:opacity-60 flex items-center justify-center gap-1">
+                      {subLoading === s.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "❌"} Rad etish
+                    </button>
+                  </div>
+                )}
+                {(isExpired || isRejected) && (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <select value={renewPlan[s.id] || s.selectedPlan || '1month'}
+                        onChange={e => setRenewPlan(prev => ({ ...prev, [s.id]: e.target.value }))}
+                        className="flex-1 text-xs border border-border/60 rounded-lg px-2 py-2 bg-transparent">
+                        {Object.entries(DEV_PLAN_CONFIG).map(([k, v]) => (
+                          <option key={k} value={k}>{v.label} — {v.amount.toLocaleString()} so'm</option>
+                        ))}
+                      </select>
+                      <button onClick={() => renewSub(s.id)} disabled={subLoading === s.id}
+                        className="px-3 py-2 rounded-lg text-xs font-bold bg-primary text-white hover:bg-primary/90 disabled:opacity-60 flex items-center gap-1 shrink-0">
+                        {subLoading === s.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "🔄"} Yangilash
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })
         ) : tab === "firms" ? (
           companies.length === 0 ? <p className="text-center text-sm text-muted-foreground py-12">Firma yo'q</p> :
           companies.map(c => (

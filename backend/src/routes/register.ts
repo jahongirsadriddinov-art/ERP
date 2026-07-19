@@ -6,6 +6,8 @@ import Company from '../models/Company';
 import Subscription from '../models/Subscription';
 import ConsentLog from '../models/ConsentLog';
 import { generateBranchId } from '../models/Counter';
+import { PLAN_CONFIG, SelectedPlan } from './subscriptions';
+import { bot } from '../services/bot';
 import {
   normalizePhone, isValidUzPhone, hashPassword, isStrongPassword, hashToken,
 } from '../utils/tokens';
@@ -143,10 +145,10 @@ router.post('/cancel', async (req, res) => {
   }
 });
 
-// ─── 5) Yakunlash: firma + egasi yaratiladi, JWT beriladi ────────────────────
+// ─── 5) Yakunlash: firma + egasi yaratiladi (JWT EMAS — obuna tasdiqini kutadi) ──
 router.post('/complete', async (req, res) => {
   try {
-    const { token, owner, company, logoUrl } = req.body || {};
+    const { token, owner, company, logoUrl, selectedPlan } = req.body || {};
 
     // Token orqali faol sessiyani topamiz (256-bit sir + bot tasdig'i talab qilinadi)
     const reg = await findActiveByRawToken(token);
@@ -224,8 +226,18 @@ router.post('/complete', async (req, res) => {
     createdCompany.ownerUserId = String(ownerUser._id);
     await createdCompany.save();
 
-    // Billing skeleton: FREE obuna (bo'sh tur, hech narsa cheklamaydi)
-    await Subscription.create({ companyId: String(createdCompany._id), plan: 'FREE', status: 'active' }).catch(() => {});
+    // Obuna: tanlangan tarif bilan, admin tasdiqini kutadi (PENDING)
+    const planKey = (selectedPlan && PLAN_CONFIG[selectedPlan as SelectedPlan]) ? (selectedPlan as SelectedPlan) : '1month';
+    const planInfo = PLAN_CONFIG[planKey];
+    const sub = await Subscription.create({
+      companyId: String(createdCompany._id),
+      userId: String(ownerUser._id),
+      plan: 'PRO',
+      selectedPlan: planKey,
+      amount: planInfo.amount,
+      status: 'pending',
+      requestedAt: new Date(),
+    }).catch(() => null);
 
     // Rozilik audit izlari
     const ip = clientIp(req);
@@ -238,34 +250,43 @@ router.post('/complete', async (req, res) => {
 
     // Sessiyani yopamiz
     reg.step = 'COMPLETED';
-    reg.otpTokenHash = hashToken('used-' + String(reg._id)); // tokenni bekor qilamiz
+    reg.otpTokenHash = hashToken('used-' + String(reg._id));
     await reg.save();
 
-    // JWT (login bilan bir xil shakl)
-    const jwtToken = jwt.sign(
-      { userId: ownerUser._id, role: ownerUser.role, companyId: String(createdCompany._id), branchId: createdCompany.branchId, isOwner: true },
-      process.env.JWT_SECRET || 'secret',
-      { expiresIn: '7d' }
-    );
+    // Dasturchiga bildirishnoma
+    const DEVELOPER_CHAT_ID = process.env.DEVELOPER_CHAT_ID;
+    if (DEVELOPER_CHAT_ID && sub) {
+      const planInfo2 = PLAN_CONFIG[planKey];
+      const subIdStr = String(sub._id);
+      const msgText = `🆕 <b>Yangi obuna so'rovi!</b>\n\n` +
+        `👤 ${ownerUser.firstName} ${ownerUser.lastName || ''}\n` +
+        `📞 ${ownerUser.phone}\n` +
+        `🏢 ${createdCompany.name} (${createdCompany.branchId})\n` +
+        `📦 Tarif: ${planInfo2.label} — ${planInfo2.amount.toLocaleString()} so'm\n\n` +
+        `Tasdiqlash yoki rad etish uchun admin panelga kiring yoki pastdagi tugmalarni bosing:`;
+      await bot.sendMessage(DEVELOPER_CHAT_ID, msgText, {
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: [[
+            { text: '✅ Tasdiqlash', callback_data: `sub_approve_${subIdStr}` },
+            { text: '❌ Rad etish',  callback_data: `sub_reject_${subIdStr}` },
+          ]],
+        },
+      }).catch((e: any) => console.error('bot developer notify error:', e));
+    }
 
+    // JWT BERILMAYDI — foydalanuvchi admin tasdiqini kutishi kerak
     return res.status(201).json({
-      token: jwtToken,
-      user: {
-        id: ownerUser._id,
-        firstName: ownerUser.firstName,
-        lastName: ownerUser.lastName,
-        phone: ownerUser.phone,
-        role: ownerUser.role,
-        projectIds: [],
-        companyId: String(createdCompany._id),
-        isOwner: true,
-      },
+      ok: true,
+      subscriptionPending: true,
+      phone: ownerUser.phone,
+      selectedPlan: planKey,
+      planLabel: PLAN_CONFIG[planKey].label,
+      planAmount: PLAN_CONFIG[planKey].amount,
       company: {
         id: createdCompany._id,
         branchId: createdCompany.branchId,
         name: createdCompany.name,
-        logoUrl: createdCompany.logoUrl || '',
-        currency: createdCompany.currency,
       },
     });
   } catch (err) {

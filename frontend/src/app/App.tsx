@@ -2147,6 +2147,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
             </button>
           )}
           {contacts.length===0 && groups.length===0 && <p className="text-center text-xs text-muted-foreground py-8">Kontaktlar yo'q</p>}
+          {contacts.length===0 && groups.length>0 && <p className="text-center text-xs text-muted-foreground py-4 px-3">Bu kompaniyada boshqa foydalanuvchi yo'q</p>}
           {contacts.map(u => {
             const th = messages.filter(m => !m.deleted && !m.groupId && ((m.fromUserId===u.id&&m.toUserId===currentUser.id)||(m.fromUserId===currentUser.id&&m.toUserId===u.id)));
             const last = th.slice(-1)[0];
@@ -2199,7 +2200,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
                   ? <p className="text-[11px] text-muted-foreground truncate">{selGroup.devSupport ? 'Texnik yordam' : `${selGroup.memberIds.length} a'zo`}</p>
                   : <p className="text-[11px] text-muted-foreground">{isOnline(selUser!.id) ? <span className="text-green-600">onlayn</span> : ROLE_LABELS[selUser!.role]}</p>}
               </div>
-              {!selectMode && (
+              {!selectMode && !selGroup?.devSupport && (
                 <div className="flex items-center gap-1 flex-shrink-0">
                   <button onClick={() => onStartCall('voice', { peer: selUser || undefined, group: selGroup || undefined })} title="Ovozli qo'ng'iroq" className="btn btn-ghost w-9 h-9 p-0 rounded-full text-primary"><Phone className="w-[18px] h-[18px]"/></button>
                   <button onClick={() => onStartCall('video', { peer: selUser || undefined, group: selGroup || undefined })} title="Video qo'ng'iroq" className="btn btn-ghost w-9 h-9 p-0 rounded-full text-primary"><VideoIcon className="w-[18px] h-[18px]"/></button>
@@ -4110,6 +4111,7 @@ function DeveloperPanel({ currentUser, onLogout }: { currentUser: AppUser; onLog
   const [selDevFirm, setSelDevFirm] = useState<any|null>(null);
   const [selDevContact, setSelDevContact] = useState<any|null>(null);
   const [devDMMessages, setDevDMMessages] = useState<Msg[]>([]);
+  const [devMobileStep, setDevMobileStep] = useState<'firms'|'contacts'|'chat'>('firms');
   const [devMsgText, setDevMsgText] = useState("");
   const [devMsgLoading, setDevMsgLoading] = useState(false);
   const devMsgBottomRef = useRef<HTMLDivElement>(null);
@@ -4380,56 +4382,83 @@ function DeveloperPanel({ currentUser, onLogout }: { currentUser: AppUser; onLog
             </div>
           ))
         ) : tab === "messages" ? (
-          <div className="flex gap-2 h-[60vh] min-h-[320px]">
+          <div className="flex flex-col md:flex-row gap-0 md:gap-2 md:h-[60vh] md:min-h-[320px]">
+            {/* Mobile: breadcrumb/back nav */}
+            {devMobileStep !== 'firms' && (
+              <div className="md:hidden flex items-center gap-2 mb-2 pb-2 border-b border-border/40">
+                <button onClick={() => {
+                  if (devMobileStep === 'chat') { setDevMobileStep('contacts'); }
+                  else { setDevMobileStep('firms'); setSelDevFirm(null); setSelDevContact(null); setDevDMMessages([]); }
+                }} className="flex items-center gap-1 text-xs text-primary font-semibold py-1.5 px-2 rounded-lg hover:bg-primary/10">
+                  <ChevronLeft className="w-4 h-4"/> Orqaga
+                </button>
+                <span className="text-xs font-semibold text-foreground truncate">
+                  {devMobileStep === 'contacts' ? selDevFirm?.name : selDevContact?.name}
+                </span>
+              </div>
+            )}
+
             {/* Column 1: Firmalar */}
-            <div className="w-36 shrink-0 flex flex-col gap-1 overflow-y-auto">
+            <div className={`${devMobileStep === 'firms' ? 'flex' : 'hidden'} md:flex flex-col gap-1 overflow-y-auto w-full md:w-36 md:shrink-0`}>
               <p className="text-[10px] font-semibold text-muted-foreground px-1 pb-1">Firmalar</p>
               {companies.length === 0 && <p className="text-xs text-muted-foreground text-center py-6">Firma yo'q</p>}
               {companies.map((c: any) => {
                 const cid = c.id || c._id;
                 const isActive = selDevFirm && (selDevFirm.id || selDevFirm._id) === cid;
                 return (
-                  <button key={cid} onClick={() => { setSelDevFirm(c); setSelDevContact(null); setDevDMMessages([]); }}
-                    className={`w-full text-left px-3 py-2 rounded-xl text-xs font-semibold border border-border/40 ${isActive?'bg-primary text-white':'surface'}`}>
-                    <p className="truncate">{c.name}</p>
-                    <p className={`text-[10px] font-normal truncate ${isActive?'text-white/70':'text-muted-foreground'}`}>{c.branchId || ''}</p>
+                  <button key={cid} onClick={() => {
+                    setSelDevFirm(c); setSelDevContact(null); setDevDMMessages([]);
+                    setDevMobileStep('contacts');
+                  }} className={`w-full text-left px-3 py-2.5 md:py-2 rounded-xl text-xs font-semibold border border-border/40 flex items-center justify-between ${isActive?'bg-primary text-white':'surface'}`}>
+                    <div className="min-w-0">
+                      <p className="truncate">{c.name}</p>
+                      <p className={`text-[10px] font-normal truncate ${isActive?'text-white/70':'text-muted-foreground'}`}>{c.branchId || ''}</p>
+                    </div>
+                    <ChevronLeft className="w-3.5 h-3.5 rotate-180 opacity-40 md:hidden flex-shrink-0 ml-1"/>
                   </button>
                 );
               })}
             </div>
-            {/* Column 2: Rahbar / O'rinbosarlar */}
-            <div className="w-36 shrink-0 flex flex-col gap-1 overflow-y-auto">
+
+            {/* Column 2: Rahbarlar / O'rinbosarlar */}
+            <div className={`${devMobileStep === 'contacts' ? 'flex' : 'hidden'} md:flex flex-col gap-1 overflow-y-auto w-full md:w-36 md:shrink-0`}>
               <p className="text-[10px] font-semibold text-muted-foreground px-1 pb-1">Rahbarlar</p>
               {!selDevFirm ? (
                 <p className="text-xs text-muted-foreground text-center py-6">Firma tanlang</p>
               ) : (() => {
                 const cid = selDevFirm.id || selDevFirm._id;
-                const contacts = users.filter((u: any) => (u.companyId === cid) && (u.role === 'direktor' || u.role === 'orinbosar'));
-                if (contacts.length === 0) return <p className="text-xs text-muted-foreground text-center py-6">Rahbar yo'q</p>;
-                return contacts.map((u: any) => {
+                const devContacts = users.filter((u: any) => (u.companyId === cid) && (u.role === 'direktor' || u.role === 'orinbosar'));
+                if (devContacts.length === 0) return <p className="text-xs text-muted-foreground text-center py-6">Rahbar yo'q</p>;
+                return devContacts.map((u: any) => {
                   const isActive = selDevContact?.id === u.id;
                   return (
-                    <button key={u.id} onClick={() => { setSelDevContact(u); loadDevDM(u.id); }}
-                      className={`w-full text-left px-3 py-2 rounded-xl text-xs font-semibold border border-border/40 ${isActive?'bg-primary text-white':'surface'}`}>
-                      <p className="truncate">{u.name}</p>
-                      <p className={`text-[10px] font-normal truncate ${isActive?'text-white/70':'text-muted-foreground'}`}>{ROLE_LABELS[u.role as Role] || u.role}</p>
+                    <button key={u.id} onClick={() => {
+                      setSelDevContact(u); loadDevDM(u.id);
+                      setDevMobileStep('chat');
+                    }} className={`w-full text-left px-3 py-2.5 md:py-2 rounded-xl text-xs font-semibold border border-border/40 flex items-center justify-between ${isActive?'bg-primary text-white':'surface'}`}>
+                      <div className="min-w-0">
+                        <p className="truncate">{u.name}</p>
+                        <p className={`text-[10px] font-normal truncate ${isActive?'text-white/70':'text-muted-foreground'}`}>{ROLE_LABELS[u.role as Role] || u.role}</p>
+                      </div>
+                      <ChevronLeft className="w-3.5 h-3.5 rotate-180 opacity-40 md:hidden flex-shrink-0 ml-1"/>
                     </button>
                   );
                 });
               })()}
             </div>
+
             {/* Column 3: DM chat */}
-            <div className="flex-1 flex flex-col surface rounded-2xl overflow-hidden">
+            <div className={`${devMobileStep === 'chat' ? 'flex' : 'hidden'} md:flex flex-1 flex-col surface rounded-2xl overflow-hidden min-h-[60vh] md:min-h-0`}>
               {!selDevContact ? (
                 <div className="flex-1 flex items-center justify-center text-xs text-muted-foreground">Rahbar tanlang</div>
               ) : (
                 <>
-                  <div className="px-3 py-2 border-b border-border/40 flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-full bg-primary/15 flex items-center justify-center text-[11px] font-bold text-primary">
+                  <div className="px-3 py-2 border-b border-border/40 flex items-center gap-2 flex-shrink-0">
+                    <div className="w-7 h-7 rounded-full bg-primary/15 flex items-center justify-center text-[12px] font-bold text-primary flex-shrink-0">
                       {selDevContact.name?.[0]?.toUpperCase() || '?'}
                     </div>
-                    <div>
-                      <p className="text-xs font-semibold leading-none">{selDevContact.name}</p>
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold leading-none truncate">{selDevContact.name}</p>
                       <p className="text-[10px] text-muted-foreground">{ROLE_LABELS[selDevContact.role as Role] || selDevContact.role}</p>
                     </div>
                   </div>
@@ -4440,7 +4469,7 @@ function DeveloperPanel({ currentUser, onLogout }: { currentUser: AppUser; onLog
                       return (
                         <div key={m.id} className={`flex ${mine?'justify-end':'justify-start'}`}>
                           <div className={`max-w-[80%] px-3 py-2 rounded-2xl text-xs ${mine?'bg-primary text-white':'bg-muted'}`}>
-                            <p>{m.text}</p>
+                            <p className="break-words">{m.text}</p>
                             <p className={`text-[9px] mt-0.5 ${mine?'text-white/60':'text-muted-foreground'}`}>{new Date(m.timestamp).toLocaleTimeString('uz-UZ',{hour:'2-digit',minute:'2-digit'})}</p>
                           </div>
                         </div>
@@ -4448,13 +4477,14 @@ function DeveloperPanel({ currentUser, onLogout }: { currentUser: AppUser; onLog
                     })}
                     <div ref={devMsgBottomRef}/>
                   </div>
-                  <div className="flex items-center gap-2 px-3 py-2 border-t border-border/40">
+                  <div className="flex items-center gap-2 px-3 py-2.5 border-t border-border/40 flex-shrink-0">
                     <input value={devMsgText} onChange={e => setDevMsgText(e.target.value)}
                       onKeyDown={e => e.key==='Enter'&&!e.shiftKey&&sendDevMsg()}
-                      placeholder="Xabar yozing..." className="flex-1 text-xs bg-muted/50 rounded-xl px-3 py-2 focus:outline-none"/>
+                      placeholder="Xabar yozing..."
+                      className="flex-1 text-sm md:text-xs bg-muted/50 rounded-xl px-3 py-2.5 md:py-2 focus:outline-none focus:ring-2 focus:ring-primary/30"/>
                     <button onClick={sendDevMsg} disabled={devMsgLoading||!devMsgText.trim()}
-                      className="w-8 h-8 rounded-xl bg-primary text-white flex items-center justify-center disabled:opacity-40">
-                      {devMsgLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin"/> : <Send className="w-3.5 h-3.5"/>}
+                      className="w-10 h-10 md:w-8 md:h-8 rounded-xl bg-primary text-white flex items-center justify-center disabled:opacity-40 flex-shrink-0">
+                      {devMsgLoading ? <Loader2 className="w-4 h-4 animate-spin"/> : <Send className="w-4 h-4"/>}
                     </button>
                   </div>
                 </>

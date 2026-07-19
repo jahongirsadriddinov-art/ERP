@@ -18,7 +18,7 @@ import {
 
 const router = Router();
 
-const BOT_USERNAME = process.env.BOT_USERNAME || 'Erp_Firma_bot';
+const BOT_USERNAME = process.env.BOT_USERNAME || 'qurilish_erp_bot';
 const CONSENT_VERSION = { terms: 'terms_v1', privacy: 'privacy_v1' };
 
 function clientIp(req: any): string {

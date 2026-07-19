@@ -3085,8 +3085,8 @@ function LoginScreen({ onLogin, onRegister }: { onLogin: (u: any, company?: any)
               <p className="text-sm md:text-xs text-muted-foreground leading-relaxed text-center">
                 Oldin Telegram botimizga kiring, <span className="font-semibold text-foreground">/start</span> tugmasini bosib raqamingizni ulashing. Keyin shu yerga raqamingizni yozib kodni oling.
               </p>
-              <a href="https://t.me/Erp_Firma_bot" target="_blank" rel="noopener noreferrer" className="mt-2 text-sm md:text-xs font-semibold text-primary flex items-center justify-center gap-1 hover:underline">
-                <Send className="w-3 h-3"/> @Erp_Firma_bot ga o'tish
+              <a href="https://t.me/qurilish_erp_bot" target="_blank" rel="noopener noreferrer" className="mt-2 text-sm md:text-xs font-semibold text-primary flex items-center justify-center gap-1 hover:underline">
+                <Send className="w-3 h-3"/> @qurilish_erp_bot ga o'tish
               </a>
             </div>
             <div>

@@ -2864,7 +2864,8 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
     <div className="overflow-y-auto scrollbar-hide max-w-lg mx-auto w-full pb-10">
 
       {/* ── Company Banner ─────────────────────────── */}
-      <div className="relative overflow-hidden" style={{ ...bannerStyle, height: 210 }}>
+      <motion.div initial={{ opacity: 0, scale: 1.04 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+        className="relative overflow-hidden" style={{ ...bannerStyle, height: 210 }}>
         <div className="absolute inset-0" style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.12) 0%, rgba(0,0,0,0.58) 100%)" }}/>
         {canEditCompany && (
           <button onClick={() => bgRef.current?.click()}
@@ -2909,12 +2910,13 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
             <p className="text-white/65 text-xs mt-0.5">Qurilish kompaniyasi</p>
           </div>
         </div>
-      </div>
+      </motion.div>
 
       <div className="px-4 mt-4 space-y-4">
 
         {/* ── Profile Card ──────────────────────────── */}
-        <div className="bg-card border border-border rounded-2xl p-5 text-center relative shadow-sm">
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28, delay: 0.02 }}
+          className="surface p-5 text-center relative">
           {isAdmin(currentUser.role) && (
             !isEditing
               ? <button onClick={() => setIsEditing(true)} className="absolute top-4 right-4 p-1.5 text-muted-foreground hover:bg-muted/50 hover:text-foreground rounded-lg liquid-transition"><Edit className="w-4 h-4"/></button>
@@ -2944,10 +2946,11 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
               {currentUser.brigade && <p className="text-xs text-muted-foreground mt-1">{currentUser.brigade}</p>}
             </>
           )}
-        </div>
+        </motion.div>
 
         {/* ── Fon Mavzular ─────────────────────────── */}
-        <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28, delay: 0.06 }}
+          className="surface overflow-hidden">
           <div className="px-4 py-3 border-b border-border flex items-center gap-2">
             <div className="w-4 h-4 rounded-md flex-shrink-0" style={(bannerStyle as any).background ? { background: (bannerStyle as any).background } : { backgroundImage: (bannerStyle as any).backgroundImage, backgroundSize: 'cover' }}/>
             <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex-1">Fon mavzular</p>
@@ -2975,10 +2978,11 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
               </button>
             </div>
           </div>
-        </div>
+        </motion.div>
 
         {/* ── Ko'rinish rejimi (Light / Dark / System) ─────────── */}
-        <div className="surface overflow-hidden">
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28, delay: 0.10 }}
+          className="surface overflow-hidden">
           <div className="px-4 py-3 border-b border-border flex items-center gap-2">
             <Moon className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0"/>
             <p className="section-title flex-1">Ko'rinish rejimi</p>
@@ -2994,10 +2998,11 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
               ))}
             </div>
           </div>
-        </div>
+        </motion.div>
 
         {/* ── Rang Mavzusi ─────────────────────────── */}
-        <div className="surface overflow-hidden">
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28, delay: 0.14 }}
+          className="surface overflow-hidden">
           <div className="px-4 py-3 border-b border-border flex items-center gap-2">
             <Palette className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0"/>
             <p className="section-title flex-1">Rang mavzusi</p>
@@ -3024,10 +3029,11 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
               ))}
             </div>
           </div>
-        </div>
+        </motion.div>
 
         {/* ── Ruxsatlar ─────────────────────────────── */}
-        <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28, delay: 0.18 }}
+          className="surface overflow-hidden">
           <div className="px-4 py-3.5 border-b border-border">
             <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Ruxsatlar</p>
           </div>
@@ -3037,10 +3043,11 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
               {has ? <CheckCircle className="w-4 h-4 text-green-500"/> : <X className="w-4 h-4 text-muted-foreground/30"/>}
             </div>
           ))}
-        </div>
+        </motion.div>
 
         {/* ── Obyektlarim ───────────────────────────── */}
-        <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28, delay: 0.22 }}
+          className="surface overflow-hidden">
           <div className="px-4 py-3.5 border-b border-border">
             <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Obyektlarim</p>
           </div>
@@ -3055,12 +3062,13 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
               </div>
             ))
           }
-        </div>
+        </motion.div>
 
-        <button onClick={() => { localStorage.removeItem("currentUser"); localStorage.removeItem("token"); onLogout(); }}
+        <motion.button initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28, delay: 0.26 }}
+          onClick={() => { localStorage.removeItem("currentUser"); localStorage.removeItem("token"); onLogout(); }}
           className="w-full flex items-center justify-center gap-2.5 text-sm border-2 border-border rounded-2xl px-4 py-3.5 text-muted-foreground hover:bg-red-500/10 hover:text-red-600 hover:border-red-500/30 liquid-transition font-semibold">
           <LogOut className="w-4 h-4"/>Tizimdan chiqish
-        </button>
+        </motion.button>
       </div>
     </div>
   );

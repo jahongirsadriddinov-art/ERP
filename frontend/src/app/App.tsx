@@ -2072,7 +2072,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
       mediaRecRef.current = mr;
       setIsRecording(true); setRecSec(0);
       timerRef.current = setInterval(() => setRecSec(s => s + 1), 1000);
-    } catch { alert("Mikrofon ruxsati kerak"); }
+    } catch { toast.error("Mikrofon ruxsati kerak"); }
   };
   const stopRec = () => {
     mediaRecRef.current?.stop();
@@ -2101,10 +2101,10 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
   };
 
   const sendLocation = () => {
-    if (!navigator.geolocation) { alert("Brauzer geolokatsiyani qo'llab-quvvatlamaydi"); return; }
+    if (!navigator.geolocation) { toast.error("Brauzer geolokatsiyani qo'llab-quvvatlamaydi"); return; }
     navigator.geolocation.getCurrentPosition(
       pos => doSend({ type: 'location', text: '📍 Lokatsiya', location: { lat: pos.coords.latitude, lng: pos.coords.longitude } }),
-      () => alert("Lokatsiya ruxsati berilmadi")
+      () => toast.error("Lokatsiya ruxsati berilmadi")
     );
     setShowAttach(false);
   };
@@ -2323,7 +2323,8 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
             )}
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-3 flex flex-col justify-end gap-1.5 scrollbar-hide relative" onClick={()=>{setCtxMenu(null);setShowAttach(false);}}>
+            <div className="flex-1 overflow-y-auto scrollbar-hide relative" onClick={()=>{setCtxMenu(null);setShowAttach(false);}}>
+              <div className="min-h-full flex flex-col justify-end gap-1.5 max-w-3xl mx-auto w-full p-3">
               {thread.length===0 && <div className="text-center py-8 text-muted-foreground text-sm">Xabar yo'q. Birinchi bo'ling!</div>}
               {thread.map(m => {
                 const mine = m.fromUserId===currentUser.id;
@@ -2358,10 +2359,11 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
                 );
               })}
               <div ref={bottomRef}/>
+              </div>
 
               {/* Context Menu */}
               {ctxMenu && (
-                <div className="fixed z-50 glass-card p-1.5 rounded-xl border border-white/20 shadow-2xl flex flex-col gap-0.5 animate-pop-in"
+                <div className="fixed z-50 glass p-1.5 rounded-2xl border border-white/20 shadow-2xl flex flex-col gap-0.5 animate-pop-in"
                   style={{top:Math.min(ctxMenu.y,window.innerHeight-260),left:ctxMenu.x>window.innerWidth-164?window.innerWidth-168:Math.max(4,ctxMenu.x)}}
                   onClick={e=>e.stopPropagation()}>
                   <div onClick={()=>{if(ctxMsg)setReplyTo(ctxMsg);setCtxMenu(null);}} className="flex items-center gap-2 px-3 py-2 hover:bg-muted/40 rounded-lg cursor-pointer text-xs"><CornerDownLeft className="w-3.5 h-3.5 text-blue-500"/>Reply</div>
@@ -2411,14 +2413,14 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
             {!selectMode && (
               <div className="px-3 flex-shrink-0 relative" style={{ paddingTop: '0.5rem', paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }} onClick={e=>e.stopPropagation()}>
                 {showAttach && (
-                  <div className="absolute bottom-[4.5rem] left-3 glass-card p-2 rounded-2xl border border-white/20 shadow-2xl flex flex-col gap-0.5 animate-slide-up-fade z-50 min-w-[190px]" onClick={e=>e.stopPropagation()}>
+                  <div className="absolute bottom-[4.5rem] left-3 glass p-2 rounded-2xl border border-white/20 shadow-2xl flex flex-col gap-0.5 animate-slide-up-fade z-50 min-w-[190px]" onClick={e=>e.stopPropagation()}>
                     <button onClick={()=>fileImgRef.current?.click()} className="flex items-center gap-3 px-3 py-2 hover:bg-muted/40 rounded-xl transition-colors text-sm"><ImageIcon className="w-4 h-4 text-blue-500"/>Rasm / Video</button>
                     <button onClick={()=>camRef.current?.click()} className="flex items-center gap-3 px-3 py-2 hover:bg-muted/40 rounded-xl transition-colors text-sm"><Camera className="w-4 h-4 text-rose-500"/>Kamera</button>
                     <button onClick={()=>fileAllRef.current?.click()} className="flex items-center gap-3 px-3 py-2 hover:bg-muted/40 rounded-xl transition-colors text-sm"><FileText className="w-4 h-4 text-orange-500"/>Fayl</button>
                     <button onClick={sendLocation} className="flex items-center gap-3 px-3 py-2 hover:bg-muted/40 rounded-xl transition-colors text-sm"><MapPin className="w-4 h-4 text-green-500"/>Lokatsiya</button>
                   </div>
                 )}
-                <div className="nav-pill-desktop flex gap-1 items-end rounded-full px-1.5 py-1.5">
+                <div className="nav-pill-desktop flex gap-1 items-end rounded-full px-1.5 py-1.5 max-w-3xl mx-auto">
                   {!isRecording && (
                     <button onClick={()=>setShowAttach(!showAttach)} className="w-9 h-9 flex-shrink-0 flex items-center justify-center text-muted-foreground hover:bg-white/10 rounded-full transition-colors">
                       <Paperclip className="w-5 h-5"/>

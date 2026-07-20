@@ -13,7 +13,7 @@ import {
 } from "recharts";
 import { API_BASE, parseSmetaFile, uploadChatMedia } from "./api";
 import { connectSocket, getSocket, disconnectSocket } from "./socket";
-import { motion } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
 
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -3089,6 +3089,45 @@ function BottomFinanceBar({ expenses, projects }: { expenses: Expense[]; project
   );
 }
 
+// ─── OTP kod qutilar (4 xonali kod uchun) — auto-advance, backspace, paste ──────
+function OtpBoxes({ value, onChange, length = 4, autoFocus, error }: { value: string; onChange: (v: string) => void; length?: number; autoFocus?: boolean; error?: boolean }) {
+  const refs = useRef<(HTMLInputElement | null)[]>([]);
+  const digits = Array.from({ length }, (_, i) => value[i] || "");
+
+  const setAt = (i: number, d: string) => {
+    const next = digits.slice();
+    next[i] = d;
+    onChange(next.join(""));
+  };
+  const handleChange = (i: number, raw: string) => {
+    const d = raw.replace(/\D/g, "").slice(-1);
+    setAt(i, d);
+    if (d && i < length - 1) refs.current[i + 1]?.focus();
+  };
+  const handleKeyDown = (i: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Backspace" && !digits[i] && i > 0) refs.current[i - 1]?.focus();
+  };
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const text = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, length);
+    if (text) { e.preventDefault(); onChange(text); refs.current[Math.min(text.length, length - 1)]?.focus(); }
+  };
+
+  return (
+    <div className="flex justify-center gap-2.5">
+      {digits.map((d, i) => (
+        <input key={i} ref={el => { refs.current[i] = el; }} type="text" inputMode="numeric" maxLength={1}
+          value={d}
+          onChange={e => handleChange(i, e.target.value)}
+          onKeyDown={e => handleKeyDown(i, e)}
+          onPaste={handlePaste}
+          autoFocus={autoFocus && i === 0}
+          className={`w-14 h-16 text-center text-2xl font-bold rounded-2xl border bg-white/50 dark:bg-black/20 focus:bg-white dark:focus:bg-black/40 focus:outline-none focus:ring-2 focus:ring-primary/50 shadow-inner liquid-transition ${error ? "border-red-500/50" : "border-border/50"}`}
+        />
+      ))}
+    </div>
+  );
+}
+
 // ─── Login Screen ─────────────────────────────────────────────────────────────
 function LoginScreen({ onLogin, onRegister }: { onLogin: (u: any, company?: any) => void; onRegister?: () => void }) {
   const [phone, setPhone] = useState("+998 ");
@@ -3141,8 +3180,8 @@ function LoginScreen({ onLogin, onRegister }: { onLogin: (u: any, company?: any)
     }
   };
 
-  const handleCodeSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleCodeSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     const cleanPhone = phone.replace(/\s+/g, "");
     try {
       const res = await fetch(API_BASE + "/api/auth/login", {
@@ -3176,6 +3215,12 @@ function LoginScreen({ onLogin, onRegister }: { onLogin: (u: any, company?: any)
       setError("Server bilan ulanishda xatolik");
     }
   };
+
+  // 4 xona to'lganda avtomatik yuborish (OTP qutilar bilan qulay oqim)
+  useEffect(() => {
+    if (step === "code" && code.length === 4) handleCodeSubmit();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [code, step]);
 
   // Dasturchi login: raqam + parol
   const handleDevLogin = async (e: React.FormEvent) => {
@@ -3219,9 +3264,12 @@ function LoginScreen({ onLogin, onRegister }: { onLogin: (u: any, company?: any)
         <h1 className="text-3xl font-bold font-['Roboto_Slab',serif] bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70">{loginCompanyName}</h1>
         <p className="text-sm text-muted-foreground mt-1">Tizimga kirish</p>
       </div>
-      <div className="w-full max-w-sm space-y-4 glass p-6 rounded-2xl border border-white/20 shadow-2xl animate-pop-in relative z-10">
+      <div className="w-full max-w-sm space-y-4 glass p-6 rounded-2xl border border-white/20 shadow-2xl animate-pop-in relative z-10 overflow-hidden">
         {error && <div className="bg-red-500/10 text-red-600 dark:text-red-400 text-sm md:text-xs p-3 rounded-lg border border-red-500/20 text-center">{error}</div>}
-        
+
+        <AnimatePresence mode="wait">
+        <motion.div key={step} initial={{ opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -24 }}
+          transition={{ type: "spring", stiffness: 380, damping: 34 }}>
         {step === "phone" ? (
           <form onSubmit={handlePhoneSubmit} className="space-y-4">
             <div className="bg-primary/5 border border-primary/10 rounded-xl p-3 mb-4">
@@ -3301,9 +3349,8 @@ function LoginScreen({ onLogin, onRegister }: { onLogin: (u: any, company?: any)
         ) : (
           <form onSubmit={handleCodeSubmit} className="space-y-4">
             <div>
-              <label className="text-sm md:text-xs font-medium block mb-1.5 ml-1 text-muted-foreground text-center">Telegram botga yuborilgan 4 xonali kod</label>
-              <input type="text" className="w-full text-center text-3xl tracking-[1em] pl-[1em] border border-border/50 rounded-xl px-4 py-4 bg-white/50 dark:bg-black/20 focus:bg-white dark:focus:bg-black/40 focus:outline-none focus:ring-2 focus:ring-primary/50 font-mono liquid-transition shadow-inner"
-                placeholder="0000" maxLength={4} value={code} onChange={e => {setError(""); setCode(e.target.value.replace(/\D/g, ''));}} autoFocus/>
+              <label className="text-sm md:text-xs font-medium block mb-2 text-muted-foreground text-center">Telegram botga yuborilgan 4 xonali kod</label>
+              <OtpBoxes value={code} onChange={v => { setError(""); setCode(v); }} error={!!error} autoFocus/>
             </div>
             <button type="submit" className="w-full bg-gradient-to-r from-primary to-primary/90 text-white text-sm font-semibold py-3 rounded-xl shadow-lg shadow-primary/25 hover:shadow-primary/40 hover:-translate-y-0.5 liquid-transition">
               Tizimga kirish
@@ -3320,6 +3367,8 @@ function LoginScreen({ onLogin, onRegister }: { onLogin: (u: any, company?: any)
             </div>
           </form>
         )}
+        </motion.div>
+        </AnimatePresence>
       </div>
 
       {/* ─── Yangi firma ochish (mavjud formaga tegilmadi) ─────────────────── */}

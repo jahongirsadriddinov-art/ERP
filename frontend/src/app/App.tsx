@@ -5068,7 +5068,7 @@ export default function App() {
           <span className="text-base font-bold tracking-tight hidden lg:block">{companyName}</span>
         </div>
         <div className="h-5 w-px bg-border hidden sm:block mx-1.5"/>
-        <nav className="hidden sm:flex items-center gap-0.5 lg:gap-1 flex-1 nav-pill-desktop px-1.5 py-1.5 rounded-full w-fit">
+        <nav className="hidden sm:flex items-center gap-0.5 lg:gap-1 nav-pill-desktop px-1.5 py-1.5 rounded-full w-fit flex-shrink-0">
           {NAV.map(n=>(
             <button key={n.key} onClick={()=>{setPage(n.key);setSelProject(null);}}
               className={`relative flex items-center gap-1.5 lg:gap-2 text-sm md:text-[13px] lg:text-sm px-2.5 md:px-2.5 lg:px-4 py-2 lg:py-2.5 rounded-full z-10 liquid-transition whitespace-nowrap ${page===n.key?"text-primary font-semibold":"text-muted-foreground hover:text-foreground"}`}>
@@ -5104,7 +5104,7 @@ export default function App() {
       </div>
 
       {/* Main */}
-      <main className={`flex-1 overflow-hidden flex flex-col relative ${(page === 'chat' && chatIsOpen) ? '' : 'main-pb-safe'}`}>
+      <main key={`${page}:${selProject?.id || ''}`} className={`page-enter flex-1 overflow-hidden flex flex-col relative ${(page === 'chat' && chatIsOpen) ? '' : 'main-pb-safe'}`}>
         {/* Admin dashboard */}
         {page==="dashboard" && admin && !selProject && (
           <AdminDashboard currentUser={liveUser} users={users} projects={projects} transfers={transfers}

@@ -100,11 +100,16 @@
   .btn-ghost { background: transparent; color: var(--muted-foreground); }
   .btn-ghost:hover { background: color-mix(in srgb, var(--foreground) 6%, transparent); color: var(--foreground); }
 
-  /* Desktop/tablet header nav — capsule "liquid glass" pill, theme-aware */
+  /* Desktop/tablet header nav — capsule "liquid glass" pill, theme-aware.
+     Needs real tonal + elevation contrast against the header's own .glass
+     surface, or the pill boundary disappears (color-mix tint alone isn't enough). */
   .nav-pill-desktop {
-    background: color-mix(in srgb, var(--foreground) 5%, transparent);
-    border: 1px solid color-mix(in srgb, var(--foreground) 7%, transparent);
-    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--background) 60%, transparent);
+    background: color-mix(in srgb, var(--background) 45%, transparent);
+    border: 1px solid color-mix(in srgb, var(--foreground) 15%, transparent);
+    box-shadow:
+      0 1px 3px rgba(0,0,0,0.14),
+      0 6px 16px rgba(0,0,0,0.12),
+      inset 0 1px 0 color-mix(in srgb, var(--background) 55%, transparent);
   }
 
   .chip {

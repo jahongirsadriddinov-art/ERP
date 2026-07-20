@@ -4,9 +4,13 @@
 
 | Qism | Texnologiya | Qayerga |
 |------|-------------|---------|
-| **Frontend** | React + Vite (statik) | **Vercel** → `erp-firma.uz` |
-| **Backend** | Express + **Telegram bot (long-polling)** + **Socket.io** | **Render** (Vercel EMAS ❌) |
+| **Frontend** | React + Vite (statik) | **Vercel** → `https://erp-ebon-seven-91.vercel.app` (hozircha maxsus domensiz) |
+| **Backend** | Express + **Telegram bot (long-polling)** + **Socket.io** | **Render** → `https://qurilisherp-backend.onrender.com` (Vercel EMAS ❌) |
 | **Ma'lumotlar bazasi** | MongoDB | **MongoDB Atlas** (bulut) |
+
+> ⚠️ Hozirgi jonli manzillar shu — pastdagi barcha qadamlarda ishlatiladi. Agar keyinchalik
+> maxsus domen (masalan `erp-firma.uz`) ulasangiz, faqat `SITE_URL` (Render) va `VITE_API_URL`
+> (Vercel) o'zgaruvchilarini yangilang — kodda domen hech qayerda qattiq yozilmagan.
 
 **Nega backend Vercel'da emas?** Vercel *serverless* — funksiyalar qisqa muddat ishlaydi, doimiy jarayon yo'q.
 Bizning bot Telegram'ni **doimiy so'rab turadi (polling)** va Socket.io **doimiy WebSocket** ushlab turadi.
@@ -55,7 +59,7 @@ git push origin main
    - `MONGODB_URI` = Atlas satri (1-qadam)
    - `TELEGRAM_BOT_TOKEN` = `<BotFather'dan olingan token>`
    - `BOT_USERNAME` = `qurilish_erp_bot`
-   - `SITE_URL` = `https://erp-firma.uz`
+   - `SITE_URL` = `https://erp-ebon-seven-91.vercel.app` (yoki keyinroq ulagan maxsus domeningiz)
    - `DEVELOPER_PHONE` = `+998900960890`
    - `DEVELOPER_PASSWORD` = kuchli parol
    - `DEVELOPER_CHAT_ID` = `<sizning Telegram chat ID>`
@@ -70,15 +74,19 @@ git push origin main
 1. https://vercel.com → GitHub bilan kiring → **Add New → Project** → repo'ni tanlang.
 2. **Root Directory** = `frontend` (muhim!). Framework: Vite (avtomatik).
 3. **Environment Variables**:
-   - `VITE_API_URL` = backend URL (masalan `https://erp-firma-backend.onrender.com` yoki Render'dagi URL)
-4. **Deploy**. Keyin Vercel → Domains → `erp-firma.uz` qo'shing.
+   - `VITE_API_URL` = `https://qurilisherp-backend.onrender.com` (joriy jonli backend manzili)
+4. **Deploy**. Vercel avtomatik `*.vercel.app` manzil beradi (hozir: `erp-ebon-seven-91.vercel.app`).
+   Maxsus domen ulamoqchi bo'lsangiz — Vercel → Domains → domeningizni qo'shing.
 
 ---
 
 ## 5. Bog'lash (oxirgi qadam)
-1. **Render** → backend → Environment → `SITE_URL` = `https://erp-firma.uz` → saqlang.
-2. **@BotFather** → `/setdomain` → `erp-firma.uz` qo'shing (web_app tugmalari uchun).
-3. Tayyor! `https://erp-firma.uz` ga kiring, ro'yxatdan o'ting yoki dasturchi (`+998770160054`) bilan test qiling.
+1. **Render** → backend → Environment → `SITE_URL` = Vercel manzilingiz (hozir
+   `https://erp-ebon-seven-91.vercel.app`) → saqlang. Bot xabarlaridagi "Saytda ko'rish"
+   havolasi shu qiymatdan olinadi.
+2. **@BotFather** → `/setdomain` → shu domenni qo'shing (web_app tugmalari uchun).
+3. Tayyor! `https://erp-ebon-seven-91.vercel.app` ga kiring, ro'yxatdan o'ting yoki dasturchi
+   (`+998770160054`) bilan test qiling.
 
 ---
 
@@ -86,3 +94,4 @@ git push origin main
 - `:5000/api/auth/send-code 404` — frontend backendni topa olmadi. Lokalда: backend ishlamayotgan bo'lsa `cd backend && npm run dev`. Deploy'дан keyin: Vercel'да `VITE_API_URL` to'g'ri (Render URL) ekanini tekshiring.
 - `AbortError: play() interrupted by pause()` — zararsiz (qo'ng'iroq/media audio elementi). E'tibor bermang.
 - `409 Conflict` (Telegram) — bot bir vaqtda ikki joyda ishlayapti. Lokal `npm run dev` ni to'xtating.
+- `net::ERR_NAME_NOT_RESOLVED` / WebSocket ulanish xatoligi backend manziliga — odatda Render **bepul reja** 15 daqiqa harakatsizlikdan keyin serverni "uxlatib qo'yishi"dan (cold start). Birinchi so'rov ~30-50 soniya kutadi, browser ba'zan buni DNS xatosi sifatida ko'rsatadi; sahifani qayta yuklasangiz odatda tuzaladi. Doimiy uyg'oq turishi uchun Render pullik reja yoki tashqi "ping" xizmati (masalan UptimeRobot, 10 daqiqada bir marta `/health`ga so'rov) kerak.

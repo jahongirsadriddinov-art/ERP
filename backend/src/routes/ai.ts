@@ -140,6 +140,9 @@ Xabar yuborish uchun:
     if (err.message?.includes('API_KEY') || err.message?.includes('env yo\'q')) {
       return res.status(500).json({ error: 'AI API kaliti sozlanmagan' });
     }
+    if (err.message?.includes('limitga yetdi')) {
+      return res.status(429).json({ error: 'Gemini AI kunlik/oylik limitga yetdi. Birozdan keyin qayta urinib ko\'ring yoki yangi API kalit qo\'shing.' });
+    }
     res.status(500).json({ error: 'AI xizmati bilan ulanishda xatolik' });
   }
 });

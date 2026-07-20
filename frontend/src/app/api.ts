@@ -1,6 +1,7 @@
 // ─── API base ────────────────────────────────────────────────────────────────
-// Production (erp-firma.uz) va local o'rtasida sozlanadigan baza.
-// .env / .env.production dagi VITE_API_URL orqali boshqariladi.
+// Production (hozir: erp-ebon-seven-91.vercel.app → qurilisherp-backend.onrender.com)
+// va local o'rtasida sozlanadigan baza. .env / .env.production dagi
+// VITE_API_URL orqali boshqariladi — domen hech qayerda qattiq yozilmagan.
 export const API_BASE: string =
   (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') ||
   'http://localhost:5000';

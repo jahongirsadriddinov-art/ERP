@@ -39,7 +39,7 @@ app.get('/health', (_req, res) => res.json({ ok: true, service: 'quriliserp-back
 
 // optionalAuth: token bo'lsa o'qib tenant kontekstini o'rnatadi, bo'lmasa ham
 // so'rovni o'tkazadi — shu tufayli eski klientlar sinmaydi (bosqichma-bosqich izolyatsiya).
-app.use('/api/auth', authRoutes);
+app.use('/api/auth', optionalAuth, authRoutes);
 app.use('/api/register', registerRoutes); // v1.2 self-signup (pre-auth, ochiq)
 app.use('/api/objects', optionalAuth, objectRoutes);
 app.use('/api/users', optionalAuth, usersRoutes);

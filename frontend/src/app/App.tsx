@@ -13,6 +13,7 @@ import {
 } from "recharts";
 import { API_BASE, parseSmetaFile, uploadChatMedia } from "./api";
 import { connectSocket, getSocket, disconnectSocket } from "./socket";
+import { motion } from "motion/react";
 
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -4953,12 +4954,12 @@ export default function App() {
           <span className="text-base font-bold tracking-tight hidden lg:block">{companyName}</span>
         </div>
         <div className="h-5 w-px bg-border hidden sm:block mx-1.5"/>
-        <nav className="hidden sm:flex items-center gap-1 flex-1">
+        <nav className="hidden sm:flex items-center gap-2 flex-1">
           {NAV.map(n=>(
             <button key={n.key} onClick={()=>{setPage(n.key);setSelProject(null);}}
-              className={`btn flex items-center gap-1.5 text-sm md:text-xs px-3 py-1.5 relative ${page===n.key?"bg-primary/10 text-primary font-semibold":"text-muted-foreground hover:bg-muted hover:text-foreground"}`}>
-              <n.icon className="w-4 h-4"/><span className="hidden lg:inline">{n.label}</span>
-              {n.badge && n.badge>0 && <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 bg-accent text-accent-foreground rounded-full text-[9px] flex items-center justify-center font-bold shadow-sm">{n.badge}</span>}
+              className={`btn flex items-center gap-2 text-sm px-3.5 py-2.5 sm:px-3 sm:py-2 lg:px-4 lg:py-2.5 relative ${page===n.key?"bg-primary/10 text-primary font-semibold":"text-muted-foreground hover:bg-muted hover:text-foreground"}`}>
+              <n.icon className="w-5 h-5 sm:w-[18px] sm:h-[18px] lg:w-5 lg:h-5"/><span className="hidden md:inline">{n.label}</span>
+              {n.badge && n.badge>0 && <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-accent text-accent-foreground rounded-full text-[10px] flex items-center justify-center font-bold shadow-sm">{n.badge}</span>}
             </button>
           ))}
         </nav>
@@ -5051,19 +5052,28 @@ export default function App() {
           onClose={()=>setShowSend(false)} onSend={t=>{handleSendTransfer(t);setShowSend(false);}}/>
       )}
 
-      {/* Mobile Bottom Navigation (Telegram Style Floating Pill) */}
-      <nav className={`ios-bottom-bar flex items-center justify-around transition-all duration-300 ${page==='chat' && chatIsOpen ? 'translate-y-[120%] opacity-0 pointer-events-none' : ''}`}>
+      {/* Mobile Bottom Navigation — iOS 26 "Liquid Glass" pill, spring-animated */}
+      <nav className={`ios-bottom-bar flex items-center justify-around ${page==='chat' && chatIsOpen ? 'ios-bottom-bar-hidden' : ''}`}>
         {NAV.map(n => (
-          <button key={n.key} onClick={() => { setPage(n.key); setSelProject(null); }}
-            className={`flex flex-col items-center justify-center gap-1 w-14 h-14 relative transition-all duration-300 ${page===n.key?"text-white scale-110":"text-white/55 hover:text-white"}`}
+          <motion.button key={n.key} onClick={() => { setPage(n.key); setSelProject(null); }}
+            whileTap={{ scale: 0.86 }}
+            transition={{ type: "spring", stiffness: 500, damping: 28 }}
+            className={`flex flex-col items-center justify-center gap-1 w-14 h-14 relative z-10 ${page===n.key?"text-white":"text-white/55"}`}
           >
-            <div className={`flex items-center justify-center w-8 h-8 rounded-full transition-all duration-300 ${page===n.key?"bg-white/18":"bg-transparent"}`}>
+            {page === n.key && (
+              <motion.div
+                layoutId="mobileNavLiquidPill"
+                className="absolute w-11 h-11 rounded-full liquid-pill -z-10"
+                transition={{ type: "spring", stiffness: 480, damping: 32 }}
+              />
+            )}
+            <div className={`flex items-center justify-center w-8 h-8 transition-transform duration-300 ${page===n.key?"scale-110":""}`}>
               <n.icon className={`w-5 h-5 ${page===n.key?"fill-current":""}`}/>
             </div>
             {n.badge && n.badge>0 && (
-              <span className="absolute top-0 right-2 w-3.5 h-3.5 bg-red-500 text-white rounded-full text-[8px] flex items-center justify-center font-bold shadow-sm border border-black/50">{n.badge}</span>
+              <span className="badge-pulse absolute top-0 right-2 w-3.5 h-3.5 bg-red-500 text-white rounded-full text-[8px] flex items-center justify-center font-bold shadow-sm border border-black/50">{n.badge}</span>
             )}
-          </button>
+          </motion.button>
         ))}
       </nav>
 

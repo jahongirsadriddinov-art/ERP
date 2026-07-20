@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import User from '../models/User';
 import { scoped } from '../middleware/scope';
+import { getTenant } from '../middleware/tenantContext';
 
 const router = Router();
 
@@ -28,20 +29,27 @@ router.get('/', async (req, res) => {
 // Update user
 router.put('/:id', async (req, res) => {
   try {
-    const { firstName, lastName } = req.body;
+    const { firstName, lastName, companyId } = req.body;
     const user = await User.findOne(scoped({ _id: req.params.id }));
     if (!user) return res.status(404).json({ error: 'Foydalanuvchi topilmadi' });
-    
+
     if (firstName) user.firstName = firstName;
     if (lastName !== undefined) user.lastName = lastName;
-    
+    // companyId faqat dasturchi (super-admin) orqali qayta biriktirilishi mumkin —
+    // eski tenant-bug qurbonlarini (companyId yo'q/noto'g'ri xodimlar) tuzatish uchun.
+    // Oddiy tenant o'zini boshqa firmaga "ko'chira olmaydi" (privilege escalation yo'q).
+    if (companyId !== undefined && getTenant()?.isDeveloper) {
+      user.companyId = companyId || undefined;
+    }
+
     await user.save();
     res.json({
       id: user._id,
       name: user.firstName + (user.lastName ? ' ' + user.lastName : ''),
       phone: user.phone,
       role: user.role,
-      brigade: user.brigade
+      brigade: user.brigade,
+      companyId: user.companyId || null
     });
   } catch (err) {
     res.status(500).json({ error: 'Server xatoligi' });

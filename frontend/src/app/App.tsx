@@ -197,12 +197,13 @@ function RoleBadge({ role }: { role: Role }) {
 
 // ─── Add User Modal ────────────────────────────────────────────────────────────
 function AddUserModal({ currentUser, users, projects, onClose, onAdd }:
-  { currentUser: AppUser; users: AppUser[]; projects: Project[]; onClose: () => void; onAdd: (u: AppUser) => void }) {
+  { currentUser: AppUser; users: AppUser[]; projects: Project[]; onClose: () => void; onAdd: (u: AppUser) => Promise<{ ok: boolean; error?: string }> }) {
   const [form, setForm] = useState({
     name: "", phone: "+998 ", role: "ishchi" as Role,
     brigade: currentUser.brigade ?? "", newBrigade: "", projectIds: [] as string[]
   });
   const [err, setErr] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   // Role options based on who's adding
   const allowedRoles: Role[] = currentUser.role === "brigadir"
@@ -214,7 +215,7 @@ function AddUserModal({ currentUser, users, projects, onClose, onAdd }:
   const brigades = [...new Set(users.filter(u => u.brigade).map(u => u.brigade!))];
   if (currentUser.brigade && !brigades.includes(currentUser.brigade)) brigades.push(currentUser.brigade);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const phone = form.phone.replace(/\D/g, "");
     if (phone.length < 9) { setErr("Telefon raqam noto'g'ri"); return; }
@@ -229,8 +230,11 @@ function AddUserModal({ currentUser, users, projects, onClose, onAdd }:
       brigade: (form.role === "brigadir" || form.role === "ishchi") ? (form.brigade === "__new__" ? form.newBrigade : form.brigade) : undefined,
       projectIds: form.projectIds
     };
-    onAdd(newUser);
-    onClose();
+    setErr(""); setSubmitting(true);
+    const result = await onAdd(newUser);
+    setSubmitting(false);
+    if (result.ok) onClose();
+    else setErr(result.error || "Foydalanuvchi qo'shilmadi");
   };
 
   return (
@@ -300,8 +304,10 @@ function AddUserModal({ currentUser, users, projects, onClose, onAdd }:
             </div>
           )}
           <div className="flex gap-2 pt-1">
-            <button type="button" onClick={onClose} className="flex-1 text-sm md:text-xs border border-border rounded px-3 py-2 hover:bg-muted transition-colors">Bekor</button>
-            <button type="submit" className="flex-1 text-sm md:text-xs bg-primary text-white rounded px-3 py-2 hover:bg-primary/90 transition-colors font-semibold">Qo'shish</button>
+            <button type="button" onClick={onClose} disabled={submitting} className="flex-1 text-sm md:text-xs border border-border rounded px-3 py-2 hover:bg-muted transition-colors disabled:opacity-50">Bekor</button>
+            <button type="submit" disabled={submitting} className="flex-1 text-sm md:text-xs bg-primary text-white rounded px-3 py-2 hover:bg-primary/90 transition-colors font-semibold disabled:opacity-60 flex items-center justify-center gap-1.5">
+              {submitting && <Loader2 className="w-3.5 h-3.5 animate-spin"/>}Qo'shish
+            </button>
           </div>
         </form>
       </div>
@@ -969,7 +975,7 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
   { currentUser: AppUser; users: AppUser[]; projects: Project[]; transfers: Transfer[];
     setUsers: React.Dispatch<React.SetStateAction<AppUser[]>>;
     onSendTransfer: (t: Transfer) => void; onConfirmTransfer: (id: string, d?: string) => void;
-    onRejectTransfer: (id: string) => void; onSelectProject: (p: Project) => void; onAddUser: (u: AppUser) => void;
+    onRejectTransfer: (id: string) => void; onSelectProject: (p: Project) => void; onAddUser: (u: AppUser) => Promise<{ ok: boolean; error?: string }>;
     onUpdateUser: (u: AppUser) => void; onDeleteUser: (id: string) => void;
     onAddProject: (p: Project) => void;
   }) {
@@ -1312,7 +1318,7 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
       })}
     </div>
 
-      {showAddUser && <AddUserModal currentUser={currentUser} users={users} projects={projects} onClose={()=>setShowAddUser(false)} onAdd={u=>{onAddUser(u);setShowAddUser(false);}}/>}
+      {showAddUser && <AddUserModal currentUser={currentUser} users={users} projects={projects} onClose={()=>setShowAddUser(false)} onAdd={onAddUser}/>}
       {editUser && <EditUserModal currentUser={currentUser} user={editUser} onClose={()=>setEditUser(null)} onUpdate={u=>{onUpdateUser(u);setEditUser(null);}}/>}
       {showSend && <SendTransferModal currentUser={currentUser} projects={projects} allUsers={users} onClose={()=>setShowSend(false)} onSend={t=>{onSendTransfer(t);setShowSend(false);}}/>}
       {showAddObject && <AddObjectModal users={users} onClose={()=>setShowAddObject(false)} onAdd={p=>{onAddProject(p);setShowAddObject(false);}}/>}
@@ -4236,6 +4242,12 @@ function DeveloperPanel({ currentUser, onLogout }: { currentUser: AppUser; onLog
     const res = await fetch(`${API_BASE}/api/auth/users/${u.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ role }) });
     if (res.ok) load(); else setErr("O'zgartirishda xatolik");
   };
+  // Eski tenant-bug qurbonlarini (companyId noto'g'ri/yo'q xodimlar) to'g'ri firmaga biriktirish
+  const assignCompany = async (u: any, companyId: string) => {
+    const res = await fetch(`${API_BASE}/api/users/${u.id}`, { method: "PUT", headers: authHdr, body: JSON.stringify({ companyId: companyId || null }) });
+    if (res.ok) { load(); toast.success(`${u.name} firmaga biriktirildi. Xodim qayta login qilishi kerak.`); }
+    else setErr("Firmaga biriktirishda xatolik");
+  };
 
   return (
     <div className="min-h-screen bg-background" style={{ paddingTop: "env(safe-area-inset-top)" }}>
@@ -4499,9 +4511,17 @@ function DeveloperPanel({ currentUser, onLogout }: { currentUser: AppUser; onLog
               <div className="min-w-0">
                 <p className="text-sm font-semibold truncate">{u.name}</p>
                 <p className="text-[11px] text-muted-foreground font-mono">{u.phone}</p>
-                <p className="text-[11px] text-muted-foreground truncate">{u.companyId ? companyName(u.companyId) : "firmasiz"}{u.isOwner ? " · egasi" : ""}</p>
+                <p className={`text-[11px] truncate ${u.companyId ? "text-muted-foreground" : "text-red-500 font-semibold"}`}>{u.companyId ? companyName(u.companyId) : "⚠️ firmasiz (eski bug qurboni)"}{u.isOwner ? " · egasi" : ""}</p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
+                {u.role !== "dasturchi" && (
+                  <select value={u.companyId || ""} onChange={e => assignCompany(u, e.target.value)}
+                    title="Firmaga biriktirish"
+                    className={`text-xs border rounded-lg px-2 py-1.5 bg-transparent max-w-[110px] ${u.companyId ? "border-border/60" : "border-red-500/50 text-red-600"}`}>
+                    <option value="">— firmasiz —</option>
+                    {companies.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                )}
                 <select value={u.role} onChange={e => changeRole(u, e.target.value)} disabled={u.role === "dasturchi"}
                   className="text-xs border border-border/60 rounded-lg px-2 py-1.5 bg-transparent">
                   {["direktor","orinbosar","prorab","brigadir","ishchi"].map(r => <option key={r} value={r}>{ROLE_LABELS[r as Role]}</option>)}
@@ -4800,12 +4820,20 @@ export default function App() {
       }
     } catch(err) { console.error(err); }
   };
-  const handleAddUser = async (u: AppUser) => {
+  const handleAddUser = async (u: AppUser): Promise<{ ok: boolean; error?: string }> => {
     try {
       const nameParts = u.name.trim().split(" ");
       const res = await fetch(API_BASE + "/api/auth/users", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({firstName: nameParts[0] || u.name, lastName: nameParts.slice(1).join(" ") || "", phone: u.phone, role: u.role, brigade: u.brigade, projectIds: u.projectIds || []}) });
-      if (res.ok) { const data = await res.json(); setUsers(p=>[...p, {...data, id: data.id || data._id, name: data.name || u.name, projectIds: u.projectIds || []}]); }
-    } catch(err) { console.error('Foydalanuvchi qo\'shish xatosi:', err); }
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setUsers(p=>[...p, {...data, id: data.id || data._id, name: data.name || u.name, projectIds: u.projectIds || []}]);
+        return { ok: true };
+      }
+      return { ok: false, error: data.error || "Foydalanuvchi qo'shilmadi" };
+    } catch(err) {
+      console.error('Foydalanuvchi qo\'shish xatosi:', err);
+      return { ok: false, error: "Server bilan bog'lanib bo'lmadi" };
+    }
   };
   const handleUpdateUser = async (u: AppUser) => {
     try {
@@ -4831,7 +4859,8 @@ export default function App() {
     try {
       const res = await fetch(`${API_BASE}/api/auth/users/${id}`, { method: "DELETE" });
       if (res.ok) setUsers(p=>p.filter(u=>u.id!==id));
-    } catch(err) { console.error(err); }
+      else toast.error("O'chirib bo'lmadi — dasturchi panelidan tekshiring (@Sadriddinov_Jahongir)");
+    } catch(err) { console.error(err); toast.error("Server bilan bog'lanib bo'lmadi"); }
   };
 
   const handleConfirmExpense = async (id: string) => {

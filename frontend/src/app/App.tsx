@@ -4,7 +4,7 @@ import {
   CheckCircle, Clock, AlertTriangle, ChevronRight, MapPin,
   Phone, User, X, Check, Download, BarChart2,
   DollarSign, MessageCircle, ChevronDown, ChevronUp, Send,
-  TrendingDown, Wallet, LogOut, Camera, Home, UserPlus, Edit, Trash, Search, AlertCircle, ChevronLeft, Loader2, Paperclip, Mic, Video as VideoIcon, Image as ImageIcon, FileText, CornerDownLeft, Share2, SquareCheck, Trash2, MoreHorizontal, Upload, Palette, Sun, Moon, Monitor, PhoneOff, MicOff, VideoOff, Users2, Copy
+  TrendingDown, Wallet, LogOut, Camera, Home, UserPlus, Edit, Trash, Search, AlertCircle, ChevronLeft, Loader2, Paperclip, Mic, Video as VideoIcon, Image as ImageIcon, FileText, CornerDownLeft, Share2, SquareCheck, Trash2, MoreHorizontal, Upload, Palette, Sun, Moon, Monitor, PhoneOff, MicOff, VideoOff, Users2, Copy, Bell
 } from "lucide-react";
 import { toast, Toaster } from "sonner";
 import {
@@ -193,6 +193,91 @@ function Avatar({ user, size = "md" }: { user: AppUser; size?: "sm"|"md"|"lg" })
 
 function RoleBadge({ role }: { role: Role }) {
   return <span className={`text-[9px] px-1.5 py-0.5 rounded font-semibold whitespace-nowrap ${ROLE_COLORS[role]}`}>{ROLE_LABELS[role]}</span>;
+}
+
+// ─── Notification Bell (liquid-glass dropdown, real data) ─────────────────────
+function timeAgoShort(iso?: string): string {
+  if (!iso) return "";
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const min = Math.floor(diffMs / 60000);
+  if (min < 1) return "hozir";
+  if (min < 60) return `${min}m`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `${h}s`;
+  return `${Math.floor(h / 24)}k`;
+}
+
+function NotificationBell({ messages, transfers, expenses, users, currentUser, onOpenChat, onOpenDashboard }:
+  { messages: Msg[]; transfers: Transfer[]; expenses: Expense[]; users: AppUser[]; currentUser: AppUser;
+    onOpenChat: () => void; onOpenDashboard: () => void; }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+
+  const unread = messages.filter(m => m.toUserId === currentUser.id && !m.read && !m.deleted);
+  const bySender = Object.values(unread.reduce((acc: Record<string, { userId: string; count: number; last: Msg }>, m) => {
+    const cur = acc[m.fromUserId];
+    if (!cur) acc[m.fromUserId] = { userId: m.fromUserId, count: 1, last: m };
+    else { cur.count++; if (new Date(m.timestamp) > new Date(cur.last.timestamp)) cur.last = m; }
+    return acc;
+  }, {}));
+  const pendingTransfers = transfers.filter(t => t.toUserId === currentUser.id && t.status === "pending");
+  const pendingExpenses = expenses.filter((e: any) => e.toUserId === currentUser.id && e.status === "pending");
+  const badgeCount = unread.length + pendingTransfers.length + pendingExpenses.length;
+  const hasAny = bySender.length + pendingTransfers.length + pendingExpenses.length > 0;
+
+  return (
+    <div className="relative" ref={ref}>
+      <button onClick={() => setOpen(o => !o)} title="Bildirishnomalar"
+        className="btn btn-ghost w-9 h-9 p-0 rounded-full relative">
+        <Bell className="w-[18px] h-[18px]"/>
+        {badgeCount > 0 && (
+          <span className="badge-pulse absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 bg-accent text-accent-foreground rounded-full text-[9px] flex items-center justify-center font-bold shadow-sm">{badgeCount}</span>
+        )}
+      </button>
+      {open && (
+        <motion.div initial={{ opacity: 0, y: -8, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ type: "spring", stiffness: 420, damping: 32 }}
+          className="absolute right-0 top-full mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-2xl overflow-hidden z-50 liquid-glass">
+          <div className="px-4 py-3 border-b border-white/10"><p className="text-sm font-bold text-white">Bildirishnomalar</p></div>
+          <div className="max-h-80 overflow-y-auto scrollbar-hide divide-y divide-white/5">
+            {!hasAny && <p className="text-center text-xs text-white/50 py-8">Bildirishnoma yo'q</p>}
+            {bySender.map(u => {
+              const sender = users.find(x => x.id === u.userId);
+              return (
+                <button key={u.userId} onClick={() => { onOpenChat(); setOpen(false); }}
+                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/5 text-left transition-colors">
+                  <div className="w-9 h-9 rounded-full bg-primary/25 text-primary flex items-center justify-center flex-shrink-0"><MessageCircle className="w-4 h-4"/></div>
+                  <div className="flex-1 min-w-0"><p className="text-xs font-semibold text-white truncate">{sender?.name || "Foydalanuvchi"}</p><p className="text-[11px] text-white/60 truncate">{u.count > 1 ? `${u.count} ta yangi xabar` : (u.last.type && u.last.type !== "text" ? "📎 Media xabar" : (u.last.text || "Yangi xabar"))}</p></div>
+                  <span className="text-[10px] text-white/40 flex-shrink-0">{timeAgoShort(u.last.timestamp)}</span>
+                </button>
+              );
+            })}
+            {pendingTransfers.map(t => (
+              <button key={t.id} onClick={() => { onOpenDashboard(); setOpen(false); }}
+                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/5 text-left transition-colors">
+                <div className="w-9 h-9 rounded-full bg-amber-500/25 text-amber-300 flex items-center justify-center flex-shrink-0"><Package className="w-4 h-4"/></div>
+                <div className="flex-1 min-w-0"><p className="text-xs font-semibold text-white">Yangi o'tkazma</p><p className="text-[11px] text-white/60 truncate">{t.fromUserName || "Xodim"}dan tasdiq kutilmoqda</p></div>
+              </button>
+            ))}
+            {pendingExpenses.map((e: any) => (
+              <button key={e.id} onClick={() => { onOpenDashboard(); setOpen(false); }}
+                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/5 text-left transition-colors">
+                <div className="w-9 h-9 rounded-full bg-green-500/25 text-green-300 flex items-center justify-center flex-shrink-0"><Wallet className="w-4 h-4"/></div>
+                <div className="flex-1 min-w-0"><p className="text-xs font-semibold text-white">Chiqim tasdiqlash</p><p className="text-[11px] text-white/60 truncate">Sizning tasdiqingiz kerak</p></div>
+              </button>
+            ))}
+          </div>
+        </motion.div>
+      )}
+    </div>
+  );
 }
 
 // ─── Add User Modal ────────────────────────────────────────────────────────────
@@ -4983,17 +5068,22 @@ export default function App() {
           <span className="text-base font-bold tracking-tight hidden lg:block">{companyName}</span>
         </div>
         <div className="h-5 w-px bg-border hidden sm:block mx-1.5"/>
-        <nav className="hidden sm:flex items-center gap-2 flex-1">
+        <nav className="hidden sm:flex items-center gap-0.5 lg:gap-1 flex-1 nav-pill-desktop px-1.5 py-1.5 rounded-full w-fit">
           {NAV.map(n=>(
             <button key={n.key} onClick={()=>{setPage(n.key);setSelProject(null);}}
-              className={`btn flex items-center gap-2 text-sm px-3.5 py-2.5 sm:px-3 sm:py-2 lg:px-4 lg:py-2.5 relative ${page===n.key?"bg-primary/10 text-primary font-semibold":"text-muted-foreground hover:bg-muted hover:text-foreground"}`}>
-              <n.icon className="w-5 h-5 sm:w-[18px] sm:h-[18px] lg:w-5 lg:h-5"/><span className="hidden md:inline">{n.label}</span>
-              {n.badge && n.badge>0 && <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-accent text-accent-foreground rounded-full text-[10px] flex items-center justify-center font-bold shadow-sm">{n.badge}</span>}
+              className={`relative flex items-center gap-1.5 lg:gap-2 text-sm md:text-[13px] lg:text-sm px-2.5 md:px-2.5 lg:px-4 py-2 lg:py-2.5 rounded-full z-10 liquid-transition whitespace-nowrap ${page===n.key?"text-primary font-semibold":"text-muted-foreground hover:text-foreground"}`}>
+              {page===n.key && (
+                <motion.div layoutId="desktopNavPill" className="absolute inset-0 rounded-full bg-primary/10 -z-10"
+                  transition={{ type: "spring", stiffness: 480, damping: 34 }}/>
+              )}
+              <n.icon className="w-[18px] h-[18px] lg:w-5 lg:h-5 flex-shrink-0"/><span className="hidden md:inline">{n.label}</span>
+              {!!n.badge && n.badge>0 && <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-accent text-accent-foreground rounded-full text-[10px] flex items-center justify-center font-bold shadow-sm">{n.badge}</span>}
             </button>
           ))}
         </nav>
         <div className="flex items-center gap-2 flex-shrink-0 ml-auto">
-          {totalNotifs>0&&<span className="w-5 h-5 bg-accent text-accent-foreground rounded-full text-[9px] flex items-center justify-center font-bold shadow-sm">{totalNotifs}</span>}
+          <NotificationBell messages={messages} transfers={transfers} expenses={expenses} users={users} currentUser={liveUser}
+            onOpenChat={()=>{setPage("chat");setSelProject(null);}} onOpenDashboard={()=>{setPage("dashboard");setSelProject(null);}}/>
           <button onClick={cycleThemeMode} title={themeMode==="light"?"Yorug'":themeMode==="dark"?"Qorong'i":"Tizim bo'yicha"}
             className="btn btn-ghost w-9 h-9 p-0 rounded-xl">
             {themeMode==="light"?<Sun className="w-[18px] h-[18px]"/>:themeMode==="dark"?<Moon className="w-[18px] h-[18px]"/>:<Monitor className="w-[18px] h-[18px]"/>}
@@ -5097,9 +5187,11 @@ export default function App() {
               />
             )}
             <div className={`flex items-center justify-center w-8 h-8 transition-transform duration-300 ${page===n.key?"scale-110":""}`}>
-              <n.icon className={`w-5 h-5 ${page===n.key?"fill-current":""}`}/>
+              {n.key === "profile"
+                ? <div className={`rounded-full ${page===n.key?"ring-2 ring-white/70":""}`}><Avatar user={liveUser} size="sm"/></div>
+                : <n.icon className={`w-5 h-5 ${page===n.key?"fill-current":""}`}/>}
             </div>
-            {n.badge && n.badge>0 && (
+            {!!n.badge && n.badge>0 && (
               <span className="badge-pulse absolute top-0 right-2 w-3.5 h-3.5 bg-red-500 text-white rounded-full text-[8px] flex items-center justify-center font-bold shadow-sm border border-black/50">{n.badge}</span>
             )}
           </motion.button>

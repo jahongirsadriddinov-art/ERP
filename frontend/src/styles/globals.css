@@ -100,6 +100,13 @@
   .btn-ghost { background: transparent; color: var(--muted-foreground); }
   .btn-ghost:hover { background: color-mix(in srgb, var(--foreground) 6%, transparent); color: var(--foreground); }
 
+  /* Desktop/tablet header nav — capsule "liquid glass" pill, theme-aware */
+  .nav-pill-desktop {
+    background: color-mix(in srgb, var(--foreground) 5%, transparent);
+    border: 1px solid color-mix(in srgb, var(--foreground) 7%, transparent);
+    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--background) 60%, transparent);
+  }
+
   .chip {
     display: inline-flex; align-items: center; gap: 0.3rem;
     font-size: 0.6875rem; font-weight: 600; line-height: 1;

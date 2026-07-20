@@ -3257,14 +3257,16 @@ function LoginScreen({ onLogin, onRegister }: { onLogin: (u: any, company?: any)
       <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/20 rounded-full blur-[100px]" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-accent/20 rounded-full blur-[100px]" />
 
-      <div className="mb-8 text-center animate-slide-up-fade relative z-10">
-        <div className="w-16 h-16 bg-gradient-to-br from-primary to-primary/80 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-xl shadow-primary/20 overflow-hidden">
+      <motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 26 }}
+        className="mb-8 text-center relative z-10">
+        <div className="w-16 h-16 bg-gradient-to-br from-primary to-primary/80 rounded-3xl flex items-center justify-center mx-auto mb-4 shadow-xl shadow-primary/20 overflow-hidden">
           {loginCompanyLogo ? <img src={loginCompanyLogo} alt="Logo" className="w-full h-full object-contain p-1"/> : <Building2 className="w-8 h-8 text-white"/>}
         </div>
         <h1 className="text-3xl font-bold font-['Roboto_Slab',serif] bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70">{loginCompanyName}</h1>
         <p className="text-sm text-muted-foreground mt-1">Tizimga kirish</p>
-      </div>
-      <div className="w-full max-w-sm space-y-4 glass p-6 rounded-2xl border border-white/20 shadow-2xl animate-pop-in relative z-10 overflow-hidden">
+      </motion.div>
+      <motion.div initial={{ opacity: 0, y: 16, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ type: "spring", stiffness: 260, damping: 24, delay: 0.08 }}
+        className="w-full max-w-sm space-y-4 glass p-7 rounded-[2rem] border border-white/20 shadow-2xl relative z-10 overflow-hidden">
         {error && <div className="bg-red-500/10 text-red-600 dark:text-red-400 text-sm md:text-xs p-3 rounded-lg border border-red-500/20 text-center">{error}</div>}
 
         <AnimatePresence mode="wait">
@@ -3282,15 +3284,18 @@ function LoginScreen({ onLogin, onRegister }: { onLogin: (u: any, company?: any)
             </div>
             <div>
               <label className="text-sm md:text-xs font-medium block mb-1.5 ml-1 text-muted-foreground">Telefon raqamingiz</label>
-              <input type="text" className="w-full text-sm border border-border/50 rounded-xl px-4 py-3 bg-white/50 dark:bg-black/20 focus:bg-white dark:focus:bg-black/40 focus:outline-none focus:ring-2 focus:ring-primary/50 font-mono liquid-transition shadow-inner"
-                value={phone} onChange={e => {
-                  setError(""); 
-                  const val = e.target.value;
-                  if (val.startsWith("+998 ")) setPhone(val);
-                  else if (val === "+998") setPhone("+998 ");
-                }} autoFocus/>
+              <div className="relative">
+                <Phone className="w-4 h-4 text-muted-foreground absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none"/>
+                <input type="text" className="w-full text-sm border border-border/50 rounded-2xl pl-11 pr-4 py-3 bg-white/50 dark:bg-black/20 focus:bg-white dark:focus:bg-black/40 focus:outline-none focus:ring-2 focus:ring-primary/50 font-mono liquid-transition shadow-inner"
+                  value={phone} onChange={e => {
+                    setError("");
+                    const val = e.target.value;
+                    if (val.startsWith("+998 ")) setPhone(val);
+                    else if (val === "+998") setPhone("+998 ");
+                  }} autoFocus/>
+              </div>
             </div>
-            <button type="submit" className="w-full bg-gradient-to-r from-primary to-primary/90 text-white text-sm font-semibold py-3 rounded-xl shadow-lg shadow-primary/25 hover:shadow-primary/40 hover:-translate-y-0.5 liquid-transition">
+            <button type="submit" className="w-full bg-gradient-to-r from-primary to-primary/90 text-white text-sm font-semibold py-3.5 rounded-full shadow-lg shadow-primary/25 hover:shadow-primary/40 hover:-translate-y-0.5 liquid-transition">
               Kodni olish
             </button>
           </form>
@@ -3320,7 +3325,7 @@ function LoginScreen({ onLogin, onRegister }: { onLogin: (u: any, company?: any)
               )}
             </div>
             <a href="https://t.me/Sadriddinov_Jahongir" target="_blank" rel="noopener noreferrer"
-              className="w-full inline-flex items-center justify-center gap-2 bg-blue-500 text-white text-sm font-semibold py-3 rounded-xl min-h-[44px] active:scale-[0.98] transition-transform">
+              className="w-full inline-flex items-center justify-center gap-2 bg-blue-500 text-white text-sm font-semibold py-3.5 rounded-full min-h-[44px] active:scale-[0.98] transition-transform">
               <Send className="w-4 h-4"/> @Sadriddinov_Jahongir'ga yozish
             </a>
             <button type="button" onClick={() => { setStep("phone"); setBlockedReason(null); setError(""); }}
@@ -3339,7 +3344,7 @@ function LoginScreen({ onLogin, onRegister }: { onLogin: (u: any, company?: any)
               <input type="password" className="w-full text-base text-center border border-border/50 rounded-xl px-4 py-3 bg-white/50 dark:bg-black/20 focus:bg-white dark:focus:bg-black/40 focus:outline-none focus:ring-2 focus:ring-primary/50 liquid-transition shadow-inner"
                 placeholder="••••••••" value={password} onChange={e => { setError(""); setPassword(e.target.value); }} autoFocus/>
             </div>
-            <button type="submit" className="w-full bg-gradient-to-r from-primary to-primary/90 text-white text-sm font-semibold py-3 rounded-xl shadow-lg shadow-primary/25 hover:shadow-primary/40 hover:-translate-y-0.5 liquid-transition">
+            <button type="submit" className="w-full bg-gradient-to-r from-primary to-primary/90 text-white text-sm font-semibold py-3.5 rounded-full shadow-lg shadow-primary/25 hover:shadow-primary/40 hover:-translate-y-0.5 liquid-transition">
               Kirish
             </button>
             <button type="button" onClick={() => { setStep("phone"); setPassword(""); }} className="w-full text-sm md:text-xs text-muted-foreground hover:text-foreground py-2 liquid-transition">
@@ -3352,7 +3357,7 @@ function LoginScreen({ onLogin, onRegister }: { onLogin: (u: any, company?: any)
               <label className="text-sm md:text-xs font-medium block mb-2 text-muted-foreground text-center">Telegram botga yuborilgan 4 xonali kod</label>
               <OtpBoxes value={code} onChange={v => { setError(""); setCode(v); }} error={!!error} autoFocus/>
             </div>
-            <button type="submit" className="w-full bg-gradient-to-r from-primary to-primary/90 text-white text-sm font-semibold py-3 rounded-xl shadow-lg shadow-primary/25 hover:shadow-primary/40 hover:-translate-y-0.5 liquid-transition">
+            <button type="submit" className="w-full bg-gradient-to-r from-primary to-primary/90 text-white text-sm font-semibold py-3.5 rounded-full shadow-lg shadow-primary/25 hover:shadow-primary/40 hover:-translate-y-0.5 liquid-transition">
               Tizimga kirish
             </button>
             <div className="flex flex-col gap-2 pt-2">
@@ -3369,7 +3374,7 @@ function LoginScreen({ onLogin, onRegister }: { onLogin: (u: any, company?: any)
         )}
         </motion.div>
         </AnimatePresence>
-      </div>
+      </motion.div>
 
       {/* ─── Yangi firma ochish (mavjud formaga tegilmadi) ─────────────────── */}
       {onRegister && (
@@ -3380,7 +3385,7 @@ function LoginScreen({ onLogin, onRegister }: { onLogin: (u: any, company?: any)
             <div className="h-px flex-1 bg-border/60" />
           </div>
           <button type="button" onClick={onRegister}
-            className="w-full text-sm font-semibold py-3 rounded-xl border border-primary/30 text-primary bg-primary/5 hover:bg-primary/10 liquid-transition flex items-center justify-center gap-2 min-h-[48px]">
+            className="w-full text-sm font-semibold py-3 rounded-full border border-primary/30 text-primary bg-primary/5 hover:bg-primary/10 liquid-transition flex items-center justify-center gap-2 min-h-[48px]">
             <Building2 className="w-4 h-4" /> Yangi foydalanuvchimisiz? Firma ochish
           </button>
         </div>
@@ -5108,15 +5113,14 @@ export default function App() {
 
   return (
     <div className={`h-[100dvh] flex flex-col overflow-hidden font-['Inter',sans-serif] ${siteBg ? 'with-bg' : ''}`} style={(() => { if (!siteBg) return { background: 'var(--background)' }; const isImg = !siteBg.startsWith('linear-gradient') && !siteBg.startsWith('radial-gradient'); return isImg ? { backgroundImage: `url(${siteBg})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' } : { background: siteBg }; })()}>
-      {/* Header — minimal, surface (yangi uslub) */}
-      <header className="glass h-14 flex items-center gap-3 px-4 flex-shrink-0 border-b border-border z-50 sticky top-0">
-        <div className="flex items-center gap-2.5 flex-shrink-0">
-          <div className="w-8 h-8 rounded-xl flex items-center justify-center overflow-hidden bg-gradient-to-br from-accent to-accent/75 shadow-sm">
-            {companyLogo ? <img src={companyLogo} alt="Logo" className="w-full h-full object-contain"/> : <Building2 className="w-4 h-4 text-white"/>}
+      {/* Header — 3 ta mustaqil "orolcha" pill (logo / nav / bell+avatar), orqada bar yo'q */}
+      <header className="flex items-center gap-3 px-4 py-2.5 flex-shrink-0 z-50 sticky top-0">
+        <div className="nav-pill-desktop flex items-center gap-2.5 px-3 py-2 rounded-full flex-shrink-0">
+          <div className="w-7 h-7 rounded-full flex items-center justify-center overflow-hidden bg-gradient-to-br from-accent to-accent/75 shadow-sm flex-shrink-0">
+            {companyLogo ? <img src={companyLogo} alt="Logo" className="w-full h-full object-contain"/> : <Building2 className="w-3.5 h-3.5 text-white"/>}
           </div>
-          <span className="text-base font-bold tracking-tight hidden lg:block">{companyName}</span>
+          <span className="text-sm font-bold tracking-tight hidden lg:block whitespace-nowrap">{companyName}</span>
         </div>
-        <div className="h-5 w-px bg-border hidden sm:block mx-1.5"/>
         <nav className="hidden sm:flex items-center gap-0.5 lg:gap-1 nav-pill-desktop px-1.5 py-1.5 rounded-full w-fit flex-shrink-0">
           {NAV.map(n=>(
             <button key={n.key} onClick={()=>{setPage(n.key);setSelProject(null);}}
@@ -5130,14 +5134,14 @@ export default function App() {
             </button>
           ))}
         </nav>
-        <div className="flex items-center gap-2 flex-shrink-0 ml-auto">
+        <div className="nav-pill-desktop flex items-center gap-1 px-1.5 py-1.5 rounded-full flex-shrink-0 ml-auto">
           <NotificationBell messages={messages} transfers={transfers} expenses={expenses} users={users} currentUser={liveUser}
             onOpenChat={()=>{setPage("chat");setSelProject(null);}} onOpenDashboard={()=>{setPage("dashboard");setSelProject(null);}}/>
           <button onClick={cycleThemeMode} title={themeMode==="light"?"Yorug'":themeMode==="dark"?"Qorong'i":"Tizim bo'yicha"}
-            className="btn btn-ghost w-9 h-9 p-0 rounded-xl">
+            className="btn btn-ghost w-9 h-9 p-0 rounded-full">
             {themeMode==="light"?<Sun className="w-[18px] h-[18px]"/>:themeMode==="dark"?<Moon className="w-[18px] h-[18px]"/>:<Monitor className="w-[18px] h-[18px]"/>}
           </button>
-          <button onClick={()=>{setPage("profile");setSelProject(null);}} className="flex items-center gap-2 bg-muted/60 hover:bg-muted pl-1 pr-1 sm:pr-3 py-1 rounded-full border border-border liquid-transition">
+          <button onClick={()=>{setPage("profile");setSelProject(null);}} className="flex items-center gap-2 hover:bg-white/5 pl-1 pr-1 sm:pr-3 py-1 rounded-full liquid-transition">
             <Avatar user={liveUser} size="sm"/>
             <div className="hidden sm:block text-left">
               <p className="text-[11px] font-semibold leading-none">{liveUser.name.split(" ")[0]}</p>

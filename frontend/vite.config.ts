@@ -33,4 +33,18 @@ export default defineConfig({
 
   // File types to support raw imports. Never add .css, .tsx, or .ts files to this.
   assetsInclude: ['**/*.svg', '**/*.csv'],
+
+  build: {
+    rollupOptions: {
+      output: {
+        // Vendor kutubxonalar alohida chunkka — deploy'dan deploy'ga kamdan-kam
+        // o'zgaradi, shuning uchun brauzer ularni keshda uzoq saqlaydi (qayta
+        // tashrifda faqat kichik app-chunk qayta yuklanadi).
+        manualChunks: {
+          vendor: ['react', 'react-dom', 'socket.io-client', 'sonner'],
+          'vendor-motion': ['motion'],
+        },
+      },
+    },
+  },
 })

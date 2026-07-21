@@ -177,13 +177,4 @@
   label  { font-weight: var(--font-weight-medium); }
   button { font-weight: var(--font-weight-medium); }
   input  { font-weight: var(--font-weight-normal); }
-
-  /* input/select/textarea uchun focus ringi globals.css'da (--ring asosida)
-     allaqachon bor edi — bu yerda ikkinchi marta yozmaymiz (ziddiyat bo'lmasin).
-     Faqat tugma/havolalar uchun klaviatura-fokus halqasi yetishmayotgan edi
-     (sichqoncha bilan bosilganda emas — :focus-visible shuni ta'minlaydi). */
-  button:focus-visible, a:focus-visible, [role="button"]:focus-visible {
-    outline: 2px solid var(--ring);
-    outline-offset: 2px;
-  }
 }

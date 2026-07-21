@@ -9,59 +9,36 @@ import { emitToUser } from '../services/socket';
 
 const router = Router();
 
-// ─── Gemini key rotation ──────────────────────────────────────────────────────
-const GEMINI_KEYS: string[] = (
-  process.env.GEMINI_API_KEYS || process.env.GEMINI_API_KEY || ''
-).split(',').map(k => k.trim()).filter(Boolean);
+// ─── Groq (OpenAI-compatible) ─────────────────────────────────────────────────
+const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
+const GROQ_MODEL = process.env.GROQ_MODEL || 'openai/gpt-oss-120b';
 
-let keyIdx = 0;
-function currentKey(): string { return GEMINI_KEYS[keyIdx] || ''; }
-function rotateKey(): boolean {
-  const next = (keyIdx + 1) % GEMINI_KEYS.length;
-  if (next === keyIdx) return false;
-  keyIdx = next;
-  console.warn(`[AI] Gemini key ${keyIdx + 1}/${GEMINI_KEYS.length} ga o'tildi`);
-  return true;
-}
-function isQuotaError(body: any, status: number): boolean {
-  if (status === 429) return true;
-  const msg = JSON.stringify(body || '');
-  return msg.includes('RESOURCE_EXHAUSTED') || msg.includes('quota') || msg.includes('rate limit');
-}
+async function groqChat(systemPrompt: string, messages: Array<{ role: string; content: string }>): Promise<string> {
+  if (!GROQ_API_KEY) throw new Error('GROQ_API_KEY env yo\'q');
 
-async function geminiChat(systemPrompt: string, contents: Array<{ role: string; parts: Array<{ text: string }> }>): Promise<string> {
-  if (!GEMINI_KEYS.length) throw new Error('GEMINI_API_KEY env yo\'q');
+  const resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${GROQ_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: GROQ_MODEL,
+      messages: [{ role: 'system', content: systemPrompt }, ...messages],
+      temperature: 0.1,
+      max_tokens: 512,
+      response_format: { type: 'json_object' },
+    }),
+  });
 
-  for (let attempt = 0; attempt < GEMINI_KEYS.length; attempt++) {
-    const key = currentKey();
-    if (!key) throw new Error('Gemini API kaliti topilmadi');
+  const data = await resp.json();
 
-    const resp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: systemPrompt }] },
-          contents,
-          generationConfig: { maxOutputTokens: 512, temperature: 0.1 },
-        }),
-      }
-    );
-
-    const data = await resp.json();
-
-    if (!resp.ok && isQuotaError(data, resp.status)) {
-      if (rotateKey()) continue;
-      throw new Error('Barcha Gemini kalitlari limitga yetdi');
-    }
-
-    if (!resp.ok) throw new Error(`Gemini API xatosi: ${resp.status} — ${JSON.stringify(data)}`);
-
-    return (data?.candidates?.[0]?.content?.parts?.[0]?.text as string) || '';
+  if (!resp.ok) {
+    if (resp.status === 429) throw new Error('Groq AI limitga yetdi');
+    throw new Error(`Groq API xatosi: ${resp.status} — ${JSON.stringify(data)}`);
   }
 
-  throw new Error('Gemini API bilan ulanishda xatolik');
+  return (data?.choices?.[0]?.message?.content as string) || '';
 }
 
 // Faqat direktor/orinbosar/isOwner — dasturchi emas
@@ -113,16 +90,15 @@ Oddiy javob uchun:
 Xabar yuborish uchun:
 {"type":"action","response":"Tasdiqni so'rash matni","action":{"type":"send_message","toUserId":"id","toUserName":"Ism","text":"xabar matni","description":"Qisqa tavsif"}}`;
 
-    // Map history to Gemini contents format (assistant → model)
-    const contents = [
+    const messages = [
       ...(history as any[]).slice(-8).map((h: any) => ({
-        role: h.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: h.content }],
+        role: h.role === 'assistant' ? 'assistant' : 'user',
+        content: h.content,
       })),
-      { role: 'user', parts: [{ text: message.trim() }] },
+      { role: 'user', content: message.trim() },
     ];
 
-    const raw = await geminiChat(SYSTEM, contents);
+    const raw = await groqChat(SYSTEM, messages);
 
     let parsed: any;
     try {
@@ -141,7 +117,7 @@ Xabar yuborish uchun:
       return res.status(500).json({ error: 'AI API kaliti sozlanmagan' });
     }
     if (err.message?.includes('limitga yetdi')) {
-      return res.status(429).json({ error: 'Gemini AI kunlik/oylik limitga yetdi. Birozdan keyin qayta urinib ko\'ring yoki yangi API kalit qo\'shing.' });
+      return res.status(429).json({ error: 'Groq AI limitga yetdi. Birozdan keyin qayta urinib ko\'ring.' });
     }
     res.status(500).json({ error: 'AI xizmati bilan ulanishda xatolik' });
   }

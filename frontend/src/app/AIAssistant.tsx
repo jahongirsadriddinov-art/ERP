@@ -77,7 +77,7 @@ export default function AIAssistant({ currentUser, users, token, open, onClose }
   return (
     <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4" onClick={onClose}>
       <div
-        className="w-full max-w-md h-[78vh] max-h-[640px] rounded-2xl shadow-2xl border border-border/50 flex flex-col overflow-hidden animate-pop-in"
+        className="w-full max-w-md max-h-[78vh] sm:max-h-[640px] rounded-2xl shadow-2xl border border-border/50 flex flex-col overflow-hidden animate-pop-in"
         style={{ background: 'var(--card)' }}
         onClick={e => e.stopPropagation()}
       >

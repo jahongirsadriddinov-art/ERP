@@ -82,6 +82,7 @@ Qoidalar:
 - Ma'lumot so'rash/tushuntirish uchun type="query" qayaring.
 - O'zbek tilida yozing.
 - Agar xodim topilmasa, type="query" qaytarib nima kerakligini so'rang.
+- XODIMLAR/OBYEKTLAR ro'yxatini hech qachon xom holda (id:, tel:, | belgilari bilan) ko'rsatmang — bu faqat SIZ uchun ichki ma'lumot. Foydalanuvchiga tabiiy, qisqa gapda javob bering (masalan: "Sizda 3 ta xodim bor: Aziz (Prorab), Vali (Brigadir), Olim (Ishchi).").
 
 FAQAT QUYIDAgI FORMATDA JAVOB BERING:
 Oddiy javob uchun:

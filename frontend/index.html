@@ -23,11 +23,16 @@
       <meta name="twitter:title" content="QurilishERP — Qurilish firmalari uchun boshqaruv tizimi" />
       <meta name="twitter:description" content="Loyihalar, materiallar, moliya va xodimlarni bir joyda boshqaring." />
 
-      <!-- Shriftlar — preconnect + <link> (CSS @import emas), brauzer erta
-           aniqlab yuklashi uchun (LCP/FCP tezlashadi) -->
+      <!-- Shriftlar — preconnect + asinxron <link> (render-blocking EMAS).
+           media="print" + onload="this.media='all'" — standart "loadCSS"
+           usuli: brauzer faylni erta yuklaydi, lekin sahifa chizilishini
+           kutmaydi (font-display:swap allaqachon bor, shuning uchun matn
+           darhol tizim shrifti bilan ko'rinadi, keyin shriftga almashadi). -->
       <link rel="preconnect" href="https://fonts.googleapis.com" />
       <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" />
+      <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" />
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" media="print" onload="this.media='all'" />
+      <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" /></noscript>
 
       <style>html, body { height: 100%; margin: 0; } #root { height: 100%; }</style>
 

@@ -14,6 +14,11 @@ import { motion, AnimatePresence } from "motion/react";
 // recharts og'ir kutubxona — faqat "Hisobotlar" bo'limiga kirilganda yuklanadi
 // (boshlang'ich bundle hajmini kamaytiradi, sayt tezroq ochiladi).
 const ReportsPage = lazy(() => import("./ReportsPage"));
+// Kamdan-kam ishlatiladigan (rol/hodisaga bog'liq) og'ir sahifalar — faqat
+// chindan kerak bo'lganda yuklanadi (unused JS ni kamaytiradi).
+const CallOverlay = lazy(() => import("./CallOverlay"));
+const RegisterWizard = lazy(() => import("./RegisterWizard"));
+const DeveloperPanel = lazy(() => import("./DeveloperPanel"));
 
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -51,7 +56,7 @@ export interface Expense {
   projectId: string; description: string; date: string;
   status: EStatus; createdById: string; confirmedById?: string;
 }
-interface Msg {
+export interface Msg {
   id: string; fromUserId: string; toUserId: string; groupId?: string;
   text: string; timestamp: string; read: boolean;
   type?: 'text'|'image'|'video'|'file'|'audio'|'location';
@@ -64,7 +69,7 @@ interface Group {
   memberIds: string[]; adminIds: string[]; createdBy: string;
   devSupport?: boolean;
 }
-interface ActiveCall {
+export interface ActiveCall {
   direction: 'out'|'in';
   mode: 'voice'|'video';
   peerId?: string;       // 1:1 (yoki incoming'da chaqiruvchi)
@@ -99,23 +104,23 @@ function fmtNum(n: number|null|undefined): string {
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const ROLE_LABELS: Record<Role, string> = {
+export const ROLE_LABELS: Record<Role, string> = {
   direktor: "Direktor", orinbosar: "O'rinbosar",
   prorab: "Prorab", brigadir: "Brigadir", ishchi: "Ishchi", dasturchi: "Dasturchi"
 };
 const ROLE_COLORS: Record<Role, string> = {
-  direktor: "bg-red-500/15 text-red-600 dark:text-red-300",
-  orinbosar: "bg-purple-500/15 text-purple-600 dark:text-purple-300",
-  prorab: "bg-blue-500/15 text-blue-600 dark:text-blue-300",
-  brigadir: "bg-amber-500/15 text-amber-600 dark:text-amber-300",
-  ishchi: "bg-green-500/15 text-green-600 dark:text-green-300",
+  direktor: "bg-red-500/15 text-red-700 dark:text-red-300",
+  orinbosar: "bg-purple-500/15 text-purple-700 dark:text-purple-300",
+  prorab: "bg-blue-500/15 text-blue-700 dark:text-blue-300",
+  brigadir: "bg-amber-500/15 text-amber-800 dark:text-amber-300",
+  ishchi: "bg-green-500/15 text-green-800 dark:text-green-300",
   dasturchi: "bg-slate-800/15 text-slate-700 dark:text-slate-200"
 };
 export const EXP_LABELS: Record<ExpType, string> = {
   oylik: "Oylik", material: "Material",
   jihozlar: "Jihozlar", transport: "Transport", boshqa: "Boshqa"
 };
-export const CHART_COLORS = ["#1B3A6B", "#D9460F", "#1B7A4B", "#F0A500", "#7B2D8B"];
+export const CHART_COLORS = ["#1B3A6B", "#D2440F", "#1B7A4B", "#F0A500", "#7B2D8B"];
 export const fmt = (n?: number) => (n || 0).toLocaleString("uz-UZ") + " so'm";
 export const isAdmin = (r: Role) => r === "direktor" || r === "orinbosar" || r === "dasturchi";
 const DEV_PHONE = "+998900960890"; // dasturchi raqami — parol bilan kiradi (Telegram kod emas)
@@ -185,7 +190,7 @@ function Avatar({ user, size = "md" }: { user: AppUser; size?: "sm"|"md"|"lg" })
   if (user.avatar) return <img src={user.avatar} alt={user.name} className={`${sz} rounded-full object-cover flex-shrink-0`}/>;
   const initials = user.name.split(" ").map(w => w[0]).slice(0,2).join("");
   return (
-    <div className={`${sz} rounded-full bg-primary/15 flex items-center justify-center font-bold text-primary flex-shrink-0 select-none`}>
+    <div className={`${sz} rounded-full bg-primary/15 flex items-center justify-center font-bold text-primary dark:text-white flex-shrink-0 select-none`}>
       {initials}
     </div>
   );
@@ -327,10 +332,10 @@ function AddUserModal({ currentUser, users, projects, onClose, onAdd }:
       <div className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-sm animate-slide-up-fade" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-4 py-3.5 border-b border-border" style={{ background: "linear-gradient(to right, rgba(27,58,107,0.06), transparent)" }}>
           <h3 className="font-bold text-sm flex items-center gap-2"><UserPlus className="w-4 h-4 text-primary"/>Yangi Foydalanuvchi</h3>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted liquid-transition"><X className="w-4 h-4 text-muted-foreground"/></button>
+          <button aria-label="Yopish" onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted liquid-transition"><X className="w-4 h-4 text-muted-foreground"/></button>
         </div>
         <form onSubmit={handleSubmit} className="p-4 space-y-3">
-          {err && <div className="bg-red-500/10 border border-red-500/25 rounded-xl px-3 py-2.5 text-xs text-red-600 dark:text-red-400 flex items-center gap-2"><AlertCircle className="w-3.5 h-3.5 flex-shrink-0"/>{err}</div>}
+          {err && <div className="bg-red-500/10 border border-red-500/25 rounded-xl px-3 py-2.5 text-xs text-red-700 dark:text-red-400 flex items-center gap-2"><AlertCircle className="w-3.5 h-3.5 flex-shrink-0"/>{err}</div>}
           <div>
             <label className="text-sm md:text-xs font-medium block mb-1">Ism Familiya *</label>
             <input className="w-full text-sm md:text-xs border border-border rounded px-3 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary"
@@ -460,7 +465,7 @@ function AddObjectModal({ users, onClose, onAdd }:
       <div className="bg-card rounded-2xl shadow-2xl w-full max-w-sm animate-slide-up-fade" onClick={e=>e.stopPropagation()}>
         <div className="flex items-center justify-between px-4 py-3.5 border-b border-border" style={{ background: "linear-gradient(to right, rgba(217,70,15,0.06), transparent)" }}>
           <h3 className="font-bold text-sm flex items-center gap-2"><Package className="w-4 h-4 text-accent"/>Yangi Obyekt</h3>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted liquid-transition"><X className="w-4 h-4 text-muted-foreground"/></button>
+          <button aria-label="Yopish" onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted liquid-transition"><X className="w-4 h-4 text-muted-foreground"/></button>
         </div>
         <form onSubmit={handleSubmit} className="p-4 space-y-3">
           <div><label className="text-sm md:text-xs font-medium block mb-1">Nomi *</label><input className="w-full text-sm md:text-xs border border-border rounded px-3 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary" placeholder="Masalan: 5-uy qurilishi" value={form.name} onChange={e=>setForm({...form,name:e.target.value})} required/></div>
@@ -550,7 +555,7 @@ function SendTransferModal({ currentUser, projects, allUsers, onClose, onSend, i
       <div className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-sm max-h-[88vh] overflow-y-auto scrollbar-hide animate-slide-up-fade" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-4 py-3.5 border-b border-border" style={{ background: "linear-gradient(to right, rgba(27,58,107,0.06), transparent)" }}>
           <h3 className="font-bold text-sm flex items-center gap-2"><Send className="w-4 h-4 text-primary"/>Material Yuborish</h3>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted liquid-transition"><X className="w-4 h-4 text-muted-foreground"/></button>
+          <button aria-label="Yopish" onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted liquid-transition"><X className="w-4 h-4 text-muted-foreground"/></button>
         </div>
         <form onSubmit={submit} className="p-4 space-y-3">
           {/* Project */}
@@ -805,11 +810,11 @@ function AddExpenseModal({ currentUser, projects, allUsers, onClose, onAdd }:
       <div className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-sm max-h-[88vh] overflow-y-auto scrollbar-hide animate-slide-up-fade" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-4 py-3.5 border-b border-border" style={{ background: "linear-gradient(to right, rgba(217,70,15,0.06), transparent)" }}>
           <h3 className="font-bold text-sm flex items-center gap-2"><TrendingDown className="w-4 h-4 text-accent"/>Chiqim Qo'shish</h3>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted liquid-transition"><X className="w-4 h-4 text-muted-foreground"/></button>
+          <button aria-label="Yopish" onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted liquid-transition"><X className="w-4 h-4 text-muted-foreground"/></button>
         </div>
         <form onSubmit={submit} className="p-4 space-y-3">
           {err && (
-            <div className="bg-red-500/10 border border-red-500/25 rounded-xl px-3 py-2.5 text-xs text-red-600 dark:text-red-400 flex items-center gap-2">
+            <div className="bg-red-500/10 border border-red-500/25 rounded-xl px-3 py-2.5 text-xs text-red-700 dark:text-red-400 flex items-center gap-2">
               <AlertCircle className="w-3.5 h-3.5 flex-shrink-0"/>{err}
             </div>
           )}
@@ -904,7 +909,7 @@ function AddExpenseModal({ currentUser, projects, allUsers, onClose, onAdd }:
           <div className="flex gap-2 pt-1">
             <button type="button" onClick={onClose} className="flex-1 text-sm border border-border rounded-xl px-3 py-2.5 hover:bg-muted liquid-transition font-medium">Bekor</button>
             <button type="submit" className="flex-1 text-sm text-white rounded-xl px-3 py-2.5 font-bold liquid-transition shadow-sm"
-              style={{ background: "linear-gradient(135deg, #D9460F 0%, #c03d0d 100%)" }}>
+              style={{ background: "linear-gradient(135deg, #D2440F 0%, #c03d0d 100%)" }}>
               Qo'shish
             </button>
           </div>
@@ -927,9 +932,9 @@ function TransferRow({ t, currentUser, allUsers, projects, onConfirm, onReject }
   const canConfirm = isReceiver && t.status === "pending";
 
   const statusBadge = {
-    pending: <span className="text-[9px] bg-amber-500/15 text-amber-600 dark:text-amber-300 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 whitespace-nowrap"><Clock className="w-2.5 h-2.5"/>Kutilmoqda</span>,
-    confirmed: <span className="text-[9px] bg-green-500/15 text-green-600 dark:text-green-300 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 whitespace-nowrap"><CheckCircle className="w-2.5 h-2.5"/>Tasdiqlandi</span>,
-    rejected: <span className="text-[9px] bg-red-500/15 text-red-600 dark:text-red-300 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 whitespace-nowrap"><X className="w-2.5 h-2.5"/>Rad etildi</span>,
+    pending: <span className="text-[9px] bg-amber-500/15 text-amber-800 dark:text-amber-300 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 whitespace-nowrap"><Clock className="w-2.5 h-2.5"/>Kutilmoqda</span>,
+    confirmed: <span className="text-[9px] bg-green-500/15 text-green-800 dark:text-green-300 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 whitespace-nowrap"><CheckCircle className="w-2.5 h-2.5"/>Tasdiqlandi</span>,
+    rejected: <span className="text-[9px] bg-red-500/15 text-red-700 dark:text-red-300 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 whitespace-nowrap"><X className="w-2.5 h-2.5"/>Rad etildi</span>,
   }[t.status];
 
   return (
@@ -944,7 +949,7 @@ function TransferRow({ t, currentUser, allUsers, projects, onConfirm, onReject }
           <p className="text-sm md:text-xs text-muted-foreground">{proj?.name} • {t.date || t.sentDate}</p>
           {t.defect && <p className="text-sm md:text-xs text-amber-700 flex items-center gap-1 mt-0.5"><AlertTriangle className="w-2.5 h-2.5"/>{t.defect}</p>}
           {t.status === "confirmed" && isSender && t.confirmedDate && (
-            <p className="text-sm md:text-xs text-green-600 font-medium mt-0.5">✓ {to?.name} tasdiqladi ({t.confirmedDate})</p>
+            <p className="text-sm md:text-xs text-green-800 dark:text-green-400 font-medium mt-0.5">✓ {to?.name} tasdiqladi ({t.confirmedDate})</p>
           )}
         </div>
         <div className="flex-shrink-0">{statusBadge}</div>
@@ -959,7 +964,7 @@ function TransferRow({ t, currentUser, allUsers, projects, onConfirm, onReject }
               <Check className="w-3 h-3"/>Qabul qilish
             </button>
             <button onClick={() => onReject(t.id)}
-              className="flex items-center justify-center gap-1 text-sm md:text-xs bg-red-500/15 text-red-600 dark:text-red-300 rounded px-2.5 py-1.5 hover:bg-red-500/100/25 font-semibold">
+              className="flex items-center justify-center gap-1 text-sm md:text-xs bg-red-500/15 text-red-700 dark:text-red-300 rounded px-2.5 py-1.5 hover:bg-red-500/100/25 font-semibold">
               <X className="w-3 h-3"/>Rad
             </button>
           </div>
@@ -1018,7 +1023,7 @@ function EditUserModal({ user, currentUser, onClose, onUpdate }: { user: AppUser
       <div className="bg-card rounded-lg border border-border shadow-xl w-full max-w-sm" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between p-4 border-b border-border">
           <h3 className="font-semibold text-sm flex items-center gap-2"><Edit className="w-4 h-4 text-primary"/>Xodimni tahrirlash</h3>
-          <button onClick={onClose} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4 text-muted-foreground"/></button>
+          <button aria-label="Yopish" onClick={onClose} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4 text-muted-foreground"/></button>
         </div>
         <form onSubmit={e => { e.preventDefault(); onUpdate({...user, ...form}); onClose(); }} className="p-4 space-y-3">
           <div>
@@ -1144,8 +1149,8 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
               <div className="flex-1 min-w-0"><p className="text-sm md:text-xs font-semibold truncate">{u.name}</p><p className="text-sm md:text-xs text-muted-foreground font-mono">{u.phone}</p>{u.brigade&&<p className="text-[9px] text-muted-foreground">{u.brigade}</p>}</div>
               <RoleBadge role={u.role}/>
               <div className="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button onClick={() => setEditUser(u)} className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-primary"><Edit className="w-3 h-3"/></button>
-                <button onClick={() => { if(confirm("O'chirishni tasdiqlaysizmi?")) onDeleteUser(u.id); }} className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-destructive"><Trash className="w-3 h-3"/></button>
+                <button aria-label="Tahrirlash" onClick={() => setEditUser(u)} className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-primary"><Edit className="w-3 h-3"/></button>
+                <button aria-label="O'chirish" onClick={() => { if(confirm("O'chirishni tasdiqlaysizmi?")) onDeleteUser(u.id); }} className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-destructive"><Trash className="w-3 h-3"/></button>
               </div>
             </div>
           ))}
@@ -1172,8 +1177,8 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
                   <div className="flex-1 min-w-0"><p className="text-sm md:text-xs text-foreground truncate">{m.name}</p></div>
                   <RoleBadge role={m.role}/>
                   <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => setEditUser(m)} className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-primary"><Edit className="w-3 h-3"/></button>
-                    <button onClick={() => { if(confirm("O'chirishni tasdiqlaysizmi?")) onDeleteUser(m.id); }} className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-destructive"><Trash className="w-3 h-3"/></button>
+                    <button aria-label="Tahrirlash" onClick={() => setEditUser(m)} className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-primary"><Edit className="w-3 h-3"/></button>
+                    <button aria-label="O'chirish" onClick={() => { if(confirm("O'chirishni tasdiqlaysizmi?")) onDeleteUser(m.id); }} className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-destructive"><Trash className="w-3 h-3"/></button>
                   </div>
                 </div>
               ))}
@@ -1181,7 +1186,7 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
           ))}
           {transfers.filter(t=>t.toUserId===currentUser.id&&t.status==="pending").length > 0 && (
             <div className="mt-3 pt-3 border-t border-border">
-              <p className="text-sm md:text-xs font-semibold text-amber-600 uppercase mb-2 flex items-center gap-1"><Package className="w-2.5 h-2.5"/>Sizga kelgan</p>
+              <p className="text-sm md:text-xs font-semibold text-amber-800 dark:text-amber-400 uppercase mb-2 flex items-center gap-1"><Package className="w-2.5 h-2.5"/>Sizga kelgan</p>
               {transfers.filter(t=>t.toUserId===currentUser.id&&t.status==="pending").map(t => (
                 <TransferRow key={t.id} t={t} currentUser={currentUser} allUsers={users} projects={projects} onConfirm={onConfirmTransfer} onReject={onRejectTransfer}/>
               ))}
@@ -1195,8 +1200,8 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
                 <div className="flex-1 min-w-0"><p className="text-sm md:text-xs text-foreground truncate">{m.name}</p></div>
                 <RoleBadge role={m.role}/>
                 <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button onClick={() => setEditUser(m)} className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-primary"><Edit className="w-3 h-3"/></button>
-                  <button onClick={() => { if(confirm("O'chirishni tasdiqlaysizmi?")) onDeleteUser(m.id); }} className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-destructive"><Trash className="w-3 h-3"/></button>
+                  <button aria-label="Tahrirlash" onClick={() => setEditUser(m)} className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-primary"><Edit className="w-3 h-3"/></button>
+                  <button aria-label="O'chirish" onClick={() => { if(confirm("O'chirishni tasdiqlaysizmi?")) onDeleteUser(m.id); }} className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-destructive"><Trash className="w-3 h-3"/></button>
                 </div>
               </div>
             ))}
@@ -1209,11 +1214,11 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
         className="surface flex flex-col overflow-hidden">
         <div className="flex items-center justify-between px-4 py-2.5 border-b border-border flex-shrink-0">
           <div className="flex items-center gap-2"><div className="icon-chip icon-chip-accent w-6 h-6"><Package className="w-3.5 h-3.5"/></div><h2 className="text-sm md:text-xs font-bold uppercase tracking-wider font-['Roboto_Slab',serif]">Faol Obyektlar</h2></div>
-          <button onClick={()=>setShowAddObject(true)} className="text-sm md:text-xs bg-accent/10 text-accent px-2 py-1 rounded hover:bg-accent/20 font-semibold flex items-center gap-1"><Plus className="w-2.5 h-2.5"/>Qo'shish</button>
+          <button onClick={()=>setShowAddObject(true)} className="text-sm md:text-xs bg-accent text-white px-2 py-1 rounded hover:bg-accent/90 font-semibold flex items-center gap-1 dark:bg-accent/10 dark:text-accent dark:hover:bg-accent/20"><Plus className="w-2.5 h-2.5"/>Qo'shish</button>
         </div>
         <div className="flex-1 overflow-y-auto p-3 scrollbar-hide">
           <div className="grid grid-cols-3 gap-1.5 mb-3">
-            {[["active","Faol","text-green-600"],["paused","To'x.","text-amber-500"],["completed","Tugagan","text-blue-500"]].map(([s,l,c])=>(
+            {[["active","Faol","text-green-800 dark:text-green-400"],["paused","To'x.","text-amber-500"],["completed","Tugagan","text-blue-500"]].map(([s,l,c])=>(
               <div key={s} className="bg-muted/40 rounded-lg p-2 text-center">
                 <p className={`text-sm font-bold font-mono ${c}`}>{projects.filter(p=>p.status===s).length}</p>
                 <p className="text-[9px] text-muted-foreground">{l}</p>
@@ -1235,7 +1240,7 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
                 </div>
                 <div className="flex items-center gap-2 mt-2 pt-2 border-t border-border">
                   <span className="text-[9px] text-muted-foreground font-mono">{fmt(p.budget)}</span>
-                  {pend>0&&<span className="ml-auto text-[9px] bg-amber-500/15 text-amber-600 dark:text-amber-300 px-1.5 py-0.5 rounded font-semibold">{pend} kutilmoqda</span>}
+                  {pend>0&&<span className="ml-auto text-[9px] bg-amber-500/15 text-amber-800 dark:text-amber-300 px-1.5 py-0.5 rounded font-semibold">{pend} kutilmoqda</span>}
                 </div>
               </div>
             );
@@ -1310,8 +1315,8 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
                         <div className="flex-1"><p className="text-sm font-semibold">{u.name}</p><p className="text-sm md:text-xs text-muted-foreground font-mono">{u.phone}</p></div>
                         <RoleBadge role={u.role}/>
                         <div className="flex gap-1">
-                          <button onClick={() => setEditUser(u)} className="p-2 hover:bg-muted rounded-lg text-muted-foreground hover:text-primary"><Edit className="w-4 h-4"/></button>
-                          <button onClick={() => { if(confirm("O'chirishni tasdiqlaysizmi?")) onDeleteUser(u.id); }} className="p-2 hover:bg-muted rounded-lg text-muted-foreground hover:text-destructive"><Trash className="w-4 h-4"/></button>
+                          <button aria-label="Tahrirlash" onClick={() => setEditUser(u)} className="p-2 hover:bg-muted rounded-lg text-muted-foreground hover:text-primary"><Edit className="w-4 h-4"/></button>
+                          <button aria-label="O'chirish" onClick={() => { if(confirm("O'chirishni tasdiqlaysizmi?")) onDeleteUser(u.id); }} className="p-2 hover:bg-muted rounded-lg text-muted-foreground hover:text-destructive"><Trash className="w-4 h-4"/></button>
                         </div>
                       </div>
                     ))}
@@ -1335,8 +1340,8 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
                             <div className="flex-1"><p className="text-sm">{m.name}</p></div>
                             <RoleBadge role={m.role}/>
                             <div className="flex gap-1">
-                              <button onClick={() => setEditUser(m)} className="p-1.5 hover:bg-muted rounded-lg text-muted-foreground hover:text-primary"><Edit className="w-3.5 h-3.5"/></button>
-                              <button onClick={() => { if(confirm("O'chirishni tasdiqlaysizmi?")) onDeleteUser(m.id); }} className="p-1.5 hover:bg-muted rounded-lg text-muted-foreground hover:text-destructive"><Trash className="w-3.5 h-3.5"/></button>
+                              <button aria-label="Tahrirlash" onClick={() => setEditUser(m)} className="p-1.5 hover:bg-muted rounded-lg text-muted-foreground hover:text-primary"><Edit className="w-3.5 h-3.5"/></button>
+                              <button aria-label="O'chirish" onClick={() => { if(confirm("O'chirishni tasdiqlaysizmi?")) onDeleteUser(m.id); }} className="p-1.5 hover:bg-muted rounded-lg text-muted-foreground hover:text-destructive"><Trash className="w-3.5 h-3.5"/></button>
                             </div>
                           </div>
                         ))}
@@ -1350,15 +1355,15 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
                           <div className="flex-1"><p className="text-sm">{m.name}</p></div>
                           <RoleBadge role={m.role}/>
                           <div className="flex gap-1">
-                            <button onClick={() => setEditUser(m)} className="p-1.5 hover:bg-muted rounded-lg text-muted-foreground hover:text-primary"><Edit className="w-3.5 h-3.5"/></button>
-                            <button onClick={() => { if(confirm("O'chirishni tasdiqlaysizmi?")) onDeleteUser(m.id); }} className="p-1.5 hover:bg-muted rounded-lg text-muted-foreground hover:text-destructive"><Trash className="w-3.5 h-3.5"/></button>
+                            <button aria-label="Tahrirlash" onClick={() => setEditUser(m)} className="p-1.5 hover:bg-muted rounded-lg text-muted-foreground hover:text-primary"><Edit className="w-3.5 h-3.5"/></button>
+                            <button aria-label="O'chirish" onClick={() => { if(confirm("O'chirishni tasdiqlaysizmi?")) onDeleteUser(m.id); }} className="p-1.5 hover:bg-muted rounded-lg text-muted-foreground hover:text-destructive"><Trash className="w-3.5 h-3.5"/></button>
                           </div>
                         </div>
                       ))}
                     </div>
                     {transfers.filter(t=>t.toUserId===currentUser.id&&t.status==="pending").length > 0 && (
                       <div className="pt-2 border-t border-border">
-                        <p className="text-sm md:text-xs font-semibold text-amber-600 uppercase mb-2 flex items-center gap-1"><Package className="w-3 h-3"/>Sizga kelgan materiallar</p>
+                        <p className="text-sm md:text-xs font-semibold text-amber-800 dark:text-amber-400 uppercase mb-2 flex items-center gap-1"><Package className="w-3 h-3"/>Sizga kelgan materiallar</p>
                         {transfers.filter(t=>t.toUserId===currentUser.id&&t.status==="pending").map(t => (
                           <TransferRow key={t.id} t={t} currentUser={currentUser} allUsers={users} projects={projects} onConfirm={onConfirmTransfer} onReject={onRejectTransfer}/>
                         ))}
@@ -1373,7 +1378,7 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
                       <button onClick={()=>setShowAddObject(true)} className="flex items-center gap-1.5 text-sm md:text-xs bg-accent text-white px-3 py-1.5 rounded-full font-semibold"><Plus className="w-3 h-3"/>Qo'shish</button>
                     </div>
                     <div className="grid grid-cols-3 gap-2 mb-4">
-                      {[["active","Faol","text-green-600 dark:text-green-400","bg-green-500/10"],["paused","To'xtatilgan","text-amber-500","bg-amber-500/10"],["completed","Tugagan","text-blue-500 dark:text-blue-400","bg-blue-500/10"]].map(([s,l,c,bg])=>(
+                      {[["active","Faol","text-green-800 dark:text-green-400","bg-green-500/10"],["paused","To'xtatilgan","text-amber-500","bg-amber-500/10"],["completed","Tugagan","text-blue-500 dark:text-blue-400","bg-blue-500/10"]].map(([s,l,c,bg])=>(
                         <div key={s} className={`${bg} border border-border rounded-xl p-3 text-center`}>
                           <p className={`text-lg font-bold font-mono ${c}`}>{projects.filter(p=>p.status===s).length}</p>
                           <p className="text-sm md:text-xs text-muted-foreground">{l}</p>
@@ -1395,7 +1400,7 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
                           </div>
                           <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border">
                             <span className="text-sm md:text-xs text-muted-foreground font-mono">{fmt(p.budget)}</span>
-                            {pend>0&&<span className="ml-auto text-sm md:text-xs bg-amber-500/15 text-amber-600 dark:text-amber-300 px-2 py-0.5 rounded-full font-semibold">{pend} kutilmoqda</span>}
+                            {pend>0&&<span className="ml-auto text-sm md:text-xs bg-amber-500/15 text-amber-800 dark:text-amber-300 px-2 py-0.5 rounded-full font-semibold">{pend} kutilmoqda</span>}
                           </div>
                         </div>
                       );
@@ -1447,7 +1452,7 @@ function SmetaResultView({ smeta }: { smeta: SmetaResult }) {
           <div className="flex justify-between"><span className="text-muted-foreground">Resurs summasi (byudjet)</span><span className="font-mono font-bold text-primary">{fmtNum(budget)} so'm</span></div>
           {vat != null && <div className="flex justify-between"><span className="text-muted-foreground">НДС bilan</span><span className="font-mono">{fmtNum(vat)} so'm</span></div>}
         </div>
-        <div className={`mt-2 text-xs px-2 py-1.5 rounded-lg ${smeta.validation.ok ? "bg-green-500/15 text-green-600 dark:text-green-300" : "bg-amber-500/15 text-amber-600 dark:text-amber-300"}`}>
+        <div className={`mt-2 text-xs px-2 py-1.5 rounded-lg ${smeta.validation.ok ? "bg-green-500/15 text-green-800 dark:text-green-300" : "bg-amber-500/15 text-amber-800 dark:text-amber-300"}`}>
           {smeta.validation.ok ? `✓ Tekshiruv o'tdi — ${smeta.resources.length} resurs, guruh summalari mos` : `⚠ ${smeta.validation.errors.length} xato`}
           {smeta.validation.warnings.length > 0 && ` · ${smeta.validation.warnings.length} ogohlantirish`}
         </div>
@@ -1592,7 +1597,7 @@ function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSe
           </p>
           <p className="text-sm md:text-xs text-muted-foreground">{project.location}</p>
         </div>
-        {project.pdfFile && <button className="flex items-center gap-1 text-sm md:text-xs bg-accent/10 text-accent px-2.5 py-1.5 rounded hover:bg-accent/20 font-medium flex-shrink-0"><Download className="w-3.5 h-3.5"/>PDF</button>}
+        {project.pdfFile && <button className="flex items-center gap-1 text-sm md:text-xs bg-accent text-white px-2.5 py-1.5 rounded hover:bg-accent/90 font-medium flex-shrink-0 dark:bg-accent/10 dark:text-accent dark:hover:bg-accent/20"><Download className="w-3.5 h-3.5"/>PDF</button>}
         <div className="flex items-center gap-2 flex-shrink-0">
           <input type="file" id="smeta-upload" className="hidden" accept=".pdf" onChange={async e=>{
             const file = e.target.files?.[0];
@@ -1613,7 +1618,7 @@ function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSe
             }
             e.target.value='';
           }}/>
-          <label htmlFor="smeta-upload" className={`flex flex-col items-center gap-0.5 text-sm md:text-xs px-2.5 py-1.5 rounded-lg font-medium cursor-pointer liquid-transition min-w-[120px] ${uploadingSmeta ? (smetaMsg.startsWith('✓') ? "bg-green-500/15 text-green-600 dark:text-green-400 cursor-not-allowed" : smetaMsg.startsWith('✗') ? "bg-destructive/15 text-destructive cursor-not-allowed" : "bg-accent/10 text-accent cursor-wait") : "bg-accent/10 text-accent hover:bg-accent/20"}`}>
+          <label htmlFor="smeta-upload" className={`flex flex-col items-center gap-0.5 text-sm md:text-xs px-2.5 py-1.5 rounded-lg font-medium cursor-pointer liquid-transition min-w-[120px] ${uploadingSmeta ? (smetaMsg.startsWith('✓') ? "bg-green-500/15 text-green-800 dark:text-green-400 cursor-not-allowed" : smetaMsg.startsWith('✗') ? "bg-destructive/15 text-destructive cursor-not-allowed" : "bg-accent text-white cursor-wait dark:bg-accent/10 dark:text-accent") : "bg-accent text-white hover:bg-accent/90 dark:bg-accent/10 dark:text-accent dark:hover:bg-accent/20"}`}>
             {uploadingSmeta ? (
               <>
                 <div className="flex items-center gap-1 text-center">
@@ -1718,7 +1723,7 @@ function MaterialDetailsModal({ mat, confT, pendT, onClose, onSend }: { mat: Req
           <h3 className="font-semibold text-base truncate pr-4">{mat.name}</h3>
           <div className="flex items-center gap-2">
             {onSend && <button onClick={()=>{onClose(); onSend();}} className="flex items-center gap-1.5 bg-primary text-white text-sm md:text-xs px-3 py-1.5 rounded-full hover:bg-primary/90 font-medium liquid-transition shadow-md shadow-primary/20"><Send className="w-3 h-3"/>Yuborish</button>}
-            <button onClick={onClose} className="p-1.5 text-muted-foreground hover:bg-muted/50 rounded-full liquid-transition bg-muted/20"><X className="w-4 h-4"/></button>
+            <button aria-label="Yopish" onClick={onClose} className="p-1.5 text-muted-foreground hover:bg-muted/50 rounded-full liquid-transition bg-muted/20"><X className="w-4 h-4"/></button>
           </div>
         </div>
         <div className="p-4 overflow-y-auto">
@@ -1772,10 +1777,10 @@ function FinancePage({ currentUser, users, projects, expenses, onAddExpense, onC
   const totalExpense = expenses.filter(e=>e.status==="confirmed").reduce((a,e)=>a+e.amount,0);
   const pendingMe = expenses.filter(e=>e.toUserId===currentUser.id&&e.status==="pending").length;
   const typeClr: Record<string,string> = {
-    oylik:"bg-blue-500/15 text-blue-600 dark:text-blue-300",
-    material:"bg-orange-500/15 text-orange-600 dark:text-orange-300",
-    jihozlar:"bg-purple-500/15 text-purple-600 dark:text-purple-300",
-    transport:"bg-teal-500/15 text-teal-600 dark:text-teal-300",
+    oylik:"bg-blue-500/15 text-blue-700 dark:text-blue-300",
+    material:"bg-orange-500/15 text-orange-800 dark:text-orange-300",
+    jihozlar:"bg-purple-500/15 text-purple-700 dark:text-purple-300",
+    transport:"bg-teal-500/15 text-teal-700 dark:text-teal-300",
     boshqa:"bg-muted text-muted-foreground"
   };
 
@@ -1788,7 +1793,7 @@ function FinancePage({ currentUser, users, projects, expenses, onAddExpense, onC
           <p className="text-sm md:text-xs text-muted-foreground">Jami tasdiqlangan: <span className="font-semibold text-accent">{fmt(totalExpense)}</span></p>
         </div>
         <div className="flex items-center gap-1.5">
-          {pendingMe>0&&<span className="text-sm md:text-xs bg-amber-500/15 text-amber-600 dark:text-amber-300 px-2 py-1 rounded-full font-semibold flex items-center gap-1 badge-pulse"><Clock className="w-3 h-3"/>{pendingMe} tasdiqlash</span>}
+          {pendingMe>0&&<span className="text-sm md:text-xs bg-amber-500/15 text-amber-800 dark:text-amber-300 px-2 py-1 rounded-full font-semibold flex items-center gap-1 badge-pulse"><Clock className="w-3 h-3"/>{pendingMe} tasdiqlash</span>}
           <button onClick={()=>setShowAdd(true)} className="btn btn-accent flex items-center gap-1 text-sm md:text-xs px-3 py-1.5 rounded-full"><Plus className="w-3 h-3"/>Chiqim</button>
         </div>
       </div>
@@ -1829,8 +1834,8 @@ function FinancePage({ currentUser, users, projects, expenses, onAddExpense, onC
                     <div className="text-right flex-shrink-0">
                       <p className="font-bold text-accent">{fmt(e.amount)}</p>
                       {e.status==="confirmed"
-                        ?<p className="text-[9px] text-green-600 font-semibold mt-1 flex items-center gap-0.5 justify-end"><CheckCircle className="w-2.5 h-2.5"/>Tasdiqlandi</p>
-                        :<p className="text-[9px] text-amber-600 font-semibold mt-1 flex items-center gap-0.5 justify-end"><Clock className="w-2.5 h-2.5"/>Kutilmoqda</p>}
+                        ?<p className="text-[9px] text-green-800 dark:text-green-400 font-semibold mt-1 flex items-center gap-0.5 justify-end"><CheckCircle className="w-2.5 h-2.5"/>Tasdiqlandi</p>
+                        :<p className="text-[9px] text-amber-800 dark:text-amber-400 font-semibold mt-1 flex items-center gap-0.5 justify-end"><Clock className="w-2.5 h-2.5"/>Kutilmoqda</p>}
                     </div>
                   </div>
                   {canConfirm&&<button onClick={()=>onConfirm(e.id)} className="mt-2 w-full text-sm md:text-xs bg-green-600 text-white rounded py-1.5 hover:bg-green-700 font-semibold flex items-center justify-center gap-1"><Check className="w-3 h-3"/>Qabul qilganman — Tasdiqlash</button>}
@@ -1867,7 +1872,7 @@ function VoicePlayer({ src }: { src: string }) {
         onTimeUpdate={e => { const a = e.target as HTMLAudioElement; setCurrentTime(a.currentTime); setProgress(a.duration ? a.currentTime/a.duration*100 : 0); }}
         onEnded={() => { setPlaying(false); setProgress(0); setCurrentTime(0); if (audioRef.current) audioRef.current.currentTime=0; }}
       />
-      <button onClick={toggle}
+      <button onClick={toggle} aria-label={playing ? "Pauza" : "Ijro etish"}
         className="w-8 h-8 rounded-full bg-primary/20 text-primary flex items-center justify-center flex-shrink-0 hover:bg-primary/30 active:scale-95 transition-all">
         {playing
           ? <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
@@ -2205,7 +2210,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
           <>
             {/* Header */}
             <div className="glass border-b border-border px-4 py-3 flex items-center gap-3 flex-shrink-0 z-10">
-              <button onClick={closeChat} className="md:hidden p-2 -ml-2 mr-1 text-muted-foreground hover:bg-muted rounded-full transition-colors">
+              <button onClick={closeChat} aria-label="Orqaga" className="md:hidden p-2 -ml-2 mr-1 text-muted-foreground hover:bg-muted rounded-full transition-colors">
                 <ChevronLeft className="w-5 h-5"/>
               </button>
               {selGroup ? (
@@ -2219,7 +2224,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
                 <p className="text-sm font-semibold truncate">{selGroup ? (selGroup.devSupport ? 'Dasturchi' : selGroup.name) : selUser!.name}</p>
                 {selGroup
                   ? <p className="text-[11px] text-muted-foreground truncate">{selGroup.devSupport ? 'Texnik yordam' : `${selGroup.memberIds.length} a'zo`}</p>
-                  : <p className="text-[11px] text-muted-foreground">{isOnline(selUser!.id) ? <span className="text-green-600">onlayn</span> : ROLE_LABELS[selUser!.role]}</p>}
+                  : <p className="text-[11px] text-muted-foreground">{isOnline(selUser!.id) ? <span className="text-green-800 dark:text-green-400">onlayn</span> : ROLE_LABELS[selUser!.role]}</p>}
               </div>
               {!selectMode && !selGroup?.devSupport && (
                 <div className="flex items-center gap-1 flex-shrink-0">
@@ -2231,10 +2236,10 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
                 <div className="flex items-center gap-1">
                   <span className="text-xs text-muted-foreground mr-1">{selected.size} ta</span>
                   {selected.size>0 && <>
-                    <button onClick={() => { const msg=messages.find(m=>m.id===[...selected][0]); if(msg) setShowForward(msg); }} className="p-2 hover:bg-muted rounded-full text-muted-foreground"><Share2 className="w-4 h-4"/></button>
-                    <button onClick={() => { selected.forEach(id=>onDelete(id)); setSelectMode(false); setSelected(new Set()); }} className="p-2 hover:bg-red-500/100/10 rounded-full text-red-500"><Trash2 className="w-4 h-4"/></button>
+                    <button aria-label="Uzatish" onClick={() => { const msg=messages.find(m=>m.id===[...selected][0]); if(msg) setShowForward(msg); }} className="p-2 hover:bg-muted rounded-full text-muted-foreground"><Share2 className="w-4 h-4"/></button>
+                    <button aria-label="Tanlanganlarni o'chirish" onClick={() => { selected.forEach(id=>onDelete(id)); setSelectMode(false); setSelected(new Set()); }} className="p-2 hover:bg-red-500/100/10 rounded-full text-red-500"><Trash2 className="w-4 h-4"/></button>
                   </>}
-                  <button onClick={() => { setSelectMode(false); setSelected(new Set()); }} className="p-2 hover:bg-muted rounded-full text-muted-foreground"><X className="w-4 h-4"/></button>
+                  <button aria-label="Tanlashni bekor qilish" onClick={() => { setSelectMode(false); setSelected(new Set()); }} className="p-2 hover:bg-muted rounded-full text-muted-foreground"><X className="w-4 h-4"/></button>
                 </div>
               )}
             </div>
@@ -2247,7 +2252,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
                   <p className="text-[10px] font-semibold text-primary">📌 Muhim xabar</p>
                   <p className="text-xs text-muted-foreground truncate">{pinned.type==='audio'?'🎤 Ovoz':pinned.type==='image'?'🖼️ Rasm':pinned.type==='location'?'📍 Joylashuv':pinned.text}</p>
                 </div>
-                <button onClick={()=>onPin(pinned.id)} className="p-1 text-muted-foreground hover:text-foreground flex-shrink-0"><X className="w-3.5 h-3.5"/></button>
+                <button aria-label="Qadalgan xabarni yopish" onClick={()=>onPin(pinned.id)} className="p-1 text-muted-foreground hover:text-foreground flex-shrink-0"><X className="w-3.5 h-3.5"/></button>
               </div>
             )}
 
@@ -2322,7 +2327,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
                   <p className="text-[10px] font-semibold text-primary">{replyTo.fromUserId===currentUser.id?'Siz':userById(replyTo.fromUserId)?.name}</p>
                   <p className="text-xs text-muted-foreground truncate">{replyTo.type==='audio'?'🎤 Ovoz':replyTo.type==='image'?'🖼️ Rasm':replyTo.text}</p>
                 </div>
-                <button onClick={()=>setReplyTo(null)} className="p-1 text-muted-foreground hover:text-foreground flex-shrink-0"><X className="w-4 h-4"/></button>
+                <button aria-label="Javobni bekor qilish" onClick={()=>setReplyTo(null)} className="p-1 text-muted-foreground hover:text-foreground flex-shrink-0"><X className="w-4 h-4"/></button>
               </div>
             )}
 
@@ -2331,10 +2336,10 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
               <div className="flex items-center gap-2 bg-amber-500/10 px-4 py-2 border-t border-amber-500/25 flex-shrink-0">
                 <Edit className="w-4 h-4 text-amber-600 flex-shrink-0"/>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[10px] font-semibold text-amber-600">Tahrirlash</p>
+                  <p className="text-[10px] font-semibold text-amber-800 dark:text-amber-400">Tahrirlash</p>
                   <p className="text-xs text-muted-foreground truncate">{messages.find(m=>m.id===editingId)?.text}</p>
                 </div>
-                <button onClick={()=>{setEditingId(null);setEditText("");}} className="p-1 text-muted-foreground hover:text-foreground flex-shrink-0"><X className="w-4 h-4"/></button>
+                <button aria-label="Tahrirlashni bekor qilish" onClick={()=>{setEditingId(null);setEditText("");}} className="p-1 text-muted-foreground hover:text-foreground flex-shrink-0"><X className="w-4 h-4"/></button>
               </div>
             )}
 
@@ -2373,13 +2378,13 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
                   <div className="flex items-center gap-1 flex-shrink-0">
                     {isRecording ? (
                       <>
-                        <button onClick={cancelRec} className="w-9 h-9 flex items-center justify-center text-muted-foreground hover:bg-white/10 rounded-full transition-colors"><X className="w-4 h-4"/></button>
-                        <button onClick={stopRec} className="w-9 h-9 bg-gradient-to-br from-red-500 to-red-600 text-white rounded-full flex items-center justify-center active:scale-95 liquid-transition shadow-md shadow-red-500/30"><Send className="w-4 h-4 ml-0.5"/></button>
+                        <button aria-label="Yozishni bekor qilish" onClick={cancelRec} className="w-9 h-9 flex items-center justify-center text-muted-foreground hover:bg-white/10 rounded-full transition-colors"><X className="w-4 h-4"/></button>
+                        <button aria-label="Ovozli xabarni yuborish" onClick={stopRec} className="w-9 h-9 bg-gradient-to-br from-red-500 to-red-600 text-white rounded-full flex items-center justify-center active:scale-95 liquid-transition shadow-md shadow-red-500/30"><Send className="w-4 h-4 ml-0.5"/></button>
                       </>
                     ) : (editingId ? editText : text).trim() ? (
-                      <button onClick={()=>{if(editingId)saveEdit();else doSend();}} className="w-9 h-9 bg-gradient-to-br from-primary to-primary/80 text-white rounded-full flex items-center justify-center active:scale-95 liquid-transition shadow-md shadow-primary/30"><Send className="w-4 h-4 ml-0.5"/></button>
+                      <button aria-label="Xabar yuborish" onClick={()=>{if(editingId)saveEdit();else doSend();}} className="w-9 h-9 bg-gradient-to-br from-primary to-primary/80 text-white rounded-full flex items-center justify-center active:scale-95 liquid-transition shadow-md shadow-primary/30"><Send className="w-4 h-4 ml-0.5"/></button>
                     ) : (
-                      <button onClick={startRec} className="w-9 h-9 flex items-center justify-center text-muted-foreground hover:bg-white/10 rounded-full transition-colors"><Mic className="w-5 h-5"/></button>
+                      <button aria-label="Ovozli xabar yozish" onClick={startRec} className="w-9 h-9 flex items-center justify-center text-muted-foreground hover:bg-white/10 rounded-full transition-colors"><Mic className="w-5 h-5"/></button>
                     )}
                   </div>
                 </div>
@@ -2395,7 +2400,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
           <div className="glass-modal rounded-t-3xl sm:rounded-2xl w-full max-w-sm p-5 animate-slide-up-fade" onClick={e=>e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-bold text-sm">Kimga yuborish?</h3>
-              <button onClick={()=>setShowForward(null)} className="p-1.5 hover:bg-muted rounded-full"><X className="w-4 h-4"/></button>
+              <button aria-label="Yopish" onClick={()=>setShowForward(null)} className="p-1.5 hover:bg-muted rounded-full"><X className="w-4 h-4"/></button>
             </div>
             <div className="space-y-1 max-h-64 overflow-y-auto scrollbar-hide">
               {contacts.map(u => (
@@ -2434,7 +2439,7 @@ function GroupCreateModal({ contacts, onClose, onCreate }:
       <div className="glass-modal rounded-t-3xl sm:rounded-2xl w-full max-w-sm p-5 mb-[104px] sm:mb-0 animate-slide-up-fade" onClick={e=>e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-bold text-sm flex items-center gap-2"><Users2 className="w-4 h-4 text-primary"/>Yangi guruh</h3>
-          <button onClick={onClose} className="p-1.5 hover:bg-muted rounded-full"><X className="w-4 h-4"/></button>
+          <button aria-label="Yopish" onClick={onClose} className="p-1.5 hover:bg-muted rounded-full"><X className="w-4 h-4"/></button>
         </div>
         <input value={name} onChange={e=>setName(e.target.value)} placeholder="Guruh nomi *" autoFocus
           className="w-full text-sm border border-border rounded-lg px-3 py-2.5 bg-input-background focus:outline-none mb-2"/>
@@ -2457,197 +2462,6 @@ function GroupCreateModal({ contacts, onClose, onCreate }:
       </div>
     </div>
   );
-}
-
-// ─── Qo'ng'iroq (WebRTC — 1:1 va guruh) ──────────────────────────────────────────
-const ICE_CONFIG: RTCConfiguration = {
-  iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:global.stun.twilio.com:3478' },
-  ],
-};
-
-function CallOverlay({ currentUser, users, call, onClose }:
-  { currentUser: AppUser; users: AppUser[]; call: ActiveCall; onClose: () => void }) {
-  const socket = getSocket();
-  const localRef = useRef<HTMLVideoElement>(null);
-  const localStream = useRef<MediaStream | null>(null);
-  // streamReady — accept() bu promise'ni kutib stream tayyor bo'lganini bildiradi
-  const streamReadyResolve = useRef<((s: MediaStream) => void) | null>(null);
-  const streamReady = useRef<Promise<MediaStream>>(new Promise(res => { streamReadyResolve.current = res; }));
-  const pcs = useRef<Record<string, RTCPeerConnection>>({});
-  const pendingIce = useRef<Record<string, RTCIceCandidateInit[]>>({});
-  const [remote, setRemote] = useState<Record<string, MediaStream>>({});
-  const [status, setStatus] = useState<'incoming'|'ringing'|'connected'>(call.direction === 'in' ? 'incoming' : 'ringing');
-  const [muted, setMuted] = useState(false);
-  const [camOff, setCamOff] = useState(call.mode === 'voice');
-
-  const userById = (id: string) => users.find(u => u.id === id);
-  const title = call.groupId ? "Guruh qo'ng'irog'i" : (userById(call.peerId || '')?.name || call.fromName || "Qo'ng'iroq");
-
-  const makePC = (peerId: string) => {
-    if (pcs.current[peerId]) return pcs.current[peerId];
-    const pc = new RTCPeerConnection(ICE_CONFIG);
-    localStream.current?.getTracks().forEach(t => pc.addTrack(t, localStream.current!));
-    pc.onicecandidate = e => { if (e.candidate) socket?.emit('call:ice', { to: peerId, from: currentUser.id, candidate: e.candidate }); };
-    pc.ontrack = e => { setRemote(prev => ({ ...prev, [peerId]: e.streams[0] })); setStatus('connected'); };
-    pcs.current[peerId] = pc;
-    return pc;
-  };
-
-  const offerTo = async (peerId: string) => {
-    const pc = makePC(peerId);
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-    socket?.emit('call:offer', { to: peerId, from: currentUser.id, fromName: currentUser.name, mode: call.mode, groupId: call.groupId, sdp: offer });
-  };
-
-  const flushIce = async (peerId: string) => {
-    const pc = pcs.current[peerId]; const list = pendingIce.current[peerId];
-    if (pc && list) { for (const c of list) { try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch {} } pendingIce.current[peerId] = []; }
-  };
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: call.mode === 'video' });
-        if (cancelled) { stream.getTracks().forEach(t => t.stop()); return; }
-        localStream.current = stream;
-        if (localRef.current) { localRef.current.srcObject = stream; localRef.current.play().catch(()=>{}); }
-        // Re-add tracks to any peer connections created before stream was ready (race condition fix)
-        Object.values(pcs.current).forEach(pc => {
-          stream.getTracks().forEach(t => { try { pc.addTrack(t, stream); } catch {} });
-        });
-        // accept() shu promise'ni kutib turib stream tayyor bo'lgandan keyin createAnswer qiladi
-        streamReadyResolve.current?.(stream);
-      } catch (e: any) { toast("Kamera/mikrofon ruxsati kerak: " + (e?.message || '')); onClose(); return; }
-      if (call.direction === 'out') {
-        const targets = call.groupId ? (call.memberIds || []) : (call.peerId ? [call.peerId] : []);
-        targets.forEach(t => offerTo(t));
-      }
-    })();
-
-    const onAnswer = async (d: any) => { const pc = pcs.current[d.from]; if (pc) { await pc.setRemoteDescription(new RTCSessionDescription(d.sdp)); await flushIce(d.from); setStatus('connected'); } };
-    const onIce = async (d: any) => {
-      const pc = pcs.current[d.from];
-      if (pc && pc.remoteDescription) { try { await pc.addIceCandidate(new RTCIceCandidate(d.candidate)); } catch {} }
-      else { (pendingIce.current[d.from] ||= []).push(d.candidate); }
-    };
-    const onOffer = async (d: any) => { // guruh mesh — boshqa a'zodan yangi offer
-      if (!call.groupId || d.groupId !== call.groupId || d.from === currentUser.id) return;
-      const pc = makePC(d.from);
-      await pc.setRemoteDescription(new RTCSessionDescription(d.sdp));
-      await flushIce(d.from);
-      const ans = await pc.createAnswer(); await pc.setLocalDescription(ans);
-      socket?.emit('call:answer', { to: d.from, from: currentUser.id, sdp: ans });
-    };
-    const onJoin = (d: any) => { if (call.groupId && d.groupId === call.groupId && d.from !== currentUser.id) offerTo(d.from); };
-    const closePeer = (peerId: string) => { pcs.current[peerId]?.close(); delete pcs.current[peerId]; setRemote(prev => { const c = { ...prev }; delete c[peerId]; return c; }); };
-    const onEnd = (d: any) => { closePeer(d.from); if (Object.keys(pcs.current).length === 0) onClose(); };
-    const onReject = (d: any) => { toast("Qo'ng'iroq rad etildi"); onEnd(d); };
-
-    socket?.on('call:answer', onAnswer);
-    socket?.on('call:ice', onIce);
-    socket?.on('call:offer', onOffer);
-    socket?.on('call:join', onJoin);
-    socket?.on('call:end', onEnd);
-    socket?.on('call:reject', onReject);
-
-    return () => {
-      cancelled = true;
-      socket?.off('call:answer', onAnswer); socket?.off('call:ice', onIce); socket?.off('call:offer', onOffer);
-      socket?.off('call:join', onJoin); socket?.off('call:end', onEnd); socket?.off('call:reject', onReject);
-      Object.values(pcs.current).forEach(pc => pc.close()); pcs.current = {};
-      localStream.current?.getTracks().forEach(t => t.stop());
-    };
-  }, []);
-
-  const accept = async () => {
-    setStatus('ringing');
-    // Stream tayyor bo'lishini kutamiz (agar hali kamera/mikrofon ruxsati olinmagan bo'lsa)
-    await streamReady.current;
-    const from = call.peerId!;
-    const pc = makePC(from);
-    await pc.setRemoteDescription(new RTCSessionDescription(call.offer));
-    await flushIce(from);
-    const ans = await pc.createAnswer(); await pc.setLocalDescription(ans);
-    socket?.emit('call:answer', { to: from, from: currentUser.id, sdp: ans });
-    if (call.groupId) socket?.emit('call:join', { groupId: call.groupId, from: currentUser.id });
-  };
-  const decline = () => { socket?.emit('call:reject', { to: call.peerId, from: currentUser.id }); onClose(); };
-  const hangup = () => { Object.keys(pcs.current).forEach(pid => socket?.emit('call:end', { to: pid, from: currentUser.id })); onClose(); };
-  const toggleMute = () => { const m = !muted; localStream.current?.getAudioTracks().forEach(t => t.enabled = !m); setMuted(m); };
-  const toggleCam = () => { const c = !camOff; localStream.current?.getVideoTracks().forEach(t => t.enabled = !c); setCamOff(c); };
-
-  const remoteEntries = Object.entries(remote);
-
-  return (
-    <div className="fixed inset-0 z-[100] bg-[#0A0E1C] flex flex-col animate-fade-in">
-      {/* Video/masofaviy */}
-      <div className="flex-1 relative overflow-hidden">
-        {call.mode === 'video' && remoteEntries.length > 0 ? (
-          <div className={`w-full h-full grid gap-1 ${remoteEntries.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
-            {remoteEntries.map(([pid, stream]) => (
-              <RemoteVideo key={pid} stream={stream} label={userById(pid)?.name || ''}/>
-            ))}
-          </div>
-        ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center gap-4 text-white">
-            <div className="w-28 h-28 rounded-full bg-white/10 flex items-center justify-center">
-              {call.groupId ? <Users2 className="w-12 h-12"/> : <span className="text-4xl font-bold">{title.charAt(0)}</span>}
-            </div>
-            <p className="text-xl font-semibold">{title}</p>
-            <p className="text-white/60 text-sm">
-              {status === 'incoming' ? `Kiruvchi ${call.mode==='video'?'video':'ovozli'} qo'ng'iroq...` :
-               status === 'ringing' ? "Ulanmoqda..." : "Ulandi"}
-            </p>
-            {/* Ovozli qo'ng'iroqda masofaviy audio */}
-            {remoteEntries.map(([pid, stream]) => <RemoteAudio key={pid} stream={stream}/>)}
-          </div>
-        )}
-        {/* Lokal PiP (mirror + larger for readability) */}
-        {call.mode === 'video' && (
-          <video ref={localRef} autoPlay muted playsInline
-            className="absolute bottom-4 right-4 w-32 h-48 object-cover rounded-2xl border-2 border-white/30 shadow-xl bg-black"
-            style={{ transform: 'scaleX(-1)' }}
-          />
-        )}
-      </div>
-
-      {/* Boshqaruv */}
-      <div className="flex-shrink-0 pt-4 flex items-center justify-center gap-4" style={{ paddingBottom: "max(2rem, calc(env(safe-area-inset-bottom) + 1rem))" }}>
-        {status === 'incoming' ? (
-          <>
-            <button onClick={decline} className="w-16 h-16 rounded-full bg-red-500 text-white flex items-center justify-center active:scale-95 shadow-lg"><PhoneOff className="w-6 h-6"/></button>
-            <button onClick={accept} className="w-16 h-16 rounded-full bg-green-500 text-white flex items-center justify-center active:scale-95 shadow-lg animate-pulse"><Phone className="w-6 h-6"/></button>
-          </>
-        ) : (
-          <>
-            <button onClick={toggleMute} className={`w-14 h-14 rounded-full flex items-center justify-center text-white active:scale-95 ${muted?'bg-white/30':'bg-white/10'}`}>{muted?<MicOff className="w-5 h-5"/>:<Mic className="w-5 h-5"/>}</button>
-            {call.mode === 'video' && <button onClick={toggleCam} className={`w-14 h-14 rounded-full flex items-center justify-center text-white active:scale-95 ${camOff?'bg-white/30':'bg-white/10'}`}>{camOff?<VideoOff className="w-5 h-5"/>:<VideoIcon className="w-5 h-5"/>}</button>}
-            <button onClick={hangup} className="w-16 h-16 rounded-full bg-red-500 text-white flex items-center justify-center active:scale-95 shadow-lg"><PhoneOff className="w-6 h-6"/></button>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function RemoteVideo({ stream, label }: { stream: MediaStream; label: string }) {
-  const ref = useRef<HTMLVideoElement>(null);
-  useEffect(() => { if (ref.current) ref.current.srcObject = stream; }, [stream]);
-  return (
-    <div className="relative w-full h-full bg-black">
-      <video ref={ref} autoPlay playsInline className="w-full h-full object-cover"/>
-      {label && <span className="absolute bottom-2 left-2 text-white text-xs bg-black/50 px-2 py-0.5 rounded">{label}</span>}
-    </div>
-  );
-}
-function RemoteAudio({ stream }: { stream: MediaStream }) {
-  const ref = useRef<HTMLAudioElement>(null);
-  useEffect(() => { if (ref.current) ref.current.srcObject = stream; }, [stream]);
-  return <audio ref={ref} autoPlay/>;
 }
 
 // ─── Profile Page ──────────────────────────────────────────────────────────────
@@ -2691,14 +2505,14 @@ function themeVars(p: VarInput): Record<string, string> {
 
 const DARK_BORDER = "rgba(255,255,255,0.10)";
 const COLOR_THEMES = [
-  { id: "navy", name: "Klassik", primary: "#1B3A6B", accent: "#D9460F",
-    light: themeVars({ primary:"#1B3A6B", accent:"#D9460F", secondary:"#E4EAF3", secondaryFg:"#1B3A6B", bg:"#F4F6FA", card:"#FFFFFF", fg:"#0F1A2E", muted:"#EAEEF5", mutedFg:"#5C6B84", border:"rgba(15,26,46,0.10)", input:"#EDF1F7", ring:"#1B3A6B" }),
+  { id: "navy", name: "Klassik", primary: "#1B3A6B", accent: "#D2440F",
+    light: themeVars({ primary:"#1B3A6B", accent:"#D2440F", secondary:"#E4EAF3", secondaryFg:"#1B3A6B", bg:"#F4F6FA", card:"#FFFFFF", fg:"#0F1A2E", muted:"#EAEEF5", mutedFg:"#5C6B84", border:"rgba(15,26,46,0.10)", input:"#EDF1F7", ring:"#1B3A6B" }),
     dark:  themeVars({ primary:"#3E6DB5", accent:"#F26A3D", secondary:"#1E2A40", secondaryFg:"#CBD5E1", bg:"#0B1220", card:"#131C2E", fg:"#E6ECF5", muted:"#1A2436", mutedFg:"#8A9CB8", border:DARK_BORDER, input:"#1A2436", ring:"#5B8DD6" }) },
-  { id: "ocean", name: "Okean", primary: "#0369A1", accent: "#0EA5E9",
-    light: themeVars({ primary:"#0369A1", accent:"#0EA5E9", secondary:"#E0F2FE", secondaryFg:"#075985", bg:"#F1F9FE", card:"#FFFFFF", fg:"#0C2536", muted:"#E4F3FB", mutedFg:"#4E6E7E", border:"rgba(3,105,161,0.10)", input:"#E8F5FF", ring:"#0369A1" }),
+  { id: "ocean", name: "Okean", primary: "#0369A1", accent: "#0B7CAF",
+    light: themeVars({ primary:"#0369A1", accent:"#0B7CAF", secondary:"#E0F2FE", secondaryFg:"#075985", bg:"#F1F9FE", card:"#FFFFFF", fg:"#0C2536", muted:"#E4F3FB", mutedFg:"#4E6E7E", border:"rgba(3,105,161,0.10)", input:"#E8F5FF", ring:"#0369A1" }),
     dark:  themeVars({ primary:"#2A94D6", accent:"#22C3E6", secondary:"#102838", secondaryFg:"#BAE0F5", bg:"#071620", card:"#0E2130", fg:"#E1F0F7", muted:"#12293A", mutedFg:"#7F9DB0", border:DARK_BORDER, input:"#12293A", ring:"#38BDF8" }) },
-  { id: "forest", name: "O'rmon", primary: "#166534", accent: "#16A34A",
-    light: themeVars({ primary:"#166534", accent:"#16A34A", secondary:"#DCFCE7", secondaryFg:"#14532D", bg:"#F1FBF4", card:"#FFFFFF", fg:"#0E2A18", muted:"#E4F6EA", mutedFg:"#4B6B57", border:"rgba(22,101,52,0.10)", input:"#E9F8EF", ring:"#166534" }),
+  { id: "forest", name: "O'rmon", primary: "#166534", accent: "#12863D",
+    light: themeVars({ primary:"#166534", accent:"#12863D", secondary:"#DCFCE7", secondaryFg:"#14532D", bg:"#F1FBF4", card:"#FFFFFF", fg:"#0E2A18", muted:"#E4F6EA", mutedFg:"#4B6B57", border:"rgba(22,101,52,0.10)", input:"#E9F8EF", ring:"#166534" }),
     dark:  themeVars({ primary:"#2E9E5B", accent:"#22C55E", secondary:"#12281B", secondaryFg:"#BBF7D0", bg:"#08160E", card:"#0F2418", fg:"#E2F3E8", muted:"#132A1D", mutedFg:"#83AE92", border:DARK_BORDER, input:"#132A1D", ring:"#34D399" }) },
   { id: "purple", name: "Binafsha", primary: "#6D28D9", accent: "#7C3AED",
     light: themeVars({ primary:"#6D28D9", accent:"#7C3AED", secondary:"#EDE9FE", secondaryFg:"#5B21B6", bg:"#F7F5FF", card:"#FFFFFF", fg:"#241542", muted:"#F0ECFE", mutedFg:"#665A82", border:"rgba(91,33,182,0.10)", input:"#F0EEFF", ring:"#6D28D9" }),
@@ -2709,11 +2523,11 @@ const COLOR_THEMES = [
   { id: "slate", name: "Tosh", primary: "#334155", accent: "#475569",
     light: themeVars({ primary:"#334155", accent:"#475569", secondary:"#E2E8F0", secondaryFg:"#1E293B", bg:"#F4F6F9", card:"#FFFFFF", fg:"#111827", muted:"#EBEFF4", mutedFg:"#5A6577", border:"rgba(30,41,59,0.10)", input:"#EEF2F7", ring:"#334155" }),
     dark:  themeVars({ primary:"#64748B", accent:"#94A3B8", secondary:"#1E2836", secondaryFg:"#CBD5E1", bg:"#0B1017", card:"#131A24", fg:"#E6EAF0", muted:"#18202C", mutedFg:"#8A97A8", border:DARK_BORDER, input:"#18202C", ring:"#94A3B8" }) },
-  { id: "amber", name: "Oltin rang", primary: "#B45309", accent: "#D97706",
-    light: themeVars({ primary:"#B45309", accent:"#D97706", secondary:"#FEF3C7", secondaryFg:"#92400E", bg:"#FFFBEB", card:"#FFFFFF", fg:"#2E1D06", muted:"#FBF2D8", mutedFg:"#7A6A48", border:"rgba(146,64,14,0.10)", input:"#FFF8E0", ring:"#B45309" }),
+  { id: "amber", name: "Oltin rang", primary: "#B45309", accent: "#B16105",
+    light: themeVars({ primary:"#B45309", accent:"#B16105", secondary:"#FEF3C7", secondaryFg:"#92400E", bg:"#FFFBEB", card:"#FFFFFF", fg:"#2E1D06", muted:"#FBF2D8", mutedFg:"#7A6A48", border:"rgba(146,64,14,0.10)", input:"#FFF8E0", ring:"#B45309" }),
     dark:  themeVars({ primary:"#B87A1C", accent:"#F59E0B", secondary:"#2C2110", secondaryFg:"#FDE68A", bg:"#15100A", card:"#221A0E", fg:"#F5ECD8", muted:"#271F10", mutedFg:"#B39B6E", border:DARK_BORDER, input:"#271F10", ring:"#FBBF24" }) },
-  { id: "teal", name: "Moviy-yashil", primary: "#0F766E", accent: "#0D9488",
-    light: themeVars({ primary:"#0F766E", accent:"#0D9488", secondary:"#CCFBF1", secondaryFg:"#115E59", bg:"#F0FDFA", card:"#FFFFFF", fg:"#0A2A28", muted:"#E0F5F1", mutedFg:"#4B6E6A", border:"rgba(15,118,110,0.10)", input:"#E8FBF7", ring:"#0F766E" }),
+  { id: "teal", name: "Moviy-yashil", primary: "#0F766E", accent: "#0C8479",
+    light: themeVars({ primary:"#0F766E", accent:"#0C8479", secondary:"#CCFBF1", secondaryFg:"#115E59", bg:"#F0FDFA", card:"#FFFFFF", fg:"#0A2A28", muted:"#E0F5F1", mutedFg:"#4B6E6A", border:"rgba(15,118,110,0.10)", input:"#E8FBF7", ring:"#0F766E" }),
     dark:  themeVars({ primary:"#1AA093", accent:"#14B8A6", secondary:"#0F2A28", secondaryFg:"#99F6E4", bg:"#051614", card:"#0D2422", fg:"#DDF3F0", muted:"#112B28", mutedFg:"#7BA9A3", border:DARK_BORDER, input:"#112B28", ring:"#2DD4BF" }) },
 ];
 
@@ -2776,7 +2590,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
     ? bgIsImage
       ? { backgroundImage: `url(${profileBg})`, backgroundSize: "cover" as const, backgroundPosition: "center" as const }
       : { background: profileBg }
-    : { background: "linear-gradient(135deg, #1B3A6B 0%, #D9460F 100%)" };
+    : { background: "linear-gradient(135deg, #1B3A6B 0%, #D2440F 100%)" };
 
   const perms: [string, boolean][] = [
     ["Barcha moliya va hisobotlarni ko'rish", isAdmin(currentUser.role)],
@@ -2803,7 +2617,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
         transition={{ type: "spring", stiffness: 380, damping: 34 }}
         className="overflow-y-auto scrollbar-hide max-w-lg mx-auto w-full pb-10">
         <div className="flex items-center gap-2 px-4 py-4 sticky top-0 bg-background/80 backdrop-blur-xl z-10">
-          <button onClick={() => setActivePanel(null)} className="btn btn-ghost w-9 h-9 p-0 rounded-full flex-shrink-0"><ChevronLeft className="w-5 h-5"/></button>
+          <button onClick={() => setActivePanel(null)} aria-label="Orqaga" className="btn btn-ghost w-9 h-9 p-0 rounded-full flex-shrink-0"><ChevronLeft className="w-5 h-5"/></button>
           <h2 className="text-base font-bold">{panelTitle}</h2>
         </div>
         <div className="px-4 space-y-4">
@@ -2928,7 +2742,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
               {companyLogo ? <img src={companyLogo} alt="Logo" className="w-full h-full object-contain p-1"/> : <Building2 className="w-8 h-8 text-primary"/>}
             </div>
             {canEditCompany && (
-              <button onClick={() => logoRef.current?.click()}
+              <button onClick={() => logoRef.current?.click()} aria-label="Logotipni almashtirish"
                 className="absolute -bottom-1.5 -right-1.5 w-6 h-6 bg-white text-primary rounded-full flex items-center justify-center border border-border shadow-lg hover:bg-primary hover:text-white liquid-transition">
                 <Camera className="w-3 h-3"/>
               </button>
@@ -2940,14 +2754,14 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
               <div className="flex items-center gap-2">
                 <input className="flex-1 text-white font-bold text-lg bg-transparent border-b-2 border-white/60 focus:border-white focus:outline-none pb-0.5"
                   value={brandInput} onChange={e => setBrandInput(e.target.value)} autoFocus onKeyDown={e => e.key === 'Enter' && saveBrand()}/>
-                <button onClick={saveBrand} className="w-7 h-7 bg-white/20 text-white rounded-full flex items-center justify-center border border-white/30 hover:bg-white/30 liquid-transition"><Check className="w-3.5 h-3.5"/></button>
-                <button onClick={() => setEditingBrand(false)} className="w-7 h-7 bg-black/20 text-white rounded-full flex items-center justify-center hover:bg-black/30 liquid-transition"><X className="w-3.5 h-3.5"/></button>
+                <button aria-label="Saqlash" onClick={saveBrand} className="w-7 h-7 bg-white/20 text-white rounded-full flex items-center justify-center border border-white/30 hover:bg-white/30 liquid-transition"><Check className="w-3.5 h-3.5"/></button>
+                <button aria-label="Bekor qilish" onClick={() => setEditingBrand(false)} className="w-7 h-7 bg-black/20 text-white rounded-full flex items-center justify-center hover:bg-black/30 liquid-transition"><X className="w-3.5 h-3.5"/></button>
               </div>
             ) : (
               <div className="flex items-center gap-2">
                 <p className="text-white font-bold text-xl drop-shadow-lg">{companyName}</p>
                 {canEditCompany && (
-                  <button onClick={() => { setBrandInput(companyName); setEditingBrand(true); }}
+                  <button onClick={() => { setBrandInput(companyName); setEditingBrand(true); }} aria-label="Nomni tahrirlash"
                     className="p-1 text-white/60 hover:text-white rounded-lg hover:bg-white/10 liquid-transition">
                     <Edit className="w-3.5 h-3.5"/>
                   </button>
@@ -2966,12 +2780,12 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
           className="surface p-5 text-center relative">
           {isAdmin(currentUser.role) && (
             !isEditing
-              ? <button onClick={() => setIsEditing(true)} className="absolute top-4 right-4 p-1.5 text-muted-foreground hover:bg-muted/50 hover:text-foreground rounded-lg liquid-transition"><Edit className="w-4 h-4"/></button>
-              : <button onClick={() => setIsEditing(false)} className="absolute top-4 right-4 p-1.5 text-muted-foreground hover:bg-muted/50 rounded-lg liquid-transition"><X className="w-4 h-4"/></button>
+              ? <button aria-label="Tahrirlash" onClick={() => setIsEditing(true)} className="absolute top-4 right-4 p-1.5 text-muted-foreground hover:bg-muted/50 hover:text-foreground rounded-lg liquid-transition"><Edit className="w-4 h-4"/></button>
+              : <button aria-label="Tahrirlashni yopish" onClick={() => setIsEditing(false)} className="absolute top-4 right-4 p-1.5 text-muted-foreground hover:bg-muted/50 rounded-lg liquid-transition"><X className="w-4 h-4"/></button>
           )}
           <div className="relative inline-block mb-3">
             <Avatar user={currentUser} size="lg"/>
-            <button onClick={() => fileRef.current?.click()} className="absolute bottom-0 right-0 w-7 h-7 bg-primary text-white rounded-full flex items-center justify-center hover:bg-primary/90 border-2 border-white shadow-lg liquid-transition">
+            <button onClick={() => fileRef.current?.click()} aria-label="Rasmni almashtirish" className="absolute bottom-0 right-0 w-7 h-7 bg-primary text-white rounded-full flex items-center justify-center hover:bg-primary/90 border-2 border-white shadow-lg liquid-transition">
               <Camera className="w-3.5 h-3.5"/>
             </button>
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile}/>
@@ -3233,7 +3047,7 @@ function LoginScreen({ onLogin, onRegister }: { onLogin: (u: any, company?: any)
       </motion.div>
       <motion.div initial={{ opacity: 0, y: 16, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ type: "spring", stiffness: 260, damping: 24, delay: 0.08 }}
         className="w-full max-w-sm space-y-4 glass p-7 rounded-[2rem] border border-white/20 shadow-2xl relative z-10 overflow-hidden">
-        {error && <div className="bg-red-500/10 text-red-600 dark:text-red-400 text-sm md:text-xs p-3 rounded-lg border border-red-500/20 text-center">{error}</div>}
+        {error && <div className="bg-red-500/10 text-red-700 dark:text-red-400 text-sm md:text-xs p-3 rounded-lg border border-red-500/20 text-center">{error}</div>}
 
         <AnimatePresence mode="wait">
         <motion.div key={step} initial={{ opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -24 }}
@@ -3360,662 +3174,6 @@ function LoginScreen({ onLogin, onRegister }: { onLogin: (u: any, company?: any)
   );
 }
 
-// ─── Register Wizard (v1.2 self-signup) ────────────────────────────────────────
-type RegStep = "warn" | "tarif" | "payment" | "phone" | "bot" | "owner" | "company" | "brand" | "summary" | "done";
-
-// Modul darajasida (render ichida emas) — aks holda input fokusini yo'qotadi
-function RegField({ label, children, hint }: { label: string; children: any; hint?: string }) {
-  return (
-    <div>
-      <label className="text-sm md:text-xs font-medium block mb-1.5 ml-1 text-muted-foreground">{label}</label>
-      {children}
-      {hint && <p className="text-[11px] text-muted-foreground mt-1 ml-1">{hint}</p>}
-    </div>
-  );
-}
-
-function RegisterWizard({ onBack, onDone }: { onBack: () => void; onDone: (u: any, company?: any) => void }) {
-  const [step, setStep] = useState<RegStep>("warn");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  // Qadam 1 — ogohlantirish
-  const [ownerConfirm, setOwnerConfirm] = useState(false);
-
-  // Qadam 2 — tarif tanlash
-  const [selectedPlan, setSelectedPlan] = useState<'1month'|'3month'|'6month'|'12month'|null>(null);
-  const [regDoneInfo, setRegDoneInfo] = useState<{phone:string;planLabel:string;planAmount:number;companyName:string;branchId:string;ownerName:string}|null>(null);
-  const [doneCopied, setDoneCopied] = useState(false);
-
-  // Qadam 3 — telefon
-  const [phone, setPhone] = useState("+998 ");
-
-  // Ro'yxat sessiyasi (resume uchun localStorage'da saqlanadi)
-  const [reg, setReg] = useState<{ registrationId: string; token: string; deepLink: string; botUsername: string; expiresAt: string } | null>(() => {
-    try { const s = localStorage.getItem("erp_reg"); return s ? JSON.parse(s) : null; } catch { return null; }
-  });
-  const [botStatus, setBotStatus] = useState<string>("");
-  const [timeLeft, setTimeLeft] = useState(0);
-  const [resendCd, setResendCd] = useState(0);
-
-  // Qadam 5.1 — egasi
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [middleName, setMiddleName] = useState("");
-  const [email, setEmail] = useState("");
-  const [position, setPosition] = useState("Direktor");
-  const [password, setPassword] = useState("");
-  const [password2, setPassword2] = useState("");
-
-  // Qadam 5.2 — firma
-  const [companyName, setCompanyName] = useState("");
-  const [legalName, setLegalName] = useState("");
-  const [inn, setInn] = useState("");
-  const [activityType, setActivityType] = useState("qurilish");
-  const [region, setRegion] = useState("");
-  const [employeeRange, setEmployeeRange] = useState("1-10");
-
-  // Qadam 5.3 — logo + valyuta
-  const [logoUrl, setLogoUrl] = useState("");
-  const [logoUploading, setLogoUploading] = useState(false);
-  const [currency, setCurrency] = useState<"UZS" | "USD">("UZS");
-  const logoRef = useRef<HTMLInputElement>(null);
-
-  const saveReg = (r: any, plan?: string) => {
-    setReg(r);
-    try { localStorage.setItem("erp_reg", JSON.stringify(r)); } catch {}
-    if (plan) try { localStorage.setItem("erp_reg_plan", plan); } catch {}
-  };
-  const clearReg = () => {
-    setReg(null);
-    try { localStorage.removeItem("erp_reg"); localStorage.removeItem("erp_reg_plan"); } catch {}
-  };
-
-  // Resume: sahifa ochilganda faol sessiya bo'lsa botga/keyingi qadamга o'tamiz
-  useEffect(() => {
-    if (reg && step === "warn") {
-      setOwnerConfirm(true);
-      // Saqlangan tarifni tiklaymiz
-      const savedPlan = localStorage.getItem("erp_reg_plan") as '1month'|'3month'|'12month'|null;
-      if (savedPlan) setSelectedPlan(savedPlan);
-      setStep("bot");
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // 15 daqiqa timer
-  useEffect(() => {
-    if (step !== "bot" || !reg) return;
-    const tick = () => {
-      const left = Math.max(0, Math.floor((new Date(reg.expiresAt).getTime() - Date.now()) / 1000));
-      setTimeLeft(left);
-    };
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, [step, reg]);
-
-  // Resend cooldown
-  useEffect(() => {
-    if (resendCd <= 0) return;
-    const id = setTimeout(() => setResendCd(resendCd - 1), 1000);
-    return () => clearTimeout(id);
-  }, [resendCd]);
-
-  // Polling: bot tomonda tasdiqlanganini kutamiz
-  useEffect(() => {
-    if (step !== "bot" || !reg) return;
-    let stop = false;
-    const poll = async () => {
-      try {
-        const res = await fetch(`${API_BASE}/api/register/status?registrationId=${reg.registrationId}`);
-        const d = await res.json();
-        if (stop) return;
-        setBotStatus(d.step);
-        if (d.step === "EXPIRED") { setError("Sessiya muddati tugadi. Qaytadan boshlang."); clearReg(); setStep("phone"); return; }
-        if (d.consentGiven) { setStep("owner"); return; }
-      } catch { /* tarmoq — keyingi urinishda */ }
-    };
-    poll();
-    const id = setInterval(poll, 2500);
-    return () => { stop = true; clearInterval(id); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, reg?.registrationId]);
-
-  const submitPhone = async () => {
-    const clean = phone.replace(/\s+/g, "");
-    if (!/^\+998\d{9}$/.test(clean)) { setError("To'g'ri raqam kiriting: +998 XX XXX XX XX"); return; }
-    setError(""); setLoading(true);
-    try {
-      const res = await fetch(`${API_BASE}/api/register/phone`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: clean, ownerConfirm }),
-      });
-      const d = await res.json();
-      if (!res.ok) { setError(d.error || "Xatolik"); setLoading(false); return; }
-      if (d.exists) { setError("Bu raqam bilan firma mavjud. Tizimga kiring."); setLoading(false); setTimeout(onBack, 1800); return; }
-      // Tarifni ham saqlaymiz — resume qilganda tiklanadi
-      saveReg(
-        { registrationId: d.registrationId, token: d.token, deepLink: d.deepLink, botUsername: d.botUsername, expiresAt: d.expiresAt },
-        selectedPlan || '1month'
-      );
-      setStep("bot");
-    } catch { setError("Server bilan ulanishda xatolik"); }
-    setLoading(false);
-  };
-
-  const resend = async () => {
-    if (!reg || resendCd > 0) return;
-    try {
-      const res = await fetch(`${API_BASE}/api/register/resend`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ registrationId: reg.registrationId }),
-      });
-      const d = await res.json();
-      if (res.ok) { saveReg({ registrationId: d.registrationId, token: d.token, deepLink: d.deepLink, botUsername: d.botUsername, expiresAt: d.expiresAt }); setResendCd(60); }
-      else if (d.retryAfterSec) setResendCd(d.retryAfterSec);
-    } catch {}
-  };
-
-  const pickLogo = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0]; if (!f) return;
-    if (f.size > 2 * 1024 * 1024) { setError("Logo 2MB dan katta bo'lmasin"); return; }
-    if (!/^image\/(png|jpe?g|webp)$/.test(f.type)) { setError("Faqat PNG/JPG/WEBP"); return; }
-    setError(""); setLogoUploading(true);
-    try { const { url } = await uploadChatMedia(f, f.name); setLogoUrl(url); }
-    catch { setError("Logo yuklanmadi"); }
-    setLogoUploading(false);
-  };
-
-  const complete = async () => {
-    if (!reg) return;
-    setError(""); setLoading(true);
-    try {
-      const res = await fetch(`${API_BASE}/api/register/complete`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          token: reg.token,
-          selectedPlan: selectedPlan || '1month',
-          owner: { firstName, lastName, middleName, email, position, password },
-          company: { name: companyName, legalName, inn, activityType, region, employeeRange, currency },
-          logoUrl,
-        }),
-      });
-      const d = await res.json();
-      if (!res.ok) { setError(d.error || "Xatolik"); setLoading(false); return; }
-      // Server endi JWT bermaydi — pending holatida admin tasdiqini kutamiz
-      clearReg();
-      setRegDoneInfo({
-        phone: d.phone || phone.replace(/\s/g,''),
-        planLabel: d.planLabel || '1 oylik',
-        planAmount: d.planAmount || 700_000,
-        companyName: d.company?.name || companyName,
-        branchId: d.company?.branchId || '',
-        ownerName: `${firstName} ${lastName}`.trim(),
-      });
-      setStep("done");
-    } catch { setError("Server bilan ulanishda xatolik"); setLoading(false); }
-    setLoading(false);
-  };
-
-  // ── Kichik UI yordamchilar ──────────────────────────────────────────────────
-  const STEPS_ORDER: RegStep[] = ["tarif", "payment", "phone", "bot", "owner", "company", "brand", "summary"];
-  const progress = Math.max(0, STEPS_ORDER.indexOf(step)) / (STEPS_ORDER.length - 1);
-  const inputCls = "w-full text-base border border-border/50 rounded-xl px-4 py-3 bg-white/60 dark:bg-black/20 focus:bg-white dark:focus:bg-black/40 focus:outline-none focus:ring-2 focus:ring-primary/50 liquid-transition";
-
-  const goBack = () => {
-    const map: Record<RegStep, RegStep | null> = {
-      warn: null, tarif: "warn", payment: "tarif", phone: "payment",
-      bot: "phone", owner: "bot", company: "owner", brand: "company", summary: "brand", done: null
-    };
-    const prev = map[step];
-    if (prev) setStep(prev); else onBack();
-  };
-
-  return (
-    <div className="h-[100dvh] bg-background flex flex-col liquid-transition relative overflow-hidden" style={{ paddingTop: "env(safe-area-inset-top)" }}>
-      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/20 rounded-full blur-[100px]" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-accent/20 rounded-full blur-[100px]" />
-
-      {/* Header: back + progress */}
-      <div className="relative z-10 flex items-center gap-3 px-4 pt-4">
-        <button onClick={goBack} className="w-10 h-10 rounded-full bg-white/50 dark:bg-black/20 flex items-center justify-center shrink-0">
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-        <div className="flex-1 h-1.5 rounded-full bg-border/60 overflow-hidden">
-          <div className="h-full bg-primary liquid-transition" style={{ width: `${step === "warn" ? 0 : progress * 100}%` }} />
-        </div>
-      </div>
-
-      {/* pb-24 = sticky button height uchun joy qoldiradi — content uning ostiga tushib ketmaydi */}
-      <div className="relative z-10 flex-1 overflow-y-auto scrollbar-hide px-4 py-6 pb-24 flex flex-col">
-        <div className="w-full max-w-md mx-auto flex-1 flex flex-col">
-          {error && <div className="bg-red-500/10 text-red-600 dark:text-red-400 text-sm p-3 rounded-lg border border-red-500/20 text-center mb-4 animate-pop-in">{error}</div>}
-
-          {/* ── Qadam 1: Ogohlantirish ── */}
-          {step === "warn" && (
-            <div className="space-y-5 animate-slide-up-fade">
-              <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4">
-                <div className="flex items-center gap-2 mb-2 text-amber-600 dark:text-amber-300 font-bold">
-                  <AlertTriangle className="w-5 h-5" /> Diqqat!
-                </div>
-                <p className="text-sm leading-relaxed text-foreground">
-                  Faqat <b>firma egasi (rahbari)</b> ro'yxatdan o'ta oladi. Bu formani shaxsan firma egasi o'zi to'ldirishi kerak.
-                  Xodimlar mustaqil ro'yxatdan o'ta olmaydi — sizni firma egasi tizimga taklif qiladi.
-                  Har bir yangi firmaga alohida <b>Branch ID</b> beriladi va ma'lumotlaringiz boshqa firmalarga ko'rinmaydi.
-                </p>
-              </div>
-              <label className="flex items-start gap-3 cursor-pointer select-none">
-                <input type="checkbox" checked={ownerConfirm} onChange={e => setOwnerConfirm(e.target.checked)} className="mt-1 w-5 h-5 accent-primary" />
-                <span className="text-sm">Men firma egasi ekanligimni va ma'lumotlar to'g'ri ekanini tasdiqlayman</span>
-              </label>
-            </div>
-          )}
-
-          {/* ── Qadam 2: Tarif tanlash ── */}
-          {step === "tarif" && (
-            <div className="space-y-5 animate-slide-in-right">
-              <div>
-                <h2 className="text-xl font-bold mb-1">Tarif tanlang</h2>
-                <p className="text-sm text-muted-foreground">Firma uchun obuna muddatini tanlang</p>
-              </div>
-
-              {/* Barcha tariflarga kiritilgan (bir marta, takrorlanmaydi) */}
-              <div className="rounded-2xl border border-border/50 bg-white/40 dark:bg-black/20 p-4">
-                <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Barcha tariflarga kiritilgan</p>
-                <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
-                  {["Cheklanmagan xodimlar", "Cheklanmagan obyektlar", "AI yordamchi", "Real-time chat va qo'ng'iroq", "Smeta va hisobotlar", "Telegram bot integratsiyasi"].map(f => (
-                    <div key={f} className="flex items-center gap-1.5 text-xs text-foreground/80"><CheckCircle className="w-3.5 h-3.5 flex-shrink-0 text-green-500"/>{f}</div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                {([
-                  { key: '1month',  label: '1 oylik',  price: 700_000,   days: 30,  badge: 'BEPUL (1-oy sinov)', featured: false },
-                  { key: '3month',  label: '3 oylik',  price: 2_000_000, days: 90,  badge: '100 000 so\'m tejaysiz', featured: false },
-                  { key: '6month',  label: '6 oylik',  price: 4_000_000, days: 180, badge: '200 000 so\'m tejaysiz', featured: false },
-                  { key: '12month', label: '12 oylik', price: 8_000_000, days: 365, badge: '400 000 so\'m tejaysiz', featured: true },
-                ] as const).map((plan, i) => {
-                  const selected = selectedPlan === plan.key;
-                  return (
-                    <motion.button key={plan.key} type="button" onClick={() => setSelectedPlan(plan.key)}
-                      initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0, scale: selected ? 1.02 : 1 }}
-                      transition={{ delay: i * 0.05, type: "spring", stiffness: 320, damping: 26 }}
-                      whileTap={{ scale: 0.98 }}
-                      className={`relative w-full rounded-3xl p-4 text-left overflow-visible ${plan.featured ? "pt-7" : ""} ${
-                        plan.featured
-                          ? "shadow-xl shadow-primary/30 text-white"
-                          : `border-2 ${selected ? "border-primary bg-primary/8 shadow-md shadow-primary/20" : "border-border/50 bg-white/40 dark:bg-black/20 hover:border-primary/40"}`
-                      }`}
-                      style={plan.featured ? { background: "linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%)", border: selected ? "2px solid white" : "2px solid transparent" } : undefined}>
-                      {plan.featured && (
-                        <span className="absolute -top-3 left-1/2 -translate-x-1/2 text-[9px] font-bold bg-accent text-accent-foreground px-3 py-1 rounded-full tracking-wide shadow-md whitespace-nowrap">ENG TEJAMKOR</span>
-                      )}
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <p className={`text-base font-bold ${plan.featured ? "text-white" : ""}`}>{plan.label}</p>
-                          <p className={`text-[11px] ${plan.featured ? "text-white/70" : "text-muted-foreground"}`}>{plan.days} kun</p>
-                        </div>
-                        <div className="text-right">
-                          {plan.key === '1month' ? (
-                            <div>
-                              <p className={`text-2xl font-bold ${plan.featured ? "text-white" : "text-green-600 dark:text-green-400"}`}>BEPUL</p>
-                              <p className={`text-xs line-through ${plan.featured ? "text-white/50" : "text-muted-foreground"}`}>{plan.price.toLocaleString('uz-UZ')} so'm</p>
-                            </div>
-                          ) : (
-                            <>
-                              <p className={`text-2xl font-bold ${plan.featured ? "text-white" : "text-primary"}`}>{plan.price.toLocaleString('uz-UZ')}</p>
-                              <p className={`text-[11px] ${plan.featured ? "text-white/70" : "text-muted-foreground"}`}>so'm</p>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                      <span className={`inline-block mt-2 text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${
-                        plan.featured ? "bg-white/20 text-white" : plan.key === '1month' ? "bg-green-500/15 text-green-600 dark:text-green-400" : "bg-accent/15 text-accent"
-                      }`}>{plan.badge}</span>
-                      {selected && (
-                        <div className={`mt-2 flex items-center gap-1.5 ${plan.featured ? "text-white" : "text-primary"}`}>
-                          <Check className="w-4 h-4"/><span className="text-xs font-semibold">Tanlangan</span>
-                        </div>
-                      )}
-                    </motion.button>
-                  );
-                })}
-              </div>
-              <p className="text-xs text-center text-muted-foreground pt-1">Birinchi oy bepul. Keyingi oydan to'lov boshlanadi.</p>
-            </div>
-          )}
-
-          {/* ── Qadam 3: To'lov jarayoni ── */}
-          {step === "payment" && selectedPlan && (
-            <div className="space-y-5 animate-slide-in-right">
-              <div>
-                <h2 className="text-xl font-bold mb-1">To'lov jarayoni</h2>
-                <p className="text-sm text-muted-foreground">Ro'yxatdan o'tgandan so'ng qanday ishlaydi</p>
-              </div>
-              <div className="bg-primary/8 border border-primary/20 rounded-2xl p-4">
-                <p className="text-[11px] font-semibold text-primary uppercase tracking-wider mb-2">Tanlangan tarif</p>
-                {selectedPlan === '1month' ? (
-                  <div>
-                    <p className="text-2xl font-bold text-green-600 dark:text-green-400">BEPUL</p>
-                    <p className="text-sm line-through text-muted-foreground">700 000 so'm</p>
-                  </div>
-                ) : (
-                  <p className="text-2xl font-bold text-primary">
-                    {selectedPlan==='3month'?'2 000 000':selectedPlan==='6month'?'4 000 000':'8 000 000'}
-                    <span className="text-base font-normal text-muted-foreground ml-1">so'm</span>
-                  </p>
-                )}
-                <p className="text-sm text-muted-foreground mt-1">
-                  {selectedPlan==='1month'?'1 oylik (30 kun) — birinchi oy bepul':selectedPlan==='3month'?'3 oylik (90 kun)':selectedPlan==='6month'?'6 oylik (180 kun)':'12 oylik (365 kun)'}
-                </p>
-              </div>
-              <div className="surface rounded-2xl p-4 space-y-3">
-                {[
-                  { n: "1", t: "Ro'yxatdan o'ting", d: "Barcha bosqichlarni to'ldiring va firmangizni oching" },
-                  { n: "2", t: "Ma'lumotlarni yuboring", d: "@Sadriddinov_Jahongir'ga (Telegram) nusxalangan ma'lumotni yuboring" },
-                  { n: "3", t: "Operator tasdiqlaydi", d: "1 daqiqadan 24 soat ichida akkauntingiz tekshiriladi" },
-                  { n: "4", t: "Akkaunt ochiladi", d: "Birinchi oy — BEPUL! Keyingi oydan to'lov boshlanadi" },
-                ].map(s => (
-                  <div key={s.n} className="flex items-start gap-3">
-                    <div className="w-6 h-6 rounded-full bg-primary text-white text-xs flex items-center justify-center font-bold flex-shrink-0 mt-0.5">{s.n}</div>
-                    <div><p className="text-sm font-semibold">{s.t}</p><p className="text-xs text-muted-foreground">{s.d}</p></div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* ── Qadam 4: Telefon ── */}
-          {step === "phone" && (
-            <div className="space-y-5 animate-slide-in-right">
-              <div>
-                <h2 className="text-xl font-bold mb-1">Telefon raqamingiz</h2>
-                <p className="text-sm text-muted-foreground">Firma egasining raqami. Telegram orqali tasdiqlanadi.</p>
-              </div>
-              <RegField label="Telefon">
-                <input inputMode="tel" className={inputCls + " font-mono"} value={phone}
-                  onChange={e => { setError(""); const v = e.target.value; if (v.startsWith("+998 ")) setPhone(v); else if (v === "+998") setPhone("+998 "); }}
-                  autoFocus />
-              </RegField>
-            </div>
-          )}
-
-          {/* ── Qadam 3: Botga o'tish ── */}
-          {step === "bot" && reg && (
-            <div className="space-y-5 animate-slide-in-right text-center">
-              <div>
-                <h2 className="text-xl font-bold mb-1">Telegram orqali tasdiqlash</h2>
-                <p className="text-sm text-muted-foreground">Botga o'ting, raqamingizni yuboring va rozilik bering. Bu sahifa avtomatik davom etadi.</p>
-              </div>
-              <a href={reg.deepLink} target="_blank" rel="noopener noreferrer"
-                className="w-full inline-flex items-center justify-center gap-2 bg-gradient-to-r from-primary to-primary/90 text-white text-base font-semibold py-4 rounded-xl shadow-lg shadow-primary/25 min-h-[54px] active:scale-[0.98] transition-transform">
-                <Send className="w-5 h-5" /> Telegram botga o'tish
-              </a>
-              {/* Bosib to'liq /start <token> nusxalanadi (kesilmaydi) */}
-              <button type="button" onClick={() => {
-                const txt = `/start ${reg.token}`;
-                const done = () => toast.success("Nusxalandi ✅ — botga joylab yuboring");
-                if (navigator.clipboard?.writeText) navigator.clipboard.writeText(txt).then(done).catch(()=>{});
-                else { try { const ta=document.createElement("textarea"); ta.value=txt; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta); done(); } catch {} }
-              }} className="w-full bg-white/50 dark:bg-black/20 rounded-xl p-3 border border-border/50 text-left active:scale-[0.99] transition-transform">
-                <div className="flex items-center justify-between mb-1">
-                  <p className="text-[11px] text-muted-foreground">Tugma ishlamasa — bosib nusxalang:</p>
-                  <span className="text-[11px] text-primary font-semibold whitespace-nowrap">📋 Nusxalash</span>
-                </div>
-                <code className="text-xs break-all font-mono text-primary block leading-relaxed">/start {reg.token}</code>
-              </button>
-              <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                {botStatus === "PHONE_CONFIRMED" ? "Raqam tasdiqlandi, rozilik kutilmoqda…" : "Bot javobini kutmoqdamiz…"}
-              </div>
-              {/* Timer 2:00 → 0:00; "Qayta yuborish" FAQAT muddat tugagach chiqadi */}
-              {timeLeft > 0 ? (
-                <p className="text-sm text-muted-foreground">Kod <span className="font-mono font-semibold text-foreground">{Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, "0")}</span> amal qiladi</p>
-              ) : (
-                <button onClick={resend} disabled={resendCd > 0} className={`text-sm font-semibold min-h-[44px] px-4 rounded-lg ${resendCd > 0 ? "text-muted-foreground/50" : "text-primary hover:bg-primary/10"}`}>
-                  {resendCd > 0 ? `Qayta yuborish (${resendCd}s)` : "🔄 Kodni qayta yuborish"}
-                </button>
-              )}
-            </div>
-          )}
-
-          {/* ── Qadam 5.1: Egasi ── */}
-          {step === "owner" && (
-            <div className="space-y-4 animate-slide-in-right">
-              <div><h2 className="text-xl font-bold mb-1">Firma egasi</h2><p className="text-sm text-muted-foreground">Sizning ma'lumotlaringiz.</p></div>
-              <div className="grid grid-cols-2 gap-3">
-                <RegField label="Ism *"><input className={inputCls} value={firstName} onChange={e => setFirstName(e.target.value)} autoFocus /></RegField>
-                <RegField label="Familiya *"><input className={inputCls} value={lastName} onChange={e => setLastName(e.target.value)} /></RegField>
-              </div>
-              <RegField label="Otasining ismi"><input className={inputCls} value={middleName} onChange={e => setMiddleName(e.target.value)} /></RegField>
-              <RegField label="Email"><input type="email" className={inputCls} value={email} onChange={e => setEmail(e.target.value)} /></RegField>
-              <RegField label="Lavozim"><input className={inputCls} value={position} onChange={e => setPosition(e.target.value)} /></RegField>
-              <RegField label="Parol *" hint="Kamida 8 belgi">
-                <input type="password" className={inputCls} value={password} onChange={e => setPassword(e.target.value)} />
-                <div className="h-1 mt-1.5 rounded-full bg-border/60 overflow-hidden">
-                  <div className={`h-full liquid-transition ${password.length >= 12 ? "bg-green-500 w-full" : password.length >= 8 ? "bg-amber-500 w-2/3" : "bg-red-500 w-1/3"}`} />
-                </div>
-              </RegField>
-              <RegField label="Parolni tasdiqlang *"><input type="password" className={inputCls} value={password2} onChange={e => setPassword2(e.target.value)} /></RegField>
-            </div>
-          )}
-
-          {/* ── Qadam 5.2: Firma ── */}
-          {step === "company" && (
-            <div className="space-y-4 animate-slide-in-right">
-              <div><h2 className="text-xl font-bold mb-1">Firma ma'lumotlari</h2></div>
-              <RegField label="Firma nomi *"><input className={inputCls} value={companyName} onChange={e => setCompanyName(e.target.value)} autoFocus /></RegField>
-              <RegField label="Yuridik nomi"><input className={inputCls} value={legalName} onChange={e => setLegalName(e.target.value)} /></RegField>
-              <RegField label="INN / STIR" hint="9 raqam"><input inputMode="numeric" className={inputCls + " font-mono"} value={inn} maxLength={9} onChange={e => setInn(e.target.value.replace(/\D/g, ""))} /></RegField>
-              <RegField label="Faoliyat turi">
-                <select className={inputCls} value={activityType} onChange={e => setActivityType(e.target.value)}>
-                  <option value="qurilish">Qurilish</option><option value="tamirlash">Ta'mirlash</option>
-                  <option value="loyihalash">Loyihalash</option><option value="boshqa">Boshqa</option>
-                </select>
-              </RegField>
-              <RegField label="Viloyat / Manzil"><input className={inputCls} value={region} onChange={e => setRegion(e.target.value)} /></RegField>
-              <RegField label="Xodimlar soni">
-                <select className={inputCls} value={employeeRange} onChange={e => setEmployeeRange(e.target.value)}>
-                  <option value="1-10">1–10</option><option value="11-50">11–50</option>
-                  <option value="51-200">51–200</option><option value="200+">200+</option>
-                </select>
-              </RegField>
-            </div>
-          )}
-
-          {/* ── Qadam 5.3: Logo + valyuta ── */}
-          {step === "brand" && (
-            <div className="space-y-5 animate-slide-in-right">
-              <div><h2 className="text-xl font-bold mb-1">Logotip va brend</h2></div>
-              <div className="flex flex-col items-center gap-3">
-                <div className="w-28 h-28 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center overflow-hidden">
-                  {logoUploading ? <Loader2 className="w-6 h-6 animate-spin text-primary" />
-                    : logoUrl ? <img src={logoUrl} alt="logo" className="w-full h-full object-cover" />
-                    : <span className="text-3xl font-bold text-primary">{(companyName || "F").slice(0, 1).toUpperCase()}</span>}
-                </div>
-                <input ref={logoRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={pickLogo} />
-                <button onClick={() => logoRef.current?.click()} className="text-sm font-semibold text-primary flex items-center gap-1.5">
-                  <Camera className="w-4 h-4" /> {logoUrl ? "O'zgartirish" : "Logo yuklash"}
-                </button>
-                <p className="text-[11px] text-muted-foreground">PNG/JPG/WEBP, maks 2MB. Ixtiyoriy.</p>
-              </div>
-              <RegField label="Asosiy valyuta">
-                <div className="grid grid-cols-2 gap-3">
-                  {(["UZS", "USD"] as const).map(c => (
-                    <button key={c} onClick={() => setCurrency(c)}
-                      className={`py-3 rounded-xl border text-sm font-semibold ${currency === c ? "border-primary bg-primary/10 text-primary" : "border-border/50"}`}>{c}</button>
-                  ))}
-                </div>
-              </RegField>
-            </div>
-          )}
-
-          {/* ── Qadam 9: Yakuniy tasdiq ── */}
-          {step === "summary" && (
-            <div className="space-y-4 animate-slide-in-right">
-              <div><h2 className="text-xl font-bold mb-1">Tekshirib tasdiqlang</h2></div>
-              {[
-                { t: "Tarif", v: selectedPlan==='1month'?'1 oylik — 700 000 so\'m':selectedPlan==='3month'?'3 oylik — 2 000 000 so\'m':selectedPlan==='6month'?'6 oylik — 4 000 000 so\'m':'12 oylik — 8 000 000 so\'m', go: "tarif" as RegStep },
-                { t: "Egasi", v: `${firstName} ${lastName}`, go: "owner" as RegStep },
-                { t: "Telefon", v: phone, go: "phone" as RegStep },
-                { t: "Firma", v: companyName, go: "company" as RegStep },
-                { t: "Faoliyat", v: activityType, go: "company" as RegStep },
-                { t: "Valyuta", v: currency, go: "brand" as RegStep },
-              ].map((r, i) => (
-                <div key={i} className="flex items-center justify-between surface rounded-xl px-4 py-3">
-                  <div><p className="text-[11px] text-muted-foreground">{r.t}</p><p className="text-sm font-medium">{r.v || "—"}</p></div>
-                  <button onClick={() => setStep(r.go)} className="text-xs text-primary font-semibold">Tahrirlash</button>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* ── Qadam 10: Ro'yxatdan o'tdingiz — ma'lumotlarni yuborish ── */}
-          {step === "done" && regDoneInfo && (
-            <div className="space-y-5 animate-slide-in-right flex-1 flex flex-col justify-center">
-              <div className="flex flex-col items-center gap-3 text-center">
-                <div className="w-16 h-16 rounded-full bg-green-500/15 flex items-center justify-center">
-                  <CheckCircle className="w-8 h-8 text-green-500"/>
-                </div>
-                <div>
-                  <h2 className="text-xl font-bold mb-1">Ro'yxatdan o'tdingiz!</h2>
-                  <p className="text-sm text-muted-foreground">Quyidagi ma'lumotlarni @Sadriddinov_Jahongir'ga (Telegram) yuboring</p>
-                </div>
-              </div>
-
-              {/* Copyable info block */}
-              <div className="relative">
-                <div className="bg-slate-900 dark:bg-slate-800 text-green-400 rounded-2xl p-4 font-mono text-xs leading-relaxed whitespace-pre-wrap border border-slate-700 select-all">
-                  {[
-                    `📋 YANGI FIRMA RO'YXATI`,
-                    `─────────────────────────`,
-                    `🏢 Firma: ${regDoneInfo.companyName}`,
-                    `👤 Egasi: ${regDoneInfo.ownerName}`,
-                    `📞 Telefon: ${regDoneInfo.phone}`,
-                    `📦 Tarif: ${regDoneInfo.planLabel}`,
-                    `💰 Summa: ${regDoneInfo.planAmount.toLocaleString('uz-UZ')} so'm`,
-                    ...(regDoneInfo.branchId ? [`🔑 ID: ${regDoneInfo.branchId}`] : []),
-                    `─────────────────────────`,
-                  ].join('\n')}
-                </div>
-                <button
-                  onClick={() => {
-                    const text = [
-                      `📋 YANGI FIRMA RO'YXATI`,
-                      `─────────────────────────`,
-                      `🏢 Firma: ${regDoneInfo.companyName}`,
-                      `👤 Egasi: ${regDoneInfo.ownerName}`,
-                      `📞 Telefon: ${regDoneInfo.phone}`,
-                      `📦 Tarif: ${regDoneInfo.planLabel}`,
-                      `💰 Summa: ${regDoneInfo.planAmount.toLocaleString('uz-UZ')} so'm`,
-                      ...(regDoneInfo.branchId ? [`🔑 ID: ${regDoneInfo.branchId}`] : []),
-                      `─────────────────────────`,
-                    ].join('\n');
-                    navigator.clipboard.writeText(text).then(() => {
-                      setDoneCopied(true);
-                      setTimeout(() => setDoneCopied(false), 2500);
-                    });
-                  }}
-                  className={`absolute top-3 right-3 flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-xl transition-all ${doneCopied ? 'bg-green-500 text-white' : 'bg-white/10 text-white hover:bg-white/20'}`}>
-                  {doneCopied ? <><Check className="w-3 h-3"/>Nusxalandi!</> : <><Copy className="w-3 h-3"/>Nusxalash</>}
-                </button>
-              </div>
-
-              <div className="surface rounded-2xl p-4 space-y-2.5">
-                <p className="text-sm font-semibold">Keyingi qadam:</p>
-                <p className="text-sm leading-relaxed text-muted-foreground">Yuqoridagi ma'lumotni nusxalab @Sadriddinov_Jahongir'ga (Telegram) yuboring:</p>
-                <a href="https://t.me/Sadriddinov_Jahongir" target="_blank" rel="noopener noreferrer"
-                  className="flex items-center gap-2.5 bg-primary/10 border border-primary/25 rounded-xl px-4 py-3">
-                  <div className="w-9 h-9 rounded-full bg-primary/15 flex items-center justify-center flex-shrink-0">
-                    <MessageCircle className="w-4 h-4 text-primary"/>
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-primary">@Sadriddinov_Jahongir</p>
-                    <p className="text-[11px] text-muted-foreground">Telegram — ma'lumotlarni yuboring</p>
-                  </div>
-                </a>
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  Operator javobini kuting. <b className="text-foreground">Birinchi oy — BEPUL!</b> Keyingi oydan to'lov boshlanadi.
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Sticky primary button (thumb zone) */}
-      <div className="relative z-10 px-4 pb-4 pt-2" style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 16px)" }}>
-        <div className="w-full max-w-md mx-auto">
-          {step === "warn" && (
-            <button disabled={!ownerConfirm} onClick={() => setStep("tarif")}
-              className="w-full bg-primary text-white text-sm font-semibold py-3.5 rounded-xl min-h-[48px] disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98] transition-transform">
-              Davom etish
-            </button>
-          )}
-          {step === "tarif" && (
-            <button disabled={!selectedPlan} onClick={() => setStep("payment")}
-              className="w-full bg-primary text-white text-sm font-semibold py-3.5 rounded-xl min-h-[48px] disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98] transition-transform">
-              Davom etish
-            </button>
-          )}
-          {step === "payment" && (
-            <button onClick={() => setStep("phone")}
-              className="w-full bg-primary text-white text-sm font-semibold py-3.5 rounded-xl min-h-[48px] active:scale-[0.98] transition-transform">
-              Davom etish
-            </button>
-          )}
-          {step === "phone" && (
-            <button disabled={loading} onClick={submitPhone}
-              className="w-full bg-primary text-white text-sm font-semibold py-3.5 rounded-xl min-h-[48px] disabled:opacity-60 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform">
-              {loading && <Loader2 className="w-4 h-4 animate-spin" />} Davom etish
-            </button>
-          )}
-          {step === "owner" && (
-            <button onClick={() => {
-              if (!firstName.trim() || !lastName.trim()) { setError("Ism va familiya majburiy"); return; }
-              if (password.length < 8) { setError("Parol kamida 8 belgi"); return; }
-              if (password !== password2) { setError("Parollar mos kelmadi"); return; }
-              setError(""); setStep("company");
-            }} className="w-full bg-primary text-white text-sm font-semibold py-3.5 rounded-xl min-h-[48px]">Davom etish</button>
-          )}
-          {step === "company" && (
-            <button onClick={() => {
-              if (!companyName.trim()) { setError("Firma nomi majburiy"); return; }
-              if (inn && !/^\d{9}$/.test(inn)) { setError("INN 9 raqam bo'lishi kerak"); return; }
-              setError(""); setStep("brand");
-            }} className="w-full bg-primary text-white text-sm font-semibold py-3.5 rounded-xl min-h-[48px]">Davom etish</button>
-          )}
-          {step === "brand" && (
-            <button onClick={() => setStep("summary")} className="w-full bg-primary text-white text-sm font-semibold py-3.5 rounded-xl min-h-[48px]">Davom etish</button>
-          )}
-          {step === "summary" && (
-            <button disabled={loading} onClick={complete}
-              className="w-full bg-accent text-white text-sm font-semibold py-3.5 rounded-xl min-h-[48px] disabled:opacity-60 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform">
-              {loading && <Loader2 className="w-4 h-4 animate-spin" />} Firmani ochish
-            </button>
-          )}
-          {step === "done" && (
-            <button onClick={onBack}
-              className="w-full bg-primary text-white text-sm font-semibold py-3.5 rounded-xl min-h-[48px] active:scale-[0.98] transition-transform">
-              Tizimga kirish
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Developer (super-admin) Panel ─────────────────────────────────────────────
-const DEV_PLAN_CONFIG: Record<string, { label: string; days: number; amount: number }> = {
-  'bepul':   { label: '1 oy bepul', days: 30,  amount: 0 },
-  '1month':  { label: '1 oylik',   days: 30,  amount: 700_000 },
-  '3month':  { label: '3 oylik',   days: 90,  amount: 2_000_000 },
-  '6month':  { label: '6 oylik',   days: 180, amount: 4_000_000 },
-  '12month': { label: '12 oylik',  days: 365, amount: 8_000_000 },
-};
 
 // ─── AI Assistant ──────────────────────────────────────────────────────────────
 interface AiMsg { role: 'user'|'assistant'; content: string; }
@@ -4220,7 +3378,7 @@ function AIAssistant({ currentUser, users, token }: { currentUser: AppUser; user
               className="flex-1 text-xs bg-muted/50 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-primary/40 placeholder:text-muted-foreground/60"
               disabled={loading || !!pending}
             />
-            <button onClick={send} disabled={loading || !input.trim() || !!pending}
+            <button onClick={send} disabled={loading || !input.trim() || !!pending} aria-label="Xabar yuborish"
               className="w-8 h-8 rounded-xl flex items-center justify-center disabled:opacity-40 transition-all active:scale-95"
               style={{ background: 'var(--primary)' }}>
               <Send className="w-3.5 h-3.5 text-white"/>
@@ -4229,442 +3387,6 @@ function AIAssistant({ currentUser, users, token }: { currentUser: AppUser; user
         </div>
       )}
     </>
-  );
-}
-
-// ─── Developer Panel ────────────────────────────────────────────────────────────
-function DeveloperPanel({ currentUser, onLogout }: { currentUser: AppUser; onLogout: () => void }) {
-  const [tab, setTab] = useState<"firms" | "users" | "subscriptions" | "messages">("subscriptions");
-  const [companies, setCompanies] = useState<any[]>([]);
-  const [users, setUsers] = useState<any[]>([]);
-  const [subs, setSubs] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState("");
-  const [subLoading, setSubLoading] = useState<string|null>(null);
-  const [renewPlan, setRenewPlan] = useState<Record<string, string>>({}); // subId → selectedPlan
-  // Messages tab state — per-company direct chats
-  const [selDevFirm, setSelDevFirm] = useState<any|null>(null);
-  const [selDevContact, setSelDevContact] = useState<any|null>(null);
-  const [devDMMessages, setDevDMMessages] = useState<Msg[]>([]);
-  const [devMobileStep, setDevMobileStep] = useState<'firms'|'contacts'|'chat'>('firms');
-  const [devMsgText, setDevMsgText] = useState("");
-  const [devMsgLoading, setDevMsgLoading] = useState(false);
-  const devMsgBottomRef = useRef<HTMLDivElement>(null);
-
-  const token = localStorage.getItem("token") || "";
-  const authHdr = { "Content-Type": "application/json", "Authorization": `Bearer ${token}` };
-
-  const load = async () => {
-    setErr(""); setLoading(true);
-    try {
-      const [cr, ur, sr] = await Promise.all([
-        fetch(`${API_BASE}/api/companies`, { headers: authHdr }),
-        fetch(`${API_BASE}/api/users`, { headers: authHdr }),
-        fetch(`${API_BASE}/api/admin/subscriptions`, { headers: authHdr }),
-      ]);
-      if (!cr.ok) { setErr("Firmalarni olishda xatolik (ruxsat yo'q?)"); setLoading(false); return; }
-      setCompanies(await cr.json());
-      setUsers(ur.ok ? await ur.json() : []);
-      setSubs(sr.ok ? await sr.json() : []);
-    } catch { setErr("Server bilan ulanishda xatolik"); }
-    setLoading(false);
-  };
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
-
-  // Load direct messages between developer and a company user
-  const loadDevDM = async (toUserId: string) => {
-    try {
-      const r = await fetch(`${API_BASE}/api/messages?userId=${currentUser.id}`, { headers: authHdr });
-      if (r.ok) {
-        const all = await r.json();
-        setDevDMMessages(all.filter((m: any) => !m.deleted && !m.groupId &&
-          ((m.fromUserId === currentUser.id && m.toUserId === toUserId) ||
-           (m.fromUserId === toUserId && m.toUserId === currentUser.id))));
-      }
-    } catch {}
-  };
-
-  useEffect(() => {
-    if (!selDevContact) return;
-    loadDevDM(selDevContact.id);
-  // eslint-disable-next-line
-  }, [selDevContact?.id]);
-
-  // Socket for real-time DMs in dev panel
-  useEffect(() => {
-    const sock = connectSocket(currentUser.id);
-    const onNew = (m: any) => {
-      if (!m.groupId && selDevContact && !m.deleted &&
-        ((m.fromUserId === currentUser.id && m.toUserId === selDevContact.id) ||
-         (m.fromUserId === selDevContact.id && m.toUserId === currentUser.id)))
-        setDevDMMessages(prev => prev.some(x => x.id === (m.id || m._id)) ? prev : [...prev, { ...m, id: m.id || m._id }]);
-    };
-    sock.on('message:new', onNew);
-    return () => { sock.off('message:new', onNew); };
-  // eslint-disable-next-line
-  }, [currentUser.id, selDevContact?.id]);
-
-  useEffect(() => { devMsgBottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [devDMMessages]);
-
-  const sendDevMsg = async () => {
-    if (!devMsgText.trim() || !selDevContact) return;
-    setDevMsgLoading(true);
-    try {
-      await fetch(`${API_BASE}/api/messages`, {
-        method: 'POST', headers: authHdr,
-        body: JSON.stringify({ fromUserId: currentUser.id, toUserId: selDevContact.id, text: devMsgText.trim() }),
-      });
-      setDevMsgText('');
-    } catch {}
-    setDevMsgLoading(false);
-  };
-
-  const approveSub = async (id: string) => {
-    const plan = renewPlan[id] || 'bepul';
-    const cfg = DEV_PLAN_CONFIG[plan] || DEV_PLAN_CONFIG['bepul'];
-    setSubLoading(id);
-    const res = await fetch(`${API_BASE}/api/admin/subscriptions/${id}/approve`, {
-      method: "POST", headers: authHdr,
-      body: JSON.stringify({ selectedPlan: plan, days: cfg.days, amount: cfg.amount }),
-    });
-    if (res.ok) { await load(); } else { setErr("Tasdiqlashda xatolik"); }
-    setSubLoading(null);
-  };
-  const rejectSub = async (id: string) => {
-    if (!window.confirm("Rad etilsinmi?")) return;
-    setSubLoading(id);
-    const res = await fetch(`${API_BASE}/api/admin/subscriptions/${id}/reject`, { method: "POST", headers: authHdr });
-    if (res.ok) { await load(); } else { setErr("Rad etishda xatolik"); }
-    setSubLoading(null);
-  };
-  const renewSub = async (id: string) => {
-    const plan = renewPlan[id] || '1month';
-    setSubLoading(id);
-    const res = await fetch(`${API_BASE}/api/admin/subscriptions/${id}/renew`, {
-      method: "POST", headers: authHdr,
-      body: JSON.stringify({ selectedPlan: plan }),
-    });
-    if (res.ok) { await load(); } else { setErr("Yangilashda xatolik"); }
-    setSubLoading(null);
-  };
-
-  const companyName = (cid: string) => companies.find(c => c.id === cid)?.name || "—";
-
-  const deleteCompany = async (c: any) => {
-    if (!window.confirm(`"${c.name}" firmasi va uning BARCHA ma'lumotlari (${c.userCount} user, ${c.objectCount} obyekt) o'chiriladi. Davom etasizmi?`)) return;
-    const res = await fetch(`${API_BASE}/api/companies/${c.id}`, { method: "DELETE" });
-    if (res.ok) load(); else setErr("O'chirishda xatolik");
-  };
-  const toggleStatus = async (c: any) => {
-    const status = c.status === "SUSPENDED" ? "ACTIVE" : "SUSPENDED";
-    const res = await fetch(`${API_BASE}/api/companies/${c.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) });
-    if (res.ok) load();
-  };
-  const deleteUser = async (u: any) => {
-    if (u.id === currentUser.id) { setErr("O'z akkauntingizni o'chirib bo'lmaydi"); return; }
-    if (!window.confirm(`"${u.name}" (${u.phone}) o'chirilsinmi?`)) return;
-    const res = await fetch(`${API_BASE}/api/users/${u.id}`, { method: "DELETE", headers: authHdr });
-    if (res.ok) load(); else setErr("O'chirishda xatolik");
-  };
-  const changeRole = async (u: any, role: string) => {
-    const res = await fetch(`${API_BASE}/api/auth/users/${u.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ role }) });
-    if (res.ok) load(); else setErr("O'zgartirishda xatolik");
-  };
-  // Eski tenant-bug qurbonlarini (companyId noto'g'ri/yo'q xodimlar) to'g'ri firmaga biriktirish
-  const assignCompany = async (u: any, companyId: string) => {
-    const res = await fetch(`${API_BASE}/api/users/${u.id}`, { method: "PUT", headers: authHdr, body: JSON.stringify({ companyId: companyId || null }) });
-    if (res.ok) { load(); toast.success(`${u.name} firmaga biriktirildi. Xodim qayta login qilishi kerak.`); }
-    else setErr("Firmaga biriktirishda xatolik");
-  };
-
-  return (
-    <div className="min-h-screen bg-background" style={{ paddingTop: "env(safe-area-inset-top)" }}>
-      <header className="glass sticky top-0 z-20 px-4 py-3 flex items-center justify-between border-b border-border/50">
-        <div className="flex items-center gap-2">
-          <div className="w-9 h-9 rounded-xl bg-slate-800 text-white flex items-center justify-center text-sm font-bold">🛠</div>
-          <div>
-            <p className="text-sm font-bold leading-tight">Dasturchi paneli</p>
-            <p className="text-[11px] text-muted-foreground leading-tight">{currentUser.name} · super-admin</p>
-          </div>
-        </div>
-        <button onClick={() => { localStorage.removeItem("currentUser"); localStorage.removeItem("token"); onLogout(); }}
-          className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-red-600 border border-border rounded-xl px-3 py-2">
-          <LogOut className="w-4 h-4" /> Chiqish
-        </button>
-      </header>
-
-      <div className="mx-4 mt-3 nav-pill-desktop flex gap-1 flex-wrap p-1 rounded-full">
-        <button onClick={() => setTab("subscriptions")} className={`relative flex-1 py-2 rounded-full text-[13px] font-semibold liquid-transition ${tab === "subscriptions" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
-          To'lovlar {subs.filter(s => s.status === "pending").length > 0 && <span className="ml-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full badge-pulse">{subs.filter(s => s.status === "pending").length}</span>}
-        </button>
-        <button onClick={() => setTab("firms")} className={`flex-1 py-2 rounded-full text-[13px] font-semibold liquid-transition ${tab === "firms" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>Firmalar ({companies.length})</button>
-        <button onClick={() => setTab("users")} className={`flex-1 py-2 rounded-full text-[13px] font-semibold liquid-transition ${tab === "users" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>Foydalanuvchilar</button>
-        <button onClick={() => setTab("messages")} className={`flex-1 py-2 rounded-full text-[13px] font-semibold liquid-transition ${tab === "messages" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
-          💬 Xabarlar
-        </button>
-      </div>
-
-      {err && <div className="mx-4 mt-3 bg-red-500/10 text-red-600 dark:text-red-400 text-sm p-3 rounded-lg border border-red-500/20">{err}</div>}
-
-      <div className="p-4 space-y-3 pb-24">
-        {loading ? (
-          <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
-        ) : tab === "subscriptions" ? (
-          subs.length === 0 ? <p className="text-center text-sm text-muted-foreground py-12">Obuna so'rovi yo'q</p> :
-          subs.map(s => {
-            const isPending = s.status === "pending";
-            const isActive = s.status === "active";
-            const isExpired = s.status === "expired";
-            const isRejected = s.status === "rejected";
-            const expiryWarning = isActive && typeof s.daysLeft === "number" && s.daysLeft <= 3;
-            const statusLabel = isPending ? "Kutilmoqda" : isActive ? `Faol · ${s.daysLeft} kun` : isExpired ? "Muddati o'tgan" : "Rad etilgan";
-            const statusColor = isPending ? "text-yellow-600 bg-yellow-500/10" : isActive ? (expiryWarning ? "text-orange-600 bg-orange-500/10" : "text-green-600 bg-green-500/10") : "text-red-600 bg-red-500/10";
-            return (
-              <div key={s.id} className={`surface rounded-2xl p-4 ${expiryWarning ? "ring-1 ring-orange-500/40" : ""} ${isPending ? "ring-1 ring-yellow-500/40" : ""}`}>
-                <div className="flex items-start justify-between gap-2 mb-3">
-                  <div className="min-w-0">
-                    <p className="text-sm font-bold truncate">{s.companyName}</p>
-                    <p className="text-[11px] font-mono text-muted-foreground">{s.branchId} · {s.userPhone}</p>
-                    <p className="text-[11px] text-muted-foreground">{s.userName}</p>
-                  </div>
-                  <span className={`text-[11px] font-semibold px-2 py-1 rounded-lg shrink-0 ${statusColor}`}>{statusLabel}</span>
-                </div>
-                <div className="flex items-center justify-between text-[12px] text-muted-foreground mb-3">
-                  <span>📦 {DEV_PLAN_CONFIG[s.selectedPlan]?.label || s.selectedPlan || "—"}</span>
-                  <span className="font-semibold text-foreground">{s.amount ? s.amount.toLocaleString() + " so'm" : "—"}</span>
-                </div>
-                {s.requestedAt && <p className="text-[11px] text-muted-foreground mb-3">So'rov: {new Date(s.requestedAt).toLocaleString("uz-UZ")}</p>}
-                {expiryWarning && (
-                  <div className="mb-3">
-                    <p className="text-[11px] text-orange-600 font-semibold mb-2">⚠️ Faqat {s.daysLeft} kun qoldi!</p>
-                    <div className="flex items-center gap-2">
-                      <select value={renewPlan[s.id] || s.selectedPlan || '1month'}
-                        onChange={e => setRenewPlan(prev => ({ ...prev, [s.id]: e.target.value }))}
-                        className="flex-1 text-xs border border-orange-400/40 rounded-lg px-2 py-1.5 bg-transparent">
-                        {Object.entries(DEV_PLAN_CONFIG).map(([k, v]) => (
-                          <option key={k} value={k}>{v.label} — {v.amount.toLocaleString()} so'm</option>
-                        ))}
-                      </select>
-                      <button onClick={() => renewSub(s.id)} disabled={subLoading === s.id}
-                        className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-orange-500 text-white disabled:opacity-60 flex items-center gap-1 shrink-0">
-                        {subLoading === s.id ? <Loader2 className="w-3 h-3 animate-spin" /> : "+"} Uzaytirish
-                      </button>
-                    </div>
-                  </div>
-                )}
-                {isPending && (
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <select value={renewPlan[s.id] || 'bepul'}
-                        onChange={e => setRenewPlan(prev => ({ ...prev, [s.id]: e.target.value }))}
-                        className="flex-1 text-xs border border-green-500/40 rounded-lg px-2 py-1.5 bg-transparent">
-                        {Object.entries(DEV_PLAN_CONFIG).map(([k, v]) => (
-                          <option key={k} value={k}>{v.label}{v.amount ? ` — ${v.amount.toLocaleString()} so'm` : ' — BEPUL'}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="flex gap-2">
-                      <button onClick={() => { setRenewPlan(prev => ({ ...prev, [s.id]: prev[s.id] || 'bepul' })); approveSub(s.id); }} disabled={subLoading === s.id}
-                        className="flex-1 py-2 rounded-xl text-xs font-bold bg-green-600 text-white hover:bg-green-700 disabled:opacity-60 flex items-center justify-center gap-1">
-                        {subLoading === s.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "✅"} Tasdiqlash
-                      </button>
-                      <button onClick={() => rejectSub(s.id)} disabled={subLoading === s.id}
-                        className="flex-1 py-2 rounded-xl text-xs font-bold border border-red-500/30 text-red-600 hover:bg-red-500/10 disabled:opacity-60 flex items-center justify-center gap-1">
-                        {subLoading === s.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "❌"} Rad etish
-                      </button>
-                    </div>
-                  </div>
-                )}
-                {(isExpired || isRejected) && (
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <select value={renewPlan[s.id] || s.selectedPlan || '1month'}
-                        onChange={e => setRenewPlan(prev => ({ ...prev, [s.id]: e.target.value }))}
-                        className="flex-1 text-xs border border-border/60 rounded-lg px-2 py-2 bg-transparent">
-                        {Object.entries(DEV_PLAN_CONFIG).map(([k, v]) => (
-                          <option key={k} value={k}>{v.label} — {v.amount.toLocaleString()} so'm</option>
-                        ))}
-                      </select>
-                      <button onClick={() => renewSub(s.id)} disabled={subLoading === s.id}
-                        className="px-3 py-2 rounded-lg text-xs font-bold bg-primary text-white hover:bg-primary/90 disabled:opacity-60 flex items-center gap-1 shrink-0">
-                        {subLoading === s.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "🔄"} Yangilash
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })
-        ) : tab === "firms" ? (
-          companies.length === 0 ? <p className="text-center text-sm text-muted-foreground py-12">Firma yo'q</p> :
-          companies.map(c => (
-            <div key={c.id} className="surface rounded-2xl p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center overflow-hidden shrink-0">
-                    {c.logoUrl ? <img src={c.logoUrl} alt="" className="w-full h-full object-cover" /> : <Building2 className="w-5 h-5 text-primary" />}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-bold truncate">{c.name}</p>
-                    <p className="text-[11px] font-mono text-muted-foreground">{c.branchId} · {c.status}</p>
-                    <p className="text-[11px] text-muted-foreground truncate">Egasi: {c.owner?.name || "—"} · {c.owner?.phone || c.phone}</p>
-                  </div>
-                </div>
-                <span className="text-[11px] text-muted-foreground shrink-0 text-right">{c.userCount} user<br/>{c.objectCount} obyekt</span>
-              </div>
-              <div className="flex gap-2 mt-3">
-                <button onClick={() => toggleStatus(c)} className="flex-1 text-xs font-semibold py-2 rounded-lg border border-border/60 hover:bg-muted">
-                  {c.status === "SUSPENDED" ? "Faollashtirish" : "To'xtatish"}
-                </button>
-                <button onClick={() => deleteCompany(c)} className="flex-1 text-xs font-semibold py-2 rounded-lg border border-red-500/30 text-red-600 hover:bg-red-500/10 flex items-center justify-center gap-1">
-                  <Trash2 className="w-3.5 h-3.5" /> O'chirish
-                </button>
-              </div>
-            </div>
-          ))
-        ) : tab === "messages" ? (
-          <div className="flex flex-col md:flex-row gap-0 md:gap-2 md:h-[60vh] md:min-h-[320px]">
-            {/* Mobile: breadcrumb/back nav */}
-            {devMobileStep !== 'firms' && (
-              <div className="md:hidden flex items-center gap-2 mb-2 pb-2 border-b border-border/40">
-                <button onClick={() => {
-                  if (devMobileStep === 'chat') { setDevMobileStep('contacts'); }
-                  else { setDevMobileStep('firms'); setSelDevFirm(null); setSelDevContact(null); setDevDMMessages([]); }
-                }} className="flex items-center gap-1 text-xs text-primary font-semibold py-1.5 px-2 rounded-lg hover:bg-primary/10">
-                  <ChevronLeft className="w-4 h-4"/> Orqaga
-                </button>
-                <span className="text-xs font-semibold text-foreground truncate">
-                  {devMobileStep === 'contacts' ? selDevFirm?.name : selDevContact?.name}
-                </span>
-              </div>
-            )}
-
-            {/* Column 1: Firmalar */}
-            <div className={`${devMobileStep === 'firms' ? 'flex' : 'hidden'} md:flex flex-col gap-1 overflow-y-auto w-full md:w-36 md:shrink-0`}>
-              <p className="text-[10px] font-semibold text-muted-foreground px-1 pb-1">Firmalar</p>
-              {companies.length === 0 && <p className="text-xs text-muted-foreground text-center py-6">Firma yo'q</p>}
-              {companies.map((c: any) => {
-                const cid = c.id || c._id;
-                const isActive = selDevFirm && (selDevFirm.id || selDevFirm._id) === cid;
-                return (
-                  <button key={cid} onClick={() => {
-                    setSelDevFirm(c); setSelDevContact(null); setDevDMMessages([]);
-                    setDevMobileStep('contacts');
-                  }} className={`w-full text-left px-3 py-2.5 md:py-2 rounded-xl text-xs font-semibold border border-border/40 flex items-center justify-between ${isActive?'bg-primary text-white':'surface'}`}>
-                    <div className="min-w-0">
-                      <p className="truncate">{c.name}</p>
-                      <p className={`text-[10px] font-normal truncate ${isActive?'text-white/70':'text-muted-foreground'}`}>{c.branchId || ''}</p>
-                    </div>
-                    <ChevronLeft className="w-3.5 h-3.5 rotate-180 opacity-40 md:hidden flex-shrink-0 ml-1"/>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Column 2: Rahbarlar / O'rinbosarlar */}
-            <div className={`${devMobileStep === 'contacts' ? 'flex' : 'hidden'} md:flex flex-col gap-1 overflow-y-auto w-full md:w-36 md:shrink-0`}>
-              <p className="text-[10px] font-semibold text-muted-foreground px-1 pb-1">Rahbarlar</p>
-              {!selDevFirm ? (
-                <p className="text-xs text-muted-foreground text-center py-6">Firma tanlang</p>
-              ) : (() => {
-                const cid = selDevFirm.id || selDevFirm._id;
-                const devContacts = users.filter((u: any) => (u.companyId === cid) && (u.role === 'direktor' || u.role === 'orinbosar'));
-                if (devContacts.length === 0) return <p className="text-xs text-muted-foreground text-center py-6">Rahbar yo'q</p>;
-                return devContacts.map((u: any) => {
-                  const isActive = selDevContact?.id === u.id;
-                  return (
-                    <button key={u.id} onClick={() => {
-                      setSelDevContact(u); loadDevDM(u.id);
-                      setDevMobileStep('chat');
-                    }} className={`w-full text-left px-3 py-2.5 md:py-2 rounded-xl text-xs font-semibold border border-border/40 flex items-center justify-between ${isActive?'bg-primary text-white':'surface'}`}>
-                      <div className="min-w-0">
-                        <p className="truncate">{u.name}</p>
-                        <p className={`text-[10px] font-normal truncate ${isActive?'text-white/70':'text-muted-foreground'}`}>{ROLE_LABELS[u.role as Role] || u.role}</p>
-                      </div>
-                      <ChevronLeft className="w-3.5 h-3.5 rotate-180 opacity-40 md:hidden flex-shrink-0 ml-1"/>
-                    </button>
-                  );
-                });
-              })()}
-            </div>
-
-            {/* Column 3: DM chat */}
-            <div className={`${devMobileStep === 'chat' ? 'flex' : 'hidden'} md:flex flex-1 flex-col surface rounded-2xl overflow-hidden min-h-[60vh] md:min-h-0`}>
-              {!selDevContact ? (
-                <div className="flex-1 flex items-center justify-center text-xs text-muted-foreground">Rahbar tanlang</div>
-              ) : (
-                <>
-                  <div className="px-3 py-2 border-b border-border/40 flex items-center gap-2 flex-shrink-0">
-                    <div className="w-7 h-7 rounded-full bg-primary/15 flex items-center justify-center text-[12px] font-bold text-primary flex-shrink-0">
-                      {selDevContact.name?.[0]?.toUpperCase() || '?'}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-xs font-semibold leading-none truncate">{selDevContact.name}</p>
-                      <p className="text-[10px] text-muted-foreground">{ROLE_LABELS[selDevContact.role as Role] || selDevContact.role}</p>
-                    </div>
-                  </div>
-                  <div className="flex-1 overflow-y-auto p-3 space-y-2">
-                    {devDMMessages.length === 0 && <p className="text-xs text-muted-foreground text-center py-8">Xabarlar yo'q</p>}
-                    {devDMMessages.map(m => {
-                      const mine = m.fromUserId === currentUser.id;
-                      return (
-                        <div key={m.id} className={`flex ${mine?'justify-end':'justify-start'}`}>
-                          <div className={`max-w-[80%] px-3 py-2 rounded-2xl text-xs ${mine?'bg-primary text-white':'bg-muted'}`}>
-                            <p className="break-words">{m.text}</p>
-                            <p className={`text-[9px] mt-0.5 ${mine?'text-white/60':'text-muted-foreground'}`}>{new Date(m.timestamp).toLocaleTimeString('uz-UZ',{hour:'2-digit',minute:'2-digit'})}</p>
-                          </div>
-                        </div>
-                      );
-                    })}
-                    <div ref={devMsgBottomRef}/>
-                  </div>
-                  <div className="flex items-center gap-2 px-3 py-2.5 border-t border-border/40 flex-shrink-0">
-                    <input value={devMsgText} onChange={e => setDevMsgText(e.target.value)}
-                      onKeyDown={e => e.key==='Enter'&&!e.shiftKey&&sendDevMsg()}
-                      placeholder="Xabar yozing..."
-                      className="flex-1 text-sm md:text-xs bg-muted/50 rounded-xl px-3 py-2.5 md:py-2 focus:outline-none focus:ring-2 focus:ring-primary/30"/>
-                    <button onClick={sendDevMsg} disabled={devMsgLoading||!devMsgText.trim()}
-                      className="w-10 h-10 md:w-8 md:h-8 rounded-xl bg-primary text-white flex items-center justify-center disabled:opacity-40 flex-shrink-0">
-                      {devMsgLoading ? <Loader2 className="w-4 h-4 animate-spin"/> : <Send className="w-4 h-4"/>}
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        ) : (
-          users.length === 0 ? <p className="text-center text-sm text-muted-foreground py-12">Foydalanuvchi yo'q</p> :
-          users.map(u => (
-            <div key={u.id} className="surface rounded-2xl p-3.5 flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-sm font-semibold truncate">{u.name}</p>
-                <p className="text-[11px] text-muted-foreground font-mono">{u.phone}</p>
-                <p className={`text-[11px] truncate ${u.companyId ? "text-muted-foreground" : "text-red-500 font-semibold"}`}>{u.companyId ? companyName(u.companyId) : "⚠️ firmasiz (eski bug qurboni)"}{u.isOwner ? " · egasi" : ""}</p>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                {u.role !== "dasturchi" && (
-                  <select value={u.companyId || ""} onChange={e => assignCompany(u, e.target.value)}
-                    title="Firmaga biriktirish"
-                    className={`text-xs border rounded-lg px-2 py-1.5 bg-transparent max-w-[110px] ${u.companyId ? "border-border/60" : "border-red-500/50 text-red-600"}`}>
-                    <option value="">— firmasiz —</option>
-                    {companies.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
-                )}
-                <select value={u.role} onChange={e => changeRole(u, e.target.value)} disabled={u.role === "dasturchi"}
-                  className="text-xs border border-border/60 rounded-lg px-2 py-1.5 bg-transparent">
-                  {["direktor","orinbosar","prorab","brigadir","ishchi"].map(r => <option key={r} value={r}>{ROLE_LABELS[r as Role]}</option>)}
-                  {u.role === "dasturchi" && <option value="dasturchi">Dasturchi</option>}
-                </select>
-                <button onClick={() => deleteUser(u)} disabled={u.id === currentUser.id}
-                  className="w-9 h-9 rounded-lg border border-red-500/30 text-red-600 hover:bg-red-500/10 flex items-center justify-center disabled:opacity-30">
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-    </div>
   );
 }
 
@@ -4895,11 +3617,17 @@ export default function App() {
 
   if (!liveUser) {
     return authView === "register"
-      ? <RegisterWizard onBack={()=>setAuthView("login")} onDone={(u,company)=>{setCurrentUser(u);setPage("dashboard");setAuthView("login");applyCompany(company);}}/>
+      ? <Suspense fallback={<div className="min-h-screen bg-background flex items-center justify-center"><Loader2 className="w-8 h-8 text-primary animate-spin"/></div>}>
+          <RegisterWizard onBack={()=>setAuthView("login")} onDone={(u,company)=>{setCurrentUser(u);setPage("dashboard");setAuthView("login");applyCompany(company);}}/>
+        </Suspense>
       : <LoginScreen onLogin={(u,company)=>{setCurrentUser(u);setPage("dashboard");applyCompany(company);}} onRegister={()=>setAuthView("register")}/>;
   }
   // Dasturchi (super-admin) — alohida panel: barcha firmalar va foydalanuvchilar
-  if (liveUser.role === "dasturchi") return <DeveloperPanel currentUser={liveUser} onLogout={()=>{setCurrentUser(null);setAuthView("login");}}/>;
+  if (liveUser.role === "dasturchi") return (
+    <Suspense fallback={<div className="min-h-screen bg-background flex items-center justify-center"><Loader2 className="w-8 h-8 text-primary animate-spin"/></div>}>
+      <DeveloperPanel currentUser={liveUser} onLogout={()=>{setCurrentUser(null);setAuthView("login");}}/>
+    </Suspense>
+  );
   if (initialLoading) return <div className="min-h-screen bg-background flex items-center justify-center"><Loader2 className="w-8 h-8 text-primary animate-spin"/></div>;
 
   const admin = isAdmin(liveUser.role);
@@ -5221,6 +3949,8 @@ export default function App() {
           <motion.button key={n.key} onClick={() => { setPage(n.key); setSelProject(null); }}
             whileTap={{ scale: 0.86 }}
             transition={{ type: "spring", stiffness: 500, damping: 28 }}
+            aria-label={n.label}
+            aria-current={page===n.key ? "page" : undefined}
             className={`flex flex-col items-center justify-center gap-1 w-14 h-14 relative z-10 ${page===n.key?"text-white":"text-white/55"}`}
           >
             {page === n.key && (
@@ -5244,7 +3974,9 @@ export default function App() {
 
       {/* Qo'ng'iroq (WebRTC) */}
       {activeCall && (
-        <CallOverlay currentUser={liveUser} users={users} call={activeCall} onClose={() => setActiveCall(null)}/>
+        <Suspense fallback={null}>
+          <CallOverlay currentUser={liveUser} users={users} call={activeCall} onClose={() => setActiveCall(null)}/>
+        </Suspense>
       )}
 
       {/* AI Yordamchi — faqat direktor va o'rinbosar; ochiq chat ustiga tushib qolmasin */}

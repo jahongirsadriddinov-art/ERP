@@ -22,9 +22,9 @@
   --secondary-foreground: #1B3A6B;
   --muted: #EAEEF5;
   --muted-foreground: #5C6B84;
-  --accent: #D9460F;
+  --accent: #D2440F;
   --accent-foreground: #FFFFFF;
-  --destructive: #C0392B;
+  --destructive: #B33528;
   --destructive-foreground: #FFFFFF;
 
   --border: rgba(15, 26, 46, 0.10);
@@ -37,7 +37,7 @@
   --font-weight-medium: 550;
   --font-weight-normal: 400;
 
-  --chart-1: #D9460F;
+  --chart-1: #D2440F;
   --chart-2: #1B7A4B;
   --chart-3: #1B3A6B;
   --chart-4: #F0A500;
@@ -48,12 +48,12 @@
 
   --sidebar: #1B3A6B;
   --sidebar-foreground: #FFFFFF;
-  --sidebar-primary: #D9460F;
+  --sidebar-primary: #D2440F;
   --sidebar-primary-foreground: #FFFFFF;
   --sidebar-accent: #243F6E;
   --sidebar-accent-foreground: #FFFFFF;
   --sidebar-border: rgba(255, 255, 255, 0.1);
-  --sidebar-ring: #D9460F;
+  --sidebar-ring: #D2440F;
 
   /* Yumshoq elevation (dark-aware) */
   --shadow-color: 15, 26, 46;

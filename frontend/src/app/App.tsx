@@ -980,24 +980,26 @@ function MyTransfersPanel({ currentUser, transfers, allUsers, projects, onConfir
   const shown = tab === "inbox" ? inbox : sent;
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between px-4 py-2.5 bg-card border-b border-border flex-shrink-0">
-        <h2 className="text-sm md:text-xs font-bold uppercase tracking-wider font-['Roboto_Slab',serif]">Materiallar</h2>
-        <button onClick={onSend} className="flex items-center gap-1 text-sm md:text-xs bg-primary text-white px-2 py-1 rounded hover:bg-primary/90 font-semibold">
-          <Send className="w-2.5 h-2.5"/>Yuborish
+    <div className="flex flex-col h-full p-3 gap-3 overflow-hidden">
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28 }}
+        className="surface flex items-center justify-between px-4 py-3 flex-shrink-0">
+        <h2 className="text-sm font-bold uppercase tracking-wider font-['Roboto_Slab',serif]">Materiallar</h2>
+        <button onClick={onSend} className="btn btn-primary flex items-center gap-1.5 text-xs px-3.5 py-2 rounded-full">
+          <Send className="w-3.5 h-3.5"/>Yuborish
         </button>
-      </div>
-      <div className="flex border-b border-border bg-card flex-shrink-0">
-        <button onClick={() => setTab("inbox")} className={`flex-1 flex items-center justify-center gap-1.5 text-sm md:text-xs py-2 border-b-2 font-medium transition-all ${tab==="inbox"?"border-primary text-primary":"border-transparent text-muted-foreground"}`}>
+      </motion.div>
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28, delay: 0.05 }}
+        className="nav-pill-desktop flex p-1 rounded-full flex-shrink-0 w-fit">
+        <button onClick={() => setTab("inbox")} className={`relative flex items-center gap-1.5 text-xs px-4 py-2 rounded-full font-semibold liquid-transition ${tab==="inbox"?"bg-primary/15 text-primary":"text-muted-foreground hover:text-foreground"}`}>
           Kirgan
-          {pendingCount > 0 && <span className="text-[9px] bg-accent text-white px-1.5 py-0.5 rounded-full font-bold">{pendingCount}</span>}
+          {pendingCount > 0 && <span className="text-[9px] bg-accent text-white px-1.5 py-0.5 rounded-full font-bold badge-pulse">{pendingCount}</span>}
         </button>
-        <button onClick={() => setTab("sent")} className={`flex-1 flex items-center justify-center gap-1.5 text-sm md:text-xs py-2 border-b-2 font-medium transition-all ${tab==="sent"?"border-primary text-primary":"border-transparent text-muted-foreground"}`}>
+        <button onClick={() => setTab("sent")} className={`relative flex items-center gap-1.5 text-xs px-4 py-2 rounded-full font-semibold liquid-transition ${tab==="sent"?"bg-primary/15 text-primary":"text-muted-foreground hover:text-foreground"}`}>
           Yuborilgan
           <span className="text-[9px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full font-semibold">{sent.length}</span>
         </button>
-      </div>
-      <div className="flex-1 overflow-y-auto p-3 space-y-2 scrollbar-hide">
+      </motion.div>
+      <div className="flex-1 overflow-y-auto space-y-2 scrollbar-hide">
         {shown.length === 0 ? (
           <div className="text-center py-10 text-muted-foreground"><Package className="w-8 h-8 mx-auto mb-2 opacity-30"/><p className="text-sm md:text-xs">Hech narsa yo'q</p></div>
         ) : shown.map(t => (
@@ -1090,11 +1092,12 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
   return (
     <>
     {/* Desktop: 4-column grid */}
-    <div className="h-full hidden md:grid md:grid-cols-2 xl:grid-cols-4 md:divide-x divide-border overflow-hidden bg-background">
+    <div className="h-full hidden md:grid md:grid-cols-2 xl:grid-cols-4 gap-3 overflow-hidden bg-background p-3">
       {/* Col 1 */}
-      <div className="flex flex-col overflow-hidden">
-        <div className="flex items-center gap-2 px-4 py-2.5 bg-card border-b border-border flex-shrink-0">
-          <div className="w-6 h-6 bg-primary/10 rounded flex items-center justify-center"><Building2 className="w-3.5 h-3.5 text-primary"/></div>
+      <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28 }}
+        className="surface flex flex-col overflow-hidden">
+        <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border flex-shrink-0">
+          <div className="icon-chip w-6 h-6"><Building2 className="w-3.5 h-3.5"/></div>
           <h2 className="text-sm md:text-xs font-bold uppercase tracking-wider font-['Roboto_Slab',serif]">Rahbariyat</h2>
         </div>
         <div className="flex-1 overflow-y-auto p-3 scrollbar-hide">
@@ -1125,12 +1128,13 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
             ))}
           </div>
         </div>
-      </div>
+      </motion.div>
 
       {/* Col 2 */}
-      <div className="flex flex-col overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-2.5 bg-card border-b border-border flex-shrink-0">
-          <div className="flex items-center gap-2"><div className="w-6 h-6 bg-primary/10 rounded flex items-center justify-center"><Users className="w-3.5 h-3.5 text-primary"/></div><h2 className="text-sm md:text-xs font-bold uppercase tracking-wider font-['Roboto_Slab',serif]">Bosh Xodimlar</h2></div>
+      <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28, delay: 0.05 }}
+        className="surface flex flex-col overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-2.5 border-b border-border flex-shrink-0">
+          <div className="flex items-center gap-2"><div className="icon-chip w-6 h-6"><Users className="w-3.5 h-3.5"/></div><h2 className="text-sm md:text-xs font-bold uppercase tracking-wider font-['Roboto_Slab',serif]">Bosh Xodimlar</h2></div>
           <button onClick={() => setShowAddUser(true)} className="text-sm md:text-xs bg-primary/10 text-primary px-2 py-1 rounded hover:bg-primary/20 font-semibold flex items-center gap-1"><UserPlus className="w-2.5 h-2.5"/>Qo'shish</button>
         </div>
         <div className="flex-1 overflow-y-auto scrollbar-hide divide-y divide-border/50">
@@ -1146,12 +1150,13 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
             </div>
           ))}
         </div>
-      </div>
+      </motion.div>
 
       {/* Col 3 */}
-      <div className="flex flex-col overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-2.5 bg-card border-b border-border flex-shrink-0">
-          <div className="flex items-center gap-2"><div className="w-6 h-6 bg-primary/10 rounded flex items-center justify-center"><HardHat className="w-3.5 h-3.5 text-primary"/></div><h2 className="text-sm md:text-xs font-bold uppercase tracking-wider font-['Roboto_Slab',serif]">Brigadalar</h2></div>
+      <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28, delay: 0.10 }}
+        className="surface flex flex-col overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-2.5 border-b border-border flex-shrink-0">
+          <div className="flex items-center gap-2"><div className="icon-chip w-6 h-6"><HardHat className="w-3.5 h-3.5"/></div><h2 className="text-sm md:text-xs font-bold uppercase tracking-wider font-['Roboto_Slab',serif]">Brigadalar</h2></div>
           <button onClick={() => setShowSend(true)} className="flex items-center gap-1 text-sm md:text-xs bg-primary text-white px-2 py-1 rounded hover:bg-primary/90 font-semibold"><Send className="w-2.5 h-2.5"/>Yuborish</button>
         </div>
         <div className="flex-1 overflow-y-auto p-3 scrollbar-hide">
@@ -1197,18 +1202,19 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
             ))}
           </div>
         </div>
-      </div>
+      </motion.div>
 
       {/* Col 4 */}
-      <div className="flex flex-col overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-2.5 bg-card border-b border-border flex-shrink-0">
-          <div className="flex items-center gap-2"><div className="w-6 h-6 bg-accent/15 rounded flex items-center justify-center"><Package className="w-3.5 h-3.5 text-accent"/></div><h2 className="text-sm md:text-xs font-bold uppercase tracking-wider font-['Roboto_Slab',serif]">Faol Obyektlar</h2></div>
+      <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28, delay: 0.15 }}
+        className="surface flex flex-col overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-2.5 border-b border-border flex-shrink-0">
+          <div className="flex items-center gap-2"><div className="icon-chip icon-chip-accent w-6 h-6"><Package className="w-3.5 h-3.5"/></div><h2 className="text-sm md:text-xs font-bold uppercase tracking-wider font-['Roboto_Slab',serif]">Faol Obyektlar</h2></div>
           <button onClick={()=>setShowAddObject(true)} className="text-sm md:text-xs bg-accent/10 text-accent px-2 py-1 rounded hover:bg-accent/20 font-semibold flex items-center gap-1"><Plus className="w-2.5 h-2.5"/>Qo'shish</button>
         </div>
         <div className="flex-1 overflow-y-auto p-3 scrollbar-hide">
           <div className="grid grid-cols-3 gap-1.5 mb-3">
             {[["active","Faol","text-green-600"],["paused","To'x.","text-amber-500"],["completed","Tugagan","text-blue-500"]].map(([s,l,c])=>(
-              <div key={s} className="bg-card border border-border rounded p-2 text-center">
+              <div key={s} className="bg-muted/40 rounded-lg p-2 text-center">
                 <p className={`text-sm font-bold font-mono ${c}`}>{projects.filter(p=>p.status===s).length}</p>
                 <p className="text-[9px] text-muted-foreground">{l}</p>
               </div>
@@ -1218,7 +1224,7 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
             const pend = transfers.filter(t=>t.projectId===p.id&&t.status==="pending").length;
             const foreman = users.find(u=>u.id===p.foremanId);
             return (
-              <div key={p.id} onClick={()=>onSelectProject(p)} className="border border-border rounded-md p-3 cursor-pointer hover:border-primary/40 hover:shadow-sm transition-all bg-card group mb-2">
+              <div key={p.id} onClick={()=>onSelectProject(p)} className="surface rounded-xl p-3 cursor-pointer hover:border-primary/40 liquid-transition group mb-2">
                 <div className="flex items-start justify-between gap-1">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 mb-1"><span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${p.status==="active"?"bg-green-500":p.status==="paused"?"bg-amber-400":"bg-blue-400"}`}/><p className="text-sm md:text-xs font-semibold truncate">{p.name}</p></div>
@@ -1235,7 +1241,7 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
             );
           })}
         </div>
-      </div>
+      </motion.div>
     </div>
 
     {/* Mobile: Accordion */}
@@ -1378,7 +1384,7 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
                       const pend = transfers.filter(t=>t.projectId===p.id&&t.status==="pending").length;
                       const foreman = users.find(u=>u.id===p.foremanId);
                       return (
-                        <div key={p.id} onClick={()=>onSelectProject(p)} className="border border-border rounded-xl p-4 cursor-pointer hover:border-primary/50 hover:shadow-md transition-all bg-card mb-3 active:scale-98">
+                        <div key={p.id} onClick={()=>onSelectProject(p)} className="surface rounded-xl p-4 cursor-pointer hover:border-primary/50 liquid-transition mb-3 active:scale-98">
                           <div className="flex items-start justify-between gap-2">
                             <div className="flex-1">
                               <div className="flex items-center gap-2 mb-1"><span className={`w-2 h-2 rounded-full flex-shrink-0 ${p.status==="active"?"bg-green-500":p.status==="paused"?"bg-amber-400":"bg-blue-400"}`}/><p className="text-sm font-semibold">{p.name}</p></div>
@@ -1558,7 +1564,7 @@ function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSe
   
   return (
     <div className="flex flex-col flex-1 min-h-0 bg-background/50">
-      <div className="glass-card border-b border-border px-4 py-3 flex items-center gap-3 flex-shrink-0 z-10 sticky top-0">
+      <div className="glass border-b border-border px-4 py-3 flex items-center gap-3 flex-shrink-0 z-10 sticky top-0">
         <button onClick={onBack} className="flex items-center gap-1.5 text-sm md:text-xs text-muted-foreground hover:text-foreground transition-colors"><ArrowLeft className="w-4 h-4"/>Orqaga</button>
         <div className="w-px h-4 bg-border"/>
         <Building2 className="w-4 h-4 text-primary flex-shrink-0"/>
@@ -1576,7 +1582,7 @@ function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSe
                     method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: newStatus })
                   });
                   if (res.ok) { onUpdateStatus(project.id, newStatus); }
-                } catch(err) { alert("Xatolik"); }
+                } catch(err) { toast.error("Xatolik"); }
               }}
             >
               <option value="active" className="text-green-600">Faol</option>
@@ -1621,9 +1627,13 @@ function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSe
           <button onClick={()=>{setInitialTransferData(undefined);setShowSend(true);}} className="flex items-center gap-1 text-sm md:text-xs bg-primary text-white px-2.5 py-1.5 rounded hover:bg-primary/90 font-medium liquid-transition shadow-sm"><Send className="w-3.5 h-3.5"/>Yuborish</button>
         </div>
       </div>
-      <div className="glass-card border-b border-border px-4 flex flex-shrink-0 z-10 sticky top-[53px]">
+      <div className="glass border-b border-border px-3 py-2 flex gap-1 flex-shrink-0 z-10 sticky top-[53px] overflow-x-auto scrollbar-hide">
         {([["required","Talab",project.requiredMaterials.length], ...(project.smeta ? [["smeta","Smeta",project.smeta.resources.length] as [string,string,number]] : []), ["pending","Kutilmoqda",pendT.length],["confirmed","Tasdiqlangan",confT.length]] as [string,string,number][]).map(([k,l,c])=>(
-          <button key={k} onClick={()=>setTab(k as any)} className={`flex items-center gap-1.5 text-sm md:text-xs py-2.5 px-3 border-b-2 font-medium liquid-transition ${tab===k?"border-primary text-primary":"border-transparent text-muted-foreground hover:text-foreground"}`}>
+          <button key={k} onClick={()=>setTab(k as any)} className={`relative flex items-center gap-1.5 text-sm md:text-xs py-2 px-3 rounded-full font-medium liquid-transition whitespace-nowrap ${tab===k?"text-primary":"text-muted-foreground hover:text-foreground"}`}>
+            {tab===k && (
+              <motion.div layoutId="objectDetailTabPill" className="absolute inset-0 rounded-full bg-primary/10 -z-10"
+                transition={{ type: "spring", stiffness: 480, damping: 34 }}/>
+            )}
             {l}<span className={`text-[9px] px-1.5 py-0.5 rounded-full font-semibold ${tab===k?"bg-primary text-white":"bg-muted text-muted-foreground"}`}>{c}</span>
           </button>
         ))}
@@ -1770,33 +1780,33 @@ function FinancePage({ currentUser, users, projects, expenses, onAddExpense, onC
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full p-3 gap-3 overflow-hidden">
       {/* Header */}
-      <div className="bg-card border-b border-border px-4 py-3 flex items-center justify-between flex-shrink-0">
+      <div className="surface px-4 py-3 flex items-center justify-between flex-shrink-0">
         <div>
           <h2 className="text-sm font-bold font-['Roboto_Slab',serif]">Moliya — Chiqimlar</h2>
           <p className="text-sm md:text-xs text-muted-foreground">Jami tasdiqlangan: <span className="font-semibold text-accent">{fmt(totalExpense)}</span></p>
         </div>
         <div className="flex items-center gap-1.5">
-          {pendingMe>0&&<span className="text-sm md:text-xs bg-amber-500/15 text-amber-600 dark:text-amber-300 px-2 py-1 rounded font-semibold flex items-center gap-1"><Clock className="w-3 h-3"/>{pendingMe} tasdiqlash</span>}
-          <button onClick={()=>setShowAdd(true)} className="flex items-center gap-1 text-sm md:text-xs bg-accent text-white px-3 py-1.5 rounded hover:bg-accent/90 font-semibold"><Plus className="w-3 h-3"/>Chiqim</button>
+          {pendingMe>0&&<span className="text-sm md:text-xs bg-amber-500/15 text-amber-600 dark:text-amber-300 px-2 py-1 rounded-full font-semibold flex items-center gap-1 badge-pulse"><Clock className="w-3 h-3"/>{pendingMe} tasdiqlash</span>}
+          <button onClick={()=>setShowAdd(true)} className="btn btn-accent flex items-center gap-1 text-sm md:text-xs px-3 py-1.5 rounded-full"><Plus className="w-3 h-3"/>Chiqim</button>
         </div>
       </div>
 
       {/* Filters */}
-      <div className="bg-card border-b border-border px-4 py-2 flex gap-2 flex-wrap flex-shrink-0">
-        <select className="text-sm md:text-xs border border-border rounded px-2 py-1 bg-input-background focus:outline-none" value={projFilter} onChange={e=>setProjFilter(e.target.value)}>
+      <div className="surface px-4 py-2.5 flex gap-2 flex-wrap flex-shrink-0">
+        <select className="text-sm md:text-xs border border-border rounded-full px-3 py-1.5 bg-input-background focus:outline-none" value={projFilter} onChange={e=>setProjFilter(e.target.value)}>
           <option value="all">Barcha obyektlar</option>
           {projects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
-        <div className="flex gap-1 flex-wrap">
-          <button onClick={()=>setFilter("all")} className={`text-sm md:text-xs px-2 py-1 rounded font-medium transition-colors ${filter==="all"?"bg-primary text-white":"bg-muted text-muted-foreground hover:bg-secondary"}`}>Barchasi</button>
-          {(Object.keys(EXP_LABELS) as ExpType[]).map(k=><button key={k} onClick={()=>setFilter(k)} className={`text-sm md:text-xs px-2 py-1 rounded font-medium transition-colors ${filter===k?"bg-primary text-white":"bg-muted text-muted-foreground hover:bg-secondary"}`}>{EXP_LABELS[k]}</button>)}
+        <div className="flex gap-1.5 flex-wrap">
+          <button onClick={()=>setFilter("all")} className={`text-sm md:text-xs px-3 py-1.5 rounded-full font-medium liquid-transition ${filter==="all"?"bg-primary text-white":"bg-muted text-muted-foreground hover:bg-secondary"}`}>Barchasi</button>
+          {(Object.keys(EXP_LABELS) as ExpType[]).map(k=><button key={k} onClick={()=>setFilter(k)} className={`text-sm md:text-xs px-3 py-1.5 rounded-full font-medium liquid-transition ${filter===k?"bg-primary text-white":"bg-muted text-muted-foreground hover:bg-secondary"}`}>{EXP_LABELS[k]}</button>)}
         </div>
       </div>
 
       {/* List */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-2.5 scrollbar-hide">
+      <div className="flex-1 overflow-y-auto space-y-2.5 scrollbar-hide">
         {filteredExpenses.length===0
           ? <div className="text-center py-10 text-muted-foreground"><Wallet className="w-10 h-10 mx-auto mb-2 opacity-30"/><p className="text-sm md:text-xs">Chiqimlar topilmadi</p></div>
           : filteredExpenses.map(e=>{
@@ -1805,7 +1815,7 @@ function FinancePage({ currentUser, users, projects, expenses, onAddExpense, onC
               const creator=users.find(u=>u.id===e.createdById);
               const canConfirm=e.toUserId===currentUser.id&&e.status==="pending";
               return (
-                <div key={e.id} className={`border rounded-md p-3 text-sm md:text-xs ${e.status==="confirmed"?"border-green-500/25 bg-green-500/8":"border-amber-500/25 bg-amber-500/8"}`}>
+                <div key={e.id} className="surface rounded-2xl p-3 text-sm md:text-xs" style={{ borderLeft: `4px solid ${e.status==="confirmed"?"#22c55e":"#f59e0b"}` }}>
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 mb-1">
@@ -4383,13 +4393,13 @@ function DeveloperPanel({ currentUser, onLogout }: { currentUser: AppUser; onLog
         </button>
       </header>
 
-      <div className="px-4 pt-3 flex gap-2 flex-wrap">
-        <button onClick={() => setTab("subscriptions")} className={`flex-1 py-2.5 rounded-xl text-[13px] font-semibold ${tab === "subscriptions" ? "bg-primary text-white" : "surface"}`}>
-          To'lovlar {subs.filter(s => s.status === "pending").length > 0 && <span className="ml-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{subs.filter(s => s.status === "pending").length}</span>}
+      <div className="mx-4 mt-3 nav-pill-desktop flex gap-1 flex-wrap p-1 rounded-full">
+        <button onClick={() => setTab("subscriptions")} className={`relative flex-1 py-2 rounded-full text-[13px] font-semibold liquid-transition ${tab === "subscriptions" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
+          To'lovlar {subs.filter(s => s.status === "pending").length > 0 && <span className="ml-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full badge-pulse">{subs.filter(s => s.status === "pending").length}</span>}
         </button>
-        <button onClick={() => setTab("firms")} className={`flex-1 py-2.5 rounded-xl text-[13px] font-semibold ${tab === "firms" ? "bg-primary text-white" : "surface"}`}>Firmalar ({companies.length})</button>
-        <button onClick={() => setTab("users")} className={`flex-1 py-2.5 rounded-xl text-[13px] font-semibold ${tab === "users" ? "bg-primary text-white" : "surface"}`}>Foydalanuvchilar</button>
-        <button onClick={() => setTab("messages")} className={`flex-1 py-2.5 rounded-xl text-[13px] font-semibold ${tab === "messages" ? "bg-primary text-white" : "surface"}`}>
+        <button onClick={() => setTab("firms")} className={`flex-1 py-2 rounded-full text-[13px] font-semibold liquid-transition ${tab === "firms" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>Firmalar ({companies.length})</button>
+        <button onClick={() => setTab("users")} className={`flex-1 py-2 rounded-full text-[13px] font-semibold liquid-transition ${tab === "users" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>Foydalanuvchilar</button>
+        <button onClick={() => setTab("messages")} className={`flex-1 py-2 rounded-full text-[13px] font-semibold liquid-transition ${tab === "messages" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
           💬 Xabarlar
         </button>
       </div>

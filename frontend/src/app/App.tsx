@@ -3690,47 +3690,70 @@ function RegisterWizard({ onBack, onDone }: { onBack: () => void; onDone: (u: an
                 <h2 className="text-xl font-bold mb-1">Tarif tanlang</h2>
                 <p className="text-sm text-muted-foreground">Firma uchun obuna muddatini tanlang</p>
               </div>
-              {([
-                { key: '1month',  label: '1 oylik',  price: 700_000,   days: 30,  badge: 'BEPUL (1-oy sinov)' },
-                { key: '3month',  label: '3 oylik',  price: 2_000_000, days: 90,  badge: '100 000 so\'m tejaysiz' },
-                { key: '6month',  label: '6 oylik',  price: 4_000_000, days: 180, badge: '200 000 so\'m tejaysiz' },
-                { key: '12month', label: '12 oylik', price: 8_000_000, days: 365, badge: '400 000 so\'m tejaysiz' },
-              ] as const).map(plan => (
-                <button key={plan.key} type="button"
-                  onClick={() => setSelectedPlan(plan.key)}
-                  className={`w-full rounded-2xl border-2 p-4 text-left transition-all duration-200 active:scale-[0.98]
-                    ${selectedPlan===plan.key
-                      ? 'border-primary bg-primary/8 shadow-md shadow-primary/20'
-                      : 'border-border/50 bg-white/40 dark:bg-black/20 hover:border-primary/40'}`}>
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-base font-bold">{plan.label}</span>
-                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${plan.key === '1month' ? 'bg-green-500/15 text-green-600 dark:text-green-400' : 'bg-accent/15 text-accent'}`}>{plan.badge}</span>
-                      </div>
-                      <p className="text-[11px] text-muted-foreground">{plan.days} kun</p>
-                    </div>
-                    <div className="text-right">
-                      {plan.key === '1month' ? (
-                        <div>
-                          <p className="text-lg font-bold text-green-600 dark:text-green-400">BEPUL</p>
-                          <p className="text-xs line-through text-muted-foreground">{plan.price.toLocaleString('uz-UZ')} so'm</p>
-                        </div>
-                      ) : (
-                        <>
-                          <p className="text-lg font-bold text-primary">{plan.price.toLocaleString('uz-UZ')}</p>
-                          <p className="text-[11px] text-muted-foreground">so'm</p>
-                        </>
+
+              {/* Barcha tariflarga kiritilgan (bir marta, takrorlanmaydi) */}
+              <div className="rounded-2xl border border-border/50 bg-white/40 dark:bg-black/20 p-4">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Barcha tariflarga kiritilgan</p>
+                <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+                  {["Cheklanmagan xodimlar", "Cheklanmagan obyektlar", "AI yordamchi", "Real-time chat va qo'ng'iroq", "Smeta va hisobotlar", "Telegram bot integratsiyasi"].map(f => (
+                    <div key={f} className="flex items-center gap-1.5 text-xs text-foreground/80"><CheckCircle className="w-3.5 h-3.5 flex-shrink-0 text-green-500"/>{f}</div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                {([
+                  { key: '1month',  label: '1 oylik',  price: 700_000,   days: 30,  badge: 'BEPUL (1-oy sinov)', featured: false },
+                  { key: '3month',  label: '3 oylik',  price: 2_000_000, days: 90,  badge: '100 000 so\'m tejaysiz', featured: false },
+                  { key: '6month',  label: '6 oylik',  price: 4_000_000, days: 180, badge: '200 000 so\'m tejaysiz', featured: false },
+                  { key: '12month', label: '12 oylik', price: 8_000_000, days: 365, badge: '400 000 so\'m tejaysiz', featured: true },
+                ] as const).map((plan, i) => {
+                  const selected = selectedPlan === plan.key;
+                  return (
+                    <motion.button key={plan.key} type="button" onClick={() => setSelectedPlan(plan.key)}
+                      initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0, scale: selected ? 1.02 : 1 }}
+                      transition={{ delay: i * 0.05, type: "spring", stiffness: 320, damping: 26 }}
+                      whileTap={{ scale: 0.98 }}
+                      className={`relative w-full rounded-3xl p-4 text-left overflow-visible ${plan.featured ? "pt-7" : ""} ${
+                        plan.featured
+                          ? "shadow-xl shadow-primary/30 text-white"
+                          : `border-2 ${selected ? "border-primary bg-primary/8 shadow-md shadow-primary/20" : "border-border/50 bg-white/40 dark:bg-black/20 hover:border-primary/40"}`
+                      }`}
+                      style={plan.featured ? { background: "linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%)", border: selected ? "2px solid white" : "2px solid transparent" } : undefined}>
+                      {plan.featured && (
+                        <span className="absolute -top-3 left-1/2 -translate-x-1/2 text-[9px] font-bold bg-accent text-accent-foreground px-3 py-1 rounded-full tracking-wide shadow-md whitespace-nowrap">ENG TEJAMKOR</span>
                       )}
-                    </div>
-                  </div>
-                  {selectedPlan===plan.key && (
-                    <div className="mt-2 flex items-center gap-1.5 text-primary">
-                      <Check className="w-4 h-4"/><span className="text-xs font-semibold">Tanlangan</span>
-                    </div>
-                  )}
-                </button>
-              ))}
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className={`text-base font-bold ${plan.featured ? "text-white" : ""}`}>{plan.label}</p>
+                          <p className={`text-[11px] ${plan.featured ? "text-white/70" : "text-muted-foreground"}`}>{plan.days} kun</p>
+                        </div>
+                        <div className="text-right">
+                          {plan.key === '1month' ? (
+                            <div>
+                              <p className={`text-2xl font-bold ${plan.featured ? "text-white" : "text-green-600 dark:text-green-400"}`}>BEPUL</p>
+                              <p className={`text-xs line-through ${plan.featured ? "text-white/50" : "text-muted-foreground"}`}>{plan.price.toLocaleString('uz-UZ')} so'm</p>
+                            </div>
+                          ) : (
+                            <>
+                              <p className={`text-2xl font-bold ${plan.featured ? "text-white" : "text-primary"}`}>{plan.price.toLocaleString('uz-UZ')}</p>
+                              <p className={`text-[11px] ${plan.featured ? "text-white/70" : "text-muted-foreground"}`}>so'm</p>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      <span className={`inline-block mt-2 text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${
+                        plan.featured ? "bg-white/20 text-white" : plan.key === '1month' ? "bg-green-500/15 text-green-600 dark:text-green-400" : "bg-accent/15 text-accent"
+                      }`}>{plan.badge}</span>
+                      {selected && (
+                        <div className={`mt-2 flex items-center gap-1.5 ${plan.featured ? "text-white" : "text-primary"}`}>
+                          <Check className="w-4 h-4"/><span className="text-xs font-semibold">Tanlangan</span>
+                        </div>
+                      )}
+                    </motion.button>
+                  );
+                })}
+              </div>
               <p className="text-xs text-center text-muted-foreground pt-1">Birinchi oy bepul. Keyingi oydan to'lov boshlanadi.</p>
             </div>
           )}

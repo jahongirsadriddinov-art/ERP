@@ -6,6 +6,32 @@
       <meta charset="UTF-8" />
       <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
       <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+
+      <!-- Tema-chaqnashini (FOUC) oldini olish: React yuklanib, useEffect ishga
+           tushguncha (bu bir necha yuz ms yoki sekin tarmoqda undan ham ko'p
+           vaqt olishi mumkin) sahifa har doim standart yorug' fon bilan
+           chizilar edi — hatto foydalanuvchi qorong'i rejimni tanlagan bo'lsa
+           ham. Shu bloklovchi skript birinchi chizishdan OLDIN to'g'ri
+           rejimni <html>'ga qo'yadi (App.tsx'dagi asosiy useEffect keyin
+           to'liq rang-temani qo'llайdi — bu faqat yorug'/qorong'i sakrashini
+           yo'qotadi, chunki u eng sezilarli farq). -->
+      <script>
+        (function () {
+          try {
+            var mode = localStorage.getItem('erp_themeMode');
+            var isDark = mode === 'dark' || (mode !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+            if (isDark) {
+              document.documentElement.classList.add('dark');
+              document.documentElement.style.colorScheme = 'dark';
+            }
+          } catch (e) {}
+        })();
+      </script>
+      <style>
+        html { background: #F4F6FA; }
+        html.dark { background: #0B1220; }
+        body { background: inherit; }
+      </style>
       <meta name="apple-mobile-web-app-capable" content="yes" />
       <meta name="mobile-web-app-capable" content="yes" />
       <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -34,15 +60,35 @@
       <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" media="print" onload="this.media='all'" />
       <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" /></noscript>
 
-      <style>html, body { height: 100%; margin: 0; } #root { height: 100%; }</style>
+      <style>
+        html, body { height: 100%; margin: 0; }
+        #root { height: 100%; }
+        /* React hali mount bo'lmaguncha ko'rinadigan statik yuklanish belgisi —
+           `#root` ichida, shuning uchun `createRoot().render()` uni avtomatik
+           almashtiradi (qo'shimcha JS/tozalash kerak emas). */
+        #initial-loader {
+          height: 100%; display: flex; align-items: center; justify-content: center;
+        }
+        #initial-loader .spinner {
+          width: 34px; height: 34px; border-radius: 50%;
+          border: 3px solid color-mix(in srgb, #1B3A6B 18%, transparent);
+          border-top-color: #1B3A6B;
+          animation: initial-spin 0.7s linear infinite;
+        }
+        html.dark #initial-loader .spinner {
+          border-color: color-mix(in srgb, #3E6DB5 22%, transparent);
+          border-top-color: #3E6DB5;
+        }
+        @keyframes initial-spin { to { transform: rotate(360deg); } }
+      </style>
 
     </head>
 
     <body>
-      
-      <div id="root"></div>
+
+      <div id="root"><div id="initial-loader"><div class="spinner"></div></div></div>
       <script type="module" src="/src/main.tsx"></script>
-      
+
     </body>
   </html>
   

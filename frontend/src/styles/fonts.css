@@ -1,1 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+/* Shriftlar endi index.html dagi <link rel="preconnect">/<link rel="stylesheet">
+   orqali yuklanadi — CSS @import (bu yerda avval bo'lgan) brauzerning
+   preload-skaneri buni erta aniqlay olmasligi sababli sahifa render
+   qilinishini kechiktiradi (LCP/FCP sekinlashadi). */

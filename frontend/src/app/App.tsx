@@ -3218,7 +3218,7 @@ function LoginScreen({ onLogin, onRegister }: { onLogin: (u: any, company?: any)
   };
 
   return (
-    <div className="min-h-[100dvh] bg-background flex flex-col items-center justify-center p-4 py-8 liquid-transition relative overflow-y-auto scrollbar-hide" style={{ paddingTop: "max(2rem, env(safe-area-inset-top))", paddingBottom: "max(2rem, env(safe-area-inset-bottom))" }}>
+    <main className="min-h-[100dvh] bg-background flex flex-col items-center justify-center p-4 py-8 liquid-transition relative overflow-y-auto scrollbar-hide" style={{ paddingTop: "max(2rem, env(safe-area-inset-top))", paddingBottom: "max(2rem, env(safe-area-inset-bottom))" }}>
       {/* Background decorations */}
       <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/20 rounded-full blur-[100px]" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-accent/20 rounded-full blur-[100px]" />
@@ -3244,15 +3244,15 @@ function LoginScreen({ onLogin, onRegister }: { onLogin: (u: any, company?: any)
               <p className="text-sm md:text-xs text-muted-foreground leading-relaxed text-center">
                 Oldin Telegram botimizga kiring, <span className="font-semibold text-foreground">/start</span> tugmasini bosib raqamingizni ulashing. Keyin shu yerga raqamingizni yozib kodni oling.
               </p>
-              <a href="https://t.me/qurilish_erp_bot" target="_blank" rel="noopener noreferrer" className="mt-2 text-sm md:text-xs font-semibold text-primary flex items-center justify-center gap-1 hover:underline">
-                <Send className="w-3 h-3"/> @qurilish_erp_bot ga o'tish
+              <a href="https://t.me/qurilish_erp_bot" target="_blank" rel="noopener noreferrer" className="mt-2 text-sm md:text-xs font-semibold text-foreground flex items-center justify-center gap-1 hover:underline hover:text-primary">
+                <Send className="w-3 h-3 text-primary"/> @qurilish_erp_bot ga o'tish
               </a>
             </div>
             <div>
-              <label className="text-sm md:text-xs font-medium block mb-1.5 ml-1 text-muted-foreground">Telefon raqamingiz</label>
+              <label htmlFor="login-phone" className="text-sm md:text-xs font-medium block mb-1.5 ml-1 text-muted-foreground">Telefon raqamingiz</label>
               <div className="relative">
                 <Phone className="w-4 h-4 text-muted-foreground absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none"/>
-                <input type="text" className="w-full text-sm border border-border/50 rounded-2xl pl-11 pr-4 py-3 bg-white/50 dark:bg-black/20 focus:bg-white dark:focus:bg-black/40 focus:outline-none focus:ring-2 focus:ring-primary/50 font-mono liquid-transition shadow-inner"
+                <input id="login-phone" type="text" className="w-full text-sm border border-border/50 rounded-2xl pl-11 pr-4 py-3 bg-white/50 dark:bg-black/20 focus:bg-white dark:focus:bg-black/40 focus:outline-none focus:ring-2 focus:ring-primary/50 font-mono liquid-transition shadow-inner"
                   value={phone} onChange={e => {
                     setError("");
                     const val = e.target.value;
@@ -3351,12 +3351,12 @@ function LoginScreen({ onLogin, onRegister }: { onLogin: (u: any, company?: any)
             <div className="h-px flex-1 bg-border/60" />
           </div>
           <button type="button" onClick={onRegister}
-            className="w-full text-sm font-semibold py-3 rounded-full border border-primary/30 text-primary bg-primary/5 hover:bg-primary/10 liquid-transition flex items-center justify-center gap-2 min-h-[48px]">
-            <Building2 className="w-4 h-4" /> Yangi foydalanuvchimisiz? Firma ochish
+            className="w-full text-sm font-semibold py-3 rounded-full border border-primary/30 text-foreground bg-primary/5 hover:bg-primary/10 liquid-transition flex items-center justify-center gap-2 min-h-[48px]">
+            <Building2 className="w-4 h-4 text-primary" /> Yangi foydalanuvchimisiz? Firma ochish
           </button>
         </div>
       )}
-    </div>
+    </main>
   );
 }
 

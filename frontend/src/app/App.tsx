@@ -2859,6 +2859,124 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
   ];
 
   const activeTheme = COLOR_THEMES.find(t => t.id === colorTheme) || COLOR_THEMES[0];
+  const [activePanel, setActivePanel] = useState<null | "bg" | "appearance" | "color" | "perms" | "projects">(null);
+  const APPEARANCE_LABELS: Record<string, string> = { light: "Yorug'", dark: "Qorong'i", system: "Tizim" };
+  const myProjectCount = (currentUser.projectIds || []).length;
+
+  // ── Har bo'lim uchun alohida ekran (rasmdagi "Personal/General/..." kabi) ──
+  if (activePanel) {
+    const panelTitle = {
+      bg: "Fon mavzular", appearance: "Ko'rinish rejimi", color: "Rang mavzusi",
+      perms: "Ruxsatlar", projects: "Obyektlarim",
+    }[activePanel];
+    return (
+      <motion.div key={activePanel} initial={{ opacity: 0, x: 28 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 28 }}
+        transition={{ type: "spring", stiffness: 380, damping: 34 }}
+        className="overflow-y-auto scrollbar-hide max-w-lg mx-auto w-full pb-10">
+        <div className="flex items-center gap-2 px-4 py-4 sticky top-0 bg-background/80 backdrop-blur-xl z-10">
+          <button onClick={() => setActivePanel(null)} className="btn btn-ghost w-9 h-9 p-0 rounded-full flex-shrink-0"><ChevronLeft className="w-5 h-5"/></button>
+          <h2 className="text-base font-bold">{panelTitle}</h2>
+        </div>
+        <div className="px-4 space-y-4">
+          {activePanel === "bg" && (
+            <div className="surface overflow-hidden">
+              <div className="px-4 py-3 border-b border-border flex items-center gap-2">
+                <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex-1">Fon rasmini tanlang</p>
+                <span className="text-[10px] text-muted-foreground hidden sm:block">Butun site ga qo'llaniladi</span>
+              </div>
+              <div className="p-3">
+                <div className="grid grid-cols-4 sm:grid-cols-5 gap-2">
+                  {BG_TEMPLATES.map(t => {
+                    const isCurrent = t.id === "default" ? (!profileBg || profileBg === "") : profileBg === t.value;
+                    return (
+                      <button key={t.id} onClick={() => applyBgTemplate(t.value)}
+                        className={`relative rounded-lg sm:rounded-xl overflow-hidden border-2 liquid-transition ${isCurrent ? "border-primary shadow-md scale-[1.05]" : "border-transparent hover:border-primary/40"}`}
+                        style={{ aspectRatio: "4/3", background: t.value || "var(--background)" }}>
+                        {t.id === "default" && <div className="absolute inset-0 flex items-center justify-center bg-muted/60"><span className="text-[8px] text-muted-foreground font-semibold">Yo'q</span></div>}
+                        {isCurrent && <div className="absolute top-0.5 right-0.5 w-3.5 h-3.5 bg-white/95 rounded-full flex items-center justify-center shadow"><Check className="w-2 h-2 text-primary"/></div>}
+                        {t.id !== "default" && <div className="absolute inset-x-0 bottom-0 py-0.5" style={{ background: "rgba(0,0,0,0.38)" }}><p className="text-center text-[7px] sm:text-[8px] text-white font-semibold">{t.name}</p></div>}
+                      </button>
+                    );
+                  })}
+                  <button onClick={() => bgRef.current?.click()}
+                    className="relative rounded-lg sm:rounded-xl overflow-hidden border-2 border-dashed border-border bg-muted/40 hover:bg-muted/70 hover:border-primary/40 flex flex-col items-center justify-center gap-0.5 liquid-transition"
+                    style={{ aspectRatio: "4/3" }}>
+                    <Upload className="w-3.5 h-3.5 text-muted-foreground"/>
+                    <p className="text-[7px] sm:text-[8px] text-muted-foreground font-semibold">Rasm</p>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+          {activePanel === "appearance" && (
+            <div className="surface overflow-hidden">
+              <div className="p-3">
+                <div className="grid grid-cols-3 gap-2">
+                  {([["light","Yorug'",Sun],["dark","Qorong'i",Moon],["system","Tizim",Monitor]] as [ "light"|"dark"|"system", string, React.ElementType ][]).map(([m,label,Icon]) => (
+                    <button key={m} onClick={() => onThemeModeChange(m)}
+                      className={`btn flex flex-col items-center gap-1.5 py-3 rounded-xl border ${themeMode===m ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-muted"}`}>
+                      <Icon className="w-5 h-5"/>
+                      <span className="text-[11px] font-semibold">{label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+          {activePanel === "color" && (
+            <div className="surface overflow-hidden">
+              <div className="px-3 py-3">
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                  {COLOR_THEMES.map(t => (
+                    <button key={t.id} onClick={() => onColorThemeChange(t.id)} title={t.name}
+                      className="flex flex-col items-center gap-1.5 group">
+                      <div
+                        className="w-14 h-14 sm:w-12 sm:h-12 rounded-2xl liquid-transition group-hover:scale-105 active:scale-95 relative"
+                        style={{
+                          background: `linear-gradient(135deg, ${t.primary} 0%, ${t.accent} 100%)`,
+                          boxShadow: colorTheme === t.id
+                            ? `0 0 0 2px var(--card), 0 0 0 4px ${t.primary}, 0 3px 10px ${t.primary}50`
+                            : "0 2px 5px rgba(0,0,0,0.18)",
+                          transform: colorTheme === t.id ? "scale(1.08)" : undefined,
+                        }}>
+                        {colorTheme === t.id && <Check className="w-5 h-5 text-white absolute inset-0 m-auto drop-shadow"/>}
+                      </div>
+                      <span className="text-[11px] text-muted-foreground font-medium leading-none text-center">{t.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+          {activePanel === "perms" && (
+            <div className="surface overflow-hidden">
+              {perms.map(([label, has]) => (
+                <div key={label} className="flex items-center justify-between px-4 py-3 border-b border-border/50 last:border-0 hover:bg-muted/20 liquid-transition">
+                  <span className="text-sm text-foreground">{label}</span>
+                  {has ? <CheckCircle className="w-4 h-4 text-green-500"/> : <X className="w-4 h-4 text-muted-foreground/30"/>}
+                </div>
+              ))}
+            </div>
+          )}
+          {activePanel === "projects" && (
+            <div className="surface overflow-hidden">
+              {(!currentUser.projectIds || currentUser.projectIds.length === 0)
+                ? <p className="px-4 py-4 text-sm text-muted-foreground text-center">Tayinlangan yo'q</p>
+                : projects.filter(p => currentUser.projectIds.includes(p.id)).map(p => (
+                  <div key={p.id} className="flex items-center gap-3 px-4 py-3 border-b border-border/50 last:border-0">
+                    <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                      <Building2 className="w-4 h-4 text-primary"/>
+                    </div>
+                    <span className="text-sm truncate font-medium">{p.name}</span>
+                  </div>
+                ))
+              }
+            </div>
+          )}
+        </div>
+      </motion.div>
+    );
+  }
 
   return (
     <div className="overflow-y-auto scrollbar-hide max-w-lg mx-auto w-full pb-10">
@@ -2948,120 +3066,27 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
           )}
         </motion.div>
 
-        {/* ── Fon Mavzular ─────────────────────────── */}
+        {/* ── Sozlamalar menyusi (har biri alohida ekranga olib boradi) ── */}
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28, delay: 0.06 }}
           className="surface overflow-hidden">
-          <div className="px-4 py-3 border-b border-border flex items-center gap-2">
-            <div className="w-4 h-4 rounded-md flex-shrink-0" style={(bannerStyle as any).background ? { background: (bannerStyle as any).background } : { backgroundImage: (bannerStyle as any).backgroundImage, backgroundSize: 'cover' }}/>
-            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex-1">Fon mavzular</p>
-            <span className="text-[10px] text-muted-foreground hidden sm:block">Butun site ga qo'llaniladi</span>
-          </div>
-          <div className="p-3">
-            <div className="grid grid-cols-4 sm:grid-cols-5 gap-2">
-              {BG_TEMPLATES.map(t => {
-                const isCurrent = t.id === "default" ? (!profileBg || profileBg === "") : profileBg === t.value;
-                return (
-                  <button key={t.id} onClick={() => applyBgTemplate(t.value)}
-                    className={`relative rounded-lg sm:rounded-xl overflow-hidden border-2 liquid-transition ${isCurrent ? "border-primary shadow-md scale-[1.05]" : "border-transparent hover:border-primary/40"}`}
-                    style={{ aspectRatio: "4/3", background: t.value || "var(--background)" }}>
-                    {t.id === "default" && <div className="absolute inset-0 flex items-center justify-center bg-muted/60"><span className="text-[8px] text-muted-foreground font-semibold">Yo'q</span></div>}
-                    {isCurrent && <div className="absolute top-0.5 right-0.5 w-3.5 h-3.5 bg-white/95 rounded-full flex items-center justify-center shadow"><Check className="w-2 h-2 text-primary"/></div>}
-                    {t.id !== "default" && <div className="absolute inset-x-0 bottom-0 py-0.5" style={{ background: "rgba(0,0,0,0.38)" }}><p className="text-center text-[7px] sm:text-[8px] text-white font-semibold">{t.name}</p></div>}
-                  </button>
-                );
-              })}
-              <button onClick={() => bgRef.current?.click()}
-                className="relative rounded-lg sm:rounded-xl overflow-hidden border-2 border-dashed border-border bg-muted/40 hover:bg-muted/70 hover:border-primary/40 flex flex-col items-center justify-center gap-0.5 liquid-transition"
-                style={{ aspectRatio: "4/3" }}>
-                <Upload className="w-3.5 h-3.5 text-muted-foreground"/>
-                <p className="text-[7px] sm:text-[8px] text-muted-foreground font-semibold">Rasm</p>
-              </button>
-            </div>
-          </div>
-        </motion.div>
-
-        {/* ── Ko'rinish rejimi (Light / Dark / System) ─────────── */}
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28, delay: 0.10 }}
-          className="surface overflow-hidden">
-          <div className="px-4 py-3 border-b border-border flex items-center gap-2">
-            <Moon className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0"/>
-            <p className="section-title flex-1">Ko'rinish rejimi</p>
-          </div>
-          <div className="p-3">
-            <div className="grid grid-cols-3 gap-2">
-              {([["light","Yorug'",Sun],["dark","Qorong'i",Moon],["system","Tizim",Monitor]] as [ "light"|"dark"|"system", string, React.ElementType ][]).map(([m,label,Icon]) => (
-                <button key={m} onClick={() => onThemeModeChange(m)}
-                  className={`btn flex flex-col items-center gap-1.5 py-3 rounded-xl border ${themeMode===m ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-muted"}`}>
-                  <Icon className="w-5 h-5"/>
-                  <span className="text-[11px] font-semibold">{label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </motion.div>
-
-        {/* ── Rang Mavzusi ─────────────────────────── */}
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28, delay: 0.14 }}
-          className="surface overflow-hidden">
-          <div className="px-4 py-3 border-b border-border flex items-center gap-2">
-            <Palette className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0"/>
-            <p className="section-title flex-1">Rang mavzusi</p>
-            <span className="text-[10px] font-semibold" style={{ color: activeTheme.primary }}>{activeTheme.name}</span>
-          </div>
-          <div className="px-3 py-3">
-            <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
-              {COLOR_THEMES.map(t => (
-                <button key={t.id} onClick={() => onColorThemeChange(t.id)} title={t.name}
-                  className="flex flex-col items-center gap-1.5 group">
-                  <div
-                    className="w-14 h-14 sm:w-12 sm:h-12 rounded-2xl liquid-transition group-hover:scale-105 active:scale-95 relative"
-                    style={{
-                      background: `linear-gradient(135deg, ${t.primary} 0%, ${t.accent} 100%)`,
-                      boxShadow: colorTheme === t.id
-                        ? `0 0 0 2px var(--card), 0 0 0 4px ${t.primary}, 0 3px 10px ${t.primary}50`
-                        : "0 2px 5px rgba(0,0,0,0.18)",
-                      transform: colorTheme === t.id ? "scale(1.08)" : undefined,
-                    }}>
-                    {colorTheme === t.id && <Check className="w-5 h-5 text-white absolute inset-0 m-auto drop-shadow"/>}
-                  </div>
-                  <span className="text-[11px] text-muted-foreground font-medium leading-none text-center">{t.name}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </motion.div>
-
-        {/* ── Ruxsatlar ─────────────────────────────── */}
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28, delay: 0.18 }}
-          className="surface overflow-hidden">
-          <div className="px-4 py-3.5 border-b border-border">
-            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Ruxsatlar</p>
-          </div>
-          {perms.map(([label, has]) => (
-            <div key={label} className="flex items-center justify-between px-4 py-3 border-b border-border/50 last:border-0 hover:bg-muted/20 liquid-transition">
-              <span className="text-sm text-foreground">{label}</span>
-              {has ? <CheckCircle className="w-4 h-4 text-green-500"/> : <X className="w-4 h-4 text-muted-foreground/30"/>}
-            </div>
+          {[
+            { key: "bg" as const, icon: Palette, label: "Fon mavzular", hint: null as string|null,
+              swatch: (bannerStyle as any).background ? { background: (bannerStyle as any).background } : { backgroundImage: (bannerStyle as any).backgroundImage, backgroundSize: 'cover' } },
+            { key: "appearance" as const, icon: themeMode === "light" ? Sun : themeMode === "dark" ? Moon : Monitor, label: "Ko'rinish rejimi", hint: APPEARANCE_LABELS[themeMode], swatch: null },
+            { key: "color" as const, icon: Palette, label: "Rang mavzusi", hint: activeTheme.name, swatch: { background: `linear-gradient(135deg, ${activeTheme.primary}, ${activeTheme.accent})` } },
+            { key: "perms" as const, icon: CheckCircle, label: "Ruxsatlar", hint: `${perms.filter(([,has])=>has).length}/${perms.length}`, swatch: null },
+            { key: "projects" as const, icon: Building2, label: "Obyektlarim", hint: String(myProjectCount), swatch: null },
+          ].map((row, i) => (
+            <button key={row.key} onClick={() => setActivePanel(row.key)}
+              className={`w-full flex items-center gap-3 px-4 py-3.5 hover:bg-muted/30 liquid-transition text-left ${i > 0 ? "border-t border-border/50" : ""}`}>
+              {row.swatch
+                ? <div className="w-10 h-10 rounded-xl flex-shrink-0" style={row.swatch}/>
+                : <div className="icon-chip"><row.icon className="w-4 h-4"/></div>}
+              <span className="text-sm font-medium flex-1">{row.label}</span>
+              {row.hint && <span className="text-xs text-muted-foreground">{row.hint}</span>}
+              <ChevronRight className="w-4 h-4 text-muted-foreground/60"/>
+            </button>
           ))}
-        </motion.div>
-
-        {/* ── Obyektlarim ───────────────────────────── */}
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28, delay: 0.22 }}
-          className="surface overflow-hidden">
-          <div className="px-4 py-3.5 border-b border-border">
-            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Obyektlarim</p>
-          </div>
-          {(!currentUser.projectIds || currentUser.projectIds.length === 0)
-            ? <p className="px-4 py-4 text-sm text-muted-foreground text-center">Tayinlangan yo'q</p>
-            : projects.filter(p => currentUser.projectIds.includes(p.id)).map(p => (
-              <div key={p.id} className="flex items-center gap-3 px-4 py-3 border-b border-border/50 last:border-0">
-                <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                  <Building2 className="w-4 h-4 text-primary"/>
-                </div>
-                <span className="text-sm truncate font-medium">{p.name}</span>
-              </div>
-            ))
-          }
         </motion.div>
 
         <motion.button initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28, delay: 0.26 }}

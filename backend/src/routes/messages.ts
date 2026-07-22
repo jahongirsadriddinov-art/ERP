@@ -1,12 +1,51 @@
 import { Router } from 'express';
 import multer from 'multer';
 import path from 'path';
+import fs from 'fs';
+import os from 'os';
+import ffmpegPath from 'ffmpeg-static';
+import ffmpeg from 'fluent-ffmpeg';
 import Message from '../models/Message';
 import Group from '../models/Group';
 import User from '../models/User';
 import { emitToUser, emitToGroup } from '../services/socket';
 import { scoped, stamped } from '../middleware/scope';
 import { bot } from '../services/bot';
+
+if (ffmpegPath) ffmpeg.setFfmpegPath(ffmpegPath);
+
+// Berilgan /uploads media URL'ini shu serverdagi haqiqiy fayl yo'liga aylantiradi
+// (faqat shu backend o'zi yozgan fayllar uchun ishlaydi — masalan CDN'dan kelgan
+// tashqi URL emas). ffmpeg fayl bilan to'g'ridan-to'g'ri ishlashi uchun kerak.
+function mediaUrlToLocalPath(url?: string): string | null {
+  if (!url) return null;
+  try {
+    const u = new URL(url);
+    if (!/\/uploads\//.test(u.pathname)) return null;
+    const full = path.join(process.cwd(), 'uploads', path.basename(u.pathname));
+    return fs.existsSync(full) ? full : null;
+  } catch {
+    return null;
+  }
+}
+
+// Brauzerda yozilgan audio/webm'ni haqiqiy OGG/Opus'ga aylantiradi — Telegram
+// sendVoice buni "ovozli xabar" pufakchasi sifatida to'g'ri ochadi (webm'ni
+// sendDocument bilan yuborish faylni ochadi, lekin native ovozli xabar ko'rinishida
+// EMAS — foydalanuvchi buni "xunuk"/"yaroqsiz" deb topdi).
+function convertToOggOpus(localPath: string): Promise<string> {
+  const outPath = path.join(os.tmpdir(), `voice_${Date.now()}_${Math.round(Math.random() * 1e6)}.ogg`);
+  return new Promise((resolve, reject) => {
+    ffmpeg(localPath)
+      .audioCodec('libopus')
+      .audioBitrate('48k')
+      .audioChannels(1)
+      .format('ogg')
+      .on('error', reject)
+      .on('end', () => resolve(outPath))
+      .save(outPath);
+  });
+}
 
 const router = Router();
 
@@ -38,18 +77,34 @@ async function relayMessageToTelegram(chatId: string, senderName: string, m: {
       case 'video':
         await bot.sendVideo(chatId, m.mediaUrl, { caption });
         break;
-      case 'audio':
+      case 'audio': {
         // Telegram sendVoice FAQAT haqiqiy OGG/Opus faylni "ovozli xabar" pufakchasi
         // sifatida ochadi — brauzerlarning aksariyati (Chrome) MediaRecorder orqali
-        // audio/webm chiqaradi, buni sendVoice bilan yuborish "telefon ocholmaydi"
-        // xatosiga olib keladi. .ogg bo'lmasa sendDocument bilan yuboramiz — bu
-        // istalgan formatni qabul qiladi va foydalanuvchi qurilmasida ochiladi.
-        if (/\.ogg(\?|$)/i.test(m.mediaUrl || '')) {
+        // audio/webm chiqaradi. Buni to'g'ridan-to'g'ri sendDocument bilan yuborish
+        // "ishlaydi" lekin native ovozli xabar EMAS, oddiy yuklab olinadigan fayl —
+        // shuning uchun haqiqiy OGG/Opus'ga aylantirib, haqiqiy voice bubble sifatida
+        // yuboramiz. Faqat ffmpeg muvaffaqiyatsiz bo'lsa (masalan mahalliy fayl
+        // topilmasa) hujjat sifatida zaxira yo'l bilan yuboriladi.
+        const isOgg = /\.ogg(\?|$)/i.test(m.mediaUrl || '');
+        const localPath = isOgg ? null : mediaUrlToLocalPath(m.mediaUrl);
+        if (isOgg) {
           await bot.sendVoice(chatId, m.mediaUrl, { caption: senderName });
+        } else if (localPath) {
+          let converted: string | null = null;
+          try {
+            converted = await convertToOggOpus(localPath);
+            await bot.sendVoice(chatId, fs.createReadStream(converted), { caption: senderName });
+          } catch (err) {
+            console.error('[voice transcode]', err);
+            await bot.sendDocument(chatId, m.mediaUrl, { caption: `🎤 ${caption}` });
+          } finally {
+            if (converted) fs.unlink(converted, () => {});
+          }
         } else {
           await bot.sendDocument(chatId, m.mediaUrl, { caption: `🎤 ${caption}` });
         }
         break;
+      }
       case 'file':
         await bot.sendDocument(chatId, m.mediaUrl, { caption });
         break;

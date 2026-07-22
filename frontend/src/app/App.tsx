@@ -4,9 +4,10 @@ import {
   CheckCircle, Clock, AlertTriangle, ChevronRight, MapPin,
   Phone, User, X, Check, Download, BarChart2,
   DollarSign, MessageCircle, ChevronDown, ChevronUp, Send,
-  TrendingDown, Wallet, LogOut, Camera, Home, UserPlus, Edit, Trash, Search, AlertCircle, ChevronLeft, Loader2, Paperclip, Mic, Video as VideoIcon, Image as ImageIcon, FileText, CornerDownLeft, Share2, SquareCheck, Trash2, MoreHorizontal, Upload, Palette, Sun, Moon, Monitor, PhoneOff, MicOff, VideoOff, Users2, Copy, Bell
+  TrendingDown, Wallet, LogOut, Camera, Home, UserPlus, Edit, Trash, Search, AlertCircle, ChevronLeft, Loader2, Paperclip, Mic, Video as VideoIcon, Image as ImageIcon, FileText, CornerDownLeft, Share2, SquareCheck, Trash2, MoreHorizontal, Upload, Palette, Sun, Moon, Monitor, PhoneOff, MicOff, VideoOff, Users2, Copy, Bell, Pin, PinOff
 } from "lucide-react";
 import { toast, Toaster } from "sonner";
+import { createPortal } from "react-dom";
 import { API_BASE, parseSmetaFile, uploadChatMedia } from "./api";
 import { connectSocket, getSocket, disconnectSocket } from "./socket";
 import { motion, AnimatePresence } from "motion/react";
@@ -1898,7 +1899,7 @@ function FinancePage({ currentUser, users, projects, expenses, onAddExpense, onC
 }
 
 // ─── Voice Message Player ─────────────────────────────────────────────────────
-function VoicePlayer({ src }: { src: string }) {
+function VoicePlayer({ src, mine }: { src: string; mine?: boolean }) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -1939,7 +1940,8 @@ function VoicePlayer({ src }: { src: string }) {
         onEnded={() => { setPlaying(false); setProgress(0); setCurrentTime(0); if (audioRef.current) audioRef.current.currentTime=0; }}
       />
       <button onClick={toggle} aria-label={playing ? "Pauza" : "Ijro etish"}
-        className="w-9 h-9 rounded-full bg-primary/20 text-primary flex items-center justify-center flex-shrink-0 hover:bg-primary/30 active:scale-95 transition-all">
+        className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 active:scale-95 transition-all
+          ${mine ? "bg-white/25 text-white hover:bg-white/35" : "bg-primary/15 text-primary hover:bg-primary/25"}`}>
         {playing
           ? <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
           : <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 ml-0.5"><polygon points="5,3 19,12 5,21"/></svg>
@@ -1949,13 +1951,15 @@ function VoicePlayer({ src }: { src: string }) {
         <div className="relative h-6 flex items-center gap-[2px] cursor-pointer" onClick={seek}>
           {bars.map((h, i) => {
             const played = (i / bars.length) * 100 <= progress;
+            const activeColor = mine ? "bg-white" : "bg-primary";
+            const idleColor = mine ? "bg-white/30" : "bg-current/20";
             return (
-              <div key={i} className={`flex-1 rounded-full transition-colors ${played ? "bg-primary" : "bg-current/25"}`}
+              <div key={i} className={`flex-1 rounded-full transition-colors ${played ? activeColor : idleColor}`}
                 style={{ height: `${Math.round(h * 100)}%` }}/>
             );
           })}
         </div>
-        <div className="flex justify-between text-[9px] text-current/60">
+        <div className={`flex justify-between text-[9px] ${mine ? "text-white/70" : "text-current/50"}`}>
           <span>{fmtTime(currentTime)}</span>
           <span>{duration > 0 ? fmtTime(duration) : '—'}</span>
         </div>
@@ -2179,7 +2183,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
           <video src={m.mediaUrl} controls className="rounded-xl max-w-full max-h-52 mb-1"/>
         )}
         {m.type==='audio' && m.mediaUrl && (
-          <VoicePlayer src={m.mediaUrl}/>
+          <VoicePlayer src={m.mediaUrl} mine={mine}/>
         )}
         {m.type==='file' && m.mediaUrl && (
           <a href={m.mediaUrl} download={m.fileName} className="flex items-center gap-2 mb-1 hover:opacity-75 transition-opacity">
@@ -2384,27 +2388,45 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
               <div ref={bottomRef}/>
               </div>
 
-              {/* Context Menu */}
-              {ctxMenu && (
-                <div className="fixed z-50 glass p-1.5 rounded-2xl border border-white/20 shadow-2xl flex flex-col gap-0.5 animate-pop-in"
-                  style={{top:Math.min(ctxMenu.y,window.innerHeight-260),left:ctxMenu.x>window.innerWidth-164?window.innerWidth-168:Math.max(4,ctxMenu.x)}}
-                  onClick={e=>e.stopPropagation()}>
-                  <div onClick={()=>{if(ctxMsg)setReplyTo(ctxMsg);setCtxMenu(null);}} className="flex items-center gap-2 px-3 py-2 hover:bg-muted/40 rounded-lg cursor-pointer text-xs"><CornerDownLeft className="w-3.5 h-3.5 text-blue-500"/>Reply</div>
-                  {canModifyMessages && !ctxMsg?.deleted && (
-                    <div onClick={()=>{if(ctxMsg){setEditingId(ctxMsg.id);setEditText(ctxMsg.text);}setCtxMenu(null);}} className="flex items-center gap-2 px-3 py-2 hover:bg-muted/40 rounded-lg cursor-pointer text-xs"><Edit className="w-3.5 h-3.5 text-green-500"/>Edit</div>
-                  )}
-                  <div onClick={()=>{if(ctxMsg)onPin(ctxMsg.id);setCtxMenu(null);}} className="flex items-center gap-2 px-3 py-2 hover:bg-muted/40 rounded-lg cursor-pointer text-xs">
-                    <span className="text-xs">{ctxMsg?.pinned?'📌':'📍'}</span>{ctxMsg?.pinned?'Unpin':'Pin'}
-                  </div>
-                  <div onClick={()=>{if(ctxMsg)setShowForward(ctxMsg);setCtxMenu(null);}} className="flex items-center gap-2 px-3 py-2 hover:bg-muted/40 rounded-lg cursor-pointer text-xs"><Share2 className="w-3.5 h-3.5 text-purple-500"/>Forward</div>
-                  <div onClick={()=>{if(ctxMsg){setSelectMode(true);setSelected(new Set([ctxMsg.id]));}setCtxMenu(null);}} className="flex items-center gap-2 px-3 py-2 hover:bg-muted/40 rounded-lg cursor-pointer text-xs"><SquareCheck className="w-3.5 h-3.5 text-orange-500"/>Select</div>
-                  {canModifyMessages && (
-                    <>
-                      <div className="h-px bg-border/60 my-0.5"/>
-                      <div onClick={()=>{if(ctxMsg)onDelete(ctxMsg.id);setCtxMenu(null);}} className="flex items-center gap-2 px-3 py-2 hover:bg-red-500/10 text-red-500 rounded-lg cursor-pointer text-xs"><Trash2 className="w-3.5 h-3.5"/>Delete</div>
-                    </>
-                  )}
-                </div>
+              {/* Context Menu — document.body'ga portal qilinadi, chunki bu sahifa
+                  `.page-enter` animatsiyasi ichida (will-change: transform) joylashgan
+                  va CSS spec bo'yicha will-change:transform ham position:fixed uchun
+                  YANGI containing block yaratadi — natijada menyu haqiqiy viewport'ga
+                  emas, shu animatsiyalangan ota-elementga nisbatan joylashib, telefon
+                  va noutbukda "kesilib qolgan"/joyidan siljigan holatda ko'rinardi. */}
+              {ctxMenu && ctxMsg && createPortal(
+                (() => {
+                  const canEdit = canModifyMessages && !ctxMsg.deleted;
+                  const rows = 4 + (canEdit ? 1 : 0) + (canModifyMessages ? 1 : 0);
+                  const menuW = 176;
+                  const menuH = rows * 36 + 12 + (canModifyMessages ? 9 : 0);
+                  const vw = window.innerWidth, vh = window.innerHeight;
+                  const left = Math.min(Math.max(8, ctxMenu.x), vw - menuW - 8);
+                  const top = Math.min(Math.max(8, ctxMenu.y), vh - menuH - 8);
+                  const itemCls = "flex items-center gap-2.5 px-3 py-2 hover:bg-primary/10 hover:text-primary rounded-lg cursor-pointer text-xs text-foreground/85 transition-colors";
+                  return (
+                    <div className="fixed z-[70] w-44 glass p-1.5 rounded-2xl border border-white/20 shadow-2xl flex flex-col gap-0.5 animate-pop-in"
+                      style={{ top, left }}
+                      onClick={e=>e.stopPropagation()}>
+                      <div onClick={()=>{setReplyTo(ctxMsg);setCtxMenu(null);}} className={itemCls}><CornerDownLeft className="w-3.5 h-3.5"/>Reply</div>
+                      {canEdit && (
+                        <div onClick={()=>{setEditingId(ctxMsg.id);setEditText(ctxMsg.text);setCtxMenu(null);}} className={itemCls}><Edit className="w-3.5 h-3.5"/>Edit</div>
+                      )}
+                      <div onClick={()=>{onPin(ctxMsg.id);setCtxMenu(null);}} className={itemCls}>
+                        {ctxMsg.pinned ? <PinOff className="w-3.5 h-3.5"/> : <Pin className="w-3.5 h-3.5"/>}{ctxMsg.pinned?'Unpin':'Pin'}
+                      </div>
+                      <div onClick={()=>{setShowForward(ctxMsg);setCtxMenu(null);}} className={itemCls}><Share2 className="w-3.5 h-3.5"/>Forward</div>
+                      <div onClick={()=>{setSelectMode(true);setSelected(new Set([ctxMsg.id]));setCtxMenu(null);}} className={itemCls}><SquareCheck className="w-3.5 h-3.5"/>Select</div>
+                      {canModifyMessages && (
+                        <>
+                          <div className="h-px bg-border/60 my-0.5"/>
+                          <div onClick={()=>{onDelete(ctxMsg.id);setCtxMenu(null);}} className="flex items-center gap-2.5 px-3 py-2 hover:bg-red-500/10 text-red-500 rounded-lg cursor-pointer text-xs transition-colors"><Trash2 className="w-3.5 h-3.5"/>Delete</div>
+                        </>
+                      )}
+                    </div>
+                  );
+                })(),
+                document.body
               )}
             </div>
 

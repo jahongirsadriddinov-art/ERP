@@ -4,13 +4,16 @@ import {
   CheckCircle, Clock, AlertTriangle, ChevronRight, MapPin,
   Phone, User, X, Check, Download, BarChart2,
   DollarSign, MessageCircle, ChevronDown, ChevronUp, Send,
-  TrendingDown, Wallet, LogOut, Camera, Home, UserPlus, Edit, Trash, Search, AlertCircle, ChevronLeft, Loader2, Paperclip, Mic, Video as VideoIcon, Image as ImageIcon, FileText, CornerDownLeft, Share2, SquareCheck, Trash2, MoreHorizontal, Upload, Palette, Sun, Moon, Monitor, PhoneOff, MicOff, VideoOff, Users2, Copy, Bell, Pin, PinOff, CheckCheck
+  TrendingDown, Wallet, LogOut, Camera, Home, UserPlus, Edit, Trash, Search, AlertCircle, ChevronLeft, Loader2, Paperclip, Mic, Video as VideoIcon, Image as ImageIcon, FileText, CornerDownLeft, Share2, SquareCheck, Trash2, MoreHorizontal, Upload, Palette, Sun, Moon, Monitor, PhoneOff, MicOff, VideoOff, Users2, Copy, Bell, Pin, PinOff, CheckCheck, Languages
 } from "lucide-react";
 import { toast, Toaster } from "sonner";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import { API_BASE, parseSmetaFile, uploadChatMedia } from "./api";
 import { connectSocket, getSocket, disconnectSocket } from "./socket";
 import { motion, AnimatePresence } from "motion/react";
+import { setSiteLanguage, SiteLang, langLabel } from "./i18n";
+import LanguageSwitcher from "./i18n/LanguageSwitcher";
 
 // recharts og'ir kutubxona — faqat "Hisobotlar" bo'limiga kirilganda yuklanadi
 // (boshlang'ich bundle hajmini kamaytiradi, sayt tezroq ochiladi).
@@ -54,7 +57,7 @@ type EStatus = "pending" | "confirmed";
 export interface AppUser {
   id: string; name: string; role: Role; phone: string;
   avatar?: string; brigade?: string; projectIds: string[];
-  isOwner?: boolean; companyId?: string;
+  isOwner?: boolean; companyId?: string; language?: SiteLang;
 }
 export interface Project {
   id: string; name: string; location: string; foremanId: string;
@@ -2645,6 +2648,18 @@ const COLOR_THEMES = [
 
 function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdateUser, onCompanyNameChange, onCompanyLogoChange, onBgChange, onColorThemeChange, colorTheme, themeMode, onThemeModeChange, canEditCompany }:
   { currentUser: AppUser; projects: Project[]; onUpdateAvatar: (url: string) => void; onLogout: () => void; onUpdateUser: (u: AppUser) => void; onCompanyNameChange: (name: string) => void; onCompanyLogoChange: (logo: string) => void; onBgChange: (bg: string) => void; onColorThemeChange: (id: string) => void; colorTheme: string; themeMode: "light"|"dark"|"system"; onThemeModeChange: (m: "light"|"dark"|"system") => void; canEditCompany?: boolean }) {
+  const { t, i18n } = useTranslation();
+  const changeLanguage = async (lang: SiteLang) => {
+    setSiteLanguage(lang);
+    onUpdateUser({ ...currentUser, language: lang });
+    try {
+      await fetch(`${API_BASE}/api/users/${currentUser.id}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ language: lang }),
+      });
+      toast.success(t('profile.languageSaved'));
+    } catch { /* mahalliy o'zgarish saqlanadi, keyingi sinxronlashda serverga yetadi */ }
+  };
   const [isEditing, setIsEditing] = useState(false);
   const [form, setForm] = useState({ name: currentUser.name, phone: currentUser.phone });
   const fileRef = useRef<HTMLInputElement>(null);
@@ -2714,7 +2729,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
   ];
 
   const activeTheme = COLOR_THEMES.find(t => t.id === colorTheme) || COLOR_THEMES[0];
-  const [activePanel, setActivePanel] = useState<null | "bg" | "appearance" | "color" | "perms" | "projects">(null);
+  const [activePanel, setActivePanel] = useState<null | "bg" | "appearance" | "color" | "perms" | "projects" | "language">(null);
   const APPEARANCE_LABELS: Record<string, string> = { light: "Yorug'", dark: "Qorong'i", system: "Tizim" };
   const myProjectCount = (currentUser.projectIds || []).length;
 
@@ -2722,7 +2737,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
   if (activePanel) {
     const panelTitle = {
       bg: "Fon mavzular", appearance: "Ko'rinish rejimi", color: "Rang mavzusi",
-      perms: "Ruxsatlar", projects: "Obyektlarim",
+      perms: "Ruxsatlar", projects: "Obyektlarim", language: t('profile.language'),
     }[activePanel];
     return (
       <motion.div key={activePanel} initial={{ opacity: 0, x: 28 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 28 }}
@@ -2828,6 +2843,12 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
               }
             </div>
           )}
+          {activePanel === "language" && (
+            <div className="surface overflow-hidden p-5 flex flex-col items-center gap-3">
+              <p className="text-xs text-muted-foreground text-center">{t('profile.languageHint')}</p>
+              <LanguageSwitcher value={i18n.language as SiteLang} onChange={changeLanguage}/>
+            </div>
+          )}
         </div>
       </motion.div>
     );
@@ -2925,12 +2946,13 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28, delay: 0.06 }}
           className="surface overflow-hidden">
           {[
-            { key: "bg" as const, icon: Palette, label: "Fon mavzular", hint: null as string|null,
+            { key: "bg" as const, icon: Palette, label: t('profile.bgThemes'), hint: null as string|null,
               swatch: (bannerStyle as any).background ? { background: (bannerStyle as any).background } : { backgroundImage: (bannerStyle as any).backgroundImage, backgroundSize: 'cover' } },
-            { key: "appearance" as const, icon: themeMode === "light" ? Sun : themeMode === "dark" ? Moon : Monitor, label: "Ko'rinish rejimi", hint: APPEARANCE_LABELS[themeMode], swatch: null },
-            { key: "color" as const, icon: Palette, label: "Rang mavzusi", hint: activeTheme.name, swatch: { background: `linear-gradient(135deg, ${activeTheme.primary}, ${activeTheme.accent})` } },
-            { key: "perms" as const, icon: CheckCircle, label: "Ruxsatlar", hint: `${perms.filter(([,has])=>has).length}/${perms.length}`, swatch: null },
-            { key: "projects" as const, icon: Building2, label: "Obyektlarim", hint: String(myProjectCount), swatch: null },
+            { key: "appearance" as const, icon: themeMode === "light" ? Sun : themeMode === "dark" ? Moon : Monitor, label: t('profile.appearanceMode'), hint: APPEARANCE_LABELS[themeMode], swatch: null },
+            { key: "color" as const, icon: Palette, label: t('profile.colorTheme'), hint: activeTheme.name, swatch: { background: `linear-gradient(135deg, ${activeTheme.primary}, ${activeTheme.accent})` } },
+            { key: "language" as const, icon: Languages, label: t('profile.language'), hint: langLabel(i18n.language as SiteLang), swatch: null },
+            { key: "perms" as const, icon: CheckCircle, label: t('profile.permissions'), hint: `${perms.filter(([,has])=>has).length}/${perms.length}`, swatch: null },
+            { key: "projects" as const, icon: Building2, label: t('profile.myObjects'), hint: String(myProjectCount), swatch: null },
           ].map((row, i) => (
             <button key={row.key} onClick={() => setActivePanel(row.key)}
               className={`w-full flex items-center gap-3 px-4 py-3.5 hover:bg-muted/30 liquid-transition text-left ${i > 0 ? "border-t border-border/50" : ""}`}>
@@ -2947,7 +2969,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
         <motion.button initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28, delay: 0.26 }}
           onClick={() => { localStorage.removeItem("currentUser"); localStorage.removeItem("token"); onLogout(); }}
           className="w-full flex items-center justify-center gap-2.5 text-sm border-2 border-border rounded-2xl px-4 py-3.5 text-muted-foreground hover:bg-red-500/10 hover:text-red-600 hover:border-red-500/30 liquid-transition font-semibold">
-          <LogOut className="w-4 h-4"/>Tizimdan chiqish
+          <LogOut className="w-4 h-4"/>{t('profile.logout')}
         </motion.button>
       </div>
     </div>
@@ -3022,6 +3044,7 @@ function OtpBoxes({ value, onChange, length = 4, autoFocus, error }: { value: st
 
 // ─── Login Screen ─────────────────────────────────────────────────────────────
 function LoginScreen({ onLogin, onRegister }: { onLogin: (u: any, company?: any) => void; onRegister?: () => void }) {
+  const { t, i18n } = useTranslation();
   const [phone, setPhone] = useState("+998 ");
   const [code, setCode] = useState("");
   const [password, setPassword] = useState("");
@@ -3043,7 +3066,7 @@ function LoginScreen({ onLogin, onRegister }: { onLogin: (u: any, company?: any)
     if (e) e.preventDefault();
     const cleanPhone = phone.replace(/\s+/g, "");
     if (cleanPhone.length < 13) {
-      setError("Telefon raqamni to'g'ri kiriting");
+      setError(t('login.phoneInvalid'));
       return;
     }
     setError("");
@@ -3062,13 +3085,13 @@ function LoginScreen({ onLogin, onRegister }: { onLogin: (u: any, company?: any)
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error || "Xatolik yuz berdi");
+        setError(data.error || t('login.genericError'));
         return;
       }
       setStep("code");
       setTimeLeft(120);
     } catch (err) {
-      setError("Server bilan ulanishda xatolik");
+      setError(t('login.serverError'));
     }
   };
 
@@ -3088,7 +3111,7 @@ function LoginScreen({ onLogin, onRegister }: { onLogin: (u: any, company?: any)
           setStep("blocked");
           return;
         }
-        setError(data.error || "Xatolik yuz berdi");
+        setError(data.error || t('login.genericError'));
         return;
       }
       const u = {
@@ -3099,12 +3122,14 @@ function LoginScreen({ onLogin, onRegister }: { onLogin: (u: any, company?: any)
         projectIds: data.user.projectIds || [],
         isOwner: data.user.isOwner || false,
         companyId: data.user.companyId,
+        language: data.user.language,
       };
       localStorage.setItem("token", data.token);
       localStorage.setItem("currentUser", JSON.stringify(u));
+      if (data.user.language) setSiteLanguage(data.user.language);
       onLogin(u, data.company);
     } catch (err) {
-      setError("Server bilan ulanishda xatolik");
+      setError(t('login.serverError'));
     }
   };
 
@@ -3125,7 +3150,7 @@ function LoginScreen({ onLogin, onRegister }: { onLogin: (u: any, company?: any)
         body: JSON.stringify({ phone: cleanPhone, password })
       });
       const data = await res.json();
-      if (!res.ok) { setError(data.error || "Xatolik yuz berdi"); return; }
+      if (!res.ok) { setError(data.error || t('login.genericError')); return; }
       const u = {
         id: data.user.id || data.user._id,
         name: data.user.firstName + (data.user.lastName ? " " + data.user.lastName : ""),
@@ -3134,12 +3159,14 @@ function LoginScreen({ onLogin, onRegister }: { onLogin: (u: any, company?: any)
         projectIds: data.user.projectIds || [],
         isOwner: false,
         companyId: undefined,
+        language: data.user.language,
       };
       localStorage.setItem("token", data.token);
       localStorage.setItem("currentUser", JSON.stringify(u));
+      if (data.user.language) setSiteLanguage(data.user.language);
       onLogin(u, data.company);
     } catch (err) {
-      setError("Server bilan ulanishda xatolik");
+      setError(t('login.serverError'));
     }
   };
 
@@ -3155,8 +3182,11 @@ function LoginScreen({ onLogin, onRegister }: { onLogin: (u: any, company?: any)
           {loginCompanyLogo ? <img src={loginCompanyLogo} alt="Logo" className="w-full h-full object-contain p-1"/> : <Building2 className="w-8 h-8 text-white"/>}
         </div>
         <h1 className="text-3xl font-bold font-['Roboto_Slab',serif] bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70">{loginCompanyName}</h1>
-        <p className="text-sm text-muted-foreground mt-1">Tizimga kirish</p>
+        <p className="text-sm text-muted-foreground mt-1">{t('login.subtitle')}</p>
       </motion.div>
+      <div className="mb-4 relative z-10">
+        <LanguageSwitcher size="sm" value={i18n.language as SiteLang} onChange={l => setSiteLanguage(l)}/>
+      </div>
       <motion.div initial={{ opacity: 0, y: 16, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ type: "spring", stiffness: 260, damping: 24, delay: 0.08 }}
         className="w-full max-w-sm space-y-4 glass p-7 rounded-[2rem] border border-white/20 shadow-2xl relative z-10 overflow-hidden">
         {error && <div className="bg-red-500/10 text-red-700 dark:text-red-400 text-sm md:text-xs p-3 rounded-lg border border-red-500/20 text-center">{error}</div>}
@@ -3168,14 +3198,14 @@ function LoginScreen({ onLogin, onRegister }: { onLogin: (u: any, company?: any)
           <form onSubmit={handlePhoneSubmit} className="space-y-4">
             <div className="bg-primary/5 border border-primary/10 rounded-xl p-3 mb-4">
               <p className="text-sm md:text-xs text-muted-foreground leading-relaxed text-center">
-                Oldin Telegram botimizga kiring, <span className="font-semibold text-foreground">/start</span> tugmasini bosib raqamingizni ulashing. Keyin shu yerga raqamingizni yozib kodni oling.
+                {t('login.botHintBefore')} <span className="font-semibold text-foreground">/start</span> {t('login.botHintAfter')}
               </p>
               <a href="https://t.me/qurilish_erp_bot" target="_blank" rel="noopener noreferrer" className="mt-2 text-sm md:text-xs font-semibold text-foreground flex items-center justify-center gap-1 hover:underline hover:text-primary">
-                <Send className="w-3 h-3 text-primary"/> @qurilish_erp_bot ga o'tish
+                <Send className="w-3 h-3 text-primary"/> {t('login.goToBot', { handle: '@qurilish_erp_bot' })}
               </a>
             </div>
             <div>
-              <label htmlFor="login-phone" className="text-sm md:text-xs font-medium block mb-1.5 ml-1 text-muted-foreground">Telefon raqamingiz</label>
+              <label htmlFor="login-phone" className="text-sm md:text-xs font-medium block mb-1.5 ml-1 text-muted-foreground">{t('login.phoneLabel')}</label>
               <div className="relative">
                 <Phone className="w-4 h-4 text-muted-foreground absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none"/>
                 <input id="login-phone" type="text" className="w-full text-sm border border-border/50 rounded-2xl pl-11 pr-4 py-3 bg-white/50 dark:bg-black/20 focus:bg-white dark:focus:bg-black/40 focus:outline-none focus:ring-2 focus:ring-primary/50 font-mono liquid-transition shadow-inner"
@@ -3188,7 +3218,7 @@ function LoginScreen({ onLogin, onRegister }: { onLogin: (u: any, company?: any)
               </div>
             </div>
             <button type="submit" className="w-full bg-gradient-to-r from-primary to-primary/90 text-white text-sm font-semibold py-3.5 rounded-full shadow-lg shadow-primary/25 hover:shadow-primary/40 hover:-translate-y-0.5 liquid-transition">
-              Kodni olish
+              {t('login.getCode')}
             </button>
           </form>
         ) : step === "blocked" ? (
@@ -3205,61 +3235,61 @@ function LoginScreen({ onLogin, onRegister }: { onLogin: (u: any, company?: any)
               )}
               {blockedReason === 'pending' && (
                 <>
-                  <p className="text-sm font-semibold">Obuna tasdiqini kutmoqda</p>
-                  <p className="text-xs text-muted-foreground leading-relaxed">Adminningiz obunangizni hali tasdiqlamagan. Tasdiqlanganida Telegram orqali xabar olasiz.</p>
+                  <p className="text-sm font-semibold">{t('login.subPendingTitle')}</p>
+                  <p className="text-xs text-muted-foreground leading-relaxed">{t('login.subPendingDesc')}</p>
                 </>
               )}
               {(blockedReason === 'expired' || blockedReason === 'rejected') && (
                 <>
-                  <p className="text-sm font-semibold">{blockedReason === 'expired' ? 'Obuna muddati tugagan' : 'Obuna rad etilgan'}</p>
-                  <p className="text-xs text-muted-foreground leading-relaxed">To'lovni yangilash va kirish huquqini qayta olish uchun admin bilan bog'laning.</p>
+                  <p className="text-sm font-semibold">{blockedReason === 'expired' ? t('login.subExpiredTitle') : t('login.subRejectedTitle')}</p>
+                  <p className="text-xs text-muted-foreground leading-relaxed">{t('login.subBlockedDesc')}</p>
                 </>
               )}
             </div>
             <a href="https://t.me/Sadriddinov_Jahongir" target="_blank" rel="noopener noreferrer"
               className="w-full inline-flex items-center justify-center gap-2 bg-blue-500 text-white text-sm font-semibold py-3.5 rounded-full min-h-[44px] active:scale-[0.98] transition-transform">
-              <Send className="w-4 h-4"/> @Sadriddinov_Jahongir'ga yozish
+              <Send className="w-4 h-4"/> {t('login.contactAdmin', { handle: '@Sadriddinov_Jahongir' })}
             </a>
             <button type="button" onClick={() => { setStep("phone"); setBlockedReason(null); setError(""); }}
               className="w-full text-sm text-muted-foreground hover:text-foreground py-2">
-              Orqaga
+              {t('login.back')}
             </button>
           </div>
         ) : step === "devpass" ? (
           <form onSubmit={handleDevLogin} className="space-y-4">
             <div className="bg-slate-800/5 border border-slate-800/10 rounded-xl p-3 mb-2 text-center">
-              <p className="text-sm md:text-xs text-muted-foreground">🛠 Dasturchi kirishi</p>
+              <p className="text-sm md:text-xs text-muted-foreground">{t('login.devLoginTitle')}</p>
               <p className="text-xs font-mono text-foreground mt-1">{phone}</p>
             </div>
             <div>
-              <label className="text-sm md:text-xs font-medium block mb-1.5 ml-1 text-muted-foreground text-center">Parol</label>
+              <label className="text-sm md:text-xs font-medium block mb-1.5 ml-1 text-muted-foreground text-center">{t('login.passwordLabel')}</label>
               <input type="password" className="w-full text-base text-center border border-border/50 rounded-xl px-4 py-3 bg-white/50 dark:bg-black/20 focus:bg-white dark:focus:bg-black/40 focus:outline-none focus:ring-2 focus:ring-primary/50 liquid-transition shadow-inner"
                 placeholder="••••••••" value={password} onChange={e => { setError(""); setPassword(e.target.value); }} autoFocus/>
             </div>
             <button type="submit" className="w-full bg-gradient-to-r from-primary to-primary/90 text-white text-sm font-semibold py-3.5 rounded-full shadow-lg shadow-primary/25 hover:shadow-primary/40 hover:-translate-y-0.5 liquid-transition">
-              Kirish
+              {t('login.signIn')}
             </button>
             <button type="button" onClick={() => { setStep("phone"); setPassword(""); }} className="w-full text-sm md:text-xs text-muted-foreground hover:text-foreground py-2 liquid-transition">
-              Raqamni o'zgartirish
+              {t('login.changeNumber')}
             </button>
           </form>
         ) : (
           <form onSubmit={handleCodeSubmit} className="space-y-4">
             <div>
-              <label className="text-sm md:text-xs font-medium block mb-2 text-muted-foreground text-center">Telegram botga yuborilgan 4 xonali kod</label>
+              <label className="text-sm md:text-xs font-medium block mb-2 text-muted-foreground text-center">{t('login.codeLabel')}</label>
               <OtpBoxes value={code} onChange={v => { setError(""); setCode(v); }} error={!!error} autoFocus/>
             </div>
             <button type="submit" className="w-full bg-gradient-to-r from-primary to-primary/90 text-white text-sm font-semibold py-3.5 rounded-full shadow-lg shadow-primary/25 hover:shadow-primary/40 hover:-translate-y-0.5 liquid-transition">
-              Tizimga kirish
+              {t('login.enterSystem')}
             </button>
             <div className="flex flex-col gap-2 pt-2">
               <button type="button" onClick={() => {
                 if (timeLeft === 0) handlePhoneSubmit();
               }} className={`w-full text-sm md:text-xs font-medium py-2 rounded-lg liquid-transition ${timeLeft > 0 ? "text-muted-foreground/50 cursor-not-allowed" : "text-primary hover:bg-primary/10"}`}>
-                {timeLeft > 0 ? `Qayta yuborish (${Math.floor(timeLeft / 60)}:${(timeLeft % 60).toString().padStart(2, '0')})` : "Kodni qayta yuborish"}
+                {timeLeft > 0 ? t('login.resendCountdown', { time: `${Math.floor(timeLeft / 60)}:${(timeLeft % 60).toString().padStart(2, '0')}` }) : t('login.resend')}
               </button>
               <button type="button" onClick={() => setStep("phone")} className="w-full text-sm md:text-xs text-muted-foreground hover:text-foreground py-2 liquid-transition">
-                Raqamni o'zgartirish
+                {t('login.changeNumber')}
               </button>
             </div>
           </form>
@@ -3273,12 +3303,12 @@ function LoginScreen({ onLogin, onRegister }: { onLogin: (u: any, company?: any)
         <div className="w-full max-w-sm mt-5 relative z-10 animate-fade-in">
           <div className="flex items-center gap-3 mb-3">
             <div className="h-px flex-1 bg-border/60" />
-            <span className="text-xs text-muted-foreground">yoki</span>
+            <span className="text-xs text-muted-foreground">{t('login.or')}</span>
             <div className="h-px flex-1 bg-border/60" />
           </div>
           <button type="button" onClick={onRegister}
             className="w-full text-sm font-semibold py-3 rounded-full border border-primary/30 text-foreground bg-primary/5 hover:bg-primary/10 liquid-transition flex items-center justify-center gap-2 min-h-[48px]">
-            <Building2 className="w-4 h-4 text-primary" /> Yangi foydalanuvchimisiz? Firma ochish
+            <Building2 className="w-4 h-4 text-primary" /> {t('login.newUser')}
           </button>
         </div>
       )}
@@ -3288,12 +3318,21 @@ function LoginScreen({ onLogin, onRegister }: { onLogin: (u: any, company?: any)
 
 // ─── Main App ──────────────────────────────────────────────────────────────────
 export default function App() {
+  const { t: tApp, i18n: i18nApp } = useTranslation();
   const anyBigModalOpen = useAnyBigModalOpen();
   const [users, setUsers] = useState<AppUser[]>([]);
   const [currentUser, setCurrentUser] = useState<AppUser|null>(()=>{
     const saved = localStorage.getItem("currentUser");
     return saved ? JSON.parse(saved) : null;
   });
+  // Saqlangan hisobning tili (bu qurilmadagi oxirgi tanlovdan farqli bo'lishi
+  // mumkin — masalan boshqa qurilmadan botda o'zgartirilgan bo'lsa) ustuvor.
+  useEffect(() => {
+    if (currentUser?.language && currentUser.language !== i18nApp.language) {
+      setSiteLanguage(currentUser.language);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.language]);
   // v1.2: kirish ekrani — login yoki yangi firma ochish (register wizard)
   const [authView, setAuthView] = useState<"login"|"register">(()=>{
     if (typeof window !== "undefined") {
@@ -3499,6 +3538,19 @@ export default function App() {
         setActiveCall({ direction: 'in', mode: d.mode || 'voice', peerId: d.from, groupId: d.groupId, offer: d.sdp, fromName: d.fromName });
       };
 
+      // Til boshqa qurilmadan (masalan bot orqali) o'zgartirilsa — shu yerda ham
+      // darhol yangi tilga o'tadi (va aksincha, sayt orqali o'zgartirsa botga ham boradi).
+      const onLanguage = ({ language }: any) => {
+        if (!language) return;
+        setSiteLanguage(language);
+        setCurrentUser(prev => {
+          if (!prev) return prev;
+          const updated = { ...prev, language };
+          localStorage.setItem("currentUser", JSON.stringify(updated));
+          return updated;
+        });
+      };
+
       socket.on("message:new", onNew);
       socket.on("message:edit", onEdit);
       socket.on("message:delete", onDelete);
@@ -3510,6 +3562,7 @@ export default function App() {
       socket.on("call:offer", onCallOffer);
       socket.on("transaction:update", onTxUpdate);
       socket.on("transaction:new", onTxNew);
+      socket.on("user:language", onLanguage);
 
       // Fallback polling (socket uzilsa) — kamroq
       const fetchTx = () => {
@@ -3534,6 +3587,7 @@ export default function App() {
         socket.off("group:update", onGroupUpdate);
         socket.off("group:removed", onGroupRemoved);
         socket.off("call:offer", onCallOffer);
+        socket.off("user:language", onLanguage);
         socket.off("transaction:update", onTxUpdate);
         socket.off("transaction:new", onTxNew);
       };
@@ -3749,13 +3803,13 @@ export default function App() {
 
   // Nav items based on role
   const NAV: { key: NavPage; label: string; icon: React.ElementType; badge?: number }[] = [
-    { key: "dashboard", label: "Bosh sahifa", icon: Home },
+    { key: "dashboard", label: tApp('nav.dashboard'), icon: Home },
     ...(admin ? [
-      { key: "finance" as NavPage, label: "Moliya", icon: DollarSign },
-      { key: "reports" as NavPage, label: "Hisobotlar", icon: BarChart2 },
+      { key: "finance" as NavPage, label: tApp('nav.finance'), icon: DollarSign },
+      { key: "reports" as NavPage, label: tApp('nav.reports'), icon: BarChart2 },
     ] : []),
-    { key: "chat", label: "Xabarlar", icon: MessageCircle, badge: unreadMsgs },
-    { key: "profile", label: "Profil", icon: User },
+    { key: "chat", label: tApp('nav.chat'), icon: MessageCircle, badge: unreadMsgs },
+    { key: "profile", label: tApp('nav.profile'), icon: User },
   ];
 
   const currentProject = selProject ? (projects.find(p=>p.id===selProject.id)??selProject) : null;

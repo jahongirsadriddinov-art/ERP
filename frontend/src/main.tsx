@@ -2,6 +2,7 @@
   import { createRoot } from "react-dom/client";
   import { MotionConfig } from "motion/react";
   import App from "./app/App.tsx";
+  import "./app/i18n";
   import "./styles/index.css";
 
   // reducedMotion="user" — OS darajasidagi "Reduce motion" sozlamasini

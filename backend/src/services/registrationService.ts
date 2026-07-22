@@ -32,6 +32,7 @@ export async function createRegistration(opts: {
   ip?: string;
   userAgent?: string;
   consents?: any;
+  language?: 'uz' | 'uz-cyrl' | 'ru';
 }): Promise<{ reg: IRegistration; rawToken: string }> {
   // Shu telefon uchun eski faol sessiyalarni bekor qilamiz (bittadan ortiq bo'lmasin).
   await Registration.updateMany(
@@ -45,6 +46,7 @@ export async function createRegistration(opts: {
     otpTokenHash: hashToken(rawToken),
     step: 'PHONE_ENTERED',
     consents: opts.consents || {},
+    language: opts.language || 'uz',
     phoneAttempts: 0,
     ip: opts.ip,
     userAgent: opts.userAgent,

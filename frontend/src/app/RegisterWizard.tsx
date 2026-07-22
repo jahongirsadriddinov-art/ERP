@@ -2,7 +2,10 @@ import { useState, useRef, useEffect } from "react";
 import { ArrowLeft, AlertTriangle, CheckCircle, Send, Loader2, Check, Camera, Copy, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 import { motion } from "motion/react";
+import { useTranslation } from "react-i18next";
 import { API_BASE, uploadChatMedia } from "./api";
+import { setSiteLanguage, SiteLang } from "./i18n";
+import LanguageSwitcher from "./i18n/LanguageSwitcher";
 
 // v1.2 self-signup — faqat yangi firma ochayotgan foydalanuvchi ko'radi,
 // shuning uchun alohida faylga chiqarilib React.lazy orqali faqat
@@ -21,9 +24,11 @@ function RegField({ label, children, hint }: { label: string; children: any; hin
 }
 
 export default function RegisterWizard({ onBack, onDone }: { onBack: () => void; onDone: (u: any, company?: any) => void }) {
+  const { t, i18n } = useTranslation();
   const [step, setStep] = useState<RegStep>("warn");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [regLanguage, setRegLanguage] = useState<SiteLang>((i18n.language as SiteLang) || 'uz');
 
   // Qadam 1 — ogohlantirish
   const [ownerConfirm, setOwnerConfirm] = useState(false);
@@ -135,7 +140,7 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
     try {
       const res = await fetch(`${API_BASE}/api/register/phone`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: clean, ownerConfirm }),
+        body: JSON.stringify({ phone: clean, ownerConfirm, language: regLanguage }),
       });
       const d = await res.json();
       if (!res.ok) { setError(d.error || "Xatolik"); setLoading(false); return; }
@@ -241,6 +246,10 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
           {/* ── Qadam 1: Ogohlantirish ── */}
           {step === "warn" && (
             <div className="space-y-5 animate-slide-up-fade">
+              <div className="space-y-1.5">
+                <p className="text-xs text-muted-foreground text-center">{t('login.chooseLanguage')}</p>
+                <LanguageSwitcher size="sm" value={regLanguage} onChange={l => { setRegLanguage(l); setSiteLanguage(l); }}/>
+              </div>
               <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4">
                 <div className="flex items-center gap-2 mb-2 text-amber-800 dark:text-amber-300 font-bold">
                   <AlertTriangle className="w-5 h-5" /> Diqqat!

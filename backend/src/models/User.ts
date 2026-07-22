@@ -19,6 +19,7 @@ export interface IUser extends Document {
   middleName?: string;     // otasining ismi (ixtiyoriy)
   email?: string;          // ixtiyoriy
   position?: string;       // lavozim (default: Direktor)
+  language?: 'uz' | 'uz-cyrl' | 'ru'; // sayt/bot interfeysi tili — profildan yoki botdan o'zgartiriladi, ikkalasi sinxron
 }
 
 const UserSchema: Schema = new Schema({
@@ -39,7 +40,8 @@ const UserSchema: Schema = new Schema({
   passwordHash: { type: String },
   middleName: { type: String },
   email: { type: String },
-  position: { type: String }
+  position: { type: String },
+  language: { type: String, enum: ['uz', 'uz-cyrl', 'ru'], default: 'uz' }
 }, { timestamps: true });
 
 export default mongoose.model<IUser>('User', UserSchema);

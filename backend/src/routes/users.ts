@@ -2,6 +2,7 @@ import { Router } from 'express';
 import User from '../models/User';
 import { scoped } from '../middleware/scope';
 import { getTenant } from '../middleware/tenantContext';
+import { emitToUser } from '../services/socket';
 
 const router = Router();
 
@@ -29,7 +30,7 @@ router.get('/', async (req, res) => {
 // Update user
 router.put('/:id', async (req, res) => {
   try {
-    const { firstName, lastName, companyId } = req.body;
+    const { firstName, lastName, companyId, language } = req.body;
     const user = await User.findOne(scoped({ _id: req.params.id }));
     if (!user) return res.status(404).json({ error: 'Foydalanuvchi topilmadi' });
 
@@ -41,15 +42,24 @@ router.put('/:id', async (req, res) => {
     if (companyId !== undefined && getTenant()?.isDeveloper) {
       user.companyId = companyId || undefined;
     }
+    let languageChanged = false;
+    if (language && ['uz', 'uz-cyrl', 'ru'].includes(language) && language !== user.language) {
+      user.language = language;
+      languageChanged = true;
+    }
 
     await user.save();
+    // Real vaqtda sinxronlash — profildan o'zgartirilsa botdagi (yoki boshqa ochiq
+    // qurilmadagi) sessiya ham darhol yangi tilga o'tsin.
+    if (languageChanged) emitToUser(String(user._id), 'user:language', { language: user.language });
     res.json({
       id: user._id,
       name: user.firstName + (user.lastName ? ' ' + user.lastName : ''),
       phone: user.phone,
       role: user.role,
       brigade: user.brigade,
-      companyId: user.companyId || null
+      companyId: user.companyId || null,
+      language: user.language || 'uz'
     });
   } catch (err) {
     res.status(500).json({ error: 'Server xatoligi' });

@@ -9,6 +9,7 @@ import Message from '../models/Message';
 import Group from '../models/Group';
 import { initRegistrationScene, isInRegistration } from './registrationScene';
 import { emitToUser, emitToGroup } from './socket';
+import { tb, langLabel, BotLang } from '../i18n/bot';
 
 dotenv.config();
 
@@ -26,32 +27,35 @@ const isHttps = SITE_URL.startsWith('https');
 // o'z ochiq manzili (SITE_URL frontend manzili, bunga mos kelmaydi).
 const BACKEND_URL = (process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 5000}`).replace(/\/$/, '');
 
-const ADMIN_KEYBOARD = {
-  keyboard: [
-    isHttps
-      ? [{ text: '🌐 Saytga kirish', web_app: { url: SITE_URL } }]
-      : [{ text: '🌐 Saytga kirish: ' + SITE_URL }],
-    [{ text: '💬 Chat' }],
-    [{ text: '📋 Kutilayotgan tasdiqlar' }],
-    [{ text: '💰 Moliyaviy holat' }, { text: '🏗 Obyektlar' }],
-    [{ text: '👥 Xodimlar ro\'yxati' }, { text: '📊 Hisobot' }],
-    [{ text: '💳 Obuna holati' }],
-  ],
-  resize_keyboard: true,
-};
+// Klaviaturalar til bo'yicha — foydalanuvchining o'zi tanlagan (yoki saytdan
+// sinxronlangan) tiliga qarab tugma matnlari o'zgaradi.
+const openSiteBtn = (lang?: BotLang) => isHttps
+  ? { text: tb(lang, 'kb_openSite'), web_app: { url: SITE_URL } }
+  : { text: tb(lang, 'kb_openSiteUrl', { url: SITE_URL }) };
 
-const USER_KEYBOARD = {
+const ADMIN_KEYBOARD = (lang?: BotLang) => ({
   keyboard: [
-    isHttps
-      ? [{ text: '🌐 Saytga kirish', web_app: { url: SITE_URL } }]
-      : [{ text: '🌐 Saytga kirish: ' + SITE_URL }],
-    [{ text: '💬 Chat' }],
-    [{ text: '📦 Menga kelgan yukxatlar' }],
-    [{ text: '📤 Yuborgan yukxatlarim' }],
-    [{ text: '📬 Menga kelgan to\'lovlar' }],
+    [openSiteBtn(lang)],
+    [{ text: tb(lang, 'kb_chat') }],
+    [{ text: tb(lang, 'kb_pendingApprovals') }],
+    [{ text: tb(lang, 'kb_financeStatus') }, { text: tb(lang, 'kb_objects') }],
+    [{ text: tb(lang, 'kb_staffList') }, { text: tb(lang, 'kb_report') }],
+    [{ text: tb(lang, 'kb_subscriptionStatus') }, { text: tb(lang, 'kb_language') }],
   ],
   resize_keyboard: true,
-};
+});
+
+const USER_KEYBOARD = (lang?: BotLang) => ({
+  keyboard: [
+    [openSiteBtn(lang)],
+    [{ text: tb(lang, 'kb_chat') }],
+    [{ text: tb(lang, 'kb_incomingTransfers') }],
+    [{ text: tb(lang, 'kb_sentTransfers') }],
+    [{ text: tb(lang, 'kb_incomingPayments') }],
+    [{ text: tb(lang, 'kb_language') }],
+  ],
+  resize_keyboard: true,
+});
 
 // ─── Bot ichidan chat (kontakt/guruh tanlab yozish) ─────────────────────────────
 // Xotiradagi holat: chatId → tanlangan suhbat. Server qayta ishga tushsa
@@ -113,16 +117,15 @@ function fmt(n: number) {
   return Math.round(n).toLocaleString('uz-UZ') + ' so\'m';
 }
 
-const DEVELOPER_KEYBOARD = {
+const DEVELOPER_KEYBOARD = (lang?: BotLang) => ({
   keyboard: [
-    isHttps
-      ? [{ text: '🌐 Saytga kirish', web_app: { url: SITE_URL } }]
-      : [{ text: '🌐 Saytga kirish: ' + SITE_URL }],
-    [{ text: '🏢 Firmalar ro\'yxati' }, { text: '👥 Barcha foydalanuvchilar' }],
-    [{ text: '💳 Barcha obunalar' }, { text: '📊 Umumiy statistika' }],
+    [openSiteBtn(lang)],
+    [{ text: tb(lang, 'kb_firmsList') }, { text: tb(lang, 'kb_allUsers') }],
+    [{ text: tb(lang, 'kb_allSubscriptions') }, { text: tb(lang, 'kb_generalStats') }],
+    [{ text: tb(lang, 'kb_language') }],
   ],
   resize_keyboard: true,
-};
+});
 
 // ─── /start command ────────────────────────────────────────────────────────────
 bot.onText(/\/start/, async (msg: any) => {
@@ -133,20 +136,21 @@ bot.onText(/\/start/, async (msg: any) => {
   // Check if this chatId already belongs to a user
   const existing = await User.findOne({ telegramChatId: chatId.toString() }).catch(() => null);
   if (existing) {
-    const keyboard = isDev(existing.role) ? DEVELOPER_KEYBOARD : isAdmin(existing.role) ? ADMIN_KEYBOARD : USER_KEYBOARD;
+    const lang = existing.language as BotLang | undefined;
+    const keyboard = isDev(existing.role) ? DEVELOPER_KEYBOARD(lang) : isAdmin(existing.role) ? ADMIN_KEYBOARD(lang) : USER_KEYBOARD(lang);
     bot.sendMessage(chatId,
-      `✅ Xush kelibsiz, ${existing.firstName}!\n\nSiz tizimga ulanganmiz. Quyidagi menyudan foydalaning:`,
+      tb(lang, 'startWelcomeBack', { name: existing.firstName }),
       { reply_markup: keyboard }
     );
     return;
   }
 
   bot.sendMessage(chatId,
-    '👋 Assalomu alaykum! *QurilishERP* botiga xush kelibsiz.\n\nTizimga kirish uchun telefon raqamingizni yuboring:',
+    tb(undefined, 'startWelcomeNew'),
     {
       parse_mode: 'Markdown',
       reply_markup: {
-        keyboard: [[{ text: '📱 Telefon raqamni yuborish', request_contact: true }]],
+        keyboard: [[{ text: tb(undefined, 'sharePhoneBtn'), request_contact: true }]],
         resize_keyboard: true,
         one_time_keyboard: true,
       },
@@ -161,7 +165,7 @@ bot.on('contact', async (msg: any) => {
   const contact = msg.contact;
 
   if (!contact || contact.user_id !== msg.from?.id) {
-    bot.sendMessage(chatId, '❗ Iltimos, o\'z raqamingizni yuboring.');
+    bot.sendMessage(chatId, tb(undefined, 'contactMismatch'));
     return;
   }
 
@@ -171,20 +175,21 @@ bot.on('contact', async (msg: any) => {
   try {
     const user = await User.findOne({ phone });
     if (!user) {
-      bot.sendMessage(chatId, '❌ Raqamingiz tizimda topilmadi. Administrator bilan bog\'laning.');
+      bot.sendMessage(chatId, tb(undefined, 'contactNotFound'));
       return;
     }
 
     user.telegramChatId = chatId.toString();
     await user.save();
 
+    const lang = user.language as BotLang | undefined;
     bot.sendMessage(chatId,
-      `✅ Raqamingiz tasdiqlandi!\n\n👤 *${user.firstName} ${user.lastName || ''}*\n🏷 Lavozim: ${user.role}\n\nEndi saytga qaytib, raqamingizni kiritgan holda "Kodni olish" tugmasini bosing.`,
-      { parse_mode: 'Markdown', reply_markup: isDev(user.role) ? DEVELOPER_KEYBOARD : isAdmin(user.role) ? ADMIN_KEYBOARD : USER_KEYBOARD }
+      tb(lang, 'contactConfirmed', { name: `${user.firstName} ${user.lastName || ''}`.trim(), role: user.role }),
+      { parse_mode: 'Markdown', reply_markup: isDev(user.role) ? DEVELOPER_KEYBOARD(lang) : isAdmin(user.role) ? ADMIN_KEYBOARD(lang) : USER_KEYBOARD(lang) }
     );
   } catch (err) {
     console.error(err);
-    bot.sendMessage(chatId, '⚠️ Tizimda xatolik. Keyinroq qayta urinib ko\'ring.');
+    bot.sendMessage(chatId, tb(undefined, 'genericError'));
   }
 });
 
@@ -199,8 +204,9 @@ bot.on('message', async (msg: any) => {
     if (msg.text === EXIT_CHAT_TEXT) {
       chatSessions.delete(chatId);
       const u = await User.findById(activeChat.myUserId).catch(() => null);
-      const kb = u && isDev(u.role) ? DEVELOPER_KEYBOARD : u && isAdmin(u.role) ? ADMIN_KEYBOARD : USER_KEYBOARD;
-      bot.sendMessage(chatId, `Chat tugatildi (${activeChat.targetName}).`, { reply_markup: kb });
+      const ulang = u?.language as BotLang | undefined;
+      const kb = u && isDev(u.role) ? DEVELOPER_KEYBOARD(ulang) : u && isAdmin(u.role) ? ADMIN_KEYBOARD(ulang) : USER_KEYBOARD(ulang);
+      bot.sendMessage(chatId, tb(ulang, 'chatSessionEnd', { name: activeChat.targetName }), { reply_markup: kb });
       return;
     }
     try {
@@ -223,12 +229,12 @@ bot.on('message', async (msg: any) => {
       } else if (msg.location) {
         await relayBotMessageToSite(activeChat, { type: 'location', location: { lat: msg.location.latitude, lng: msg.location.longitude } });
       } else {
-        bot.sendMessage(chatId, 'Bu turdagi xabar hali qo\'llab-quvvatlanmaydi.');
+        bot.sendMessage(chatId, tb(undefined, 'chatUnsupportedType'));
         return;
       }
     } catch (err) {
       console.error('[bot chat relay]', err);
-      bot.sendMessage(chatId, '⚠️ Yuborishda xatolik yuz berdi.');
+      bot.sendMessage(chatId, tb(undefined, 'chatSendError'));
     }
     return;
   }
@@ -240,15 +246,30 @@ bot.on('message', async (msg: any) => {
 
   const user = await User.findOne({ telegramChatId: chatId.toString() }).catch(() => null);
   if (!user) {
-    bot.sendMessage(chatId, '❗ Avval ro\'yxatdan o\'ting: /start');
+    bot.sendMessage(chatId, tb(undefined, 'notRegistered'));
     return;
   }
 
   const admin = isAdmin(user.role);
   const developer = isDev(user.role);
+  const lang = user.language as BotLang | undefined;
+
+  // ── Til tanlash — hamma rol uchun ─────────────────────────────────────────
+  if (text === tb(lang, 'kb_language')) {
+    bot.sendMessage(chatId, tb(lang, 'langPrompt'), {
+      reply_markup: {
+        inline_keyboard: [[
+          { text: langLabel('uz'), callback_data: 'setlang_uz' },
+          { text: langLabel('uz-cyrl'), callback_data: 'setlang_uz-cyrl' },
+          { text: langLabel('ru'), callback_data: 'setlang_ru' },
+        ]],
+      },
+    });
+    return;
+  }
 
   // ── Chat (kontakt yoki guruh tanlab yozish) — hamma rol uchun ────────────
-  if (text === '💬 Chat') {
+  if (text === tb(lang, 'kb_chat')) {
     try {
       const filter = user.companyId ? { companyId: user.companyId } : {};
       const [contacts, groups] = await Promise.all([
@@ -256,41 +277,41 @@ bot.on('message', async (msg: any) => {
         Group.find({ memberIds: String(user._id) }).select('name').limit(30).lean(),
       ]);
       if (contacts.length === 0 && groups.length === 0) {
-        bot.sendMessage(chatId, 'Hozircha yozadigan kontakt yoki guruh yo\'q.');
+        bot.sendMessage(chatId, tb(lang, 'chatNoContacts'));
         return;
       }
       const rows: any[][] = [];
       groups.forEach((g: any) => rows.push([{ text: `👥 ${g.name}`, callback_data: `chatpick_group_${g._id}` }]));
       contacts.forEach((c: any) => rows.push([{ text: `${c.firstName} ${c.lastName || ''}`.trim(), callback_data: `chatpick_user_${c._id}` }]));
-      bot.sendMessage(chatId, 'Kimga yozmoqchisiz?', { reply_markup: { inline_keyboard: rows } });
+      bot.sendMessage(chatId, tb(lang, 'chatWhoTo'), { reply_markup: { inline_keyboard: rows } });
     } catch (err) {
       console.error('[bot chat picker]', err);
-      bot.sendMessage(chatId, '⚠️ Xatolik.');
+      bot.sendMessage(chatId, tb(lang, 'genericError'));
     }
     return;
   }
 
   // ── DEVELOPER commands ────────────────────────────────────────────────────
   if (developer) {
-    if (text === '🏢 Firmalar ro\'yxati') {
+    if (text === tb(user.language, 'kb_firmsList')) {
       try {
         const Company = require('../models/Company').default;
         const firms = await Company.find({}).select('name branchId status').lean();
         if (firms.length === 0) {
-          bot.sendMessage(chatId, 'Firma yo\'q.', { reply_markup: DEVELOPER_KEYBOARD });
+          bot.sendMessage(chatId, 'Firma yo\'q.', { reply_markup: DEVELOPER_KEYBOARD(user.language) });
           return;
         }
         const lines = firms.map((c: any, i: number) =>
           `${i + 1}. *${c.name}* (${c.branchId || '—'}) — ${c.status || '?'}`
         ).join('\n');
-        bot.sendMessage(chatId, `🏢 *Firmalar:*\n\n${lines}`, { parse_mode: 'Markdown', reply_markup: DEVELOPER_KEYBOARD });
+        bot.sendMessage(chatId, `🏢 *Firmalar:*\n\n${lines}`, { parse_mode: 'Markdown', reply_markup: DEVELOPER_KEYBOARD(user.language) });
       } catch {
-        bot.sendMessage(chatId, '⚠️ Xatolik.', { reply_markup: DEVELOPER_KEYBOARD });
+        bot.sendMessage(chatId, tb(user.language, 'genericError'), { reply_markup: DEVELOPER_KEYBOARD(user.language) });
       }
       return;
     }
 
-    if (text === '👥 Barcha foydalanuvchilar') {
+    if (text === tb(user.language, 'kb_allUsers')) {
       try {
         const allUsers = await User.find({}).select('firstName lastName role phone companyId').lean().limit(30);
         const Company = require('../models/Company').default;
@@ -300,20 +321,20 @@ bot.on('message', async (msg: any) => {
         const lines = (allUsers as any[]).map(u =>
           `• *${u.firstName} ${u.lastName || ''}* — ${u.role}\n  ${u.phone || '—'} | ${cMap[String(u.companyId)] || '—'}`
         ).join('\n');
-        bot.sendMessage(chatId, `👥 *Foydalanuvchilar:*\n\n${lines}`, { parse_mode: 'Markdown', reply_markup: DEVELOPER_KEYBOARD });
+        bot.sendMessage(chatId, `👥 *Foydalanuvchilar:*\n\n${lines}`, { parse_mode: 'Markdown', reply_markup: DEVELOPER_KEYBOARD(user.language) });
       } catch {
-        bot.sendMessage(chatId, '⚠️ Xatolik.', { reply_markup: DEVELOPER_KEYBOARD });
+        bot.sendMessage(chatId, tb(user.language, 'genericError'), { reply_markup: DEVELOPER_KEYBOARD(user.language) });
       }
       return;
     }
 
-    if (text === '💳 Barcha obunalar') {
+    if (text === tb(user.language, 'kb_allSubscriptions')) {
       try {
         const Subscription = require('../models/Subscription').default;
         const Company = require('../models/Company').default;
         const subs = await Subscription.find({}).sort({ createdAt: -1 }).limit(20).lean();
         if (subs.length === 0) {
-          bot.sendMessage(chatId, 'Obuna yo\'q.', { reply_markup: DEVELOPER_KEYBOARD });
+          bot.sendMessage(chatId, 'Obuna yo\'q.', { reply_markup: DEVELOPER_KEYBOARD(user.language) });
           return;
         }
         const companies = await Company.find({}).select('name').lean();
@@ -323,14 +344,14 @@ bot.on('message', async (msg: any) => {
           const statusIcon = s.status === 'active' ? '✅' : s.status === 'pending' ? '⏳' : '❌';
           return `${statusIcon} *${cMap[String(s.companyId)] || '—'}* — ${s.selectedPlan || s.plan || '—'}`;
         }).join('\n');
-        bot.sendMessage(chatId, `💳 *Obunalar:*\n\n${lines}`, { parse_mode: 'Markdown', reply_markup: DEVELOPER_KEYBOARD });
+        bot.sendMessage(chatId, `💳 *Obunalar:*\n\n${lines}`, { parse_mode: 'Markdown', reply_markup: DEVELOPER_KEYBOARD(user.language) });
       } catch {
-        bot.sendMessage(chatId, '⚠️ Xatolik.', { reply_markup: DEVELOPER_KEYBOARD });
+        bot.sendMessage(chatId, tb(user.language, 'genericError'), { reply_markup: DEVELOPER_KEYBOARD(user.language) });
       }
       return;
     }
 
-    if (text === '📊 Umumiy statistika') {
+    if (text === tb(user.language, 'kb_generalStats')) {
       try {
         const Company = require('../models/Company').default;
         const Subscription = require('../models/Subscription').default;
@@ -342,25 +363,25 @@ bot.on('message', async (msg: any) => {
         ]);
         bot.sendMessage(chatId,
           `📊 *Umumiy statistika*\n\n🏢 Firmalar: *${firmCount}*\n👥 Foydalanuvchilar: *${userCount}*\n✅ Faol obunalar: *${activeSubs}*\n⏳ Kutilayotgan: *${pendingSubs}*`,
-          { parse_mode: 'Markdown', reply_markup: DEVELOPER_KEYBOARD }
+          { parse_mode: 'Markdown', reply_markup: DEVELOPER_KEYBOARD(user.language) }
         );
       } catch {
-        bot.sendMessage(chatId, '⚠️ Xatolik.', { reply_markup: DEVELOPER_KEYBOARD });
+        bot.sendMessage(chatId, tb(user.language, 'genericError'), { reply_markup: DEVELOPER_KEYBOARD(user.language) });
       }
       return;
     }
 
-    bot.sendMessage(chatId, 'Menyudan birini tanlang:', { reply_markup: DEVELOPER_KEYBOARD });
+    bot.sendMessage(chatId, tb(user.language, 'chooseFromMenu'), { reply_markup: DEVELOPER_KEYBOARD(user.language) });
     return;
   }
 
   // ── ADMIN commands ────────────────────────────────────────────────────────
   if (admin) {
-    if (text === '📋 Kutilayotgan tasdiqlar') {
+    if (text === tb(user.language, 'kb_pendingApprovals')) {
       try {
         const pending = await Transaction.find({ status: 'pending' }).sort({ createdAt: -1 }).limit(10);
         if (pending.length === 0) {
-          bot.sendMessage(chatId, '✅ Hozircha barcha tasdiqlar tugagan. Yangi tasdiq yo\'q.', { reply_markup: ADMIN_KEYBOARD });
+          bot.sendMessage(chatId, '✅ Hozircha barcha tasdiqlar tugagan. Yangi tasdiq yo\'q.', { reply_markup: ADMIN_KEYBOARD(user.language) });
           return;
         }
         for (const tx of pending) {
@@ -374,19 +395,19 @@ bot.on('message', async (msg: any) => {
             parse_mode: 'Markdown',
             reply_markup: {
               inline_keyboard: [[
-                { text: '✅ Tasdiqlash', callback_data: `confirm_${tx._id}` },
-                { text: '❌ Rad etish', callback_data: `reject_${tx._id}` },
+                { text: tb(user.language, 'confirmBtn'), callback_data: `confirm_${tx._id}` },
+                { text: tb(user.language, 'rejectBtn'), callback_data: `reject_${tx._id}` },
               ]],
             },
           });
         }
       } catch (err) {
-        bot.sendMessage(chatId, '⚠️ Ma\'lumot olishda xatolik.');
+        bot.sendMessage(chatId, tb(user.language, 'genericError'));
       }
       return;
     }
 
-    if (text === '💰 Moliyaviy holat') {
+    if (text === tb(user.language, 'kb_financeStatus')) {
       try {
         const confirmed = await Transaction.find({ status: 'confirmed', type: { $ne: 'transfer' } });
         const total = confirmed.reduce((s: number, t: any) => s + (t.amount || 0), 0);
@@ -394,44 +415,44 @@ bot.on('message', async (msg: any) => {
         const pendTotal = pending.reduce((s: number, t: any) => s + (t.amount || 0), 0);
         bot.sendMessage(chatId,
           `📊 *Moliyaviy holat*\n\n✅ Tasdiqlangan chiqimlar: *${fmt(total)}*\n⏳ Kutilayotgan: *${fmt(pendTotal)}*\n\nFarq: *${fmt(total - pendTotal)}*`,
-          { parse_mode: 'Markdown', reply_markup: ADMIN_KEYBOARD }
+          { parse_mode: 'Markdown', reply_markup: ADMIN_KEYBOARD(user.language) }
         );
       } catch {
-        bot.sendMessage(chatId, '⚠️ Xatolik.', { reply_markup: ADMIN_KEYBOARD });
+        bot.sendMessage(chatId, tb(user.language, 'genericError'), { reply_markup: ADMIN_KEYBOARD(user.language) });
       }
       return;
     }
 
-    if (text === '🏗 Obyektlar') {
+    if (text === tb(user.language, 'kb_objects')) {
       try {
         const ObjectModel = require('../models/Object').default;
         const filter = user.companyId ? { companyId: user.companyId } : {};
         const objects = await ObjectModel.find(filter).limit(20);
         if (objects.length === 0) {
-          bot.sendMessage(chatId, 'Hozircha obyekt yo\'q.', { reply_markup: ADMIN_KEYBOARD });
+          bot.sendMessage(chatId, 'Hozircha obyekt yo\'q.', { reply_markup: ADMIN_KEYBOARD(user.language) });
           return;
         }
         const lines = objects.map((o: any, i: number) => `${i + 1}. *${o.name}*\n   📍 ${o.location || '—'} | Budjet: ${fmt(o.budget || 0)}`).join('\n\n');
-        bot.sendMessage(chatId, `🏗 *Obyektlar ro'yxati:*\n\n${lines}`, { parse_mode: 'Markdown', reply_markup: ADMIN_KEYBOARD });
+        bot.sendMessage(chatId, `🏗 *Obyektlar ro'yxati:*\n\n${lines}`, { parse_mode: 'Markdown', reply_markup: ADMIN_KEYBOARD(user.language) });
       } catch {
-        bot.sendMessage(chatId, '⚠️ Xatolik.', { reply_markup: ADMIN_KEYBOARD });
+        bot.sendMessage(chatId, tb(user.language, 'genericError'), { reply_markup: ADMIN_KEYBOARD(user.language) });
       }
       return;
     }
 
-    if (text === '👥 Xodimlar ro\'yxati') {
+    if (text === tb(user.language, 'kb_staffList')) {
       try {
         const filter = user.companyId ? { companyId: user.companyId } : {};
         const companyUsers = await User.find(filter).select('firstName lastName role phone');
         const lines = companyUsers.map(u => `• *${u.firstName} ${u.lastName || ''}* — ${u.role}\n  📞 ${u.phone}`).join('\n');
-        bot.sendMessage(chatId, `👥 *Xodimlar:*\n\n${lines}`, { parse_mode: 'Markdown', reply_markup: ADMIN_KEYBOARD });
+        bot.sendMessage(chatId, `👥 *Xodimlar:*\n\n${lines}`, { parse_mode: 'Markdown', reply_markup: ADMIN_KEYBOARD(user.language) });
       } catch {
-        bot.sendMessage(chatId, '⚠️ Xatolik.', { reply_markup: ADMIN_KEYBOARD });
+        bot.sendMessage(chatId, tb(user.language, 'genericError'), { reply_markup: ADMIN_KEYBOARD(user.language) });
       }
       return;
     }
 
-    if (text === '📊 Hisobot') {
+    if (text === tb(user.language, 'kb_report')) {
       try {
         const allTx = await Transaction.find({});
         const transfers = allTx.filter((t: any) => t.type === 'transfer');
@@ -440,54 +461,54 @@ bot.on('message', async (msg: any) => {
         const pendCount = allTx.filter((t: any) => t.status === 'pending').length;
         bot.sendMessage(chatId,
           `📊 *Umumiy hisobot*\n\n📦 Jami yukxatlar: *${transfers.length}*\n💰 Jami chiqimlar: *${fmt(confExp)}*\n⏳ Kutilayotgan tasdiqlar: *${pendCount}*`,
-          { parse_mode: 'Markdown', reply_markup: ADMIN_KEYBOARD }
+          { parse_mode: 'Markdown', reply_markup: ADMIN_KEYBOARD(user.language) }
         );
       } catch {
-        bot.sendMessage(chatId, '⚠️ Xatolik.', { reply_markup: ADMIN_KEYBOARD });
+        bot.sendMessage(chatId, tb(user.language, 'genericError'), { reply_markup: ADMIN_KEYBOARD(user.language) });
       }
       return;
     }
 
     // Unknown admin message — show keyboard
-    bot.sendMessage(chatId, 'Menyudan birini tanlang:', { reply_markup: ADMIN_KEYBOARD });
+    bot.sendMessage(chatId, tb(user.language, 'chooseFromMenu'), { reply_markup: ADMIN_KEYBOARD(user.language) });
     return;
   }
 
   // ── Obuna holati (faqat rahbar/o'rinbosar va dasturchi) ──────────────────
-  if (text === '💳 Obuna holati') {
+  if (text === tb(lang, 'kb_subscriptionStatus')) {
     if (!admin && !developer) {
-      bot.sendMessage(chatId, 'Bu bo\'lim faqat rahbar va o\'rinbosar uchun.', { reply_markup: USER_KEYBOARD });
+      bot.sendMessage(chatId, tb(lang, 'subOnlyBoss'), { reply_markup: USER_KEYBOARD(lang) });
       return;
     }
     try {
       const Subscription = require('../models/Subscription').default;
       const sub = user.companyId ? await Subscription.findOne({ companyId: user.companyId }).sort({ createdAt: -1 }) : null;
       if (!sub) {
-        bot.sendMessage(chatId, '📭 Obuna ma\'lumoti topilmadi.', { reply_markup: admin ? ADMIN_KEYBOARD : USER_KEYBOARD });
+        bot.sendMessage(chatId, tb(lang, 'subNotFound'), { reply_markup: admin ? ADMIN_KEYBOARD(lang) : USER_KEYBOARD(lang) });
         return;
       }
       const now = new Date();
       let statusText = '';
-      if (sub.status === 'pending') statusText = '⏳ Admin tasdiqini kutmoqda';
+      if (sub.status === 'pending') statusText = tb(lang, 'subPending');
       else if (sub.status === 'active') {
         const daysLeft = sub.currentPeriodEnd
           ? Math.max(0, Math.ceil((sub.currentPeriodEnd.getTime() - now.getTime()) / 86400000))
           : null;
-        statusText = daysLeft !== null ? `✅ Faol (${daysLeft} kun qoldi)` : '✅ Faol';
-      } else if (sub.status === 'expired') statusText = '🔴 Muddati tugagan';
-      else if (sub.status === 'rejected') statusText = '❌ Rad etilgan';
+        statusText = daysLeft !== null ? tb(lang, 'subActiveDays', { days: daysLeft }) : tb(lang, 'subActive');
+      } else if (sub.status === 'expired') statusText = tb(lang, 'subExpired');
+      else if (sub.status === 'rejected') statusText = tb(lang, 'subRejected');
       else statusText = sub.status;
       const endDate = sub.currentPeriodEnd ? sub.currentPeriodEnd.toLocaleDateString('uz-UZ') : '—';
       await bot.sendMessage(chatId,
-        `💳 <b>Obuna holati</b>\n\nHolat: ${statusText}\nTugash: <b>${endDate}</b>\n\nSavollar uchun: <a href="https://t.me/Sadriddinov_Jahongir">@Sadriddinov_Jahongir</a>`,
-        { parse_mode: 'HTML', reply_markup: developer ? DEVELOPER_KEYBOARD : admin ? ADMIN_KEYBOARD : USER_KEYBOARD }
+        tb(lang, 'subStatusMsg', { status: statusText, end: endDate }),
+        { parse_mode: 'HTML', reply_markup: developer ? DEVELOPER_KEYBOARD(lang) : admin ? ADMIN_KEYBOARD(lang) : USER_KEYBOARD(lang) }
       );
-    } catch { bot.sendMessage(chatId, '⚠️ Xatolik.'); }
+    } catch { bot.sendMessage(chatId, tb(lang, 'genericError')); }
     return;
   }
 
   // ── NON-ADMIN commands ────────────────────────────────────────────────────
-  if (text === '📦 Menga kelgan yukxatlar') {
+  if (text === tb(user.language, 'kb_incomingTransfers')) {
     try {
       const txs = await Transaction.find({
         type: 'transfer',
@@ -496,7 +517,7 @@ bot.on('message', async (msg: any) => {
       }).sort({ createdAt: -1 }).limit(10);
 
       if (txs.length === 0) {
-        bot.sendMessage(chatId, 'Hozircha siz uchun yukxat yo\'q.', { reply_markup: USER_KEYBOARD });
+        bot.sendMessage(chatId, 'Hozircha siz uchun yukxat yo\'q.', { reply_markup: USER_KEYBOARD(user.language) });
         return;
       }
       for (const tx of txs) {
@@ -507,8 +528,8 @@ bot.on('message', async (msg: any) => {
             parse_mode: 'Markdown',
             reply_markup: {
               inline_keyboard: [[
-                { text: '✅ Qabul qilish', callback_data: `confirm_${tx._id}` },
-                { text: '❌ Rad etish', callback_data: `reject_${tx._id}` },
+                { text: tb(user.language, 'acceptBtn'), callback_data: `confirm_${tx._id}` },
+                { text: tb(user.language, 'rejectBtn'), callback_data: `reject_${tx._id}` },
               ]],
             },
           });
@@ -517,12 +538,12 @@ bot.on('message', async (msg: any) => {
         }
       }
     } catch {
-      bot.sendMessage(chatId, '⚠️ Xatolik.', { reply_markup: USER_KEYBOARD });
+      bot.sendMessage(chatId, tb(user.language, 'genericError'), { reply_markup: USER_KEYBOARD(user.language) });
     }
     return;
   }
 
-  if (text === '📤 Yuborgan yukxatlarim') {
+  if (text === tb(user.language, 'kb_sentTransfers')) {
     try {
       const txs = await Transaction.find({
         type: 'transfer',
@@ -530,21 +551,21 @@ bot.on('message', async (msg: any) => {
       }).sort({ createdAt: -1 }).limit(10);
 
       if (txs.length === 0) {
-        bot.sendMessage(chatId, 'Siz hali hech narsa yubormadingiz.', { reply_markup: USER_KEYBOARD });
+        bot.sendMessage(chatId, 'Siz hali hech narsa yubormadingiz.', { reply_markup: USER_KEYBOARD(user.language) });
         return;
       }
       const lines = txs.map(tx => {
         const st = tx.status === 'confirmed' ? '✅' : tx.status === 'rejected' ? '❌' : '⏳';
         return `${st} *${tx.materialName}* — ${tx.quantity} ${tx.unit}\nSana: ${tx.date || '—'}`;
       }).join('\n\n');
-      bot.sendMessage(chatId, `📤 *Yuborgan yukxatlarim:*\n\n${lines}`, { parse_mode: 'Markdown', reply_markup: USER_KEYBOARD });
+      bot.sendMessage(chatId, `📤 *Yuborgan yukxatlarim:*\n\n${lines}`, { parse_mode: 'Markdown', reply_markup: USER_KEYBOARD(user.language) });
     } catch {
-      bot.sendMessage(chatId, '⚠️ Xatolik.', { reply_markup: USER_KEYBOARD });
+      bot.sendMessage(chatId, tb(user.language, 'genericError'), { reply_markup: USER_KEYBOARD(user.language) });
     }
     return;
   }
 
-  if (text === '📬 Menga kelgan to\'lovlar') {
+  if (text === tb(user.language, 'kb_incomingPayments')) {
     try {
       const txs = await Transaction.find({
         type: { $ne: 'transfer' },
@@ -552,7 +573,7 @@ bot.on('message', async (msg: any) => {
       }).sort({ createdAt: -1 }).limit(10);
 
       if (txs.length === 0) {
-        bot.sendMessage(chatId, 'Sizga hali to\'lov yuborilmagan.', { reply_markup: USER_KEYBOARD });
+        bot.sendMessage(chatId, 'Sizga hali to\'lov yuborilmagan.', { reply_markup: USER_KEYBOARD(user.language) });
         return;
       }
       for (const tx of txs) {
@@ -563,8 +584,8 @@ bot.on('message', async (msg: any) => {
             parse_mode: 'Markdown',
             reply_markup: {
               inline_keyboard: [[
-                { text: '✅ Qabul qilganman', callback_data: `confirm_${tx._id}` },
-                { text: '❌ Rad etish', callback_data: `reject_${tx._id}` },
+                { text: tb(user.language, 'acceptedByMeBtn'), callback_data: `confirm_${tx._id}` },
+                { text: tb(user.language, 'rejectBtn'), callback_data: `reject_${tx._id}` },
               ]],
             },
           });
@@ -573,13 +594,13 @@ bot.on('message', async (msg: any) => {
         }
       }
     } catch {
-      bot.sendMessage(chatId, '⚠️ Xatolik.', { reply_markup: USER_KEYBOARD });
+      bot.sendMessage(chatId, tb(user.language, 'genericError'), { reply_markup: USER_KEYBOARD(user.language) });
     }
     return;
   }
 
   // Unknown non-admin message
-  bot.sendMessage(chatId, 'Menyudan birini tanlang:', { reply_markup: USER_KEYBOARD });
+  bot.sendMessage(chatId, tb(user.language, 'chooseFromMenu'), { reply_markup: USER_KEYBOARD(user.language) });
 });
 
 // ─── Inline button handler — confirm / reject ──────────────────────────────────
@@ -589,32 +610,52 @@ bot.on('callback_query', async (query: any) => {
   const messageId = query.message?.message_id;
 
   const user = await User.findOne({ telegramChatId: chatId?.toString() }).catch(() => null);
+  const lang = user?.language as BotLang | undefined;
+
+  // ── Til o'zgartirish ───────────────────────────────────────────────────────
+  if (data.startsWith('setlang_')) {
+    const newLang = data.replace('setlang_', '') as BotLang;
+    if (!user) { await bot.answerCallbackQuery(query.id); return; }
+    try {
+      user.language = newLang;
+      await user.save();
+      // Real vaqtda sinxronlash — profilda ham darhol shu tilga o'tsin.
+      emitToUser(String(user._id), 'user:language', { language: newLang });
+      await bot.answerCallbackQuery(query.id, { text: langLabel(newLang) });
+      const kb = isDev(user.role) ? DEVELOPER_KEYBOARD(newLang) : isAdmin(user.role) ? ADMIN_KEYBOARD(newLang) : USER_KEYBOARD(newLang);
+      await bot.sendMessage(chatId, tb(newLang, 'langSaved', { lang: langLabel(newLang) }), { reply_markup: kb });
+    } catch (err) {
+      console.error('[bot setlang]', err);
+      await bot.answerCallbackQuery(query.id, { text: tb(user.language, 'genericError') });
+    }
+    return;
+  }
 
   // ── Chat uchun kontakt/guruh tanlash ──────────────────────────────────────
   if (data.startsWith('chatpick_user_') || data.startsWith('chatpick_group_')) {
-    if (!user) { await bot.answerCallbackQuery(query.id, { text: 'Avval ro\'yxatdan o\'ting.' }); return; }
+    if (!user) { await bot.answerCallbackQuery(query.id, { text: tb(undefined, 'chatLoginFirst') }); return; }
     const isGroup = data.startsWith('chatpick_group_');
     const targetId = data.replace(isGroup ? 'chatpick_group_' : 'chatpick_user_', '');
     try {
       let targetName = '';
       if (isGroup) {
         const g = await Group.findById(targetId).select('name memberIds').lean();
-        if (!g || !g.memberIds.includes(String(user._id))) { await bot.answerCallbackQuery(query.id, { text: 'Guruh topilmadi.' }); return; }
+        if (!g || !g.memberIds.includes(String(user._id))) { await bot.answerCallbackQuery(query.id, { text: tb(lang, 'chatGroupNotFound') }); return; }
         targetName = g.name;
       } else {
         const u = await User.findById(targetId).select('firstName lastName').lean();
-        if (!u) { await bot.answerCallbackQuery(query.id, { text: 'Foydalanuvchi topilmadi.' }); return; }
+        if (!u) { await bot.answerCallbackQuery(query.id, { text: tb(lang, 'chatUserNotFound') }); return; }
         targetName = `${u.firstName} ${u.lastName || ''}`.trim();
       }
       chatSessions.set(chatId, { targetType: isGroup ? 'group' : 'user', targetId, targetName, myUserId: String(user._id) });
       await bot.answerCallbackQuery(query.id);
       await bot.sendMessage(chatId,
-        `💬 Endi *${targetName}* bilan suhbatdasiz.\nMatn, rasm, video, ovozli xabar, fayl yoki lokatsiya yuborishingiz mumkin.\n\nChiqish uchun pastdagi tugmani bosing.`,
+        tb(lang, 'chatSessionStart', { name: targetName }),
         { parse_mode: 'Markdown', reply_markup: chatExitKeyboard }
       );
     } catch (err) {
       console.error('[bot chatpick]', err);
-      await bot.answerCallbackQuery(query.id, { text: '⚠️ Xatolik.' });
+      await bot.answerCallbackQuery(query.id, { text: tb(lang, 'genericError') });
     }
     return;
   }
@@ -628,8 +669,8 @@ bot.on('callback_query', async (query: any) => {
       const Company = require('../models/Company').default;
       const { PLAN_CONFIG } = require('../routes/subscriptions');
       const sub = await Subscription.findById(subId);
-      if (!sub) { await bot.answerCallbackQuery(query.id, { text: 'Obuna topilmadi!' }); return; }
-      if (sub.status !== 'pending') { await bot.answerCallbackQuery(query.id, { text: 'Bu obuna allaqachon qayta ishlangan.' }); return; }
+      if (!sub) { await bot.answerCallbackQuery(query.id, { text: tb(lang, 'notFoundGeneric') }); return; }
+      if (sub.status !== 'pending') { await bot.answerCallbackQuery(query.id, { text: tb(lang, 'alreadyProcessed') }); return; }
       if (isApprove) {
         const planKey = sub.selectedPlan || 'bepul';
         const planInfo = PLAN_CONFIG[planKey] || PLAN_CONFIG['bepul'] || PLAN_CONFIG['1month'];
@@ -641,32 +682,33 @@ bot.on('callback_query', async (query: any) => {
         if (sub.userId) {
           const notUser = await User.findById(sub.userId).catch(() => null);
           if (notUser?.telegramChatId) {
+            const notLang = notUser.language as BotLang | undefined;
             const expStr = expiresAt.toLocaleDateString('uz-UZ', { day: '2-digit', month: '2-digit', year: 'numeric' });
             await bot.sendMessage(notUser.telegramChatId,
-              `✅ <b>Tabriklaymiz!</b>\n\nSizning obunangiz tasdiqlandi!\n\n📦 Tarif: <b>${planInfo.label}</b>\n📅 Muddat: <b>${expStr}</b> gacha\n\nEndi tizimga kirishingiz mumkin:\n${process.env.SITE_URL || 'http://localhost:5173'}`,
+              tb(notLang, 'subApprovedNotify', { planLabel: planInfo.label, expStr, siteUrl: process.env.SITE_URL || 'http://localhost:5173' }),
               { parse_mode: 'HTML' }
             ).catch(() => {});
           }
         }
-        await bot.answerCallbackQuery(query.id, { text: '✅ Obuna tasdiqlandi!' });
-        await bot.editMessageText(`✅ Obuna tasdiqlandi (${planInfo.label})`, { chat_id: chatId, message_id: messageId }).catch(() => {});
+        await bot.answerCallbackQuery(query.id, { text: tb(lang, 'subApprovedShort', { planLabel: planInfo.label }) });
+        await bot.editMessageText(tb(lang, 'subApprovedShort', { planLabel: planInfo.label }), { chat_id: chatId, message_id: messageId }).catch(() => {});
       } else {
         sub.status = 'rejected'; sub.rejectedAt = new Date(); await sub.save();
         if (sub.userId) {
           const notUser = await User.findById(sub.userId).catch(() => null);
           if (notUser?.telegramChatId) {
             await bot.sendMessage(notUser.telegramChatId,
-              `❌ <b>Obuna rad etildi</b>\n\nTo'lov va savollar uchun: <a href="https://t.me/Sadriddinov_Jahongir">@Sadriddinov_Jahongir</a>`,
+              tb(notUser.language as BotLang | undefined, 'subRejectedNotify'),
               { parse_mode: 'HTML' }
             ).catch(() => {});
           }
         }
-        await bot.answerCallbackQuery(query.id, { text: '❌ Obuna rad etildi.' });
-        await bot.editMessageText('❌ Obuna rad etildi', { chat_id: chatId, message_id: messageId }).catch(() => {});
+        await bot.answerCallbackQuery(query.id, { text: tb(lang, 'subRejectedShort') });
+        await bot.editMessageText(tb(lang, 'subRejectedShort'), { chat_id: chatId, message_id: messageId }).catch(() => {});
       }
     } catch (err) {
       console.error('Bot sub callback error:', err);
-      await bot.answerCallbackQuery(query.id, { text: '⚠️ Xatolik!' });
+      await bot.answerCallbackQuery(query.id, { text: tb(lang, 'genericError') });
     }
     return;
   }
@@ -678,15 +720,15 @@ bot.on('callback_query', async (query: any) => {
     try {
       const tx = await Transaction.findById(txId);
       if (!tx) {
-        await bot.answerCallbackQuery(query.id, { text: 'Tranzaksiya topilmadi!' });
+        await bot.answerCallbackQuery(query.id, { text: tb(lang, 'notFoundGeneric') });
         return;
       }
       if (tx.status !== 'pending') {
-        await bot.answerCallbackQuery(query.id, { text: 'Bu tranzaksiya allaqachon qayta ishlangan.' });
+        await bot.answerCallbackQuery(query.id, { text: tb(lang, 'alreadyProcessed') });
         return;
       }
       if (!user || String(tx.toUserId) !== String(user._id)) {
-        await bot.answerCallbackQuery(query.id, { text: 'Bu sizga tegishli emas — faqat qabul qiluvchi tasdiqlashi mumkin!' });
+        await bot.answerCallbackQuery(query.id, { text: tb(lang, 'notYoursOnlyRecipient') });
         return;
       }
 
@@ -738,17 +780,17 @@ bot.on('callback_query', async (query: any) => {
         if (tx.toUserId) emitToUser(String(tx.toUserId), 'transaction:new', expPayload);
       }
 
-      const resultText = isConfirm ? '✅ Tasdiqlandi!' : '❌ Rad etildi!';
+      const resultText = isConfirm ? tb(lang, 'txConfirmedResult') : tb(lang, 'txRejectedResult');
       await bot.answerCallbackQuery(query.id, { text: resultText });
 
       // Edit the original message to remove inline buttons
       const label = tx.type === 'transfer' ? `${tx.materialName} — ${tx.quantity} ${tx.unit}` : `${tx.description} — ${fmt(tx.amount || 0)}`;
       await bot.editMessageText(
-        `${isConfirm ? '✅' : '❌'} *${isConfirm ? 'Tasdiqlandi' : 'Rad etildi'}*: ${label}`,
+        isConfirm ? tb(lang, 'txConfirmedEdit', { label }) : tb(lang, 'txRejectedEdit', { label }),
         { chat_id: chatId, message_id: messageId, parse_mode: 'Markdown' }
       ).catch(() => {});
 
-      // Notify the other party
+      // Notify the other party (ularning O'ZINING tilida)
       const notifyUserId = isConfirm
         ? (tx.fromUserId || tx.createdById)
         : (tx.toUserId);
@@ -756,15 +798,17 @@ bot.on('callback_query', async (query: any) => {
       if (notifyUserId) {
         const notifyUser = await User.findById(notifyUserId).catch(() => null);
         if (notifyUser && notifyUser.telegramChatId) {
+          const notifyLang = notifyUser.language as BotLang | undefined;
+          const actorName = user?.firstName || (notifyLang === 'ru' ? 'Получатель' : 'Qabul qiluvchi');
           const notifyMsg = isConfirm
-            ? `✅ ${user?.firstName || 'Qabul qiluvchi'} sizning "${label}" ni qabul qildi!`
-            : `❌ ${user?.firstName || 'Qabul qiluvchi'} "${label}" ni rad etdi.`;
+            ? tb(notifyLang, 'notifyConfirmedToSender', { name: actorName, label })
+            : tb(notifyLang, 'notifyRejectedToSender', { name: actorName, label });
           await bot.sendMessage(notifyUser.telegramChatId, notifyMsg).catch(console.error);
         }
       }
     } catch (err) {
       console.error('Bot callback error:', err);
-      await bot.answerCallbackQuery(query.id, { text: '⚠️ Xatolik yuz berdi.' });
+      await bot.answerCallbackQuery(query.id, { text: tb(lang, 'genericError') });
     }
   }
 });

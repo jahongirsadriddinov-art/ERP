@@ -17,6 +17,7 @@ export interface IRegistration extends Document {
   telegramChatId?: string;     // bot orqali bog'langan chat (complete'da User'ga ko'chiriladi)
   telegramUsername?: string;
   step: RegistrationStep;
+  language?: 'uz' | 'uz-cyrl' | 'ru'; // ro'yxatdan o'tishda tanlangan til — yaratilgan User'ga ko'chiriladi
   consents: any;               // qaysi rozilik qachon berilgan (json)
   phoneAttempts: number;       // botda noto'g'ri raqam yuborish urinishlari
   ip?: string;
@@ -38,6 +39,7 @@ const RegistrationSchema: Schema = new Schema({
     enum: ['PHONE_ENTERED', 'BOT_STARTED', 'PHONE_CONFIRMED', 'CONSENT_GIVEN', 'COMPLETED', 'EXPIRED'],
     default: 'PHONE_ENTERED'
   },
+  language: { type: String, enum: ['uz', 'uz-cyrl', 'ru'], default: 'uz' },
   consents: { type: Schema.Types.Mixed, default: {} },
   phoneAttempts: { type: Number, default: 0 },
   ip: { type: String },

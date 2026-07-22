@@ -4,6 +4,7 @@ import Transaction from '../models/Transaction';
 import { bot } from '../services/bot';
 import User from '../models/User';
 import { scoped, stamped } from '../middleware/scope';
+import { tb, BotLang } from '../i18n/bot';
 
 const router = Router();
 
@@ -56,14 +57,14 @@ router.post('/send', async (req, res) => {
       if (receiver && receiver.telegramChatId) {
         bot.sendMessage(
           receiver.telegramChatId,
-          `📦 Sizga *${amount} ${material.unit} ${material.name}* yuborildi. Qabul qildingizmi?`,
+          tb(receiver.language as BotLang | undefined, 'transferIncoming', { amount: String(amount), unit: material.unit, name: material.name }),
           {
             parse_mode: 'Markdown',
             reply_markup: {
               inline_keyboard: [
                 [
-                  { text: '✅ Qabul qilish', callback_data: `confirm_${transaction._id}` },
-                  { text: '❌ Rad etish', callback_data: `reject_${transaction._id}` }
+                  { text: tb(receiver.language as BotLang | undefined, 'acceptBtn'), callback_data: `confirm_${transaction._id}` },
+                  { text: tb(receiver.language as BotLang | undefined, 'rejectBtn'), callback_data: `reject_${transaction._id}` }
                 ]
               ]
             }

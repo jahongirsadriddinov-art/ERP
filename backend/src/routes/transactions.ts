@@ -6,6 +6,7 @@ import User from '../models/User';
 import { scoped, stamped } from '../middleware/scope';
 import { getTenant } from '../middleware/tenantContext';
 import { emitToUser } from '../services/socket';
+import { tb, BotLang } from '../i18n/bot';
 
 const router = Router();
 
@@ -64,27 +65,30 @@ router.post('/', async (req, res) => {
     // Send telegram notification
     if (tx.status === 'pending') {
       try {
-        const inlineKeyboard = [[
-          { text: '✅ Tasdiqlash', callback_data: `confirm_${tx._id}` },
-          { text: '❌ Rad etish', callback_data: `reject_${tx._id}` },
-        ]];
-
         if (tx.type === 'transfer' && tx.toUserId) {
           // Bitta xabarda: to'liq matn + tugmalar (avval 2 alohida xabar edi)
-          const msg = `📦 *Yangi yukxat keldi!*\n\n📌 Material: *${tx.materialName}*\nMiqdor: *${tx.quantity} ${tx.unit}*\nYuboruvchi: ${tx.fromUserName || '—'}\nSana: ${tx.date || '—'}\n\nQabul qilasizmi?`;
           const toUser = await User.findById(tx.toUserId).catch(() => null);
           if (toUser && toUser.telegramChatId) {
+            const toLang = toUser.language as BotLang | undefined;
+            const msg = tb(toLang, 'transferNewFull', { name: tx.materialName || '—', qty: String(tx.quantity), unit: tx.unit || '', sender: tx.fromUserName || '—', date: tx.date || '—' });
             await bot.sendMessage(toUser.telegramChatId, msg, {
-              parse_mode: 'Markdown', reply_markup: { inline_keyboard: inlineKeyboard }
+              parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[
+                { text: tb(toLang, 'confirmBtn'), callback_data: `confirm_${tx._id}` },
+                { text: tb(toLang, 'rejectBtn'), callback_data: `reject_${tx._id}` },
+              ]] }
             }).catch(console.error);
           }
         } else if (tx.type !== 'transfer' && tx.toUserId) {
           // Payment to specific user — bitta xabarda matn + tugmalar
-          const msg = `💰 *Sizga to'lov yuborildi*\n\nSumma: *${(tx.amount || 0).toLocaleString()} so'm*\nSabab: ${tx.description || '—'}\nSana: ${tx.date || '—'}\n\nQabul qildingizmi?`;
           const toUser = await User.findById(tx.toUserId).catch(() => null);
           if (toUser && toUser.telegramChatId) {
+            const toLang = toUser.language as BotLang | undefined;
+            const msg = tb(toLang, 'paymentNew', { amount: `${(tx.amount || 0).toLocaleString()} so'm`, reason: tx.description || '—', date: tx.date || '—' });
             await bot.sendMessage(toUser.telegramChatId, msg, {
-              parse_mode: 'Markdown', reply_markup: { inline_keyboard: inlineKeyboard }
+              parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[
+                { text: tb(toLang, 'confirmBtn'), callback_data: `confirm_${tx._id}` },
+                { text: tb(toLang, 'rejectBtn'), callback_data: `reject_${tx._id}` },
+              ]] }
             }).catch(console.error);
           }
         }
@@ -180,8 +184,8 @@ router.patch('/:id/confirm', async (req, res) => {
         const fromUser = await User.findById(fromUserId).catch(() => null) ||
                          await User.findOne({ _id: fromUserId }).catch(() => null);
         if (fromUser && fromUser.telegramChatId) {
-          const label = tx.type === 'transfer' ? tx.materialName : tx.description;
-          await bot.sendMessage(fromUser.telegramChatId, `✅ Tasdiqlandi: ${label}`).catch(console.error);
+          const label = (tx.type === 'transfer' ? tx.materialName : tx.description) || '—';
+          await bot.sendMessage(fromUser.telegramChatId, tb(fromUser.language as BotLang | undefined, 'simpleConfirmedNotify', { label })).catch(console.error);
         }
       }
     } catch(notifErr) {
@@ -222,8 +226,8 @@ router.patch('/:id/reject', async (req, res) => {
         const fromUser = await User.findById(fromUserId).catch(() => null) ||
                          await User.findOne({ _id: fromUserId }).catch(() => null);
         if (fromUser && fromUser.telegramChatId) {
-          const label = tx.type === 'transfer' ? tx.materialName : tx.description;
-          await bot.sendMessage(fromUser.telegramChatId, `❌ Rad etildi: ${label}`).catch(console.error);
+          const label = (tx.type === 'transfer' ? tx.materialName : tx.description) || '—';
+          await bot.sendMessage(fromUser.telegramChatId, tb(fromUser.language as BotLang | undefined, 'simpleRejectedNotify', { label })).catch(console.error);
         }
       }
     } catch(notifErr) {

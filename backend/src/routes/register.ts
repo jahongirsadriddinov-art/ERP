@@ -28,12 +28,13 @@ function clientIp(req: any): string {
 // ─── 1) Telefon kiritish → ro'yxat sessiyasi + deep-link token ────────────────
 router.post('/phone', async (req, res) => {
   try {
-    const { phone, ownerConfirm } = req.body;
+    const { phone, ownerConfirm, language } = req.body;
     if (!phone || !isValidUzPhone(phone)) {
       return res.status(400).json({ error: 'To\'g\'ri O\'zbekiston raqamini kiriting (+998 XX XXX XX XX)' });
     }
     const normalized = normalizePhone(phone);
     const ip = clientIp(req);
+    const lang = ['uz', 'uz-cyrl', 'ru'].includes(language) ? language : 'uz';
 
     // Rate limit: IP dan 5/soat, raqamга 3/soat
     const ipLimit = checkRate(`reg:ip:${ip}`, 5, 60 * 60 * 1000);
@@ -56,6 +57,7 @@ router.post('/phone', async (req, res) => {
       ip,
       userAgent: req.headers['user-agent']?.toString(),
       consents: ownerConfirm ? { ownerConfirm: true, ownerConfirmAt: new Date().toISOString() } : {},
+      language: lang,
     });
 
     return res.status(201).json({
@@ -118,6 +120,7 @@ router.post('/resend', async (req, res) => {
       ip: clientIp(req),
       userAgent: req.headers['user-agent']?.toString(),
       consents: reg.consents,
+      language: reg.language,
     });
     return res.json({
       registrationId: String(fresh._id),
@@ -213,6 +216,7 @@ router.post('/complete', async (req, res) => {
         telegramChatId: reg.telegramChatId,
         phoneVerifiedAt: new Date(),
         passwordHash: await hashPassword(owner.password),
+        language: reg.language || 'uz',
         projectIds: [],
       });
     } catch (userErr) {
@@ -280,6 +284,7 @@ router.post('/complete', async (req, res) => {
       ok: true,
       subscriptionPending: true,
       phone: ownerUser.phone,
+      language: ownerUser.language || 'uz',
       selectedPlan: planKey,
       planLabel: PLAN_CONFIG[planKey].label,
       planAmount: PLAN_CONFIG[planKey].amount,

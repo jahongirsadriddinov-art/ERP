@@ -136,7 +136,8 @@ router.post('/login', async (req, res) => {
         role: user.role,
         projectIds: user.projectIds || [],
         companyId: user.companyId,
-        isOwner: user.isOwner || false
+        isOwner: user.isOwner || false,
+        language: user.language || 'uz'
       },
       // Firma brendi — hamma a'zo shu qiymatni ko'radi (o'zgartira olmaydi)
       company: company ? {
@@ -196,6 +197,7 @@ router.post('/dev-login', async (req, res) => {
         role: 'dasturchi',
         projectIds: [],
         isDeveloper: true,
+        language: dev.language || 'uz'
       },
       company: null,
     });

@@ -195,7 +195,12 @@ export default function CallOverlay({ currentUser, users, call, onClose }:
 
 function RemoteVideo({ stream, label }: { stream: MediaStream; label: string }) {
   const ref = useRef<HTMLVideoElement>(null);
-  useEffect(() => { if (ref.current) ref.current.srcObject = stream; }, [stream]);
+  // `autoPlay` attributi yolg'iz o'zi yetarli emas — bu element muted EMAS
+  // (masofaviy ovoz shu orqali eshitiladi), va ba'zi brauzerlar (ayniqsa mobil)
+  // muted bo'lmagan avtomatik play'ni jim tarzda bloklaydi: srcObject to'g'ri
+  // o'rnatiladi, lekin ekran qop-qora bo'lib qoladi. Shuning uchun play()'ni
+  // qo'lda ham chaqiramiz — xuddi lokal PiP videosida qilingani kabi.
+  useEffect(() => { if (ref.current) { ref.current.srcObject = stream; ref.current.play().catch(()=>{}); } }, [stream]);
   return (
     <div className="relative w-full h-full bg-black">
       <video ref={ref} autoPlay playsInline className="w-full h-full object-cover"/>
@@ -205,6 +210,6 @@ function RemoteVideo({ stream, label }: { stream: MediaStream; label: string }) 
 }
 function RemoteAudio({ stream }: { stream: MediaStream }) {
   const ref = useRef<HTMLAudioElement>(null);
-  useEffect(() => { if (ref.current) ref.current.srcObject = stream; }, [stream]);
+  useEffect(() => { if (ref.current) { ref.current.srcObject = stream; ref.current.play().catch(()=>{}); } }, [stream]);
   return <audio ref={ref} autoPlay/>;
 }

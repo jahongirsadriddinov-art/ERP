@@ -1,0 +1,43 @@
+export const uz = {
+  call: {
+    groupCall: "Guruh qo'ng'irog'i",
+    defaultTitle: "Qo'ng'iroq",
+    connectionError: "Ulanishda muammo — tarmoqni tekshiring",
+    permissionRequired: "Kamera/mikrofon ruxsati kerak: {{message}}",
+    declined: "Qo'ng'iroq rad etildi",
+    incoming: "Kiruvchi {{type}} qo'ng'iroq...",
+    typeVideo: "video",
+    typeVoice: "ovozli",
+    connecting: "Ulanmoqda...",
+    connected: "Ulandi",
+    decline: "Qo'ng'iroqni rad etish",
+    accept: "Qo'ng'iroqni qabul qilish",
+    mute: "Ovozni o'chirish",
+    unmute: "Ovozni yoqish",
+    cameraOn: "Kamerani yoqish",
+    cameraOff: "Kamerani o'chirish",
+    hangup: "Qo'ng'iroqni tugatish",
+  },
+};
+
+export const ru = {
+  call: {
+    groupCall: "Групповой звонок",
+    defaultTitle: "Звонок",
+    connectionError: "Проблема с соединением — проверьте сеть",
+    permissionRequired: "Требуется доступ к камере/микрофону: {{message}}",
+    declined: "Звонок отклонён",
+    incoming: "Входящий {{type}} звонок...",
+    typeVideo: "видео",
+    typeVoice: "голосовой",
+    connecting: "Соединение...",
+    connected: "Соединено",
+    decline: "Отклонить звонок",
+    accept: "Принять звонок",
+    mute: "Выключить звук",
+    unmute: "Включить звук",
+    cameraOn: "Включить камеру",
+    cameraOff: "Выключить камеру",
+    hangup: "Завершить звонок",
+  },
+};

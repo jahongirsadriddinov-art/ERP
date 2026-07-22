@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Phone, PhoneOff, Mic, MicOff, Video as VideoIcon, VideoOff, Users2 } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 import { getSocket } from "./socket";
 import { AppUser, ActiveCall } from "./App";
 
@@ -25,6 +26,7 @@ const ICE_CONFIG: RTCConfiguration = {
 
 export default function CallOverlay({ currentUser, users, call, onClose }:
   { currentUser: AppUser; users: AppUser[]; call: ActiveCall; onClose: () => void }) {
+  const { t } = useTranslation();
   const socket = getSocket();
   const localRef = useRef<HTMLVideoElement>(null);
   const localStream = useRef<MediaStream | null>(null);
@@ -39,7 +41,7 @@ export default function CallOverlay({ currentUser, users, call, onClose }:
   const [camOff, setCamOff] = useState(call.mode === 'voice');
 
   const userById = (id: string) => users.find(u => u.id === id);
-  const title = call.groupId ? "Guruh qo'ng'irog'i" : (userById(call.peerId || '')?.name || call.fromName || "Qo'ng'iroq");
+  const title = call.groupId ? t('call.groupCall') : (userById(call.peerId || '')?.name || call.fromName || t('call.defaultTitle'));
 
   const makePC = (peerId: string) => {
     if (pcs.current[peerId]) return pcs.current[peerId];
@@ -48,7 +50,7 @@ export default function CallOverlay({ currentUser, users, call, onClose }:
     pc.onicecandidate = e => { if (e.candidate) socket?.emit('call:ice', { to: peerId, from: currentUser.id, candidate: e.candidate }); };
     pc.ontrack = e => { setRemote(prev => ({ ...prev, [peerId]: e.streams[0] })); setStatus('connected'); };
     pc.oniceconnectionstatechange = () => {
-      if (pc.iceConnectionState === 'failed') toast.error("Ulanishda muammo — tarmoqni tekshiring");
+      if (pc.iceConnectionState === 'failed') toast.error(t('call.connectionError'));
     };
     pcs.current[peerId] = pc;
     return pc;
@@ -80,7 +82,7 @@ export default function CallOverlay({ currentUser, users, call, onClose }:
         });
         // accept() shu promise'ni kutib turib stream tayyor bo'lgandan keyin createAnswer qiladi
         streamReadyResolve.current?.(stream);
-      } catch (e: any) { toast("Kamera/mikrofon ruxsati kerak: " + (e?.message || '')); onClose(); return; }
+      } catch (e: any) { toast(t('call.permissionRequired', { message: e?.message || '' })); onClose(); return; }
       if (call.direction === 'out') {
         const targets = call.groupId ? (call.memberIds || []) : (call.peerId ? [call.peerId] : []);
         targets.forEach(t => offerTo(t));
@@ -104,7 +106,7 @@ export default function CallOverlay({ currentUser, users, call, onClose }:
     const onJoin = (d: any) => { if (call.groupId && d.groupId === call.groupId && d.from !== currentUser.id) offerTo(d.from); };
     const closePeer = (peerId: string) => { pcs.current[peerId]?.close(); delete pcs.current[peerId]; setRemote(prev => { const c = { ...prev }; delete c[peerId]; return c; }); };
     const onEnd = (d: any) => { closePeer(d.from); if (Object.keys(pcs.current).length === 0) onClose(); };
-    const onReject = (d: any) => { toast("Qo'ng'iroq rad etildi"); onEnd(d); };
+    const onReject = (d: any) => { toast(t('call.declined')); onEnd(d); };
 
     socket?.on('call:answer', onAnswer);
     socket?.on('call:ice', onIce);
@@ -158,8 +160,8 @@ export default function CallOverlay({ currentUser, users, call, onClose }:
             </div>
             <p className="text-xl font-semibold">{title}</p>
             <p className="text-white/60 text-sm">
-              {status === 'incoming' ? `Kiruvchi ${call.mode==='video'?'video':'ovozli'} qo'ng'iroq...` :
-               status === 'ringing' ? "Ulanmoqda..." : "Ulandi"}
+              {status === 'incoming' ? t('call.incoming', { type: call.mode === 'video' ? t('call.typeVideo') : t('call.typeVoice') }) :
+               status === 'ringing' ? t('call.connecting') : t('call.connected')}
             </p>
             {/* Ovozli qo'ng'iroqda masofaviy audio */}
             {remoteEntries.map(([pid, stream]) => <RemoteAudio key={pid} stream={stream}/>)}
@@ -178,14 +180,14 @@ export default function CallOverlay({ currentUser, users, call, onClose }:
       <div className="flex-shrink-0 pt-4 flex items-center justify-center gap-4" style={{ paddingBottom: "max(2rem, calc(env(safe-area-inset-bottom) + 1rem))" }}>
         {status === 'incoming' ? (
           <>
-            <button onClick={decline} aria-label="Qo'ng'iroqni rad etish" className="w-16 h-16 rounded-full bg-red-500 text-white flex items-center justify-center active:scale-95 shadow-lg"><PhoneOff className="w-6 h-6"/></button>
-            <button onClick={accept} aria-label="Qo'ng'iroqni qabul qilish" className="w-16 h-16 rounded-full bg-green-500 text-white flex items-center justify-center active:scale-95 shadow-lg animate-pulse"><Phone className="w-6 h-6"/></button>
+            <button onClick={decline} aria-label={t('call.decline')} className="w-16 h-16 rounded-full bg-red-500 text-white flex items-center justify-center active:scale-95 shadow-lg"><PhoneOff className="w-6 h-6"/></button>
+            <button onClick={accept} aria-label={t('call.accept')} className="w-16 h-16 rounded-full bg-green-500 text-white flex items-center justify-center active:scale-95 shadow-lg animate-pulse"><Phone className="w-6 h-6"/></button>
           </>
         ) : (
           <>
-            <button onClick={toggleMute} aria-label={muted ? "Ovozni yoqish" : "Ovozni o'chirish"} className={`w-14 h-14 rounded-full flex items-center justify-center text-white active:scale-95 ${muted?'bg-white/30':'bg-white/10'}`}>{muted?<MicOff className="w-5 h-5"/>:<Mic className="w-5 h-5"/>}</button>
-            {call.mode === 'video' && <button onClick={toggleCam} aria-label={camOff ? "Kamerani yoqish" : "Kamerani o'chirish"} className={`w-14 h-14 rounded-full flex items-center justify-center text-white active:scale-95 ${camOff?'bg-white/30':'bg-white/10'}`}>{camOff?<VideoOff className="w-5 h-5"/>:<VideoIcon className="w-5 h-5"/>}</button>}
-            <button onClick={hangup} aria-label="Qo'ng'iroqni tugatish" className="w-16 h-16 rounded-full bg-red-500 text-white flex items-center justify-center active:scale-95 shadow-lg"><PhoneOff className="w-6 h-6"/></button>
+            <button onClick={toggleMute} aria-label={muted ? t('call.unmute') : t('call.mute')} className={`w-14 h-14 rounded-full flex items-center justify-center text-white active:scale-95 ${muted?'bg-white/30':'bg-white/10'}`}>{muted?<MicOff className="w-5 h-5"/>:<Mic className="w-5 h-5"/>}</button>
+            {call.mode === 'video' && <button onClick={toggleCam} aria-label={camOff ? t('call.cameraOn') : t('call.cameraOff')} className={`w-14 h-14 rounded-full flex items-center justify-center text-white active:scale-95 ${camOff?'bg-white/30':'bg-white/10'}`}>{camOff?<VideoOff className="w-5 h-5"/>:<VideoIcon className="w-5 h-5"/>}</button>}
+            <button onClick={hangup} aria-label={t('call.hangup')} className="w-16 h-16 rounded-full bg-red-500 text-white flex items-center justify-center active:scale-95 shadow-lg"><PhoneOff className="w-6 h-6"/></button>
           </>
         )}
       </div>

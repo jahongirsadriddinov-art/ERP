@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { X, Check, Send, Loader2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { API_BASE } from "./api";
 import type { AppUser } from "./App";
 import { useModalPresence } from "./App";
@@ -9,6 +10,7 @@ interface AiAction { type: string; toUserId?: string; toUserName?: string; text?
 
 export default function AIAssistant({ currentUser, users, token, open, onClose }:
   { currentUser: AppUser; users: AppUser[]; token: string; open: boolean; onClose: () => void }) {
+  const { t } = useTranslation();
   useModalPresence();
   const [msgs, setMsgs] = useState<AiMsg[]>([]);
   const [input, setInput] = useState('');
@@ -36,15 +38,15 @@ export default function AIAssistant({ currentUser, users, token, open, onClose }
       });
       const data = await res.json();
       if (!res.ok) {
-        setMsgs(p => [...p, { role: 'assistant', content: `⚠️ ${data.error || 'Xatolik yuz berdi'}` }]);
+        setMsgs(p => [...p, { role: 'assistant', content: `⚠️ ${data.error || t('ai.errorGeneric')}` }]);
       } else if (data.type === 'action' && data.action) {
         setMsgs(p => [...p, { role: 'assistant', content: data.response }]);
         setPending({ action: data.action, response: data.response });
       } else {
-        setMsgs(p => [...p, { role: 'assistant', content: data.response || 'Javob yo\'q' }]);
+        setMsgs(p => [...p, { role: 'assistant', content: data.response || t('ai.noResponse') }]);
       }
     } catch {
-      setMsgs(p => [...p, { role: 'assistant', content: '⚠️ Server bilan ulanishda xatolik' }]);
+      setMsgs(p => [...p, { role: 'assistant', content: `⚠️ ${t('ai.serverError')}` }]);
     }
     setLoading(false);
   };
@@ -59,20 +61,20 @@ export default function AIAssistant({ currentUser, users, token, open, onClose }
         body: JSON.stringify({ action: pending.action }),
       });
       const data = await res.json();
-      const result = res.ok ? `✅ ${data.result || 'Bajarildi'}` : `⚠️ ${data.error || 'Xatolik'}`;
+      const result = res.ok ? `✅ ${data.result || t('ai.actionDone')}` : `⚠️ ${data.error || t('ai.actionError')}`;
       setMsgs(p => [...p, { role: 'assistant', content: result }]);
     } catch {
-      setMsgs(p => [...p, { role: 'assistant', content: '⚠️ Amalga oshirishda xatolik' }]);
+      setMsgs(p => [...p, { role: 'assistant', content: `⚠️ ${t('ai.executeError')}` }]);
     }
     setLoading(false);
   };
 
   const cancel = () => {
     setPending(null);
-    setMsgs(p => [...p, { role: 'assistant', content: '❌ Bekor qilindi' }]);
+    setMsgs(p => [...p, { role: 'assistant', content: `❌ ${t('ai.cancelled')}` }]);
   };
 
-  const greeting = `Salom, ${currentUser.name.split(' ')[0]}! Men AI yordamchisiman.\n\nMasalan: "Alibekka 'Ertaga soat 9da yig\'ilish bor' deb xabar yubor"`;
+  const greeting = t('ai.greeting', { name: currentUser.name.split(' ')[0] });
 
   if (!open) return null;
 
@@ -91,10 +93,10 @@ export default function AIAssistant({ currentUser, users, token, open, onClose }
             <span className="text-white text-sm">✨</span>
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold leading-none">AI Yordamchi</p>
-            <p className="text-[10px] text-muted-foreground mt-0.5">Buyruqni bajaruvchi asistent</p>
+            <p className="text-sm font-bold leading-none">{t('ai.title')}</p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">{t('ai.subtitle')}</p>
           </div>
-          <button onClick={onClose} aria-label="Yopish" className="p-1.5 rounded-lg hover:bg-muted/50 text-muted-foreground">
+          <button onClick={onClose} aria-label={t('ai.close')} className="p-1.5 rounded-lg hover:bg-muted/50 text-muted-foreground">
             <X className="w-4 h-4"/>
           </button>
         </div>
@@ -106,9 +108,9 @@ export default function AIAssistant({ currentUser, users, token, open, onClose }
               <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-line">{greeting}</p>
               <div className="flex flex-wrap gap-1.5 justify-center mt-3">
                 {[
-                  "Xodimlar ro'yxati",
-                  "Rahimovga xabar yubor",
-                  "Bugun nima qilsa bo'ladi?",
+                  t('ai.hints.employeeList'),
+                  t('ai.hints.sendMessage'),
+                  t('ai.hints.todayTasks'),
                 ].map(hint => (
                   <button key={hint} onClick={() => { setInput(hint); inputRef.current?.focus(); }}
                     className="text-[10px] px-2.5 py-1.5 rounded-full border border-border/60 hover:bg-muted/60 transition-colors">
@@ -137,7 +139,7 @@ export default function AIAssistant({ currentUser, users, token, open, onClose }
                     <div key={i} className="w-1.5 h-1.5 rounded-full bg-primary/60 animate-bounce" style={{ animationDelay: `${i*150}ms` }}/>
                   ))}
                 </div>
-                <span className="text-[10px] text-muted-foreground">O'ylayapti...</span>
+                <span className="text-[10px] text-muted-foreground">{t('ai.thinking')}</span>
               </div>
             </div>
           )}
@@ -150,18 +152,18 @@ export default function AIAssistant({ currentUser, users, token, open, onClose }
               </div>
               {pending.action.text && (
                 <div className="bg-white/10 dark:bg-black/20 rounded-xl px-3 py-2">
-                  <p className="text-[10px] text-muted-foreground mb-0.5">Xabar matni:</p>
+                  <p className="text-[10px] text-muted-foreground mb-0.5">{t('ai.messageTextLabel')}</p>
                   <p className="text-xs font-medium">"{pending.action.text}"</p>
                 </div>
               )}
               <div className="flex gap-2">
                 <button onClick={confirm}
                   className="flex-1 bg-green-600 text-white text-xs font-bold py-2 rounded-xl flex items-center justify-center gap-1 active:scale-95 transition-transform">
-                  <Check className="w-3.5 h-3.5"/> Ha, bajar
+                  <Check className="w-3.5 h-3.5"/> {t('ai.confirm')}
                 </button>
                 <button onClick={cancel}
                   className="flex-1 border border-red-500/40 text-red-500 text-xs font-bold py-2 rounded-xl flex items-center justify-center gap-1 active:scale-95 transition-transform">
-                  <X className="w-3.5 h-3.5"/> Yo'q
+                  <X className="w-3.5 h-3.5"/> {t('ai.cancel')}
                 </button>
               </div>
             </div>
@@ -176,11 +178,11 @@ export default function AIAssistant({ currentUser, users, token, open, onClose }
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && !e.shiftKey && send()}
-            placeholder="Buyruq bering..."
+            placeholder={t('ai.placeholder')}
             className="flex-1 text-sm bg-muted/50 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-primary/40 placeholder:text-muted-foreground/60"
             disabled={loading || !!pending}
           />
-          <button onClick={send} disabled={loading || !input.trim() || !!pending} aria-label="Xabar yuborish"
+          <button onClick={send} disabled={loading || !input.trim() || !!pending} aria-label={t('ai.sendAriaLabel')}
             className="w-9 h-9 rounded-xl flex items-center justify-center disabled:opacity-40 transition-all active:scale-95 flex-shrink-0"
             style={{ background: 'var(--primary)' }}>
             {loading ? <Loader2 className="w-4 h-4 text-white animate-spin"/> : <Send className="w-4 h-4 text-white"/>}

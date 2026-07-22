@@ -4,6 +4,7 @@ import {
   ResponsiveContainer
 } from "recharts";
 import { motion } from "motion/react";
+import { useTranslation } from "react-i18next";
 import { Project, Expense, AppUser, ExpType, EXP_LABELS, CHART_COLORS, fmt, isAdmin } from "./App";
 
 // Ushbu sahifa recharts kutubxonasini ishlatadi (og'ir kutubxona) — shuning
@@ -11,6 +12,7 @@ import { Project, Expense, AppUser, ExpType, EXP_LABELS, CHART_COLORS, fmt, isAd
 // "Hisobotlar" bo'limiga kirilganda yuklanadi (boshlang'ich bundle kichrayadi).
 export default function ReportsPage({ projects, expenses, users }:
   { projects: Project[]; expenses: Expense[]; users: AppUser[] }) {
+  const { t } = useTranslation();
   const [selProj, setSelProj] = useState("all");
   const filtExp = (selProj==="all"?expenses:expenses.filter(e=>e.projectId===selProj)).filter(e=>e.status==="confirmed");
   const total = filtExp.reduce((a,e)=>a+e.amount,0);
@@ -20,22 +22,22 @@ export default function ReportsPage({ projects, expenses, users }:
   return (
     <div className="flex flex-col h-full p-3 gap-3 overflow-hidden">
       <div className="surface px-4 py-3 flex items-center justify-between flex-shrink-0">
-        <h2 className="text-sm font-bold font-['Roboto_Slab',serif]">Hisobotlar</h2>
+        <h2 className="text-sm font-bold font-['Roboto_Slab',serif]">{t('reports.title')}</h2>
         <select className="text-sm md:text-xs border border-border rounded-full px-3 py-1.5 bg-input-background focus:outline-none" value={selProj} onChange={e=>setSelProj(e.target.value)}>
-          <option value="all">Barcha obyektlar</option>
+          <option value="all">{t('reports.allProjects')}</option>
           {projects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
       </div>
       <div className="flex-1 overflow-y-auto scrollbar-hide space-y-3">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {[["Jami chiqim",total,"text-accent"],[EXP_LABELS.material,filtExp.filter(e=>e.type==="material").reduce((a,e)=>a+e.amount,0),"text-orange-700"],[EXP_LABELS.oylik,filtExp.filter(e=>e.type==="oylik").reduce((a,e)=>a+e.amount,0),"text-blue-600"],["Boshqa",filtExp.filter(e=>!["material","oylik"].includes(e.type)).reduce((a,e)=>a+e.amount,0),"text-purple-600"]].map(([l,v,c],i)=>(
+          {[[t('reports.totalExpense'),total,"text-accent"],[EXP_LABELS.material,filtExp.filter(e=>e.type==="material").reduce((a,e)=>a+e.amount,0),"text-orange-700"],[EXP_LABELS.oylik,filtExp.filter(e=>e.type==="oylik").reduce((a,e)=>a+e.amount,0),"text-blue-600"],[t('reports.other'),filtExp.filter(e=>!["material","oylik"].includes(e.type)).reduce((a,e)=>a+e.amount,0),"text-purple-600"]].map(([l,v,c],i)=>(
             <motion.div key={String(l)} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i*0.04, type: "spring", stiffness: 300, damping: 28 }}
               className="surface p-3"><p className="text-sm md:text-xs text-muted-foreground">{String(l)}</p><p className={`text-sm font-bold font-mono mt-1 ${c}`}>{fmt(v as number)}</p></motion.div>
           ))}
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05, type: "spring", stiffness: 300, damping: 28 }} className="surface p-4">
-            <p className="text-sm md:text-xs font-semibold mb-3 font-['Roboto_Slab',serif]">Chiqim turlari</p>
+            <p className="text-sm md:text-xs font-semibold mb-3 font-['Roboto_Slab',serif]">{t('reports.byType')}</p>
             <ResponsiveContainer width="100%" height={180}>
               <PieChart><Pie data={byType} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={65} label={({name,percent})=>`${name} ${(percent*100).toFixed(0)}%`} labelLine={false} fontSize={9}>
                 {byType.map((_,i)=><Cell key={i} fill={CHART_COLORS[i%CHART_COLORS.length]}/>)}
@@ -43,29 +45,29 @@ export default function ReportsPage({ projects, expenses, users }:
             </ResponsiveContainer>
           </motion.div>
           <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.10, type: "spring", stiffness: 300, damping: 28 }} className="surface p-4">
-            <p className="text-sm md:text-xs font-semibold mb-3 font-['Roboto_Slab',serif]">Obyektlar bo'yicha</p>
+            <p className="text-sm md:text-xs font-semibold mb-3 font-['Roboto_Slab',serif]">{t('reports.byProject')}</p>
             <ResponsiveContainer width="100%" height={180}>
-              <BarChart data={byProject}><XAxis dataKey="name" tick={{fontSize:9}} tickLine={false} axisLine={false}/><YAxis hide/><Tooltip formatter={(v:number)=>fmt(v)}/><Bar dataKey="chiqim" fill="#D9460F" radius={[3,3,0,0]} name="Chiqim"/></BarChart>
+              <BarChart data={byProject}><XAxis dataKey="name" tick={{fontSize:9}} tickLine={false} axisLine={false}/><YAxis hide/><Tooltip formatter={(v:number)=>fmt(v)}/><Bar dataKey="chiqim" fill="#D9460F" radius={[3,3,0,0]} name={t('reports.expense')}/></BarChart>
             </ResponsiveContainer>
           </motion.div>
         </div>
         {byPerson.length>0&&(
           <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.14, type: "spring", stiffness: 300, damping: 28 }} className="surface p-4">
-            <p className="text-sm md:text-xs font-semibold mb-3 font-['Roboto_Slab',serif]">Xodimlar bo'yicha to'lovlar</p>
+            <p className="text-sm md:text-xs font-semibold mb-3 font-['Roboto_Slab',serif]">{t('reports.byPerson')}</p>
             <ResponsiveContainer width="100%" height={byPerson.length*40+20}>
               <BarChart data={byPerson} layout="vertical" margin={{right:80,left:10}}>
                 <XAxis type="number" hide/><YAxis type="category" dataKey="name" tick={{fontSize:10}} tickLine={false} axisLine={false} width={90}/>
                 <Tooltip formatter={(v:number)=>fmt(v)}/>
-                <Bar dataKey="total" fill="#1B3A6B" radius={[0,3,3,0]} name="To'lov" label={{position:"right",fontSize:9,formatter:(v:number)=>v>0?fmt(v):""}}/>
+                <Bar dataKey="total" fill="#1B3A6B" radius={[0,3,3,0]} name={t('reports.payment')} label={{position:"right",fontSize:9,formatter:(v:number)=>v>0?fmt(v):""}}/>
               </BarChart>
             </ResponsiveContainer>
           </motion.div>
         )}
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18, type: "spring", stiffness: 300, damping: 28 }} className="surface overflow-hidden">
-          <div className="px-4 py-2.5 border-b border-border"><p className="text-sm md:text-xs font-semibold font-['Roboto_Slab',serif]">Batafsil jadval</p></div>
+          <div className="px-4 py-2.5 border-b border-border"><p className="text-sm md:text-xs font-semibold font-['Roboto_Slab',serif]">{t('reports.detailedTable')}</p></div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm md:text-xs">
-              <thead><tr className="border-b border-border bg-muted/40">{["Sana","Tavsif","Tur","Kimga","Obyekt","Summa"].map(h=><th key={h} className="text-left px-3 py-2 text-sm md:text-xs font-semibold text-muted-foreground whitespace-nowrap">{h}</th>)}</tr></thead>
+              <thead><tr className="border-b border-border bg-muted/40">{[t('reports.table.date'),t('reports.table.description'),t('reports.table.type'),t('reports.table.to'),t('reports.table.project'),t('reports.table.amount')].map(h=><th key={h} className="text-left px-3 py-2 text-sm md:text-xs font-semibold text-muted-foreground whitespace-nowrap">{h}</th>)}</tr></thead>
               <tbody>
                 {filtExp.slice().reverse().map(e=>{
                   const to=users.find(u=>u.id===e.toUserId);

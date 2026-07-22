@@ -39,7 +39,16 @@ async function relayMessageToTelegram(chatId: string, senderName: string, m: {
         await bot.sendVideo(chatId, m.mediaUrl, { caption });
         break;
       case 'audio':
-        await bot.sendVoice(chatId, m.mediaUrl, { caption: senderName });
+        // Telegram sendVoice FAQAT haqiqiy OGG/Opus faylni "ovozli xabar" pufakchasi
+        // sifatida ochadi — brauzerlarning aksariyati (Chrome) MediaRecorder orqali
+        // audio/webm chiqaradi, buni sendVoice bilan yuborish "telefon ocholmaydi"
+        // xatosiga olib keladi. .ogg bo'lmasa sendDocument bilan yuboramiz — bu
+        // istalgan formatni qabul qiladi va foydalanuvchi qurilmasida ochiladi.
+        if (/\.ogg(\?|$)/i.test(m.mediaUrl || '')) {
+          await bot.sendVoice(chatId, m.mediaUrl, { caption: senderName });
+        } else {
+          await bot.sendDocument(chatId, m.mediaUrl, { caption: `🎤 ${caption}` });
+        }
         break;
       case 'file':
         await bot.sendDocument(chatId, m.mediaUrl, { caption });

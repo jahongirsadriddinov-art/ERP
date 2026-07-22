@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, lazy, Suspense } from "react";
+import { useState, useRef, useEffect, useMemo, lazy, Suspense } from "react";
 import {
   Building2, Users, HardHat, Package, Plus, ArrowLeft,
   CheckCircle, Clock, AlertTriangle, ChevronRight, MapPin,
@@ -1912,30 +1912,48 @@ function VoicePlayer({ src }: { src: string }) {
   };
   const fmtTime = (s: number) => `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
 
+  // "Waveform" ko'rinishi — haqiqiy audio amplitudasi emas (bu client-side og'ir
+  // dekodlashni talab qiladi), balki src'ga bog'liq DETERMINISTIK naqsh — shu
+  // xabar uchun har safar bir xil chiqadi, faqat vizual jihatdan WhatsApp uslubiga
+  // yaqinlashtiradi.
+  const bars = useMemo(() => {
+    let seed = 0;
+    for (let i = 0; i < src.length; i++) seed = (seed * 31 + src.charCodeAt(i)) >>> 0;
+    return Array.from({ length: 28 }, () => {
+      seed = (seed * 1103515245 + 12345) >>> 0;
+      return 0.22 + ((seed >>> 8) / 0xFFFFFF) * 0.78;
+    });
+  }, [src]);
+
+  const seek = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const pct = (e.clientX - rect.left) / rect.width;
+    if (audioRef.current?.duration) audioRef.current.currentTime = pct * audioRef.current.duration;
+  };
+
   return (
-    <div className="flex items-center gap-2 mb-1 min-w-[180px] max-w-[220px]">
+    <div className="flex items-center gap-2 mb-1 min-w-[200px] max-w-[250px]">
       <audio ref={audioRef} src={src} preload="metadata"
         onLoadedMetadata={e => setDuration((e.target as HTMLAudioElement).duration)}
         onTimeUpdate={e => { const a = e.target as HTMLAudioElement; setCurrentTime(a.currentTime); setProgress(a.duration ? a.currentTime/a.duration*100 : 0); }}
         onEnded={() => { setPlaying(false); setProgress(0); setCurrentTime(0); if (audioRef.current) audioRef.current.currentTime=0; }}
       />
       <button onClick={toggle} aria-label={playing ? "Pauza" : "Ijro etish"}
-        className="w-8 h-8 rounded-full bg-primary/20 text-primary flex items-center justify-center flex-shrink-0 hover:bg-primary/30 active:scale-95 transition-all">
+        className="w-9 h-9 rounded-full bg-primary/20 text-primary flex items-center justify-center flex-shrink-0 hover:bg-primary/30 active:scale-95 transition-all">
         {playing
           ? <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
-          : <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><polygon points="5,3 19,12 5,21"/></svg>
+          : <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 ml-0.5"><polygon points="5,3 19,12 5,21"/></svg>
         }
       </button>
-      <div className="flex-1 flex flex-col gap-0.5">
-        <div className="relative h-1.5 bg-white/20 rounded-full overflow-hidden cursor-pointer"
-          onClick={e => {
-            const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-            const pct = (e.clientX - rect.left) / rect.width;
-            if (audioRef.current && audioRef.current.duration) {
-              audioRef.current.currentTime = pct * audioRef.current.duration;
-            }
-          }}>
-          <div className="absolute inset-y-0 left-0 bg-primary rounded-full transition-all" style={{ width: `${progress}%` }}/>
+      <div className="flex-1 flex flex-col gap-1 min-w-0">
+        <div className="relative h-6 flex items-center gap-[2px] cursor-pointer" onClick={seek}>
+          {bars.map((h, i) => {
+            const played = (i / bars.length) * 100 <= progress;
+            return (
+              <div key={i} className={`flex-1 rounded-full transition-colors ${played ? "bg-primary" : "bg-current/25"}`}
+                style={{ height: `${Math.round(h * 100)}%` }}/>
+            );
+          })}
         </div>
         <div className="flex justify-between text-[9px] text-current/60">
           <span>{fmtTime(currentTime)}</span>
@@ -1990,16 +2008,43 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
   const userById = (id: string) => users.find(u => u.id === id);
   const isOnline = (id: string) => onlineUsers.includes(id);
 
-  const thread = selGroup
-    ? messages.filter(m => !m.deleted && m.groupId === selGroup.id)
-    : selUser
-      ? messages.filter(m =>
-          !m.deleted && !m.groupId &&
-          ((m.fromUserId===currentUser.id && m.toUserId===selUser.id) ||
-           (m.fromUserId===selUser.id && m.toUserId===currentUser.id)))
-      : [];
+  // Har bir guruh/kontakt uchun oxirgi xabar + o'qilmagan sonini BITTA o'tishda
+  // hisoblaymiz. Avval sidebar'dagi HAR BIR qator butun `messages` massivini
+  // o'zi alohida filter qilardi (N kontakt × M xabar) — har renderda, hatto
+  // shunchaki matn yozayotganda ham — xabar tarixi o'sgani sari sezilarli
+  // sekinlashardi ("chat sekin ketyapti").
+  const { lastByGroup, lastByUser, unreadByUser } = useMemo(() => {
+    const lastByGroup = new Map<string, Msg>();
+    const lastByUser = new Map<string, Msg>();
+    const unreadByUser = new Map<string, number>();
+    for (const m of messages) {
+      if (m.deleted) continue;
+      if (m.groupId) {
+        lastByGroup.set(m.groupId, m);
+      } else {
+        const other = m.fromUserId === currentUser.id ? m.toUserId : m.fromUserId;
+        if (!other) continue;
+        lastByUser.set(other, m);
+        if (m.toUserId === currentUser.id && !m.read) {
+          unreadByUser.set(other, (unreadByUser.get(other) || 0) + 1);
+        }
+      }
+    }
+    return { lastByGroup, lastByUser, unreadByUser };
+  }, [messages, currentUser.id]);
+  const unread = (uid: string) => unreadByUser.get(uid) || 0;
+
+  const thread = useMemo(() => (
+    selGroup
+      ? messages.filter(m => !m.deleted && m.groupId === selGroup.id)
+      : selUser
+        ? messages.filter(m =>
+            !m.deleted && !m.groupId &&
+            ((m.fromUserId===currentUser.id && m.toUserId===selUser.id) ||
+             (m.fromUserId===selUser.id && m.toUserId===currentUser.id)))
+        : []
+  ), [messages, selGroup?.id, selUser?.id, currentUser.id]);
   const pinned = thread.filter(m => m.pinned).slice(-1)[0] ?? null;
-  const unread = (uid: string) => messages.filter(m => !m.groupId && m.fromUserId===uid && m.toUserId===currentUser.id && !m.read).length;
 
   const closeChat = () => { setSelUser(null); setSelGroup(null); setSelectMode(false); setSelected(new Set()); };
 
@@ -2170,8 +2215,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
         <div className="flex-1 overflow-y-auto scrollbar-hide">
           {/* Guruhlar */}
           {groups.filter(g => !g.devSupport).map(g => {
-            const th = messages.filter(m => !m.deleted && m.groupId===g.id);
-            const last = th.slice(-1)[0];
+            const last = lastByGroup.get(g.id);
             const lastText = last ? `${userById(last.fromUserId)?.name?.split(' ')[0] || ''}: ${last.type&&last.type!=='text'?(last.type==='audio'?'🎤 Ovoz':last.type==='image'?'🖼️ Rasm':last.type==='video'?'🎥 Video':last.type==='location'?'📍 Joylashuv':`📎 ${last.fileName??'Fayl'}`):last.text}` : `${g.memberIds.length} a'zo`;
             return (
               <button key={g.id} onClick={() => { setSelGroup(g); setSelUser(null); setSelectMode(false); setSelected(new Set()); }}
@@ -2191,8 +2235,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
           })}
           {/* devSupport — ko'rinishi: to'g'ridan-to'g'ri chat (guruh emas) */}
           {groups.filter(g => g.devSupport).map(g => {
-            const th = messages.filter(m => !m.deleted && m.groupId===g.id);
-            const last = th.slice(-1)[0];
+            const last = lastByGroup.get(g.id);
             const lastText = last ? `${last.type&&last.type!=='text'?(last.type==='audio'?'🎤 Ovoz':last.type==='image'?'🖼️ Rasm':last.type==='video'?'🎥 Video':last.type==='location'?'📍 Joylashuv':`📎 ${last.fileName??'Fayl'}`):last.text}` : 'Texnik yordam';
             return (
               <button key={g.id} onClick={() => { setSelGroup(g); setSelUser(null); setSelectMode(false); setSelected(new Set()); }}
@@ -2222,8 +2265,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
           {contacts.length===0 && groups.length===0 && <p className="text-center text-xs text-muted-foreground py-8">Kontaktlar yo'q</p>}
           {contacts.length===0 && groups.length>0 && <p className="text-center text-xs text-muted-foreground py-4 px-3">Bu kompaniyada boshqa foydalanuvchi yo'q</p>}
           {contacts.map(u => {
-            const th = messages.filter(m => !m.deleted && !m.groupId && ((m.fromUserId===u.id&&m.toUserId===currentUser.id)||(m.fromUserId===currentUser.id&&m.toUserId===u.id)));
-            const last = th.slice(-1)[0];
+            const last = lastByUser.get(u.id);
             const ur = unread(u.id);
             const lastText = last ? (last.type==='audio'?'🎤 Ovoz':last.type==='image'?'🖼️ Rasm':last.type==='video'?'🎥 Video':last.type==='location'?'📍 Joylashuv':last.type==='file'?`📎 ${last.fileName??'Fayl'}`:last.text) : '...';
             return (

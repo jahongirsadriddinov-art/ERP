@@ -72,6 +72,7 @@ interface Transfer {
   note?: string; defect?: string;
   date?: string;
   fromUserName?: string;
+  price?: number; // yuboruvchi kiritgan birlik narxi (so'm) — tasdiqlanganda chiqim shundan hisoblanadi
 }
 export interface Expense {
   id: string; type: ExpType; amount: number; toUserId?: string;
@@ -535,7 +536,10 @@ function SendTransferModal({ currentUser, projects, allUsers, onClose, onSend, i
   const [note, setNote] = useState("");
   const [matSearch, setMatSearch] = useState("");
 
-  const myProjects = isAdmin(currentUser.role) ? projects : projects.filter(p => currentUser.projectIds.includes(p.id));
+  // Qaysi rol bo'lishidan qat'iy nazar barcha obyektlar tanlash uchun ko'rinadi —
+  // faqat smetadan tanlash (pastda) rahbar/o'rinbosar bilan cheklangan.
+  const myProjects = projects;
+  const canBrowseSmeta = isAdmin(currentUser.role);
   const selProj = projects.find(p => p.id === projectId);
   const targets = allUsers.filter(u => u.id !== currentUser.id && (isAdmin(currentUser.role) || u.projectIds.some(pid => pid === projectId)));
 
@@ -550,7 +554,7 @@ function SendTransferModal({ currentUser, projects, allUsers, onClose, onSend, i
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     const mats = [...selMats];
-    if (showCustom) {
+    if (showCustom || !canBrowseSmeta) {
       customMats.forEach(cm => {
         if (cm.name.trim() && cm.quantity) mats.push(cm);
       });
@@ -567,7 +571,8 @@ function SendTransferModal({ currentUser, projects, allUsers, onClose, onSend, i
         projectId,
         sentDate: new Date().toISOString().split("T")[0],
         status: "pending",
-        note: [mat.price ? `Narxi: ${Number(mat.price).toLocaleString()} so'm` : "", note].filter(Boolean).join(" | ") || undefined
+        price: mat.price ? Number(mat.price) : undefined,
+        note: note || undefined
       });
     });
     onClose();
@@ -628,47 +633,60 @@ function SendTransferModal({ currentUser, projects, allUsers, onClose, onSend, i
                 </div>
               )}
 
-              {/* Qidiruvli select */}
-              <div className="relative mb-2">
-                <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"/>
-                <input value={matSearch} onChange={e => setMatSearch(e.target.value)}
-                  placeholder="Material qidirish..."
-                  className="w-full text-sm border border-border rounded-lg pl-9 pr-3 py-2.5 bg-input-background focus:outline-none"/>
-              </div>
+              {/* Smetadan tanlash — faqat rahbar/o'rinbosar uchun (prorab/brigadir/ishchi
+                  faqat o'zi qo'shgan material yuboradi, smeta ro'yxatini ko'rmaydi) */}
+              {canBrowseSmeta && (
+                <>
+                  <div className="relative mb-2">
+                    <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"/>
+                    <input value={matSearch} onChange={e => setMatSearch(e.target.value)}
+                      placeholder="Material qidirish..."
+                      className="w-full text-sm border border-border rounded-lg pl-9 pr-3 py-2.5 bg-input-background focus:outline-none"/>
+                  </div>
 
-              <div className="border border-border rounded-xl overflow-hidden divide-y divide-border/50 shadow-sm max-h-56 overflow-y-auto scrollbar-hide">
-                {(() => {
-                  const q = matSearch.trim().toLowerCase();
-                  const list = selProj.requiredMaterials.filter(m =>
-                    !selMats.some(s => s.name === m.name) && (!q || m.name.toLowerCase().includes(q))
-                  );
-                  if (list.length === 0) return (
-                    <div className="px-3 py-4 text-center text-xs text-muted-foreground">
-                      {q ? "Topilmadi — pastdan qo'lda kiriting" : selProj.requiredMaterials.length === 0 ? "Smeta yuklanmagan — qo'lda kiriting" : "Barchasi tanlandi"}
-                    </div>
-                  );
-                  return list.map(m => (
-                    <button type="button" key={m.id} onClick={() => { toggleMat(m); setMatSearch(""); }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2.5 cursor-pointer bg-card hover:bg-muted/40 liquid-transition text-left">
-                      <Plus className="w-4 h-4 text-primary flex-shrink-0"/>
-                      <span className="text-sm flex-1 min-w-0 truncate font-medium">{m.name}</span>
-                      <span className="text-[10px] text-muted-foreground bg-muted/70 px-1.5 py-0.5 rounded-full flex-shrink-0">{m.unit}</span>
-                    </button>
-                  ));
-                })()}
+                  <div className="border border-border rounded-xl overflow-hidden divide-y divide-border/50 shadow-sm max-h-56 overflow-y-auto scrollbar-hide">
+                    {(() => {
+                      const q = matSearch.trim().toLowerCase();
+                      const list = selProj.requiredMaterials.filter(m =>
+                        !selMats.some(s => s.name === m.name) && (!q || m.name.toLowerCase().includes(q))
+                      );
+                      if (list.length === 0) return (
+                        <div className="px-3 py-4 text-center text-xs text-muted-foreground">
+                          {q ? "Topilmadi — pastdan qo'lda kiriting" : selProj.requiredMaterials.length === 0 ? "Smeta yuklanmagan — qo'lda kiriting" : "Barchasi tanlandi"}
+                        </div>
+                      );
+                      return list.map(m => (
+                        <button type="button" key={m.id} onClick={() => { toggleMat(m); setMatSearch(""); }}
+                          className="w-full flex items-center gap-2.5 px-3 py-2.5 cursor-pointer bg-card hover:bg-muted/40 liquid-transition text-left">
+                          <Plus className="w-4 h-4 text-primary flex-shrink-0"/>
+                          <span className="text-sm flex-1 min-w-0 truncate font-medium">{m.name}</span>
+                          <span className="text-[10px] text-muted-foreground bg-muted/70 px-1.5 py-0.5 rounded-full flex-shrink-0">{m.unit}</span>
+                        </button>
+                      ));
+                    })()}
+                  </div>
+                </>
+              )}
 
-                {/* Custom material */}
-                <div className={`liquid-transition ${showCustom ? "bg-primary/5" : "bg-card hover:bg-muted/30"}`}>
+              {/* Boshqa material qo'shish — smeta ro'yxatidan alohida, doim ko'rinadigan
+                  bo'lak (avval smeta scroll ichida "pastda qolib" ko'rinmay qolar edi).
+                  Rahbar/o'rinbosar uchun ixtiyoriy (checkbox), boshqa rollar uchun
+                  yagona yo'l bo'lgani sababli doim ochiq. */}
+              <div className={`mt-2 rounded-xl border border-border/60 liquid-transition ${showCustom ? "bg-primary/5" : "bg-card hover:bg-muted/30"}`}>
+                {canBrowseSmeta ? (
                   <label className="flex items-center gap-2.5 px-3 py-2.5 cursor-pointer">
                     <input type="checkbox" checked={showCustom} onChange={e => setShowCustom(e.target.checked)}
                       className="w-4 h-4 accent-primary rounded flex-shrink-0"/>
                     <span className="text-sm italic text-muted-foreground">Boshqa material...</span>
                   </label>
-                  {showCustom && (
+                ) : (
+                  <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider px-3 pt-3">Materialni yozib qo'shing</p>
+                )}
+                {(showCustom || !canBrowseSmeta) && (
                     <div className="px-3 pb-3 space-y-4 border-t border-border/30 pt-3">
                       {customMats.map((cm, i) => (
                         <div key={i} className="space-y-2 relative pr-7 bg-muted/40 p-2 rounded-xl border border-border/40">
-                          <input placeholder="Material nomi *" required={showCustom && i === 0}
+                          <input placeholder="Material nomi *" required={(showCustom || !canBrowseSmeta) && i === 0}
                             className="w-full text-sm border border-border rounded-lg px-2.5 py-1.5 bg-input-background focus:outline-none shadow-sm"
                             value={cm.name} onChange={e => {
                               const newMats = [...customMats];
@@ -683,7 +701,7 @@ function SendTransferModal({ currentUser, projects, allUsers, onClose, onSend, i
                             }}
                           />
                           <div className="grid grid-cols-3 gap-1.5">
-                            <input type="number" min="1" placeholder="Miqdor *" required={showCustom && cm.name.trim() !== ""}
+                            <input type="number" min="1" placeholder="Miqdor *" required={(showCustom || !canBrowseSmeta) && cm.name.trim() !== ""}
                               className="w-full text-sm border border-border rounded-lg px-2.5 py-1.5 bg-input-background focus:outline-none shadow-sm"
                               value={cm.quantity} onChange={e => {
                                 const newMats = [...customMats];
@@ -697,7 +715,7 @@ function SendTransferModal({ currentUser, projects, allUsers, onClose, onSend, i
                                 }
                               }}
                             />
-                            <input placeholder="O'lchov *" required={showCustom && cm.name.trim() !== ""}
+                            <input placeholder="O'lchov *" required={(showCustom || !canBrowseSmeta) && cm.name.trim() !== ""}
                               className="w-full text-sm border border-border rounded-lg px-2.5 py-1.5 bg-input-background focus:outline-none shadow-sm"
                               value={cm.unit} onChange={e => {
                                 const newMats = [...customMats];
@@ -741,10 +759,9 @@ function SendTransferModal({ currentUser, projects, allUsers, onClose, onSend, i
                     </div>
                   )}
                 </div>
-              </div>
-              {selMats.length > 0 || (showCustom && customMats.some(m => m.name.trim())) ? (
+              {selMats.length > 0 || customMats.some(m => m.name.trim()) ? (
                 <p className="mt-1.5 text-[10px] text-primary font-semibold flex items-center gap-1">
-                  <CheckCircle className="w-3 h-3"/>{selMats.length + (showCustom ? customMats.filter(m => m.name.trim()).length : 0)} material tanlandi
+                  <CheckCircle className="w-3 h-3"/>{selMats.length + customMats.filter(m => m.name.trim()).length} material tanlandi
                 </p>
               ) : null}
             </div>
@@ -771,7 +788,7 @@ function SendTransferModal({ currentUser, projects, allUsers, onClose, onSend, i
           <div className="flex gap-2 p-4 pt-3 border-t border-border flex-shrink-0">
             <button type="button" onClick={onClose} className="flex-1 text-sm border border-border rounded-xl px-3 py-2.5 hover:bg-muted liquid-transition font-medium">Bekor</button>
             <button type="submit"
-              disabled={selMats.length === 0 && (!showCustom || !customMats.some(m => m.name.trim()))}
+              disabled={selMats.length === 0 && !customMats.some(m => m.name.trim())}
               className="flex-1 text-sm text-white rounded-xl px-3 py-2.5 font-bold liquid-transition disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
               style={{ background: "linear-gradient(135deg, #1B3A6B 0%, #243F6E 100%)" }}>
               Yuborish
@@ -967,11 +984,15 @@ function TransferRow({ t, currentUser, allUsers, projects, onConfirm, onReject }
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-foreground">{t.materialName}</p>
-          <p className="text-muted-foreground font-mono text-sm md:text-xs">{t.quantity.toLocaleString()} {t.unit}</p>
+          <p className="text-muted-foreground font-mono text-sm md:text-xs">
+            {t.quantity.toLocaleString()} {t.unit}
+            {!!t.price && <span className="ml-1.5 text-primary font-semibold">· {(t.price * t.quantity).toLocaleString()} so'm</span>}
+          </p>
           <p className="text-sm md:text-xs text-muted-foreground mt-0.5">
             {isSender ? <><span className="text-foreground font-medium">Siz</span> → {to?.name}</> : <>{from?.name} → <span className="text-foreground font-medium">Siz</span></>}
           </p>
           <p className="text-sm md:text-xs text-muted-foreground">{proj?.name} • {t.date || t.sentDate}</p>
+          {t.note && <p className="text-sm md:text-xs text-muted-foreground italic">{t.note}</p>}
           {t.defect && <p className="text-sm md:text-xs text-amber-700 flex items-center gap-1 mt-0.5"><AlertTriangle className="w-2.5 h-2.5"/>{t.defect}</p>}
           {t.status === "confirmed" && isSender && t.confirmedDate && (
             <p className="text-sm md:text-xs text-green-800 dark:text-green-400 font-medium mt-0.5">✓ {to?.name} tasdiqladi ({t.confirmedDate})</p>

@@ -25,11 +25,14 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
   const [err, setErr] = useState("");
   const [subLoading, setSubLoading] = useState<string|null>(null);
   const [renewPlan, setRenewPlan] = useState<Record<string, string>>({}); // subId → selectedPlan
-  // Messages tab state — per-company direct chats
+  // Messages tab state — har firma uchun bitta umumiy "🛠 Dasturchi" guruh chati
+  // (o'sha firmaning barcha xodimlari ham shu guruh orqali yozadi — ikkala
+  // tomon bir xil xabarlarni ko'rishi uchun groupId asosida ishlaydi).
   const [selDevFirm, setSelDevFirm] = useState<any|null>(null);
-  const [selDevContact, setSelDevContact] = useState<any|null>(null);
-  const [devDMMessages, setDevDMMessages] = useState<Msg[]>([]);
-  const [devMobileStep, setDevMobileStep] = useState<'firms'|'contacts'|'chat'>('firms');
+  const [selDevGroup, setSelDevGroup] = useState<any|null>(null);
+  const [devGroupLoading, setDevGroupLoading] = useState(false);
+  const [devMsgs, setDevMsgs] = useState<Msg[]>([]);
+  const [devMobileStep, setDevMobileStep] = useState<'firms'|'chat'>('firms');
   const [devMsgText, setDevMsgText] = useState("");
   const [devMsgLoading, setDevMsgLoading] = useState(false);
   const devMsgBottomRef = useRef<HTMLDivElement>(null);
@@ -54,48 +57,57 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
   };
   useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
 
-  // Load direct messages between developer and a company user
-  const loadDevDM = async (toUserId: string) => {
+  // Tanlangan firmaning umumiy "🛠 Dasturchi" guruhini topish/yaratish (yo'q
+  // bo'lsa) va shu guruh xabarlarini yuklash — xodimlar ChatPage'dan xuddi
+  // shu guruhga yozadi, shuning uchun ikkala tomon bir xil xabarlarni ko'radi.
+  const openDevGroup = async (firm: any) => {
+    setSelDevFirm(firm);
+    setSelDevGroup(null);
+    setDevMsgs([]);
+    setDevMobileStep('chat');
+    setDevGroupLoading(true);
     try {
-      const r = await fetch(`${API_BASE}/api/messages?userId=${currentUser.id}`, { headers: authHdr });
+      const r = await fetch(`${API_BASE}/api/groups/dev-support`, {
+        method: 'POST', headers: authHdr,
+        body: JSON.stringify({ companyId: firm.id || firm._id }),
+      });
       if (r.ok) {
-        const all = await r.json();
-        setDevDMMessages(all.filter((m: any) => !m.deleted && !m.groupId &&
-          ((m.fromUserId === currentUser.id && m.toUserId === toUserId) ||
-           (m.fromUserId === toUserId && m.toUserId === currentUser.id))));
+        const g = await r.json();
+        setSelDevGroup(g);
+        connectSocket(currentUser.id).emit('join:group', g.id);
+        const mr = await fetch(`${API_BASE}/api/messages?userId=${currentUser.id}`, { headers: authHdr });
+        if (mr.ok) {
+          const all = await mr.json();
+          setDevMsgs(all.filter((m: any) => !m.deleted && m.groupId === g.id));
+        }
+      } else {
+        setErr("Firma chat guruhini olishda xatolik");
       }
-    } catch {}
+    } catch { setErr("Server bilan ulanishda xatolik"); }
+    setDevGroupLoading(false);
   };
 
-  useEffect(() => {
-    if (!selDevContact) return;
-    loadDevDM(selDevContact.id);
-  // eslint-disable-next-line
-  }, [selDevContact?.id]);
-
-  // Socket for real-time DMs in dev panel
+  // Real-time — shu guruhga tegishli yangi xabarlarni ko'rsatish
   useEffect(() => {
     const sock = connectSocket(currentUser.id);
     const onNew = (m: any) => {
-      if (!m.groupId && selDevContact && !m.deleted &&
-        ((m.fromUserId === currentUser.id && m.toUserId === selDevContact.id) ||
-         (m.fromUserId === selDevContact.id && m.toUserId === currentUser.id)))
-        setDevDMMessages(prev => prev.some(x => x.id === (m.id || m._id)) ? prev : [...prev, { ...m, id: m.id || m._id }]);
+      if (selDevGroup && m.groupId === selDevGroup.id && !m.deleted)
+        setDevMsgs(prev => prev.some(x => x.id === (m.id || m._id)) ? prev : [...prev, { ...m, id: m.id || m._id }]);
     };
     sock.on('message:new', onNew);
     return () => { sock.off('message:new', onNew); };
   // eslint-disable-next-line
-  }, [currentUser.id, selDevContact?.id]);
+  }, [currentUser.id, selDevGroup?.id]);
 
-  useEffect(() => { devMsgBottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [devDMMessages]);
+  useEffect(() => { devMsgBottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [devMsgs]);
 
   const sendDevMsg = async () => {
-    if (!devMsgText.trim() || !selDevContact) return;
+    if (!devMsgText.trim() || !selDevGroup) return;
     setDevMsgLoading(true);
     try {
       await fetch(`${API_BASE}/api/messages`, {
         method: 'POST', headers: authHdr,
-        body: JSON.stringify({ fromUserId: currentUser.id, toUserId: selDevContact.id, text: devMsgText.trim() }),
+        body: JSON.stringify({ fromUserId: currentUser.id, groupId: selDevGroup.id, text: devMsgText.trim() }),
       });
       setDevMsgText('');
     } catch {}
@@ -310,30 +322,24 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
             {/* Mobile: breadcrumb/back nav */}
             {devMobileStep !== 'firms' && (
               <div className="md:hidden flex items-center gap-2 mb-2 pb-2 border-b border-border/40">
-                <button onClick={() => {
-                  if (devMobileStep === 'chat') { setDevMobileStep('contacts'); }
-                  else { setDevMobileStep('firms'); setSelDevFirm(null); setSelDevContact(null); setDevDMMessages([]); }
-                }} className="flex items-center gap-1 text-xs text-primary font-semibold py-1.5 px-2 rounded-lg hover:bg-primary/10">
+                <button onClick={() => { setDevMobileStep('firms'); setSelDevFirm(null); setSelDevGroup(null); setDevMsgs([]); }}
+                  className="flex items-center gap-1 text-xs text-primary font-semibold py-1.5 px-2 rounded-lg hover:bg-primary/10">
                   <ChevronLeft className="w-4 h-4"/> Orqaga
                 </button>
-                <span className="text-xs font-semibold text-foreground truncate">
-                  {devMobileStep === 'contacts' ? selDevFirm?.name : selDevContact?.name}
-                </span>
+                <span className="text-xs font-semibold text-foreground truncate">{selDevFirm?.name}</span>
               </div>
             )}
 
             {/* Column 1: Firmalar */}
-            <div className={`${devMobileStep === 'firms' ? 'flex' : 'hidden'} md:flex flex-col gap-1 overflow-y-auto w-full md:w-36 md:shrink-0`}>
+            <div className={`${devMobileStep === 'firms' ? 'flex' : 'hidden'} md:flex flex-col gap-1 overflow-y-auto w-full md:w-40 md:shrink-0`}>
               <p className="text-[10px] font-semibold text-muted-foreground px-1 pb-1">Firmalar</p>
               {companies.length === 0 && <p className="text-xs text-muted-foreground text-center py-6">Firma yo'q</p>}
               {companies.map((c: any) => {
                 const cid = c.id || c._id;
                 const isActive = selDevFirm && (selDevFirm.id || selDevFirm._id) === cid;
                 return (
-                  <button key={cid} onClick={() => {
-                    setSelDevFirm(c); setSelDevContact(null); setDevDMMessages([]);
-                    setDevMobileStep('contacts');
-                  }} className={`w-full text-left px-3 py-2.5 md:py-2 rounded-xl text-xs font-semibold border border-border/40 flex items-center justify-between ${isActive?'bg-primary text-white':'surface'}`}>
+                  <button key={cid} onClick={() => openDevGroup(c)}
+                    className={`w-full text-left px-3 py-2.5 md:py-2 rounded-xl text-xs font-semibold border border-border/40 flex items-center justify-between ${isActive?'bg-primary text-white':'surface'}`}>
                     <div className="min-w-0">
                       <p className="truncate">{c.name}</p>
                       <p className={`text-[10px] font-normal truncate ${isActive?'text-white/70':'text-muted-foreground'}`}>{c.branchId || ''}</p>
@@ -344,55 +350,30 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
               })}
             </div>
 
-            {/* Column 2: Rahbarlar / O'rinbosarlar */}
-            <div className={`${devMobileStep === 'contacts' ? 'flex' : 'hidden'} md:flex flex-col gap-1 overflow-y-auto w-full md:w-36 md:shrink-0`}>
-              <p className="text-[10px] font-semibold text-muted-foreground px-1 pb-1">Rahbarlar</p>
-              {!selDevFirm ? (
-                <p className="text-xs text-muted-foreground text-center py-6">Firma tanlang</p>
-              ) : (() => {
-                const cid = selDevFirm.id || selDevFirm._id;
-                const devContacts = users.filter((u: any) => (u.companyId === cid) && (u.role === 'direktor' || u.role === 'orinbosar'));
-                if (devContacts.length === 0) return <p className="text-xs text-muted-foreground text-center py-6">Rahbar yo'q</p>;
-                return devContacts.map((u: any) => {
-                  const isActive = selDevContact?.id === u.id;
-                  return (
-                    <button key={u.id} onClick={() => {
-                      setSelDevContact(u); loadDevDM(u.id);
-                      setDevMobileStep('chat');
-                    }} className={`w-full text-left px-3 py-2.5 md:py-2 rounded-xl text-xs font-semibold border border-border/40 flex items-center justify-between ${isActive?'bg-primary text-white':'surface'}`}>
-                      <div className="min-w-0">
-                        <p className="truncate">{u.name}</p>
-                        <p className={`text-[10px] font-normal truncate ${isActive?'text-white/70':'text-muted-foreground'}`}>{ROLE_LABELS[u.role as Role] || u.role}</p>
-                      </div>
-                      <ChevronLeft className="w-3.5 h-3.5 rotate-180 opacity-40 md:hidden flex-shrink-0 ml-1"/>
-                    </button>
-                  );
-                });
-              })()}
-            </div>
-
-            {/* Column 3: DM chat */}
+            {/* Column 2: Chat — firmaning umumiy "🛠 Dasturchi" guruhi (barcha xodimlar shu yerdan yozadi) */}
             <div className={`${devMobileStep === 'chat' ? 'flex' : 'hidden'} md:flex flex-1 flex-col surface rounded-2xl overflow-hidden min-h-[60vh] md:min-h-0`}>
-              {!selDevContact ? (
-                <div className="flex-1 flex items-center justify-center text-xs text-muted-foreground">Rahbar tanlang</div>
+              {!selDevFirm ? (
+                <div className="flex-1 flex items-center justify-center text-xs text-muted-foreground">Firma tanlang</div>
+              ) : devGroupLoading ? (
+                <div className="flex-1 flex items-center justify-center"><Loader2 className="w-5 h-5 animate-spin text-primary"/></div>
               ) : (
                 <>
                   <div className="px-3 py-2 border-b border-border/40 flex items-center gap-2 flex-shrink-0">
-                    <div className="w-7 h-7 rounded-full bg-primary/15 flex items-center justify-center text-[12px] font-bold text-primary flex-shrink-0">
-                      {selDevContact.name?.[0]?.toUpperCase() || '?'}
-                    </div>
+                    <div className="w-7 h-7 rounded-full bg-orange-500/15 flex items-center justify-center text-[14px] flex-shrink-0">🛠</div>
                     <div className="min-w-0">
-                      <p className="text-xs font-semibold leading-none truncate">{selDevContact.name}</p>
-                      <p className="text-[10px] text-muted-foreground">{ROLE_LABELS[selDevContact.role as Role] || selDevContact.role}</p>
+                      <p className="text-xs font-semibold leading-none truncate">{selDevFirm.name}</p>
+                      <p className="text-[10px] text-muted-foreground">Barcha xodimlar bilan umumiy chat</p>
                     </div>
                   </div>
                   <div className="flex-1 overflow-y-auto p-3 space-y-2">
-                    {devDMMessages.length === 0 && <p className="text-xs text-muted-foreground text-center py-8">Xabarlar yo'q</p>}
-                    {devDMMessages.map(m => {
+                    {devMsgs.length === 0 && <p className="text-xs text-muted-foreground text-center py-8">Xabarlar yo'q</p>}
+                    {devMsgs.map(m => {
                       const mine = m.fromUserId === currentUser.id;
+                      const sender = !mine ? users.find((u: any) => u.id === m.fromUserId) : null;
                       return (
                         <div key={m.id} className={`flex ${mine?'justify-end':'justify-start'}`}>
                           <div className={`max-w-[80%] px-3 py-2 rounded-2xl text-xs ${mine?'bg-primary text-white':'bg-muted'}`}>
+                            {!mine && sender && <p className="text-[9px] font-semibold text-primary mb-0.5">{sender.name}</p>}
                             <p className="break-words">{m.text}</p>
                             <p className={`text-[9px] mt-0.5 ${mine?'text-white/60':'text-muted-foreground'}`}>{new Date(m.timestamp).toLocaleTimeString('uz-UZ',{hour:'2-digit',minute:'2-digit'})}</p>
                           </div>

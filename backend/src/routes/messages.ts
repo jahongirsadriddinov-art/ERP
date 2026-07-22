@@ -61,7 +61,7 @@ router.post('/', async (req, res) => {
     if (!fromUserId || (!toUserId && !groupId) || (!text?.trim() && !mediaUrl && !location)) {
       return res.status(400).json({ error: 'fromUserId, (toUserId yoki groupId) va text/media kerak' });
     }
-    const msg = await Message.create(stamped({
+    let msgData: any = stamped({
       fromUserId: String(fromUserId),
       toUserId: toUserId ? String(toUserId) : '',
       ...(groupId && { groupId: String(groupId) }),
@@ -74,7 +74,16 @@ router.post('/', async (req, res) => {
       ...(fileSize != null && { fileSize }),
       ...(location && { location }),
       ...(replyToId && { replyToId }),
-    }));
+    });
+    if (groupId) {
+      // Guruh xabari uchun companyId GURUHning o'zidan olinishi kerak — masalan
+      // dasturchi (o'z companyId'i yo'q) biror firmaning dev-support guruhiga
+      // yozganda, stamped() hech narsa qo'shmaydi va xabar keyin scoped() bilan
+      // topilmay qoladi. Guruhning companyId'i har doim to'g'ri tenant.
+      const group = await Group.findById(String(groupId)).select('companyId').lean();
+      if (group?.companyId) msgData = { ...msgData, companyId: group.companyId };
+    }
+    const msg = await Message.create(msgData);
     const payload = shape(msg);
     if (groupId) emitToGroup(String(groupId), 'message:new', payload);
     else {

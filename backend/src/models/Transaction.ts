@@ -9,6 +9,7 @@ export interface ITransaction extends Document {
   materialName?: string;
   quantity?: number;
   unit?: string;
+  price?: number; // yuboruvchi kiritgan birlik narxi (so'm) — Material.price'dan ustuvor
   projectId?: string;
   fromUserId?: string;
   fromUserName?: string;
@@ -40,6 +41,7 @@ const TransactionSchema: Schema = new Schema({
   materialName: { type: String },
   quantity: { type: Number },
   unit: { type: String },
+  price: { type: Number },
   projectId: { type: String },
   fromUserId: { type: String },
   fromUserName: { type: String },

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import Transaction from '../models/Transaction';
 import Material from '../models/Material';
-import { bot, notifyUser, notifyAdmins } from '../services/bot';
+import { bot, notifyAdmins } from '../services/bot';
 import User from '../models/User';
 import { scoped, stamped } from '../middleware/scope';
 import { getTenant } from '../middleware/tenantContext';
@@ -41,6 +41,7 @@ router.post('/', async (req, res) => {
       txData.materialName = data.materialName;
       txData.quantity = data.quantity;
       txData.unit = data.unit;
+      txData.price = data.price != null ? Number(data.price) : undefined;
       txData.projectId = data.projectId ? String(data.projectId) : undefined;
       txData.fromUserId = data.fromUserId ? String(data.fromUserId) : undefined;
       txData.fromUserName = data.fromUserName;
@@ -69,24 +70,21 @@ router.post('/', async (req, res) => {
         ]];
 
         if (tx.type === 'transfer' && tx.toUserId) {
-          // Notify recipient with inline buttons
-          const msg = `📦 *Yangi yukxat keldi!*\n\n📌 Material: *${tx.materialName}*\nMiqdor: *${tx.quantity} ${tx.unit}*\nYuboruvchi: ${tx.fromUserName || '—'}\nSana: ${tx.date || '—'}`;
-          await notifyUser(tx.toUserId, msg + '\n\nQabul qilasizmi?').catch(console.error);
-          // Also send inline buttons separately
+          // Bitta xabarda: to'liq matn + tugmalar (avval 2 alohida xabar edi)
+          const msg = `📦 *Yangi yukxat keldi!*\n\n📌 Material: *${tx.materialName}*\nMiqdor: *${tx.quantity} ${tx.unit}*\nYuboruvchi: ${tx.fromUserName || '—'}\nSana: ${tx.date || '—'}\n\nQabul qilasizmi?`;
           const toUser = await User.findById(tx.toUserId).catch(() => null);
           if (toUser && toUser.telegramChatId) {
-            await bot.sendMessage(toUser.telegramChatId, 'Tasdiqlash yoki rad etish:', {
-              reply_markup: { inline_keyboard: inlineKeyboard }
+            await bot.sendMessage(toUser.telegramChatId, msg, {
+              parse_mode: 'Markdown', reply_markup: { inline_keyboard: inlineKeyboard }
             }).catch(console.error);
           }
         } else if (tx.type !== 'transfer' && tx.toUserId) {
-          // Payment to specific user — notify them
-          const msg = `💰 *Sizga to'lov yuborildi*\n\nSumma: *${(tx.amount || 0).toLocaleString()} so'm*\nSabab: ${tx.description || '—'}\nSana: ${tx.date || '—'}`;
-          await notifyUser(tx.toUserId, msg).catch(console.error);
+          // Payment to specific user — bitta xabarda matn + tugmalar
+          const msg = `💰 *Sizga to'lov yuborildi*\n\nSumma: *${(tx.amount || 0).toLocaleString()} so'm*\nSabab: ${tx.description || '—'}\nSana: ${tx.date || '—'}\n\nQabul qildingizmi?`;
           const toUser = await User.findById(tx.toUserId).catch(() => null);
           if (toUser && toUser.telegramChatId) {
-            await bot.sendMessage(toUser.telegramChatId, 'Qabul qildingizmi?', {
-              reply_markup: { inline_keyboard: inlineKeyboard }
+            await bot.sendMessage(toUser.telegramChatId, msg, {
+              parse_mode: 'Markdown', reply_markup: { inline_keyboard: inlineKeyboard }
             }).catch(console.error);
           }
         }
@@ -142,13 +140,16 @@ router.patch('/:id/confirm', async (req, res) => {
           { objectId: tx.projectId, name: tx.materialName },
           { $inc: { sent: tx.quantity, remaining: -tx.quantity } }
         );
+        // Yuboruvchi kiritgan narx (tx.price) katalogdagi Material.price'dan ustuvor —
+        // smetada yo'q/eskirgan narx bo'lsa ham chiqim to'g'ri hisoblansin.
         const mat = await Material.findOne({ objectId: tx.projectId, name: tx.materialName });
-        if (mat?.price) {
+        const unitPrice = tx.price ?? mat?.price;
+        if (unitPrice) {
           expenseTx = await Transaction.create(stamped({
             type: 'material',
             status: 'confirmed',
             date: tx.date,
-            amount: mat.price * tx.quantity,
+            amount: unitPrice * tx.quantity,
             description: `Material: ${tx.materialName} (${tx.quantity} ${tx.unit})`,
             projectId: tx.projectId,
             createdById: tx.fromUserId,

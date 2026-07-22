@@ -27,6 +27,7 @@ const ADMIN_KEYBOARD = {
     [{ text: '📋 Kutilayotgan tasdiqlar' }],
     [{ text: '💰 Moliyaviy holat' }, { text: '🏗 Obyektlar' }],
     [{ text: '👥 Xodimlar ro\'yxati' }, { text: '📊 Hisobot' }],
+    [{ text: '💳 Obuna holati' }],
   ],
   resize_keyboard: true,
 };
@@ -39,7 +40,6 @@ const USER_KEYBOARD = {
     [{ text: '📦 Menga kelgan yukxatlar' }],
     [{ text: '📤 Yuborgan yukxatlarim' }],
     [{ text: '📬 Menga kelgan to\'lovlar' }],
-    [{ text: '💳 Obuna holati' }],
   ],
   resize_keyboard: true,
 };
@@ -327,8 +327,12 @@ bot.on('message', async (msg: any) => {
     return;
   }
 
-  // ── Obuna holati (barcha foydalanuvchilar) ───────────────────────────────
+  // ── Obuna holati (faqat rahbar/o'rinbosar va dasturchi) ──────────────────
   if (text === '💳 Obuna holati') {
+    if (!admin && !developer) {
+      bot.sendMessage(chatId, 'Bu bo\'lim faqat rahbar va o\'rinbosar uchun.', { reply_markup: USER_KEYBOARD });
+      return;
+    }
     try {
       const Subscription = require('../models/Subscription').default;
       const sub = user.companyId ? await Subscription.findOne({ companyId: user.companyId }).sort({ createdAt: -1 }) : null;
@@ -548,12 +552,13 @@ bot.on('callback_query', async (query: any) => {
             { $inc: { sent: tx.quantity, remaining: -tx.quantity } }
           );
           const mat = await Material.findOne({ objectId: tx.projectId, name: tx.materialName });
-          if (mat?.price) {
+          const unitPrice = tx.price ?? mat?.price;
+          if (unitPrice) {
             expenseTx = await Transaction.create({
               type: 'material',
               status: 'confirmed',
               date: tx.date,
-              amount: mat.price * tx.quantity,
+              amount: unitPrice * tx.quantity,
               description: `Material: ${tx.materialName} (${tx.quantity} ${tx.unit})`,
               projectId: tx.projectId,
               createdById: tx.fromUserId,

@@ -22,40 +22,45 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Dasturchi-support guruhini topish yoki yaratish (firma uchun alohida)
+// Dasturchi-support guruhini topish yoki yaratish (firma uchun alohida).
+// Oddiy firma a'zosi o'z companyId'i uchun chaqiradi; dasturchi (isDeveloper)
+// istalgan firmani body.companyId orqali ko'rsatib, o'sha guruhga qo'shilishi
+// mumkin — shu bitta guruh orqali ikkala tomon HAM bir xil xabarlarni ko'radi.
 router.post('/dev-support', async (req, res) => {
   try {
     const t = getTenant();
-    if (!t?.companyId) return res.status(400).json({ error: 'companyId kerak (firma a\'zosi bo\'lishi shart)' });
+    const companyId = t?.isDeveloper ? String(req.body?.companyId || '') : t?.companyId;
+    if (!companyId) return res.status(400).json({ error: 'companyId kerak (firma a\'zosi bo\'lishi shart)' });
 
     // Dasturchi user topamiz
     const dev = await User.findOne({ role: 'dasturchi' }).lean();
     const devId = dev ? String(dev._id) : null;
-    const callerId = t.userId ? String(t.userId) : '';
+    const callerId = t?.isDeveloper ? null : (t?.userId ? String(t.userId) : '');
 
     // Allaqachon mavjud devSupport guruhini qidiramiz
-    let group = await Group.findOne({ companyId: t.companyId, devSupport: true });
+    let group = await Group.findOne({ companyId, devSupport: true });
     if (!group) {
-      const members = [...new Set([callerId, ...(devId ? [devId] : [])])].filter(Boolean);
+      const members = [...new Set([callerId, devId].filter(Boolean))] as string[];
       group = await Group.create({
         name: '🛠 Dasturchi',
         devSupport: true,
-        companyId: t.companyId,
+        companyId,
         memberIds: members,
         adminIds: devId ? [devId] : [],
-        createdBy: callerId,
+        createdBy: callerId || devId || '',
       });
-      if (devId) emitToUser(devId, 'group:new', { ...group.toObject(), id: group._id });
+      if (devId && callerId) emitToUser(devId, 'group:new', { ...group.toObject(), id: group._id });
     } else {
       let changed = false;
       if (devId && !group.memberIds.includes(devId)) {
         group.memberIds.push(devId);
         changed = true;
-        emitToUser(devId, 'group:new', { ...group.toObject(), id: group._id });
+        if (callerId) emitToUser(devId, 'group:new', { ...group.toObject(), id: group._id });
       }
       if (callerId && !group.memberIds.includes(callerId)) {
         group.memberIds.push(callerId);
         changed = true;
+        emitToUser(callerId, 'group:new', { ...group.toObject(), id: group._id });
       }
       if (changed) await group.save();
     }

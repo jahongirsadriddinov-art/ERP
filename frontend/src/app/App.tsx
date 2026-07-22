@@ -433,7 +433,7 @@ function AddObjectModal({ users, onClose, onAdd }:
       if (smeta) {
         setSmetaMsg('Smeta tahlil qilinmoqda...');
         try {
-          smetaResult = await parseSmetaFile(smeta);
+          smetaResult = await parseSmetaFile(smeta, obj.id || obj._id);
           finalMats = smetaResult!.resources.filter(r => r.group === 'material');
           finalBudget = smetaResult!.meta?.totalWithoutVat ?? finalBudget;
         } catch (e) {
@@ -552,13 +552,14 @@ function SendTransferModal({ currentUser, projects, allUsers, onClose, onSend, i
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-sm max-h-[88vh] overflow-y-auto scrollbar-hide animate-slide-up-fade" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-4 py-3.5 border-b border-border" style={{ background: "linear-gradient(to right, rgba(27,58,107,0.06), transparent)" }}>
+    <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
+      <div className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-sm max-h-[88vh] overflow-hidden animate-slide-up-fade flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-4 py-3.5 border-b border-border flex-shrink-0" style={{ background: "linear-gradient(to right, rgba(27,58,107,0.06), transparent)" }}>
           <h3 className="font-bold text-sm flex items-center gap-2"><Send className="w-4 h-4 text-primary"/>Material Yuborish</h3>
           <button aria-label="Yopish" onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted liquid-transition"><X className="w-4 h-4 text-muted-foreground"/></button>
         </div>
-        <form onSubmit={submit} className="p-4 space-y-3">
+        <form onSubmit={submit} className="flex flex-col flex-1 min-h-0">
+        <div className="flex-1 overflow-y-auto p-4 space-y-3">
           {/* Project */}
           <div>
             <label className="text-[10px] font-bold block mb-1.5 text-muted-foreground uppercase tracking-wider">Obyekt *</label>
@@ -743,8 +744,9 @@ function SendTransferModal({ currentUser, projects, allUsers, onClose, onSend, i
             <input className="w-full text-sm border border-border rounded-lg px-3 py-2.5 bg-input-background focus:outline-none"
               placeholder="Qo'shimcha ma'lumot..." value={note} onChange={e => setNote(e.target.value)}/>
           </div>
+        </div>
 
-          <div className="flex gap-2 pt-1">
+          <div className="flex gap-2 p-4 pt-3 border-t border-border flex-shrink-0">
             <button type="button" onClick={onClose} className="flex-1 text-sm border border-border rounded-xl px-3 py-2.5 hover:bg-muted liquid-transition font-medium">Bekor</button>
             <button type="submit"
               disabled={selMats.length === 0 && (!showCustom || !customMats.some(m => m.name.trim()))}
@@ -1605,7 +1607,7 @@ function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSe
             if(!file) return;
             setUploadingSmeta(true); setSmetaMsg('Tahlil qilinmoqda...'); setSmetaPercent(40);
             try {
-              const result = await parseSmetaFile(file);
+              const result = await parseSmetaFile(file, project.id);
               onSmetaUploaded(project.id, result);
               const matN = result.resources.filter((r:any)=>r.group==='material').length;
               setSmetaMsg(`✓ ${result.resources.length} resurs, ${matN} material`);
@@ -1718,7 +1720,7 @@ function MaterialDetailsModal({ mat, confT, pendT, onClose, onSend }: { mat: Req
   const totalSpent = sent * (mat.price || 0);
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex flex-col justify-end sm:justify-center sm:items-center backdrop-blur-sm liquid-transition">
+    <div className="fixed inset-0 bg-black/60 z-[60] flex flex-col justify-end sm:justify-center sm:items-center backdrop-blur-sm liquid-transition">
       <div className="bg-background/90 backdrop-blur-xl w-full sm:w-[450px] sm:rounded-2xl rounded-t-[2rem] overflow-hidden animate-slide-up-fade flex flex-col shadow-2xl border border-white/20">
         <div className="p-5 border-b border-border/50 flex justify-between items-center bg-card/50">
           <h3 className="font-semibold text-base truncate pr-4">{mat.name}</h3>
@@ -2437,7 +2439,7 @@ function GroupCreateModal({ contacts, onClose, onCreate }:
   const filtered = contacts.filter(u => u.name.toLowerCase().includes(q.trim().toLowerCase()));
   return (
     <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/40 modal-backdrop animate-fade-in" onClick={onClose}>
-      <div className="glass-modal rounded-t-3xl sm:rounded-2xl w-full max-w-sm p-5 mb-[104px] sm:mb-0 animate-slide-up-fade" onClick={e=>e.stopPropagation()}>
+      <div className="glass-modal rounded-t-3xl sm:rounded-2xl w-full max-w-sm p-5 animate-slide-up-fade" onClick={e=>e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-bold text-sm flex items-center gap-2"><Users2 className="w-4 h-4 text-primary"/>Yangi guruh</h3>
           <button aria-label="Yopish" onClick={onClose} className="p-1.5 hover:bg-muted rounded-full"><X className="w-4 h-4"/></button>
@@ -3300,7 +3302,12 @@ export default function App() {
       ]).then(([uData, pData, tData]) => {
         if(Array.isArray(uData)) setUsers(uData.map(u => ({...u, id: u.id || u._id, projectIds: u.projectIds || []})));
         if(Array.isArray(pData)) {
-          const formattedP = pData.map(p => ({...p, id: p.id || p._id, requiredMaterials: (p.materials || []).map((m:any) => ({ id: m._id || m.id, name: m.name, quantity: m.needed, unit: m.unit, category: 'Qurilish', price: m.price }))}));
+          const formattedP = pData.map(p => {
+            const mats = p.smeta?.resources?.length
+              ? p.smeta.resources.filter((r:any) => r.group === 'material').map((m:any) => ({ id: String(m.index), name: m.rawName, quantity: m.qty, unit: m.unit, category: m.category || 'Qurilish', price: m.price ?? undefined }))
+              : (p.materials || []).map((m:any) => ({ id: m._id || m.id, name: m.name, quantity: m.needed, unit: m.unit, category: 'Qurilish', price: m.price }));
+            return { ...p, id: p.id || p._id, requiredMaterials: mats };
+          });
           setProjects(formattedP);
           const savedId = localStorage.getItem("selProjectId");
           if (savedId && !selProject) {
@@ -3360,6 +3367,21 @@ export default function App() {
       const onGroupUpdate = (g: any) => setGroups(prev => prev.map(x => x.id===(g.id||g._id) ? {...g, id: g.id||g._id} : x));
       const onGroupRemoved = ({ id }: any) => setGroups(prev => prev.filter(x => x.id !== id));
 
+      // Transfer/chiqim tasdiqlash Telegram bot orqali ham bo'lishi mumkin —
+      // socket orqali ochiq sessiyani darhol yangilaymiz (qayta login shart emas).
+      const onTxUpdate = (payload: any) => {
+        const t = { ...payload, id: payload.id || payload._id };
+        if (t.type === 'transfer') setTransfers(prev => prev.map(x => x.id === t.id ? t : x));
+        else if (t.type === 'income') setIncomes(prev => prev.map(x => x.id === t.id ? t : x));
+        else setExpenses(prev => prev.map(x => x.id === t.id ? t : x));
+      };
+      const onTxNew = (payload: any) => {
+        const t = { ...payload, id: payload.id || payload._id };
+        if (t.type === 'transfer') setTransfers(prev => prev.some(x => x.id === t.id) ? prev : [...prev, t]);
+        else if (t.type === 'income') setIncomes(prev => prev.some(x => x.id === t.id) ? prev : [...prev, t]);
+        else setExpenses(prev => prev.some(x => x.id === t.id) ? prev : [...prev, t]);
+      };
+
       // Kiruvchi qo'ng'iroq (faol qo'ng'iroq bo'lmasa)
       const onCallOffer = (d: any) => {
         if (activeCallRef.current) return; // allaqachon qo'ng'iroqda — CallOverlay mesh'ni boshqaradi
@@ -3376,9 +3398,21 @@ export default function App() {
       socket.on("group:update", onGroupUpdate);
       socket.on("group:removed", onGroupRemoved);
       socket.on("call:offer", onCallOffer);
+      socket.on("transaction:update", onTxUpdate);
+      socket.on("transaction:new", onTxNew);
 
       // Fallback polling (socket uzilsa) — kamroq
-      const intv = setInterval(() => { fetchMsgs(); fetchGroups(); }, 12000);
+      const fetchTx = () => {
+        fetch(`${API_BASE}/api/transactions`).then(r=>r.json()).then(tData => {
+          if (Array.isArray(tData)) {
+            const formattedT = tData.map((t: any) => ({...t, id: t.id || t._id}));
+            setTransfers(formattedT.filter((t: any) => t.type === 'transfer'));
+            setIncomes(formattedT.filter((t: any) => t.type === 'income'));
+            setExpenses(formattedT.filter((t: any) => t.type !== 'transfer' && t.type !== 'income'));
+          }
+        }).catch(()=>{});
+      };
+      const intv = setInterval(() => { fetchMsgs(); fetchGroups(); fetchTx(); }, 12000);
       return () => {
         clearInterval(intv);
         socket.off("message:new", onNew);
@@ -3390,6 +3424,8 @@ export default function App() {
         socket.off("group:update", onGroupUpdate);
         socket.off("group:removed", onGroupRemoved);
         socket.off("call:offer", onCallOffer);
+        socket.off("transaction:update", onTxUpdate);
+        socket.off("transaction:new", onTxNew);
       };
     }
   }, [liveUser?.id]);
@@ -3666,7 +3702,7 @@ export default function App() {
       </div>
 
       {/* Main */}
-      <main key={`${page}:${selProject?.id || ''}`} className={`page-enter flex-1 overflow-hidden flex flex-col relative ${(page === 'chat' && chatIsOpen) ? '' : 'main-pb-safe'}`}>
+      <main key={`${page}:${selProject?.id || ''}`} className={`page-enter bg-background flex-1 overflow-hidden flex flex-col relative ${(page === 'chat' && chatIsOpen) ? '' : 'main-pb-safe'}`}>
         {/* Admin dashboard */}
         {page==="dashboard" && admin && !selProject && (
           <AdminDashboard currentUser={liveUser} users={users} projects={projects} transfers={transfers}

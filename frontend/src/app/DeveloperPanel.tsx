@@ -6,12 +6,13 @@ import { connectSocket } from "./socket";
 import type { AppUser, Msg, Role } from "./App";
 import { ROLE_LABELS } from "./App";
 
+// Har bir tarifda BIRINCHI OY BEPUL — backend/src/routes/subscriptions.ts PLAN_CONFIG bilan bir xil.
 const DEV_PLAN_CONFIG: Record<string, { label: string; days: number; amount: number }> = {
   'bepul':   { label: '1 oy bepul', days: 30,  amount: 0 },
-  '1month':  { label: '1 oylik',   days: 30,  amount: 700_000 },
-  '3month':  { label: '3 oylik',   days: 90,  amount: 2_000_000 },
-  '6month':  { label: '6 oylik',   days: 180, amount: 4_000_000 },
-  '12month': { label: '12 oylik',  days: 365, amount: 8_000_000 },
+  '1month':  { label: '1 oylik',   days: 30,  amount: 0 },
+  '3month':  { label: '3 oylik',   days: 90,  amount: 1_400_000 },
+  '6month':  { label: '6 oylik',   days: 180, amount: 3_500_000 },
+  '12month': { label: '12 oylik',  days: 365, amount: 7_700_000 },
 };
 
 // ─── Developer Panel ────────────────────────────────────────────────────────────

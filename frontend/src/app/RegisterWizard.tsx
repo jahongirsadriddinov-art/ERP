@@ -194,7 +194,7 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
       setRegDoneInfo({
         phone: d.phone || phone.replace(/\s/g,''),
         planLabel: d.planLabel || '1 oylik',
-        planAmount: d.planAmount || 700_000,
+        planAmount: d.planAmount ?? 0,
         companyName: d.company?.name || companyName,
         branchId: d.company?.branchId || '',
         ownerName: `${firstName} ${lastName}`.trim(),
@@ -278,58 +278,53 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
 
               <div className="space-y-3">
                 {([
-                  { key: '1month',  label: '1 oylik',  price: 700_000,   days: 30,  badge: 'BEPUL (1-oy sinov)', featured: false },
-                  { key: '3month',  label: '3 oylik',  price: 2_000_000, days: 90,  badge: '100 000 so\'m tejaysiz', featured: false },
-                  { key: '6month',  label: '6 oylik',  price: 4_000_000, days: 180, badge: '200 000 so\'m tejaysiz', featured: false },
-                  { key: '12month', label: '12 oylik', price: 8_000_000, days: 365, badge: '400 000 so\'m tejaysiz', featured: true },
+                  { key: '1month',  label: '1 oylik',  fullPrice: 700_000,   price: 0,         days: 30,  ribbon: undefined as string|undefined, featured: false },
+                  { key: '3month',  label: '3 oylik',  fullPrice: 2_100_000, price: 1_400_000, days: 90,  ribbon: 'ENG TEJAMKOR',   featured: false },
+                  { key: '6month',  label: '6 oylik',  fullPrice: 4_200_000, price: 3_500_000, days: 180, ribbon: undefined,        featured: false },
+                  { key: '12month', label: '12 oylik', fullPrice: 8_400_000, price: 7_700_000, days: 365, ribbon: 'ENG UZOQ MUDDAT',featured: true },
                 ] as const).map((plan, i) => {
                   const selected = selectedPlan === plan.key;
                   return (
                     <motion.button key={plan.key} type="button" onClick={() => setSelectedPlan(plan.key)}
                       initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0, scale: selected ? 1.02 : 1 }}
                       transition={{ delay: i * 0.05, type: "spring", stiffness: 320, damping: 26 }}
-                      whileTap={{ scale: 0.98 }}
-                      className={`relative w-full rounded-3xl p-4 text-left overflow-visible ${plan.featured ? "pt-7" : ""} ${
+                      whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }}
+                      className={`relative w-full rounded-3xl p-4 text-left overflow-visible ${plan.ribbon ? "pt-7" : ""} ${
                         plan.featured
                           ? "shadow-xl shadow-primary/30 text-white"
                           : `border-2 ${selected ? "border-primary bg-primary/8 shadow-md shadow-primary/20" : "border-border/50 bg-white/40 dark:bg-black/20 hover:border-primary/40"}`
                       }`}
                       style={plan.featured ? { background: "linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%)", border: selected ? "2px solid white" : "2px solid transparent" } : undefined}>
-                      {plan.featured && (
-                        <span className="absolute -top-3 left-1/2 -translate-x-1/2 text-[9px] font-bold bg-accent text-accent-foreground px-3 py-1 rounded-full tracking-wide shadow-md whitespace-nowrap">ENG TEJAMKOR</span>
+                      {plan.ribbon && (
+                        <span className={`absolute -top-3 left-1/2 -translate-x-1/2 text-[9px] font-bold px-3 py-1 rounded-full tracking-wide shadow-md whitespace-nowrap ${plan.featured ? "bg-accent text-accent-foreground" : "bg-primary text-white"}`}>{plan.ribbon}</span>
+                      )}
+                      {selected && (
+                        <span className={`absolute -top-2.5 -right-2.5 w-7 h-7 rounded-full flex items-center justify-center shadow-md ${plan.featured ? "bg-white text-primary" : "bg-primary text-white"}`}>
+                          <Check className="w-4 h-4"/>
+                        </span>
                       )}
                       <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <p className={`text-base font-bold ${plan.featured ? "text-white" : ""}`}>{plan.label}</p>
-                          <p className={`text-[11px] ${plan.featured ? "text-white/70" : "text-muted-foreground"}`}>{plan.days} kun</p>
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-base font-bold leading-tight ${plan.featured ? "text-white" : ""}`}>{plan.label}</p>
+                          <p className={`text-[11px] mt-0.5 ${plan.featured ? "text-white/70" : "text-muted-foreground"}`}>{plan.days} kun</p>
+                          <span className={`inline-block mt-1.5 text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${
+                            plan.featured ? "bg-white/20 text-white" : "bg-green-500/15 text-green-800 dark:text-green-400"
+                          }`}>🎁 1-oy bepul</span>
                         </div>
-                        <div className="text-right">
-                          {plan.key === '1month' ? (
-                            <div>
-                              <p className={`text-2xl font-bold ${plan.featured ? "text-white" : "text-green-800 dark:text-green-400"}`}>BEPUL</p>
-                              <p className={`text-xs line-through ${plan.featured ? "text-white/50" : "text-muted-foreground"}`}>{plan.price.toLocaleString('uz-UZ')} so'm</p>
-                            </div>
+                        <div className="text-right flex-shrink-0">
+                          {plan.price === 0 ? (
+                            <p className={`text-2xl font-bold ${plan.featured ? "text-white" : "text-green-800 dark:text-green-400"}`}>BEPUL</p>
                           ) : (
-                            <>
-                              <p className={`text-2xl font-bold ${plan.featured ? "text-white" : "text-primary"}`}>{plan.price.toLocaleString('uz-UZ')}</p>
-                              <p className={`text-[11px] ${plan.featured ? "text-white/70" : "text-muted-foreground"}`}>so'm</p>
-                            </>
+                            <p className={`text-xl font-bold ${plan.featured ? "text-white" : "text-primary"}`}>{plan.price.toLocaleString('uz-UZ')}<span className="text-[11px] font-normal ml-0.5">so'm</span></p>
                           )}
+                          <p className={`text-[11px] line-through ${plan.featured ? "text-white/50" : "text-muted-foreground"}`}>{plan.fullPrice.toLocaleString('uz-UZ')} so'm</p>
                         </div>
                       </div>
-                      <span className={`inline-block mt-2 text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${
-                        plan.featured ? "bg-white/20 text-white" : plan.key === '1month' ? "bg-green-500/15 text-green-800 dark:text-green-400" : "bg-accent text-white dark:bg-accent/10 dark:text-accent"
-                      }`}>{plan.badge}</span>
-                      {selected && (
-                        <div className={`mt-2 flex items-center gap-1.5 ${plan.featured ? "text-white" : "text-primary"}`}>
-                          <Check className="w-4 h-4"/><span className="text-xs font-semibold">Tanlangan</span>
-                        </div>
-                      )}
                     </motion.button>
                   );
                 })}
               </div>
-              <p className="text-xs text-center text-muted-foreground pt-1">Birinchi oy bepul. Keyingi oydan to'lov boshlanadi.</p>
+              <p className="text-xs text-center text-muted-foreground pt-1">Har bir tarifda birinchi oy bepul. Keyingi oylardan to'lov boshlanadi.</p>
             </div>
           )}
 
@@ -348,10 +343,15 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
                     <p className="text-sm line-through text-muted-foreground">700 000 so'm</p>
                   </div>
                 ) : (
-                  <p className="text-2xl font-bold text-primary">
-                    {selectedPlan==='3month'?'2 000 000':selectedPlan==='6month'?'4 000 000':'8 000 000'}
-                    <span className="text-base font-normal text-muted-foreground ml-1">so'm</span>
-                  </p>
+                  <div>
+                    <p className="text-2xl font-bold text-primary">
+                      {selectedPlan==='3month'?'1 400 000':selectedPlan==='6month'?'3 500 000':'7 700 000'}
+                      <span className="text-base font-normal text-muted-foreground ml-1">so'm</span>
+                    </p>
+                    <p className="text-sm line-through text-muted-foreground">
+                      {selectedPlan==='3month'?'2 100 000':selectedPlan==='6month'?'4 200 000':'8 400 000'} so'm
+                    </p>
+                  </div>
                 )}
                 <p className="text-sm text-muted-foreground mt-1">
                   {selectedPlan==='1month'?'1 oylik (30 kun) — birinchi oy bepul':selectedPlan==='3month'?'3 oylik (90 kun)':selectedPlan==='6month'?'6 oylik (180 kun)':'12 oylik (365 kun)'}
@@ -503,7 +503,7 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
             <div className="space-y-4 animate-slide-in-right">
               <div><h2 className="text-xl font-bold mb-1">Tekshirib tasdiqlang</h2></div>
               {[
-                { t: "Tarif", v: selectedPlan==='1month'?'1 oylik — 700 000 so\'m':selectedPlan==='3month'?'3 oylik — 2 000 000 so\'m':selectedPlan==='6month'?'6 oylik — 4 000 000 so\'m':'12 oylik — 8 000 000 so\'m', go: "tarif" as RegStep },
+                { t: "Tarif", v: selectedPlan==='1month'?'1 oylik — BEPUL':selectedPlan==='3month'?'3 oylik — 1 400 000 so\'m':selectedPlan==='6month'?'6 oylik — 3 500 000 so\'m':'12 oylik — 7 700 000 so\'m', go: "tarif" as RegStep },
                 { t: "Egasi", v: `${firstName} ${lastName}`, go: "owner" as RegStep },
                 { t: "Telefon", v: phone, go: "phone" as RegStep },
                 { t: "Firma", v: companyName, go: "company" as RegStep },

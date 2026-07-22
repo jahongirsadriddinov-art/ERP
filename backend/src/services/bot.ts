@@ -2,7 +2,9 @@ const TelegramBot = require('node-telegram-bot-api');
 import dotenv from 'dotenv';
 import User from '../models/User';
 import Transaction from '../models/Transaction';
+import Material from '../models/Material';
 import { initRegistrationScene, isInRegistration } from './registrationScene';
+import { emitToUser } from './socket';
 
 dotenv.config();
 
@@ -524,6 +526,10 @@ bot.on('callback_query', async (query: any) => {
         await bot.answerCallbackQuery(query.id, { text: 'Bu tranzaksiya allaqachon qayta ishlangan.' });
         return;
       }
+      if (!user || String(tx.toUserId) !== String(user._id)) {
+        await bot.answerCallbackQuery(query.id, { text: 'Bu sizga tegishli emas — faqat qabul qiluvchi tasdiqlashi mumkin!' });
+        return;
+      }
 
       tx.status = isConfirm ? 'confirmed' : 'rejected';
       if (isConfirm) {
@@ -531,6 +537,46 @@ bot.on('callback_query', async (query: any) => {
         if (user) tx.confirmedById = user._id.toString();
       }
       await tx.save();
+
+      // Material qoldig'ini yangilash + moliyaviy chiqim yozuvi yaratish
+      // (veb-ilovadagi PATCH /:id/confirm bilan bir xil mantiq).
+      let expenseTx: any = null;
+      if (isConfirm && tx.type === 'transfer' && tx.projectId && tx.materialName && tx.quantity) {
+        try {
+          await Material.findOneAndUpdate(
+            { objectId: tx.projectId, name: tx.materialName },
+            { $inc: { sent: tx.quantity, remaining: -tx.quantity } }
+          );
+          const mat = await Material.findOne({ objectId: tx.projectId, name: tx.materialName });
+          if (mat?.price) {
+            expenseTx = await Transaction.create({
+              type: 'material',
+              status: 'confirmed',
+              date: tx.date,
+              amount: mat.price * tx.quantity,
+              description: `Material: ${tx.materialName} (${tx.quantity} ${tx.unit})`,
+              projectId: tx.projectId,
+              createdById: tx.fromUserId,
+              confirmedById: tx.confirmedById,
+              confirmedDate: tx.confirmedDate,
+              sourceTransferId: String(tx._id),
+              companyId: tx.companyId,
+            });
+          }
+        } catch (matErr) {
+          console.error('[bot] material/expense update error:', matErr);
+        }
+      }
+
+      // Realtime — ochiq veb-sessiyalarni darhol yangilash
+      const txPayload = { ...tx.toObject(), id: tx._id };
+      if (tx.toUserId) emitToUser(String(tx.toUserId), 'transaction:update', txPayload);
+      if (tx.fromUserId) emitToUser(String(tx.fromUserId), 'transaction:update', txPayload);
+      if (expenseTx) {
+        const expPayload = { ...expenseTx.toObject(), id: expenseTx._id };
+        if (tx.fromUserId) emitToUser(String(tx.fromUserId), 'transaction:new', expPayload);
+        if (tx.toUserId) emitToUser(String(tx.toUserId), 'transaction:new', expPayload);
+      }
 
       const resultText = isConfirm ? '✅ Tasdiqlandi!' : '❌ Rad etildi!';
       await bot.answerCallbackQuery(query.id, { text: resultText });

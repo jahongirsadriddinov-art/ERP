@@ -3,6 +3,8 @@ import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import fs from 'fs';
 import { parseSmeta } from '../smeta';
+import ObjectModel from '../models/Object';
+import { scoped } from '../middleware/scope';
 
 const router = Router();
 const upload = multer({ dest: 'uploads/', limits: { fileSize: 50 * 1024 * 1024 } });
@@ -21,8 +23,19 @@ router.post('/parse', upload.single('smeta'), async (req: Request, res: Response
   try {
     const buf = fs.readFileSync(file.path);
     const result = await parseSmeta(buf, file.originalname || 'smeta.pdf');
-    // ok:false bo'lsa ham natijани qaytaramiz — foydalanuvchi xatolarni ko'rsin.
-    // ERP bazasiga yozishni frontend validation.ok bo'yicha hal qiladi.
+    // Agar objectId berilgan bo'lsa — natijani shu Obyekt hujjatiga yozamiz,
+    // shunda boshqa qurilma/sessiya ham GET /api/objects orqali ko'radi.
+    const objectId = req.body.objectId as string | undefined;
+    if (objectId && result.resources?.length) {
+      await ObjectModel.findOneAndUpdate(
+        scoped({ _id: objectId }),
+        {
+          smeta: result,
+          smetaFileUrl: file.originalname,
+          ...(result.meta?.totalWithoutVat ? { budget: result.meta.totalWithoutVat } : {}),
+        }
+      );
+    }
     return res.json(result);
   } catch (err) {
     console.error('[smeta] parse xatosi:', err);

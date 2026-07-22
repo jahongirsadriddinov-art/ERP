@@ -29,6 +29,7 @@ export interface ITransaction extends Document {
   confirmedDate?: string;
   defect?: string;
   note?: string;
+  sourceTransferId?: string; // tasdiqlangan material yukxatidan avtomatik yaratilgan chiqim uchun
 
   companyId?: string; // v1.2 multi-tenant (nullable)
 }
@@ -56,6 +57,7 @@ const TransactionSchema: Schema = new Schema({
   confirmedDate: { type: String },
   defect: { type: String },
   note: { type: String },
+  sourceTransferId: { type: String },
   companyId: { type: String, index: true } // v1.2 multi-tenant
 }, { timestamps: true });
 

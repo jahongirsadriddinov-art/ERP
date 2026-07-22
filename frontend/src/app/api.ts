@@ -62,9 +62,10 @@ export async function uploadChatMedia(
 
 // ─── Deterministik smeta parser (AI'siz, POST /api/smeta/parse) ──────────────
 // Butun ParseResult qaytaradi: resources (guruhlangan), works (bo'limli), totals, meta.
-export async function parseSmetaFile(file: File): Promise<any> {
+export async function parseSmetaFile(file: File, objectId?: string): Promise<any> {
   const fd = new FormData();
   fd.append('smeta', file);
+  if (objectId) fd.append('objectId', objectId);
   const res = await fetch(api('/api/smeta/parse'), { method: 'POST', body: fd });
   if (!res.ok) {
     let msg = 'Smeta o\'qilmadi';

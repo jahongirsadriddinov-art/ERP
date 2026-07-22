@@ -4,6 +4,8 @@ import Material from '../models/Material';
 import { bot, notifyUser, notifyAdmins } from '../services/bot';
 import User from '../models/User';
 import { scoped, stamped } from '../middleware/scope';
+import { getTenant } from '../middleware/tenantContext';
+import { emitToUser } from '../services/socket';
 
 const router = Router();
 
@@ -89,11 +91,12 @@ router.post('/', async (req, res) => {
           }
         }
 
-        // Always notify admins about new pending transactions
+        // Always notify admins about new pending transactions (informational only —
+        // faqat qabul qiluvchi tasdiqlashi/rad etishi kerak, shuning uchun tugmalarsiz).
         const adminMsg = tx.type === 'transfer'
-          ? `📦 *Yangi yukxat*\n${tx.materialName} — ${tx.quantity} ${tx.unit}\nYuboruvchi: ${tx.fromUserName || '—'}`
+          ? `📦 *Yangi yukxat*\n${tx.materialName} — ${tx.quantity} ${tx.unit}\nYuboruvchi: ${tx.fromUserName || '—'}\nQabul qiluvchi: ${tx.toUserName || '—'}`
           : `💰 *Yangi to'lov so'rovi*\n${tx.description || '—'} — ${(tx.amount || 0).toLocaleString()} so'm`;
-        await notifyAdmins(adminMsg, inlineKeyboard).catch(console.error);
+        await notifyAdmins(adminMsg).catch(console.error);
 
       } catch(notifErr) {
         console.error('Telegram notification error:', notifErr);
@@ -108,29 +111,65 @@ router.post('/', async (req, res) => {
   }
 });
 
-// Confirm transaction
+// Confirm transaction — FAQAT qabul qiluvchi (tx.toUserId) tasdiqlashi mumkin.
+// confirmedById HECH QACHON so'rov tanasidan olinmaydi — faqat tekshirilgan
+// JWT (getTenant().userId) dan, aks holda boshqa odam ("sender") ham
+// o'zi yuborgan tranzaksiyani tasdiqlab qo'ya olar edi.
 router.patch('/:id/confirm', async (req, res) => {
   try {
-    const { defect, confirmedById } = req.body;
+    const { defect } = req.body;
     const tx = await Transaction.findOne(scoped({ _id: req.params.id }));
     if (!tx) return res.status(404).json({ error: 'Topilmadi' });
+    if (tx.status !== 'pending') return res.status(409).json({ error: 'Bu allaqachon qayta ishlangan' });
+
+    const actingUserId = getTenant()?.userId;
+    if (!actingUserId || String(tx.toUserId) !== String(actingUserId)) {
+      return res.status(403).json({ error: 'Faqat qabul qiluvchi tasdiqlashi mumkin' });
+    }
 
     tx.status = 'confirmed';
     if (defect) tx.defect = defect;
-    if (confirmedById) tx.confirmedById = confirmedById;
+    tx.confirmedById = actingUserId;
     tx.confirmedDate = new Date().toISOString().split('T')[0];
     await tx.save();
 
-    // Update material sent/remaining counts when a transfer is confirmed
+    // Update material sent/remaining counts + create a linked expense record
+    // when a material transfer is confirmed, so it shows up in Moliya.
+    let expenseTx: any = null;
     if (tx.type === 'transfer' && tx.projectId && tx.materialName && tx.quantity) {
       try {
         await Material.findOneAndUpdate(
           { objectId: tx.projectId, name: tx.materialName },
           { $inc: { sent: tx.quantity, remaining: -tx.quantity } }
         );
+        const mat = await Material.findOne({ objectId: tx.projectId, name: tx.materialName });
+        if (mat?.price) {
+          expenseTx = await Transaction.create(stamped({
+            type: 'material',
+            status: 'confirmed',
+            date: tx.date,
+            amount: mat.price * tx.quantity,
+            description: `Material: ${tx.materialName} (${tx.quantity} ${tx.unit})`,
+            projectId: tx.projectId,
+            createdById: tx.fromUserId,
+            confirmedById: actingUserId,
+            confirmedDate: tx.confirmedDate,
+            sourceTransferId: String(tx._id),
+          }));
+        }
       } catch (matErr) {
         console.error('Material update error:', matErr);
       }
+    }
+
+    // Realtime — ochiq veb-sessiyalar darhol yangilansin (Telegram orqali ham shu yo'l ishlaydi)
+    const payload = { ...tx.toObject(), id: tx._id };
+    if (tx.toUserId) emitToUser(String(tx.toUserId), 'transaction:update', payload);
+    if (tx.fromUserId) emitToUser(String(tx.fromUserId), 'transaction:update', payload);
+    if (expenseTx) {
+      const expPayload = { ...expenseTx.toObject(), id: expenseTx._id };
+      if (tx.fromUserId) emitToUser(String(tx.fromUserId), 'transaction:new', expPayload);
+      if (tx.toUserId) emitToUser(String(tx.toUserId), 'transaction:new', expPayload);
     }
 
     // Notify sender
@@ -156,14 +195,24 @@ router.patch('/:id/confirm', async (req, res) => {
   }
 });
 
-// Reject transaction
+// Reject transaction — xuddi shu tarzda faqat qabul qiluvchi rad eta oladi.
 router.patch('/:id/reject', async (req, res) => {
   try {
     const tx = await Transaction.findOne(scoped({ _id: req.params.id }));
     if (!tx) return res.status(404).json({ error: 'Topilmadi' });
+    if (tx.status !== 'pending') return res.status(409).json({ error: 'Bu allaqachon qayta ishlangan' });
+
+    const actingUserId = getTenant()?.userId;
+    if (!actingUserId || String(tx.toUserId) !== String(actingUserId)) {
+      return res.status(403).json({ error: 'Faqat qabul qiluvchi rad etishi mumkin' });
+    }
 
     tx.status = 'rejected';
     await tx.save();
+
+    const payload = { ...tx.toObject(), id: tx._id };
+    if (tx.toUserId) emitToUser(String(tx.toUserId), 'transaction:update', payload);
+    if (tx.fromUserId) emitToUser(String(tx.fromUserId), 'transaction:update', payload);
 
     // Notify sender
     try {

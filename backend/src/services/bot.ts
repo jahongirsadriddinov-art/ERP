@@ -60,10 +60,9 @@ const USER_KEYBOARD = (lang?: BotLang) => ({
 // ─── Bot ichidan chat (kontakt/guruh tanlab yozish) ─────────────────────────────
 // Xotiradagi holat: chatId → tanlangan suhbat. Server qayta ishga tushsa
 // tozalanadi — foydalanuvchi "💬 Chat" tugmasini qayta bosadi, katta muammo emas.
-interface BotChatSession { targetType: 'user' | 'group'; targetId: string; targetName: string; myUserId: string; }
+interface BotChatSession { targetType: 'user' | 'group'; targetId: string; targetName: string; myUserId: string; lang?: BotLang; }
 const chatSessions = new Map<number, BotChatSession>();
-const EXIT_CHAT_TEXT = '🔚 Chatni tugatish';
-const chatExitKeyboard = { keyboard: [[{ text: EXIT_CHAT_TEXT }]], resize_keyboard: true };
+const chatExitKeyboard = (lang?: BotLang) => ({ keyboard: [[{ text: tb(lang, 'exitChat') }]], resize_keyboard: true });
 
 // Telegramdan kelgan faylni (photo/video/voice/document) yuklab, /uploads ichiga
 // saqlaydi va saytdagi Message.mediaUrl bilan bir xil ko'rinishdagi to'liq URL qaytaradi.
@@ -113,8 +112,8 @@ async function relayBotMessageToSite(session: BotChatSession, data: {
 const isAdmin = (role: string) => role === 'direktor' || role === 'orinbosar';
 const isDev = (role: string) => role === 'dasturchi';
 
-function fmt(n: number) {
-  return Math.round(n).toLocaleString('uz-UZ') + ' so\'m';
+function fmt(n: number, lang?: BotLang) {
+  return Math.round(n).toLocaleString('uz-UZ') + ' ' + tb(lang, 'currencySuffix');
 }
 
 const DEVELOPER_KEYBOARD = (lang?: BotLang) => ({
@@ -201,7 +200,7 @@ bot.on('message', async (msg: any) => {
   // ── Bot ichidan chat rejimi — matn, rasm/video/ovoz/fayl/lokatsiya bo'lishi mumkin ──
   const activeChat = chatSessions.get(chatId);
   if (activeChat) {
-    if (msg.text === EXIT_CHAT_TEXT) {
+    if (msg.text === tb(activeChat.lang, 'exitChat')) {
       chatSessions.delete(chatId);
       const u = await User.findById(activeChat.myUserId).catch(() => null);
       const ulang = u?.language as BotLang | undefined;
@@ -229,12 +228,12 @@ bot.on('message', async (msg: any) => {
       } else if (msg.location) {
         await relayBotMessageToSite(activeChat, { type: 'location', location: { lat: msg.location.latitude, lng: msg.location.longitude } });
       } else {
-        bot.sendMessage(chatId, tb(undefined, 'chatUnsupportedType'));
+        bot.sendMessage(chatId, tb(activeChat.lang, 'chatUnsupportedType'));
         return;
       }
     } catch (err) {
       console.error('[bot chat relay]', err);
-      bot.sendMessage(chatId, tb(undefined, 'chatSendError'));
+      bot.sendMessage(chatId, tb(activeChat.lang, 'chatSendError'));
     }
     return;
   }
@@ -298,13 +297,13 @@ bot.on('message', async (msg: any) => {
         const Company = require('../models/Company').default;
         const firms = await Company.find({}).select('name branchId status').lean();
         if (firms.length === 0) {
-          bot.sendMessage(chatId, 'Firma yo\'q.', { reply_markup: DEVELOPER_KEYBOARD(user.language) });
+          bot.sendMessage(chatId, tb(user.language, 'devNoFirms'), { reply_markup: DEVELOPER_KEYBOARD(user.language) });
           return;
         }
         const lines = firms.map((c: any, i: number) =>
           `${i + 1}. *${c.name}* (${c.branchId || '—'}) — ${c.status || '?'}`
         ).join('\n');
-        bot.sendMessage(chatId, `🏢 *Firmalar:*\n\n${lines}`, { parse_mode: 'Markdown', reply_markup: DEVELOPER_KEYBOARD(user.language) });
+        bot.sendMessage(chatId, `${tb(user.language, 'devFirmsHeader')}\n\n${lines}`, { parse_mode: 'Markdown', reply_markup: DEVELOPER_KEYBOARD(user.language) });
       } catch {
         bot.sendMessage(chatId, tb(user.language, 'genericError'), { reply_markup: DEVELOPER_KEYBOARD(user.language) });
       }
@@ -321,7 +320,7 @@ bot.on('message', async (msg: any) => {
         const lines = (allUsers as any[]).map(u =>
           `• *${u.firstName} ${u.lastName || ''}* — ${u.role}\n  ${u.phone || '—'} | ${cMap[String(u.companyId)] || '—'}`
         ).join('\n');
-        bot.sendMessage(chatId, `👥 *Foydalanuvchilar:*\n\n${lines}`, { parse_mode: 'Markdown', reply_markup: DEVELOPER_KEYBOARD(user.language) });
+        bot.sendMessage(chatId, `${tb(user.language, 'devUsersHeader')}\n\n${lines}`, { parse_mode: 'Markdown', reply_markup: DEVELOPER_KEYBOARD(user.language) });
       } catch {
         bot.sendMessage(chatId, tb(user.language, 'genericError'), { reply_markup: DEVELOPER_KEYBOARD(user.language) });
       }
@@ -334,7 +333,7 @@ bot.on('message', async (msg: any) => {
         const Company = require('../models/Company').default;
         const subs = await Subscription.find({}).sort({ createdAt: -1 }).limit(20).lean();
         if (subs.length === 0) {
-          bot.sendMessage(chatId, 'Obuna yo\'q.', { reply_markup: DEVELOPER_KEYBOARD(user.language) });
+          bot.sendMessage(chatId, tb(user.language, 'devNoSubs'), { reply_markup: DEVELOPER_KEYBOARD(user.language) });
           return;
         }
         const companies = await Company.find({}).select('name').lean();
@@ -344,7 +343,7 @@ bot.on('message', async (msg: any) => {
           const statusIcon = s.status === 'active' ? '✅' : s.status === 'pending' ? '⏳' : '❌';
           return `${statusIcon} *${cMap[String(s.companyId)] || '—'}* — ${s.selectedPlan || s.plan || '—'}`;
         }).join('\n');
-        bot.sendMessage(chatId, `💳 *Obunalar:*\n\n${lines}`, { parse_mode: 'Markdown', reply_markup: DEVELOPER_KEYBOARD(user.language) });
+        bot.sendMessage(chatId, `${tb(user.language, 'devSubsHeader')}\n\n${lines}`, { parse_mode: 'Markdown', reply_markup: DEVELOPER_KEYBOARD(user.language) });
       } catch {
         bot.sendMessage(chatId, tb(user.language, 'genericError'), { reply_markup: DEVELOPER_KEYBOARD(user.language) });
       }
@@ -362,7 +361,7 @@ bot.on('message', async (msg: any) => {
           Subscription.countDocuments({ status: 'pending' }),
         ]);
         bot.sendMessage(chatId,
-          `📊 *Umumiy statistika*\n\n🏢 Firmalar: *${firmCount}*\n👥 Foydalanuvchilar: *${userCount}*\n✅ Faol obunalar: *${activeSubs}*\n⏳ Kutilayotgan: *${pendingSubs}*`,
+          tb(user.language, 'devStatsBody', { firmCount, userCount, activeSubs, pendingSubs }),
           { parse_mode: 'Markdown', reply_markup: DEVELOPER_KEYBOARD(user.language) }
         );
       } catch {
@@ -381,15 +380,15 @@ bot.on('message', async (msg: any) => {
       try {
         const pending = await Transaction.find({ status: 'pending' }).sort({ createdAt: -1 }).limit(10);
         if (pending.length === 0) {
-          bot.sendMessage(chatId, '✅ Hozircha barcha tasdiqlar tugagan. Yangi tasdiq yo\'q.', { reply_markup: ADMIN_KEYBOARD(user.language) });
+          bot.sendMessage(chatId, tb(user.language, 'admNoPending'), { reply_markup: ADMIN_KEYBOARD(user.language) });
           return;
         }
         for (const tx of pending) {
           let label = '';
           if (tx.type === 'transfer') {
-            label = `📦 *Material yukxat*\n${tx.materialName} — ${tx.quantity} ${tx.unit}\nYuboruvchi: ${tx.fromUserName || '—'}`;
+            label = tb(user.language, 'admTransferLabel', { materialName: tx.materialName || '—', quantity: tx.quantity ?? '—', unit: tx.unit || '', sender: tx.fromUserName || '—' });
           } else {
-            label = `💰 *To'lov*\n${tx.description}\nSumma: ${fmt(tx.amount || 0)}\nSana: ${tx.date || '—'}`;
+            label = tb(user.language, 'admPaymentLabel', { description: tx.description || '—', amount: fmt(tx.amount || 0, user.language), date: tx.date || '—' });
           }
           await bot.sendMessage(chatId, label, {
             parse_mode: 'Markdown',
@@ -414,7 +413,7 @@ bot.on('message', async (msg: any) => {
         const pending = await Transaction.find({ status: 'pending', type: { $ne: 'transfer' } });
         const pendTotal = pending.reduce((s: number, t: any) => s + (t.amount || 0), 0);
         bot.sendMessage(chatId,
-          `📊 *Moliyaviy holat*\n\n✅ Tasdiqlangan chiqimlar: *${fmt(total)}*\n⏳ Kutilayotgan: *${fmt(pendTotal)}*\n\nFarq: *${fmt(total - pendTotal)}*`,
+          tb(user.language, 'admFinanceStatusBody', { total: fmt(total, user.language), pendTotal: fmt(pendTotal, user.language), diff: fmt(total - pendTotal, user.language) }),
           { parse_mode: 'Markdown', reply_markup: ADMIN_KEYBOARD(user.language) }
         );
       } catch {
@@ -429,11 +428,11 @@ bot.on('message', async (msg: any) => {
         const filter = user.companyId ? { companyId: user.companyId } : {};
         const objects = await ObjectModel.find(filter).limit(20);
         if (objects.length === 0) {
-          bot.sendMessage(chatId, 'Hozircha obyekt yo\'q.', { reply_markup: ADMIN_KEYBOARD(user.language) });
+          bot.sendMessage(chatId, tb(user.language, 'admNoObjects'), { reply_markup: ADMIN_KEYBOARD(user.language) });
           return;
         }
-        const lines = objects.map((o: any, i: number) => `${i + 1}. *${o.name}*\n   📍 ${o.location || '—'} | Budjet: ${fmt(o.budget || 0)}`).join('\n\n');
-        bot.sendMessage(chatId, `🏗 *Obyektlar ro'yxati:*\n\n${lines}`, { parse_mode: 'Markdown', reply_markup: ADMIN_KEYBOARD(user.language) });
+        const lines = objects.map((o: any, i: number) => `${i + 1}. *${o.name}*\n   📍 ${o.location || '—'} | Budjet: ${fmt(o.budget || 0, user.language)}`).join('\n\n');
+        bot.sendMessage(chatId, `${tb(user.language, 'admObjectsHeader')}\n\n${lines}`, { parse_mode: 'Markdown', reply_markup: ADMIN_KEYBOARD(user.language) });
       } catch {
         bot.sendMessage(chatId, tb(user.language, 'genericError'), { reply_markup: ADMIN_KEYBOARD(user.language) });
       }
@@ -445,7 +444,7 @@ bot.on('message', async (msg: any) => {
         const filter = user.companyId ? { companyId: user.companyId } : {};
         const companyUsers = await User.find(filter).select('firstName lastName role phone');
         const lines = companyUsers.map(u => `• *${u.firstName} ${u.lastName || ''}* — ${u.role}\n  📞 ${u.phone}`).join('\n');
-        bot.sendMessage(chatId, `👥 *Xodimlar:*\n\n${lines}`, { parse_mode: 'Markdown', reply_markup: ADMIN_KEYBOARD(user.language) });
+        bot.sendMessage(chatId, `${tb(user.language, 'admStaffHeader')}\n\n${lines}`, { parse_mode: 'Markdown', reply_markup: ADMIN_KEYBOARD(user.language) });
       } catch {
         bot.sendMessage(chatId, tb(user.language, 'genericError'), { reply_markup: ADMIN_KEYBOARD(user.language) });
       }
@@ -460,7 +459,7 @@ bot.on('message', async (msg: any) => {
         const confExp = expenses.filter((t: any) => t.status === 'confirmed').reduce((s: number, t: any) => s + (t.amount || 0), 0);
         const pendCount = allTx.filter((t: any) => t.status === 'pending').length;
         bot.sendMessage(chatId,
-          `📊 *Umumiy hisobot*\n\n📦 Jami yukxatlar: *${transfers.length}*\n💰 Jami chiqimlar: *${fmt(confExp)}*\n⏳ Kutilayotgan tasdiqlar: *${pendCount}*`,
+          tb(user.language, 'admReportBody', { transfersCount: transfers.length, confExp: fmt(confExp, user.language), pendCount }),
           { parse_mode: 'Markdown', reply_markup: ADMIN_KEYBOARD(user.language) }
         );
       } catch {
@@ -517,12 +516,12 @@ bot.on('message', async (msg: any) => {
       }).sort({ createdAt: -1 }).limit(10);
 
       if (txs.length === 0) {
-        bot.sendMessage(chatId, 'Hozircha siz uchun yukxat yo\'q.', { reply_markup: USER_KEYBOARD(user.language) });
+        bot.sendMessage(chatId, tb(user.language, 'usrNoIncomingTransfers'), { reply_markup: USER_KEYBOARD(user.language) });
         return;
       }
       for (const tx of txs) {
-        const statusLabel = tx.status === 'confirmed' ? '✅ Tasdiqlangan' : '⏳ Kutilmoqda';
-        const msg_text = `📦 *${tx.materialName}*\nMiqdor: ${tx.quantity} ${tx.unit}\nHolat: ${statusLabel}\nYuboruvchi: ${tx.fromUserName || '—'}\nSana: ${tx.date || '—'}`;
+        const statusLabel = tx.status === 'confirmed' ? tb(user.language, 'statusConfirmed') : tb(user.language, 'statusPending');
+        const msg_text = tb(user.language, 'usrIncomingTransferMsg', { name: tx.materialName || '—', qty: tx.quantity ?? '—', unit: tx.unit || '', status: statusLabel, sender: tx.fromUserName || '—', date: tx.date || '—' });
         if (tx.status === 'pending') {
           await bot.sendMessage(chatId, msg_text, {
             parse_mode: 'Markdown',
@@ -551,14 +550,14 @@ bot.on('message', async (msg: any) => {
       }).sort({ createdAt: -1 }).limit(10);
 
       if (txs.length === 0) {
-        bot.sendMessage(chatId, 'Siz hali hech narsa yubormadingiz.', { reply_markup: USER_KEYBOARD(user.language) });
+        bot.sendMessage(chatId, tb(user.language, 'usrNoSentTransfers'), { reply_markup: USER_KEYBOARD(user.language) });
         return;
       }
       const lines = txs.map(tx => {
         const st = tx.status === 'confirmed' ? '✅' : tx.status === 'rejected' ? '❌' : '⏳';
-        return `${st} *${tx.materialName}* — ${tx.quantity} ${tx.unit}\nSana: ${tx.date || '—'}`;
+        return tb(user.language, 'usrSentTransferRow', { icon: st, name: tx.materialName || '—', qty: tx.quantity ?? '—', unit: tx.unit || '', date: tx.date || '—' });
       }).join('\n\n');
-      bot.sendMessage(chatId, `📤 *Yuborgan yukxatlarim:*\n\n${lines}`, { parse_mode: 'Markdown', reply_markup: USER_KEYBOARD(user.language) });
+      bot.sendMessage(chatId, `${tb(user.language, 'usrSentTransfersHeader')}\n\n${lines}`, { parse_mode: 'Markdown', reply_markup: USER_KEYBOARD(user.language) });
     } catch {
       bot.sendMessage(chatId, tb(user.language, 'genericError'), { reply_markup: USER_KEYBOARD(user.language) });
     }
@@ -573,12 +572,12 @@ bot.on('message', async (msg: any) => {
       }).sort({ createdAt: -1 }).limit(10);
 
       if (txs.length === 0) {
-        bot.sendMessage(chatId, 'Sizga hali to\'lov yuborilmagan.', { reply_markup: USER_KEYBOARD(user.language) });
+        bot.sendMessage(chatId, tb(user.language, 'usrNoIncomingPayments'), { reply_markup: USER_KEYBOARD(user.language) });
         return;
       }
       for (const tx of txs) {
-        const statusLabel = tx.status === 'confirmed' ? '✅ Tasdiqlangan' : '⏳ Kutilmoqda';
-        const msg_text = `💰 *To'lov: ${fmt(tx.amount || 0)}*\nSabab: ${tx.description || '—'}\nHolat: ${statusLabel}\nSana: ${tx.date || '—'}`;
+        const statusLabel = tx.status === 'confirmed' ? tb(user.language, 'statusConfirmed') : tb(user.language, 'statusPending');
+        const msg_text = tb(user.language, 'usrIncomingPaymentMsg', { amount: fmt(tx.amount || 0, user.language), reason: tx.description || '—', status: statusLabel, date: tx.date || '—' });
         if (tx.status === 'pending') {
           await bot.sendMessage(chatId, msg_text, {
             parse_mode: 'Markdown',
@@ -647,11 +646,11 @@ bot.on('callback_query', async (query: any) => {
         if (!u) { await bot.answerCallbackQuery(query.id, { text: tb(lang, 'chatUserNotFound') }); return; }
         targetName = `${u.firstName} ${u.lastName || ''}`.trim();
       }
-      chatSessions.set(chatId, { targetType: isGroup ? 'group' : 'user', targetId, targetName, myUserId: String(user._id) });
+      chatSessions.set(chatId, { targetType: isGroup ? 'group' : 'user', targetId, targetName, myUserId: String(user._id), lang });
       await bot.answerCallbackQuery(query.id);
       await bot.sendMessage(chatId,
         tb(lang, 'chatSessionStart', { name: targetName }),
-        { parse_mode: 'Markdown', reply_markup: chatExitKeyboard }
+        { parse_mode: 'Markdown', reply_markup: chatExitKeyboard(lang) }
       );
     } catch (err) {
       console.error('[bot chatpick]', err);
@@ -784,7 +783,7 @@ bot.on('callback_query', async (query: any) => {
       await bot.answerCallbackQuery(query.id, { text: resultText });
 
       // Edit the original message to remove inline buttons
-      const label = tx.type === 'transfer' ? `${tx.materialName} — ${tx.quantity} ${tx.unit}` : `${tx.description} — ${fmt(tx.amount || 0)}`;
+      const label = tx.type === 'transfer' ? `${tx.materialName} — ${tx.quantity} ${tx.unit}` : `${tx.description} — ${fmt(tx.amount || 0, lang)}`;
       await bot.editMessageText(
         isConfirm ? tb(lang, 'txConfirmedEdit', { label }) : tb(lang, 'txRejectedEdit', { label }),
         { chat_id: chatId, message_id: messageId, parse_mode: 'Markdown' }

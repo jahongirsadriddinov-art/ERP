@@ -81,6 +81,34 @@ interface BotDict {
 
   langPrompt: string;
   langSaved: (p: { lang: string }) => string;
+
+  devNoFirms: string;
+  devFirmsHeader: string;
+  devUsersHeader: string;
+  devNoSubs: string;
+  devSubsHeader: string;
+  devStatsBody: (p: { firmCount: number; userCount: number; activeSubs: number; pendingSubs: number }) => string;
+
+  admNoPending: string;
+  admTransferLabel: (p: { materialName: string; quantity: number | string; unit: string; sender: string }) => string;
+  admPaymentLabel: (p: { description: string; amount: string; date: string }) => string;
+  admFinanceStatusBody: (p: { total: string; pendTotal: string; diff: string }) => string;
+  admNoObjects: string;
+  admObjectsHeader: string;
+  admStaffHeader: string;
+  admReportBody: (p: { transfersCount: number; confExp: string; pendCount: number }) => string;
+
+  statusConfirmed: string;
+  statusPending: string;
+  currencySuffix: string;
+
+  usrNoIncomingTransfers: string;
+  usrIncomingTransferMsg: (p: { name: string; qty: number | string; unit: string; status: string; sender: string; date: string }) => string;
+  usrNoSentTransfers: string;
+  usrSentTransfersHeader: string;
+  usrSentTransferRow: (p: { icon: string; name: string; qty: number | string; unit: string; date: string }) => string;
+  usrNoIncomingPayments: string;
+  usrIncomingPaymentMsg: (p: { amount: string; reason: string; status: string; date: string }) => string;
 }
 
 const uz: BotDict = {
@@ -157,6 +185,42 @@ const uz: BotDict = {
 
   langPrompt: 'Qaysi tilda ishlashni istaysiz?\nНа каком языке вам удобнее?',
   langSaved: (p: { lang: string }) => `✅ Til o'zgartirildi: ${p.lang}`,
+
+  devNoFirms: "Firma yo'q.",
+  devFirmsHeader: '🏢 *Firmalar:*',
+  devUsersHeader: '👥 *Foydalanuvchilar:*',
+  devNoSubs: "Obuna yo'q.",
+  devSubsHeader: '💳 *Obunalar:*',
+  devStatsBody: (p: { firmCount: number; userCount: number; activeSubs: number; pendingSubs: number }) =>
+    `📊 *Umumiy statistika*\n\n🏢 Firmalar: *${p.firmCount}*\n👥 Foydalanuvchilar: *${p.userCount}*\n✅ Faol obunalar: *${p.activeSubs}*\n⏳ Kutilayotgan: *${p.pendingSubs}*`,
+
+  admNoPending: "✅ Hozircha barcha tasdiqlar tugagan. Yangi tasdiq yo'q.",
+  admTransferLabel: (p: { materialName: string; quantity: number | string; unit: string; sender: string }) =>
+    `📦 *Material yukxat*\n${p.materialName} — ${p.quantity} ${p.unit}\nYuboruvchi: ${p.sender}`,
+  admPaymentLabel: (p: { description: string; amount: string; date: string }) =>
+    `💰 *To'lov*\n${p.description}\nSumma: ${p.amount}\nSana: ${p.date}`,
+  admFinanceStatusBody: (p: { total: string; pendTotal: string; diff: string }) =>
+    `📊 *Moliyaviy holat*\n\n✅ Tasdiqlangan chiqimlar: *${p.total}*\n⏳ Kutilayotgan: *${p.pendTotal}*\n\nFarq: *${p.diff}*`,
+  admNoObjects: "Hozircha obyekt yo'q.",
+  admObjectsHeader: "🏗 *Obyektlar ro'yxati:*",
+  admStaffHeader: '👥 *Xodimlar:*',
+  admReportBody: (p: { transfersCount: number; confExp: string; pendCount: number }) =>
+    `📊 *Umumiy hisobot*\n\n📦 Jami yukxatlar: *${p.transfersCount}*\n💰 Jami chiqimlar: *${p.confExp}*\n⏳ Kutilayotgan tasdiqlar: *${p.pendCount}*`,
+
+  statusConfirmed: '✅ Tasdiqlangan',
+  statusPending: '⏳ Kutilmoqda',
+  currencySuffix: "so'm",
+
+  usrNoIncomingTransfers: "Hozircha siz uchun yukxat yo'q.",
+  usrIncomingTransferMsg: (p: { name: string; qty: number | string; unit: string; status: string; sender: string; date: string }) =>
+    `📦 *${p.name}*\nMiqdor: ${p.qty} ${p.unit}\nHolat: ${p.status}\nYuboruvchi: ${p.sender}\nSana: ${p.date}`,
+  usrNoSentTransfers: 'Siz hali hech narsa yubormadingiz.',
+  usrSentTransfersHeader: '📤 *Yuborgan yukxatlarim:*',
+  usrSentTransferRow: (p: { icon: string; name: string; qty: number | string; unit: string; date: string }) =>
+    `${p.icon} *${p.name}* — ${p.qty} ${p.unit}\nSana: ${p.date}`,
+  usrNoIncomingPayments: "Sizga hali to'lov yuborilmagan.",
+  usrIncomingPaymentMsg: (p: { amount: string; reason: string; status: string; date: string }) =>
+    `💰 *To'lov: ${p.amount}*\nSabab: ${p.reason}\nHolat: ${p.status}\nSana: ${p.date}`,
 };
 
 const ru: BotDict = {
@@ -233,6 +297,42 @@ const ru: BotDict = {
 
   langPrompt: 'Qaysi tilda ishlashni istaysiz?\nНа каком языке вам удобнее?',
   langSaved: (p) => `✅ Язык изменён: ${p.lang}`,
+
+  devNoFirms: 'Компаний нет.',
+  devFirmsHeader: '🏢 *Компании:*',
+  devUsersHeader: '👥 *Пользователи:*',
+  devNoSubs: 'Подписок нет.',
+  devSubsHeader: '💳 *Подписки:*',
+  devStatsBody: (p) =>
+    `📊 *Общая статистика*\n\n🏢 Компании: *${p.firmCount}*\n👥 Пользователи: *${p.userCount}*\n✅ Активные подписки: *${p.activeSubs}*\n⏳ Ожидают: *${p.pendingSubs}*`,
+
+  admNoPending: '✅ Все подтверждения обработаны. Новых нет.',
+  admTransferLabel: (p) =>
+    `📦 *Накладная материала*\n${p.materialName} — ${p.quantity} ${p.unit}\nОтправитель: ${p.sender}`,
+  admPaymentLabel: (p) =>
+    `💰 *Платёж*\n${p.description}\nСумма: ${p.amount}\nДата: ${p.date}`,
+  admFinanceStatusBody: (p) =>
+    `📊 *Финансовое состояние*\n\n✅ Подтверждённые расходы: *${p.total}*\n⏳ Ожидающие: *${p.pendTotal}*\n\nРазница: *${p.diff}*`,
+  admNoObjects: 'Пока нет объектов.',
+  admObjectsHeader: '🏗 *Список объектов:*',
+  admStaffHeader: '👥 *Сотрудники:*',
+  admReportBody: (p) =>
+    `📊 *Общий отчёт*\n\n📦 Всего накладных: *${p.transfersCount}*\n💰 Всего расходов: *${p.confExp}*\n⏳ Ожидающие подтверждения: *${p.pendCount}*`,
+
+  statusConfirmed: '✅ Подтверждено',
+  statusPending: '⏳ Ожидает',
+  currencySuffix: 'сум',
+
+  usrNoIncomingTransfers: 'Пока нет накладных для вас.',
+  usrIncomingTransferMsg: (p) =>
+    `📦 *${p.name}*\nКоличество: ${p.qty} ${p.unit}\nСтатус: ${p.status}\nОтправитель: ${p.sender}\nДата: ${p.date}`,
+  usrNoSentTransfers: 'Вы ещё ничего не отправляли.',
+  usrSentTransfersHeader: '📤 *Отправленные накладные:*',
+  usrSentTransferRow: (p) =>
+    `${p.icon} *${p.name}* — ${p.qty} ${p.unit}\nДата: ${p.date}`,
+  usrNoIncomingPayments: 'Вам пока не отправлены платежи.',
+  usrIncomingPaymentMsg: (p) =>
+    `💰 *Платёж: ${p.amount}*\nПричина: ${p.reason}\nСтатус: ${p.status}\nДата: ${p.date}`,
 };
 
 // uz-cyrl — funksiyalarni chaqirib string natijasini kirillga o'giradigan wrapper.

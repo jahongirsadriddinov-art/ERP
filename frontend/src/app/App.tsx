@@ -21,6 +21,27 @@ const RegisterWizard = lazy(() => import("./RegisterWizard"));
 const DeveloperPanel = lazy(() => import("./DeveloperPanel"));
 const AIAssistant = lazy(() => import("./AIAssistant"));
 
+// ─── Mobil pastki navbar ko'rinishini boshqarish ────────────────────────────────
+// Katta (ekranning pastigacha yetadigan) modallar ochilganda floating pastki
+// navbar orqadan "ko'rinib qolmasligi" uchun — istalgan chuqurlikdagi modal
+// komponenti `useModalPresence()`ni chaqirsa yetarli, prop-drilling shart emas.
+let openModalCount = 0;
+const modalListeners = new Set<(open: boolean) => void>();
+function notifyModalListeners() { modalListeners.forEach(l => l(openModalCount > 0)); }
+function useAnyBigModalOpen() {
+  const [open, setOpen] = useState(openModalCount > 0);
+  useEffect(() => {
+    modalListeners.add(setOpen);
+    return () => { modalListeners.delete(setOpen); };
+  }, []);
+  return open;
+}
+export function useModalPresence() {
+  useEffect(() => {
+    openModalCount++; notifyModalListeners();
+    return () => { openModalCount--; notifyModalListeners(); };
+  }, []);
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export type Role = "direktor" | "orinbosar" | "prorab" | "brigadir" | "ishchi" | "dasturchi";
@@ -499,6 +520,7 @@ function AddObjectModal({ users, onClose, onAdd }:
 // ─── Send Transfer Modal ───────────────────────────────────────────────────────
 function SendTransferModal({ currentUser, projects, allUsers, onClose, onSend, initialTransfer }:
   { currentUser: AppUser; projects: Project[]; allUsers: AppUser[]; onClose: () => void; onSend: (t: Transfer) => void; initialTransfer?: Partial<Transfer> }) {
+  useModalPresence();
   type SelMat = { name: string; unit: string; quantity: string; price: string };
 
   const [projectId, setProjectId] = useState(initialTransfer?.projectId || "");
@@ -1715,6 +1737,7 @@ function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSe
 
 // ─── Material Details Modal ───────────────────────────────────────────────────
 function MaterialDetailsModal({ mat, confT, pendT, onClose, onSend }: { mat: ReqMat; confT: Transfer[]; pendT: Transfer[]; onClose: () => void; onSend?: () => void; }) {
+  useModalPresence();
   const sent = confT.filter(t=>t.materialName===mat.name).reduce((a,t)=>a+t.quantity,0);
   const pending = pendT.filter(t=>t.materialName===mat.name).reduce((a,t)=>a+t.quantity,0);
   const totalSpent = sent * (mat.price || 0);
@@ -2432,6 +2455,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
 // ─── Yangi guruh modal ──────────────────────────────────────────────────────────
 function GroupCreateModal({ contacts, onClose, onCreate }:
   { contacts: AppUser[]; onClose: () => void; onCreate: (name: string, memberIds: string[]) => void }) {
+  useModalPresence();
   const [name, setName] = useState("");
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [q, setQ] = useState("");
@@ -3179,6 +3203,7 @@ function LoginScreen({ onLogin, onRegister }: { onLogin: (u: any, company?: any)
 
 // ─── Main App ──────────────────────────────────────────────────────────────────
 export default function App() {
+  const anyBigModalOpen = useAnyBigModalOpen();
   const [users, setUsers] = useState<AppUser[]>([]);
   const [currentUser, setCurrentUser] = useState<AppUser|null>(()=>{
     const saved = localStorage.getItem("currentUser");
@@ -3772,7 +3797,7 @@ export default function App() {
       )}
 
       {/* Mobile Bottom Navigation — iOS 26 "Liquid Glass" pill, spring-animated */}
-      <nav className={`ios-bottom-bar flex items-center justify-around ${page==='chat' && chatIsOpen ? 'ios-bottom-bar-hidden' : ''}`}>
+      <nav className={`ios-bottom-bar flex items-center justify-around ${(page==='chat' && chatIsOpen) || anyBigModalOpen ? 'ios-bottom-bar-hidden' : ''}`}>
         {NAV.map(n => (
           <motion.button key={n.key} onClick={() => { setPage(n.key); setSelProject(null); }}
             whileTap={{ scale: 0.86 }}

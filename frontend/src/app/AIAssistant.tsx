@@ -2,12 +2,14 @@ import { useState, useRef, useEffect } from "react";
 import { X, Check, Send, Loader2 } from "lucide-react";
 import { API_BASE } from "./api";
 import type { AppUser } from "./App";
+import { useModalPresence } from "./App";
 
 interface AiMsg { role: 'user'|'assistant'; content: string; }
 interface AiAction { type: string; toUserId?: string; toUserName?: string; text?: string; description?: string; }
 
 export default function AIAssistant({ currentUser, users, token, open, onClose }:
   { currentUser: AppUser; users: AppUser[]; token: string; open: boolean; onClose: () => void }) {
+  useModalPresence();
   const [msgs, setMsgs] = useState<AiMsg[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);

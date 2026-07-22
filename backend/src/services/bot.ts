@@ -1,10 +1,14 @@
 const TelegramBot = require('node-telegram-bot-api');
 import dotenv from 'dotenv';
+import fs from 'fs';
+import path from 'path';
 import User from '../models/User';
 import Transaction from '../models/Transaction';
 import Material from '../models/Material';
+import Message from '../models/Message';
+import Group from '../models/Group';
 import { initRegistrationScene, isInRegistration } from './registrationScene';
-import { emitToUser } from './socket';
+import { emitToUser, emitToGroup } from './socket';
 
 dotenv.config();
 
@@ -18,12 +22,16 @@ export const bot = new TelegramBot(token, { polling: true });
 // ─── Role-based keyboards ──────────────────────────────────────────────────────
 const SITE_URL = process.env.SITE_URL || 'http://localhost:5173';
 const isHttps = SITE_URL.startsWith('https');
+// Bot media fayllarni /uploads orqali serverdan qaytarish uchun — bu backend'ning
+// o'z ochiq manzili (SITE_URL frontend manzili, bunga mos kelmaydi).
+const BACKEND_URL = (process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 5000}`).replace(/\/$/, '');
 
 const ADMIN_KEYBOARD = {
   keyboard: [
     isHttps
       ? [{ text: '🌐 Saytga kirish', web_app: { url: SITE_URL } }]
       : [{ text: '🌐 Saytga kirish: ' + SITE_URL }],
+    [{ text: '💬 Chat' }],
     [{ text: '📋 Kutilayotgan tasdiqlar' }],
     [{ text: '💰 Moliyaviy holat' }, { text: '🏗 Obyektlar' }],
     [{ text: '👥 Xodimlar ro\'yxati' }, { text: '📊 Hisobot' }],
@@ -37,12 +45,66 @@ const USER_KEYBOARD = {
     isHttps
       ? [{ text: '🌐 Saytga kirish', web_app: { url: SITE_URL } }]
       : [{ text: '🌐 Saytga kirish: ' + SITE_URL }],
+    [{ text: '💬 Chat' }],
     [{ text: '📦 Menga kelgan yukxatlar' }],
     [{ text: '📤 Yuborgan yukxatlarim' }],
     [{ text: '📬 Menga kelgan to\'lovlar' }],
   ],
   resize_keyboard: true,
 };
+
+// ─── Bot ichidan chat (kontakt/guruh tanlab yozish) ─────────────────────────────
+// Xotiradagi holat: chatId → tanlangan suhbat. Server qayta ishga tushsa
+// tozalanadi — foydalanuvchi "💬 Chat" tugmasini qayta bosadi, katta muammo emas.
+interface BotChatSession { targetType: 'user' | 'group'; targetId: string; targetName: string; myUserId: string; }
+const chatSessions = new Map<number, BotChatSession>();
+const EXIT_CHAT_TEXT = '🔚 Chatni tugatish';
+const chatExitKeyboard = { keyboard: [[{ text: EXIT_CHAT_TEXT }]], resize_keyboard: true };
+
+// Telegramdan kelgan faylni (photo/video/voice/document) yuklab, /uploads ichiga
+// saqlaydi va saytdagi Message.mediaUrl bilan bir xil ko'rinishdagi to'liq URL qaytaradi.
+async function downloadTelegramFileToUploads(fileId: string, ext: string): Promise<{ url: string; size: number }> {
+  const fileLink = await bot.getFileLink(fileId);
+  const resp = await fetch(fileLink);
+  const buf = Buffer.from(await resp.arrayBuffer());
+  const filename = `chat_${Date.now()}_${Math.round(Math.random() * 1e6)}${ext}`;
+  const destDir = path.join(process.cwd(), 'uploads');
+  if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
+  fs.writeFileSync(path.join(destDir, filename), buf);
+  return { url: `${BACKEND_URL}/uploads/${filename}`, size: buf.length };
+}
+
+// Bot suhbatidan yaratilgan xabarni saqlaydi, socket orqali saytga yuboradi.
+async function relayBotMessageToSite(session: BotChatSession, data: {
+  text?: string; type?: 'image' | 'video' | 'file' | 'audio' | 'location';
+  mediaUrl?: string; fileName?: string; fileSize?: number; location?: { lat: number; lng: number };
+}) {
+  let companyId: string | undefined;
+  if (session.targetType === 'group') {
+    const group = await Group.findById(session.targetId).select('companyId').lean();
+    companyId = group?.companyId;
+  } else {
+    const me = await User.findById(session.myUserId).select('companyId').lean();
+    companyId = me?.companyId;
+  }
+  const msg = await Message.create({
+    fromUserId: session.myUserId,
+    toUserId: session.targetType === 'user' ? session.targetId : '',
+    ...(session.targetType === 'group' && { groupId: session.targetId }),
+    text: data.text || '',
+    timestamp: new Date().toISOString(),
+    read: false,
+    ...(data.type && { type: data.type }),
+    ...(data.mediaUrl && { mediaUrl: data.mediaUrl }),
+    ...(data.fileName && { fileName: data.fileName }),
+    ...(data.fileSize != null && { fileSize: data.fileSize }),
+    ...(data.location && { location: data.location }),
+    ...(companyId && { companyId }),
+  });
+  const payload = { ...msg.toObject(), id: msg._id };
+  if (session.targetType === 'group') emitToGroup(session.targetId, 'message:new', payload);
+  else { emitToUser(session.targetId, 'message:new', payload); emitToUser(session.myUserId, 'message:new', payload); }
+}
 
 const isAdmin = (role: string) => role === 'direktor' || role === 'orinbosar';
 const isDev = (role: string) => role === 'dasturchi';
@@ -128,11 +190,52 @@ bot.on('contact', async (msg: any) => {
 
 // ─── Text message handler — main menu ─────────────────────────────────────────
 bot.on('message', async (msg: any) => {
-  if (msg.contact || !msg.text) return;
   const chatId = msg.chat.id;
+  if (isInRegistration(chatId)) return; // self-signup scene o'zi ushlaydi
+
+  // ── Bot ichidan chat rejimi — matn, rasm/video/ovoz/fayl/lokatsiya bo'lishi mumkin ──
+  const activeChat = chatSessions.get(chatId);
+  if (activeChat) {
+    if (msg.text === EXIT_CHAT_TEXT) {
+      chatSessions.delete(chatId);
+      const u = await User.findById(activeChat.myUserId).catch(() => null);
+      const kb = u && isDev(u.role) ? DEVELOPER_KEYBOARD : u && isAdmin(u.role) ? ADMIN_KEYBOARD : USER_KEYBOARD;
+      bot.sendMessage(chatId, `Chat tugatildi (${activeChat.targetName}).`, { reply_markup: kb });
+      return;
+    }
+    try {
+      if (msg.text) {
+        await relayBotMessageToSite(activeChat, { text: msg.text });
+      } else if (msg.photo?.length) {
+        const largest = msg.photo[msg.photo.length - 1];
+        const { url, size } = await downloadTelegramFileToUploads(largest.file_id, '.jpg');
+        await relayBotMessageToSite(activeChat, { type: 'image', mediaUrl: url, fileSize: size, text: msg.caption || '' });
+      } else if (msg.video) {
+        const { url, size } = await downloadTelegramFileToUploads(msg.video.file_id, '.mp4');
+        await relayBotMessageToSite(activeChat, { type: 'video', mediaUrl: url, fileSize: size, text: msg.caption || '' });
+      } else if (msg.voice) {
+        const { url, size } = await downloadTelegramFileToUploads(msg.voice.file_id, '.ogg');
+        await relayBotMessageToSite(activeChat, { type: 'audio', mediaUrl: url, fileSize: size });
+      } else if (msg.document) {
+        const ext = path.extname(msg.document.file_name || '') || '';
+        const { url, size } = await downloadTelegramFileToUploads(msg.document.file_id, ext);
+        await relayBotMessageToSite(activeChat, { type: 'file', mediaUrl: url, fileName: msg.document.file_name, fileSize: size, text: msg.caption || '' });
+      } else if (msg.location) {
+        await relayBotMessageToSite(activeChat, { type: 'location', location: { lat: msg.location.latitude, lng: msg.location.longitude } });
+      } else {
+        bot.sendMessage(chatId, 'Bu turdagi xabar hali qo\'llab-quvvatlanmaydi.');
+        return;
+      }
+    } catch (err) {
+      console.error('[bot chat relay]', err);
+      bot.sendMessage(chatId, '⚠️ Yuborishda xatolik yuz berdi.');
+    }
+    return;
+  }
+
+  if (msg.contact || !msg.text) return;
   const text = msg.text;
 
-  if (isInRegistration(chatId)) return; // self-signup scene o'zi ushlaydi
   if (text.startsWith('/start')) return; // /start va /start <token> — yuqorida/scene'da
 
   const user = await User.findOne({ telegramChatId: chatId.toString() }).catch(() => null);
@@ -143,6 +246,29 @@ bot.on('message', async (msg: any) => {
 
   const admin = isAdmin(user.role);
   const developer = isDev(user.role);
+
+  // ── Chat (kontakt yoki guruh tanlab yozish) — hamma rol uchun ────────────
+  if (text === '💬 Chat') {
+    try {
+      const filter = user.companyId ? { companyId: user.companyId } : {};
+      const [contacts, groups] = await Promise.all([
+        User.find({ ...filter, _id: { $ne: user._id } }).select('firstName lastName role').limit(30).lean(),
+        Group.find({ memberIds: String(user._id) }).select('name').limit(30).lean(),
+      ]);
+      if (contacts.length === 0 && groups.length === 0) {
+        bot.sendMessage(chatId, 'Hozircha yozadigan kontakt yoki guruh yo\'q.');
+        return;
+      }
+      const rows: any[][] = [];
+      groups.forEach((g: any) => rows.push([{ text: `👥 ${g.name}`, callback_data: `chatpick_group_${g._id}` }]));
+      contacts.forEach((c: any) => rows.push([{ text: `${c.firstName} ${c.lastName || ''}`.trim(), callback_data: `chatpick_user_${c._id}` }]));
+      bot.sendMessage(chatId, 'Kimga yozmoqchisiz?', { reply_markup: { inline_keyboard: rows } });
+    } catch (err) {
+      console.error('[bot chat picker]', err);
+      bot.sendMessage(chatId, '⚠️ Xatolik.');
+    }
+    return;
+  }
 
   // ── DEVELOPER commands ────────────────────────────────────────────────────
   if (developer) {
@@ -463,6 +589,35 @@ bot.on('callback_query', async (query: any) => {
   const messageId = query.message?.message_id;
 
   const user = await User.findOne({ telegramChatId: chatId?.toString() }).catch(() => null);
+
+  // ── Chat uchun kontakt/guruh tanlash ──────────────────────────────────────
+  if (data.startsWith('chatpick_user_') || data.startsWith('chatpick_group_')) {
+    if (!user) { await bot.answerCallbackQuery(query.id, { text: 'Avval ro\'yxatdan o\'ting.' }); return; }
+    const isGroup = data.startsWith('chatpick_group_');
+    const targetId = data.replace(isGroup ? 'chatpick_group_' : 'chatpick_user_', '');
+    try {
+      let targetName = '';
+      if (isGroup) {
+        const g = await Group.findById(targetId).select('name memberIds').lean();
+        if (!g || !g.memberIds.includes(String(user._id))) { await bot.answerCallbackQuery(query.id, { text: 'Guruh topilmadi.' }); return; }
+        targetName = g.name;
+      } else {
+        const u = await User.findById(targetId).select('firstName lastName').lean();
+        if (!u) { await bot.answerCallbackQuery(query.id, { text: 'Foydalanuvchi topilmadi.' }); return; }
+        targetName = `${u.firstName} ${u.lastName || ''}`.trim();
+      }
+      chatSessions.set(chatId, { targetType: isGroup ? 'group' : 'user', targetId, targetName, myUserId: String(user._id) });
+      await bot.answerCallbackQuery(query.id);
+      await bot.sendMessage(chatId,
+        `💬 Endi *${targetName}* bilan suhbatdasiz.\nMatn, rasm, video, ovozli xabar, fayl yoki lokatsiya yuborishingiz mumkin.\n\nChiqish uchun pastdagi tugmani bosing.`,
+        { parse_mode: 'Markdown', reply_markup: chatExitKeyboard }
+      );
+    } catch (err) {
+      console.error('[bot chatpick]', err);
+      await bot.answerCallbackQuery(query.id, { text: '⚠️ Xatolik.' });
+    }
+    return;
+  }
 
   // ── Obuna tasdiqlash/rad etish (dasturchi inline keyboard) ───────────────────
   if (data.startsWith('sub_approve_') || data.startsWith('sub_reject_')) {

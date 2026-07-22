@@ -22,6 +22,42 @@ const upload = multer({ storage, limits: { fileSize: 60 * 1024 * 1024 } });
 
 const shape = (m: any) => ({ ...m.toObject(), id: m._id });
 
+// Saytdan yuborilgan xabarni Telegramga TO'LIQ ko'rinishda (matn EMAS, haqiqiy
+// rasm/video/ovoz/fayl/lokatsiya sifatida) qayta jo'natadi — mediaUrl allaqachon
+// ochiq /uploads orqali xizmat qilinayotgani uchun qayta yuklab olish shart emas,
+// Telegram Bot API to'g'ridan-to'g'ri URL qabul qiladi.
+async function relayMessageToTelegram(chatId: string, senderName: string, m: {
+  text?: string; type?: string; mediaUrl?: string; location?: { lat: number; lng: number };
+}) {
+  try {
+    const caption = `💬 ${senderName}` + (m.text?.trim() ? `\n\n${m.text.trim()}` : '');
+    switch (m.type) {
+      case 'image':
+        await bot.sendPhoto(chatId, m.mediaUrl, { caption });
+        break;
+      case 'video':
+        await bot.sendVideo(chatId, m.mediaUrl, { caption });
+        break;
+      case 'audio':
+        await bot.sendVoice(chatId, m.mediaUrl, { caption: senderName });
+        break;
+      case 'file':
+        await bot.sendDocument(chatId, m.mediaUrl, { caption });
+        break;
+      case 'location':
+        if (m.location) {
+          await bot.sendMessage(chatId, `💬 <b>${senderName}</b> lokatsiya yubordi:`, { parse_mode: 'HTML' });
+          await bot.sendLocation(chatId, m.location.lat, m.location.lng);
+        }
+        break;
+      default:
+        await bot.sendMessage(chatId, `💬 <b>${senderName}</b>:\n\n${m.text?.trim() || ''}`, { parse_mode: 'HTML' });
+    }
+  } catch (err) {
+    console.error('[telegram relay]', err);
+  }
+}
+
 // Media yuklash — server URL qaytaradi (blob emas, hamma ko'radi)
 router.post('/upload', upload.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Fayl yuklanmadi' });
@@ -85,20 +121,28 @@ router.post('/', async (req, res) => {
     }
     const msg = await Message.create(msgData);
     const payload = shape(msg);
-    if (groupId) emitToGroup(String(groupId), 'message:new', payload);
-    else {
+    if (groupId) {
+      emitToGroup(String(groupId), 'message:new', payload);
+      // Telegram relay — guruhning HAR BIR a'zosiga (yuboruvchidan tashqari)
+      Group.findById(String(groupId)).then(async (group: any) => {
+        if (!group) return;
+        const sender = await User.findById(String(fromUserId)).catch(() => null);
+        const senderName = sender ? `${sender.firstName} ${sender.lastName || ''}`.trim() : 'Foydalanuvchi';
+        const memberIds = (group.memberIds || []).filter((id: string) => id !== String(fromUserId));
+        const members = await User.find({ _id: { $in: memberIds } }).select('telegramChatId').lean();
+        for (const m of members) {
+          if (m.telegramChatId) await relayMessageToTelegram(m.telegramChatId, `${senderName} (${group.name})`, { text, type, mediaUrl, location });
+        }
+      }).catch(console.error);
+    } else {
       emitToUser(String(toUserId), 'message:new', payload);
       emitToUser(String(fromUserId), 'message:new', payload);
-      // Telegram notification (async, non-blocking)
+      // Telegram relay (async, non-blocking) — haqiqiy media sifatida
       User.findById(String(toUserId)).then(async (recipient: any) => {
         if (!recipient?.telegramChatId) return;
         const sender = await User.findById(String(fromUserId)).catch(() => null);
         const senderName = sender ? `${sender.firstName} ${sender.lastName || ''}`.trim() : 'Foydalanuvchi';
-        const preview = (text || '').trim() ? (text.trim().substring(0, 80) + (text.trim().length > 80 ? '…' : '')) : '📎 Fayl';
-        await bot.sendMessage(recipient.telegramChatId,
-          `💬 <b>${senderName}</b> xabar yubordi:\n\n${preview}\n\n<a href="${process.env.SITE_URL || 'http://localhost:5173'}">Saytda ko'rish</a>`,
-          { parse_mode: 'HTML' }
-        ).catch(() => {});
+        await relayMessageToTelegram(recipient.telegramChatId, senderName, { text, type, mediaUrl, location });
       }).catch(() => {});
     }
     res.status(201).json(payload);

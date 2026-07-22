@@ -123,7 +123,7 @@ router.post('/login', async (req, res) => {
         isOwner: user.isOwner || false
       },
       process.env.JWT_SECRET || 'secret',
-      { expiresIn: '7d' }
+      { expiresIn: '365d' }
     );
 
     return res.json({
@@ -183,7 +183,7 @@ router.post('/dev-login', async (req, res) => {
     const token = jwt.sign(
       { userId: dev._id, role: 'dasturchi', isDeveloper: true },
       process.env.JWT_SECRET || 'secret',
-      { expiresIn: '7d' }
+      { expiresIn: '365d' }
     );
 
     return res.json({

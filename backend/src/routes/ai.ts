@@ -41,11 +41,19 @@ async function groqChat(systemPrompt: string, messages: Array<{ role: string; co
   return (data?.choices?.[0]?.message?.content as string) || '';
 }
 
-// Faqat direktor/orinbosar/isOwner — dasturchi emas
-function requireBoss(req: Request, res: Response, next: NextFunction) {
+// Faqat direktor/orinbosar/isOwner — dasturchi emas.
+// Rolni JWT'dagi (365 kunlik sessiya davomida eskirishi mumkin bo'lgan) qiymatdan
+// emas, DB'dagi joriy qiymatdan tekshiramiz — aks holda foydalanuvchi rahbar/
+// o'rinbosarga ko'tarilgandan keyin ham, qayta login qilmaguncha, eski token
+// bilan "faqat rahbar va o'rinbosar uchun" deb rad etilaverar edi.
+async function requireBoss(req: Request, res: Response, next: NextFunction) {
   const u = req.user;
   if (!u) return res.status(401).json({ error: 'Auth kerak' });
-  if (u.isOwner || u.role === 'direktor' || u.role === 'orinbosar') return next();
+  if (u.isOwner) return next();
+  try {
+    const dbUser = await User.findById(u.userId).select('role').lean();
+    if (dbUser && (dbUser.role === 'direktor' || dbUser.role === 'orinbosar')) return next();
+  } catch { /* quyida 403 qaytadi */ }
   return res.status(403).json({ error: 'Faqat rahbar va o\'rinbosar uchun' });
 }
 

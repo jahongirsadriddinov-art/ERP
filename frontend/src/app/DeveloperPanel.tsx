@@ -1,10 +1,10 @@
 import { useState, useRef, useEffect } from "react";
-import { LogOut, Loader2, Building2, Trash2, ChevronLeft, Send } from "lucide-react";
+import { LogOut, Loader2, Building2, Trash2, ChevronLeft, Send, FileText, MapPin } from "lucide-react";
 import { toast } from "sonner";
 import { API_BASE } from "./api";
 import { connectSocket } from "./socket";
 import type { AppUser, Msg, Role } from "./App";
-import { ROLE_LABELS } from "./App";
+import { ROLE_LABELS, VoicePlayer } from "./App";
 
 // Har bir tarifda BIRINCHI OY BEPUL — backend/src/routes/subscriptions.ts PLAN_CONFIG bilan bir xil.
 const DEV_PLAN_CONFIG: Record<string, { label: string; days: number; amount: number }> = {
@@ -372,9 +372,32 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
                       const sender = !mine ? users.find((u: any) => u.id === m.fromUserId) : null;
                       return (
                         <div key={m.id} className={`flex ${mine?'justify-end':'justify-start'}`}>
-                          <div className={`max-w-[80%] px-3 py-2 rounded-2xl text-xs ${mine?'bg-primary text-white':'bg-muted'}`}>
+                          <div className={`max-w-[80%] px-3 py-2 rounded-2xl text-xs ${mine?'bg-gradient-to-br from-primary to-primary/90 text-white':'bg-muted'}`}>
                             {!mine && sender && <p className="text-[9px] font-semibold text-primary mb-0.5">{sender.name}</p>}
-                            <p className="break-words">{m.text}</p>
+                            {m.type==='image' && m.mediaUrl && (
+                              <img src={m.mediaUrl} alt="Rasm" loading="lazy" decoding="async" className="rounded-xl max-w-full max-h-52 object-cover mb-1 cursor-pointer" onClick={()=>window.open(m.mediaUrl,'_blank')}/>
+                            )}
+                            {m.type==='video' && m.mediaUrl && (
+                              <video src={m.mediaUrl} controls preload="metadata" className="rounded-xl max-w-full max-h-52 mb-1"/>
+                            )}
+                            {m.type==='audio' && m.mediaUrl && (
+                              <VoicePlayer src={m.mediaUrl} mine={mine}/>
+                            )}
+                            {m.type==='file' && m.mediaUrl && (
+                              <a href={m.mediaUrl} download={m.fileName} className="flex items-center gap-2 mb-1 hover:opacity-75 transition-opacity">
+                                <FileText className="w-4 h-4 flex-shrink-0"/>
+                                <span className="truncate max-w-[140px] font-medium">{m.fileName || 'Fayl'}</span>
+                              </a>
+                            )}
+                            {m.type==='location' && m.location && (
+                              <a href={`https://maps.google.com/?q=${m.location.lat},${m.location.lng}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 bg-black/10 rounded-xl px-2.5 py-1.5 mb-1 hover:bg-black/20 transition-colors">
+                                <MapPin className="w-3.5 h-3.5 text-green-400 flex-shrink-0"/>
+                                <span className="text-[10px]">Lokatsiya</span>
+                              </a>
+                            )}
+                            {m.text && !['🖼️ Rasm','🎥 Video','🎤 Ovozli xabar','📍 Lokatsiya'].includes(m.text) && (
+                              <p className="break-words">{m.text}</p>
+                            )}
                             <p className={`text-[9px] mt-0.5 ${mine?'text-white/60':'text-muted-foreground'}`}>{new Date(m.timestamp).toLocaleTimeString('uz-UZ',{hour:'2-digit',minute:'2-digit'})}</p>
                           </div>
                         </div>

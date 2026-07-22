@@ -7,10 +7,19 @@ import { AppUser, ActiveCall } from "./App";
 // Qo'ng'iroq oynasi (WebRTC) — kamdan-kam ishlatiladi (faqat qo'ng'iroq
 // paytida), shuning uchun alohida faylga chiqarilib React.lazy orqali
 // faqat chindan ham qo'ng'iroq boshlanganda yuklanadi.
+// STUN'dan tashqari TURN ham kerak — STUN faqat ikkala tomon ham to'g'ridan-to'g'ri
+// ulanadigan (oddiy NAT) tarmoqda ishlaydi. Ikki tomon turli tarmoqlarda bo'lsa
+// (mobil internet vs Wi-Fi, ofis firewall va h.k. — real foydalanishda odatiy hol)
+// ICE ulanmay qoladi va na ovoz, na video hech qachon kelmaydi ("ulanmoqda..."da
+// abadiy qolib ketadi). Open Relay Project'ning bepul TURN serveri shu holatlarda
+// P2P o'rniga trafikni relay qiladi.
 const ICE_CONFIG: RTCConfiguration = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:global.stun.twilio.com:3478' },
+    { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+    { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+    { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
   ],
 };
 
@@ -38,6 +47,9 @@ export default function CallOverlay({ currentUser, users, call, onClose }:
     localStream.current?.getTracks().forEach(t => pc.addTrack(t, localStream.current!));
     pc.onicecandidate = e => { if (e.candidate) socket?.emit('call:ice', { to: peerId, from: currentUser.id, candidate: e.candidate }); };
     pc.ontrack = e => { setRemote(prev => ({ ...prev, [peerId]: e.streams[0] })); setStatus('connected'); };
+    pc.oniceconnectionstatechange = () => {
+      if (pc.iceConnectionState === 'failed') toast.error("Ulanishda muammo — tarmoqni tekshiring");
+    };
     pcs.current[peerId] = pc;
     return pc;
   };

@@ -4,7 +4,7 @@ import {
   CheckCircle, Clock, AlertTriangle, ChevronRight, MapPin,
   Phone, User, X, Check, Download, BarChart2,
   DollarSign, MessageCircle, ChevronDown, ChevronUp, Send,
-  TrendingDown, Wallet, LogOut, Camera, Home, UserPlus, Edit, Trash, Search, AlertCircle, ChevronLeft, Loader2, Paperclip, Mic, Video as VideoIcon, Image as ImageIcon, FileText, CornerDownLeft, Share2, SquareCheck, Trash2, MoreHorizontal, Upload, Palette, Sun, Moon, Monitor, PhoneOff, MicOff, VideoOff, Users2, Copy, Bell, Pin, PinOff
+  TrendingDown, Wallet, LogOut, Camera, Home, UserPlus, Edit, Trash, Search, AlertCircle, ChevronLeft, Loader2, Paperclip, Mic, Video as VideoIcon, Image as ImageIcon, FileText, CornerDownLeft, Share2, SquareCheck, Trash2, MoreHorizontal, Upload, Palette, Sun, Moon, Monitor, PhoneOff, MicOff, VideoOff, Users2, Copy, Bell, Pin, PinOff, CheckCheck
 } from "lucide-react";
 import { toast, Toaster } from "sonner";
 import { createPortal } from "react-dom";
@@ -1899,7 +1899,7 @@ function FinancePage({ currentUser, users, projects, expenses, onAddExpense, onC
 }
 
 // ─── Voice Message Player ─────────────────────────────────────────────────────
-function VoicePlayer({ src, mine }: { src: string; mine?: boolean }) {
+export function VoicePlayer({ src, mine }: { src: string; mine?: boolean }) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -2177,10 +2177,10 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
           </div>
         )}
         {m.type==='image' && m.mediaUrl && (
-          <img src={m.mediaUrl} alt="Rasm" className="rounded-xl max-w-full max-h-52 object-cover mb-1 cursor-pointer" onClick={()=>window.open(m.mediaUrl,'_blank')}/>
+          <img src={m.mediaUrl} alt="Rasm" loading="lazy" decoding="async" className="rounded-xl max-w-full max-h-52 object-cover mb-1 cursor-pointer" onClick={()=>window.open(m.mediaUrl,'_blank')}/>
         )}
         {m.type==='video' && m.mediaUrl && (
-          <video src={m.mediaUrl} controls className="rounded-xl max-w-full max-h-52 mb-1"/>
+          <video src={m.mediaUrl} controls preload="metadata" className="rounded-xl max-w-full max-h-52 mb-1"/>
         )}
         {m.type==='audio' && m.mediaUrl && (
           <VoicePlayer src={m.mediaUrl} mine={mine}/>
@@ -2379,7 +2379,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
                         {m.edited && <span className="text-[9px] italic">tahrirlangan</span>}
                         {m.pinned && <span className="text-[9px]">📌</span>}
                         <span className="text-[9px]">{new Date(m.timestamp).toLocaleTimeString("uz-UZ",{hour:"2-digit",minute:"2-digit"})}</span>
-                        {mine && <Check className="w-3 h-3"/>}
+                        {mine && (m.read ? <CheckCheck className="w-3.5 h-3.5"/> : <Check className="w-3 h-3"/>)}
                       </div>
                     </div>
                   </div>

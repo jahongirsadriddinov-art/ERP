@@ -123,7 +123,7 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
         const d = await res.json();
         if (stop) return;
         setBotStatus(d.step);
-        if (d.step === "EXPIRED") { setError("Sessiya muddati tugadi. Qaytadan boshlang."); clearReg(); setStep("phone"); return; }
+        if (d.step === "EXPIRED") { setError(t('register.sessionExpired')); clearReg(); setStep("phone"); return; }
         if (d.consentGiven) { setStep("owner"); return; }
       } catch { /* tarmoq — keyingi urinishda */ }
     };
@@ -135,7 +135,7 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
 
   const submitPhone = async () => {
     const clean = phone.replace(/\s+/g, "");
-    if (!/^\+998\d{9}$/.test(clean)) { setError("To'g'ri raqam kiriting: +998 XX XXX XX XX"); return; }
+    if (!/^\+998\d{9}$/.test(clean)) { setError(t('register.phoneRequired')); return; }
     setError(""); setLoading(true);
     try {
       const res = await fetch(`${API_BASE}/api/register/phone`, {
@@ -143,15 +143,15 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
         body: JSON.stringify({ phone: clean, ownerConfirm, language: regLanguage }),
       });
       const d = await res.json();
-      if (!res.ok) { setError(d.error || "Xatolik"); setLoading(false); return; }
-      if (d.exists) { setError("Bu raqam bilan firma mavjud. Tizimga kiring."); setLoading(false); setTimeout(onBack, 1800); return; }
+      if (!res.ok) { setError(d.error || t('common.error')); setLoading(false); return; }
+      if (d.exists) { setError(t('register.phoneTakenError')); setLoading(false); setTimeout(onBack, 1800); return; }
       // Tarifni ham saqlaymiz — resume qilganda tiklanadi
       saveReg(
         { registrationId: d.registrationId, token: d.token, deepLink: d.deepLink, botUsername: d.botUsername, expiresAt: d.expiresAt },
         selectedPlan || '1month'
       );
       setStep("bot");
-    } catch { setError("Server bilan ulanishda xatolik"); }
+    } catch { setError(t('login.serverError')); }
     setLoading(false);
   };
 
@@ -170,11 +170,11 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
 
   const pickLogo = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]; if (!f) return;
-    if (f.size > 2 * 1024 * 1024) { setError("Logo 2MB dan katta bo'lmasin"); return; }
-    if (!/^image\/(png|jpe?g|webp)$/.test(f.type)) { setError("Faqat PNG/JPG/WEBP"); return; }
+    if (f.size > 2 * 1024 * 1024) { setError(t('register.logoTooBig')); return; }
+    if (!/^image\/(png|jpe?g|webp)$/.test(f.type)) { setError(t('register.logoWrongFormat')); return; }
     setError(""); setLogoUploading(true);
     try { const { url } = await uploadChatMedia(f, f.name); setLogoUrl(url); }
-    catch { setError("Logo yuklanmadi"); }
+    catch { setError(t('register.logoUploadFailed')); }
     setLogoUploading(false);
   };
 
@@ -193,7 +193,7 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
         }),
       });
       const d = await res.json();
-      if (!res.ok) { setError(d.error || "Xatolik"); setLoading(false); return; }
+      if (!res.ok) { setError(d.error || t('common.error')); setLoading(false); return; }
       // Server endi JWT bermaydi — pending holatida admin tasdiqini kutamiz
       clearReg();
       setRegDoneInfo({
@@ -205,7 +205,7 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
         ownerName: `${firstName} ${lastName}`.trim(),
       });
       setStep("done");
-    } catch { setError("Server bilan ulanishda xatolik"); setLoading(false); }
+    } catch { setError(t('login.serverError')); setLoading(false); }
     setLoading(false);
   };
 
@@ -230,7 +230,7 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
 
       {/* Header: back + progress */}
       <div className="relative z-10 flex items-center gap-3 px-4 pt-4">
-        <button onClick={goBack} aria-label="Orqaga" className="w-10 h-10 rounded-full bg-white/50 dark:bg-black/20 flex items-center justify-center shrink-0">
+        <button onClick={goBack} aria-label={t('common.back')} className="w-10 h-10 rounded-full bg-white/50 dark:bg-black/20 flex items-center justify-center shrink-0">
           <ArrowLeft className="w-5 h-5" />
         </button>
         <div className="flex-1 h-1.5 rounded-full bg-border/60 overflow-hidden">
@@ -252,17 +252,13 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
               </div>
               <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4">
                 <div className="flex items-center gap-2 mb-2 text-amber-800 dark:text-amber-300 font-bold">
-                  <AlertTriangle className="w-5 h-5" /> Diqqat!
+                  <AlertTriangle className="w-5 h-5" /> {t('register.warnTitle')}
                 </div>
-                <p className="text-sm leading-relaxed text-foreground">
-                  Faqat <b>firma egasi (rahbari)</b> ro'yxatdan o'ta oladi. Bu formani shaxsan firma egasi o'zi to'ldirishi kerak.
-                  Xodimlar mustaqil ro'yxatdan o'ta olmaydi — sizni firma egasi tizimga taklif qiladi.
-                  Har bir yangi firmaga alohida <b>Branch ID</b> beriladi va ma'lumotlaringiz boshqa firmalarga ko'rinmaydi.
-                </p>
+                <p className="text-sm leading-relaxed text-foreground">{t('register.warnBody')}</p>
               </div>
               <label className="flex items-start gap-3 cursor-pointer select-none">
                 <input type="checkbox" checked={ownerConfirm} onChange={e => setOwnerConfirm(e.target.checked)} className="mt-1 w-5 h-5 accent-primary" />
-                <span className="text-sm">Men firma egasi ekanligimni va ma'lumotlar to'g'ri ekanini tasdiqlayman</span>
+                <span className="text-sm">{t('register.warnConfirm')}</span>
               </label>
             </div>
           )}
@@ -271,15 +267,15 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
           {step === "tarif" && (
             <div className="space-y-5 animate-slide-in-right">
               <div>
-                <h2 className="text-xl font-bold mb-1">Tarif tanlang</h2>
-                <p className="text-sm text-muted-foreground">Firma uchun obuna muddatini tanlang</p>
+                <h2 className="text-xl font-bold mb-1">{t('register.tarifTitle')}</h2>
+                <p className="text-sm text-muted-foreground">{t('register.tarifSubtitle')}</p>
               </div>
 
               {/* Barcha tariflarga kiritilgan (bir marta, takrorlanmaydi) */}
               <div className="rounded-2xl border border-border/50 bg-white/40 dark:bg-black/20 p-4">
-                <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Barcha tariflarga kiritilgan</p>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2">{t('register.includedTitle')}</p>
                 <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
-                  {["Cheklanmagan xodimlar", "Cheklanmagan obyektlar", "AI yordamchi", "Real-time chat va qo'ng'iroq", "Smeta va hisobotlar", "Telegram bot integratsiyasi"].map(f => (
+                  {[t('register.featureUnlimitedStaff'), t('register.featureUnlimitedObjects'), t('register.featureAI'), t('register.featureRealtime'), t('register.featureSmeta'), t('register.featureBot')].map(f => (
                     <div key={f} className="flex items-center gap-1.5 text-xs text-foreground/80"><CheckCircle className="w-3.5 h-3.5 flex-shrink-0 text-green-500"/>{f}</div>
                   ))}
                 </div>
@@ -287,10 +283,10 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
 
               <div className="space-y-3">
                 {([
-                  { key: '1month',  label: '1 oylik',  fullPrice: 700_000,   price: 0,         days: 30,  ribbon: undefined as string|undefined, featured: false },
-                  { key: '3month',  label: '3 oylik',  fullPrice: 2_100_000, price: 1_400_000, days: 90,  ribbon: 'ENG TEJAMKOR',   featured: false },
-                  { key: '6month',  label: '6 oylik',  fullPrice: 4_200_000, price: 3_500_000, days: 180, ribbon: undefined,        featured: false },
-                  { key: '12month', label: '12 oylik', fullPrice: 8_400_000, price: 7_700_000, days: 365, ribbon: 'ENG UZOQ MUDDAT',featured: true },
+                  { key: '1month',  label: t('register.plan1Month'),  fullPrice: 700_000,   price: 0,         days: 30,  ribbon: undefined as string|undefined, featured: false },
+                  { key: '3month',  label: t('register.plan3Month'),  fullPrice: 2_100_000, price: 1_400_000, days: 90,  ribbon: t('register.ribbonSavings'),   featured: false },
+                  { key: '6month',  label: t('register.plan6Month'),  fullPrice: 4_200_000, price: 3_500_000, days: 180, ribbon: undefined,        featured: false },
+                  { key: '12month', label: t('register.plan12Month'), fullPrice: 8_400_000, price: 7_700_000, days: 365, ribbon: t('register.ribbonLongest'),featured: true },
                 ] as const).map((plan, i) => {
                   const selected = selectedPlan === plan.key;
                   return (
@@ -315,25 +311,25 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex-1 min-w-0">
                           <p className={`text-base font-bold leading-tight ${plan.featured ? "text-white" : ""}`}>{plan.label}</p>
-                          <p className={`text-[11px] mt-0.5 ${plan.featured ? "text-white/70" : "text-muted-foreground"}`}>{plan.days} kun</p>
+                          <p className={`text-[11px] mt-0.5 ${plan.featured ? "text-white/70" : "text-muted-foreground"}`}>{t('register.daysCount', { count: plan.days })}</p>
                           <span className={`inline-block mt-1.5 text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${
                             plan.featured ? "bg-white/20 text-white" : "bg-green-500/15 text-green-800 dark:text-green-400"
-                          }`}>🎁 1-oy bepul</span>
+                          }`}>{t('register.freeMonthBadge')}</span>
                         </div>
                         <div className="text-right flex-shrink-0">
                           {plan.price === 0 ? (
-                            <p className={`text-2xl font-bold ${plan.featured ? "text-white" : "text-green-800 dark:text-green-400"}`}>BEPUL</p>
+                            <p className={`text-2xl font-bold ${plan.featured ? "text-white" : "text-green-800 dark:text-green-400"}`}>{t('register.free')}</p>
                           ) : (
-                            <p className={`text-xl font-bold ${plan.featured ? "text-white" : "text-primary"}`}>{plan.price.toLocaleString('uz-UZ')}<span className="text-[11px] font-normal ml-0.5">so'm</span></p>
+                            <p className={`text-xl font-bold ${plan.featured ? "text-white" : "text-primary"}`}>{plan.price.toLocaleString('uz-UZ')}<span className="text-[11px] font-normal ml-0.5">{t('register.som')}</span></p>
                           )}
-                          <p className={`text-[11px] line-through ${plan.featured ? "text-white/50" : "text-muted-foreground"}`}>{plan.fullPrice.toLocaleString('uz-UZ')} so'm</p>
+                          <p className={`text-[11px] line-through ${plan.featured ? "text-white/50" : "text-muted-foreground"}`}>{plan.fullPrice.toLocaleString('uz-UZ')} {t('register.som')}</p>
                         </div>
                       </div>
                     </motion.button>
                   );
                 })}
               </div>
-              <p className="text-xs text-center text-muted-foreground pt-1">Har bir tarifda birinchi oy bepul. Keyingi oylardan to'lov boshlanadi.</p>
+              <p className="text-xs text-center text-muted-foreground pt-1">{t('register.tarifFooter')}</p>
             </div>
           )}
 
@@ -341,37 +337,37 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
           {step === "payment" && selectedPlan && (
             <div className="space-y-5 animate-slide-in-right">
               <div>
-                <h2 className="text-xl font-bold mb-1">To'lov jarayoni</h2>
-                <p className="text-sm text-muted-foreground">Ro'yxatdan o'tgandan so'ng qanday ishlaydi</p>
+                <h2 className="text-xl font-bold mb-1">{t('register.paymentTitle')}</h2>
+                <p className="text-sm text-muted-foreground">{t('register.paymentSubtitle')}</p>
               </div>
               <div className="bg-primary/8 border border-primary/20 rounded-2xl p-4">
-                <p className="text-[11px] font-semibold text-primary uppercase tracking-wider mb-2">Tanlangan tarif</p>
+                <p className="text-[11px] font-semibold text-primary uppercase tracking-wider mb-2">{t('register.selectedPlan')}</p>
                 {selectedPlan === '1month' ? (
                   <div>
-                    <p className="text-2xl font-bold text-green-800 dark:text-green-400">BEPUL</p>
-                    <p className="text-sm line-through text-muted-foreground">700 000 so'm</p>
+                    <p className="text-2xl font-bold text-green-800 dark:text-green-400">{t('register.free')}</p>
+                    <p className="text-sm line-through text-muted-foreground">700 000 {t('register.som')}</p>
                   </div>
                 ) : (
                   <div>
                     <p className="text-2xl font-bold text-primary">
                       {selectedPlan==='3month'?'1 400 000':selectedPlan==='6month'?'3 500 000':'7 700 000'}
-                      <span className="text-base font-normal text-muted-foreground ml-1">so'm</span>
+                      <span className="text-base font-normal text-muted-foreground ml-1">{t('register.som')}</span>
                     </p>
                     <p className="text-sm line-through text-muted-foreground">
-                      {selectedPlan==='3month'?'2 100 000':selectedPlan==='6month'?'4 200 000':'8 400 000'} so'm
+                      {selectedPlan==='3month'?'2 100 000':selectedPlan==='6month'?'4 200 000':'8 400 000'} {t('register.som')}
                     </p>
                   </div>
                 )}
                 <p className="text-sm text-muted-foreground mt-1">
-                  {selectedPlan==='1month'?'1 oylik (30 kun) — birinchi oy bepul':selectedPlan==='3month'?'3 oylik (90 kun)':selectedPlan==='6month'?'6 oylik (180 kun)':'12 oylik (365 kun)'}
+                  {selectedPlan==='1month'?t('register.plan1MonthDays'):selectedPlan==='3month'?t('register.plan3MonthDays'):selectedPlan==='6month'?t('register.plan6MonthDays'):t('register.plan12MonthDays')}
                 </p>
               </div>
               <div className="surface rounded-2xl p-4 space-y-3">
                 {[
-                  { n: "1", t: "Ro'yxatdan o'ting", d: "Barcha bosqichlarni to'ldiring va firmangizni oching" },
-                  { n: "2", t: "Ma'lumotlarni yuboring", d: "@Sadriddinov_Jahongir'ga (Telegram) nusxalangan ma'lumotni yuboring" },
-                  { n: "3", t: "Operator tasdiqlaydi", d: "1 daqiqadan 24 soat ichida akkauntingiz tekshiriladi" },
-                  { n: "4", t: "Akkaunt ochiladi", d: "Birinchi oy — BEPUL! Keyingi oydan to'lov boshlanadi" },
+                  { n: "1", t: t('register.step1Title'), d: t('register.step1Desc') },
+                  { n: "2", t: t('register.step2Title'), d: t('register.step2Desc', { handle: '@Sadriddinov_Jahongir' }) },
+                  { n: "3", t: t('register.step3Title'), d: t('register.step3Desc') },
+                  { n: "4", t: t('register.step4Title'), d: t('register.step4Desc') },
                 ].map(s => (
                   <div key={s.n} className="flex items-start gap-3">
                     <div className="w-6 h-6 rounded-full bg-primary text-white text-xs flex items-center justify-center font-bold flex-shrink-0 mt-0.5">{s.n}</div>
@@ -386,10 +382,10 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
           {step === "phone" && (
             <div className="space-y-5 animate-slide-in-right">
               <div>
-                <h2 className="text-xl font-bold mb-1">Telefon raqamingiz</h2>
-                <p className="text-sm text-muted-foreground">Firma egasining raqami. Telegram orqali tasdiqlanadi.</p>
+                <h2 className="text-xl font-bold mb-1">{t('register.phoneTitle')}</h2>
+                <p className="text-sm text-muted-foreground">{t('register.phoneSubtitle')}</p>
               </div>
-              <RegField label="Telefon">
+              <RegField label={t('register.phoneFieldLabel')}>
                 <input inputMode="tel" className={inputCls + " font-mono"} value={phone}
                   onChange={e => { setError(""); const v = e.target.value; if (v.startsWith("+998 ")) setPhone(v); else if (v === "+998") setPhone("+998 "); }}
                   autoFocus />
@@ -401,36 +397,36 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
           {step === "bot" && reg && (
             <div className="space-y-5 animate-slide-in-right text-center">
               <div>
-                <h2 className="text-xl font-bold mb-1">Telegram orqali tasdiqlash</h2>
-                <p className="text-sm text-muted-foreground">Botga o'ting, raqamingizni yuboring va rozilik bering. Bu sahifa avtomatik davom etadi.</p>
+                <h2 className="text-xl font-bold mb-1">{t('register.botTitle')}</h2>
+                <p className="text-sm text-muted-foreground">{t('register.botSubtitle')}</p>
               </div>
               <a href={reg.deepLink} target="_blank" rel="noopener noreferrer"
                 className="w-full inline-flex items-center justify-center gap-2 bg-gradient-to-r from-primary to-primary/90 text-white text-base font-semibold py-4 rounded-xl shadow-lg shadow-primary/25 min-h-[54px] active:scale-[0.98] transition-transform">
-                <Send className="w-5 h-5" /> Telegram botga o'tish
+                <Send className="w-5 h-5" /> {t('register.goToBot')}
               </a>
               {/* Bosib to'liq /start <token> nusxalanadi (kesilmaydi) */}
               <button type="button" onClick={() => {
                 const txt = `/start ${reg.token}`;
-                const done = () => toast.success("Nusxalandi ✅ — botga joylab yuboring");
+                const done = () => toast.success(t('register.copySuccess'));
                 if (navigator.clipboard?.writeText) navigator.clipboard.writeText(txt).then(done).catch(()=>{});
                 else { try { const ta=document.createElement("textarea"); ta.value=txt; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta); done(); } catch {} }
               }} className="w-full bg-white/50 dark:bg-black/20 rounded-xl p-3 border border-border/50 text-left active:scale-[0.99] transition-transform">
                 <div className="flex items-center justify-between mb-1">
-                  <p className="text-[11px] text-muted-foreground">Tugma ishlamasa — bosib nusxalang:</p>
-                  <span className="text-[11px] text-primary font-semibold whitespace-nowrap">📋 Nusxalash</span>
+                  <p className="text-[11px] text-muted-foreground">{t('register.copyHint')}</p>
+                  <span className="text-[11px] text-primary font-semibold whitespace-nowrap">{t('register.copyAction')}</span>
                 </div>
                 <code className="text-xs break-all font-mono text-primary block leading-relaxed">/start {reg.token}</code>
               </button>
               <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="w-4 h-4 animate-spin" />
-                {botStatus === "PHONE_CONFIRMED" ? "Raqam tasdiqlandi, rozilik kutilmoqda…" : "Bot javobini kutmoqdamiz…"}
+                {botStatus === "PHONE_CONFIRMED" ? t('register.waitingConfirmed') : t('register.waitingBot')}
               </div>
               {/* Timer 2:00 → 0:00; "Qayta yuborish" FAQAT muddat tugagach chiqadi */}
               {timeLeft > 0 ? (
-                <p className="text-sm text-muted-foreground">Kod <span className="font-mono font-semibold text-foreground">{Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, "0")}</span> amal qiladi</p>
+                <p className="text-sm text-muted-foreground">{t('register.codeValidBefore')} <span className="font-mono font-semibold text-foreground">{Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, "0")}</span> {t('register.codeValidAfter')}</p>
               ) : (
                 <button onClick={resend} disabled={resendCd > 0} className={`text-sm font-semibold min-h-[44px] px-4 rounded-lg ${resendCd > 0 ? "text-muted-foreground/50" : "text-primary hover:bg-primary/10"}`}>
-                  {resendCd > 0 ? `Qayta yuborish (${resendCd}s)` : "🔄 Kodni qayta yuborish"}
+                  {resendCd > 0 ? t('register.resendWithCooldown', { sec: resendCd }) : t('register.resendNow')}
                 </button>
               )}
             </div>
@@ -439,39 +435,39 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
           {/* ── Qadam 5.1: Egasi ── */}
           {step === "owner" && (
             <div className="space-y-4 animate-slide-in-right">
-              <div><h2 className="text-xl font-bold mb-1">Firma egasi</h2><p className="text-sm text-muted-foreground">Sizning ma'lumotlaringiz.</p></div>
+              <div><h2 className="text-xl font-bold mb-1">{t('register.ownerTitle')}</h2><p className="text-sm text-muted-foreground">{t('register.ownerSubtitle')}</p></div>
               <div className="grid grid-cols-2 gap-3">
-                <RegField label="Ism *"><input className={inputCls} value={firstName} onChange={e => setFirstName(e.target.value)} autoFocus /></RegField>
-                <RegField label="Familiya *"><input className={inputCls} value={lastName} onChange={e => setLastName(e.target.value)} /></RegField>
+                <RegField label={t('register.firstName')}><input className={inputCls} value={firstName} onChange={e => setFirstName(e.target.value)} autoFocus /></RegField>
+                <RegField label={t('register.lastName')}><input className={inputCls} value={lastName} onChange={e => setLastName(e.target.value)} /></RegField>
               </div>
-              <RegField label="Otasining ismi"><input className={inputCls} value={middleName} onChange={e => setMiddleName(e.target.value)} /></RegField>
-              <RegField label="Email"><input type="email" className={inputCls} value={email} onChange={e => setEmail(e.target.value)} /></RegField>
-              <RegField label="Lavozim"><input className={inputCls} value={position} onChange={e => setPosition(e.target.value)} /></RegField>
-              <RegField label="Parol *" hint="Kamida 8 belgi">
+              <RegField label={t('register.middleName')}><input className={inputCls} value={middleName} onChange={e => setMiddleName(e.target.value)} /></RegField>
+              <RegField label={t('register.email')}><input type="email" className={inputCls} value={email} onChange={e => setEmail(e.target.value)} /></RegField>
+              <RegField label={t('register.position')}><input className={inputCls} value={position} onChange={e => setPosition(e.target.value)} /></RegField>
+              <RegField label={t('register.password')} hint={t('register.passwordHint')}>
                 <input type="password" className={inputCls} value={password} onChange={e => setPassword(e.target.value)} />
                 <div className="h-1 mt-1.5 rounded-full bg-border/60 overflow-hidden">
                   <div className={`h-full liquid-transition ${password.length >= 12 ? "bg-green-500 w-full" : password.length >= 8 ? "bg-amber-500 w-2/3" : "bg-red-500 w-1/3"}`} />
                 </div>
               </RegField>
-              <RegField label="Parolni tasdiqlang *"><input type="password" className={inputCls} value={password2} onChange={e => setPassword2(e.target.value)} /></RegField>
+              <RegField label={t('register.passwordConfirm')}><input type="password" className={inputCls} value={password2} onChange={e => setPassword2(e.target.value)} /></RegField>
             </div>
           )}
 
           {/* ── Qadam 5.2: Firma ── */}
           {step === "company" && (
             <div className="space-y-4 animate-slide-in-right">
-              <div><h2 className="text-xl font-bold mb-1">Firma ma'lumotlari</h2></div>
-              <RegField label="Firma nomi *"><input className={inputCls} value={companyName} onChange={e => setCompanyName(e.target.value)} autoFocus /></RegField>
-              <RegField label="Yuridik nomi"><input className={inputCls} value={legalName} onChange={e => setLegalName(e.target.value)} /></RegField>
-              <RegField label="INN / STIR" hint="9 raqam"><input inputMode="numeric" className={inputCls + " font-mono"} value={inn} maxLength={9} onChange={e => setInn(e.target.value.replace(/\D/g, ""))} /></RegField>
-              <RegField label="Faoliyat turi">
+              <div><h2 className="text-xl font-bold mb-1">{t('register.companyTitle')}</h2></div>
+              <RegField label={t('register.companyNameLabel')}><input className={inputCls} value={companyName} onChange={e => setCompanyName(e.target.value)} autoFocus /></RegField>
+              <RegField label={t('register.legalName')}><input className={inputCls} value={legalName} onChange={e => setLegalName(e.target.value)} /></RegField>
+              <RegField label={t('register.inn')} hint={t('register.innHint')}><input inputMode="numeric" className={inputCls + " font-mono"} value={inn} maxLength={9} onChange={e => setInn(e.target.value.replace(/\D/g, ""))} /></RegField>
+              <RegField label={t('register.activityType')}>
                 <select className={inputCls} value={activityType} onChange={e => setActivityType(e.target.value)}>
-                  <option value="qurilish">Qurilish</option><option value="tamirlash">Ta'mirlash</option>
-                  <option value="loyihalash">Loyihalash</option><option value="boshqa">Boshqa</option>
+                  <option value="qurilish">{t('register.activityConstruction')}</option><option value="tamirlash">{t('register.activityRepair')}</option>
+                  <option value="loyihalash">{t('register.activityDesign')}</option><option value="boshqa">{t('register.activityOther')}</option>
                 </select>
               </RegField>
-              <RegField label="Viloyat / Manzil"><input className={inputCls} value={region} onChange={e => setRegion(e.target.value)} /></RegField>
-              <RegField label="Xodimlar soni">
+              <RegField label={t('register.region')}><input className={inputCls} value={region} onChange={e => setRegion(e.target.value)} /></RegField>
+              <RegField label={t('register.employeeCount')}>
                 <select className={inputCls} value={employeeRange} onChange={e => setEmployeeRange(e.target.value)}>
                   <option value="1-10">1–10</option><option value="11-50">11–50</option>
                   <option value="51-200">51–200</option><option value="200+">200+</option>
@@ -483,7 +479,7 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
           {/* ── Qadam 5.3: Logo + valyuta ── */}
           {step === "brand" && (
             <div className="space-y-5 animate-slide-in-right">
-              <div><h2 className="text-xl font-bold mb-1">Logotip va brend</h2></div>
+              <div><h2 className="text-xl font-bold mb-1">{t('register.brandTitle')}</h2></div>
               <div className="flex flex-col items-center gap-3">
                 <div className="w-28 h-28 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center overflow-hidden">
                   {logoUploading ? <Loader2 className="w-6 h-6 animate-spin text-primary" />
@@ -492,11 +488,11 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
                 </div>
                 <input ref={logoRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={pickLogo} />
                 <button onClick={() => logoRef.current?.click()} className="text-sm font-semibold text-primary flex items-center gap-1.5">
-                  <Camera className="w-4 h-4" /> {logoUrl ? "O'zgartirish" : "Logo yuklash"}
+                  <Camera className="w-4 h-4" /> {logoUrl ? t('register.changeLogo') : t('register.uploadLogo')}
                 </button>
-                <p className="text-[11px] text-muted-foreground">PNG/JPG/WEBP, maks 2MB. Ixtiyoriy.</p>
+                <p className="text-[11px] text-muted-foreground">{t('register.logoHint')}</p>
               </div>
-              <RegField label="Asosiy valyuta">
+              <RegField label={t('register.mainCurrency')}>
                 <div className="grid grid-cols-2 gap-3">
                   {(["UZS", "USD"] as const).map(c => (
                     <button key={c} onClick={() => setCurrency(c)}
@@ -510,18 +506,18 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
           {/* ── Qadam 9: Yakuniy tasdiq ── */}
           {step === "summary" && (
             <div className="space-y-4 animate-slide-in-right">
-              <div><h2 className="text-xl font-bold mb-1">Tekshirib tasdiqlang</h2></div>
+              <div><h2 className="text-xl font-bold mb-1">{t('register.summaryTitle')}</h2></div>
               {[
-                { t: "Tarif", v: selectedPlan==='1month'?'1 oylik — BEPUL':selectedPlan==='3month'?'3 oylik — 1 400 000 so\'m':selectedPlan==='6month'?'6 oylik — 3 500 000 so\'m':'12 oylik — 7 700 000 so\'m', go: "tarif" as RegStep },
-                { t: "Egasi", v: `${firstName} ${lastName}`, go: "owner" as RegStep },
-                { t: "Telefon", v: phone, go: "phone" as RegStep },
-                { t: "Firma", v: companyName, go: "company" as RegStep },
-                { t: "Faoliyat", v: activityType, go: "company" as RegStep },
-                { t: "Valyuta", v: currency, go: "brand" as RegStep },
+                { t: t('register.summaryPlan'), v: selectedPlan==='1month'?t('register.plan1MonthSummary'):selectedPlan==='3month'?t('register.plan3MonthSummary'):selectedPlan==='6month'?t('register.plan6MonthSummary'):t('register.plan12MonthSummary'), go: "tarif" as RegStep },
+                { t: t('register.summaryOwner'), v: `${firstName} ${lastName}`, go: "owner" as RegStep },
+                { t: t('register.summaryPhone'), v: phone, go: "phone" as RegStep },
+                { t: t('register.summaryCompany'), v: companyName, go: "company" as RegStep },
+                { t: t('register.summaryActivity'), v: activityType, go: "company" as RegStep },
+                { t: t('register.summaryCurrency'), v: currency, go: "brand" as RegStep },
               ].map((r, i) => (
                 <div key={i} className="flex items-center justify-between surface rounded-xl px-4 py-3">
                   <div><p className="text-[11px] text-muted-foreground">{r.t}</p><p className="text-sm font-medium">{r.v || "—"}</p></div>
-                  <button onClick={() => setStep(r.go)} className="text-xs text-primary font-semibold">Tahrirlash</button>
+                  <button onClick={() => setStep(r.go)} className="text-xs text-primary font-semibold">{t('common.edit')}</button>
                 </div>
               ))}
             </div>
@@ -535,12 +531,14 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
                   <CheckCircle className="w-8 h-8 text-green-500"/>
                 </div>
                 <div>
-                  <h2 className="text-xl font-bold mb-1">Ro'yxatdan o'tdingiz!</h2>
-                  <p className="text-sm text-muted-foreground">Quyidagi ma'lumotlarni @Sadriddinov_Jahongir'ga (Telegram) yuboring</p>
+                  <h2 className="text-xl font-bold mb-1">{t('register.doneTitle')}</h2>
+                  <p className="text-sm text-muted-foreground">{t('register.doneSubtitle', { handle: '@Sadriddinov_Jahongir' })}</p>
                 </div>
               </div>
 
-              {/* Copyable info block */}
+              {/* Copyable info block — ataylab tarjima qilinmagan: bu matn faqat
+                  o'zbek tilida so'zlashuvchi operatorga (@Sadriddinov_Jahongir)
+                  yuboriladigan qat'iy formatdagi xabar, foydalanuvchi UI'si emas. */}
               <div className="relative">
                 <div className="bg-slate-900 dark:bg-slate-800 text-green-400 rounded-2xl p-4 font-mono text-xs leading-relaxed whitespace-pre-wrap border border-slate-700 select-all">
                   {[
@@ -574,13 +572,13 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
                     });
                   }}
                   className={`absolute top-3 right-3 flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-xl transition-all ${doneCopied ? 'bg-green-500 text-white' : 'bg-white/10 text-white hover:bg-white/20'}`}>
-                  {doneCopied ? <><Check className="w-3 h-3"/>Nusxalandi!</> : <><Copy className="w-3 h-3"/>Nusxalash</>}
+                  {doneCopied ? <><Check className="w-3 h-3"/>{t('register.copied')}</> : <><Copy className="w-3 h-3"/>{t('register.copyAction2')}</>}
                 </button>
               </div>
 
               <div className="surface rounded-2xl p-4 space-y-2.5">
-                <p className="text-sm font-semibold">Keyingi qadam:</p>
-                <p className="text-sm leading-relaxed text-muted-foreground">Yuqoridagi ma'lumotni nusxalab @Sadriddinov_Jahongir'ga (Telegram) yuboring:</p>
+                <p className="text-sm font-semibold">{t('register.nextStep')}</p>
+                <p className="text-sm leading-relaxed text-muted-foreground">{t('register.nextStepDesc', { handle: '@Sadriddinov_Jahongir' })}</p>
                 <a href="https://t.me/Sadriddinov_Jahongir" target="_blank" rel="noopener noreferrer"
                   className="flex items-center gap-2.5 bg-primary/10 border border-primary/25 rounded-xl px-4 py-3">
                   <div className="w-9 h-9 rounded-full bg-primary/15 flex items-center justify-center flex-shrink-0">
@@ -588,11 +586,11 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
                   </div>
                   <div>
                     <p className="text-sm font-bold text-primary">@Sadriddinov_Jahongir</p>
-                    <p className="text-[11px] text-muted-foreground">Telegram — ma'lumotlarni yuboring</p>
+                    <p className="text-[11px] text-muted-foreground">{t('register.telegramSendHint')}</p>
                   </div>
                 </a>
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                  Operator javobini kuting. <b className="text-foreground">Birinchi oy — BEPUL!</b> Keyingi oydan to'lov boshlanadi.
+                  {t('register.waitOperator')} <b className="text-foreground">{t('register.firstMonthFreeBold')}</b> {t('register.thenPayment')}
                 </p>
               </div>
             </div>
@@ -606,55 +604,55 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
           {step === "warn" && (
             <button disabled={!ownerConfirm} onClick={() => setStep("tarif")}
               className="w-full bg-primary text-white text-sm font-semibold py-3.5 rounded-xl min-h-[48px] disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98] transition-transform">
-              Davom etish
+              {t('register.continue')}
             </button>
           )}
           {step === "tarif" && (
             <button disabled={!selectedPlan} onClick={() => setStep("payment")}
               className="w-full bg-primary text-white text-sm font-semibold py-3.5 rounded-xl min-h-[48px] disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98] transition-transform">
-              Davom etish
+              {t('register.continue')}
             </button>
           )}
           {step === "payment" && (
             <button onClick={() => setStep("phone")}
               className="w-full bg-primary text-white text-sm font-semibold py-3.5 rounded-xl min-h-[48px] active:scale-[0.98] transition-transform">
-              Davom etish
+              {t('register.continue')}
             </button>
           )}
           {step === "phone" && (
             <button disabled={loading} onClick={submitPhone}
               className="w-full bg-primary text-white text-sm font-semibold py-3.5 rounded-xl min-h-[48px] disabled:opacity-60 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform">
-              {loading && <Loader2 className="w-4 h-4 animate-spin" />} Davom etish
+              {loading && <Loader2 className="w-4 h-4 animate-spin" />} {t('register.continue')}
             </button>
           )}
           {step === "owner" && (
             <button onClick={() => {
-              if (!firstName.trim() || !lastName.trim()) { setError("Ism va familiya majburiy"); return; }
-              if (password.length < 8) { setError("Parol kamida 8 belgi"); return; }
-              if (password !== password2) { setError("Parollar mos kelmadi"); return; }
+              if (!firstName.trim() || !lastName.trim()) { setError(t('register.nameRequired')); return; }
+              if (password.length < 8) { setError(t('register.passwordTooShort')); return; }
+              if (password !== password2) { setError(t('register.passwordMismatch')); return; }
               setError(""); setStep("company");
-            }} className="w-full bg-primary text-white text-sm font-semibold py-3.5 rounded-xl min-h-[48px]">Davom etish</button>
+            }} className="w-full bg-primary text-white text-sm font-semibold py-3.5 rounded-xl min-h-[48px]">{t('register.continue')}</button>
           )}
           {step === "company" && (
             <button onClick={() => {
-              if (!companyName.trim()) { setError("Firma nomi majburiy"); return; }
-              if (inn && !/^\d{9}$/.test(inn)) { setError("INN 9 raqam bo'lishi kerak"); return; }
+              if (!companyName.trim()) { setError(t('register.companyNameRequired')); return; }
+              if (inn && !/^\d{9}$/.test(inn)) { setError(t('register.innInvalid')); return; }
               setError(""); setStep("brand");
-            }} className="w-full bg-primary text-white text-sm font-semibold py-3.5 rounded-xl min-h-[48px]">Davom etish</button>
+            }} className="w-full bg-primary text-white text-sm font-semibold py-3.5 rounded-xl min-h-[48px]">{t('register.continue')}</button>
           )}
           {step === "brand" && (
-            <button onClick={() => setStep("summary")} className="w-full bg-primary text-white text-sm font-semibold py-3.5 rounded-xl min-h-[48px]">Davom etish</button>
+            <button onClick={() => setStep("summary")} className="w-full bg-primary text-white text-sm font-semibold py-3.5 rounded-xl min-h-[48px]">{t('register.continue')}</button>
           )}
           {step === "summary" && (
             <button disabled={loading} onClick={complete}
               className="w-full bg-accent text-white text-sm font-semibold py-3.5 rounded-xl min-h-[48px] disabled:opacity-60 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform">
-              {loading && <Loader2 className="w-4 h-4 animate-spin" />} Firmani ochish
+              {loading && <Loader2 className="w-4 h-4 animate-spin" />} {t('register.openCompanyBtn')}
             </button>
           )}
           {step === "done" && (
             <button onClick={onBack}
               className="w-full bg-primary text-white text-sm font-semibold py-3.5 rounded-xl min-h-[48px] active:scale-[0.98] transition-transform">
-              Tizimga kirish
+              {t('login.enterSystem')}
             </button>
           )}
         </div>

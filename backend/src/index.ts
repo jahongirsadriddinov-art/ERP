@@ -32,7 +32,13 @@ const app = express();
 
 app.use(cors());
 app.use(express.json({ limit: '60mb' }));
-app.use('/uploads', express.static('uploads'));
+// Yuklangan fayllar (chat media, smeta, va h.k.) doim noyob nom bilan saqlanadi
+// (vaqt tamg'asi + tasodifiy raqam) — demak bir xil URL hech qachon boshqa
+// mazmunga o'zgarmaydi. Shuning uchun uzoq muddatli "immutable" keshni xavfsiz
+// yoqish mumkin: brauzer buni QAYTA SO'RAMASDAN to'g'ridan-to'g'ri qurilma
+// xotirasidan (disk keshidan) o'qib beradi — chat qayta ochilganda rasm/video/
+// ovoz darhol, tarmoqqa chiqmasdan ko'rinadi.
+app.use('/uploads', express.static('uploads', { maxAge: '365d', immutable: true }));
 
 // Health-check (bazaga bog'liq emas) — Render/uptime darhol 200 oladi
 app.get('/health', (_req, res) => res.json({ ok: true, service: 'quriliserp-backend' }));

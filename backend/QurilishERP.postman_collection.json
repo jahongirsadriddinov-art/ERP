@@ -1,0 +1,665 @@
+{
+  "info": {
+    "_postman_id": "b6f2a1a0-1a2b-4c3d-9e4f-qurilisherp001",
+    "name": "QurilishERP Backend API",
+    "description": "Barcha backend endpointlar uchun test to'plami.\n\nQanday ishlatish:\n1. `base_url` collection o'zgaruvchisini tekshiring (default: http://localhost:5000, prodga http://qurilisherp-backend.onrender.com qiling).\n2. Avval bazada mavjud foydalanuvchi telefoni bilan `Auth > Send Code` so'rovini yuboring — bu Telegram botga kod yuboradi.\n3. Botdan kelgan kodni `Auth > Login` so'roviga qo'yib yuboring — token avtomatik `token` o'zgaruvchisiga yoziladi (Tests skripti orqali), shundan keyingi barcha so'rovlar shu tokenni ishlatadi.\n4. Dasturchi (super-admin) sifatida test qilish uchun `Auth > Dev Login`ni ishlating — `dev_token` avtomatik saqlanadi. `Companies` va `Subscriptions` papkalari shu tokenni ishlatadi.\n5. Ko'p so'rovlar `{{user_id}}`, `{{object_id}}` kabi o'zgaruvchilarga bog'liq — javobdan kerakli ID'ni collection o'zgaruvchilariga qo'lda yozib qo'ying (yoki har bir so'rov javobini o'qib, keyingisiga moslang).\n\nEslatma: ko'pgina route'lar `optionalAuth` bilan o'ralgan — token bo'lmasa ham so'rov o'tadi, lekin natija bo'sh/noto'g'ri firma ma'lumoti bo'lishi mumkin (tenant scoping ishlamaydi). Haqiqiy test uchun DOIM token bilan yuboring.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }]
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:5000", "type": "string" },
+    { "key": "token", "value": "", "type": "string" },
+    { "key": "dev_token", "value": "", "type": "string" },
+    { "key": "phone", "value": "+998901234567", "type": "string" },
+    { "key": "code", "value": "1234", "type": "string" },
+    { "key": "dev_phone", "value": "+998900960890", "type": "string" },
+    { "key": "dev_password", "value": "1212", "type": "string" },
+    { "key": "user_id", "value": "", "type": "string" },
+    { "key": "to_user_id", "value": "", "type": "string" },
+    { "key": "object_id", "value": "", "type": "string" },
+    { "key": "material_id", "value": "", "type": "string" },
+    { "key": "transaction_id", "value": "", "type": "string" },
+    { "key": "group_id", "value": "", "type": "string" },
+    { "key": "message_id", "value": "", "type": "string" },
+    { "key": "company_id", "value": "", "type": "string" },
+    { "key": "subscription_id", "value": "", "type": "string" },
+    { "key": "registration_id", "value": "", "type": "string" },
+    { "key": "reg_token", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health check",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/health", "host": ["{{base_url}}"], "path": ["health"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Send Code (Telegram orqali)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"phone\": \"{{phone}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{base_url}}/api/auth/send-code", "host": ["{{base_url}}"], "path": ["api", "auth", "send-code"] },
+            "description": "Bazada shu telefon raqamli va telegramChatId bor foydalanuvchi bo'lishi shart. Botga /start bosgan bo'lishi kerak."
+          }
+        },
+        {
+          "name": "Login (kod bilan)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const data = pm.response.json();",
+                  "  if (data.token) pm.collectionVariables.set('token', data.token);",
+                  "  if (data.user && data.user.id) pm.collectionVariables.set('user_id', data.user.id);",
+                  "  if (data.company && data.company.id) pm.collectionVariables.set('company_id', data.company.id);",
+                  "  console.log('token saqlandi');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"code\": \"{{code}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{base_url}}/api/auth/login", "host": ["{{base_url}}"], "path": ["api", "auth", "login"] },
+            "description": "Muvaffaqiyatli bo'lsa `token` collection o'zgaruvchisiga avtomatik yoziladi — pastdagi barcha so'rovlar shundan foydalanadi."
+          }
+        },
+        {
+          "name": "Dev Login (dasturchi, parol bilan)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const data = pm.response.json();",
+                  "  if (data.token) pm.collectionVariables.set('dev_token', data.token);",
+                  "  console.log('dev_token saqlandi');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"phone\": \"{{dev_phone}}\",\n  \"password\": \"{{dev_password}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{base_url}}/api/auth/dev-login", "host": ["{{base_url}}"], "path": ["api", "auth", "dev-login"] },
+            "description": "backend/.env dagi DEVELOPER_PHONE/DEVELOPER_PASSWORD bilan mos bo'lishi kerak. `dev_token` avtomatik saqlanadi va Companies/Subscriptions papkalarida ishlatiladi."
+          }
+        },
+        {
+          "name": "Add User (admin tomonidan)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"firstName\": \"Test\",\n  \"lastName\": \"Ishchi\",\n  \"phone\": \"+998907654321\",\n  \"role\": \"ishchi\",\n  \"brigade\": \"\",\n  \"projectIds\": []\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{base_url}}/api/auth/users", "host": ["{{base_url}}"], "path": ["api", "auth", "users"] },
+            "description": "role: direktor | orinbosar | prorab | brigadir | ishchi"
+          }
+        },
+        {
+          "name": "Update User",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"firstName\": \"Yangilangan\",\n  \"lastName\": \"Ism\",\n  \"role\": \"brigadir\",\n  \"brigade\": \"1-brigada\",\n  \"projectIds\": []\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{base_url}}/api/auth/users/{{user_id}}", "host": ["{{base_url}}"], "path": ["api", "auth", "users", "{{user_id}}"] }
+          }
+        },
+        {
+          "name": "Delete User",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": { "raw": "{{base_url}}/api/auth/users/{{user_id}}", "host": ["{{base_url}}"], "path": ["api", "auth", "users", "{{user_id}}"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Register (o'z-o'zidan ro'yxatdan o'tish)",
+      "item": [
+        {
+          "name": "1) Phone (deep-link token olish)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const data = pm.response.json();",
+                  "  pm.collectionVariables.set('registration_id', data.registrationId);",
+                  "  pm.collectionVariables.set('reg_token', data.token);",
+                  "  console.log('Telegramda oching:', data.deepLink);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"phone\": \"+998901112233\",\n  \"ownerConfirm\": true\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{base_url}}/api/register/phone", "host": ["{{base_url}}"], "path": ["api", "register", "phone"] },
+            "description": "Javobdagi deepLink'ni Telegramda ochib botga /start bosish kerak — bot shu raqamni PHONE_CONFIRMED va keyin CONSENT_GIVEN qilib qo'yadi. Shundan keyingina /complete ishlaydi."
+          }
+        },
+        {
+          "name": "2) Status (polling)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/register/status?registrationId={{registration_id}}",
+              "host": ["{{base_url}}"], "path": ["api", "register", "status"],
+              "query": [{ "key": "registrationId", "value": "{{registration_id}}" }]
+            },
+            "description": "step: PHONE_ENTERED -> PHONE_CONFIRMED -> CONSENT_GIVEN -> COMPLETED (yoki EXPIRED)"
+          }
+        },
+        {
+          "name": "3) Resend token",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"registrationId\": \"{{registration_id}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{base_url}}/api/register/resend", "host": ["{{base_url}}"], "path": ["api", "register", "resend"] },
+            "description": "60 sekundlik cooldown bor."
+          }
+        },
+        {
+          "name": "4) Cancel",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"registrationId\": \"{{registration_id}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{base_url}}/api/register/cancel", "host": ["{{base_url}}"], "path": ["api", "register", "cancel"] }
+          }
+        },
+        {
+          "name": "5) Complete (firma + egasi yaratish)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{reg_token}}\",\n  \"owner\": {\n    \"firstName\": \"Aziz\",\n    \"lastName\": \"Azizov\",\n    \"password\": \"StrongPass123\",\n    \"position\": \"Direktor\"\n  },\n  \"company\": {\n    \"name\": \"Test Qurilish MChJ\",\n    \"inn\": \"123456789\",\n    \"address\": \"Toshkent\",\n    \"activityType\": \"qurilish\",\n    \"currency\": \"UZS\"\n  },\n  \"selectedPlan\": \"1month\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/api/register/complete", "host": ["{{base_url}}"], "path": ["api", "register", "complete"] },
+            "description": "Faqat reg.step === 'CONSENT_GIVEN' bo'lganda ishlaydi (2-qadamdagi Telegram tasdig'idan keyin). Muvaffaqiyatli bo'lsa ham JWT BERMAYDI — obuna dasturchi tomonidan tasdiqlanishini kutadi (Subscriptions > Approve)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "List Users",
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{base_url}}/api/users", "host": ["{{base_url}}"], "path": ["api", "users"] } }
+        },
+        {
+          "name": "Update User (firm/isim)",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"firstName\": \"Yangi ism\",\n  \"lastName\": \"Familiya\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{base_url}}/api/users/{{user_id}}", "host": ["{{base_url}}"], "path": ["api", "users", "{{user_id}}"] },
+            "description": "companyId maydoni faqat dasturchi (isDeveloper) tokeni bilan o'zgaradi — {{dev_token}} bilan sinab ko'ring."
+          }
+        },
+        {
+          "name": "Delete User",
+          "request": { "method": "DELETE", "header": [], "url": { "raw": "{{base_url}}/api/users/{{user_id}}", "host": ["{{base_url}}"], "path": ["api", "users", "{{user_id}}"] } }
+        }
+      ]
+    },
+    {
+      "name": "Objects (Obyektlar)",
+      "item": [
+        {
+          "name": "Create Object",
+          "event": [
+            {
+              "listen": "test",
+              "script": { "type": "text/javascript", "exec": [
+                "if (pm.response.code === 201) { pm.collectionVariables.set('object_id', pm.response.json()._id); }"
+              ] }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Test obyekt\",\n  \"budget\": 100000000,\n  \"location\": \"Toshkent, Chilonzor\",\n  \"foremanId\": \"{{user_id}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{base_url}}/api/objects", "host": ["{{base_url}}"], "path": ["api", "objects"] }
+          }
+        },
+        {
+          "name": "Upload Smeta to Object (SSE progress)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [{ "key": "smeta", "type": "file", "src": [] }]
+            },
+            "url": { "raw": "{{base_url}}/api/objects/{{object_id}}/smeta", "host": ["{{base_url}}"], "path": ["api", "objects", "{{object_id}}", "smeta"] },
+            "description": "DIQQAT: bu Server-Sent Events (SSE) oqimi qaytaradi, oddiy JSON emas — Postman javobni oxirigacha kutadi va 'data: {...}' qatorlari ketma-ket ko'rinadi. PDF/XLSX/XLS/DOCX qabul qilinadi. 'smeta' maydonida faylni tanlang (Select Files)."
+          }
+        },
+        {
+          "name": "List Objects",
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{base_url}}/api/objects", "host": ["{{base_url}}"], "path": ["api", "objects"] } }
+        },
+        {
+          "name": "Update Object Status",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"active\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{base_url}}/api/objects/{{object_id}}/status", "host": ["{{base_url}}"], "path": ["api", "objects", "{{object_id}}", "status"] },
+            "description": "status: active | paused | completed"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Materials",
+      "item": [
+        {
+          "name": "List Materials by Object",
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{base_url}}/api/materials/object/{{object_id}}", "host": ["{{base_url}}"], "path": ["api", "materials", "object", "{{object_id}}"] } }
+        },
+        {
+          "name": "Send Material (eski, oddiy oqim)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"materialId\": \"{{material_id}}\",\n  \"amount\": 10,\n  \"senderId\": \"{{user_id}}\",\n  \"receiverId\": \"{{to_user_id}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{base_url}}/api/materials/send", "host": ["{{base_url}}"], "path": ["api", "materials", "send"] },
+            "description": "Eslatma: hozirgi frontend materiallarni asosan Transactions (type=transfer) orqali yuboradi — pastdagi 'Transactions > Create Transfer' shu oqimga mos keladi va narx/tasdiqlash bilan to'liq ishlaydi."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Smeta Parser",
+      "item": [
+        {
+          "name": "Parse Smeta PDF (deterministik, AI'siz)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "smeta", "type": "file", "src": [] },
+                { "key": "objectId", "value": "{{object_id}}", "type": "text", "description": "Ixtiyoriy — berilsa natija shu Obyektga yoziladi (boshqa qurilma ham ko'radi)" }
+              ]
+            },
+            "url": { "raw": "{{base_url}}/api/smeta/parse", "host": ["{{base_url}}"], "path": ["api", "smeta", "parse"] },
+            "description": "FAQAT .pdf qabul qilinadi. 'smeta' maydonida faylni tanlang."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Transactions (Moliya / Yukxat)",
+      "item": [
+        {
+          "name": "List Transactions",
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{base_url}}/api/transactions", "host": ["{{base_url}}"], "path": ["api", "transactions"] } }
+        },
+        {
+          "name": "Create Transfer (material yukxati)",
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (pm.response.code === 201) { pm.collectionVariables.set('transaction_id', pm.response.json().id); }"
+            ] } }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"transfer\",\n  \"materialName\": \"Sement\",\n  \"quantity\": 50,\n  \"unit\": \"qop\",\n  \"price\": 45000,\n  \"projectId\": \"{{object_id}}\",\n  \"fromUserId\": \"{{user_id}}\",\n  \"fromUserName\": \"Yuboruvchi\",\n  \"toUserId\": \"{{to_user_id}}\",\n  \"toUserName\": \"Qabul qiluvchi\",\n  \"note\": \"Test yukxat\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/api/transactions", "host": ["{{base_url}}"], "path": ["api", "transactions"] },
+            "description": "toUserId berilsa status='pending' bo'ladi va qabul qiluvchiga Telegram orqali tasdiqlash tugmalari yuboriladi."
+          }
+        },
+        {
+          "name": "Create Expense (to'lov/chiqim)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"oylik\",\n  \"amount\": 2500000,\n  \"description\": \"Iyul oyi maoshi\",\n  \"projectId\": \"{{object_id}}\",\n  \"toUserId\": \"{{to_user_id}}\",\n  \"createdById\": \"{{user_id}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/api/transactions", "host": ["{{base_url}}"], "path": ["api", "transactions"] },
+            "description": "type: oylik | material | jihozlar | transport | boshqa | expense | income. toUserId berilsa pending, berilmasa avtomatik confirmed."
+          }
+        },
+        {
+          "name": "Confirm Transaction",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"defect\": \"\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{base_url}}/api/transactions/{{transaction_id}}/confirm", "host": ["{{base_url}}"], "path": ["api", "transactions", "{{transaction_id}}", "confirm"] },
+            "description": "MUHIM: faqat tx.toUserId === tokendagi userId bo'lsa ishlaydi (403 aks holda) — {{to_user_id}} akkaunti tokeni bilan yuboring."
+          }
+        },
+        {
+          "name": "Reject Transaction",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": { "raw": "{{base_url}}/api/transactions/{{transaction_id}}/reject", "host": ["{{base_url}}"], "path": ["api", "transactions", "{{transaction_id}}", "reject"] },
+            "description": "Faqat qabul qiluvchi (toUserId) rad eta oladi."
+          }
+        },
+        {
+          "name": "Delete Transaction",
+          "request": { "method": "DELETE", "header": [], "url": { "raw": "{{base_url}}/api/transactions/{{transaction_id}}", "host": ["{{base_url}}"], "path": ["api", "transactions", "{{transaction_id}}"] } }
+        }
+      ]
+    },
+    {
+      "name": "Messages (Chat)",
+      "item": [
+        {
+          "name": "Upload Chat Media",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": { "mode": "formdata", "formdata": [{ "key": "file", "type": "file", "src": [] }] },
+            "url": { "raw": "{{base_url}}/api/messages/upload", "host": ["{{base_url}}"], "path": ["api", "messages", "upload"] },
+            "description": "Javobdagi 'url' maydonini keyingi 'Send Message'da mediaUrl sifatida ishlating (to'liq {{base_url}} bilan qo'shib yuboring)."
+          }
+        },
+        {
+          "name": "List Messages",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/messages?userId={{user_id}}",
+              "host": ["{{base_url}}"], "path": ["api", "messages"],
+              "query": [{ "key": "userId", "value": "{{user_id}}" }]
+            },
+            "description": "Shu userId'ning barcha DM'lari + a'zo bo'lgan guruh xabarlarini qaytaradi."
+          }
+        },
+        {
+          "name": "Send Text Message (DM)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"fromUserId\": \"{{user_id}}\",\n  \"toUserId\": \"{{to_user_id}}\",\n  \"text\": \"Salom, bu test xabar\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{base_url}}/api/messages", "host": ["{{base_url}}"], "path": ["api", "messages"] }
+          }
+        },
+        {
+          "name": "Send Group Message",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"fromUserId\": \"{{user_id}}\",\n  \"groupId\": \"{{group_id}}\",\n  \"text\": \"Salom guruh!\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{base_url}}/api/messages", "host": ["{{base_url}}"], "path": ["api", "messages"] }
+          }
+        },
+        {
+          "name": "Send Media Message (rasm/video/ovoz/fayl)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fromUserId\": \"{{user_id}}\",\n  \"toUserId\": \"{{to_user_id}}\",\n  \"type\": \"image\",\n  \"text\": \"\\ud83d\\uddbc\\ufe0f Rasm\",\n  \"mediaUrl\": \"{{base_url}}/uploads/REPLACE_WITH_UPLOADED_FILENAME.jpg\",\n  \"fileName\": \"rasm.jpg\",\n  \"fileSize\": 12345\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/api/messages", "host": ["{{base_url}}"], "path": ["api", "messages"] },
+            "description": "type: image | video | audio | file | location. Avval 'Upload Chat Media' bilan faylni yuklab, qaytgan url'ni mediaUrl'ga qo'ying."
+          }
+        },
+        {
+          "name": "Send Location Message",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"fromUserId\": \"{{user_id}}\",\n  \"toUserId\": \"{{to_user_id}}\",\n  \"type\": \"location\",\n  \"text\": \"\\ud83d\\udccd Lokatsiya\",\n  \"location\": { \"lat\": 41.2995, \"lng\": 69.2401 }\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{base_url}}/api/messages", "host": ["{{base_url}}"], "path": ["api", "messages"] }
+          }
+        },
+        {
+          "name": "Mark Read",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"fromUserId\": \"{{to_user_id}}\",\n  \"toUserId\": \"{{user_id}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{base_url}}/api/messages/read", "host": ["{{base_url}}"], "path": ["api", "messages", "read"] },
+            "description": "fromUserId=xabar yuborgan, toUserId=hozir o'qiyotgan (siz). fromUserId'dan toUserId'ga kelgan barcha xabarlarni read=true qiladi."
+          }
+        },
+        {
+          "name": "Edit / Pin Message",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"text\": \"Tahrirlangan matn\",\n  \"pinned\": true\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{base_url}}/api/messages/{{message_id}}", "host": ["{{base_url}}"], "path": ["api", "messages", "{{message_id}}"] },
+            "description": "Faqat direktor/orinbosar/dasturchi tahrirlay/pin qila oladi."
+          }
+        },
+        {
+          "name": "Delete Message",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": { "raw": "{{base_url}}/api/messages/{{message_id}}", "host": ["{{base_url}}"], "path": ["api", "messages", "{{message_id}}"] },
+            "description": "Faqat direktor/orinbosar/dasturchi. Soft-delete (deleted=true, text=' ')."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Groups (Guruhlar)",
+      "item": [
+        {
+          "name": "List My Groups",
+          "request": {
+            "method": "GET", "header": [],
+            "url": { "raw": "{{base_url}}/api/groups?userId={{user_id}}", "host": ["{{base_url}}"], "path": ["api", "groups"], "query": [{ "key": "userId", "value": "{{user_id}}" }] }
+          }
+        },
+        {
+          "name": "Get/Create Dev-Support Group",
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (pm.response.code === 200) { pm.collectionVariables.set('group_id', pm.response.json().id); }"
+            ] } }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"companyId\": \"{{company_id}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{base_url}}/api/groups/dev-support", "host": ["{{base_url}}"], "path": ["api", "groups", "dev-support"] },
+            "description": "Oddiy foydalanuvchi tokeni bilan yuborsangiz companyId shart emas (o'z firmasidan olinadi). Dasturchi ({{dev_token}}) yuborsa body.companyId majburiy."
+          }
+        },
+        {
+          "name": "Create Group",
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (pm.response.code === 201) { pm.collectionVariables.set('group_id', pm.response.json().id); }"
+            ] } }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Test guruh\",\n  \"memberIds\": [\"{{to_user_id}}\"],\n  \"createdBy\": \"{{user_id}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{base_url}}/api/groups", "host": ["{{base_url}}"], "path": ["api", "groups"] }
+          }
+        },
+        {
+          "name": "Add Members",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"memberIds\": [\"{{to_user_id}}\"]\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{base_url}}/api/groups/{{group_id}}/members", "host": ["{{base_url}}"], "path": ["api", "groups", "{{group_id}}", "members"] }
+          }
+        },
+        {
+          "name": "Leave Group",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"userId\": \"{{user_id}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{base_url}}/api/groups/{{group_id}}/leave", "host": ["{{base_url}}"], "path": ["api", "groups", "{{group_id}}", "leave"] }
+          }
+        },
+        {
+          "name": "Update Group (name/avatar)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Yangi nom\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{base_url}}/api/groups/{{group_id}}", "host": ["{{base_url}}"], "path": ["api", "groups", "{{group_id}}"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "AI Assistant (faqat direktor/orinbosar)",
+      "item": [
+        {
+          "name": "Chat",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"message\": \"Nechta xodim bor?\",\n  \"history\": []\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{base_url}}/api/ai/chat", "host": ["{{base_url}}"], "path": ["api", "ai", "chat"] },
+            "description": "GROQ_API_KEY backend/.env da bo'lishi shart. Token egasi direktor/orinbosar/isOwner bo'lishi kerak (endi rol bazadan tekshiriladi, tokenning eski roli emas)."
+          }
+        },
+        {
+          "name": "Execute Action (tasdiqdan keyin)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": {\n    \"type\": \"send_message\",\n    \"toUserId\": \"{{to_user_id}}\",\n    \"text\": \"AI orqali yuborilgan test xabar\"\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{base_url}}/api/ai/execute", "host": ["{{base_url}}"], "path": ["api", "ai", "execute"] },
+            "description": "Odatda 'Chat' javobidagi action obyekti shu yerga qo'yiladi (foydalanuvchi tasdiqlagandan keyin)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Companies (faqat dasturchi)",
+      "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{dev_token}}", "type": "string" }] },
+      "item": [
+        {
+          "name": "List Companies",
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{base_url}}/api/companies", "host": ["{{base_url}}"], "path": ["api", "companies"] } }
+        },
+        {
+          "name": "Update Company",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Yangi firma nomi\",\n  \"status\": \"ACTIVE\",\n  \"plan\": \"PRO\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{base_url}}/api/companies/{{company_id}}", "host": ["{{base_url}}"], "path": ["api", "companies", "{{company_id}}"] },
+            "description": "status: PENDING | ACTIVE | SUSPENDED. plan: FREE | PRO | ENTERPRISE."
+          }
+        },
+        {
+          "name": "Delete Company (CASCADE — ehtiyot bo'ling!)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": { "raw": "{{base_url}}/api/companies/{{company_id}}", "host": ["{{base_url}}"], "path": ["api", "companies", "{{company_id}}"] },
+            "description": "QAYTARIB BO'LMAYDI: firmaning barcha user/object/material/transaction/message/group/subscription yozuvlarini o'chiradi. Faqat test firmalarida ishlating."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Subscriptions (faqat dasturchi)",
+      "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{dev_token}}", "type": "string" }] },
+      "item": [
+        {
+          "name": "List Subscriptions",
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{base_url}}/api/admin/subscriptions", "host": ["{{base_url}}"], "path": ["api", "admin", "subscriptions"] } }
+        },
+        {
+          "name": "Approve Subscription",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"selectedPlan\": \"1month\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{base_url}}/api/admin/subscriptions/{{subscription_id}}/approve", "host": ["{{base_url}}"], "path": ["api", "admin", "subscriptions", "{{subscription_id}}", "approve"] },
+            "description": "selectedPlan: bepul | 1month | 3month | 6month | 12month. days/amount ham qo'lda berib override qilish mumkin (ixtiyoriy)."
+          }
+        },
+        {
+          "name": "Reject Subscription",
+          "request": {
+            "method": "POST", "header": [],
+            "url": { "raw": "{{base_url}}/api/admin/subscriptions/{{subscription_id}}/reject", "host": ["{{base_url}}"], "path": ["api", "admin", "subscriptions", "{{subscription_id}}", "reject"] }
+          }
+        },
+        {
+          "name": "Renew Subscription",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"selectedPlan\": \"3month\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{base_url}}/api/admin/subscriptions/{{subscription_id}}/renew", "host": ["{{base_url}}"], "path": ["api", "admin", "subscriptions", "{{subscription_id}}", "renew"] },
+            "description": "Muddatni joriy tugash sanasidan (yoki bugundan, agar allaqachon tugagan bo'lsa) uzaytiradi."
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -183,7 +183,14 @@
 }
 
 /* ── Full-height root ────────────────────────────────────────────────── */
-html, body, #root { height: 100%; overflow: hidden; }
+/* width:100% + overflow-x:hidden explicitly (not just the overflow:hidden
+   shorthand) — a fixed-position child (any modal, the bottom nav, dropdowns
+   all use position:fixed) sits outside html/body's normal box and can still
+   force a horizontal rubber-band pan on mobile Safari/Chrome if its content
+   is ever a pixel wider than the viewport, even though overflow:hidden
+   already blocks a true scrollbar. overscroll-behavior-x:none kills that
+   rubber-band gesture outright regardless of the cause. */
+html, body, #root { height: 100%; width: 100%; overflow: hidden; overflow-x: hidden; overscroll-behavior-x: none; max-width: 100vw; }
 
 /* Matnni belgilash (select) faqat haqiqiy kiritish maydonlarida ishlasin —
    jadval/karta/xabar matnini uzoq bosib tasodifan belgilab qo'yish

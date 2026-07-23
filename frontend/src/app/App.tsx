@@ -562,6 +562,7 @@ function AddObjectModal({ users, onClose, onAdd }:
 // ─── Send Transfer Modal ───────────────────────────────────────────────────────
 function SendTransferModal({ currentUser, projects, allUsers, onClose, onSend, initialTransfer }:
   { currentUser: AppUser; projects: Project[]; allUsers: AppUser[]; onClose: () => void; onSend: (t: Transfer) => void; initialTransfer?: Partial<Transfer> }) {
+  const { t } = useTranslation();
   useModalPresence();
   type SelMat = { name: string; unit: string; quantity: string; price: string };
 
@@ -623,17 +624,17 @@ function SendTransferModal({ currentUser, projects, allUsers, onClose, onSend, i
     <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
       <div className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-sm max-h-[88vh] overflow-hidden animate-slide-up-fade flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-4 py-3.5 border-b border-border flex-shrink-0" style={{ background: "linear-gradient(to right, rgba(27,58,107,0.06), transparent)" }}>
-          <h3 className="font-bold text-sm flex items-center gap-2"><Send className="w-4 h-4 text-primary"/>Material Yuborish</h3>
-          <button aria-label="Yopish" onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted liquid-transition"><X className="w-4 h-4 text-muted-foreground"/></button>
+          <h3 className="font-bold text-sm flex items-center gap-2"><Send className="w-4 h-4 text-primary"/>{t('sendTransfer.title')}</h3>
+          <button aria-label={t('sendTransfer.close')} onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted liquid-transition"><X className="w-4 h-4 text-muted-foreground"/></button>
         </div>
         <form onSubmit={submit} className="flex flex-col flex-1 min-h-0">
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
           {/* Project */}
           <div>
-            <label className="text-[10px] font-bold block mb-1.5 text-muted-foreground uppercase tracking-wider">Obyekt *</label>
+            <label className="text-[10px] font-bold block mb-1.5 text-muted-foreground uppercase tracking-wider">{t('sendTransfer.objectLabel')}</label>
             <select className="w-full text-sm border border-border rounded-lg px-3 py-2.5 bg-input-background focus:outline-none"
               value={projectId} onChange={e => { setProjectId(e.target.value); setSelMats([]); setShowCustom(false); setCustomMats([{ name: "", unit: "", quantity: "1", price: "" }]); }} required>
-              <option value="">Tanlang...</option>
+              <option value="">{t('sendTransfer.selectPlaceholder')}</option>
               {myProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </div>
@@ -641,7 +642,7 @@ function SendTransferModal({ currentUser, projects, allUsers, onClose, onSend, i
           {/* Multi-select materials */}
           {selProj && (
             <div>
-              <label className="text-[11px] font-bold block mb-1.5 text-muted-foreground uppercase tracking-wider">Materiallar *</label>
+              <label className="text-[11px] font-bold block mb-1.5 text-muted-foreground uppercase tracking-wider">{t('sendTransfer.materialsLabel')}</label>
 
               {/* Tanlangan materiallar — yuqorida, hajmi/narxi bilan */}
               {selMats.length > 0 && (
@@ -657,13 +658,13 @@ function SendTransferModal({ currentUser, projects, allUsers, onClose, onSend, i
                       </div>
                       <div className="grid grid-cols-2 gap-2">
                         <div>
-                          <label className="text-[10px] text-muted-foreground block mb-1 font-semibold uppercase">Hajmi (miqdor)</label>
+                          <label className="text-[10px] text-muted-foreground block mb-1 font-semibold uppercase">{t('sendTransfer.quantityLabel')}</label>
                           <input type="number" min="1" placeholder="1"
                             className="w-full text-sm border border-border rounded-lg px-2.5 py-1.5 bg-input-background focus:outline-none shadow-sm"
                             value={sel.quantity} onChange={e => updateMat(sel.name, "quantity", e.target.value)}/>
                         </div>
                         <div>
-                          <label className="text-[10px] text-muted-foreground block mb-1 font-semibold uppercase">Narxi (so'm)</label>
+                          <label className="text-[10px] text-muted-foreground block mb-1 font-semibold uppercase">{t('sendTransfer.priceLabel')}</label>
                           <input type="number" min="0" placeholder="0"
                             className="w-full text-sm border border-border rounded-lg px-2.5 py-1.5 bg-input-background focus:outline-none shadow-sm"
                             value={sel.price} onChange={e => updateMat(sel.name, "price", e.target.value)}/>
@@ -681,7 +682,7 @@ function SendTransferModal({ currentUser, projects, allUsers, onClose, onSend, i
                   <div className="relative mb-2">
                     <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"/>
                     <input value={matSearch} onChange={e => setMatSearch(e.target.value)}
-                      placeholder="Material qidirish..."
+                      placeholder={t('sendTransfer.searchPlaceholder')}
                       className="w-full text-sm border border-border rounded-lg pl-9 pr-3 py-2.5 bg-input-background focus:outline-none"/>
                   </div>
 
@@ -693,7 +694,7 @@ function SendTransferModal({ currentUser, projects, allUsers, onClose, onSend, i
                       );
                       if (list.length === 0) return (
                         <div className="px-3 py-4 text-center text-xs text-muted-foreground">
-                          {q ? "Topilmadi — pastdan qo'lda kiriting" : selProj.requiredMaterials.length === 0 ? "Smeta yuklanmagan — qo'lda kiriting" : "Barchasi tanlandi"}
+                          {q ? t('sendTransfer.notFoundManual') : selProj.requiredMaterials.length === 0 ? t('sendTransfer.noSmeta') : t('sendTransfer.allSelected')}
                         </div>
                       );
                       return list.map(m => (
@@ -718,16 +719,16 @@ function SendTransferModal({ currentUser, projects, allUsers, onClose, onSend, i
                   <label className="flex items-center gap-2.5 px-3 py-2.5 cursor-pointer">
                     <input type="checkbox" checked={showCustom} onChange={e => setShowCustom(e.target.checked)}
                       className="w-4 h-4 accent-primary rounded flex-shrink-0"/>
-                    <span className="text-sm italic text-muted-foreground">Boshqa material...</span>
+                    <span className="text-sm italic text-muted-foreground">{t('sendTransfer.otherMaterialCheckbox')}</span>
                   </label>
                 ) : (
-                  <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider px-3 pt-3">Materialni yozib qo'shing</p>
+                  <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider px-3 pt-3">{t('sendTransfer.writeManually')}</p>
                 )}
                 {(showCustom || !canBrowseSmeta) && (
                     <div className="px-3 pb-3 space-y-4 border-t border-border/30 pt-3">
                       {customMats.map((cm, i) => (
                         <div key={i} className="space-y-2 relative pr-7 bg-muted/40 p-2 rounded-xl border border-border/40">
-                          <input placeholder="Material nomi *" required={(showCustom || !canBrowseSmeta) && i === 0}
+                          <input placeholder={t('sendTransfer.materialNamePlaceholder')} required={(showCustom || !canBrowseSmeta) && i === 0}
                             className="w-full text-sm border border-border rounded-lg px-2.5 py-1.5 bg-input-background focus:outline-none shadow-sm"
                             value={cm.name} onChange={e => {
                               const newMats = [...customMats];
@@ -742,7 +743,7 @@ function SendTransferModal({ currentUser, projects, allUsers, onClose, onSend, i
                             }}
                           />
                           <div className="grid grid-cols-3 gap-1.5">
-                            <input type="number" min="1" placeholder="Miqdor *" required={(showCustom || !canBrowseSmeta) && cm.name.trim() !== ""}
+                            <input type="number" min="1" placeholder={t('sendTransfer.quantityPlaceholder')} required={(showCustom || !canBrowseSmeta) && cm.name.trim() !== ""}
                               className="w-full text-sm border border-border rounded-lg px-2.5 py-1.5 bg-input-background focus:outline-none shadow-sm"
                               value={cm.quantity} onChange={e => {
                                 const newMats = [...customMats];
@@ -756,7 +757,7 @@ function SendTransferModal({ currentUser, projects, allUsers, onClose, onSend, i
                                 }
                               }}
                             />
-                            <input placeholder="O'lchov *" required={(showCustom || !canBrowseSmeta) && cm.name.trim() !== ""}
+                            <input placeholder={t('sendTransfer.unitPlaceholder')} required={(showCustom || !canBrowseSmeta) && cm.name.trim() !== ""}
                               className="w-full text-sm border border-border rounded-lg px-2.5 py-1.5 bg-input-background focus:outline-none shadow-sm"
                               value={cm.unit} onChange={e => {
                                 const newMats = [...customMats];
@@ -770,7 +771,7 @@ function SendTransferModal({ currentUser, projects, allUsers, onClose, onSend, i
                                 }
                               }}
                             />
-                            <input type="number" min="0" placeholder="Narx"
+                            <input type="number" min="0" placeholder={t('sendTransfer.pricePlaceholder')}
                               className="w-full text-sm border border-border rounded-lg px-2.5 py-1.5 bg-input-background focus:outline-none shadow-sm"
                               value={cm.price} onChange={e => {
                                 const newMats = [...customMats];
@@ -795,14 +796,14 @@ function SendTransferModal({ currentUser, projects, allUsers, onClose, onSend, i
                       ))}
                       <button type="button" onClick={() => setCustomMats([...customMats, { name: "", unit: "", quantity: "1", price: "" }])}
                         className="text-xs text-primary font-semibold flex items-center gap-1 mt-2 hover:underline">
-                        <Plus className="w-3 h-3"/> Yana qo'shish (Yoki Enter bosing)
+                        <Plus className="w-3 h-3"/> {t('sendTransfer.addMore')}
                       </button>
                     </div>
                   )}
                 </div>
               {selMats.length > 0 || customMats.some(m => m.name.trim()) ? (
                 <p className="mt-1.5 text-[10px] text-primary font-semibold flex items-center gap-1">
-                  <CheckCircle className="w-3 h-3"/>{selMats.length + customMats.filter(m => m.name.trim()).length} material tanlandi
+                  <CheckCircle className="w-3 h-3"/>{t('sendTransfer.materialsSelected', { count: selMats.length + customMats.filter(m => m.name.trim()).length })}
                 </p>
               ) : null}
             </div>
@@ -810,29 +811,29 @@ function SendTransferModal({ currentUser, projects, allUsers, onClose, onSend, i
 
           {/* Recipient */}
           <div>
-            <label className="text-[10px] font-bold block mb-1.5 text-muted-foreground uppercase tracking-wider">Kimga *</label>
+            <label className="text-[10px] font-bold block mb-1.5 text-muted-foreground uppercase tracking-wider">{t('sendTransfer.toLabel')}</label>
             <select className="w-full text-sm border border-border rounded-lg px-3 py-2.5 bg-input-background focus:outline-none"
               value={toUserId} onChange={e => setToUserId(e.target.value)} required>
-              <option value="">Tanlang...</option>
+              <option value="">{t('sendTransfer.selectPlaceholder')}</option>
               {targets.map(u => <option key={u.id} value={u.id}>{u.name} — {ROLE_LABELS[u.role]}</option>)}
             </select>
           </div>
 
           {/* Note */}
           <div>
-            <label className="text-[10px] font-bold block mb-1.5 text-muted-foreground uppercase tracking-wider">Izoh <span className="normal-case font-normal">(ixtiyoriy)</span></label>
+            <label className="text-[10px] font-bold block mb-1.5 text-muted-foreground uppercase tracking-wider">{t('sendTransfer.noteLabel')} <span className="normal-case font-normal">{t('sendTransfer.optional')}</span></label>
             <input className="w-full text-sm border border-border rounded-lg px-3 py-2.5 bg-input-background focus:outline-none"
-              placeholder="Qo'shimcha ma'lumot..." value={note} onChange={e => setNote(e.target.value)}/>
+              placeholder={t('sendTransfer.notePlaceholder')} value={note} onChange={e => setNote(e.target.value)}/>
           </div>
         </div>
 
           <div className="flex gap-2 p-4 pt-3 border-t border-border flex-shrink-0">
-            <button type="button" onClick={onClose} className="flex-1 text-sm border border-border rounded-xl px-3 py-2.5 hover:bg-muted liquid-transition font-medium">Bekor</button>
+            <button type="button" onClick={onClose} className="flex-1 text-sm border border-border rounded-xl px-3 py-2.5 hover:bg-muted liquid-transition font-medium">{t('sendTransfer.cancel')}</button>
             <button type="submit"
               disabled={selMats.length === 0 && !customMats.some(m => m.name.trim())}
               className="flex-1 text-sm text-white rounded-xl px-3 py-2.5 font-bold liquid-transition disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
               style={{ background: "linear-gradient(135deg, #1B3A6B 0%, #243F6E 100%)" }}>
-              Yuborish
+              {t('sendTransfer.submit')}
             </button>
           </div>
         </form>

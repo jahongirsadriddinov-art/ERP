@@ -2874,7 +2874,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
     return (
       <motion.div key={activePanel} initial={{ opacity: 0, x: 28 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 28 }}
         transition={{ type: "spring", stiffness: 380, damping: 34 }}
-        className="overflow-y-auto scrollbar-hide max-w-lg mx-auto w-full pb-10">
+        className="overflow-y-auto scrollbar-hide max-w-lg md:max-w-2xl xl:max-w-3xl mx-auto w-full pb-10">
         <div className="flex items-center gap-2 px-4 py-4 sticky top-0 bg-background/80 backdrop-blur-xl z-10">
           <button onClick={() => setActivePanel(null)} aria-label="Orqaga" className="btn btn-ghost w-9 h-9 p-0 rounded-full flex-shrink-0"><ChevronLeft className="w-5 h-5"/></button>
           <h2 className="text-base font-bold">{panelTitle}</h2>
@@ -2887,7 +2887,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
                 <span className="text-[10px] text-muted-foreground hidden sm:block">Butun site ga qo'llaniladi</span>
               </div>
               <div className="p-3">
-                <div className="grid grid-cols-4 sm:grid-cols-5 gap-2">
+                <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 xl:grid-cols-7 gap-2">
                   {BG_TEMPLATES.map(t => {
                     const isCurrent = t.id === "default" ? (!profileBg || profileBg === "") : profileBg === t.value;
                     return (
@@ -2928,7 +2928,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
           {activePanel === "color" && (
             <div className="surface overflow-hidden">
               <div className="px-3 py-3">
-                <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-6 gap-3">
                   {COLOR_THEMES.map(t => (
                     <button key={t.id} onClick={() => onColorThemeChange(t.id)} title={t.name}
                       className="flex flex-col items-center gap-1.5 group">

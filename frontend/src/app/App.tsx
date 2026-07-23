@@ -844,6 +844,7 @@ function SendTransferModal({ currentUser, projects, allUsers, onClose, onSend, i
 // ─── Add Expense Modal ─────────────────────────────────────────────────────────
 function AddExpenseModal({ currentUser, projects, allUsers, onClose, onAdd }:
   { currentUser: AppUser; projects: Project[]; allUsers: AppUser[]; onClose: () => void; onAdd: (e: Expense) => void }) {
+  const { t } = useTranslation();
   const [form, setForm] = useState({ type: "oylik" as ExpType, amount: "", projectId: projects[0]?.id || "", description: "", toUserId: "", date: new Date().toISOString().split("T")[0] });
   const [err, setErr] = useState("");
   const [boshqaRows, setBoshqaRows] = useState<{ name: string; price: string }[]>([{ name: "", price: "" }]);
@@ -856,7 +857,7 @@ function AddExpenseModal({ currentUser, projects, allUsers, onClose, onAdd }:
 
     if (form.type === "boshqa") {
       const valid = boshqaRows.filter(r => r.name.trim() && r.price);
-      if (valid.length === 0) { setErr("Kamida bitta material va narx kiritilishi shart"); return; }
+      if (valid.length === 0) { setErr(t('addExpense.errNeedMaterial')); return; }
       onAdd({
         id: `e${Date.now()}`,
         type: "boshqa",
@@ -872,8 +873,8 @@ function AddExpenseModal({ currentUser, projects, allUsers, onClose, onAdd }:
       return;
     }
 
-    if (!form.amount || +form.amount <= 0) { setErr("Summa kiritilishi shart"); return; }
-    if (form.type === "oylik" && !form.toUserId) { setErr("Oylik uchun xodimni tanlang"); return; }
+    if (!form.amount || +form.amount <= 0) { setErr(t('addExpense.errAmountRequired')); return; }
+    if (form.type === "oylik" && !form.toUserId) { setErr(t('addExpense.errSalaryRecipient')); return; }
     onAdd({
       id: `e${Date.now()}`,
       type: form.type,
@@ -892,8 +893,8 @@ function AddExpenseModal({ currentUser, projects, allUsers, onClose, onAdd }:
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-sm max-h-[88vh] overflow-y-auto scrollbar-hide animate-slide-up-fade" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-4 py-3.5 border-b border-border" style={{ background: "linear-gradient(to right, rgba(217,70,15,0.06), transparent)" }}>
-          <h3 className="font-bold text-sm flex items-center gap-2"><TrendingDown className="w-4 h-4 text-accent"/>Chiqim Qo'shish</h3>
-          <button aria-label="Yopish" onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted liquid-transition"><X className="w-4 h-4 text-muted-foreground"/></button>
+          <h3 className="font-bold text-sm flex items-center gap-2"><TrendingDown className="w-4 h-4 text-accent"/>{t('addExpense.title')}</h3>
+          <button aria-label={t('addExpense.close')} onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted liquid-transition"><X className="w-4 h-4 text-muted-foreground"/></button>
         </div>
         <form onSubmit={submit} className="p-4 space-y-3">
           {err && (
@@ -904,14 +905,14 @@ function AddExpenseModal({ currentUser, projects, allUsers, onClose, onAdd }:
 
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-[10px] font-bold block mb-1.5 text-muted-foreground uppercase tracking-wider">Tur *</label>
+              <label className="text-[10px] font-bold block mb-1.5 text-muted-foreground uppercase tracking-wider">{t('addExpense.typeLabel')}</label>
               <select className="w-full text-sm border border-border rounded-lg px-2.5 py-2.5 bg-input-background focus:outline-none"
                 value={form.type} onChange={e => { setErr(""); setForm({...form, type: e.target.value as ExpType, toUserId: "", description: ""}); }}>
                 {(Object.keys(EXP_LABELS) as ExpType[]).map(k => <option key={k} value={k}>{EXP_LABELS[k]}</option>)}
               </select>
             </div>
             <div>
-              <label className="text-[10px] font-bold block mb-1.5 text-muted-foreground uppercase tracking-wider">Sana *</label>
+              <label className="text-[10px] font-bold block mb-1.5 text-muted-foreground uppercase tracking-wider">{t('addExpense.dateLabel')}</label>
               <input type="date" className="w-full text-sm border border-border rounded-lg px-2.5 py-2.5 bg-input-background focus:outline-none"
                 value={form.date} onChange={e => setForm({...form, date: e.target.value})} required/>
             </div>
@@ -920,14 +921,14 @@ function AddExpenseModal({ currentUser, projects, allUsers, onClose, onAdd }:
           {/* Boshqa: dynamic material rows — replaces amount + description fields */}
           {form.type === "boshqa" ? (
             <div>
-              <label className="text-[10px] font-bold block mb-2 text-muted-foreground uppercase tracking-wider">Materiallar va narxlar</label>
+              <label className="text-[10px] font-bold block mb-2 text-muted-foreground uppercase tracking-wider">{t('addExpense.materialsLabel')}</label>
               <div className="space-y-2">
                 {boshqaRows.map((row, i) => (
                   <div key={i} className="flex gap-1.5 items-center">
-                    <input placeholder={`Material ${i + 1}`}
+                    <input placeholder={t('addExpense.materialPlaceholder', { n: i + 1 })}
                       className="flex-1 text-sm border border-border rounded-lg px-2.5 py-2 bg-input-background focus:outline-none"
                       value={row.name} onChange={e => { const r = [...boshqaRows]; r[i] = {...r[i], name: e.target.value}; setBoshqaRows(r); }}/>
-                    <input type="number" min="0" placeholder="Narx"
+                    <input type="number" min="0" placeholder={t('addExpense.pricePlaceholder')}
                       className="w-28 text-sm border border-border rounded-lg px-2.5 py-2 bg-input-background focus:outline-none"
                       value={row.price} onChange={e => { const r = [...boshqaRows]; r[i] = {...r[i], price: e.target.value}; setBoshqaRows(r); }}/>
                     {boshqaRows.length > 1 && (
@@ -941,11 +942,11 @@ function AddExpenseModal({ currentUser, projects, allUsers, onClose, onAdd }:
               </div>
               <button type="button" onClick={() => setBoshqaRows(r => [...r, { name: "", price: "" }])}
                 className="mt-2.5 flex items-center gap-1.5 text-sm text-primary hover:bg-primary/5 px-2.5 py-1.5 rounded-lg liquid-transition font-semibold">
-                <Plus className="w-3.5 h-3.5"/>Qo'shish
+                <Plus className="w-3.5 h-3.5"/>{t('addExpense.addRow')}
               </button>
               {boshqaTotal > 0 && (
                 <div className="mt-2.5 flex items-center justify-between p-3 rounded-xl border border-accent/20" style={{ background: "rgba(217,70,15,0.05)" }}>
-                  <span className="text-xs text-muted-foreground font-semibold">Jami to'lov:</span>
+                  <span className="text-xs text-muted-foreground font-semibold">{t('addExpense.totalPayment')}</span>
                   <span className="text-sm font-bold text-accent">{boshqaTotal.toLocaleString()} so'm</span>
                 </div>
               )}
@@ -953,26 +954,26 @@ function AddExpenseModal({ currentUser, projects, allUsers, onClose, onAdd }:
           ) : (
             <>
               <div>
-                <label className="text-[10px] font-bold block mb-1.5 text-muted-foreground uppercase tracking-wider">Summa (so'm) *</label>
+                <label className="text-[10px] font-bold block mb-1.5 text-muted-foreground uppercase tracking-wider">{t('addExpense.amountLabel')}</label>
                 <input type="number" min="1" className="w-full text-sm border border-border rounded-lg px-2.5 py-2.5 bg-input-background focus:outline-none"
-                  placeholder="5 000 000" value={form.amount} onChange={e => { setErr(""); setForm({...form, amount: e.target.value}); }} required/>
+                  placeholder={t('addExpense.amountPlaceholder')} value={form.amount} onChange={e => { setErr(""); setForm({...form, amount: e.target.value}); }} required/>
               </div>
               <div>
                 <label className="text-[10px] font-bold block mb-1.5 text-muted-foreground uppercase tracking-wider">
-                  Tavsif <span className="normal-case font-normal">(ixtiyoriy)</span>
+                  {t('addExpense.descLabel')} <span className="normal-case font-normal">{t('addExpense.optional')}</span>
                 </label>
                 <input className="w-full text-sm border border-border rounded-lg px-2.5 py-2.5 bg-input-background focus:outline-none"
-                  placeholder="To'lov maqsadi..." value={form.description} onChange={e => { setErr(""); setForm({...form, description: e.target.value}); }}/>
+                  placeholder={t('addExpense.descPlaceholder')} value={form.description} onChange={e => { setErr(""); setForm({...form, description: e.target.value}); }}/>
               </div>
             </>
           )}
 
           {projects.length > 0 && (
             <div>
-              <label className="text-[10px] font-bold block mb-1.5 text-muted-foreground uppercase tracking-wider">Obyekt</label>
+              <label className="text-[10px] font-bold block mb-1.5 text-muted-foreground uppercase tracking-wider">{t('addExpense.objectLabel')}</label>
               <select className="w-full text-sm border border-border rounded-lg px-2.5 py-2.5 bg-input-background focus:outline-none"
                 value={form.projectId} onChange={e => setForm({...form, projectId: e.target.value})}>
-                <option value="">— umumiy —</option>
+                <option value="">{t('addExpense.objectNone')}</option>
                 {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
             </div>
@@ -980,20 +981,20 @@ function AddExpenseModal({ currentUser, projects, allUsers, onClose, onAdd }:
 
           <div>
             <label className="text-[10px] font-bold block mb-1.5 text-muted-foreground uppercase tracking-wider">
-              Kimga {form.type === "oylik" ? <span className="text-accent normal-case">*</span> : <span className="normal-case font-normal">(ixtiyoriy)</span>}
+              {t('addExpense.toLabel')} {form.type === "oylik" ? <span className="text-accent normal-case">*</span> : <span className="normal-case font-normal">{t('addExpense.optional')}</span>}
             </label>
             <select className="w-full text-sm border border-border rounded-lg px-2.5 py-2.5 bg-input-background focus:outline-none"
               value={form.toUserId} onChange={e => { setErr(""); setForm({...form, toUserId: e.target.value}); }}>
-              <option value="">— tanlang —</option>
+              <option value="">{t('addExpense.toSelectPlaceholder')}</option>
               {allUsers.filter(u => u.id !== currentUser.id).map(u => <option key={u.id} value={u.id}>{u.name} ({ROLE_LABELS[u.role]})</option>)}
             </select>
           </div>
 
           <div className="flex gap-2 pt-1">
-            <button type="button" onClick={onClose} className="flex-1 text-sm border border-border rounded-xl px-3 py-2.5 hover:bg-muted liquid-transition font-medium">Bekor</button>
+            <button type="button" onClick={onClose} className="flex-1 text-sm border border-border rounded-xl px-3 py-2.5 hover:bg-muted liquid-transition font-medium">{t('addExpense.cancel')}</button>
             <button type="submit" className="flex-1 text-sm text-white rounded-xl px-3 py-2.5 font-bold liquid-transition shadow-sm"
               style={{ background: "linear-gradient(135deg, #D2440F 0%, #c03d0d 100%)" }}>
-              Qo'shish
+              {t('addExpense.submit')}
             </button>
           </div>
         </form>
@@ -1104,6 +1105,7 @@ function MyTransfersPanel({ currentUser, transfers, allUsers, projects, onConfir
 
 // ─── Edit User Modal ─────────────────────────────────────────────────────────────
 function EditUserModal({ user, currentUser, onClose, onUpdate }: { user: AppUser; currentUser: AppUser; onClose: () => void; onUpdate: (u: AppUser) => void }) {
+  const { t } = useTranslation();
   const [form, setForm] = useState({ name: user.name, role: user.role, phone: user.phone, brigade: user.brigade || "" });
   // "Direktor" va "dasturchi" lavozimini FAQAT dasturchi paneli o'zgartira oladi —
   // oddiy admin (direktor/o'rinbosar) tahrirlash oynasidan xodimni direktor yoki
@@ -1115,24 +1117,24 @@ function EditUserModal({ user, currentUser, onClose, onUpdate }: { user: AppUser
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-card rounded-lg border border-border shadow-xl w-full max-w-sm" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between p-4 border-b border-border">
-          <h3 className="font-semibold text-sm flex items-center gap-2"><Edit className="w-4 h-4 text-primary"/>Xodimni tahrirlash</h3>
-          <button aria-label="Yopish" onClick={onClose} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4 text-muted-foreground"/></button>
+          <h3 className="font-semibold text-sm flex items-center gap-2"><Edit className="w-4 h-4 text-primary"/>{t('editUser.title')}</h3>
+          <button aria-label={t('editUser.close')} onClick={onClose} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4 text-muted-foreground"/></button>
         </div>
         <form onSubmit={e => { e.preventDefault(); onUpdate({...user, ...form}); onClose(); }} className="p-4 space-y-3">
           <div>
-            <label className="text-sm md:text-xs font-medium block mb-1">To'liq ism *</label>
+            <label className="text-sm md:text-xs font-medium block mb-1">{t('editUser.nameLabel')}</label>
             <input className="w-full text-sm md:text-xs border border-border rounded px-2.5 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
-              placeholder="Masalan: Aliyev Vali" value={form.name} onChange={e => setForm({...form, name: e.target.value})} required autoFocus
+              placeholder={t('editUser.namePlaceholder')} value={form.name} onChange={e => setForm({...form, name: e.target.value})} required autoFocus
               disabled={!(currentUser.role === 'direktor' || currentUser.role === 'orinbosar')} />
           </div>
           <div>
-            <label className="text-sm md:text-xs font-medium block mb-1">Telefon *</label>
+            <label className="text-sm md:text-xs font-medium block mb-1">{t('editUser.phoneLabel')}</label>
             <input className="w-full text-sm md:text-xs border border-border rounded px-2.5 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary font-mono disabled:opacity-50"
               placeholder="+998901234567" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} required
               disabled={!(currentUser.role === 'direktor' || currentUser.role === 'orinbosar')} />
           </div>
           <div>
-            <label className="text-sm md:text-xs font-medium block mb-1">Lavozim</label>
+            <label className="text-sm md:text-xs font-medium block mb-1">{t('editUser.positionLabel')}</label>
             <select className="w-full text-sm md:text-xs border border-border rounded px-2.5 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary"
               value={form.role} onChange={e => setForm({...form, role: e.target.value as Role})}>
               {editableRoles.map(r => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
@@ -1141,14 +1143,14 @@ function EditUserModal({ user, currentUser, onClose, onUpdate }: { user: AppUser
           </div>
           {["ishchi", "brigadir"].includes(form.role) && (
             <div>
-              <label className="text-sm md:text-xs font-medium block mb-1">Brigada nomi (masalan: G'isht teruvchilar)</label>
+              <label className="text-sm md:text-xs font-medium block mb-1">{t('editUser.brigadeLabel')}</label>
               <input className="w-full text-sm md:text-xs border border-border rounded px-2.5 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary"
                 value={form.brigade} onChange={e => setForm({...form, brigade: e.target.value})}/>
             </div>
           )}
           <div className="flex gap-2 pt-1">
-            <button type="button" onClick={onClose} className="flex-1 text-sm md:text-xs border border-border rounded px-3 py-2 hover:bg-muted transition-colors">Bekor</button>
-            <button type="submit" className="flex-1 text-sm md:text-xs bg-primary text-white rounded px-3 py-2 hover:bg-primary/90 font-semibold">Saqlash</button>
+            <button type="button" onClick={onClose} className="flex-1 text-sm md:text-xs border border-border rounded px-3 py-2 hover:bg-muted transition-colors">{t('editUser.cancel')}</button>
+            <button type="submit" className="flex-1 text-sm md:text-xs bg-primary text-white rounded px-3 py-2 hover:bg-primary/90 font-semibold">{t('editUser.save')}</button>
           </div>
         </form>
       </div>

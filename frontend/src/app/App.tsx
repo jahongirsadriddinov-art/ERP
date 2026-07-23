@@ -149,6 +149,42 @@ export const EXP_LABELS: Record<ExpType, string> = {
 };
 export const CHART_COLORS = ["#1B3A6B", "#D2440F", "#1B7A4B", "#F0A500", "#7B2D8B"];
 export const fmt = (n?: number) => (n || 0).toLocaleString("uz-UZ") + " so'm";
+
+// CSV eksport — Excel'da to'g'ridan-to'g'ri ochiladi. Uchinchi tomon xlsx
+// kutubxonasi ATAYLAB ishlatilmadi (npm'dagi "xlsx" paketida tuzatilmagan
+// xavfsizlik zaifligi bor — prototype pollution/ReDoS, hech qanday fix yo'q).
+// CSV hech qanday tashqi kodsiz, xavfsiz va Excel/Google Sheets/LibreOffice
+// hammasida bir xil ochiladi. BOM — Excel'da o'zbek/rus harflari to'g'ri
+// (krakozyabra bo'lmasdan) ko'rinishi uchun shart.
+function csvCell(v: string | number): string {
+  const s = String(v ?? "");
+  return /[",\n;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+export function downloadCsv(filename: string, headers: string[], rows: (string | number)[][]) {
+  const lines = [headers, ...rows].map(r => r.map(csvCell).join(";"));
+  const blob = new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+export function exportExpensesToCsv(expenses: Expense[], users: AppUser[], projects: Project[], filename: string) {
+  const headers = ["Sana", "Tavsif", "Turi", "Kimga", "Obyekt", "Summa (so'm)", "Holati", "Kim qo'shdi", "Kim tasdiqladi"];
+  const rows = expenses.map(e => {
+    const to = users.find(u => u.id === e.toUserId);
+    const proj = projects.find(p => p.id === e.projectId);
+    const creator = users.find(u => u.id === e.createdById);
+    const confirmer = users.find(u => u.id === e.confirmedById);
+    return [
+      e.date, e.description || EXP_LABELS[e.type], EXP_LABELS[e.type],
+      to?.name || "-", proj?.name || "-", e.amount,
+      e.status === "confirmed" ? "Tasdiqlangan" : "Kutilmoqda",
+      creator?.name || "-", confirmer?.name || "-",
+    ];
+  });
+  downloadCsv(filename, headers, rows);
+}
 export const isAdmin = (r: Role) => r === "direktor" || r === "orinbosar" || r === "dasturchi";
 const DEV_PHONE = "+998900960890"; // dasturchi raqami — parol bilan kiradi (Telegram kod emas)
 
@@ -1836,6 +1872,7 @@ function FinancePage({ currentUser, users, projects, expenses, onAddExpense, onC
   const [showAdd, setShowAdd] = useState(false);
   const [filter, setFilter] = useState<"all"|ExpType>("all");
   const [projFilter, setProjFilter] = useState("all");
+  const [detailExp, setDetailExp] = useState<Expense|null>(null);
 
   const filteredExpenses = expenses.filter(e => (filter==="all"||e.type===filter) && (projFilter==="all"||e.projectId===projFilter));
 
@@ -1885,13 +1922,13 @@ function FinancePage({ currentUser, users, projects, expenses, onAddExpense, onC
               const creator=users.find(u=>u.id===e.createdById);
               const canConfirm=e.toUserId===currentUser.id&&e.status==="pending";
               return (
-                <div key={e.id} className="surface rounded-2xl p-3 text-sm md:text-xs" style={{ borderLeft: `4px solid ${e.status==="confirmed"?"#22c55e":"#f59e0b"}` }}>
+                <button key={e.id} onClick={()=>setDetailExp(e)} className="w-full text-left surface rounded-2xl p-3 text-sm md:text-xs hover:bg-muted/20 liquid-transition" style={{ borderLeft: `4px solid ${e.status==="confirmed"?"#22c55e":"#f59e0b"}` }}>
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 mb-1">
                         <span className={`text-[9px] px-1.5 py-0.5 rounded font-semibold ${typeClr[e.type] || "bg-muted text-muted-foreground"}`}>{EXP_LABELS[e.type as ExpType] || e.type}</span>
                       </div>
-                      <p className="font-semibold text-foreground">{e.description}</p>
+                      <p className="font-semibold text-foreground">{e.description || EXP_LABELS[e.type as ExpType]}</p>
                       <p className="text-sm md:text-xs text-muted-foreground mt-0.5">{proj?.name || "—"} • {e.date}</p>
                       {to&&<p className="text-sm md:text-xs text-muted-foreground">{t('finance.to')} <span className="font-medium">{to.name}</span></p>}
                       {creator&&<p className="text-sm md:text-xs text-muted-foreground">{t('finance.createdBy')} {creator.name}</p>}
@@ -1903,14 +1940,59 @@ function FinancePage({ currentUser, users, projects, expenses, onAddExpense, onC
                         :<p className="text-[9px] text-amber-800 dark:text-amber-400 font-semibold mt-1 flex items-center gap-0.5 justify-end"><Clock className="w-2.5 h-2.5"/>{t('finance.pending')}</p>}
                     </div>
                   </div>
-                  {canConfirm&&<button onClick={()=>onConfirm(e.id)} className="mt-2 w-full text-sm md:text-xs bg-green-600 text-white rounded py-1.5 hover:bg-green-700 font-semibold flex items-center justify-center gap-1"><Check className="w-3 h-3"/>{t('finance.confirmAction')}</button>}
-                </div>
+                  {canConfirm&&<button onClick={e2=>{e2.stopPropagation();onConfirm(e.id);}} className="mt-2 w-full text-sm md:text-xs bg-green-600 text-white rounded py-1.5 hover:bg-green-700 font-semibold flex items-center justify-center gap-1"><Check className="w-3 h-3"/>{t('finance.confirmAction')}</button>}
+                </button>
               );
             })
         }
       </div>
 
       {showAdd&&<AddExpenseModal currentUser={currentUser} projects={projects} allUsers={users} onClose={()=>setShowAdd(false)} onAdd={onAddExpense}/>}
+      {detailExp&&<ExpenseDetailModal expense={detailExp} users={users} projects={projects} onClose={()=>setDetailExp(null)}/>}
+    </div>
+  );
+}
+
+function ExpenseDetailModal({ expense, users, projects, onClose }: { expense: Expense; users: AppUser[]; projects: Project[]; onClose: () => void }) {
+  const { t } = useTranslation();
+  const to = users.find(u => u.id === expense.toUserId);
+  const proj = projects.find(p => p.id === expense.projectId);
+  const creator = users.find(u => u.id === expense.createdById);
+  const confirmer = users.find(u => u.id === expense.confirmedById);
+  const rows: [string, string][] = [
+    [t('reports.table.date'), expense.date],
+    [t('reports.table.type'), EXP_LABELS[expense.type]],
+    [t('finance.to'), to?.name || "—"],
+    [t('reports.table.project'), proj?.name || "—"],
+    [t('finance.createdBy'), creator?.name || "—"],
+    ...(confirmer ? [[t('finance.confirmedBy'), confirmer.name] as [string, string]] : []),
+  ];
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-sm overflow-hidden animate-slide-up-fade" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-4 py-3.5 border-b border-border" style={{ background: "linear-gradient(to right, rgba(217,70,15,0.06), transparent)" }}>
+          <h3 className="font-bold text-sm flex items-center gap-2"><Wallet className="w-4 h-4 text-accent"/>{t('finance.detailTitle')}</h3>
+          <button aria-label={t('common.close')} onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted liquid-transition"><X className="w-4 h-4 text-muted-foreground"/></button>
+        </div>
+        <div className="p-4 space-y-3">
+          <div>
+            <p className="text-base font-bold text-foreground">{expense.description || EXP_LABELS[expense.type]}</p>
+            <p className="text-lg font-bold text-accent font-mono mt-1">{fmt(expense.amount)}</p>
+          </div>
+          <div className="surface divide-y divide-border/50 overflow-hidden">
+            {rows.map(([label, value]) => (
+              <div key={label} className="flex items-center justify-between px-3 py-2 text-sm md:text-xs">
+                <span className="text-muted-foreground">{label}</span>
+                <span className="font-medium text-foreground">{value}</span>
+              </div>
+            ))}
+          </div>
+          <button onClick={() => exportExpensesToCsv([expense], users, projects, `chiqim_${expense.date}.csv`)}
+            className="btn btn-outline w-full flex items-center justify-center gap-1.5 text-sm md:text-xs py-2.5 rounded-full">
+            <Download className="w-3.5 h-3.5"/>{t('reports.exportExcel')}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

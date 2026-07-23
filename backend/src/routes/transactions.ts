@@ -157,6 +157,7 @@ router.patch('/:id/confirm', async (req, res) => {
             description: `Material: ${tx.materialName} (${tx.quantity} ${tx.unit})`,
             projectId: tx.projectId,
             createdById: tx.fromUserId,
+            toUserId: tx.toUserId,
             confirmedById: actingUserId,
             confirmedDate: tx.confirmedDate,
             sourceTransferId: String(tx._id),

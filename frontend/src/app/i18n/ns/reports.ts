@@ -18,6 +18,10 @@ export const uz = {
       project: "Obyekt",
       amount: "Summa",
     },
+    dateFrom: "Dan",
+    dateTo: "Gacha",
+    exportExcel: "Excel'ga yuklab olish",
+    exportEmpty: "Tanlangan davrda hisobot yo'q",
   },
 };
 
@@ -41,5 +45,9 @@ export const ru = {
       project: "Объект",
       amount: "Сумма",
     },
+    dateFrom: "С",
+    dateTo: "По",
+    exportExcel: "Скачать в Excel",
+    exportEmpty: "За выбранный период отчётов нет",
   },
 };

@@ -233,6 +233,8 @@ const uz = {
     confirmed: "Tasdiqlandi",
     pending: "Kutilmoqda",
     confirmAction: "Qabul qilganman — Tasdiqlash",
+    detailTitle: "Chiqim tafsilotlari",
+    confirmedBy: "Kim tasdiqladi:",
   },
   chat: {
     play: "Ijro etish",
@@ -518,6 +520,8 @@ const ru: TranslationShape = {
     confirmed: "Подтверждено",
     pending: "Ожидает",
     confirmAction: "Я принял — Подтвердить",
+    detailTitle: "Детали расхода",
+    confirmedBy: "Кто подтвердил:",
   },
   chat: {
     play: "Воспроизвести",

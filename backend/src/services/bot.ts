@@ -758,6 +758,7 @@ bot.on('callback_query', async (query: any) => {
               description: `Material: ${tx.materialName} (${tx.quantity} ${tx.unit})`,
               projectId: tx.projectId,
               createdById: tx.fromUserId,
+              toUserId: tx.toUserId,
               confirmedById: tx.confirmedById,
               confirmedDate: tx.confirmedDate,
               sourceTransferId: String(tx._id),

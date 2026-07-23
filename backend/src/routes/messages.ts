@@ -86,7 +86,7 @@ const shape = (m: any) => ({ ...m.toObject(), id: m._id });
 // rasm/video/ovoz/fayl/lokatsiya sifatida) qayta jo'natadi — mediaUrl allaqachon
 // ochiq /uploads orqali xizmat qilinayotgani uchun qayta yuklab olish shart emas,
 // Telegram Bot API to'g'ridan-to'g'ri URL qabul qiladi.
-async function relayMessageToTelegram(chatId: string, senderName: string, m: {
+export async function relayMessageToTelegram(chatId: string, senderName: string, m: {
   text?: string; type?: string; mediaUrl?: string; location?: { lat: number; lng: number };
 }) {
   try {

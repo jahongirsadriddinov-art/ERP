@@ -6,6 +6,7 @@ import User from '../models/User';
 import ObjectModel from '../models/Object';
 import Message from '../models/Message';
 import { emitToUser } from '../services/socket';
+import { relayMessageToTelegram } from './messages';
 
 const router = Router();
 
@@ -26,7 +27,7 @@ async function groqChat(systemPrompt: string, messages: Array<{ role: string; co
       model: GROQ_MODEL,
       messages: [{ role: 'system', content: systemPrompt }, ...messages],
       temperature: 0.1,
-      max_tokens: 512,
+      max_tokens: 1024,
       response_format: { type: 'json_object' },
     }),
   });
@@ -148,6 +149,14 @@ router.post('/execute', requireAuth, requireBoss, async (req, res) => {
       const { toUserId, text } = action;
       if (!toUserId || !text?.trim()) return res.status(400).json({ error: 'Qabul qiluvchi va matn kerak' });
 
+      // AI modeldan kelgan toUserId'ni ko'r-ko'rona ishonib bo'lmaydi — model
+      // uzun ID'ni noto'g'ri ko'chirib yozishi yoki xayoliy ID chiqarishi mumkin
+      // (LLM'larda ma'lum muammo). Tekshirmasdan yozilsa, xabar HECH KIMGA
+      // yetib bormagan holda "muvaffaqiyatli yuborildi" deb ko'rsatilardi —
+      // buyruq "bajarilgandek" ko'rinib, aslida hech narsa bo'lmagan bo'lardi.
+      const recipient = await User.findOne(scoped({ _id: String(toUserId) })).select('_id telegramChatId language').lean();
+      if (!recipient) return res.status(404).json({ error: "Qabul qiluvchi topilmadi — ro'yxatdan qayta tanlab ko'ring" });
+
       const t = getTenant();
       const fromUserId = String(t?.userId || req.user!.userId);
 
@@ -162,6 +171,17 @@ router.post('/execute', requireAuth, requireBoss, async (req, res) => {
       const payload = { ...msg.toObject(), id: msg._id };
       emitToUser(String(toUserId), 'message:new', payload);
       emitToUser(fromUserId, 'message:new', payload);
+
+      // Oddiy chatdagi kabi — qabul qiluvchi saytda bo'lmasa ham Telegram orqali
+      // xabar topsin (async, javobni kutmaymiz).
+      if (recipient.telegramChatId) {
+        User.findById(fromUserId).select('firstName lastName').lean()
+          .then(sender => {
+            const senderName = sender ? `${sender.firstName} ${sender.lastName || ''}`.trim() : 'AI yordamchi';
+            return relayMessageToTelegram(recipient.telegramChatId!, senderName, { text: text.trim(), type: 'text' });
+          })
+          .catch(() => {});
+      }
 
       return res.json({ ok: true, result: 'Xabar muvaffaqiyatli yuborildi' });
     }

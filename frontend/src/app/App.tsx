@@ -472,6 +472,7 @@ function AddUserModal({ currentUser, users, projects, onClose, onAdd }:
 // ─── Add Object Modal ────────────────────────────────────────────────────────
 function AddObjectModal({ users, onClose, onAdd }:
   { users: AppUser[]; onClose: () => void; onAdd: (p: Project) => void }) {
+  const { t } = useTranslation();
   const [form, setForm] = useState({ name: "", budget: "", location: "", foremanId: "" });
   const [smeta, setSmeta] = useState<File|null>(null);
   const [loading, setLoading] = useState(false);
@@ -494,14 +495,14 @@ function AddObjectModal({ users, onClose, onAdd }:
 
       let smetaResult: SmetaResult | undefined;
       if (smeta) {
-        setSmetaMsg('Smeta tahlil qilinmoqda...');
+        setSmetaMsg(t('addObject.smetaAnalyzing'));
         try {
           smetaResult = await parseSmetaFile(smeta, obj.id || obj._id);
           finalMats = smetaResult!.resources.filter(r => r.group === 'material');
           finalBudget = smetaResult!.meta?.totalWithoutVat ?? finalBudget;
         } catch (e) {
           // Obyekt yaratildi, lekin smeta o'qilmadi — ogohlantirib davom etamiz
-          setSmetaMsg((e as Error).message || 'Smeta o\'qilmadi');
+          setSmetaMsg((e as Error).message || t('addObject.smetaParseFailed'));
         }
       }
 
@@ -518,7 +519,7 @@ function AddObjectModal({ users, onClose, onAdd }:
       };
       onAdd(newP);
     } catch(err) {
-      alert("Xatolik");
+      toast.error(t('addObject.error'));
     } finally {
       setLoading(false);
     }
@@ -528,31 +529,31 @@ function AddObjectModal({ users, onClose, onAdd }:
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-card rounded-2xl shadow-2xl w-full max-w-sm animate-slide-up-fade" onClick={e=>e.stopPropagation()}>
         <div className="flex items-center justify-between px-4 py-3.5 border-b border-border" style={{ background: "linear-gradient(to right, rgba(217,70,15,0.06), transparent)" }}>
-          <h3 className="font-bold text-sm flex items-center gap-2"><Package className="w-4 h-4 text-accent"/>Yangi Obyekt</h3>
-          <button aria-label="Yopish" onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted liquid-transition"><X className="w-4 h-4 text-muted-foreground"/></button>
+          <h3 className="font-bold text-sm flex items-center gap-2"><Package className="w-4 h-4 text-accent"/>{t('addObject.title')}</h3>
+          <button aria-label={t('addObject.close')} onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted liquid-transition"><X className="w-4 h-4 text-muted-foreground"/></button>
         </div>
         <form onSubmit={handleSubmit} className="p-4 space-y-3">
-          <div><label className="text-sm md:text-xs font-medium block mb-1">Nomi *</label><input className="w-full text-sm md:text-xs border border-border rounded px-3 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary" placeholder="Masalan: 5-uy qurilishi" value={form.name} onChange={e=>setForm({...form,name:e.target.value})} required/></div>
-          <div><label className="text-sm md:text-xs font-medium block mb-1">Manzil</label><input className="w-full text-sm md:text-xs border border-border rounded px-3 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary" placeholder="Toshkent sh..." value={form.location} onChange={e=>setForm({...form,location:e.target.value})}/></div>
-          <div><label className="text-sm md:text-xs font-medium block mb-1">Budjet (so'm)</label><input type="number" className="w-full text-sm md:text-xs border border-border rounded px-3 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary" placeholder="50000000" value={form.budget} onChange={e=>setForm({...form,budget:e.target.value})}/></div>
+          <div><label className="text-sm md:text-xs font-medium block mb-1">{t('addObject.nameLabel')}</label><input className="w-full text-sm md:text-xs border border-border rounded px-3 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary" placeholder={t('addObject.namePlaceholder')} value={form.name} onChange={e=>setForm({...form,name:e.target.value})} required/></div>
+          <div><label className="text-sm md:text-xs font-medium block mb-1">{t('addObject.locationLabel')}</label><input className="w-full text-sm md:text-xs border border-border rounded px-3 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary" placeholder={t('addObject.locationPlaceholder')} value={form.location} onChange={e=>setForm({...form,location:e.target.value})}/></div>
+          <div><label className="text-sm md:text-xs font-medium block mb-1">{t('addObject.budgetLabel')}</label><input type="number" className="w-full text-sm md:text-xs border border-border rounded px-3 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary" placeholder="50000000" value={form.budget} onChange={e=>setForm({...form,budget:e.target.value})}/></div>
           <div>
-            <label className="text-sm md:text-xs font-medium block mb-1">Prorab biriktirish</label>
+            <label className="text-sm md:text-xs font-medium block mb-1">{t('addObject.foremanLabel')}</label>
             <select className="w-full text-sm md:text-xs border border-border rounded px-3 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary" value={form.foremanId} onChange={e=>setForm({...form,foremanId:e.target.value})}>
-              <option value="">— tanlang —</option>
+              <option value="">{t('addObject.selectPlaceholder')}</option>
               {users.filter(u=>u.role==="prorab").map(u=><option key={u.id} value={u.id}>{u.name}</option>)}
             </select>
           </div>
           <div>
-            <label className="text-sm md:text-xs font-medium block mb-1">Smeta yuklash (ixtiyoriy)</label>
+            <label className="text-sm md:text-xs font-medium block mb-1">{t('addObject.smetaLabel')}</label>
             <input type="file" accept=".pdf" className="w-full text-sm md:text-xs border border-border rounded px-3 py-1.5 bg-input-background file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-sm md:text-xs file:bg-primary file:text-white hover:file:bg-primary/90" onChange={e=>setSmeta(e.target.files?.[0]||null)}/>
             {loading && smeta && (
               <div className="mt-2">
-                <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground"><Loader2 className="w-3 h-3 animate-spin"/>{smetaMsg || 'Yuklanmoqda...'}</div>
+                <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground"><Loader2 className="w-3 h-3 animate-spin"/>{smetaMsg || t('addObject.smetaLoading')}</div>
                 {smetaPercent > 0 && <div className="w-full bg-muted rounded-full h-1 mt-1"><div className="bg-accent h-1 rounded-full liquid-transition" style={{width:`${smetaPercent}%`}}/></div>}
               </div>
             )}
           </div>
-          <div className="flex gap-2 pt-1"><button type="button" onClick={onClose} className="flex-1 text-sm md:text-xs border border-border rounded px-3 py-2 hover:bg-muted">Bekor</button><button type="submit" disabled={loading} className="flex-1 text-sm md:text-xs bg-accent text-white rounded px-3 py-2 font-semibold hover:bg-accent/90">{loading?'Yuklanmoqda...':"Qo'shish"}</button></div>
+          <div className="flex gap-2 pt-1"><button type="button" onClick={onClose} className="flex-1 text-sm md:text-xs border border-border rounded px-3 py-2 hover:bg-muted">{t('addObject.cancel')}</button><button type="submit" disabled={loading} className="flex-1 text-sm md:text-xs bg-accent text-white rounded px-3 py-2 font-semibold hover:bg-accent/90">{loading?t('addObject.smetaLoading'):t('addObject.submit')}</button></div>
         </form>
       </div>
     </div>
@@ -2643,6 +2644,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
 // ─── Yangi guruh modal ──────────────────────────────────────────────────────────
 function GroupCreateModal({ contacts, onClose, onCreate }:
   { contacts: AppUser[]; onClose: () => void; onCreate: (name: string, memberIds: string[]) => void }) {
+  const { t } = useTranslation();
   useModalPresence();
   const [name, setName] = useState("");
   const [sel, setSel] = useState<Set<string>>(new Set());
@@ -2653,14 +2655,14 @@ function GroupCreateModal({ contacts, onClose, onCreate }:
     <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/40 modal-backdrop animate-fade-in" onClick={onClose}>
       <div className="glass-modal rounded-t-3xl sm:rounded-2xl w-full max-w-sm p-5 animate-slide-up-fade" onClick={e=>e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
-          <h3 className="font-bold text-sm flex items-center gap-2"><Users2 className="w-4 h-4 text-primary"/>Yangi guruh</h3>
-          <button aria-label="Yopish" onClick={onClose} className="p-1.5 hover:bg-muted rounded-full"><X className="w-4 h-4"/></button>
+          <h3 className="font-bold text-sm flex items-center gap-2"><Users2 className="w-4 h-4 text-primary"/>{t('groupCreate.title')}</h3>
+          <button aria-label={t('groupCreate.close')} onClick={onClose} className="p-1.5 hover:bg-muted rounded-full"><X className="w-4 h-4"/></button>
         </div>
-        <input value={name} onChange={e=>setName(e.target.value)} placeholder="Guruh nomi *" autoFocus
+        <input value={name} onChange={e=>setName(e.target.value)} placeholder={t('groupCreate.namePlaceholder')} autoFocus
           className="w-full text-sm border border-border rounded-lg px-3 py-2.5 bg-input-background focus:outline-none mb-2"/>
         <div className="relative mb-2">
           <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"/>
-          <input value={q} onChange={e=>setQ(e.target.value)} placeholder="A'zo qidirish..." className="w-full text-sm border border-border rounded-lg pl-9 pr-3 py-2 bg-input-background focus:outline-none"/>
+          <input value={q} onChange={e=>setQ(e.target.value)} placeholder={t('groupCreate.searchPlaceholder')} className="w-full text-sm border border-border rounded-lg pl-9 pr-3 py-2 bg-input-background focus:outline-none"/>
         </div>
         <div className="space-y-1 max-h-56 overflow-y-auto scrollbar-hide mb-3">
           {filtered.map(u => (
@@ -2673,7 +2675,7 @@ function GroupCreateModal({ contacts, onClose, onCreate }:
           ))}
         </div>
         <button disabled={!name.trim() || sel.size===0} onClick={()=>onCreate(name.trim(), Array.from(sel))}
-          className="btn btn-primary w-full py-2.5 disabled:opacity-40">Yaratish ({sel.size})</button>
+          className="btn btn-primary w-full py-2.5 disabled:opacity-40">{t('groupCreate.submit', { count: sel.size })}</button>
       </div>
     </div>
   );

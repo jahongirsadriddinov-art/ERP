@@ -185,18 +185,41 @@
 /* ── Full-height root ────────────────────────────────────────────────── */
 html, body, #root { height: 100%; overflow: hidden; }
 
+/* Matnni belgilash (select) faqat haqiqiy kiritish maydonlarida ishlasin —
+   jadval/karta/xabar matnini uzoq bosib tasodifan belgilab qo'yish
+   (ayniqsa mobil/planshetda) UX'ni buzadi. Ikki marta bosganda brauzer
+   avtomatik zoom qilishining oldi ham olinadi — pinch (ikki barmoq bilan)
+   zoom bunga ta'sir qilmaydi, u alohida gesture va viewport meta'da
+   cheklanmagan. */
 body {
   background: var(--background);
   -webkit-tap-highlight-color: transparent;
   -webkit-touch-callout: none;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+}
+input, textarea, [contenteditable="true"], [contenteditable=""] {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 /* ── with-bg context (foydalanuvchi rasm fon qo'ygan) ─────────────────── */
 /* Yuzalar yetarlicha quyuq bo'lsin — fon-rasm ustida matn o'qilishi shart. */
+/* MUHIM: Tailwind opasity-modifikatorli klasslar (masalan "bg-background/50",
+   "bg-card/60") DOM'da xuddi shu satr sifatida chiqadi, lekin CSS'da
+   ".bg-background" oddiy klass selektori bunday nomlarni umuman
+   TUTMAYDI — chunki generatsiya qilingan haqiqiy klass nomi
+   ".bg-background\/50" (boshqa selektor). Natijada bu skrim qoidalari
+   shunday elementlarda ishlamay qolar, foydalanuvchi tanlagan fon (ayniqsa
+   yorqin surat/gradient) ustida matn o'qib bo'lmas darajada xira ko'rinardi
+   (masalan bo'sh chat paneli, Profil bo'lim kartalari). Substring
+   ([class*=]) selektor barcha variantlarni (bilan yoki opacity
+   qo'shimchasisiz) birdek tutadi.                                        */
 .with-bg header { background: color-mix(in srgb, var(--card) 90%, transparent) !important; backdrop-filter: blur(28px) saturate(1.6) !important; -webkit-backdrop-filter: blur(28px) saturate(1.6) !important; }
-.with-bg .glass-card, .with-bg .bg-card, .with-bg .surface, .with-bg .stat-card { background: color-mix(in srgb, var(--card) 94%, transparent) !important; backdrop-filter: blur(16px) !important; -webkit-backdrop-filter: blur(16px) !important; }
-.with-bg .bg-background { background: color-mix(in srgb, var(--background) 82%, transparent) !important; backdrop-filter: blur(12px) !important; }
-.with-bg .bg-muted, .with-bg .bg-secondary { background: color-mix(in srgb, var(--muted) 88%, transparent) !important; }
+.with-bg [class*="glass-card"], .with-bg [class*="bg-card"], .with-bg [class*="surface"], .with-bg [class*="stat-card"] { background: color-mix(in srgb, var(--card) 94%, transparent) !important; backdrop-filter: blur(16px) !important; -webkit-backdrop-filter: blur(16px) !important; }
+.with-bg [class*="bg-background"] { background: color-mix(in srgb, var(--background) 86%, transparent) !important; backdrop-filter: blur(12px) !important; }
+.with-bg [class*="bg-muted"], .with-bg [class*="bg-secondary"] { background: color-mix(in srgb, var(--muted) 88%, transparent) !important; }
 /* Kontent zonasi — fon-rasm ustida matn o'qilishi uchun yengil skrim */
 .with-bg main { background: color-mix(in srgb, var(--background) 86%, transparent); }
 
@@ -291,6 +314,13 @@ input:not([type=file]):not([type=checkbox]):not([type=radio]), select, textarea 
   .text-\[9px\]  { font-size: 11px !important; }
   .text-\[10px\] { font-size: 11.5px !important; line-height: 1.35; }
   .text-\[11px\] { font-size: 12.5px !important; }
+
+  /* iOS/Android: agar fokus qilingan input/select/textarea shrift o'lchami
+     16px'dan kichik bo'lsa, brauzer maydonga avtomatik ZOOM qiladi (odatiy
+     platforma xatti-harakati). Ko'p formalar shu yerda "text-sm md:text-xs"
+     (mobil kengligida 14px) ishlatgani uchun har bosishda ekran zoom bo'lib
+     ketardi. 16px past chegara qo'yib oldini olamiz. */
+  input, select, textarea { font-size: max(16px, 1em) !important; }
 }
 
 /* ── BLOK C: Micro-interactions & Design polish ──────────────────────── */

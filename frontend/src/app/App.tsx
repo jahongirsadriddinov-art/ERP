@@ -2661,6 +2661,39 @@ const COLOR_THEMES = [
     dark:  themeVars({ primary:"#1AA093", accent:"#14B8A6", secondary:"#0F2A28", secondaryFg:"#99F6E4", bg:"#051614", card:"#0D2422", fg:"#DDF3F0", muted:"#112B28", mutedFg:"#7BA9A3", border:DARK_BORDER, input:"#112B28", ring:"#2DD4BF" }) },
 ];
 
+// Galereyadan/kameradan yuklangan rasm (ayniqsa telefon fotosi, ko'pincha bir
+// necha MB) to'g'ridan-to'g'ri base64 sifatida localStorage'ga yozilsa, brauzer
+// kvotasidan (odatda ~5-10MB) chiqib ketib localStorage.setItem jim-jimgina
+// xato tashlaydi — natijada rasm "yuklandi" deyiladi-yu, aslida saqlanmay,
+// ekranda ko'rinmay qoladi. Shu yerda canvas orqali kichraytirib/JPEG'ga
+// siqib qaytaramiz — hajmi kvotadan doim kichik bo'ladi.
+function resizeImageFile(file: File, maxDim: number, quality = 0.85): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error || new Error("O'qib bo'lmadi"));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("Rasm ochilmadi"));
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > maxDim || height > maxDim) {
+          const scale = maxDim / Math.max(width, height);
+          width = Math.round(width * scale);
+          height = Math.round(height * scale);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { reject(new Error('canvas')); return; }
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.src = reader.result as string;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdateUser, onCompanyNameChange, onCompanyLogoChange, onBgChange, onColorThemeChange, colorTheme, themeMode, onThemeModeChange, canEditCompany }:
   { currentUser: AppUser; projects: Project[]; onUpdateAvatar: (url: string) => void; onLogout: () => void; onUpdateUser: (u: AppUser) => void; onCompanyNameChange: (name: string) => void; onCompanyLogoChange: (logo: string) => void; onBgChange: (bg: string) => void; onColorThemeChange: (id: string) => void; colorTheme: string; themeMode: "light"|"dark"|"system"; onThemeModeChange: (m: "light"|"dark"|"system") => void; canEditCompany?: boolean }) {
   const { t, i18n } = useTranslation();
@@ -2687,27 +2720,29 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
   const [editingBrand, setEditingBrand] = useState(false);
   const [brandInput, setBrandInput] = useState(companyName);
 
-  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return;
-    const reader = new FileReader();
-    reader.onload = ev => { if (ev.target?.result) onUpdateAvatar(ev.target.result as string); };
-    reader.readAsDataURL(file);
+    try {
+      const url = await resizeImageFile(file, 500, 0.85);
+      onUpdateAvatar(url);
+    } catch { toast.error("Rasmni yuklab bo'lmadi"); }
+    finally { e.target.value = ""; }
   };
-  const handleLogoFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLogoFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return;
-    const reader = new FileReader();
-    reader.onload = ev => {
-      if (ev.target?.result) { const url = ev.target.result as string; setCompanyLogo(url); localStorage.setItem("erp_companyLogo", url); onCompanyLogoChange(url); }
-    };
-    reader.readAsDataURL(file);
+    try {
+      const url = await resizeImageFile(file, 500, 0.9);
+      setCompanyLogo(url); localStorage.setItem("erp_companyLogo", url); onCompanyLogoChange(url);
+    } catch { toast.error("Logotipni yuklab bo'lmadi"); }
+    finally { e.target.value = ""; }
   };
-  const handleBgFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleBgFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return;
-    const reader = new FileReader();
-    reader.onload = ev => {
-      if (ev.target?.result) { const url = ev.target.result as string; setProfileBg(url); localStorage.setItem("erp_profileBg", url); onBgChange(url); }
-    };
-    reader.readAsDataURL(file);
+    try {
+      const url = await resizeImageFile(file, 1600, 0.82);
+      setProfileBg(url); localStorage.setItem("erp_profileBg", url); onBgChange(url);
+    } catch { toast.error("Fon rasmini yuklab bo'lmadi — fayl juda katta yoki buzilgan bo'lishi mumkin"); }
+    finally { e.target.value = ""; }
   };
   const handleSave = () => {
     if (!form.name.trim() || !form.phone.trim()) return;

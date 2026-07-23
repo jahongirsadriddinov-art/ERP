@@ -1069,6 +1069,12 @@ function MyTransfersPanel({ currentUser, transfers, allUsers, projects, onConfir
 // ─── Edit User Modal ─────────────────────────────────────────────────────────────
 function EditUserModal({ user, currentUser, onClose, onUpdate }: { user: AppUser; currentUser: AppUser; onClose: () => void; onUpdate: (u: AppUser) => void }) {
   const [form, setForm] = useState({ name: user.name, role: user.role, phone: user.phone, brigade: user.brigade || "" });
+  // "Direktor" va "dasturchi" lavozimini FAQAT dasturchi paneli o'zgartira oladi —
+  // oddiy admin (direktor/o'rinbosar) tahrirlash oynasidan xodimni direktor yoki
+  // dasturchi qilib qo'ya olmasligi kerak (imtiyoz eskalatsiyasi xatosi edi).
+  const editableRoles: Role[] = currentUser.role === "dasturchi"
+    ? (Object.keys(ROLE_LABELS) as Role[])
+    : (["orinbosar", "prorab", "brigadir", "ishchi"] as Role[]);
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-card rounded-lg border border-border shadow-xl w-full max-w-sm" onClick={e => e.stopPropagation()}>
@@ -1093,7 +1099,8 @@ function EditUserModal({ user, currentUser, onClose, onUpdate }: { user: AppUser
             <label className="text-sm md:text-xs font-medium block mb-1">Lavozim</label>
             <select className="w-full text-sm md:text-xs border border-border rounded px-2.5 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary"
               value={form.role} onChange={e => setForm({...form, role: e.target.value as Role})}>
-              {(Object.keys(ROLE_LABELS) as Role[]).map(r => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
+              {editableRoles.map(r => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
+              {!editableRoles.includes(form.role) && <option value={form.role}>{ROLE_LABELS[form.role]}</option>}
             </select>
           </div>
           {["ishchi", "brigadir"].includes(form.role) && (

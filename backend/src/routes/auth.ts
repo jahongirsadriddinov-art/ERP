@@ -260,6 +260,18 @@ router.put('/users/:id', async (req, res) => {
     const user = await User.findOne(scoped({ _id: req.params.id }));
     if (!user) return res.status(404).json({ error: 'Foydalanuvchi topilmadi' });
 
+    // "Direktor" va "dasturchi" lavozimini FAQAT dasturchi (super-admin) belgilay
+    // oladi — aks holda oddiy admin (direktor/o'rinbosar) o'zini yoki boshqa
+    // xodimni shu tahrirlash so'rovi orqali yuqori huquqqa ko'tarib olishi mumkin
+    // edi (imtiyoz eskalatsiyasi). Frontend allaqachon bu variantlarni yashiradi —
+    // bu yerdagi tekshiruv haqiqiy himoya, chunki API to'g'ridan-to'g'ri ham
+    // chaqirilishi mumkin.
+    const requester = req.user;
+    const isDeveloperCaller = !!(requester?.isDeveloper || requester?.role === 'dasturchi');
+    if (role && ['direktor', 'dasturchi'].includes(role) && role !== user.role && !isDeveloperCaller) {
+      return res.status(403).json({ error: "Bu lavozimni faqat dasturchi paneli orqali o'zgartirish mumkin" });
+    }
+
     if (firstName) user.firstName = firstName;
     if (lastName !== undefined) user.lastName = lastName;
     if (role) user.role = role;

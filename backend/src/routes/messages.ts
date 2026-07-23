@@ -47,6 +47,27 @@ function convertToOggOpus(localPath: string): Promise<string> {
   });
 }
 
+// Saytdan kelgan video ixtiyoriy formatda bo'lishi mumkin (brauzer/kamera/galereya —
+// webm, mov/HEVC, mkv va h.k.). Telegram bunday fayllar uchun ko'pincha preview
+// thumbnail generatsiya qila olmay, video o'rniga yagona rangli (ko'k/binafsha)
+// to'rtburchak ko'rsatadi ("mov bo'lib qolyapti" muammosi). Voice xabar uchun
+// qilingan OGG/Opus konvertatsiyasi bilan bir xil mantiq — har doim H.264/AAC
+// MP4'ga aylantirib yuboramiz, shunda Telegram har doim to'g'ri thumbnail va
+// pleer bilan ochadi.
+function convertToMp4(localPath: string): Promise<string> {
+  const outPath = path.join(os.tmpdir(), `vid_${Date.now()}_${Math.round(Math.random() * 1e6)}.mp4`);
+  return new Promise((resolve, reject) => {
+    ffmpeg(localPath)
+      .videoCodec('libx264')
+      .audioCodec('aac')
+      .outputOptions(['-pix_fmt yuv420p', '-movflags +faststart', '-preset veryfast'])
+      .format('mp4')
+      .on('error', reject)
+      .on('end', () => resolve(outPath))
+      .save(outPath);
+  });
+}
+
 const router = Router();
 
 // Chat media uchun multer (asl kengaytmani saqlaydi)
@@ -74,9 +95,27 @@ async function relayMessageToTelegram(chatId: string, senderName: string, m: {
       case 'image':
         await bot.sendPhoto(chatId, m.mediaUrl, { caption });
         break;
-      case 'video':
-        await bot.sendVideo(chatId, m.mediaUrl, { caption });
+      case 'video': {
+        const isMp4 = /\.mp4(\?|$)/i.test(m.mediaUrl || '');
+        const localVidPath = isMp4 ? null : mediaUrlToLocalPath(m.mediaUrl);
+        if (isMp4) {
+          await bot.sendVideo(chatId, m.mediaUrl, { caption });
+        } else if (localVidPath) {
+          let convertedVid: string | null = null;
+          try {
+            convertedVid = await convertToMp4(localVidPath);
+            await bot.sendVideo(chatId, fs.createReadStream(convertedVid), { caption });
+          } catch (err) {
+            console.error('[video transcode]', err);
+            await bot.sendVideo(chatId, m.mediaUrl, { caption }).catch(() => bot.sendDocument(chatId, m.mediaUrl!, { caption }));
+          } finally {
+            if (convertedVid) fs.unlink(convertedVid, () => {});
+          }
+        } else {
+          await bot.sendVideo(chatId, m.mediaUrl, { caption });
+        }
         break;
+      }
       case 'audio': {
         // Telegram sendVoice FAQAT haqiqiy OGG/Opus faylni "ovozli xabar" pufakchasi
         // sifatida ochadi — brauzerlarning aksariyati (Chrome) MediaRecorder orqali

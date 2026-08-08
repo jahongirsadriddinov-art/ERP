@@ -126,9 +126,13 @@ router.post('/send-otp', async (req, res) => {
     const code = Math.floor(1000 + Math.random() * 9000).toString(); // 1000-9999
     const otpHash = await hashPassword(code);
 
-    // Eski OTP (agar bo'lsa) bekor qilinadi — bitta faol OTP qoidasi.
-    await Otp.deleteMany({ phone });
-    await Otp.create({ phone, otpHash, attempts: 0, expiresAt: new Date(Date.now() + OTP_TTL_MS) });
+    // Eski OTP (agar bo'lsa) shu bilan bir yo'la bekor qilinadi — bitta
+    // upsert, ikkita alohida so'rov (delete+create) o'rniga (tezroq).
+    await Otp.findOneAndUpdate(
+      { phone },
+      { phone, otpHash, attempts: 0, expiresAt: new Date(Date.now() + OTP_TTL_MS) },
+      { upsert: true, setDefaultsOnInsert: true }
+    );
 
     const sms = await sendOtpSms(phone, code);
     if (!sms.ok) {

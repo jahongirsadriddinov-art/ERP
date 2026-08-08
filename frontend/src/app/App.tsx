@@ -3244,38 +3244,42 @@ function BottomFinanceBar({ expenses, projects }: { expenses: Expense[]; project
 
 // ─── OTP kod qutilar (4 xonali kod uchun) — auto-advance, backspace, paste ──────
 function OtpBoxes({ value, onChange, length = 4, autoFocus, error }: { value: string; onChange: (v: string) => void; length?: number; autoFocus?: boolean; error?: boolean }) {
-  const refs = useRef<(HTMLInputElement | null)[]>([]);
+  const realRef = useRef<HTMLInputElement | null>(null);
   const digits = Array.from({ length }, (_, i) => value[i] || "");
 
-  const setAt = (i: number, d: string) => {
-    const next = digits.slice();
-    next[i] = d;
-    onChange(next.join(""));
-  };
-  const handleChange = (i: number, raw: string) => {
-    const d = raw.replace(/\D/g, "").slice(-1);
-    setAt(i, d);
-    if (d && i < length - 1) refs.current[i + 1]?.focus();
-  };
-  const handleKeyDown = (i: number, e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Backspace" && !digits[i] && i > 0) refs.current[i - 1]?.focus();
-  };
-  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
-    const text = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, length);
-    if (text) { e.preventDefault(); onChange(text); refs.current[Math.min(text.length, length - 1)]?.focus(); }
+  // Ko'rinadigan 4 ta katakcha shunchaki DISPLAY — haqiqiy kiritish (teri,
+  // backspace, paste, VA eng muhimi — OS SMS-kod autofill) bitta HAQIQIY,
+  // shaffof inputga tushadi (autoComplete="one-time-code"). Bu — iOS/Android
+  // klaviaturasi kelgan SMS ichidan raqamli kodni avtomatik tanib, klaviatura
+  // ustida taklif sifatida ko'rsatadigan STANDART veb-platforma mexanizmi:
+  // FAQAT haqiqiy SMS kelganda ishlaydi, hech qachon o'zidan to'ldirmaydi —
+  // shu bilan boshqa ilovalardagi kabi tabiiy xatti-harakat olinadi.
+  // (Eski versiya 4 ta ALOHIDA inputdan iborat edi — bitta butun kodni
+  // avtomatik taqsimlab bera olmasdi, chunki bu attribut bitta maydonga
+  // butun kodni tushirishga mo'ljallangan.)
+  const handleRealChange = (raw: string) => {
+    onChange(raw.replace(/\D/g, "").slice(0, length));
   };
 
   return (
-    <div className="flex justify-center gap-2.5">
+    <div className="relative flex justify-center gap-2.5">
+      <input
+        ref={realRef}
+        type="text"
+        inputMode="numeric"
+        autoComplete="one-time-code"
+        maxLength={length}
+        value={value}
+        onChange={e => handleRealChange(e.target.value)}
+        autoFocus={autoFocus}
+        aria-label="Tasdiqlash kodi"
+        className="absolute inset-0 z-10 w-full h-full opacity-0 cursor-text"
+      />
       {digits.map((d, i) => (
-        <input key={i} ref={el => { refs.current[i] = el; }} type="text" inputMode="numeric" maxLength={1}
-          value={d}
-          onChange={e => handleChange(i, e.target.value)}
-          onKeyDown={e => handleKeyDown(i, e)}
-          onPaste={handlePaste}
-          autoFocus={autoFocus && i === 0}
-          className={`w-14 h-16 text-center text-2xl font-bold rounded-2xl border bg-white/50 dark:bg-black/20 focus:bg-white dark:focus:bg-black/40 focus:outline-none focus:ring-2 focus:ring-primary/50 shadow-inner liquid-transition ${error ? "border-red-500/50" : "border-border/50"}`}
-        />
+        <div key={i} onClick={() => realRef.current?.focus()}
+          className={`w-14 h-16 flex items-center justify-center text-2xl font-bold rounded-2xl border bg-white/50 dark:bg-black/20 shadow-inner liquid-transition ${error ? "border-red-500/50" : value.length === i ? "border-primary ring-2 ring-primary/50" : "border-border/50"}`}>
+          {d}
+        </div>
       ))}
     </div>
   );
@@ -3333,10 +3337,11 @@ function LoginScreen({ onLogin, onRegister }: { onLogin: (u: any, company?: any)
       // haqiqiy kod HECH QACHON kelmaydi (Eskiz faqat qat'iy test-matnini
       // yuboradi) — shuning uchun backend shu holatda kodni javobga ham
       // qo'shadi (devOtp), faqat ESKIZ_TEST_MODE=true bo'lganda. Productionda
-      // bu maydon hech qachon kelmaydi, kod faqat SMS orqali yetadi.
+      // bu maydon hech qachon kelmaydi. ATAYLAB avtomatik to'ldirilmaydi —
+      // faqat ko'rsatiladi (foydalanuvchi so'ragan: kod faqat HAQIQIY SMS
+      // kelganda — OS autofill orqali — o'zi to'lsin, hech qachon soxta emas).
       if (data.devOtp) {
         toast(`🧪 TEST rejimi: kod = ${data.devOtp}`, { description: data.devNote, duration: 15000 });
-        setCode(data.devOtp);
       }
     } catch (err) {
       setError(t('login.serverError'));

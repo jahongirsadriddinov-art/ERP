@@ -471,41 +471,36 @@ bot.on('message', async (msg: any) => {
       return;
     }
 
-    // Unknown admin message — show keyboard
-    bot.sendMessage(chatId, tb(user.language, 'chooseFromMenu'), { reply_markup: ADMIN_KEYBOARD(user.language) });
-    return;
-  }
-
-  // ── Obuna holati (faqat rahbar/o'rinbosar va dasturchi) ──────────────────
-  if (text === tb(lang, 'kb_subscriptionStatus')) {
-    if (!admin && !developer) {
-      bot.sendMessage(chatId, tb(lang, 'subOnlyBoss'), { reply_markup: USER_KEYBOARD(lang) });
+    if (text === tb(user.language, 'kb_subscriptionStatus')) {
+      try {
+        const Subscription = require('../models/Subscription').default;
+        const sub = user.companyId ? await Subscription.findOne({ companyId: user.companyId }).sort({ createdAt: -1 }) : null;
+        if (!sub) {
+          bot.sendMessage(chatId, tb(user.language, 'subNotFound'), { reply_markup: ADMIN_KEYBOARD(user.language) });
+          return;
+        }
+        const now = new Date();
+        let statusText = '';
+        if (sub.status === 'pending') statusText = tb(user.language, 'subPending');
+        else if (sub.status === 'active') {
+          const daysLeft = sub.currentPeriodEnd
+            ? Math.max(0, Math.ceil((sub.currentPeriodEnd.getTime() - now.getTime()) / 86400000))
+            : null;
+          statusText = daysLeft !== null ? tb(user.language, 'subActiveDays', { days: daysLeft }) : tb(user.language, 'subActive');
+        } else if (sub.status === 'expired') statusText = tb(user.language, 'subExpired');
+        else if (sub.status === 'rejected') statusText = tb(user.language, 'subRejected');
+        else statusText = sub.status;
+        const endDate = sub.currentPeriodEnd ? sub.currentPeriodEnd.toLocaleDateString('uz-UZ') : '—';
+        await bot.sendMessage(chatId,
+          tb(user.language, 'subStatusMsg', { status: statusText, end: endDate }),
+          { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD(user.language) }
+        );
+      } catch { bot.sendMessage(chatId, tb(user.language, 'genericError'), { reply_markup: ADMIN_KEYBOARD(user.language) }); }
       return;
     }
-    try {
-      const Subscription = require('../models/Subscription').default;
-      const sub = user.companyId ? await Subscription.findOne({ companyId: user.companyId }).sort({ createdAt: -1 }) : null;
-      if (!sub) {
-        bot.sendMessage(chatId, tb(lang, 'subNotFound'), { reply_markup: admin ? ADMIN_KEYBOARD(lang) : USER_KEYBOARD(lang) });
-        return;
-      }
-      const now = new Date();
-      let statusText = '';
-      if (sub.status === 'pending') statusText = tb(lang, 'subPending');
-      else if (sub.status === 'active') {
-        const daysLeft = sub.currentPeriodEnd
-          ? Math.max(0, Math.ceil((sub.currentPeriodEnd.getTime() - now.getTime()) / 86400000))
-          : null;
-        statusText = daysLeft !== null ? tb(lang, 'subActiveDays', { days: daysLeft }) : tb(lang, 'subActive');
-      } else if (sub.status === 'expired') statusText = tb(lang, 'subExpired');
-      else if (sub.status === 'rejected') statusText = tb(lang, 'subRejected');
-      else statusText = sub.status;
-      const endDate = sub.currentPeriodEnd ? sub.currentPeriodEnd.toLocaleDateString('uz-UZ') : '—';
-      await bot.sendMessage(chatId,
-        tb(lang, 'subStatusMsg', { status: statusText, end: endDate }),
-        { parse_mode: 'HTML', reply_markup: developer ? DEVELOPER_KEYBOARD(lang) : admin ? ADMIN_KEYBOARD(lang) : USER_KEYBOARD(lang) }
-      );
-    } catch { bot.sendMessage(chatId, tb(lang, 'genericError')); }
+
+    // Unknown admin message — show keyboard
+    bot.sendMessage(chatId, tb(user.language, 'chooseFromMenu'), { reply_markup: ADMIN_KEYBOARD(user.language) });
     return;
   }
 
@@ -729,7 +724,9 @@ bot.on('callback_query', async (query: any) => {
         await bot.answerCallbackQuery(query.id, { text: tb(lang, 'alreadyProcessed') });
         return;
       }
-      if (!user || String(tx.toUserId) !== String(user._id)) {
+      // Qabul qiluvchi YOKI o'sha kompaniya adminlari tasdiqlashi/rad etishi mumkin
+      const isAdminOfCompany = user && isAdmin(user.role) && user.companyId && String(tx.companyId) === String(user.companyId);
+      if (!user || (String(tx.toUserId) !== String(user._id) && !isAdminOfCompany)) {
         await bot.answerCallbackQuery(query.id, { text: tb(lang, 'notYoursOnlyRecipient') });
         return;
       }

@@ -1,0 +1,103 @@
+export const uz = {
+  // Context menu
+  reply: "Javob berish",
+  edit: "Tahrirlash",
+  pin: "Pin",
+  unpin: "Pindan chiqarish",
+  forward: "Yuborish",
+  select: "Tanlash",
+  delete: "O'chirish",
+  // Attachment menu
+  attachImage: "Rasm / Video",
+  attachCamera: "Kamera",
+  attachFile: "Fayl",
+  attachLocation: "Lokatsiya",
+  // Forward dialog
+  forwardTo: "Kimga yuborish?",
+  // Input
+  inputPlaceholder: "Xabar yozing...",
+  recording: "Yozilmoqda...",
+  you: "Siz",
+  // Errors / toasts
+  micPermission: "Mikrofon uchun ruxsat kerak",
+  geoNotSupported: "Brauzer geolokatsiyani qo'llab-quvvatlamaydi",
+  geoPermission: "Lokatsiya ruxsati berilmadi",
+  uploadFailed: "Media yuklanmadi",
+  // Labels
+  voiceMessage: "🎤 Ovozli xabar",
+  photo: "🖼️ Rasm",
+  video: "🎥 Video",
+  // Notification bell
+  notifTitle: "Bildirishnomalar",
+  notifEmpty: "Bildirishnoma yo'q",
+  notifNewTransfer: "Yangi o'tkazma",
+  notifFrom: "Xodim",
+  notifPendingApproval: "dan tasdiq kutilmoqda",
+  notifNewMessages: "{{count}} ta yangi xabar",
+  notifNewMessage: "Yangi xabar",
+  notifMediaMessage: "📎 Media xabar",
+  notifExpenseApproval: "Chiqim tasdiqlash",
+  notifNeedApproval: "Sizning tasdiqingiz kerak",
+  // Chat sidebar
+  contacts: "Kontaktlar",
+  groups: "Guruhlar",
+  newGroup: "Yangi guruh",
+  devSupport: "Dasturchi yordam",
+  online: "Online",
+  // Select mode
+  selectCancel: "Bekor",
+  selectDelete: "O'chirish",
+  deleteSelected: "{{count}} ta o'chirish",
+};
+
+export const ru = {
+  // Context menu
+  reply: "Ответить",
+  edit: "Редактировать",
+  pin: "Закрепить",
+  unpin: "Открепить",
+  forward: "Переслать",
+  select: "Выбрать",
+  delete: "Удалить",
+  // Attachment menu
+  attachImage: "Фото / Видео",
+  attachCamera: "Камера",
+  attachFile: "Файл",
+  attachLocation: "Местоположение",
+  // Forward dialog
+  forwardTo: "Кому переслать?",
+  // Input
+  inputPlaceholder: "Написать сообщение...",
+  recording: "Запись...",
+  you: "Вы",
+  // Errors / toasts
+  micPermission: "Нужен доступ к микрофону",
+  geoNotSupported: "Браузер не поддерживает геолокацию",
+  geoPermission: "Доступ к геолокации отклонён",
+  uploadFailed: "Не удалось загрузить медиа",
+  // Labels
+  voiceMessage: "🎤 Голосовое сообщение",
+  photo: "🖼️ Фото",
+  video: "🎥 Видео",
+  // Notification bell
+  notifTitle: "Уведомления",
+  notifEmpty: "Уведомлений нет",
+  notifNewTransfer: "Новая передача",
+  notifFrom: "Сотрудник",
+  notifPendingApproval: "ожидает подтверждения",
+  notifNewMessages: "{{count}} новых сообщений",
+  notifNewMessage: "Новое сообщение",
+  notifMediaMessage: "📎 Медиа-сообщение",
+  notifExpenseApproval: "Подтвердить расход",
+  notifNeedApproval: "Нужно ваше подтверждение",
+  // Chat sidebar
+  contacts: "Контакты",
+  groups: "Группы",
+  newGroup: "Новая группа",
+  devSupport: "Поддержка разработчика",
+  online: "Онлайн",
+  // Select mode
+  selectCancel: "Отмена",
+  selectDelete: "Удалить",
+  deleteSelected: "Удалить ({{count}})",
+};

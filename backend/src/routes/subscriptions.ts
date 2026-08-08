@@ -2,7 +2,8 @@ import { Router } from 'express';
 import Subscription from '../models/Subscription';
 import User from '../models/User';
 import Company from '../models/Company';
-import { requireDeveloper } from '../middleware/auth';
+import { requireDeveloper, requireAuth } from '../middleware/auth';
+import { getTenant } from '../middleware/tenantContext';
 import { bot } from '../services/bot';
 
 const router = Router();
@@ -19,6 +20,41 @@ export const PLAN_CONFIG: Record<string, { label: string; days: number; amount: 
 export type SelectedPlan = string;
 
 const SITE_URL = process.env.SITE_URL || 'http://localhost:5173';
+
+// GET /api/admin/subscriptions/my — joriy firma obuna holati (direktor/o'rinbosar uchun)
+router.get('/my', requireAuth, async (req, res) => {
+  try {
+    const t = getTenant();
+    if (!t?.companyId) return res.status(400).json({ error: 'Firma topilmadi' });
+
+    const sub = await Subscription.findOne({ companyId: String(t.companyId) }).sort({ createdAt: -1 }).lean();
+    if (!sub) return res.json({ status: 'none' });
+
+    const now = new Date();
+    let status = (sub as any).status;
+    if (status === 'active' && (sub as any).currentPeriodEnd && (sub as any).currentPeriodEnd < now) {
+      status = 'expired';
+    }
+    const daysLeft = (sub as any).currentPeriodEnd
+      ? Math.max(0, Math.ceil(((sub as any).currentPeriodEnd.getTime() - now.getTime()) / 86400000))
+      : null;
+
+    return res.json({
+      id: (sub as any)._id,
+      status,
+      plan: (sub as any).plan,
+      selectedPlan: (sub as any).selectedPlan,
+      amount: (sub as any).amount,
+      currentPeriodEnd: (sub as any).currentPeriodEnd,
+      daysLeft,
+      requestedAt: (sub as any).requestedAt || (sub as any).createdAt,
+      approvedAt: (sub as any).approvedAt,
+    });
+  } catch (err) {
+    console.error('subscriptions/my error:', err);
+    res.status(500).json({ error: 'Server xatoligi' });
+  }
+});
 
 // GET /api/admin/subscriptions — barcha obunalar (dasturchi uchun)
 router.get('/', requireDeveloper, async (req, res) => {

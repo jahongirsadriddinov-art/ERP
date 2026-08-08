@@ -6,6 +6,7 @@ import * as nsReports from './ns/reports';
 import * as nsCall from './ns/call';
 import * as nsAi from './ns/ai';
 import * as nsDevPanel from './ns/devPanel';
+import * as nsChat from './ns/chat';
 
 export type SiteLang = 'uz' | 'uz-cyrl' | 'ru';
 
@@ -19,6 +20,7 @@ const uzMerged = {
   ...nsCall.uz,
   ...nsDevPanel.uz,
   ai: nsAi.uz,
+  chat: nsChat.uz,
 };
 const ruMerged = {
   ...RESOURCES.ru,
@@ -26,6 +28,7 @@ const ruMerged = {
   ...nsCall.ru,
   ...nsDevPanel.ru,
   ai: nsAi.ru,
+  chat: nsChat.ru,
 };
 
 const uzCyrl = transliterateDict(uzMerged);

@@ -1,15 +1,37 @@
 import { useState, useRef, useEffect } from "react";
-import { X, Check, Send, Loader2 } from "lucide-react";
+import { X, Check, Send, Loader2, UserPlus, Trash2, Edit, Zap } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { API_BASE } from "./api";
 import type { AppUser } from "./App";
 import { useModalPresence } from "./App";
 
 interface AiMsg { role: 'user'|'assistant'; content: string; }
-interface AiAction { type: string; toUserId?: string; toUserName?: string; text?: string; description?: string; }
+interface AiAction {
+  type: string;
+  // send_message
+  toUserId?: string; toUserName?: string; text?: string; description?: string;
+  // add_user
+  firstName?: string; lastName?: string; phone?: string; role?: string; brigade?: string;
+  // delete_user / update_user
+  userId?: string; userName?: string; changes?: Record<string, any>;
+}
 
-export default function AIAssistant({ currentUser, users, token, open, onClose }:
-  { currentUser: AppUser; users: AppUser[]; token: string; open: boolean; onClose: () => void }) {
+const DIRECT_ACTIONS = ['add_user', 'delete_user', 'update_user'];
+
+function actionIcon(type: string) {
+  if (type === 'add_user') return <UserPlus className="w-4 h-4 text-green-500"/>;
+  if (type === 'delete_user') return <Trash2 className="w-4 h-4 text-red-500"/>;
+  if (type === 'update_user') return <Edit className="w-4 h-4 text-blue-500"/>;
+  return <Zap className="w-4 h-4 text-amber-500"/>;
+}
+
+export default function AIAssistant({ currentUser, users, token, open, onClose, onUserAdded, onUserDeleted, onUserUpdated }:
+  {
+    currentUser: AppUser; users: AppUser[]; token: string; open: boolean; onClose: () => void;
+    onUserAdded?: (u: AppUser) => void;
+    onUserDeleted?: (id: string) => void;
+    onUserUpdated?: (u: AppUser) => void;
+  }) {
   const { t } = useTranslation();
   useModalPresence();
   const [msgs, setMsgs] = useState<AiMsg[]>([]);
@@ -23,6 +45,33 @@ export default function AIAssistant({ currentUser, users, token, open, onClose }
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [msgs, pending, loading]);
   useEffect(() => { if (open) setTimeout(() => inputRef.current?.focus(), 120); }, [open]);
+
+  const executeAction = async (action: AiAction): Promise<string> => {
+    try {
+      const res = await fetch(`${API_BASE}/api/ai/execute`, {
+        method: 'POST', headers: authHdr,
+        body: JSON.stringify({ action }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        // Notify parent so UI updates immediately (no page reload needed)
+        if (action.type === 'add_user' && data.user && onUserAdded) {
+          onUserAdded({ id: data.user.id, name: data.user.name, role: data.user.role, phone: data.user.phone, projectIds: [] });
+        }
+        if (action.type === 'delete_user' && data.deletedId && onUserDeleted) {
+          onUserDeleted(data.deletedId);
+        }
+        if (action.type === 'update_user' && data.user && onUserUpdated) {
+          const existing = users.find(u => u.id === String(data.user.id));
+          if (existing) onUserUpdated({ ...existing, name: data.user.name, role: data.user.role, phone: data.user.phone });
+        }
+        return `✅ ${data.result || t('ai.actionDone')}`;
+      }
+      return `⚠️ ${data.error || t('ai.actionError')}`;
+    } catch {
+      return `⚠️ ${t('ai.executeError')}`;
+    }
+  };
 
   const send = async () => {
     const text = input.trim();
@@ -39,7 +88,13 @@ export default function AIAssistant({ currentUser, users, token, open, onClose }
       const data = await res.json();
       if (!res.ok) {
         setMsgs(p => [...p, { role: 'assistant', content: `⚠️ ${data.error || t('ai.errorGeneric')}` }]);
+      } else if (data.type === 'direct_action' && data.action && DIRECT_ACTIONS.includes(data.action.type)) {
+        // Direct actions execute immediately — no confirmation dialog shown
+        setMsgs(p => [...p, { role: 'assistant', content: data.response || t('ai.thinking') }]);
+        const result = await executeAction(data.action);
+        setMsgs(p => [...p, { role: 'assistant', content: result }]);
       } else if (data.type === 'action' && data.action) {
+        // send_message and similar — show confirmation
         setMsgs(p => [...p, { role: 'assistant', content: data.response }]);
         setPending({ action: data.action, response: data.response });
       } else {
@@ -54,18 +109,10 @@ export default function AIAssistant({ currentUser, users, token, open, onClose }
   const confirm = async () => {
     if (!pending) return;
     setLoading(true);
+    const action = pending.action;
     setPending(null);
-    try {
-      const res = await fetch(`${API_BASE}/api/ai/execute`, {
-        method: 'POST', headers: authHdr,
-        body: JSON.stringify({ action: pending.action }),
-      });
-      const data = await res.json();
-      const result = res.ok ? `✅ ${data.result || t('ai.actionDone')}` : `⚠️ ${data.error || t('ai.actionError')}`;
-      setMsgs(p => [...p, { role: 'assistant', content: result }]);
-    } catch {
-      setMsgs(p => [...p, { role: 'assistant', content: `⚠️ ${t('ai.executeError')}` }]);
-    }
+    const result = await executeAction(action);
+    setMsgs(p => [...p, { role: 'assistant', content: result }]);
     setLoading(false);
   };
 
@@ -81,7 +128,7 @@ export default function AIAssistant({ currentUser, users, token, open, onClose }
   return (
     <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4" onClick={onClose}>
       <div
-        className="w-full max-w-md max-h-[78vh] sm:max-h-[640px] rounded-2xl shadow-2xl border border-border/50 flex flex-col overflow-hidden animate-pop-in"
+        className="w-full max-w-md max-h-[82vh] sm:max-h-[660px] rounded-2xl shadow-2xl border border-border/50 flex flex-col overflow-hidden animate-pop-in"
         style={{ background: 'var(--card)' }}
         onClick={e => e.stopPropagation()}
       >
@@ -109,6 +156,7 @@ export default function AIAssistant({ currentUser, users, token, open, onClose }
               <div className="flex flex-wrap gap-1.5 justify-center mt-3">
                 {[
                   t('ai.hints.employeeList'),
+                  t('ai.hints.addEmployee'),
                   t('ai.hints.sendMessage'),
                   t('ai.hints.todayTasks'),
                 ].map(hint => (
@@ -122,7 +170,7 @@ export default function AIAssistant({ currentUser, users, token, open, onClose }
           )}
           {msgs.map((m, i) => (
             <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[82%] px-3 py-2 rounded-2xl text-xs leading-relaxed ${
+              <div className={`max-w-[85%] px-3 py-2 rounded-2xl text-xs leading-relaxed ${
                 m.role === 'user'
                   ? 'bg-primary text-white rounded-br-sm'
                   : 'bg-muted/70 text-foreground rounded-bl-sm'
@@ -143,11 +191,11 @@ export default function AIAssistant({ currentUser, users, token, open, onClose }
               </div>
             </div>
           )}
-          {/* Confirmation card */}
+          {/* Confirmation card — only for send_message */}
           {pending && !loading && (
             <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-3 space-y-2.5">
               <div className="flex items-start gap-2">
-                <span className="text-base flex-shrink-0">🤖</span>
+                {actionIcon(pending.action.type)}
                 <p className="text-xs leading-relaxed font-medium">{pending.action.description || pending.response}</p>
               </div>
               {pending.action.text && (
@@ -155,6 +203,9 @@ export default function AIAssistant({ currentUser, users, token, open, onClose }
                   <p className="text-[10px] text-muted-foreground mb-0.5">{t('ai.messageTextLabel')}</p>
                   <p className="text-xs font-medium">"{pending.action.text}"</p>
                 </div>
+              )}
+              {pending.action.toUserName && (
+                <p className="text-[10px] text-muted-foreground">{t('ai.recipientLabel')}: <span className="font-semibold text-foreground">{pending.action.toUserName}</span></p>
               )}
               <div className="flex gap-2">
                 <button onClick={confirm}

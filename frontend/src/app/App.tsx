@@ -4,7 +4,7 @@ import {
   CheckCircle, Clock, AlertTriangle, ChevronRight, MapPin,
   Phone, User, X, Check, Download, BarChart2,
   DollarSign, MessageCircle, ChevronDown, ChevronUp, Send,
-  TrendingDown, Wallet, LogOut, Camera, Home, UserPlus, Edit, Trash, Search, AlertCircle, ChevronLeft, Loader2, Paperclip, Mic, Video as VideoIcon, Image as ImageIcon, FileText, CornerDownLeft, Share2, SquareCheck, Trash2, MoreHorizontal, Upload, Palette, Sun, Moon, Monitor, PhoneOff, MicOff, VideoOff, Users2, Copy, Bell, Pin, PinOff, CheckCheck, Languages
+  TrendingDown, Wallet, LogOut, Camera, Home, UserPlus, Edit, Trash, Search, AlertCircle, ChevronLeft, Loader2, Paperclip, Mic, Video as VideoIcon, Image as ImageIcon, FileText, CornerDownLeft, Share2, SquareCheck, Trash2, MoreHorizontal, Upload, Palette, Sun, Moon, Monitor, PhoneOff, MicOff, VideoOff, Users2, Copy, Bell, Pin, PinOff, CheckCheck, Languages, CreditCard, Calendar
 } from "lucide-react";
 import { toast, Toaster } from "sonner";
 import { createPortal } from "react-dom";
@@ -280,6 +280,7 @@ function NotificationBell({ messages, transfers, expenses, users, currentUser, o
     onOpenChat: () => void; onOpenDashboard: () => void; }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const { t: tN } = useTranslation();
 
   useEffect(() => {
     if (!open) return;
@@ -313,32 +314,32 @@ function NotificationBell({ messages, transfers, expenses, users, currentUser, o
         <motion.div initial={{ opacity: 0, y: -8, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{ type: "spring", stiffness: 420, damping: 32 }}
           className="absolute right-0 top-full mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-2xl overflow-hidden z-50 liquid-glass">
-          <div className="px-4 py-3 border-b border-white/10"><p className="text-sm font-bold text-white">Bildirishnomalar</p></div>
+          <div className="px-4 py-3 border-b border-white/10"><p className="text-sm font-bold text-white">{tN('chat.notifTitle')}</p></div>
           <div className="max-h-80 overflow-y-auto scrollbar-hide divide-y divide-white/5">
-            {!hasAny && <p className="text-center text-xs text-white/50 py-8">Bildirishnoma yo'q</p>}
+            {!hasAny && <p className="text-center text-xs text-white/50 py-8">{tN('chat.notifEmpty')}</p>}
             {bySender.map(u => {
               const sender = users.find(x => x.id === u.userId);
               return (
                 <button key={u.userId} onClick={() => { onOpenChat(); setOpen(false); }}
                   className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/5 text-left transition-colors">
                   <div className="w-9 h-9 rounded-full bg-primary/25 text-primary flex items-center justify-center flex-shrink-0"><MessageCircle className="w-4 h-4"/></div>
-                  <div className="flex-1 min-w-0"><p className="text-xs font-semibold text-white truncate">{sender?.name || "Foydalanuvchi"}</p><p className="text-[11px] text-white/60 truncate">{u.count > 1 ? `${u.count} ta yangi xabar` : (u.last.type && u.last.type !== "text" ? "📎 Media xabar" : (u.last.text || "Yangi xabar"))}</p></div>
+                  <div className="flex-1 min-w-0"><p className="text-xs font-semibold text-white truncate">{sender?.name || tN('chat.notifFrom')}</p><p className="text-[11px] text-white/60 truncate">{u.count > 1 ? tN('chat.notifNewMessages', { count: u.count }) : (u.last.type && u.last.type !== "text" ? tN('chat.notifMediaMessage') : (u.last.text || tN('chat.notifNewMessage')))}</p></div>
                   <span className="text-[10px] text-white/40 flex-shrink-0">{timeAgoShort(u.last.timestamp)}</span>
                 </button>
               );
             })}
-            {pendingTransfers.map(t => (
-              <button key={t.id} onClick={() => { onOpenDashboard(); setOpen(false); }}
+            {pendingTransfers.map(tr => (
+              <button key={tr.id} onClick={() => { onOpenDashboard(); setOpen(false); }}
                 className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/5 text-left transition-colors">
                 <div className="w-9 h-9 rounded-full bg-amber-500/25 text-amber-300 flex items-center justify-center flex-shrink-0"><Package className="w-4 h-4"/></div>
-                <div className="flex-1 min-w-0"><p className="text-xs font-semibold text-white">Yangi o'tkazma</p><p className="text-[11px] text-white/60 truncate">{t.fromUserName || "Xodim"}dan tasdiq kutilmoqda</p></div>
+                <div className="flex-1 min-w-0"><p className="text-xs font-semibold text-white">{tN('chat.notifNewTransfer')}</p><p className="text-[11px] text-white/60 truncate">{tr.fromUserName || tN('chat.notifFrom')}{tN('chat.notifPendingApproval')}</p></div>
               </button>
             ))}
             {pendingExpenses.map((e: any) => (
               <button key={e.id} onClick={() => { onOpenDashboard(); setOpen(false); }}
                 className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/5 text-left transition-colors">
                 <div className="w-9 h-9 rounded-full bg-green-500/25 text-green-300 flex items-center justify-center flex-shrink-0"><Wallet className="w-4 h-4"/></div>
-                <div className="flex-1 min-w-0"><p className="text-xs font-semibold text-white">Chiqim tasdiqlash</p><p className="text-[11px] text-white/60 truncate">Sizning tasdiqingiz kerak</p></div>
+                <div className="flex-1 min-w-0"><p className="text-xs font-semibold text-white">{tN('chat.notifExpenseApproval')}</p><p className="text-[11px] text-white/60 truncate">{tN('chat.notifNeedApproval')}</p></div>
               </button>
             ))}
           </div>
@@ -2112,6 +2113,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
   const bottomRef = useRef<HTMLDivElement>(null);
   const longPressRef = useRef<ReturnType<typeof setTimeout>|null>(null);
 
+  const { t: tChat } = useTranslation();
   const contacts = users.filter(u => u.id !== currentUser.id);
   const userById = (id: string) => users.find(u => u.id === id);
   const isOnline = (id: string) => onlineUsers.includes(id);
@@ -2187,7 +2189,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
     try {
       const up = await uploadChatMedia(blob, filename);
       doSend({ type, text: label, mediaUrl: up.url, fileName: up.fileName, fileSize: up.fileSize });
-    } catch { toast("Media yuklanmadi"); }
+    } catch { toast(tChat('chat.uploadFailed')); }
   };
 
   const startRec = async () => {
@@ -2206,7 +2208,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
       mediaRecRef.current = mr;
       setIsRecording(true); setRecSec(0);
       timerRef.current = setInterval(() => setRecSec(s => s + 1), 1000);
-    } catch { toast.error("Mikrofon ruxsati kerak"); }
+    } catch { toast.error(tChat('chat.micPermission')); }
   };
   const stopRec = () => {
     mediaRecRef.current?.stop();
@@ -2235,10 +2237,10 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
   };
 
   const sendLocation = () => {
-    if (!navigator.geolocation) { toast.error("Brauzer geolokatsiyani qo'llab-quvvatlamaydi"); return; }
+    if (!navigator.geolocation) { toast.error(tChat('chat.geoNotSupported')); return; }
     navigator.geolocation.getCurrentPosition(
       pos => doSend({ type: 'location', text: '📍 Lokatsiya', location: { lat: pos.coords.latitude, lng: pos.coords.longitude } }),
-      () => toast.error("Lokatsiya ruxsati berilmadi")
+      () => toast.error(tChat('chat.geoPermission'))
     );
     setShowAttach(false);
   };
@@ -2512,19 +2514,19 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
                     <div className="fixed z-[70] w-44 glass p-1.5 rounded-2xl border border-white/20 shadow-2xl flex flex-col gap-0.5 animate-pop-in"
                       style={{ top, left }}
                       onClick={e=>e.stopPropagation()}>
-                      <div onClick={()=>{setReplyTo(ctxMsg);setCtxMenu(null);}} className={itemCls}><CornerDownLeft className="w-3.5 h-3.5"/>Reply</div>
+                      <div onClick={()=>{setReplyTo(ctxMsg);setCtxMenu(null);}} className={itemCls}><CornerDownLeft className="w-3.5 h-3.5"/>{tChat('chat.reply')}</div>
                       {canEdit && (
-                        <div onClick={()=>{setEditingId(ctxMsg.id);setEditText(ctxMsg.text);setCtxMenu(null);}} className={itemCls}><Edit className="w-3.5 h-3.5"/>Edit</div>
+                        <div onClick={()=>{setEditingId(ctxMsg.id);setEditText(ctxMsg.text);setCtxMenu(null);}} className={itemCls}><Edit className="w-3.5 h-3.5"/>{tChat('chat.edit')}</div>
                       )}
                       <div onClick={()=>{onPin(ctxMsg.id);setCtxMenu(null);}} className={itemCls}>
-                        {ctxMsg.pinned ? <PinOff className="w-3.5 h-3.5"/> : <Pin className="w-3.5 h-3.5"/>}{ctxMsg.pinned?'Unpin':'Pin'}
+                        {ctxMsg.pinned ? <PinOff className="w-3.5 h-3.5"/> : <Pin className="w-3.5 h-3.5"/>}{ctxMsg.pinned?tChat('chat.unpin'):tChat('chat.pin')}
                       </div>
-                      <div onClick={()=>{setShowForward(ctxMsg);setCtxMenu(null);}} className={itemCls}><Share2 className="w-3.5 h-3.5"/>Forward</div>
-                      <div onClick={()=>{setSelectMode(true);setSelected(new Set([ctxMsg.id]));setCtxMenu(null);}} className={itemCls}><SquareCheck className="w-3.5 h-3.5"/>Select</div>
+                      <div onClick={()=>{setShowForward(ctxMsg);setCtxMenu(null);}} className={itemCls}><Share2 className="w-3.5 h-3.5"/>{tChat('chat.forward')}</div>
+                      <div onClick={()=>{setSelectMode(true);setSelected(new Set([ctxMsg.id]));setCtxMenu(null);}} className={itemCls}><SquareCheck className="w-3.5 h-3.5"/>{tChat('chat.select')}</div>
                       {canModifyMessages && (
                         <>
                           <div className="h-px bg-border/60 my-0.5"/>
-                          <div onClick={()=>{onDelete(ctxMsg.id);setCtxMenu(null);}} className="flex items-center gap-2.5 px-3 py-2 hover:bg-red-500/10 text-red-500 rounded-lg cursor-pointer text-xs transition-colors"><Trash2 className="w-3.5 h-3.5"/>Delete</div>
+                          <div onClick={()=>{onDelete(ctxMsg.id);setCtxMenu(null);}} className="flex items-center gap-2.5 px-3 py-2 hover:bg-red-500/10 text-red-500 rounded-lg cursor-pointer text-xs transition-colors"><Trash2 className="w-3.5 h-3.5"/>{tChat('chat.delete')}</div>
                         </>
                       )}
                     </div>
@@ -2539,7 +2541,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
               <div className="flex items-center gap-2 bg-muted/60 px-4 py-2 border-t border-border/30 flex-shrink-0">
                 <div className="w-0.5 h-7 bg-primary rounded-full flex-shrink-0"/>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[10px] font-semibold text-primary">{replyTo.fromUserId===currentUser.id?'Siz':userById(replyTo.fromUserId)?.name}</p>
+                  <p className="text-[10px] font-semibold text-primary">{replyTo.fromUserId===currentUser.id?tChat('chat.you'):userById(replyTo.fromUserId)?.name}</p>
                   <p className="text-xs text-muted-foreground truncate">{replyTo.type==='audio'?'🎤 Ovoz':replyTo.type==='image'?'🖼️ Rasm':replyTo.text}</p>
                 </div>
                 <button aria-label="Javobni bekor qilish" onClick={()=>setReplyTo(null)} className="p-1 text-muted-foreground hover:text-foreground flex-shrink-0"><X className="w-4 h-4"/></button>
@@ -2563,10 +2565,10 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
               <div className="px-3 flex-shrink-0 relative" style={{ paddingTop: '0.5rem', paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }} onClick={e=>e.stopPropagation()}>
                 {showAttach && (
                   <div className="absolute bottom-[4.5rem] left-3 glass p-2 rounded-2xl border border-white/20 shadow-2xl flex flex-col gap-0.5 animate-slide-up-fade z-50 min-w-[190px]" onClick={e=>e.stopPropagation()}>
-                    <button onClick={()=>fileImgRef.current?.click()} className="flex items-center gap-3 px-3 py-2 hover:bg-muted/40 rounded-xl transition-colors text-sm"><ImageIcon className="w-4 h-4 text-blue-500"/>Rasm / Video</button>
-                    <button onClick={()=>camRef.current?.click()} className="flex items-center gap-3 px-3 py-2 hover:bg-muted/40 rounded-xl transition-colors text-sm"><Camera className="w-4 h-4 text-rose-500"/>Kamera</button>
-                    <button onClick={()=>fileAllRef.current?.click()} className="flex items-center gap-3 px-3 py-2 hover:bg-muted/40 rounded-xl transition-colors text-sm"><FileText className="w-4 h-4 text-orange-500"/>Fayl</button>
-                    <button onClick={sendLocation} className="flex items-center gap-3 px-3 py-2 hover:bg-muted/40 rounded-xl transition-colors text-sm"><MapPin className="w-4 h-4 text-green-500"/>Lokatsiya</button>
+                    <button onClick={()=>fileImgRef.current?.click()} className="flex items-center gap-3 px-3 py-2 hover:bg-muted/40 rounded-xl transition-colors text-sm"><ImageIcon className="w-4 h-4 text-blue-500"/>{tChat('chat.attachImage')}</button>
+                    <button onClick={()=>camRef.current?.click()} className="flex items-center gap-3 px-3 py-2 hover:bg-muted/40 rounded-xl transition-colors text-sm"><Camera className="w-4 h-4 text-rose-500"/>{tChat('chat.attachCamera')}</button>
+                    <button onClick={()=>fileAllRef.current?.click()} className="flex items-center gap-3 px-3 py-2 hover:bg-muted/40 rounded-xl transition-colors text-sm"><FileText className="w-4 h-4 text-orange-500"/>{tChat('chat.attachFile')}</button>
+                    <button onClick={sendLocation} className="flex items-center gap-3 px-3 py-2 hover:bg-muted/40 rounded-xl transition-colors text-sm"><MapPin className="w-4 h-4 text-green-500"/>{tChat('chat.attachLocation')}</button>
                   </div>
                 )}
                 <div className="nav-pill-desktop flex gap-1 items-end rounded-full px-1.5 py-1.5 max-w-3xl mx-auto">
@@ -2579,12 +2581,12 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
                     <div className="flex-1 flex items-center gap-3 px-3 py-2">
                       <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse flex-shrink-0"/>
                       <span className="text-sm font-mono text-red-500">{fmtTime(recSec)}</span>
-                      <span className="text-xs text-red-400/80 flex-1">Yozilmoqda...</span>
+                      <span className="text-xs text-red-400/80 flex-1">{tChat('chat.recording')}</span>
                     </div>
                   ) : (
                     <textarea rows={1}
                       className="flex-1 resize-none text-sm bg-transparent focus:outline-none max-h-28 overflow-y-auto leading-relaxed px-2 py-2.5"
-                      placeholder="Xabar yozing..."
+                      placeholder={tChat('chat.inputPlaceholder')}
                       value={editingId ? editText : text}
                       onChange={e=>{if(editingId)setEditText(e.target.value);else setText(e.target.value);e.target.style.height='auto';e.target.style.height=Math.min(e.target.scrollHeight,112)+'px';}}
                       onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();if(editingId)saveEdit();else doSend();}}}
@@ -2614,7 +2616,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 modal-backdrop animate-fade-in" onClick={()=>setShowForward(null)}>
           <div className="glass-modal rounded-t-3xl sm:rounded-2xl w-full max-w-sm p-5 animate-slide-up-fade" onClick={e=>e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-sm">Kimga yuborish?</h3>
+              <h3 className="font-bold text-sm">{tChat('chat.forwardTo')}</h3>
               <button aria-label="Yopish" onClick={()=>setShowForward(null)} className="p-1.5 hover:bg-muted rounded-full"><X className="w-4 h-4"/></button>
             </div>
             <div className="space-y-1 max-h-64 overflow-y-auto scrollbar-hide">
@@ -2866,8 +2868,22 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
   ];
 
   const activeTheme = COLOR_THEMES.find(t => t.id === colorTheme) || COLOR_THEMES[0];
-  const [activePanel, setActivePanel] = useState<null | "bg" | "appearance" | "color" | "perms" | "projects" | "language">(null);
+  const [activePanel, setActivePanel] = useState<null | "bg" | "appearance" | "color" | "perms" | "projects" | "language" | "subscription">(null);
   const APPEARANCE_LABELS: Record<string, string> = { light: "Yorug'", dark: "Qorong'i", system: "Tizim" };
+
+  const [subData, setSubData] = useState<any>(null);
+  const [subLoading, setSubLoading] = useState(false);
+  useEffect(() => {
+    if (!isAdmin(currentUser.role)) return;
+    setSubLoading(true);
+    fetch(`${API_BASE}/api/admin/subscriptions/my`, {
+      headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+    })
+      .then(r => r.json())
+      .then(d => setSubData(d))
+      .catch(() => {})
+      .finally(() => setSubLoading(false));
+  }, [currentUser.role]);
   const myProjectCount = (currentUser.projectIds || []).length;
 
   // ── Har bo'lim uchun alohida ekran (rasmdagi "Personal/General/..." kabi) ──
@@ -2875,6 +2891,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
     const panelTitle = {
       bg: "Fon mavzular", appearance: "Ko'rinish rejimi", color: "Rang mavzusi",
       perms: "Ruxsatlar", projects: "Obyektlarim", language: t('profile.language'),
+      subscription: "Obuna holati",
     }[activePanel];
     return (
       <motion.div key={activePanel} initial={{ opacity: 0, x: 28 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 28 }}
@@ -2984,6 +3001,72 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
             <div className="surface overflow-hidden p-5 flex flex-col items-center gap-3">
               <p className="text-xs text-muted-foreground text-center">{t('profile.languageHint')}</p>
               <LanguageSwitcher value={i18n.language as SiteLang} onChange={changeLanguage}/>
+            </div>
+          )}
+          {activePanel === "subscription" && (
+            <div className="surface overflow-hidden">
+              {subLoading ? (
+                <div className="flex items-center justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground"/></div>
+              ) : !subData || subData.status === 'none' ? (
+                <div className="px-5 py-8 text-center space-y-2">
+                  <CreditCard className="w-10 h-10 text-muted-foreground/40 mx-auto"/>
+                  <p className="text-sm font-medium">Obuna topilmadi</p>
+                  <p className="text-xs text-muted-foreground">Obuna bo'lish uchun dasturchi bilan bog'laning</p>
+                </div>
+              ) : (() => {
+                const statusColor: Record<string, string> = {
+                  active: "text-green-600 bg-green-500/10 border-green-500/20",
+                  pending: "text-amber-600 bg-amber-500/10 border-amber-500/20",
+                  expired: "text-red-600 bg-red-500/10 border-red-500/20",
+                  rejected: "text-red-600 bg-red-500/10 border-red-500/20",
+                };
+                const statusLabel: Record<string, string> = {
+                  active: "Faol", pending: "Kutilmoqda", expired: "Muddati o'tgan", rejected: "Rad etildi",
+                };
+                const cls = statusColor[subData.status] || "text-muted-foreground bg-muted/50 border-border";
+                return (
+                  <div className="divide-y divide-border/50">
+                    <div className="flex items-center justify-between px-5 py-4">
+                      <span className="text-sm font-semibold">Status</span>
+                      <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${cls}`}>{statusLabel[subData.status] || subData.status}</span>
+                    </div>
+                    {subData.selectedPlan && (
+                      <div className="flex items-center justify-between px-5 py-4">
+                        <span className="text-sm font-medium text-muted-foreground">Tarif</span>
+                        <span className="text-sm font-semibold capitalize">{subData.selectedPlan}</span>
+                      </div>
+                    )}
+                    {subData.daysLeft !== null && subData.status === 'active' && (
+                      <div className="flex items-center justify-between px-5 py-4">
+                        <span className="text-sm font-medium text-muted-foreground">Qolgan kunlar</span>
+                        <span className={`text-sm font-bold ${subData.daysLeft <= 7 ? 'text-red-500' : subData.daysLeft <= 30 ? 'text-amber-500' : 'text-green-600'}`}>{subData.daysLeft} kun</span>
+                      </div>
+                    )}
+                    {subData.currentPeriodEnd && (
+                      <div className="flex items-center justify-between px-5 py-4">
+                        <div className="flex items-center gap-2 text-muted-foreground"><Calendar className="w-3.5 h-3.5"/><span className="text-sm font-medium">Tugash sanasi</span></div>
+                        <span className="text-sm font-semibold">{new Date(subData.currentPeriodEnd).toLocaleDateString('uz-UZ', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>
+                      </div>
+                    )}
+                    {subData.amount > 0 && (
+                      <div className="flex items-center justify-between px-5 py-4">
+                        <span className="text-sm font-medium text-muted-foreground">Narx</span>
+                        <span className="text-sm font-semibold">{subData.amount.toLocaleString()} so'm</span>
+                      </div>
+                    )}
+                    {subData.status === 'active' && subData.daysLeft !== null && subData.daysLeft <= 30 && (
+                      <div className="px-5 py-4 bg-amber-500/5">
+                        <p className="text-xs text-amber-700 dark:text-amber-300 flex items-start gap-1.5"><AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5"/>Obuna muddati tez orada tugaydi. Uzaytirish uchun dasturchi bilan bog'laning.</p>
+                      </div>
+                    )}
+                    {(subData.status === 'expired' || subData.status === 'rejected') && (
+                      <div className="px-5 py-4 bg-red-500/5">
+                        <p className="text-xs text-red-600 dark:text-red-400 flex items-start gap-1.5"><AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5"/>Obunani yangilash uchun dasturchi bilan bog'laning: <a href="https://t.me/Sadriddinov_Jahongir" className="underline font-semibold">@Sadriddinov_Jahongir</a></p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           )}
         </div>
@@ -3105,6 +3188,9 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
             { key: "language" as const, icon: Languages, label: t('profile.language'), hint: langLabel(i18n.language as SiteLang), swatch: null },
             { key: "perms" as const, icon: CheckCircle, label: t('profile.permissions'), hint: `${perms.filter(([,has])=>has).length}/${perms.length}`, swatch: null },
             { key: "projects" as const, icon: Building2, label: t('profile.myObjects'), hint: String(myProjectCount), swatch: null },
+            ...(isAdmin(currentUser.role) ? [{ key: "subscription" as const, icon: CreditCard, label: "Obuna holati",
+              hint: subData?.status === 'active' ? (subData.daysLeft !== null ? `${subData.daysLeft} kun` : "Faol") : subData?.status === 'pending' ? "Kutilmoqda" : subData?.status === 'expired' ? "Muddati o'tgan" : subData?.status === 'rejected' ? "Rad etildi" : subLoading ? "..." : "Topilmadi",
+              swatch: null }] : []),
           ].map((row, i) => (
             <button key={row.key} onClick={() => setActivePanel(row.key)}
               className={`w-full flex items-center gap-3 px-4 py-3.5 hover:bg-muted/30 liquid-transition text-left ${i > 0 ? "border-t border-border/50" : ""}`}>
@@ -3810,7 +3896,7 @@ export default function App() {
       else {
         const errData = await res.json();
         console.error('Expense error:', errData);
-        alert('Xatolik: ' + (errData.error || 'Nomalum xato'));
+        toast.error(errData.error || 'Noma\'lum xato');
       }
     } catch(err) { console.error(err); }
   };
@@ -4132,6 +4218,9 @@ export default function App() {
             token={localStorage.getItem('token') || ''}
             open={aiOpen}
             onClose={() => setAiOpen(false)}
+            onUserAdded={(u) => setUsers(p => [...p, u])}
+            onUserDeleted={(id) => setUsers(p => p.filter(u => u.id !== id))}
+            onUserUpdated={(u) => setUsers(p => p.map(x => x.id === u.id ? u : x))}
           />
         </Suspense>
       )}

@@ -1,10 +1,13 @@
 // Eskiz.uz SMS shlyuzi bilan ishlash — LOGIN OTP shu servis orqali yuboriladi.
-// Rasmiy Postman docs sahifasi (documenter.getpostman.com/view/663428/RzfmES4z)
-// JS orqali render qilinadi va to'g'ridan-to'g'ri o'qib bo'lmaydi — shuning
-// uchun endpoint/format bir nechta mustaqil, ochiq-manba Eskiz klientlari
-// (Go: realtemirov/eskizuz, PHP: professor93/eskiz-sms-client) manba kodidan
-// tasdiqlangan: JSON body, POST /auth/login {email,password} -> data.token,
-// POST /message/sms/send {mobile_phone,message,from} + Bearer token -> {id,status,message}.
+// Format rasmiy Postman docs (documenter.getpostman.com/view/663428/RzfmES4z,
+// "SMS shlyuz" bo'limi) matnidan TASDIQLANGAN:
+//   POST /auth/login        — JSON body {email,password} -> data.token
+//   POST /message/sms/send  — MULTIPART FORM-DATA {mobile_phone,message,from,
+//                              callback_url?} + Bearer token -> {id,message,status}
+// (send endpoint JSON EMAS — docs body turini aniq "formdata" deb ko'rsatgan
+// va curl namunasi --form flagi bilan berilgan; login JSON ekani docs sahifa
+// render bo'lmagani sabab ko'rinmadi, lekin haqiqiy so'rov bilan sinovdan
+// o'tkazilgan — Eskiz JSON'ni to'g'ri tushunib, aniq xato xabari qaytardi).
 import { ESKIZ_TEST_MESSAGES, otpSmsText } from '../config/smsTemplates';
 
 const BASE_URL = 'https://notify.eskiz.uz/api';
@@ -44,17 +47,20 @@ async function getToken(): Promise<string> {
 }
 
 async function sendRaw(token: string, mobilePhone: string, message: string): Promise<{ res: Response; data: any }> {
+  // MUHIM: /message/sms/send FORM-DATA kutadi (rasmiy docs: "Body formdata",
+  // curl namunasida --form). Node'ning global FormData'siga body sifatida
+  // berilsa, fetch Content-Type'ni (boundary bilan) o'zi to'g'ri qo'yadi —
+  // qo'lda 'multipart/form-data' yozib bo'lmaydi, chunki unda tasodifiy
+  // boundary qatori bo'lishi shart.
+  const form = new FormData();
+  form.append('mobile_phone', mobilePhone);
+  form.append('message', message);
+  form.append('from', process.env.ESKIZ_FROM || '4546');
+
   const res = await fetch(`${BASE_URL}/message/sms/send`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({
-      mobile_phone: mobilePhone,
-      message,
-      from: process.env.ESKIZ_FROM || '4546',
-    }),
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
   });
   const data: any = await res.json().catch(() => ({}));
   return { res, data };

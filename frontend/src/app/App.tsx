@@ -3847,17 +3847,30 @@ export default function App() {
   }, [groups.map(g => g.id).join(",")]);
 
   if (!liveUser) {
-    return authView === "register"
-      ? <Suspense fallback={<div className="min-h-screen bg-background flex items-center justify-center"><Loader2 className="w-8 h-8 text-primary animate-spin"/></div>}>
-          <RegisterWizard onBack={()=>setAuthView("login")} onDone={(u,company)=>{setCurrentUser(u);setPage("dashboard");setAuthView("login");applyCompany(company);}}/>
-        </Suspense>
-      : <LoginScreen onLogin={(u,company)=>{setCurrentUser(u);setPage("dashboard");applyCompany(company);}} onRegister={()=>setAuthView("register")}/>;
+    // MUHIM: <Toaster/> asosiy (pastdagi, liveUser bor holatdagi) return ichida
+    // edi — login/register ekranida umuman render qilinmagan bo'lardi, ya'ni
+    // shu yerdan chiqarilgan toast() chaqiruvlari (masalan SMS OTP test-rejim
+    // kodini ko'rsatish) hech qayerda ko'rinmasdi. Har bir "erta return"
+    // filialida o'zining Toaster'i bo'lishi shart.
+    return (
+      <>
+        {authView === "register"
+          ? <Suspense fallback={<div className="min-h-screen bg-background flex items-center justify-center"><Loader2 className="w-8 h-8 text-primary animate-spin"/></div>}>
+              <RegisterWizard onBack={()=>setAuthView("login")} onDone={(u,company)=>{setCurrentUser(u);setPage("dashboard");setAuthView("login");applyCompany(company);}}/>
+            </Suspense>
+          : <LoginScreen onLogin={(u,company)=>{setCurrentUser(u);setPage("dashboard");applyCompany(company);}} onRegister={()=>setAuthView("register")}/>}
+        <Toaster position="top-center" richColors closeButton/>
+      </>
+    );
   }
   // Dasturchi (super-admin) — alohida panel: barcha firmalar va foydalanuvchilar
   if (liveUser.role === "dasturchi") return (
-    <Suspense fallback={<div className="min-h-screen bg-background flex items-center justify-center"><Loader2 className="w-8 h-8 text-primary animate-spin"/></div>}>
-      <DeveloperPanel currentUser={liveUser} onLogout={()=>{setCurrentUser(null);setAuthView("login");}}/>
-    </Suspense>
+    <>
+      <Suspense fallback={<div className="min-h-screen bg-background flex items-center justify-center"><Loader2 className="w-8 h-8 text-primary animate-spin"/></div>}>
+        <DeveloperPanel currentUser={liveUser} onLogout={()=>{setCurrentUser(null);setAuthView("login");}}/>
+      </Suspense>
+      <Toaster position="top-center" richColors closeButton/>
+    </>
   );
   if (initialLoading) return <div className="min-h-screen bg-background flex items-center justify-center"><Loader2 className="w-8 h-8 text-primary animate-spin"/></div>;
 

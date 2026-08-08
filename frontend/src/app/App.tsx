@@ -631,7 +631,7 @@ function SendTransferModal({ currentUser, projects, allUsers, onClose, onSend, i
           <button aria-label={t('sendTransfer.close')} onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted liquid-transition"><X className="w-4 h-4 text-muted-foreground"/></button>
         </div>
         <form onSubmit={submit} className="flex flex-col flex-1 min-h-0">
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-3">
           {/* Project */}
           <div>
             <label className="text-[10px] font-bold block mb-1.5 text-muted-foreground uppercase tracking-wider">{t('sendTransfer.objectLabel')}</label>
@@ -1832,7 +1832,7 @@ function MaterialDetailsModal({ mat, confT, pendT, onClose, onSend }: { mat: Req
             <button aria-label={tt('common.close')} onClick={onClose} className="p-1.5 text-muted-foreground hover:bg-muted/50 rounded-full liquid-transition bg-muted/20"><X className="w-4 h-4"/></button>
           </div>
         </div>
-        <div className="p-4 overflow-y-auto">
+        <div className="p-4 overflow-y-auto overflow-x-hidden">
           <div className="grid grid-cols-2 gap-3 mb-4">
             <div className="bg-muted p-2.5 rounded-lg border border-border">
               <p className="text-sm md:text-xs text-muted-foreground mb-1">{tt('materialDetails.planned')}</p>
@@ -3321,7 +3321,12 @@ function LoginScreen({ onLogin, onRegister }: { onLogin: (u: any, company?: any)
     }
 
     try {
-      const res = await fetch(API_BASE + "/api/auth/send-otp", {
+      // VAQTINCHA Telegram-kod oqimiga qaytarildi (/send-otp EMAS) — Eskiz
+      // akkounti hali production uchun tasdiqlanmagan, real SMS kod olib
+      // kelolmaydi. /api/auth/send-otp + /api/auth/verify-otp backendda
+      // to'liq tayyor va ishlab turibdi (sinovdan o'tgan) — akkount
+      // tasdiqlangach shu ikkita fetch manzilini almashtirish kifoya.
+      const res = await fetch(API_BASE + "/api/auth/send-code", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phone: cleanPhone })
@@ -3333,16 +3338,6 @@ function LoginScreen({ onLogin, onRegister }: { onLogin: (u: any, company?: any)
       }
       setStep("code");
       setTimeLeft(120);
-      // Eskiz TEST rejimida (haqiqiy akkount hali tasdiqlanmaguncha) SMS orqali
-      // haqiqiy kod HECH QACHON kelmaydi (Eskiz faqat qat'iy test-matnini
-      // yuboradi) — shuning uchun backend shu holatda kodni javobga ham
-      // qo'shadi (devOtp), faqat ESKIZ_TEST_MODE=true bo'lganda. Productionda
-      // bu maydon hech qachon kelmaydi. ATAYLAB avtomatik to'ldirilmaydi —
-      // faqat ko'rsatiladi (foydalanuvchi so'ragan: kod faqat HAQIQIY SMS
-      // kelganda — OS autofill orqali — o'zi to'lsin, hech qachon soxta emas).
-      if (data.devOtp) {
-        toast(`🧪 TEST rejimi: kod = ${data.devOtp}`, { description: data.devNote, duration: 15000 });
-      }
     } catch (err) {
       setError(t('login.serverError'));
     }
@@ -3352,7 +3347,7 @@ function LoginScreen({ onLogin, onRegister }: { onLogin: (u: any, company?: any)
     if (e) e.preventDefault();
     const cleanPhone = phone.replace(/\s+/g, "");
     try {
-      const res = await fetch(API_BASE + "/api/auth/verify-otp", {
+      const res = await fetch(API_BASE + "/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phone: cleanPhone, code })
@@ -3449,6 +3444,14 @@ function LoginScreen({ onLogin, onRegister }: { onLogin: (u: any, company?: any)
           transition={{ type: "spring", stiffness: 380, damping: 34 }}>
         {step === "phone" ? (
           <form onSubmit={handlePhoneSubmit} className="space-y-4">
+            <div className="bg-primary/5 border border-primary/10 rounded-xl p-3 mb-4">
+              <p className="text-sm md:text-xs text-muted-foreground leading-relaxed text-center">
+                {t('login.botHintBefore')} <span className="font-semibold text-foreground">/start</span> {t('login.botHintAfter')}
+              </p>
+              <a href="https://t.me/qurilish_erp_bot" target="_blank" rel="noopener noreferrer" className="mt-2 text-sm md:text-xs font-semibold text-foreground flex items-center justify-center gap-1 hover:underline hover:text-primary">
+                <Send className="w-3 h-3 text-primary"/> {t('login.goToBot', { handle: '@qurilish_erp_bot' })}
+              </a>
+            </div>
             <div>
               <label htmlFor="login-phone" className="text-sm md:text-xs font-medium block mb-1.5 ml-1 text-muted-foreground">{t('login.phoneLabel')}</label>
               <div className="relative">

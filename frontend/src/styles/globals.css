@@ -3,7 +3,16 @@
 
 @layer utilities {
   .scrollbar-hide::-webkit-scrollbar { display: none; }
-  .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+  /* MUHIM: overflow-x ANIQ "hidden" qilinmasa, CSS spec bo'yicha overflow-y:auto
+     bilan birga turgan overflow-x:visible avtomatik "auto"ga aylanadi (bitta
+     o'q auto/scroll bo'lsa, ikkinchisi visible qololmaydi) — ya'ni bu klass
+     ishlatilgan HAR BIR vertikal-scroll konteyner (deyarli hammasi shu klassni
+     ishlatadi) o'zining alohida gorizontal scroll konteksitini ham ochib
+     qo'yardi, root html/body'dagi overflow-x:hidden'dan mustaqil ravishda —
+     shu sabab mobil/planshetda tasodifiy "yon tomonga surilish" paydo bo'lardi
+     (Login sahifasi, chat ro'yxati va h.k.). Bu klass hamma joyda faqat
+     VERTIKAL scroll uchun ishlatiladi — gorizontalni hidden qilish xavfsiz. */
+  .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; overflow-x: hidden; }
 
   /* ── Zamonaviy toza yuzalar (dark-aware, var asosida) ───────────────── */
   /* Eski "glass" nomlar saqlanadi — endi ular tekis, toza kartalar (yangi uslub). */

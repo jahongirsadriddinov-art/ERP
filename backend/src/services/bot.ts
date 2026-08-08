@@ -378,7 +378,8 @@ bot.on('message', async (msg: any) => {
   if (admin) {
     if (text === tb(user.language, 'kb_pendingApprovals')) {
       try {
-        const pending = await Transaction.find({ status: 'pending' }).sort({ createdAt: -1 }).limit(10);
+        const companyFilter = user.companyId ? { companyId: user.companyId } : {};
+        const pending = await Transaction.find({ ...companyFilter, status: 'pending' }).sort({ createdAt: -1 }).limit(10);
         if (pending.length === 0) {
           bot.sendMessage(chatId, tb(user.language, 'admNoPending'), { reply_markup: ADMIN_KEYBOARD(user.language) });
           return;
@@ -408,9 +409,10 @@ bot.on('message', async (msg: any) => {
 
     if (text === tb(user.language, 'kb_financeStatus')) {
       try {
-        const confirmed = await Transaction.find({ status: 'confirmed', type: { $ne: 'transfer' } });
+        const companyFilter = user.companyId ? { companyId: user.companyId } : {};
+        const confirmed = await Transaction.find({ ...companyFilter, status: 'confirmed', type: { $ne: 'transfer' } });
         const total = confirmed.reduce((s: number, t: any) => s + (t.amount || 0), 0);
-        const pending = await Transaction.find({ status: 'pending', type: { $ne: 'transfer' } });
+        const pending = await Transaction.find({ ...companyFilter, status: 'pending', type: { $ne: 'transfer' } });
         const pendTotal = pending.reduce((s: number, t: any) => s + (t.amount || 0), 0);
         bot.sendMessage(chatId,
           tb(user.language, 'admFinanceStatusBody', { total: fmt(total, user.language), pendTotal: fmt(pendTotal, user.language), diff: fmt(total - pendTotal, user.language) }),
@@ -453,7 +455,8 @@ bot.on('message', async (msg: any) => {
 
     if (text === tb(user.language, 'kb_report')) {
       try {
-        const allTx = await Transaction.find({});
+        const companyFilter = user.companyId ? { companyId: user.companyId } : {};
+        const allTx = await Transaction.find(companyFilter);
         const transfers = allTx.filter((t: any) => t.type === 'transfer');
         const expenses = allTx.filter((t: any) => t.type !== 'transfer');
         const confExp = expenses.filter((t: any) => t.status === 'confirmed').reduce((s: number, t: any) => s + (t.amount || 0), 0);

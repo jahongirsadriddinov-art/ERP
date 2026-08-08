@@ -3316,7 +3316,7 @@ function LoginScreen({ onLogin, onRegister }: { onLogin: (u: any, company?: any)
     }
 
     try {
-      const res = await fetch(API_BASE + "/api/auth/send-code", {
+      const res = await fetch(API_BASE + "/api/auth/send-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phone: cleanPhone })
@@ -3337,7 +3337,7 @@ function LoginScreen({ onLogin, onRegister }: { onLogin: (u: any, company?: any)
     if (e) e.preventDefault();
     const cleanPhone = phone.replace(/\s+/g, "");
     try {
-      const res = await fetch(API_BASE + "/api/auth/login", {
+      const res = await fetch(API_BASE + "/api/auth/verify-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phone: cleanPhone, code })
@@ -3434,14 +3434,6 @@ function LoginScreen({ onLogin, onRegister }: { onLogin: (u: any, company?: any)
           transition={{ type: "spring", stiffness: 380, damping: 34 }}>
         {step === "phone" ? (
           <form onSubmit={handlePhoneSubmit} className="space-y-4">
-            <div className="bg-primary/5 border border-primary/10 rounded-xl p-3 mb-4">
-              <p className="text-sm md:text-xs text-muted-foreground leading-relaxed text-center">
-                {t('login.botHintBefore')} <span className="font-semibold text-foreground">/start</span> {t('login.botHintAfter')}
-              </p>
-              <a href="https://t.me/qurilish_erp_bot" target="_blank" rel="noopener noreferrer" className="mt-2 text-sm md:text-xs font-semibold text-foreground flex items-center justify-center gap-1 hover:underline hover:text-primary">
-                <Send className="w-3 h-3 text-primary"/> {t('login.goToBot', { handle: '@qurilish_erp_bot' })}
-              </a>
-            </div>
             <div>
               <label htmlFor="login-phone" className="text-sm md:text-xs font-medium block mb-1.5 ml-1 text-muted-foreground">{t('login.phoneLabel')}</label>
               <div className="relative">

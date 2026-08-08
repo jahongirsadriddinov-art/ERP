@@ -1,13 +1,231 @@
 import { Router } from 'express';
 import jwt from 'jsonwebtoken';
-import User from '../models/User';
+import User, { IUser } from '../models/User';
 import Company from '../models/Company';
 import Subscription from '../models/Subscription';
+import Otp from '../models/Otp';
 import { bot } from '../services/bot';
+import { sendOtpSms } from '../services/eskizService';
 import { scoped, stamped } from '../middleware/scope';
-import { normalizePhone } from '../utils/tokens';
+import { normalizePhone, isValidUzPhone, hashPassword, verifyPassword } from '../utils/tokens';
+import { checkRate } from '../utils/rateLimit';
 
 const router = Router();
+
+const clientIp = (req: any) => (req.headers['x-forwarded-for']?.toString().split(',')[0] || req.ip || '').trim();
+
+// /login (eski, Telegram-kod) bilan /verify-otp (yangi, SMS-kod) IKKALASI ham
+// muvaffaqiyatli tasdiqlangandan keyin bir xil ishni qiladi: obuna holatini
+// tekshiradi, JWT beradi, user+company qaytaradi. Ikki joyda mantiqni
+// nusxalab, ikkalasi asta-sekin bir-biridan farqlanib ketmasligi uchun shu
+// yerga chiqarilgan.
+async function issueSession(user: IUser, res: any) {
+  const [company, sub] = await Promise.all([
+    user.companyId ? Company.findById(user.companyId) : Promise.resolve(null),
+    (user.companyId && user.role !== 'dasturchi')
+      ? Subscription.findOne({ companyId: user.companyId }).sort({ createdAt: -1 })
+      : Promise.resolve(null),
+  ]);
+
+  if (user.companyId && user.role !== 'dasturchi') {
+    if (sub) {
+      const now = new Date();
+      if (sub.status === 'active' && sub.currentPeriodEnd && sub.currentPeriodEnd < now) {
+        sub.status = 'expired';
+        await sub.save();
+      }
+      if (sub.status === 'pending') {
+        return res.status(403).json({
+          subscriptionStatus: 'pending',
+          error: 'Obunangiz hali admin tomonidan tasdiqlanmagan. Iltimos kuting yoki @Sadriddinov_Jahongir bilan bog\'laning.',
+        });
+      }
+      if (sub.status === 'expired' || sub.status === 'rejected') {
+        return res.status(403).json({
+          subscriptionStatus: sub.status,
+          error: 'Obunangiz muddati tugagan yoki rad etilgan. To\'lovni yangilash uchun @Sadriddinov_Jahongir bilan bog\'laning.',
+        });
+      }
+    }
+  }
+
+  const token = jwt.sign(
+    {
+      userId: user._id,
+      role: user.role,
+      companyId: user.companyId,
+      branchId: company?.branchId,
+      isOwner: user.isOwner || false
+    },
+    process.env.JWT_SECRET || 'secret',
+    { expiresIn: '7d' }
+  );
+
+  return res.json({
+    success: true,
+    token,
+    user: {
+      id: user._id,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      phone: user.phone,
+      role: user.role,
+      projectIds: user.projectIds || [],
+      companyId: user.companyId,
+      isOwner: user.isOwner || false,
+      language: user.language || 'uz'
+    },
+    // Firma brendi — hamma a'zo shu qiymatni ko'radi (o'zgartira olmaydi)
+    company: company ? {
+      id: company._id,
+      branchId: company.branchId,
+      name: company.name,
+      logoUrl: company.logoUrl || '',
+      currency: company.currency
+    } : null
+  });
+}
+
+// ─── SMS OTP login (Eskiz.uz) — eski Telegram-kod /send-code va /login ni ────
+// almashtiradi. Faqat TIZIMDA MAVJUD userlar uchun ishlaydi (auto-create yo'q —
+// bo'sh raqamga OTP kirish huquqi bermaydi, mavjud rol/firma tizimi buziladi).
+const OTP_TTL_MS = 2 * 60 * 1000;       // 2 daqiqa
+const OTP_MAX_ATTEMPTS = 5;
+const OTP_RESEND_COOLDOWN_MS = 60 * 1000; // 60 soniya
+
+router.post('/send-otp', async (req, res) => {
+  try {
+    const rawPhone = req.body?.phone;
+    if (!rawPhone || typeof rawPhone !== 'string' || !isValidUzPhone(rawPhone)) {
+      return res.status(400).json({ success: false, error: "Telefon raqam noto'g'ri formatda. Namuna: +998901234567" });
+    }
+    const phone = normalizePhone(rawPhone);
+    const ip = clientIp(req);
+
+    // Rate limit: telefon bo'yicha 60s cooldown + soatiga max 5 ta, IP bo'yicha soatiga max 10 ta.
+    const cooldown = checkRate(`otp:cooldown:${phone}`, 1, OTP_RESEND_COOLDOWN_MS);
+    if (!cooldown.allowed) {
+      return res.status(429).json({ success: false, error: `Iltimos ${cooldown.retryAfterSec} soniyadan keyin qayta urining`, retryAfterSec: cooldown.retryAfterSec });
+    }
+    const phoneHourly = checkRate(`otp:hourly:phone:${phone}`, 5, 60 * 60 * 1000);
+    if (!phoneHourly.allowed) {
+      return res.status(429).json({ success: false, error: "Juda ko'p urinish. Keyinroq qayta urining." });
+    }
+    const ipHourly = checkRate(`otp:hourly:ip:${ip}`, 10, 60 * 60 * 1000);
+    if (!ipHourly.allowed) {
+      return res.status(429).json({ success: false, error: "Juda ko'p urinish. Keyinroq qayta urining." });
+    }
+
+    // Faqat mavjud user — begona/tasodifiy raqamga OTP yubormaymiz (ular tizimda
+    // yo'qligini ham oshkor qilmaymiz, shunchaki bir xil generic javob qaytadi).
+    const user = await User.findOne({ phone });
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'Bu raqam bilan foydalanuvchi topilmadi' });
+    }
+
+    const code = Math.floor(1000 + Math.random() * 9000).toString(); // 1000-9999
+    const otpHash = await hashPassword(code);
+
+    // Eski OTP (agar bo'lsa) bekor qilinadi — bitta faol OTP qoidasi.
+    await Otp.deleteMany({ phone });
+    await Otp.create({ phone, otpHash, attempts: 0, expiresAt: new Date(Date.now() + OTP_TTL_MS) });
+
+    const sms = await sendOtpSms(phone, code);
+    if (!sms.ok) {
+      // OTP yozuvini qoldirmaymiz — yuborilmagan kodni keyin "to'g'ri" deb tekshirib bo'lmaydi.
+      await Otp.deleteMany({ phone });
+      return res.status(502).json({ success: false, error: 'SMS yuborishda xatolik yuz berdi. Birozdan keyin qayta urining.' });
+    }
+
+    return res.json({ success: true, message: 'Tasdiqlash kodi yuborildi' });
+  } catch (err) {
+    console.error('[send-otp]', err);
+    return res.status(500).json({ success: false, error: 'Server xatoligi' });
+  }
+});
+
+router.post('/verify-otp', async (req, res) => {
+  try {
+    const rawPhone = req.body?.phone;
+    const otp = req.body?.otp ?? req.body?.code; // frontend 'code' deb yuboradi, spec 'otp' deydi — ikkalasini ham qabul qilamiz
+    if (!rawPhone || !otp || typeof otp !== 'string') {
+      return res.status(400).json({ success: false, error: 'Telefon va OTP kiritilishi shart' });
+    }
+    const phone = normalizePhone(rawPhone);
+    if (!isValidUzPhone(phone)) {
+      return res.status(400).json({ success: false, error: "Telefon raqam noto'g'ri formatda" });
+    }
+
+    // Bir IP'dan ko'plab TURLI raqamlarni brute-force qilishga qarshi qo'shimcha himoya
+    // (asosiy himoya — pastdagi 5-urinish limiti, bu esa faqat qo'shimcha qatlam).
+    const ipCheck = checkRate(`otp:verify:ip:${clientIp(req)}`, 20, 10 * 60 * 1000);
+    if (!ipCheck.allowed) {
+      return res.status(429).json({ success: false, error: "Juda ko'p urinish. Keyinroq qayta urining." });
+    }
+
+    const otpDoc = await Otp.findOne({ phone }).sort({ createdAt: -1 });
+    if (!otpDoc || otpDoc.expiresAt < new Date()) {
+      if (otpDoc) await otpDoc.deleteOne();
+      return res.status(400).json({ success: false, error: "Kod topilmadi yoki muddati tugagan. Qaytadan so'rang." });
+    }
+    if (otpDoc.attempts >= OTP_MAX_ATTEMPTS) {
+      await otpDoc.deleteOne();
+      return res.status(400).json({ success: false, error: "Urinishlar soni tugadi. Qaytadan so'rang." });
+    }
+
+    const isCorrect = await verifyPassword(otp, otpDoc.otpHash);
+    if (!isCorrect) {
+      otpDoc.attempts += 1;
+      const attemptsLeft = OTP_MAX_ATTEMPTS - otpDoc.attempts;
+      if (attemptsLeft <= 0) {
+        await otpDoc.deleteOne();
+        return res.status(400).json({ success: false, error: "Kod noto'g'ri. Urinishlar soni tugadi, qaytadan so'rang." });
+      }
+      await otpDoc.save();
+      return res.status(400).json({ success: false, error: `Kod noto'g'ri. ${attemptsLeft} ta urinish qoldi.` });
+    }
+
+    // To'g'ri — bir martalik, darhol o'chiriladi.
+    await otpDoc.deleteOne();
+
+    const user = await User.findOne({ phone });
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'Foydalanuvchi topilmadi' });
+    }
+    user.phoneVerifiedAt = new Date();
+    await user.save();
+
+    return issueSession(user, res);
+  } catch (err) {
+    console.error('[verify-otp]', err);
+    return res.status(500).json({ success: false, error: 'Server xatoligi' });
+  }
+});
+
+// Himoyalangan test endpoint — Authorization: Bearer <token> orqali joriy userni qaytaradi.
+router.get('/me', async (req, res) => {
+  if (!req.user) {
+    return res.status(401).json({ success: false, error: 'Avtorizatsiya talab qilinadi' });
+  }
+  try {
+    const user = await User.findById(req.user.userId);
+    if (!user) return res.status(404).json({ success: false, error: 'Foydalanuvchi topilmadi' });
+    return res.json({
+      success: true,
+      user: {
+        id: user._id,
+        phone: user.phone,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role,
+        companyId: user.companyId,
+      },
+    });
+  } catch (err) {
+    console.error('[auth/me]', err);
+    return res.status(500).json({ success: false, error: 'Server xatoligi' });
+  }
+});
 
 // ─── Dasturchi (super-admin) sozlamalari ─────────────────────────────────────
 // Xavfsizlik uchun .env dan o'qiladi; agar berilmasa quyidagi standart ishlatiladi.
@@ -15,7 +233,10 @@ const router = Router();
 const DEVELOPER_PHONE = normalizePhone(process.env.DEVELOPER_PHONE || '+998900960890');
 const DEVELOPER_PASSWORD = process.env.DEVELOPER_PASSWORD || 'Dasturchi_2026';
 
-// Send verification code
+// ─── DEPRECATED — Telegram-kod orqali login (SMS OTP bilan almashtirildi) ────
+// Frontend endi /send-otp va /verify-otp ni chaqiradi. Bu ikkisi ATAYLAB
+// o'chirilmagan (backward-compat / qo'lda fallback uchun) — lekin hech qanday
+// UI ular tomon so'rov yubormaydi.
 router.post('/send-code', async (req, res) => {
   const { phone } = req.body;
   if (!phone) {
@@ -82,72 +303,7 @@ router.post('/login', async (req, res) => {
     user.telegramVerificationCodeExpires = undefined;
     await user.save();
 
-    // Firma + obuna ma'lumotlarini parallel olamiz (DB round-trip kamaytirish)
-    const [company, sub] = await Promise.all([
-      user.companyId ? Company.findById(user.companyId) : Promise.resolve(null),
-      (user.companyId && user.role !== 'dasturchi')
-        ? Subscription.findOne({ companyId: user.companyId }).sort({ createdAt: -1 })
-        : Promise.resolve(null),
-    ]);
-
-    // Obuna holati tekshiruvi (dasturchi uchun o'tkazilmaydi, firmasiz eski user ham o'tadi)
-    if (user.companyId && user.role !== 'dasturchi') {
-      if (sub) {
-        const now = new Date();
-        // Muddati o'tgan active obunani expired deb belgilaymiz
-        if (sub.status === 'active' && sub.currentPeriodEnd && sub.currentPeriodEnd < now) {
-          sub.status = 'expired';
-          await sub.save();
-        }
-        if (sub.status === 'pending') {
-          return res.status(403).json({
-            subscriptionStatus: 'pending',
-            error: 'Obunangiz hali admin tomonidan tasdiqlanmagan. Iltimos kuting yoki @Sadriddinov_Jahongir bilan bog\'laning.',
-          });
-        }
-        if (sub.status === 'expired' || sub.status === 'rejected') {
-          return res.status(403).json({
-            subscriptionStatus: sub.status,
-            error: 'Obunangiz muddati tugagan yoki rad etilgan. To\'lovni yangilash uchun @Sadriddinov_Jahongir bilan bog\'laning.',
-          });
-        }
-      }
-    }
-
-    const token = jwt.sign(
-      {
-        userId: user._id,
-        role: user.role,
-        companyId: user.companyId,
-        branchId: company?.branchId,
-        isOwner: user.isOwner || false
-      },
-      process.env.JWT_SECRET || 'secret',
-      { expiresIn: '365d' }
-    );
-
-    return res.json({
-      token,
-      user: {
-        id: user._id,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        phone: user.phone,
-        role: user.role,
-        projectIds: user.projectIds || [],
-        companyId: user.companyId,
-        isOwner: user.isOwner || false,
-        language: user.language || 'uz'
-      },
-      // Firma brendi — hamma a'zo shu qiymatni ko'radi (o'zgartira olmaydi)
-      company: company ? {
-        id: company._id,
-        branchId: company.branchId,
-        name: company.name,
-        logoUrl: company.logoUrl || '',
-        currency: company.currency
-      } : null
-    });
+    return issueSession(user, res);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server xatoligi' });

@@ -185,7 +185,8 @@ export function exportExpensesToCsv(expenses: Expense[], users: AppUser[], proje
   });
   downloadCsv(filename, headers, rows);
 }
-export const isAdmin = (r: Role) => r === "direktor" || r === "orinbosar" || r === "dasturchi";
+export const isAdmin = (r: Role) => r === "direktor" || r === "orinbosar";
+export const isPlatformAdmin = (r: Role) => r === "dasturchi";
 const DEV_PHONE = "+998900960890"; // dasturchi raqami — parol bilan kiradi (Telegram kod emas)
 
 // ─── Seed Data ────────────────────────────────────────────────────────────────

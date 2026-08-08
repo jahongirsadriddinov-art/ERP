@@ -3,6 +3,7 @@ import User from '../models/User';
 import { scoped } from '../middleware/scope';
 import { getTenant } from '../middleware/tenantContext';
 import { emitToUser } from '../services/socket';
+import { blockDeveloper } from '../middleware/auth';
 
 const router = Router();
 
@@ -27,7 +28,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Update user
+// Update user — dasturchi faqat companyId ni o'zgartira oladi (tenant bug fix uchun)
 router.put('/:id', async (req, res) => {
   try {
     const { firstName, lastName, companyId, language } = req.body;
@@ -66,8 +67,8 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// Delete user
-router.delete('/:id', async (req, res) => {
+// Delete user — dasturchi o'chira olmaydi (firma ichki boshqaruvi)
+router.delete('/:id', blockDeveloper, async (req, res) => {
   try {
     const user = await User.findOneAndDelete(scoped({ _id: req.params.id }));
     if (!user) return res.status(404).json({ error: 'Foydalanuvchi topilmadi' });

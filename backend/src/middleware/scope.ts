@@ -21,6 +21,8 @@ import { currentCompanyId, getTenant } from './tenantContext';
 //  • autentifikatsiyasiz      → filtr yo'q (eski token yubormaydigan klient)
 export function scoped<T extends Record<string, any>>(filter: T = {} as T): T {
   const t = getTenant();
+  // Dasturchi ruxsat berilgan yo'llarda (users, messages, groups) barcha firmalarni ko'radi.
+  // Moliyaviy va firma-ichki yo'llar blockDeveloper middleware orqali bloklangan (index.ts).
   if (t?.isDeveloper) return filter;
   const cid = t?.companyId;
   if (cid) return { ...filter, companyId: cid };

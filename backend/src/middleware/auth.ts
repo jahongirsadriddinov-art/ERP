@@ -93,3 +93,13 @@ export function requireDeveloper(req: Request, res: Response, next: NextFunction
   if (u.isDeveloper || u.role === 'dasturchi') return next();
   return res.status(403).json({ error: 'Ruxsat yo\'q' });
 }
+
+// Dasturchi firma ichki ma'lumotlariga (tranzaksiya, material, obyekt, smeta) kira olmaydi.
+// Dasturchi faqat tashqi boshqaruv: kompaniyalar, obunalar, support chat.
+export function blockDeveloper(req: Request, res: Response, next: NextFunction) {
+  const u = req.user;
+  if (u && (u.isDeveloper || u.role === 'dasturchi')) {
+    return res.status(403).json({ error: "Dasturchi firma ichki ma'lumotlariga kira olmaydi. Faqat tashqi boshqaruv: obunalar, kompaniyalar." });
+  }
+  return next();
+}

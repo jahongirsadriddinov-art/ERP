@@ -16,7 +16,7 @@ import subscriptionRoutes from './routes/subscriptions';
 import smetaRoutes from './routes/smeta';
 import aiRoutes from './routes/ai';
 import { initSocket } from './services/socket';
-import { optionalAuth } from './middleware/auth';
+import { optionalAuth, blockDeveloper } from './middleware/auth';
 // Import bot to start it
 import './services/bot';
 
@@ -47,16 +47,18 @@ app.get('/health', (_req, res) => res.json({ ok: true, service: 'quriliserp-back
 // so'rovni o'tkazadi — shu tufayli eski klientlar sinmaydi (bosqichma-bosqich izolyatsiya).
 app.use('/api/auth', optionalAuth, authRoutes);
 app.use('/api/register', registerRoutes); // v1.2 self-signup (pre-auth, ochiq)
-app.use('/api/objects', optionalAuth, objectRoutes);
-app.use('/api/users', optionalAuth, usersRoutes);
-app.use('/api/transactions', optionalAuth, transactionRoutes);
-app.use('/api/messages', optionalAuth, messageRoutes);
-app.use('/api/groups', optionalAuth, groupRoutes);
-app.use('/api/materials', optionalAuth, materialRoutes);
-app.use('/api/companies', optionalAuth, companyRoutes); // dasturchi (super-admin) only
-app.use('/api/admin/subscriptions', optionalAuth, subscriptionRoutes); // obunalar boshqaruvi (dasturchi)
-app.use('/api/smeta', optionalAuth, smetaRoutes); // deterministik smeta parser (AI'siz)
-app.use('/api/ai', optionalAuth, aiRoutes);       // AI yordamchi (direktor/orinbosar)
+// Firma ichki ma'lumotlari — dasturchi kira olmaydi (blockDeveloper).
+// Dasturchi faqat: companies, subscriptions, messages/groups (support chat).
+app.use('/api/objects',      optionalAuth, blockDeveloper, objectRoutes);
+app.use('/api/users',        optionalAuth, usersRoutes);        // dasturchi: read-only via DeveloperPanel
+app.use('/api/transactions', optionalAuth, blockDeveloper, transactionRoutes);
+app.use('/api/messages',     optionalAuth, messageRoutes);      // dasturchi: support chat
+app.use('/api/groups',       optionalAuth, groupRoutes);        // dasturchi: support chat
+app.use('/api/materials',    optionalAuth, blockDeveloper, materialRoutes);
+app.use('/api/companies',    optionalAuth, companyRoutes);      // dasturchi (super-admin) only
+app.use('/api/admin/subscriptions', optionalAuth, subscriptionRoutes); // obunalar boshqaruvi
+app.use('/api/smeta',        optionalAuth, blockDeveloper, smetaRoutes);
+app.use('/api/ai',           optionalAuth, blockDeveloper, aiRoutes);
 
 const PORT = process.env.PORT || 5000;
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/erp_firma';

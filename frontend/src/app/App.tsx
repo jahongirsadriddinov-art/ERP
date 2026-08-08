@@ -3329,6 +3329,15 @@ function LoginScreen({ onLogin, onRegister }: { onLogin: (u: any, company?: any)
       }
       setStep("code");
       setTimeLeft(120);
+      // Eskiz TEST rejimida (haqiqiy akkount hali tasdiqlanmaguncha) SMS orqali
+      // haqiqiy kod HECH QACHON kelmaydi (Eskiz faqat qat'iy test-matnini
+      // yuboradi) — shuning uchun backend shu holatda kodni javobga ham
+      // qo'shadi (devOtp), faqat ESKIZ_TEST_MODE=true bo'lganda. Productionda
+      // bu maydon hech qachon kelmaydi, kod faqat SMS orqali yetadi.
+      if (data.devOtp) {
+        toast(`🧪 TEST rejimi: kod = ${data.devOtp}`, { description: data.devNote, duration: 15000 });
+        setCode(data.devOtp);
+      }
     } catch (err) {
       setError(t('login.serverError'));
     }

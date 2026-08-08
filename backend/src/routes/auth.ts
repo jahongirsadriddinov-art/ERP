@@ -137,7 +137,19 @@ router.post('/send-otp', async (req, res) => {
       return res.status(502).json({ success: false, error: 'SMS yuborishda xatolik yuz berdi. Birozdan keyin qayta urining.' });
     }
 
-    return res.json({ success: true, message: 'Tasdiqlash kodi yuborildi' });
+    // Eskiz TEST rejimida SMS matni doim ularning qat'iy test-matni bo'ladi
+    // (yuqorida, eskizService) — ya'ni chinakam kod HECH QACHON telefonga
+    // yetib bormaydi, sinash imkonsiz bo'lib qoladi. Shu sabab, FAQAT
+    // ESKIZ_TEST_MODE=true bo'lganda (aniq, ataylab qo'yiladigan flag —
+    // production'da hech qachon yoqilmaydi), kodni javobga ham qo'shamiz.
+    // ESKIZ_TEST_MODE=false bo'lsa (haqiqiy akkount) bu qator ishlamaydi —
+    // kod faqat SMS orqali yetadi, spec talabi to'liq saqlanadi.
+    const isTestMode = (process.env.ESKIZ_TEST_MODE || '').toLowerCase() === 'true';
+    return res.json({
+      success: true,
+      message: 'Tasdiqlash kodi yuborildi',
+      ...(isTestMode ? { devOtp: code, devNote: 'Eskiz TEST rejimida — kod SMS orqali kelmaydi, shuning uchun shu yerda ko\'rsatilyapti.' } : {}),
+    });
   } catch (err) {
     console.error('[send-otp]', err);
     return res.status(500).json({ success: false, error: 'Server xatoligi' });

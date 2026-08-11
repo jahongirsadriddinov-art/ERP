@@ -5,7 +5,13 @@
   "type": "module",
   "scripts": {
     "build": "vite build",
-    "dev": "vite"
+    "dev": "vite",
+    "tauri": "tauri",
+    "build:windows": "vite build && tauri build",
+    "dev:windows": "tauri dev",
+    "build:android": "vite build && cap sync android && cap open android",
+    "cap:sync": "cap sync",
+    "cap:run:android": "cap run android"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",
@@ -71,10 +77,24 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "4.1.12",
+    "@tauri-apps/cli": "^2.11.4",
     "@vitejs/plugin-react": "4.7.0",
     "tailwindcss": "4.1.12",
     "typescript": "^6.0.3",
     "vite": "6.3.5"
+  },
+  "optionalDependencies": {
+    "@capacitor/android": "^7.6.8",
+    "@capacitor/app": "^7.1.2",
+    "@capacitor/camera": "^7.0.5",
+    "@capacitor/cli": "^7.6.8",
+    "@capacitor/core": "^7.6.8",
+    "@capacitor/geolocation": "^7.1.8",
+    "@capacitor/local-notifications": "^7.0.7",
+    "@capacitor/push-notifications": "^7.0.7",
+    "@capacitor/status-bar": "^7.0.6",
+    "@tauri-apps/api": "^2.0.0",
+    "@tauri-apps/plugin-notification": "^2.0.0"
   },
   "peerDependencies": {
     "react": "18.3.1",

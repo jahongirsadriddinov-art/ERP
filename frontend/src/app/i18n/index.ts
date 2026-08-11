@@ -51,6 +51,17 @@ i18n.use(initReactI18next).init({
   react: { useSuspense: false },
 });
 
+// <html lang="..."> atributini aktiv tilga mos ravishda yangilaymiz.
+// Bu brauzerning "Language detection is not supported for this page" xabarini
+// bartaraf etadi (Chrome o'zi tarjima qilmoqchi bo'lganda bu atributga qaraydi).
+// uz-cyrl uchun standart BCP 47 kod "uz" (kirill lotin farqi skript teglarda).
+function syncHtmlLang(lng: string) {
+  const bcp47 = lng === 'ru' ? 'ru' : 'uz';
+  document.documentElement.setAttribute('lang', bcp47);
+}
+syncHtmlLang(i18n.language);
+i18n.on('languageChanged', syncHtmlLang);
+
 export function setSiteLanguage(lang: SiteLang) {
   localStorage.setItem('siteLang', lang);
   i18n.changeLanguage(lang);

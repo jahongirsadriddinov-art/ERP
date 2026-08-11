@@ -18,7 +18,33 @@ if (!token) {
   throw new Error('TELEGRAM_BOT_TOKEN is not defined');
 }
 
-export const bot = new TelegramBot(token, { polling: true });
+// Webhook rejimi: production'da TELEGRAM_WEBHOOK_URL o'rnatilgan bo'lsa,
+// webhook ishlatiladi (polling o'chiriladi) — bu Render + local dev bir vaqtda
+// ishlaganda kelib chiqadigan 409 Conflict xatosini to'liq bartaraf etadi.
+const webhookUrl = process.env.TELEGRAM_WEBHOOK_URL;
+const useWebhook = !!webhookUrl;
+
+export const bot = new TelegramBot(token, { polling: !useWebhook });
+
+if (useWebhook) {
+  bot.setWebHook(`${webhookUrl}/api/bot/webhook`, { max_connections: 40 })
+    .then(() => console.log(`✅ Telegram bot webhook ishga tushdi: ${webhookUrl}/api/bot/webhook`))
+    .catch((err: Error) => console.error('⚠️ Telegram webhook o\'rnatishda xato:', err.message));
+} else {
+  // Polling rejimi — local dev uchun
+  bot.on('polling_error', (err: any) => {
+    if (err?.code === 'ETELEGRAM' && (err?.response?.statusCode === 409 || String(err?.message).includes('409'))) {
+      // Bu xato Render + local dev bir vaqtda ishlaganda kelib chiqadi.
+      // Production'da TELEGRAM_WEBHOOK_URL o'rnating — muammo to'liq hal bo'ladi.
+      console.warn('⚠️ Telegram 409 Conflict: boshqa bot instance polling qilmoqda. Production\'da TELEGRAM_WEBHOOK_URL sozlang.');
+    } else if (err?.code === 'EFATAL') {
+      console.warn('⚠️ Telegram polling to\'xtatildi (EFATAL):', err?.message);
+    } else {
+      console.error('Telegram polling xatosi:', err?.message || err);
+    }
+  });
+  console.log('✅ Telegram bot polling rejimida ishga tushdi');
+}
 
 // ─── Role-based keyboards ──────────────────────────────────────────────────────
 const SITE_URL = process.env.SITE_URL || 'http://localhost:5173';

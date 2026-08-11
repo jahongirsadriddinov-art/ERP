@@ -29,8 +29,8 @@ import clientErrorRoutes from './routes/clientErrors';
 import backupRoutes from './routes/backup';
 import { initSocket } from './services/socket';
 import { optionalAuth, blockDeveloper } from './middleware/auth';
-// Import bot to start it
-import './services/bot';
+// Import bot to start it + get bot instance for webhook route
+import { bot } from './services/bot';
 
 dotenv.config();
 
@@ -90,6 +90,19 @@ app.use('/api/currency',        optionalAuth, currencyRoutes);
 app.use('/api/dashboard',       optionalAuth, blockDeveloper, dashboardRoutes);
 app.use('/api/errors',          optionalAuth, clientErrorRoutes);
 app.use('/api/admin',           optionalAuth, backupRoutes);
+
+// Telegram bot webhook — faqat TELEGRAM_WEBHOOK_URL o'rnatilgan bo'lsa faol bo'ladi.
+// Polling rejimida bu route hech qachon chaqirilmaydi.
+if (process.env.TELEGRAM_WEBHOOK_URL) {
+  app.post('/api/bot/webhook', express.json(), (req, res) => {
+    try {
+      bot.processUpdate(req.body);
+    } catch {
+      // Noto'g'ri payload — jim o'tkazib yuboramiz (bot handlerlari o'z xatolarini loglar)
+    }
+    res.sendStatus(200);
+  });
+}
 
 // 404 handler — tanilmagan route lar uchun
 app.use((_req, res) => {

@@ -30,6 +30,12 @@ export default defineConfig({
 
   assetsInclude: ['**/*.svg', '**/*.csv'],
 
+  // Recharts + d3 circular import muammosini hal qilish:
+  // pre-bundle recharts → dev va prod da TDZ xatolarini bartaraf etadi
+  optimizeDeps: {
+    include: ['recharts'],
+  },
+
   build: {
     target: 'esnext',
     cssCodeSplit: true,
@@ -55,8 +61,16 @@ export default defineConfig({
           if (id.includes('node_modules/@mui') || id.includes('node_modules/@emotion')) {
             return 'vendor-mui';
           }
-          // Recharts — only used in reports
-          if (id.includes('node_modules/recharts') || id.includes('node_modules/d3')) {
+          // Recharts + barcha d3-* sub-paketlar + victory-vendor — HAMMASI bitta chunk'da
+          // bo'lishi shart (ular orasida circular importlar bor; ajratilsa TDZ xatosi kelib chiqadi)
+          if (
+            id.includes('node_modules/recharts') ||
+            id.includes('node_modules/d3-') ||
+            id.includes('node_modules/d3/') ||
+            id.includes('node_modules/victory-vendor') ||
+            id.includes('node_modules/internmap') ||
+            id.includes('node_modules/robust-predicates')
+          ) {
             return 'vendor-charts';
           }
           // Socket.io

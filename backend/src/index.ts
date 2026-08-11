@@ -46,8 +46,41 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false,  // WebRTC + socket.io uchun kerak
   contentSecurityPolicy: false,       // Frontend Vercel'da serve bo'lgani uchun backend CSP kerak emas
 }));
+// MUHIM: origin bitta qat'iy satr bo'lsa (masalan faqat "https://erp-firma.uz"),
+// "https://www.erp-firma.uz" dan kelgan so'rov CORS preflight'da rad etiladi —
+// www. va www.siz variant BROWSER uchun ikkita BUTUNLAY BOSHQA origin
+// hisoblanadi. Shu sabab login/register/bot bilan bog'liq HAMMA so'rov
+// (www orqali kirgan har bir foydalanuvchi uchun) ishlamay qolgan edi.
+// Origin funksiyasi orqali www bilan/siz ikkalasini ham, Vercel preview
+// domenlarini, mahalliy devni va Tauri/Capacitor native ilova sxemalarini
+// (Origin header umuman yo'q yoki capacitor://, tauri:// bo'ladi) qabul qilamiz.
+const allowedHosts = new Set(
+  [process.env.SITE_URL, 'https://erp-firma.uz', 'https://www.erp-firma.uz', 'https://erp-ebon-seven-91.vercel.app']
+    .filter((u): u is string => !!u)
+    .map(u => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return null; } })
+    .filter((h): h is string => !!h)
+);
 app.use(cors({
-  origin: process.env.SITE_URL || '*',
+  origin: (origin, callback) => {
+    // Origin header yo'q — server-to-server, curl, yoki ba'zi native ilova
+    // so'rovlari (Tauri/Capacitor ko'pincha Origin yubormaydi).
+    if (!origin) return callback(null, true);
+    if (origin.startsWith('capacitor://') || origin.startsWith('tauri://') || origin.startsWith('ionic://')) {
+      return callback(null, true);
+    }
+    try {
+      const hostname = new URL(origin).hostname.replace(/^www\./, '');
+      if (
+        allowedHosts.has(hostname) ||
+        hostname === 'localhost' || hostname === '127.0.0.1' ||
+        hostname.endsWith('.vercel.app')
+      ) {
+        return callback(null, true);
+      }
+    } catch {}
+    console.warn('[cors] rad etilgan origin:', origin);
+    callback(new Error('CORS: ruxsat etilmagan origin'));
+  },
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   credentials: true,
 }));

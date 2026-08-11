@@ -25,6 +25,17 @@ function clientIp(req: any): string {
   return (req.headers['x-forwarded-for']?.toString().split(',')[0] || req.ip || '').trim();
 }
 
+// MUHIM: frontend'da bug bo'lib, o'zgaruvchi hali tayinlanmagan holatda so'rov
+// yuborilsa, query/body'da ANIQ "undefined" SATRI keladi (JS template literal
+// `${undefined}` = "undefined") — oddiy `!registrationId` tekshiruvidan
+// O'TIB KETADI (bo'sh emas, chinakam satr!), keyin esa Mongoose'ning ObjectId
+// cast'i chuqur, foydasiz stack trace bilan qulaydi. Shu funksiya 24-belgili
+// hex ekanini ANIQ tekshiradi — frontend buggi hali ham bo'lsa ham, backend
+// hech qachon qulamaydi.
+function isValidObjectIdStr(v: unknown): v is string {
+  return typeof v === 'string' && /^[0-9a-fA-F]{24}$/.test(v);
+}
+
 // ─── 1) Telefon kiritish → ro'yxat sessiyasi + deep-link token ────────────────
 router.post('/phone', async (req, res) => {
   try {
@@ -77,8 +88,10 @@ router.post('/phone', async (req, res) => {
 router.get('/status', async (req, res) => {
   try {
     const { registrationId } = req.query;
-    if (!registrationId) return res.status(400).json({ error: 'registrationId kerak' });
-    const reg = await Registration.findById(String(registrationId));
+    if (!isValidObjectIdStr(registrationId)) {
+      return res.status(400).json({ error: 'registrationId noto\'g\'ri yoki yo\'q' });
+    }
+    const reg = await Registration.findById(registrationId);
     if (!reg) return res.status(404).json({ error: 'Sessiya topilmadi' });
 
     // Lazy expiry
@@ -105,8 +118,10 @@ router.get('/status', async (req, res) => {
 router.post('/resend', async (req, res) => {
   try {
     const { registrationId } = req.body;
-    if (!registrationId) return res.status(400).json({ error: 'registrationId kerak' });
-    const reg = await Registration.findById(String(registrationId));
+    if (!isValidObjectIdStr(registrationId)) {
+      return res.status(400).json({ error: 'registrationId noto\'g\'ri yoki yo\'q' });
+    }
+    const reg = await Registration.findById(registrationId);
     if (!reg || reg.step === 'COMPLETED') return res.status(404).json({ error: 'Sessiya topilmadi' });
 
     const cd = checkRate(`reg:resend:${registrationId}`, 1, 60 * 1000); // 60 sek
@@ -139,8 +154,10 @@ router.post('/resend', async (req, res) => {
 router.post('/cancel', async (req, res) => {
   try {
     const { registrationId } = req.body;
-    if (!registrationId) return res.status(400).json({ error: 'registrationId kerak' });
-    const reg = await Registration.findById(String(registrationId));
+    if (!isValidObjectIdStr(registrationId)) {
+      return res.status(400).json({ error: 'registrationId noto\'g\'ri yoki yo\'q' });
+    }
+    const reg = await Registration.findById(registrationId);
     if (reg && reg.step !== 'COMPLETED') { reg.step = 'EXPIRED'; await reg.save(); }
     return res.json({ ok: true });
   } catch (err) {

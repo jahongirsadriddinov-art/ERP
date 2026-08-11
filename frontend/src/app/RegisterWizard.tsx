@@ -42,8 +42,22 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
   const [phone, setPhone] = useState("+998 ");
 
   // Ro'yxat sessiyasi (resume uchun localStorage'da saqlanadi)
+  // MUHIM: agar saqlangan yozuvda registrationId yo'q/bo'sh bo'lsa (eski
+  // xato tufayli buzilgan holat, yoki backend javobida shu maydon yo'q
+  // bo'lib qolgan bo'lsa) — DARHOL tashlab yuboramiz. Aks holda "bot"
+  // qadamiga o'tib, registrationId=undefined bilan cheksiz polling
+  // boshlanadi (backend'da ObjectId cast xatosi bilan qulaydi).
   const [reg, setReg] = useState<{ registrationId: string; token: string; deepLink: string; botUsername: string; expiresAt: string } | null>(() => {
-    try { const s = localStorage.getItem("erp_reg"); return s ? JSON.parse(s) : null; } catch { return null; }
+    try {
+      const s = localStorage.getItem("erp_reg");
+      if (!s) return null;
+      const parsed = JSON.parse(s);
+      if (!parsed?.registrationId || typeof parsed.registrationId !== "string") {
+        localStorage.removeItem("erp_reg");
+        return null;
+      }
+      return parsed;
+    } catch { return null; }
   });
   const [botStatus, setBotStatus] = useState<string>("");
   const [timeLeft, setTimeLeft] = useState(0);
@@ -72,10 +86,14 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
   const [currency, setCurrency] = useState<"UZS" | "USD">("UZS");
   const logoRef = useRef<HTMLInputElement>(null);
 
-  const saveReg = (r: any, plan?: string) => {
+  // registrationId'siz sessiyani HECH QACHON saqlamaymiz — chaqiruvchi joyda
+  // aniq xato ko'rsatish uchun false qaytaradi.
+  const saveReg = (r: any, plan?: string): boolean => {
+    if (!r?.registrationId || typeof r.registrationId !== "string") return false;
     setReg(r);
     try { localStorage.setItem("erp_reg", JSON.stringify(r)); } catch {}
     if (plan) try { localStorage.setItem("erp_reg_plan", plan); } catch {}
+    return true;
   };
   const clearReg = () => {
     setReg(null);
@@ -115,7 +133,10 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
 
   // Polling: bot tomonda tasdiqlanganini kutamiz
   useEffect(() => {
-    if (step !== "bot" || !reg) return;
+    // reg.registrationId'ning O'ZINI tekshiramiz — shunchaki reg obyekti
+    // mavjudligi yetarli emas, chunki registrationId maydonining o'zi
+    // undefined bo'lishi mumkin (masalan buzilgan saqlangan holat).
+    if (step !== "bot" || !reg?.registrationId) return;
     let stop = false;
     const poll = async () => {
       try {
@@ -146,24 +167,29 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
       if (!res.ok) { setError(d.error || t('common.error')); setLoading(false); return; }
       if (d.exists) { setError(t('register.phoneTakenError')); setLoading(false); setTimeout(onBack, 1800); return; }
       // Tarifni ham saqlaymiz — resume qilganda tiklanadi
-      saveReg(
+      const ok = saveReg(
         { registrationId: d.registrationId, token: d.token, deepLink: d.deepLink, botUsername: d.botUsername, expiresAt: d.expiresAt },
         selectedPlan || '1month'
       );
+      if (!ok) { setError(t('common.error')); setLoading(false); return; }
       setStep("bot");
     } catch { setError(t('login.serverError')); }
     setLoading(false);
   };
 
   const resend = async () => {
-    if (!reg || resendCd > 0) return;
+    if (!reg?.registrationId || resendCd > 0) return;
     try {
       const res = await fetch(`${API_BASE}/api/register/resend`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ registrationId: reg.registrationId }),
       });
       const d = await res.json();
-      if (res.ok) { saveReg({ registrationId: d.registrationId, token: d.token, deepLink: d.deepLink, botUsername: d.botUsername, expiresAt: d.expiresAt }); setResendCd(60); }
+      if (res.ok) {
+        const ok = saveReg({ registrationId: d.registrationId, token: d.token, deepLink: d.deepLink, botUsername: d.botUsername, expiresAt: d.expiresAt });
+        if (ok) setResendCd(60);
+        else setError(t('common.error'));
+      }
       else if (d.retryAfterSec) setResendCd(d.retryAfterSec);
     } catch {}
   };

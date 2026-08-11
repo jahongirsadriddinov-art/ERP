@@ -20,6 +20,7 @@ export interface IUser extends Document {
   email?: string;          // ixtiyoriy
   position?: string;       // lavozim (default: Direktor)
   language?: 'uz' | 'uz-cyrl' | 'ru'; // sayt/bot interfeysi tili — profildan yoki botdan o'zgartiriladi, ikkalasi sinxron
+  courses?: Array<{ title: string; provider?: string; year?: number; cert?: string }>;
 }
 
 const UserSchema: Schema = new Schema({
@@ -41,7 +42,8 @@ const UserSchema: Schema = new Schema({
   middleName: { type: String },
   email: { type: String },
   position: { type: String },
-  language: { type: String, enum: ['uz', 'uz-cyrl', 'ru'], default: 'uz' }
+  language: { type: String, enum: ['uz', 'uz-cyrl', 'ru'], default: 'uz' },
+  courses: [{ title: String, provider: String, year: Number, cert: String }],
 }, { timestamps: true });
 
 // Global search uchun indekslar

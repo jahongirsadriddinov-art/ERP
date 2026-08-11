@@ -71,5 +71,7 @@ export const emitToUser = (userId: string, event: string, payload: any) =>
   io?.to(`user:${userId}`).emit(event, payload);
 export const emitToGroup = (groupId: string, event: string, payload: any) =>
   io?.to(`group:${groupId}`).emit(event, payload);
+export const broadcast = (event: string, payload: any) =>
+  io?.emit(event, payload);
 export const getIO = () => io;
 export const isOnline = (userId: string) => userSockets.has(userId);

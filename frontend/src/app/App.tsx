@@ -53,7 +53,7 @@ export function useModalPresence() {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export type Role = "direktor" | "orinbosar" | "prorab" | "brigadir" | "ishchi" | "dasturchi";
-type NavPage = "dashboard" | "finance" | "reports" | "chat" | "profile";
+type NavPage = "dashboard" | "finance" | "reports" | "chat" | "profile" | "gps";
 export type ExpType = "oylik" | "material" | "jihozlar" | "transport" | "boshqa";
 type TStatus = "pending" | "confirmed" | "rejected";
 type EStatus = "pending" | "confirmed" | "rejected";
@@ -3005,8 +3005,176 @@ function AuditLogSection({ token }: { token: string }) {
   );
 }
 
-function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdateUser, onCompanyNameChange, onCompanyLogoChange, onBgChange, onColorThemeChange, colorTheme, themeMode, onThemeModeChange, canEditCompany }:
-  { currentUser: AppUser; projects: Project[]; onUpdateAvatar: (url: string) => void; onLogout: () => void; onUpdateUser: (u: AppUser) => void; onCompanyNameChange: (name: string) => void; onCompanyLogoChange: (logo: string) => void; onBgChange: (bg: string) => void; onColorThemeChange: (id: string) => void; colorTheme: string; themeMode: "light"|"dark"|"system"; onThemeModeChange: (m: "light"|"dark"|"system") => void; canEditCompany?: boolean }) {
+function GpsTrackingPage({ users, gpsLocations, refreshing, onRefresh }: {
+  users: AppUser[];
+  gpsLocations: Array<{userId: string; lat: number; lng: number; accuracy?: number; timestamp: string}>;
+  refreshing: boolean;
+  onRefresh: () => void;
+}) {
+  useEffect(() => { onRefresh(); }, []);
+  const workerRoles = ['ishchi', 'prorab', 'brigadir'];
+  const workers = users.filter(u => workerRoles.includes(u.role));
+  const now = Date.now();
+  const minutesAgo = (iso: string) => Math.floor((now - new Date(iso).getTime()) / 60000);
+  const statusColor = (min: number) => min < 10 ? 'bg-green-500' : min < 30 ? 'bg-amber-400' : 'bg-red-400';
+  const statusLabel = (min: number) => min < 10 ? `${min} daq. oldin` : min < 60 ? `${min} daq. oldin` : `${Math.floor(min/60)}s ${min%60}d oldin`;
+  const roleLabel: Record<string, string> = { ishchi: 'Ishchi', prorab: 'Prorab', brigadir: 'Brigadir', orinbosar: "O'rinbosar", direktor: 'Direktor' };
+
+  return (
+    <div className="flex-1 overflow-y-auto scrollbar-hide">
+      <div className="max-w-lg md:max-w-2xl mx-auto w-full px-4 pb-10 pt-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-bold">Xodimlar joylashuvi</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">Real-vaqt GPS kuzatuv</p>
+          </div>
+          <button onClick={onRefresh} disabled={refreshing}
+            className="btn btn-outline text-xs px-3 py-2 rounded-xl flex items-center gap-1.5 flex-shrink-0">
+            <MapPin className={`w-3.5 h-3.5 ${refreshing ? 'animate-pulse' : ''}`}/>
+            {refreshing ? 'Yangilanmoqda...' : 'Yangilash'}
+          </button>
+        </div>
+
+        {workers.length === 0 && (
+          <div className="surface rounded-2xl p-8 text-center">
+            <Users2 className="w-10 h-10 text-muted-foreground/30 mx-auto mb-2"/>
+            <p className="text-sm text-muted-foreground">Xodimlar topilmadi</p>
+          </div>
+        )}
+
+        {workers.map(u => {
+          const loc = gpsLocations.find(g => g.userId === u.id);
+          const min = loc ? minutesAgo(loc.timestamp) : null;
+          return (
+            <div key={u.id} className="surface rounded-2xl p-4 flex items-center gap-3">
+              <div className="relative flex-shrink-0">
+                <Avatar user={u} size="md"/>
+                <div className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-card ${loc ? statusColor(min!) : 'bg-muted-foreground/30'}`}/>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold truncate">{u.name}</p>
+                <p className="text-[11px] text-muted-foreground">{roleLabel[u.role] || u.role}</p>
+                {loc ? (
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <MapPin className="w-3 h-3 text-muted-foreground/60 flex-shrink-0"/>
+                    <span className="text-[10px] text-muted-foreground">{loc.lat.toFixed(5)}, {loc.lng.toFixed(5)}</span>
+                  </div>
+                ) : (
+                  <p className="text-[10px] text-muted-foreground mt-1">GPS ma'lumoti yo'q</p>
+                )}
+              </div>
+              <div className="flex-shrink-0 text-right">
+                {loc ? (
+                  <div className="space-y-1">
+                    <div className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${min! < 10 ? 'bg-green-500/15 text-green-700 dark:text-green-400' : min! < 30 ? 'bg-amber-500/15 text-amber-700 dark:text-amber-400' : 'bg-red-500/15 text-red-700 dark:text-red-400'}`}>
+                      {statusLabel(min!)}
+                    </div>
+                    <a href={`https://maps.google.com/?q=${loc.lat},${loc.lng}`} target="_blank" rel="noopener noreferrer"
+                      className="text-[10px] text-primary underline block">Xarita</a>
+                  </div>
+                ) : (
+                  <span className="text-[10px] text-muted-foreground/50">Offline</span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+
+        {workers.length > 0 && gpsLocations.length === 0 && !refreshing && (
+          <div className="surface rounded-2xl p-6 text-center">
+            <p className="text-sm text-muted-foreground">GPS ma'lumotlar yo'q. Xodimlar ishga kelmagan yoki GPS yoqilmagan.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CoursesPanel({ userId }: { userId: string }) {
+  const [coursesList, setCoursesList] = useState<Array<{title: string; provider?: string; year?: number; cert?: string}>>(() => {
+    try { return JSON.parse(localStorage.getItem(`erp_courses_${userId}`) || '[]'); } catch { return []; }
+  });
+  const [addOpen, setAddOpen] = useState(false);
+  const [editIdx, setEditIdx] = useState<number|null>(null);
+  const [form, setFormC] = useState({ title: '', provider: '', year: '', cert: '' });
+
+  const saveCourses = async (list: typeof coursesList) => {
+    setCoursesList(list);
+    localStorage.setItem(`erp_courses_${userId}`, JSON.stringify(list));
+    const token = localStorage.getItem('token');
+    fetch(`${API_BASE}/api/users/${userId}/courses`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify({ courses: list }),
+    }).catch(()=>{});
+  };
+  const openAdd = () => { setFormC({ title: '', provider: '', year: '', cert: '' }); setEditIdx(null); setAddOpen(true); };
+  const openEdit = (idx: number) => {
+    const c = coursesList[idx];
+    setFormC({ title: c.title, provider: c.provider||'', year: String(c.year||''), cert: c.cert||'' });
+    setEditIdx(idx); setAddOpen(true);
+  };
+  const save = () => {
+    if (!form.title.trim()) return;
+    const item = { title: form.title.trim(), provider: form.provider.trim()||undefined, year: form.year ? Number(form.year) : undefined, cert: form.cert.trim()||undefined };
+    const next = editIdx !== null ? coursesList.map((c,i) => i===editIdx ? item : c) : [...coursesList, item];
+    saveCourses(next); setAddOpen(false);
+  };
+  const del = (idx: number) => saveCourses(coursesList.filter((_,i) => i!==idx));
+
+  return (
+    <div className="space-y-3">
+      {addOpen ? (
+        <div className="surface p-4 space-y-3 rounded-2xl">
+          <h3 className="text-sm font-bold">{editIdx !== null ? 'Kursni tahrirlash' : "Kurs qo'shish"}</h3>
+          {(['title','provider','year','cert'] as const).map((k) => (
+            <div key={k}>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                {k==='title'?"Kurs nomi *":k==='provider'?"Muassasa/Platforma":k==='year'?"Yil":"Sertifikat raqami"}
+              </label>
+              <input type={k==='year'?'number':'text'} value={form[k]} onChange={e => setFormC(p => ({...p, [k]: e.target.value}))}
+                className="w-full bg-muted/60 border border-border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-primary"/>
+            </div>
+          ))}
+          <div className="flex gap-2 pt-1">
+            <button onClick={save} className="flex-1 btn btn-primary text-sm py-2.5 rounded-xl">Saqlash</button>
+            <button onClick={() => setAddOpen(false)} className="flex-1 btn btn-outline text-sm py-2.5 rounded-xl">Bekor qilish</button>
+          </div>
+        </div>
+      ) : (
+        <button onClick={openAdd} className="w-full btn btn-primary text-sm py-2.5 rounded-2xl flex items-center justify-center gap-2">
+          <Plus className="w-4 h-4"/>Kurs qo'shish
+        </button>
+      )}
+      {coursesList.length === 0 && !addOpen && (
+        <div className="surface p-8 text-center rounded-2xl">
+          <CheckCircle className="w-10 h-10 text-muted-foreground/30 mx-auto mb-2"/>
+          <p className="text-sm font-medium">Kurslar yo'q</p>
+          <p className="text-xs text-muted-foreground mt-1">Sertifikatlaringiz va o'tgan kurslaringizni qo'shing</p>
+        </div>
+      )}
+      {coursesList.map((c, i) => (
+        <div key={i} className="surface p-4 rounded-2xl flex items-start gap-3">
+          <div className="icon-chip flex-shrink-0 mt-0.5"><CheckCircle className="w-4 h-4"/></div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold leading-tight">{c.title}</p>
+            {c.provider && <p className="text-xs text-muted-foreground mt-0.5">{c.provider}</p>}
+            <div className="flex gap-3 mt-1">
+              {c.year && <span className="text-[10px] text-muted-foreground">{c.year}</span>}
+              {c.cert && <span className="text-[10px] text-primary font-medium">#{c.cert}</span>}
+            </div>
+          </div>
+          <div className="flex gap-1 flex-shrink-0">
+            <button onClick={() => openEdit(i)} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground"><Edit className="w-3.5 h-3.5"/></button>
+            <button onClick={() => del(i)} className="p-1.5 rounded-lg hover:bg-red-500/10 text-muted-foreground hover:text-red-600"><Trash className="w-3.5 h-3.5"/></button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdateUser, onCompanyNameChange, onCompanyLogoChange, onBgChange, onColorThemeChange, colorTheme, themeMode, onThemeModeChange, canEditCompany, todayAttendance, onCheckIn, onCheckOut, gpsTracking }:
+  { currentUser: AppUser; projects: Project[]; onUpdateAvatar: (url: string) => void; onLogout: () => void; onUpdateUser: (u: AppUser) => void; onCompanyNameChange: (name: string) => void; onCompanyLogoChange: (logo: string) => void; onBgChange: (bg: string) => void; onColorThemeChange: (id: string) => void; colorTheme: string; themeMode: "light"|"dark"|"system"; onThemeModeChange: (m: "light"|"dark"|"system") => void; canEditCompany?: boolean; todayAttendance: null | { status: string; checkIn?: string; checkOut?: string; workHours?: number }; onCheckIn: () => void; onCheckOut: () => void; gpsTracking: boolean }) {
   const { t, i18n } = useTranslation();
   const changeLanguage = async (lang: SiteLang) => {
     setSiteLanguage(lang);
@@ -3025,71 +3193,6 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
   const logoRef = useRef<HTMLInputElement>(null);
   const bgRef = useRef<HTMLInputElement>(null);
 
-  // Attendance & GPS state
-  const [todayAttendance, setTodayAttendance] = useState<null | { status: string; checkIn?: string; checkOut?: string; workHours?: number }>(null);
-  const [gpsTracking, setGpsTracking] = useState(false);
-  const gpsWatchRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    const token = localStorage.getItem("token");
-    const headers: Record<string,string> = {};
-    if (token) headers["Authorization"] = `Bearer ${token}`;
-    fetch(`${API_BASE}/api/attendance/today`, { headers })
-      .then(r => r.ok ? r.json() : null).then(d => { if (d) setTodayAttendance(d); }).catch(()=>{});
-  }, []);
-
-  const handleCheckIn = async () => {
-    const token = localStorage.getItem("token");
-    const headers: Record<string,string> = { "Content-Type": "application/json" };
-    if (token) headers["Authorization"] = `Bearer ${token}`;
-    try {
-      const pos = await new Promise<GeolocationPosition>((res, rej) =>
-        navigator.geolocation.getCurrentPosition(res, rej, { timeout: 8000 })
-      ).catch(() => null);
-      const body: any = {};
-      if (pos) { body.lat = pos.coords.latitude; body.lng = pos.coords.longitude; }
-      const r = await fetch(`${API_BASE}/api/attendance/checkin`, { method: "POST", headers, body: JSON.stringify(body) });
-      if (r.ok) { const d = await r.json(); setTodayAttendance(d); toast.success(t('attendance.checkedIn')); }
-      else { const e = await r.json().catch(()=>({})); toast.error(e.error || "Xatolik"); }
-    } catch { toast.error("Geolokatsiya xatoligi"); }
-  };
-
-  const handleCheckOut = async () => {
-    const token = localStorage.getItem("token");
-    const headers: Record<string,string> = { "Content-Type": "application/json" };
-    if (token) headers["Authorization"] = `Bearer ${token}`;
-    try {
-      const pos = await new Promise<GeolocationPosition>((res, rej) =>
-        navigator.geolocation.getCurrentPosition(res, rej, { timeout: 8000 })
-      ).catch(() => null);
-      const body: any = {};
-      if (pos) { body.lat = pos.coords.latitude; body.lng = pos.coords.longitude; }
-      const r = await fetch(`${API_BASE}/api/attendance/checkout`, { method: "POST", headers, body: JSON.stringify(body) });
-      if (r.ok) { const d = await r.json(); setTodayAttendance(d); toast.success(t('attendance.checkedOut')); }
-      else { const e = await r.json().catch(()=>({})); toast.error(e.error || "Xatolik"); }
-    } catch { toast.error("Xatolik"); }
-  };
-
-  const toggleGps = () => {
-    if (gpsTracking) {
-      if (gpsWatchRef.current !== null) navigator.geolocation.clearWatch(gpsWatchRef.current);
-      gpsWatchRef.current = null;
-      setGpsTracking(false);
-      return;
-    }
-    if (!navigator.geolocation) { toast.error(t('gps.permissionDenied')); return; }
-    const token = localStorage.getItem("token");
-    const headers: Record<string,string> = { "Content-Type": "application/json" };
-    if (token) headers["Authorization"] = `Bearer ${token}`;
-    const watchId = navigator.geolocation.watchPosition(pos => {
-      fetch(`${API_BASE}/api/gps`, { method: "POST", headers, body: JSON.stringify({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy }) }).catch(()=>{});
-    }, () => { setGpsTracking(false); toast.error(t('gps.permissionDenied')); }, { enableHighAccuracy: true, maximumAge: 30000 });
-    gpsWatchRef.current = watchId;
-    setGpsTracking(true);
-    toast.success(t('gps.tracking'));
-  };
-
-  useEffect(() => { return () => { if (gpsWatchRef.current !== null) navigator.geolocation.clearWatch(gpsWatchRef.current!); }; }, []);
 
   const [companyName, setCompanyName] = useState(() => localStorage.getItem("erp_companyName") || "QurilishERP");
   const [companyLogo, setCompanyLogo] = useState(() => localStorage.getItem("erp_companyLogo") || "");
@@ -3156,7 +3259,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
   ];
 
   const activeTheme = COLOR_THEMES.find(t => t.id === colorTheme) || COLOR_THEMES[0];
-  const [activePanel, setActivePanel] = useState<null | "bg" | "appearance" | "color" | "perms" | "projects" | "language" | "subscription">(null);
+  const [activePanel, setActivePanel] = useState<null | "bg" | "appearance" | "color" | "perms" | "projects" | "language" | "subscription" | "courses">(null);
   const APPEARANCE_LABELS: Record<string, string> = { light: "Yorug'", dark: "Qorong'i", system: "Tizim" };
 
   const [subData, setSubData] = useState<any>(null);
@@ -3179,7 +3282,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
     const panelTitle = {
       bg: "Fon mavzular", appearance: "Ko'rinish rejimi", color: "Rang mavzusi",
       perms: "Ruxsatlar", projects: "Obyektlarim", language: t('profile.language'),
-      subscription: "Obuna holati",
+      subscription: "Obuna holati", courses: "Mening kurslarim",
     }[activePanel];
     return (
       <motion.div key={activePanel} initial={{ opacity: 0, x: 28 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 28 }}
@@ -3290,6 +3393,9 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
               <p className="text-xs text-muted-foreground text-center">{t('profile.languageHint')}</p>
               <LanguageSwitcher value={i18n.language as SiteLang} onChange={changeLanguage}/>
             </div>
+          )}
+          {activePanel === "courses" && (
+            <CoursesPanel userId={currentUser.id}/>
           )}
           {activePanel === "subscription" && (
             <div className="surface overflow-hidden">
@@ -3476,6 +3582,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
             { key: "language" as const, icon: Languages, label: t('profile.language'), hint: langLabel(i18n.language as SiteLang), swatch: null },
             { key: "perms" as const, icon: CheckCircle, label: t('profile.permissions'), hint: `${perms.filter(([,has])=>has).length}/${perms.length}`, swatch: null },
             { key: "projects" as const, icon: Building2, label: t('profile.myObjects'), hint: String(myProjectCount), swatch: null },
+            { key: "courses" as const, icon: CheckCircle, label: "Mening kurslarim", hint: null as string|null, swatch: null },
             ...(isAdmin(currentUser.role) ? [{ key: "subscription" as const, icon: CreditCard, label: "Obuna holati",
               hint: subData?.status === 'active' ? (subData.daysLeft !== null ? `${subData.daysLeft} kun` : "Faol") : subData?.status === 'pending' ? "Kutilmoqda" : subData?.status === 'expired' ? "Muddati o'tgan" : subData?.status === 'rejected' ? "Rad etildi" : subLoading ? "..." : "Topilmadi",
               swatch: null }] : []),
@@ -3492,55 +3599,58 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
           ))}
         </motion.div>
 
-        {/* Attendance + GPS card */}
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28, delay: 0.22 }}
-          className="surface rounded-2xl overflow-hidden">
-          {/* Attendance */}
-          <div className="p-4 border-b border-border/50">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <div className="icon-chip"><Calendar className="w-4 h-4"/></div>
-                <span className="text-sm font-semibold">{t('attendance.today')}</span>
+        {/* Attendance + GPS card — faqat ishchi/prorab/brigadir uchun */}
+        {(currentUser.role === 'ishchi' || currentUser.role === 'prorab' || currentUser.role === 'brigadir') && (
+          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28, delay: 0.22 }}
+            className="surface rounded-2xl overflow-hidden">
+            <div className="p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="icon-chip"><Calendar className="w-4 h-4"/></div>
+                  <span className="text-sm font-semibold">{t('attendance.today')}</span>
+                </div>
+                {todayAttendance?.status && (
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${todayAttendance.status==='present'?'bg-green-500/15 text-green-700 dark:text-green-400':todayAttendance.status==='late'?'bg-amber-500/15 text-amber-700 dark:text-amber-400':'bg-muted text-muted-foreground'}`}>
+                    {todayAttendance.status==='present'?t('attendance.statusPresent'):todayAttendance.status==='late'?t('attendance.statusLate'):t('attendance.statusAbsent')}
+                  </span>
+                )}
               </div>
-              {todayAttendance?.status && (
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${todayAttendance.status==='present'?'bg-green-500/15 text-green-700 dark:text-green-400':todayAttendance.status==='late'?'bg-amber-500/15 text-amber-700 dark:text-amber-400':'bg-muted text-muted-foreground'}`}>
-                  {todayAttendance.status==='present'?t('attendance.statusPresent'):todayAttendance.status==='late'?t('attendance.statusLate'):t('attendance.statusAbsent')}
-                </span>
+              {todayAttendance?.checkIn ? (
+                <div className="text-xs text-muted-foreground space-y-1 mb-3">
+                  <p>Keldi: <span className="text-foreground font-medium">{new Date(todayAttendance.checkIn).toLocaleTimeString('uz-UZ',{hour:'2-digit',minute:'2-digit'})}</span></p>
+                  {todayAttendance.checkOut && <p>Ish tugadi: <span className="text-foreground font-medium">{new Date(todayAttendance.checkOut).toLocaleTimeString('uz-UZ',{hour:'2-digit',minute:'2-digit'})}</span></p>}
+                  {todayAttendance.workHours != null && <p>{t('attendance.workHours', { h: todayAttendance.workHours.toFixed(1) })}</p>}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground mb-3">{t('attendance.notCheckedIn')}</p>
               )}
-            </div>
-            {todayAttendance ? (
-              <div className="text-xs text-muted-foreground space-y-1">
-                {todayAttendance.checkIn && <p>Keldi: <span className="text-foreground font-medium">{new Date(todayAttendance.checkIn).toLocaleTimeString('uz-UZ',{hour:'2-digit',minute:'2-digit'})}</span></p>}
-                {todayAttendance.checkOut && <p>Ketdi: <span className="text-foreground font-medium">{new Date(todayAttendance.checkOut).toLocaleTimeString('uz-UZ',{hour:'2-digit',minute:'2-digit'})}</span></p>}
-                {todayAttendance.workHours != null && <p>{t('attendance.workHours', { h: todayAttendance.workHours.toFixed(1) })}</p>}
-              </div>
-            ) : (
-              <p className="text-xs text-muted-foreground">{t('attendance.notCheckedIn')}</p>
-            )}
-            <div className="flex gap-2 mt-3">
-              {!todayAttendance?.checkIn && (
-                <button onClick={handleCheckIn} className="flex-1 btn btn-primary text-xs py-2 rounded-xl flex items-center justify-center gap-1.5"><Check className="w-3 h-3"/>{t('attendance.checkIn')}</button>
-              )}
+              {/* GPS holati */}
               {todayAttendance?.checkIn && !todayAttendance?.checkOut && (
-                <button onClick={handleCheckOut} className="flex-1 btn btn-outline text-xs py-2 rounded-xl flex items-center justify-center gap-1.5"><X className="w-3 h-3"/>{t('attendance.checkOut')}</button>
+                <div className="flex items-center gap-2 mb-3 text-xs text-muted-foreground">
+                  <div className={`w-2 h-2 rounded-full flex-shrink-0 ${gpsTracking ? 'bg-green-500 animate-pulse' : 'bg-muted-foreground/40'}`}/>
+                  <span>{gpsTracking ? 'GPS faol — har 5 daqiqada joylashuv yuboriladi' : 'GPS kutilmoqda...'}</span>
+                </div>
               )}
-            </div>
-          </div>
-          {/* GPS Tracking */}
-          <div className="p-4 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className={`icon-chip ${gpsTracking?'bg-green-500/15':''}`}><MapPin className={`w-4 h-4 ${gpsTracking?'text-green-600 dark:text-green-400':''}`}/></div>
-              <div>
-                <p className="text-sm font-medium">{t('gps.title')}</p>
-                <p className="text-[10px] text-muted-foreground">{gpsTracking ? t('gps.tracking') : t('gps.startTracking')}</p>
+              <div className="flex gap-2">
+                {!todayAttendance?.checkIn && (
+                  <button onClick={onCheckIn} className="flex-1 btn btn-primary text-xs py-2.5 rounded-xl flex items-center justify-center gap-1.5">
+                    <MapPin className="w-3.5 h-3.5"/>Ishga keldim
+                  </button>
+                )}
+                {todayAttendance?.checkIn && !todayAttendance?.checkOut && (
+                  <button onClick={onCheckOut} className="flex-1 btn btn-outline text-xs py-2.5 rounded-xl flex items-center justify-center gap-1.5 border-red-400/40 text-red-600 dark:text-red-400 hover:bg-red-500/10">
+                    <X className="w-3.5 h-3.5"/>Ish tugadi
+                  </button>
+                )}
+                {todayAttendance?.checkOut && (
+                  <div className="flex-1 text-center py-2.5 text-xs text-green-600 dark:text-green-400 font-medium">
+                    ✓ Bugungi ish yakunlandi ({todayAttendance.workHours?.toFixed(1) || 0}h)
+                  </div>
+                )}
               </div>
             </div>
-            <button onClick={toggleGps}
-              className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${gpsTracking ? 'bg-green-500' : 'bg-muted'}`}>
-              <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${gpsTracking ? 'translate-x-5' : 'translate-x-0.5'}`}/>
-            </button>
-          </div>
-        </motion.div>
+          </motion.div>
+        )}
 
         {/* Audit log — faqat admin */}
         {(currentUser.role === 'direktor' || currentUser.role === 'orinbosar' || currentUser.role === 'dasturchi') && (
@@ -3988,6 +4098,14 @@ export default function App() {
   const [syncPending, setSyncPending] = useState(0);
   const [syncStatus, setSyncStatus] = useState<"idle"|"pending"|"syncing"|"synced">("idle");
 
+  // ── Attendance & GPS (App darajasida — sahifadan tashqarida ham ishlaydi) ──
+  const [todayAttendance, setTodayAttendance] = useState<null | { status: string; checkIn?: string; checkOut?: string; workHours?: number }>(null);
+  const [gpsTracking, setGpsTracking] = useState(false);
+  const gpsIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // GPS admin ko'rinishi uchun
+  const [gpsLocations, setGpsLocations] = useState<Array<{userId: string; lat: number; lng: number; accuracy?: number; timestamp: string}>>([]);
+  const [gpsRefreshing, setGpsRefreshing] = useState(false);
+
   // Offline/online detection + SW sync messages
   useEffect(() => {
     const onOnline = () => {
@@ -4057,6 +4175,102 @@ export default function App() {
   };
 
   const liveUser = currentUser ? (users.find(u => u.id === currentUser.id) ?? currentUser) : null;
+
+  // ── GPS interval functions ────────────────────────────────────────────────
+  const sendGpsNow = (token: string) => {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(pos => {
+      fetch(`${API_BASE}/api/gps`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy }),
+      }).catch(()=>{});
+    }, ()=>{}, { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 });
+  };
+
+  const startGpsInterval = () => {
+    if (gpsIntervalRef.current) return;
+    const token = localStorage.getItem('token') || '';
+    sendGpsNow(token);
+    gpsIntervalRef.current = setInterval(() => sendGpsNow(token), 5 * 60 * 1000);
+    setGpsTracking(true);
+  };
+
+  const stopGpsInterval = () => {
+    if (gpsIntervalRef.current) { clearInterval(gpsIntervalRef.current); gpsIntervalRef.current = null; }
+    setGpsTracking(false);
+  };
+
+  // Attendance fetch + GPS auto-resume if already working today
+  useEffect(() => {
+    if (!liveUser) return;
+    const workerRoles = ['ishchi', 'prorab', 'brigadir'];
+    if (!workerRoles.includes(liveUser.role)) return;
+    const token = localStorage.getItem('token') || '';
+    const headers = { Authorization: `Bearer ${token}` };
+    fetch(`${API_BASE}/api/attendance/today`, { headers })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (d) {
+          setTodayAttendance(d);
+          // Agar bugun check-in bor, check-out yo'q — GPS avtomatik boshlanadi
+          if (d.checkIn && !d.checkOut) startGpsInterval();
+        }
+      }).catch(()=>{});
+    return () => stopGpsInterval();
+  }, [liveUser?.id]);
+
+  const handleCheckIn = async () => {
+    const token = localStorage.getItem('token') || '';
+    const headers: Record<string,string> = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
+    const pos = await new Promise<GeolocationPosition>((res, rej) =>
+      navigator.geolocation.getCurrentPosition(res, rej, { timeout: 8000 })
+    ).catch(() => null);
+    const body: any = {};
+    if (pos) { body.lat = pos.coords.latitude; body.lng = pos.coords.longitude; }
+    const r = await fetch(`${API_BASE}/api/attendance/checkin`, { method: 'POST', headers, body: JSON.stringify(body) });
+    if (r.ok) {
+      const d = await r.json();
+      setTodayAttendance(d);
+      startGpsInterval();
+      toast.success('Ishga keldingiz! GPS kuzatuv boshlandi.');
+    } else {
+      const e = await r.json().catch(()=>({}));
+      toast.error(e.error || 'Xatolik');
+    }
+  };
+
+  const handleCheckOut = async () => {
+    const token = localStorage.getItem('token') || '';
+    const headers: Record<string,string> = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
+    const pos = await new Promise<GeolocationPosition>((res, rej) =>
+      navigator.geolocation.getCurrentPosition(res, rej, { timeout: 8000 })
+    ).catch(() => null);
+    const body: any = {};
+    if (pos) { body.lat = pos.coords.latitude; body.lng = pos.coords.longitude; }
+    const r = await fetch(`${API_BASE}/api/attendance/checkout`, { method: 'POST', headers, body: JSON.stringify(body) });
+    if (r.ok) {
+      const d = await r.json();
+      setTodayAttendance(d);
+      stopGpsInterval();
+      toast.success('Ish yakunlandi. GPS to\'xtatildi.');
+    } else {
+      const e = await r.json().catch(()=>({}));
+      toast.error(e.error || 'Xatolik');
+    }
+  };
+
+  // Admin GPS locations refresh
+  const fetchGpsLocations = async () => {
+    const token = localStorage.getItem('token') || '';
+    setGpsRefreshing(true);
+    try {
+      const r = await fetch(`${API_BASE}/api/gps/latest`, { headers: { Authorization: `Bearer ${token}` } });
+      if (r.ok) setGpsLocations(await r.json());
+    } catch {}
+    finally { setGpsRefreshing(false); }
+  };
+
   const selProjectMounted = useRef(false);
 
   // Socket handler'lari uchun yangi qiymatlar (stale closure'dan qochish)
@@ -4217,6 +4431,16 @@ export default function App() {
 
       // Til boshqa qurilmadan (masalan bot orqali) o'zgartirilsa — shu yerda ham
       // darhol yangi tilga o'tadi (va aksincha, sayt orqali o'zgartirsa botga ham boradi).
+      // Adminlar uchun GPS real-time update
+      const onGpsUpdate = (payload: any) => {
+        if (!payload?.userId) return;
+        setGpsLocations(prev => {
+          const idx = prev.findIndex(g => g.userId === payload.userId);
+          const item = { userId: payload.userId, lat: payload.lat, lng: payload.lng, accuracy: payload.accuracy, timestamp: payload.timestamp };
+          return idx >= 0 ? prev.map((g, i) => i === idx ? item : g) : [...prev, item];
+        });
+      };
+
       const onLanguage = ({ language }: any) => {
         if (!language) return;
         setSiteLanguage(language);
@@ -4240,6 +4464,7 @@ export default function App() {
       socket.on("transaction:update", onTxUpdate);
       socket.on("transaction:new", onTxNew);
       socket.on("user:language", onLanguage);
+      socket.on("gps:update", onGpsUpdate);
 
       // App background'dan qaytganda socket ulanishini tiklash (Android/Tauri)
       const onVisibility = () => {
@@ -4276,6 +4501,7 @@ export default function App() {
         socket.off("user:language", onLanguage);
         socket.off("transaction:update", onTxUpdate);
         socket.off("transaction:new", onTxNew);
+        socket.off("gps:update", onGpsUpdate);
       };
     }
   }, [liveUser?.id]);
@@ -4558,12 +4784,14 @@ export default function App() {
 
 
   // Nav items based on role
+  const isGpsAdmin = liveUser?.role === 'direktor' || liveUser?.role === 'orinbosar';
   const NAV: { key: NavPage; label: string; icon: React.ElementType; badge?: number }[] = [
     { key: "dashboard", label: tApp('nav.dashboard'), icon: Home },
     ...(admin ? [
       { key: "finance" as NavPage, label: tApp('nav.finance'), icon: DollarSign },
       { key: "reports" as NavPage, label: tApp('nav.reports'), icon: BarChart2 },
     ] : []),
+    ...(isGpsAdmin ? [{ key: "gps" as NavPage, label: "Kuzatuv", icon: MapPin }] : []),
     { key: "chat", label: tApp('nav.chat'), icon: MessageCircle, badge: unreadMsgs },
     { key: "profile", label: tApp('nav.profile'), icon: User },
   ];
@@ -4710,8 +4938,15 @@ export default function App() {
               onColorThemeChange={id => { setColorTheme(id); localStorage.setItem("erp_colorTheme", id); }}
               themeMode={themeMode}
               onThemeModeChange={m => { setThemeMode(m); localStorage.setItem("erp_themeMode", m); }}
-              canEditCompany={!!(liveUser.isOwner || liveUser.role === 'direktor')}/>
+              canEditCompany={!!(liveUser.isOwner || liveUser.role === 'direktor')}
+              todayAttendance={todayAttendance}
+              onCheckIn={handleCheckIn}
+              onCheckOut={handleCheckOut}
+              gpsTracking={gpsTracking}/>
           </div>
+        )}
+        {page==="gps" && isGpsAdmin && (
+          <GpsTrackingPage users={users} gpsLocations={gpsLocations} refreshing={gpsRefreshing} onRefresh={fetchGpsLocations}/>
         )}
       </main>
 

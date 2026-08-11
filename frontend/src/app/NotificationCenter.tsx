@@ -144,73 +144,84 @@ export default function NotificationCenter({ token, onOpenPage }: Props) {
 
       <AnimatePresence>
         {open && (
-          <motion.div
-            initial={{ opacity: 0, y: -8, scale: 0.96 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -8, scale: 0.96 }}
-            transition={{ type: "spring", stiffness: 420, damping: 32 }}
-            className="absolute right-0 top-full mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-2xl overflow-hidden z-50 shadow-2xl border border-white/10"
-            style={{ background: "var(--glass-bg, rgba(15,20,40,0.95))", backdropFilter: "blur(20px)" }}>
-            <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
-              <p className="text-sm font-bold text-white">{t("notifications.title")}</p>
-              <div className="flex items-center gap-1">
-                {unreadCount > 0 && (
-                  <button onClick={markAllRead} title={t("notifications.markAllRead")}
-                    className="p-1.5 rounded-lg hover:bg-white/10 text-white/60 hover:text-white transition-colors">
-                    <CheckCheck className="w-3.5 h-3.5" />
+          <>
+            {/* Mobile backdrop */}
+            <div className="fixed inset-0 z-40 sm:hidden" onClick={() => setOpen(false)}/>
+            <motion.div
+              initial={{ opacity: 0, y: -8, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -8, scale: 0.96 }}
+              transition={{ type: "spring", stiffness: 420, damping: 32 }}
+              className={[
+                "z-50 rounded-2xl overflow-hidden shadow-2xl border border-white/10",
+                // Mobile: fixed, full-width strip under header
+                "fixed left-3 right-3 top-[72px]",
+                // Desktop: absolute dropdown
+                "sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2 sm:w-80 sm:max-w-[calc(100vw-2rem)]",
+              ].join(" ")}
+              style={{ background: "var(--glass-bg, rgba(15,20,40,0.95))", backdropFilter: "blur(20px)" }}>
+              <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
+                <p className="text-sm font-bold text-white">{t("notifications.title")}</p>
+                <div className="flex items-center gap-1">
+                  {unreadCount > 0 && (
+                    <button onClick={markAllRead} title={t("notifications.markAllRead")}
+                      className="p-1.5 rounded-lg hover:bg-white/10 text-white/60 hover:text-white transition-colors">
+                      <CheckCheck className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  <button onClick={() => setOpen(false)} className="p-1.5 rounded-lg hover:bg-white/10 text-white/60 hover:text-white">
+                    <X className="w-3.5 h-3.5" />
                   </button>
-                )}
-                <button onClick={() => setOpen(false)} className="p-1.5 rounded-lg hover:bg-white/10 text-white/60 hover:text-white">
-                  <X className="w-3.5 h-3.5" />
-                </button>
+                </div>
               </div>
-            </div>
 
-            <div className="max-h-[420px] overflow-y-auto scrollbar-hide">
-              {loading && notifications.length === 0 && (
-                <div className="flex items-center justify-center py-8">
-                  <div className="w-5 h-5 border-2 border-white/20 border-t-white/60 rounded-full animate-spin" />
-                </div>
-              )}
-              {!loading && notifications.length === 0 && (
-                <div className="text-center py-10">
-                  <Bell className="w-8 h-8 text-white/20 mx-auto mb-2" />
-                  <p className="text-xs text-white/40">{t("notifications.empty")}</p>
-                </div>
-              )}
-              {notifications.map(n => {
-                const Icon = TYPE_ICONS[n.type] || Info;
-                return (
-                  <div key={n._id}
-                    className={`group flex items-start gap-3 px-4 py-3 hover:bg-white/5 transition-colors border-b border-white/5 last:border-0 ${!n.read ? "bg-primary/5" : ""}`}>
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${!n.read ? "bg-primary/25 text-primary" : "bg-white/10 text-white/40"}`}>
-                      <Icon className="w-3.5 h-3.5" />
-                    </div>
-                    <div className="flex-1 min-w-0 cursor-pointer" onClick={() => {
-                      if (!n.read) markRead(n._id);
-                      if (n.url && onOpenPage) onOpenPage(n.url);
-                    }}>
-                      <p className={`text-xs font-semibold truncate ${!n.read ? "text-white" : "text-white/70"}`}>{n.title}</p>
-                      <p className="text-[11px] text-white/50 line-clamp-2 mt-0.5">{n.body}</p>
-                      <p className="text-[10px] text-white/30 mt-1">{timeAgo(n.createdAt)}</p>
-                    </div>
-                    <div className="flex-shrink-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      {!n.read && (
-                        <button onClick={() => markRead(n._id)}
-                          className="p-1 rounded hover:bg-white/10 text-white/50 hover:text-white">
-                          <Check className="w-3 h-3" />
-                        </button>
-                      )}
-                      <button onClick={() => deleteNotif(n._id, !n.read)}
-                        className="p-1 rounded hover:bg-white/10 text-white/50 hover:text-destructive">
-                        <Trash2 className="w-3 h-3" />
-                      </button>
-                    </div>
+              <div className="max-h-[55vh] sm:max-h-[420px] overflow-y-auto scrollbar-hide">
+                {loading && notifications.length === 0 && (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="w-5 h-5 border-2 border-white/20 border-t-white/60 rounded-full animate-spin" />
                   </div>
-                );
-              })}
-            </div>
-          </motion.div>
+                )}
+                {!loading && notifications.length === 0 && (
+                  <div className="text-center py-10">
+                    <Bell className="w-8 h-8 text-white/20 mx-auto mb-2" />
+                    <p className="text-xs text-white/40">{t("notifications.empty")}</p>
+                  </div>
+                )}
+                {notifications.map(n => {
+                  const Icon = TYPE_ICONS[n.type] || Info;
+                  return (
+                    <div key={n._id}
+                      className={`group flex items-start gap-3 px-4 py-3 hover:bg-white/5 transition-colors border-b border-white/5 last:border-0 ${!n.read ? "bg-primary/5" : ""}`}>
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${!n.read ? "bg-primary/25 text-primary" : "bg-white/10 text-white/40"}`}>
+                        <Icon className="w-3.5 h-3.5" />
+                      </div>
+                      <div className="flex-1 min-w-0 cursor-pointer" onClick={() => {
+                        if (!n.read) markRead(n._id);
+                        if (n.url && onOpenPage) onOpenPage(n.url);
+                        setOpen(false);
+                      }}>
+                        <p className={`text-xs font-semibold leading-tight ${!n.read ? "text-white" : "text-white/70"}`}>{n.title}</p>
+                        <p className="text-[11px] text-white/50 line-clamp-2 mt-0.5 leading-relaxed">{n.body}</p>
+                        <p className="text-[10px] text-white/30 mt-1">{timeAgo(n.createdAt)}</p>
+                      </div>
+                      <div className="flex-shrink-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 sm:group-hover:opacity-100 opacity-100 sm:opacity-0 transition-opacity">
+                        {!n.read && (
+                          <button onClick={() => markRead(n._id)}
+                            className="p-1.5 rounded hover:bg-white/10 text-white/50 hover:text-white">
+                            <Check className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        <button onClick={() => deleteNotif(n._id, !n.read)}
+                          className="p-1.5 rounded hover:bg-white/10 text-white/50 hover:text-destructive">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </motion.div>
+          </>
         )}
       </AnimatePresence>
     </div>

@@ -67,6 +67,49 @@ router.put('/:id', async (req, res) => {
   }
 });
 
+// PATCH /api/users/:id/courses — kurslar ro'yxatini yangilash
+router.patch('/:id/courses', async (req, res) => {
+  try {
+    const tenant = getTenant();
+    const { courses } = req.body;
+    if (!Array.isArray(courses)) return res.status(400).json({ error: 'courses massiv bo\'lishi kerak' });
+    // O'z profilini yoki admin boshqasini yangilay oladi
+    const filter = (tenant?.role === 'direktor' || tenant?.role === 'orinbosar')
+      ? scoped({ _id: req.params.id })
+      : scoped({ _id: req.params.id, _id2: tenant?.userId });
+    const user = await User.findOne({ _id: req.params.id, ...(tenant?.companyId ? { companyId: tenant.companyId } : {}) });
+    if (!user) return res.status(404).json({ error: 'Foydalanuvchi topilmadi' });
+    if (String(user._id) !== tenant?.userId && tenant?.role !== 'direktor' && tenant?.role !== 'orinbosar') {
+      return res.status(403).json({ error: 'Ruxsat yo\'q' });
+    }
+    user.courses = courses.map((c: any) => ({
+      title: String(c.title || '').slice(0, 200),
+      provider: c.provider ? String(c.provider).slice(0, 100) : undefined,
+      year: c.year ? Number(c.year) : undefined,
+      cert: c.cert ? String(c.cert).slice(0, 200) : undefined,
+    })).filter((c: any) => c.title);
+    await user.save();
+    res.json({ ok: true, courses: user.courses });
+  } catch { res.status(500).json({ error: 'Server xatoligi' }); }
+});
+
+// GET /api/users/:id/profile — profil + kurslar
+router.get('/:id/profile', async (req, res) => {
+  try {
+    const user = await User.findOne({ _id: req.params.id, ...scoped() }).select('-telegramVerificationCode -telegramVerificationCodeExpires -passwordHash');
+    if (!user) return res.status(404).json({ error: 'Topilmadi' });
+    res.json({
+      id: user._id,
+      name: user.firstName + (user.lastName ? ' ' + user.lastName : ''),
+      phone: user.phone,
+      role: user.role,
+      courses: user.courses || [],
+      position: user.position,
+      email: user.email,
+    });
+  } catch { res.status(500).json({ error: 'Server xatoligi' }); }
+});
+
 // Delete user — dasturchi o'chira olmaydi (firma ichki boshqaruvi)
 router.delete('/:id', blockDeveloper, async (req, res) => {
   try {

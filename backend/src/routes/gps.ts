@@ -2,7 +2,7 @@ import { Router } from 'express';
 import GpsLocation from '../models/GpsLocation';
 import { scoped, stamped } from '../middleware/scope';
 import { getTenant } from '../middleware/tenantContext';
-import { emitToUser } from '../services/socket';
+import { broadcast } from '../services/socket';
 
 const router = Router();
 
@@ -17,9 +17,9 @@ router.post('/', async (req, res) => {
     const loc = new GpsLocation(stamped({ userId: tenant.userId, lat, lng, accuracy, projectId }));
     await loc.save();
 
-    // Adminlarga real-time emit
-    const payload = { userId: tenant.userId, lat, lng, accuracy, timestamp: loc.timestamp, projectId };
-    emitToUser(tenant.userId, 'gps:update', payload);
+    // Barcha ulangan foydalanuvchilarga real-time emit (adminlar kuzatish uchun)
+    const payload = { userId: tenant.userId, companyId: tenant.companyId, lat, lng, accuracy, timestamp: loc.timestamp, projectId };
+    broadcast('gps:update', payload);
 
     res.json({ ok: true, id: loc._id });
   } catch { res.status(500).json({ error: 'Server xatoligi' }); }

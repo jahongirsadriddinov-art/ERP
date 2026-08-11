@@ -3634,7 +3634,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
                   {!todayAttendance?.checkOut && (
                     <div className="flex items-center gap-2 mb-3 text-xs text-muted-foreground">
                       <div className={`w-2 h-2 rounded-full flex-shrink-0 ${gpsTracking ? 'bg-green-500 animate-pulse' : 'bg-muted-foreground/40'}`}/>
-                      <span>{gpsTracking ? 'GPS faol — har 5 daqiqada joylashuv yuboriladi' : 'GPS kutilmoqda...'}</span>
+                      <span>{gpsTracking ? 'GPS faol — har daqiqada joylashuv yuboriladi' : 'GPS kutilmoqda...'}</span>
                     </div>
                   )}
                   <div className="flex gap-2">
@@ -4104,6 +4104,7 @@ export default function App() {
   const [todayAttendance, setTodayAttendance] = useState<null | { status: string; checkIn?: string; checkOut?: string; workHours?: number }>(null);
   const [gpsTracking, setGpsTracking] = useState(false);
   const gpsIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const gpsWarnedRef = useRef(false); // bir marta ogohlantirish uchun — har daqiqada konsolni to'ldirmaslik uchun
   // GPS admin ko'rinishi uchun
   const [gpsLocations, setGpsLocations] = useState<Array<{userId: string; lat: number; lng: number; accuracy?: number; timestamp: string}>>([]);
   const [gpsRefreshing, setGpsRefreshing] = useState(false);
@@ -4204,22 +4205,40 @@ export default function App() {
   const liveUser = currentUser ? (users.find(u => u.id === currentUser.id) ?? currentUser) : null;
 
   // ── GPS interval functions ────────────────────────────────────────────────
+  // MUHIM: agar yuqori aniqlik (GPS chip) 10s ichida javob bermasa (bino ichida,
+  // signal yomon, va h.k.) — darhol taslim bo'lmasdan past aniqlik (tarmoq/Wi-Fi
+  // asosidagi joylashuv)ga tushib, baribir bitta koordinata yuborishga urinamiz.
+  // Ikkalasi ham muvaffaqiyatsiz bo'lsagina (masalan ruxsat rad etilgan) — bir
+  // marta (har safar emas) konsolga ogohlantirish yoziladi.
   const sendGpsNow = (token: string) => {
     if (!navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition(pos => {
+    const post = (pos: GeolocationPosition) => {
       fetch(`${API_BASE}/api/gps`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy }),
       }).catch(()=>{});
-    }, ()=>{}, { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 });
+    };
+    const giveUp = (err: GeolocationPositionError) => {
+      if (!gpsWarnedRef.current) {
+        gpsWarnedRef.current = true;
+        console.warn('[GPS] joylashuvni olib bo\'lmadi (ruxsat rad etilgan yoki signal yo\'q):', err?.message);
+      }
+    };
+    navigator.geolocation.getCurrentPosition(
+      post,
+      () => navigator.geolocation.getCurrentPosition(post, giveUp, { enableHighAccuracy: false, timeout: 15000, maximumAge: 300000 }),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+    );
   };
 
   const startGpsInterval = () => {
     if (gpsIntervalRef.current) return;
     const token = localStorage.getItem('token') || '';
     sendGpsNow(token);
-    gpsIntervalRef.current = setInterval(() => sendGpsNow(token), 5 * 60 * 1000);
+    // Har DAQIQADA (1 daqiqa) — direktor/o'rinbosar "Yangilash"ni bosganda
+    // joriy joylashuv 5 daqiqadan eski bo'lib qolmasligi uchun.
+    gpsIntervalRef.current = setInterval(() => sendGpsNow(token), 60 * 1000);
     setGpsTracking(true);
   };
 
@@ -4231,7 +4250,7 @@ export default function App() {
   // Attendance fetch + GPS kuzatuv
   // MUHIM: GPS "Ishga keldim" tugmasidan MUSTAQIL — xodim saytga/ilovaga
   // kirgan zahoti (check-in/check-out bosilgan-bosilmaganidan qat'i nazar)
-  // joylashuvi darhol va keyin har 5 daqiqada avtomatik yuborilib turishi
+  // joylashuvi darhol va keyin har daqiqada avtomatik yuborilib turishi
   // kerak, direktor/o'rinbosar esa istalgan vaqt "Kuzatuv" sahifasida
   // "Yangilash"ni bosib eng so'nggi joylashuvni ko'ra oladi — xodim hech
   // qanday qo'shimcha tugma bosishi shart emas.

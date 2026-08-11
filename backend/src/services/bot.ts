@@ -663,7 +663,7 @@ bot.on('callback_query', async (query: any) => {
       let targetName = '';
       if (isGroup) {
         const g = await Group.findById(targetId).select('name memberIds').lean();
-        if (!g || !g.memberIds.includes(String(user._id))) { await bot.answerCallbackQuery(query.id, { text: tb(lang, 'chatGroupNotFound') }); return; }
+        if (!g || !(g.memberIds || []).includes(String(user._id))) { await bot.answerCallbackQuery(query.id, { text: tb(lang, 'chatGroupNotFound') }); return; }
         targetName = g.name;
       } else {
         const u = await User.findById(targetId).select('firstName lastName').lean();

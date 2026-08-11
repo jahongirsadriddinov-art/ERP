@@ -2489,7 +2489,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
           {/* Guruhlar */}
           {groups.filter(g => !g.devSupport).map(g => {
             const last = lastByGroup.get(g.id);
-            const lastText = last ? `${userById(last.fromUserId)?.name?.split(' ')[0] || ''}: ${last.type&&last.type!=='text'?(last.type==='audio'?'🎤 Ovoz':last.type==='image'?'🖼️ Rasm':last.type==='video'?'🎥 Video':last.type==='location'?'📍 Joylashuv':`📎 ${last.fileName??'Fayl'}`):last.text}` : `${g.memberIds.length} a'zo`;
+            const lastText = last ? `${userById(last.fromUserId)?.name?.split(' ')[0] || ''}: ${last.type&&last.type!=='text'?(last.type==='audio'?'🎤 Ovoz':last.type==='image'?'🖼️ Rasm':last.type==='video'?'🎥 Video':last.type==='location'?'📍 Joylashuv':`📎 ${last.fileName??'Fayl'}`):last.text}` : `${g.memberIds?.length || 0} a'zo`;
             return (
               <button key={g.id} onClick={() => { setSelGroup(g); setSelUser(null); setSelectMode(false); setSelected(new Set()); }}
                 className={`w-full flex items-center gap-2.5 mx-2 my-0.5 px-3 py-2.5 rounded-2xl hover:bg-muted/50 transition-colors text-left ${selGroup?.id===g.id?'bg-secondary/60':''}`}>
@@ -2585,7 +2585,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold truncate">{selGroup ? (selGroup.devSupport ? 'Dasturchi' : selGroup.name) : selUser!.name}</p>
                 {selGroup
-                  ? <p className="text-[11px] text-muted-foreground truncate">{selGroup.devSupport ? 'Texnik yordam' : `${selGroup.memberIds.length} a'zo`}</p>
+                  ? <p className="text-[11px] text-muted-foreground truncate">{selGroup.devSupport ? 'Texnik yordam' : `${selGroup.memberIds?.length || 0} a'zo`}</p>
                   : <p className="text-[11px] text-muted-foreground">{isOnline(selUser!.id) ? <span className="text-green-800 dark:text-green-400">onlayn</span> : ROLE_LABELS[selUser!.role]}</p>}
               </div>
               {!selectMode && !selGroup?.devSupport && (
@@ -4814,7 +4814,7 @@ export default function App() {
     return null;
   };
   const handleStartCall = (mode: 'voice'|'video', target: { peer?: AppUser; group?: Group }) => {
-    if (target.group) setActiveCall({ direction: 'out', mode, groupId: target.group.id, memberIds: target.group.memberIds.filter(id => id !== liveUser.id) });
+    if (target.group) setActiveCall({ direction: 'out', mode, groupId: target.group.id, memberIds: (target.group.memberIds || []).filter(id => id !== liveUser.id) });
     else if (target.peer) setActiveCall({ direction: 'out', mode, peerId: target.peer.id });
   };
   const handleUpdateAvatar = (url: string) => setUsers(p=>p.map(u=>u.id===liveUser.id?{...u,avatar:url}:u));

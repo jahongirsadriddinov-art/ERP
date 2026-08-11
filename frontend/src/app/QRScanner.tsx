@@ -81,7 +81,7 @@ export default function QRScanner({ onClose, onResult, token }: Props) {
     setStatus("processing");
     stopCamera();
     try {
-      const response = await fetch(`${API_BASE}/qr/scan`, {
+      const response = await fetch(`${API_BASE}/api/qr/scan`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

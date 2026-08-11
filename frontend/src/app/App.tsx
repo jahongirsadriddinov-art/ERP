@@ -13,6 +13,7 @@ import { API_BASE, parseSmetaFile, uploadChatMedia } from "./api";
 import { connectSocket, getSocket, disconnectSocket } from "./socket";
 import { motion, AnimatePresence } from "motion/react";
 import { setSiteLanguage, SiteLang, langLabel } from "./i18n";
+import { installAndroidBackHandler } from "./platform";
 import LanguageSwitcher from "./i18n/LanguageSwitcher";
 import { SkeletonList, SkeletonPage } from "./Skeleton";
 
@@ -4062,6 +4063,10 @@ export default function App() {
   const usersRef = useRef(users); usersRef.current = users;
   const pageRef = useRef(page); pageRef.current = page;
   const chatOpenRef = useRef(chatIsOpen); chatOpenRef.current = chatIsOpen;
+  const qrScanRef = useRef(qrScanOpen); qrScanRef.current = qrScanOpen;
+  const aiOpenRef = useRef(aiOpen); aiOpenRef.current = aiOpen;
+  const globalSearchRef = useRef(globalSearch); globalSearchRef.current = globalSearch;
+  const selProjectRef = useRef(selProject); selProjectRef.current = selProject;
 
   useEffect(() => {
     localStorage.setItem("page", page);
@@ -4236,6 +4241,14 @@ export default function App() {
       socket.on("transaction:new", onTxNew);
       socket.on("user:language", onLanguage);
 
+      // App background'dan qaytganda socket ulanishini tiklash (Android/Tauri)
+      const onVisibility = () => {
+        if (document.visibilityState === 'visible' && !socket.connected) {
+          socket.connect();
+        }
+      };
+      document.addEventListener('visibilitychange', onVisibility);
+
       // Fallback polling (socket uzilsa) — kamroq
       const fetchTx = () => {
         fetch(`${API_BASE}/api/transactions`).then(r=>r.json()).then(tData => {
@@ -4250,6 +4263,7 @@ export default function App() {
       const intv = setInterval(() => { fetchMsgs(); fetchGroups(); fetchTx(); }, 12000);
       return () => {
         clearInterval(intv);
+        document.removeEventListener('visibilitychange', onVisibility);
         socket.off("message:new", onNew);
         socket.off("message:edit", onEdit);
         socket.off("message:delete", onDelete);
@@ -4272,6 +4286,20 @@ export default function App() {
     if (!socket) return;
     groups.forEach(g => socket.emit("join:group", g.id));
   }, [groups.map(g => g.id).join(",")]);
+
+  // Android Back Button — platformani aniqlash platformada ishga tushadi
+  useEffect(() => {
+    if (!liveUser) return;
+    installAndroidBackHandler(() => {
+      if (qrScanRef.current) { setQrScanOpen(false); return true; }
+      if (aiOpenRef.current) { setAiOpen(false); return true; }
+      if (globalSearchRef.current) { setGlobalSearch(false); return true; }
+      if (chatOpenRef.current) { setChatIsOpen(false); return true; }
+      if (selProjectRef.current) { setSelProject(null); return true; }
+      if (pageRef.current !== 'dashboard') { setPage('dashboard'); return true; }
+      return false;
+    });
+  }, [liveUser?.id]);
 
   if (!liveUser) {
     // MUHIM: <Toaster/> asosiy (pastdagi, liveUser bor holatdagi) return ichida

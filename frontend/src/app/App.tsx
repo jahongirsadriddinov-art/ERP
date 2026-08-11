@@ -3095,9 +3095,12 @@ function GpsTrackingPage({ users, gpsLocations, refreshing, onRefresh }: {
 // (/api/currency/rates — O'zbekiston Markaziy Banki'dan USD/EUR, soatlik
 // keshlanadi), lekin frontendda faqat FinancePage'ning ichki konvertatsiyasi
 // uchun ishlatilgan, alohida ko'rinadigan joyi yo'q edi — shu joy shu bo'ladi.
-function CurrencyPanel() {
-  const [rates, setRates] = useState<{ UZS: number; USD: number; EUR: number; date: string; source: string } | null>(null);
+function CurrencyPanel({ canEdit }: { canEdit: boolean }) {
+  const [rates, setRates] = useState<{ UZS: number; USD: number; EUR: number; date: string; source: string; cbuUsd?: number; cbuEur?: number } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState({ usd: '', eur: '' });
+  const [saving, setSaving] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -3109,6 +3112,46 @@ function CurrencyPanel() {
   };
   useEffect(() => { load(); }, []);
 
+  const openEdit = () => {
+    setForm({ usd: rates?.USD ? String(Math.round(rates.USD)) : '', eur: rates?.EUR ? String(Math.round(rates.EUR)) : '' });
+    setEditing(true);
+  };
+
+  const saveCustom = async () => {
+    setSaving(true);
+    try {
+      const token = localStorage.getItem('token') || '';
+      const r = await fetch(`${API_BASE}/api/currency/custom`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ usdRate: form.usd ? Number(form.usd) : null, eurRate: form.eur ? Number(form.eur) : null }),
+      });
+      if (!r.ok) { const e = await r.json().catch(()=>({})); toast.error(e.error || 'Xatolik'); return; }
+      toast.success("Valyuta kursi saqlandi");
+      setEditing(false);
+      load();
+    } catch { toast.error("Server bilan ulanishda xatolik"); }
+    finally { setSaving(false); }
+  };
+
+  // "CBU kursiga qaytarish" — o'z kursini o'chirib, markaziy bank kursiga qaytadi
+  const resetToCbu = async () => {
+    setForm({ usd: '', eur: '' });
+    setSaving(true);
+    try {
+      const token = localStorage.getItem('token') || '';
+      await fetch(`${API_BASE}/api/currency/custom`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ usdRate: null, eurRate: null }),
+      });
+      toast.success("CBU kursiga qaytarildi");
+      setEditing(false);
+      load();
+    } catch { toast.error("Server bilan ulanishda xatolik"); }
+    finally { setSaving(false); }
+  };
+
   const rows = rates ? [
     { code: 'USD', label: 'AQSH dollari', icon: DollarSign, value: rates.USD },
     { code: 'EUR', label: 'Yevro', icon: Euro, value: rates.EUR },
@@ -3118,6 +3161,30 @@ function CurrencyPanel() {
     <div className="space-y-3">
       {loading ? (
         <SkeletonList items={2} withAvatar={false} />
+      ) : rates && editing ? (
+        <div className="surface p-4 space-y-3 rounded-2xl">
+          <h3 className="text-sm font-bold">Firmangizning o'z kursini belgilang</h3>
+          <p className="text-xs text-muted-foreground -mt-2">Bo'sh qoldirsangiz — O'zbekiston Markaziy Banki kursi ishlatiladi.</p>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">1 USD = ? so'm</label>
+            <input type="number" value={form.usd} onChange={e => setForm(p => ({...p, usd: e.target.value}))}
+              placeholder={String(Math.round(rates.cbuUsd || rates.USD))}
+              className="w-full bg-muted/60 border border-border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-primary"/>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">1 EUR = ? so'm</label>
+            <input type="number" value={form.eur} onChange={e => setForm(p => ({...p, eur: e.target.value}))}
+              placeholder={String(Math.round(rates.cbuEur || rates.EUR))}
+              className="w-full bg-muted/60 border border-border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-primary"/>
+          </div>
+          <div className="flex gap-2 pt-1">
+            <button onClick={saveCustom} disabled={saving} className="flex-1 btn btn-primary text-sm py-2.5 rounded-xl disabled:opacity-60">Saqlash</button>
+            <button onClick={() => setEditing(false)} disabled={saving} className="flex-1 btn btn-outline text-sm py-2.5 rounded-xl">Bekor qilish</button>
+          </div>
+          {rates.source === 'company' && (
+            <button onClick={resetToCbu} disabled={saving} className="w-full text-xs text-muted-foreground underline pt-1">CBU kursiga qaytarish</button>
+          )}
+        </div>
       ) : rates ? (
         <>
           {rows.map(r => (
@@ -3133,11 +3200,18 @@ function CurrencyPanel() {
             </div>
           ))}
           <p className="text-xs text-muted-foreground text-center pt-1">
-            Manba: {rates.source === 'CBU Uzbekistan' ? "O'zbekiston Markaziy Banki" : 'standart qiymat'} • {rates.date}
+            Manba: {rates.source === 'company' ? "Firmangizning o'z kursi" : rates.source === 'CBU Uzbekistan' ? "O'zbekiston Markaziy Banki" : 'standart qiymat'} • {rates.date}
           </p>
-          <button onClick={load} className="w-full btn btn-outline text-sm py-2.5 rounded-xl flex items-center justify-center gap-2">
-            <RefreshCw className="w-4 h-4"/>Yangilash
-          </button>
+          <div className="flex gap-2">
+            <button onClick={load} className="flex-1 btn btn-outline text-sm py-2.5 rounded-xl flex items-center justify-center gap-2">
+              <RefreshCw className="w-4 h-4"/>Yangilash
+            </button>
+            {canEdit && (
+              <button onClick={openEdit} className="flex-1 btn btn-primary text-sm py-2.5 rounded-xl flex items-center justify-center gap-2">
+                <Edit className="w-4 h-4"/>O'zgartirish
+              </button>
+            )}
+          </div>
         </>
       ) : (
         <div className="surface p-8 text-center rounded-2xl">
@@ -3372,7 +3446,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
             </div>
           )}
           {activePanel === "currency" && (
-            <CurrencyPanel/>
+            <CurrencyPanel canEdit={isAdmin(currentUser.role) || !!currentUser.isOwner}/>
           )}
           {activePanel === "subscription" && (
             <div className="surface overflow-hidden">

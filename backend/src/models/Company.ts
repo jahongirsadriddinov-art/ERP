@@ -13,6 +13,8 @@ export interface ICompany extends Document {
   activityType?: 'qurilish' | 'tamirlash' | 'loyihalash' | 'boshqa';
   employeeRange?: '1-10' | '11-50' | '51-200' | '200+';
   currency: 'UZS' | 'USD';
+  customUsdRate?: number;  // firma o'zi belgilagan 1 USD = X UZS (bo'lmasa CBU kursi ishlatiladi)
+  customEurRate?: number;  // firma o'zi belgilagan 1 EUR = X UZS
   ownerUserId?: string;    // User._id (firma egasi)
   status: 'PENDING' | 'ACTIVE' | 'SUSPENDED';
   plan: 'FREE' | 'PRO' | 'ENTERPRISE'; // hozir hamma FREE
@@ -33,6 +35,8 @@ const CompanySchema: Schema = new Schema({
   activityType: { type: String, enum: ['qurilish', 'tamirlash', 'loyihalash', 'boshqa'], default: 'qurilish' },
   employeeRange: { type: String, enum: ['1-10', '11-50', '51-200', '200+'] },
   currency: { type: String, enum: ['UZS', 'USD'], default: 'UZS' },
+  customUsdRate: { type: Number },
+  customEurRate: { type: Number },
   ownerUserId: { type: String, index: true },
   status: { type: String, enum: ['PENDING', 'ACTIVE', 'SUSPENDED'], default: 'ACTIVE' },
   plan: { type: String, enum: ['FREE', 'PRO', 'ENTERPRISE'], default: 'FREE' },

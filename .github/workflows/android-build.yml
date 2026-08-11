@@ -1,0 +1,57 @@
+name: Android APK build
+
+# Bu build mahalliy kompyuterda Android SDK/JDK/Gradle o'rnatilishi shart
+# emasligi uchun ishlatiladi — GitHub'ning o'zi shu narsalarni har safar
+# tayyor holda beradigan virtual mashinada quradi. Natija ("Artifacts")
+# har bir run sahifasining pastida yuklab olish uchun paydo bo'ladi.
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/android-build.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install frontend deps
+        run: npm ci
+
+      - name: Build web bundle (embeds VITE_API_URL from .env.production)
+        run: npm run build
+
+      - name: Sync Capacitor Android project
+        run: npx cap sync android
+
+      - name: Make gradlew executable
+        run: chmod +x android/gradlew
+
+      - name: Build debug APK
+        working-directory: frontend/android
+        run: ./gradlew assembleDebug --no-daemon
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qurilisherp-debug-apk
+          path: frontend/android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30

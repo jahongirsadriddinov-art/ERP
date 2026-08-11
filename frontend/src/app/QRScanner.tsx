@@ -119,7 +119,14 @@ export default function QRScanner({ onClose, onResult, token }: Props) {
   return (
     <div className="fixed inset-0 z-[80] bg-black/90 flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 safe-top">
+      {/* MUHIM: bu yerda avval "safe-top" klassi ishlatilgan edi — bunday klass
+          globals.css'da mavjud emas (haqiqiy nomi "pt-safe-top"), shu sabab hech
+          qanday effekt bermas edi va QR-skaner ochilganda header'i telefon status
+          bar (soat/signal/batareya) bilan ustma-ust tushib qolgan edi. Shuningdek
+          pt-safe-top'ning o'zi ham notch'siz qurilmalarda 0px'ga tushib qoladi —
+          shu sabab max() bilan minimal 0.75rem (py-3 bilan bir xil) kafolatlanadi. */}
+      <div className="flex items-center justify-between px-4 flex-shrink-0"
+        style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))', paddingBottom: '0.75rem' }}>
         <div className="flex items-center gap-2 text-white">
           <QrCode className="w-5 h-5" />
           <span className="font-semibold">QR Skan</span>

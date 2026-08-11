@@ -105,7 +105,11 @@ export async function relayMessageToTelegram(chatId: string, senderName: string,
           let convertedVid: string | null = null;
           try {
             convertedVid = await convertToMp4(localVidPath);
-            await bot.sendVideo(chatId, fs.createReadStream(convertedVid), { caption });
+            // fileOptions.contentType aniq ko'rsatilmasa, node-telegram-bot-api
+            // kelajakda "application/octet-stream"ga default qiladi (deprecation
+            // warning Render log'ida ko'rinib turgan edi) — convertToMp4 doim
+            // haqiqiy .mp4 chiqaradi, shuning uchun aniq belgilaymiz.
+            await bot.sendVideo(chatId, fs.createReadStream(convertedVid), { caption }, { contentType: 'video/mp4' });
           } catch (err) {
             console.error('[video transcode]', err);
             await bot.sendVideo(chatId, m.mediaUrl, { caption }).catch(() => bot.sendDocument(chatId, m.mediaUrl!, { caption }));
@@ -133,7 +137,8 @@ export async function relayMessageToTelegram(chatId: string, senderName: string,
           let converted: string | null = null;
           try {
             converted = await convertToOggOpus(localPath);
-            await bot.sendVoice(chatId, fs.createReadStream(converted), { caption: senderName });
+            // Xuddi shu sabab bilan — convertToOggOpus doim haqiqiy OGG/Opus chiqaradi.
+            await bot.sendVoice(chatId, fs.createReadStream(converted), { caption: senderName }, { contentType: 'audio/ogg' });
           } catch (err) {
             console.error('[voice transcode]', err);
             await bot.sendDocument(chatId, m.mediaUrl, { caption: `🎤 ${caption}` });

@@ -222,7 +222,17 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(request)
         .then(resp => {
-          if (resp.ok) caches.open(STATIC_CACHE).then(c => c.put(request, resp.clone()));
+          if (resp.ok) {
+            // MUHIM: clone() BUYURTMA BILAN, sinxron — caches.open() natijasini
+            // kutib turib keyin clone() chaqirilsa, "Response body is already
+            // used" xatosiga olib keladi: respondWith(resp) darhol brauzerga
+            // qaytadi va sahifa resp body'ni o'qishni boshlab yuboradi, shundan
+            // keyin (caches.open resolve bo'lgach) clone() chaqirilsa — original
+            // stream allaqachon iste'mol qilingan bo'ladi. Shu sabab clone() shu
+            // yerda, .then ichida darhol (hech qanday async kutishsiz) olinadi.
+            const cacheable = resp.clone();
+            caches.open(STATIC_CACHE).then(c => c.put(request, cacheable)).catch(() => {});
+          }
           return resp;
         })
         .catch(() => caches.match('/') || caches.match(request))

@@ -319,7 +319,14 @@ function NotificationBell({ messages, transfers, expenses, users, currentUser, o
       {open && (
         <motion.div initial={{ opacity: 0, y: -8, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{ type: "spring", stiffness: 420, damping: 32 }}
-          className="absolute right-0 top-full mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-2xl overflow-hidden z-50 liquid-glass">
+          // MUHIM: qo'ng'iroq (bell) tugmasi ekranning o'ng chetiga tegib
+          // turmasligi mumkin (mas. tema/avatar tugmalari o'ng tomonda,
+          // undan keyin ham bor) — shu holda absolute+right-0 panelni
+          // O'ZINING kichik konteynerига nisbatan joylashtiradi, ekran
+          // chetidan tashqariga chiqib ketadi. Kichik ekranda (< sm)
+          // fixed+left-4/right-4 bilan har doim ekran ichida, xavfsiz
+          // qoladi; sm dan boshlab avvalgidek bellga yopishib turadi.
+          className="fixed left-4 right-4 top-16 sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2 sm:w-80 sm:max-w-[calc(100vw-2rem)] rounded-2xl overflow-hidden z-50 liquid-glass">
           <div className="px-4 py-3 border-b border-white/10"><p className="text-sm font-bold text-white">{tN('chat.notifTitle')}</p></div>
           <div className="max-h-80 overflow-y-auto scrollbar-hide divide-y divide-white/5">
             {!hasAny && <p className="text-center text-xs text-white/50 py-8">{tN('chat.notifEmpty')}</p>}
@@ -2423,7 +2430,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
   const findMsg = (id: string) => messages.find(m => m.id === id) ?? null;
 
   const renderBubble = (m: Msg, mine: boolean) => {
-    if (m.deleted) return <p className="italic opacity-50 text-xs">{tChat("chat:deletedMessage")}</p>;
+    if (m.deleted) return <p className="italic opacity-50 text-xs">{tChat("chat.deletedMessage")}</p>;
     const replyMsg = m.replyToId ? findMsg(m.replyToId) : null;
     return (
       <>
@@ -2474,7 +2481,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
       {/* Contacts List */}
       <div className={`${(selUser||selGroup)?'hidden md:flex':'flex'} w-full md:w-64 flex-shrink-0 border-r border-border flex-col bg-card/60 backdrop-blur-xl`}>
         <div className="px-4 py-3 border-b border-border/50 flex items-center justify-between">
-          <p className="text-base font-bold">{tChat("chat:messages")}</p>
+          <p className="text-base font-bold">{tChat("chat.messages")}</p>
           <button onClick={() => setShowNewGroup(true)} title="Yangi guruh" className="btn btn-primary w-8 h-8 p-0 rounded-full"><Users2 className="w-4 h-4"/></button>
         </div>
         <div className="flex-1 overflow-y-auto scrollbar-hide">
@@ -2527,8 +2534,8 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
               </div>
             </button>
           )}
-          {contacts.length===0 && groups.length===0 && <p className="text-center text-xs text-muted-foreground py-8">{tChat("chat:noContacts")}</p>}
-          {contacts.length===0 && groups.length>0 && <p className="text-center text-xs text-muted-foreground py-4 px-3">{tChat("chat:noOtherUsers")}</p>}
+          {contacts.length===0 && groups.length===0 && <p className="text-center text-xs text-muted-foreground py-8">{tChat("chat.noContacts")}</p>}
+          {contacts.length===0 && groups.length>0 && <p className="text-center text-xs text-muted-foreground py-4 px-3">{tChat("chat.noOtherUsers")}</p>}
           {contacts.map(u => {
             const last = lastByUser.get(u.id);
             const ur = unread(u.id);
@@ -2558,7 +2565,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
       <div className={`${!(selUser||selGroup)?'hidden md:flex':'flex'} flex-1 flex-col overflow-hidden bg-background/50`} onClick={e=>e.stopPropagation()}>
         {!(selUser||selGroup) ? (
           <div className="flex-1 flex items-center justify-center text-muted-foreground">
-            <div className="text-center animate-pop-in"><MessageCircle className="w-12 h-12 mx-auto mb-3 opacity-20"/><p className="text-sm">{tChat("chat:selectConversation")}</p></div>
+            <div className="text-center animate-pop-in"><MessageCircle className="w-12 h-12 mx-auto mb-3 opacity-20"/><p className="text-sm">{tChat("chat.selectConversation")}</p></div>
           </div>
         ) : (
           <>
@@ -2603,7 +2610,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
               <div className="bg-primary/5 border-b border-primary/10 px-4 py-2 flex items-center gap-2">
                 <div className="w-0.5 h-7 bg-primary rounded-full flex-shrink-0"/>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[10px] font-semibold text-primary">📌 {tChat("chat:pinnedMessage")}</p>
+                  <p className="text-[10px] font-semibold text-primary">📌 {tChat("chat.pinnedMessage")}</p>
                   <p className="text-xs text-muted-foreground truncate">{pinned.type==='audio'?'🎤 Ovoz':pinned.type==='image'?'🖼️ Rasm':pinned.type==='location'?'📍 Joylashuv':pinned.text}</p>
                 </div>
                 <button aria-label="Qadalgan xabarni yopish" onClick={()=>onPin(pinned.id)} className="p-1 text-muted-foreground hover:text-foreground flex-shrink-0"><X className="w-3.5 h-3.5"/></button>
@@ -2637,7 +2644,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
                     >
                       {renderBubble(m, mine)}
                       <div className={`flex items-center justify-end gap-1 mt-1 ${mine?'text-white/60':'text-muted-foreground'}`}>
-                        {m.edited && <span className="text-[9px] italic">{tChat("chat:editedLabel")}</span>}
+                        {m.edited && <span className="text-[9px] italic">{tChat("chat.editedLabel")}</span>}
                         {m.pinned && <span className="text-[9px]">📌</span>}
                         <span className="text-[9px]">{new Date(m.timestamp).toLocaleTimeString("uz-UZ",{hour:"2-digit",minute:"2-digit"})}</span>
                         {mine && (m.read ? <CheckCheck className="w-3.5 h-3.5"/> : <Check className="w-3 h-3"/>)}

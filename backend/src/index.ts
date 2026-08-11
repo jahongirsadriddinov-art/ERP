@@ -73,6 +73,14 @@ app.use(cors({
       if (
         allowedHosts.has(hostname) ||
         hostname === 'localhost' || hostname === '127.0.0.1' ||
+        // MUHIM: Tauri v2 Windows'da (WebView2) ilova sahifasini `tauri://`
+        // maxsus sxema ORQALI EMAS, balki `https://tauri.localhost`
+        // pseudo-origin orqali xizmat qiladi (macOS/Linux'da `tauri://localhost`
+        // ishlatiladi, shu sabab tepada allaqachon tekshirilgan) — shu farq
+        // sababli Windows .exe'dagi HAR BIR so'rov shu yergacha "CORS: ruxsat
+        // etilmagan origin" bilan rad etilib kelgan edi (faqat .exe'da, veb va
+        // Android'da emas — checkI qildim: veb ishlagan, .exe ishlamagan).
+        hostname === 'tauri.localhost' ||
         hostname.endsWith('.vercel.app')
       ) {
         return callback(null, true);

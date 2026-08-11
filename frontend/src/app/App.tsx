@@ -14,6 +14,7 @@ import { connectSocket, getSocket, disconnectSocket } from "./socket";
 import { motion, AnimatePresence } from "motion/react";
 import { setSiteLanguage, SiteLang, langLabel } from "./i18n";
 import LanguageSwitcher from "./i18n/LanguageSwitcher";
+import { SkeletonList, SkeletonPage } from "./Skeleton";
 
 // recharts og'ir kutubxona — faqat "Hisobotlar" bo'limiga kirilganda yuklanadi
 // (boshlang'ich bundle hajmini kamaytiradi, sayt tezroq ochiladi).
@@ -2976,7 +2977,7 @@ function AuditLogSection({ token }: { token: string }) {
       </button>
       {open && (
         <div className="border-t border-border px-4 pb-4 pt-2">
-          {loading && <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground"/></div>}
+          {loading && <SkeletonList items={4} withAvatar={false} />}
           {!loading && logs.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">Hech narsa yo'q</p>}
           <div className="space-y-2 max-h-80 overflow-y-auto scrollbar-hide">
             {logs.map(log => (
@@ -3285,7 +3286,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
           {activePanel === "subscription" && (
             <div className="surface overflow-hidden">
               {subLoading ? (
-                <div className="flex items-center justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground"/></div>
+                <SkeletonList items={1} withAvatar={false} />
               ) : !subData || subData.status === 'none' ? (
                 <div className="px-5 py-8 text-center space-y-2">
                   <CreditCard className="w-10 h-10 text-muted-foreground/40 mx-auto"/>
@@ -4097,12 +4098,22 @@ export default function App() {
   useEffect(() => {
     if (liveUser) {
       setInitialLoading(true);
+
+      // Render free tier cold-start: 30s timeout — agar backend uyg'onmasa
+      // foydalanuvchi abadiy loading ekranida qolmasin, ilovani bo'sh holda ochamiz.
+      const ctrl = new AbortController();
+      const timeoutId = setTimeout(() => { ctrl.abort(); }, 30_000);
+
+      const safeFetch = (url: string) =>
+        fetch(url, { signal: ctrl.signal }).then(r => r.json()).catch(() => null);
+
       // Fetch initial data when user logs in
       Promise.all([
-        fetch(API_BASE + "/api/users").then(r => r.json()),
-        fetch(API_BASE + "/api/objects").then(r => r.json()),
-        fetch(API_BASE + "/api/transactions").then(r => r.json())
+        safeFetch(API_BASE + "/api/users"),
+        safeFetch(API_BASE + "/api/objects"),
+        safeFetch(API_BASE + "/api/transactions"),
       ]).then(([uData, pData, tData]) => {
+        clearTimeout(timeoutId);
         if(Array.isArray(uData)) setUsers(uData.map(u => ({...u, id: u.id || u._id, projectIds: u.projectIds || []})));
         if(Array.isArray(pData)) {
           const formattedP = pData.map(p => {
@@ -4124,7 +4135,7 @@ export default function App() {
           setIncomes(formattedT.filter(t => t.type === 'income'));
           setExpenses(formattedT.filter(t => t.type !== 'transfer' && t.type !== 'income'));
         }
-      }).catch(console.error).finally(() => setInitialLoading(false));
+      }).catch(() => { clearTimeout(timeoutId); }).finally(() => setInitialLoading(false));
 
       // Xabarlar + guruhlar (dastlabki yuklash)
       const fetchMsgs = () => {
@@ -4264,7 +4275,7 @@ export default function App() {
     return (
       <>
         {authView === "register"
-          ? <Suspense fallback={<div className="min-h-screen bg-background flex items-center justify-center"><Loader2 className="w-8 h-8 text-primary animate-spin"/></div>}>
+          ? <Suspense fallback={<div className="min-h-screen bg-background"><SkeletonPage variant="form" /></div>}>
               <RegisterWizard onBack={()=>setAuthView("login")} onDone={(u,company)=>{setCurrentUser(u);setPage("dashboard");setAuthView("login");applyCompany(company);}}/>
             </Suspense>
           : <LoginScreen onLogin={(u,company)=>{setCurrentUser(u);setPage("dashboard");applyCompany(company);}} onRegister={()=>setAuthView("register")}/>}
@@ -4275,43 +4286,30 @@ export default function App() {
   // Dasturchi (super-admin) — alohida panel: barcha firmalar va foydalanuvchilar
   if (liveUser.role === "dasturchi") return (
     <>
-      <Suspense fallback={<div className="min-h-screen bg-background flex items-center justify-center"><Loader2 className="w-8 h-8 text-primary animate-spin"/></div>}>
+      <Suspense fallback={<div className="min-h-screen bg-background"><SkeletonPage variant="dashboard" /></div>}>
         <DeveloperPanel currentUser={liveUser} onLogout={()=>{setCurrentUser(null);setAuthView("login");}}/>
       </Suspense>
       <Toaster position="top-center" richColors closeButton/>
     </>
   );
   if (initialLoading) return (
-    <div className="min-h-screen bg-background flex flex-col">
-      {/* Header skeleton */}
-      <div className="h-12 bg-card border-b border-border flex items-center px-4 gap-3 flex-shrink-0">
-        <div className="w-6 h-6 rounded bg-muted animate-pulse"/>
-        <div className="w-28 h-4 rounded bg-muted animate-pulse"/>
-        <div className="ml-auto flex gap-2">
-          <div className="w-8 h-8 rounded-full bg-muted animate-pulse"/>
+    <>
+      <div className="min-h-screen bg-background flex flex-col">
+        <div className="h-12 bg-card border-b border-border flex items-center px-4 gap-3 flex-shrink-0">
+          <div className="w-6 h-6 rounded bg-muted animate-pulse"/>
+          <div className="w-28 h-4 rounded bg-muted animate-pulse"/>
+          <div className="ml-auto flex gap-2">
+            <div className="w-8 h-8 rounded-full bg-muted animate-pulse"/>
+          </div>
+        </div>
+        <SkeletonPage variant="dashboard" />
+        <div className="flex-shrink-0 flex items-center justify-center gap-2 pb-6 text-xs text-muted-foreground">
+          <Loader2 className="w-3.5 h-3.5 animate-spin"/>
+          <span>Ma'lumotlar yuklanmoqda...</span>
         </div>
       </div>
-      {/* Content skeleton */}
-      <div className="flex-1 p-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
-        {[0,1,2,3].map(i => (
-          <div key={i} className="bg-card rounded-xl border border-border p-4 space-y-3" style={{ animationDelay: `${i * 80}ms` }}>
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded bg-muted animate-pulse"/>
-              <div className="w-24 h-3 rounded bg-muted animate-pulse"/>
-            </div>
-            {[0,1,2,3].map(j => (
-              <div key={j} className="flex items-center gap-2 py-1">
-                <div className="w-8 h-8 rounded-full bg-muted animate-pulse"/>
-                <div className="flex-1 space-y-1">
-                  <div className="w-32 h-3 rounded bg-muted animate-pulse"/>
-                  <div className="w-20 h-2 rounded bg-muted/60 animate-pulse"/>
-                </div>
-              </div>
-            ))}
-          </div>
-        ))}
-      </div>
-    </div>
+      <Toaster position="top-center" richColors closeButton/>
+    </>
   );
 
   const admin = isAdmin(liveUser.role);
@@ -4650,7 +4648,7 @@ export default function App() {
             onApprove={handleApproveExpense} onReject={handleRejectExpense}/>
         )}
         {page==="reports" && admin && (
-          <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 className="w-6 h-6 text-primary animate-spin"/></div>}>
+          <Suspense fallback={<SkeletonPage variant="dashboard" />}>
             <ReportsPage projects={projects} expenses={expenses} users={users}/>
           </Suspense>
         )}

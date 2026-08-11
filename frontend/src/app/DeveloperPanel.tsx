@@ -6,6 +6,7 @@ import { API_BASE } from "./api";
 import { connectSocket } from "./socket";
 import type { AppUser, Msg, Role } from "./App";
 import { ROLE_LABELS, VoicePlayer } from "./App";
+import { SkeletonList, SkeletonMessage } from "./Skeleton";
 
 // Har bir tarifda BIRINCHI OY BEPUL — backend/src/routes/subscriptions.ts PLAN_CONFIG bilan bir xil.
 const DEV_PLAN_CONFIG: Record<string, { label: string; days: number; amount: number }> = {
@@ -206,7 +207,7 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
 
       <div className="p-4 space-y-3 pb-24">
         {loading ? (
-          <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
+          <SkeletonList items={5}/>
         ) : tab === "subscriptions" ? (
           subs.length === 0 ? <p className="text-center text-sm text-muted-foreground py-12">{t('devPanel.subscriptions.empty')}</p> :
           subs.map(s => {
@@ -358,7 +359,9 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
               {!selDevFirm ? (
                 <div className="flex-1 flex items-center justify-center text-xs text-muted-foreground">{t('devPanel.messages.selectFirm')}</div>
               ) : devGroupLoading ? (
-                <div className="flex-1 flex items-center justify-center"><Loader2 className="w-5 h-5 animate-spin text-primary"/></div>
+                <div className="flex-1 flex flex-col justify-end gap-2.5 p-3">
+                  <SkeletonMessage/><SkeletonMessage mine/><SkeletonMessage/>
+                </div>
               ) : (
                 <>
                   <div className="px-3 py-2 border-b border-border/40 flex items-center gap-2 flex-shrink-0">

@@ -15,7 +15,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { setSiteLanguage, SiteLang, langLabel } from "./i18n";
 import { installAndroidBackHandler } from "./platform";
 import LanguageSwitcher from "./i18n/LanguageSwitcher";
-import { SkeletonList, SkeletonPage } from "./Skeleton";
+import { Skeleton, SkeletonList, SkeletonPage, SkeletonMessage, SkeletonTable } from "./Skeleton";
 
 // recharts og'ir kutubxona — faqat "Hisobotlar" bo'limiga kirilganda yuklanadi
 // (boshlang'ich bundle hajmini kamaytiradi, sayt tezroq ochiladi).
@@ -4338,10 +4338,6 @@ export default function App() {
           </div>
         </div>
         <SkeletonPage variant="dashboard" />
-        <div className="flex-shrink-0 flex items-center justify-center gap-2 pb-6 text-xs text-muted-foreground">
-          <Loader2 className="w-3.5 h-3.5 animate-spin"/>
-          <span>Ma'lumotlar yuklanmoqda...</span>
-        </div>
       </div>
       <Toaster position="top-center" richColors closeButton/>
     </>
@@ -4577,7 +4573,15 @@ export default function App() {
   return (
     <div className={`h-[100dvh] flex flex-col overflow-hidden font-['Inter',sans-serif] ${siteBg ? 'with-bg' : ''}`} style={(() => { if (!siteBg) return { background: 'var(--background)' }; const isImg = !siteBg.startsWith('linear-gradient') && !siteBg.startsWith('radial-gradient'); return isImg ? { backgroundImage: `url(${siteBg})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' } : { background: siteBg }; })()}>
       {/* Header — 3 ta mustaqil "orolcha" pill (logo / nav / bell+avatar), orqada bar yo'q */}
-      <header className="flex items-center gap-3 px-4 py-2.5 flex-shrink-0 z-50 sticky top-0">
+      {/* MUHIM: safe-area-inset-top yo'q edi — sayt endi PWA (manifest.json/
+          sw.js) sifatida "Bosh ekranga qo'shish" orqali TO'LIQ EKRAN (standalone)
+          rejimda ochilsa, veb-kontent OS status-bar (soat/tarmoq/batareya)
+          ostidagi maydonni ham egallaydi — shu joyga aynan shu header
+          chizilib, telefon status-barining o'z belgilari (5G, batareya)
+          ilova header'ining ikonkalari bilan bir qatorda ustma-ust
+          chiqib, "hunuk"/"buzilgan" ko'rinishga sabab bo'lardi. */}
+      <header className="flex items-center gap-3 px-4 flex-shrink-0 z-50 sticky top-0"
+        style={{ paddingTop: 'max(0.625rem, env(safe-area-inset-top))', paddingBottom: '0.625rem' }}>
         <div className="nav-pill-desktop flex items-center gap-2.5 px-3 py-2 rounded-full flex-shrink-0">
           <div className="w-7 h-7 rounded-full flex items-center justify-center overflow-hidden bg-gradient-to-br from-accent to-accent/75 shadow-sm flex-shrink-0">
             {companyLogo ? <img src={companyLogo} alt="Logo" className="w-full h-full object-contain"/> : <Building2 className="w-3.5 h-3.5 text-white"/>}
@@ -4763,7 +4767,21 @@ export default function App() {
 
       {/* AI Yordamchi — faqat direktor va o'rinbosar; endi FAQAT header'dagi ✨ tugmasidan ochiladi */}
       {(liveUser.role === 'direktor' || liveUser.role === 'orinbosar') && aiOpen && (
-        <Suspense fallback={<div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center"><Loader2 className="w-6 h-6 text-white animate-spin"/></div>}>
+        <Suspense fallback={
+          <div className="fixed inset-0 bg-black/50 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4">
+            <div className="bg-card w-full sm:max-w-md sm:rounded-2xl rounded-t-3xl overflow-hidden" style={{ height: 'min(600px, 85vh)' }}>
+              <div className="flex items-center gap-2.5 px-4 py-3.5 border-b border-border">
+                <Skeleton className="w-8 h-8 rounded-full"/>
+                <Skeleton className="h-3 w-28"/>
+              </div>
+              <div className="p-3 space-y-2.5">
+                <SkeletonMessage/>
+                <SkeletonMessage mine/>
+                <SkeletonMessage/>
+              </div>
+            </div>
+          </div>
+        }>
           <AIAssistant
             currentUser={liveUser}
             users={users}

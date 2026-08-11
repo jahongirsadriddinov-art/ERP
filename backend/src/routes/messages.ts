@@ -12,6 +12,7 @@ import { emitToUser, emitToGroup } from '../services/socket';
 import { scoped, stamped } from '../middleware/scope';
 import { bot } from '../services/bot';
 import { uploadFileToCloud } from '../config/cloudinary';
+import { getBackendUrl } from '../utils/backendUrl';
 
 if (ffmpegPath) ffmpeg.setFfmpegPath(ffmpegPath);
 
@@ -174,8 +175,13 @@ router.post('/upload', upload.single('file'), async (req, res) => {
     const { url } = await uploadFileToCloud(req.file.path, 'qurilish-chat');
     res.json({ url, fileName: req.file.originalname, fileSize: req.file.size });
   } catch {
-    // Cloudinary muvaffaqiyatsiz bo'lsa local URL qaytaradi
-    res.json({ url: `/uploads/${req.file.filename}`, fileName: req.file.originalname, fileSize: req.file.size });
+    // Cloudinary muvaffaqiyatsiz bo'lsa local URL qaytaradi — MUHIM: mutlaq
+    // (backend domeni bilan) bo'lishi shart, nisbiy "/uploads/xxx" EMAS.
+    // Nisbiy bo'lsa, u saqlanib qolgan xabarni HAR BIR platforma o'z origin'i
+    // asosida hal qiladi (web: erp-firma.uz, Windows: tauri.localhost,
+    // Android: localhost) — hech biri backend'nikiga to'g'ri kelmaydi, rasm/
+    // fayl hech qayerda ochilmaydi.
+    res.json({ url: `${getBackendUrl()}/uploads/${req.file.filename}`, fileName: req.file.originalname, fileSize: req.file.size });
   }
 });
 

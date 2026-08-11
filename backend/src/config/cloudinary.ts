@@ -2,6 +2,7 @@ import { v2 as cloudinary } from 'cloudinary';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import { getBackendUrl } from '../utils/backendUrl';
 
 const CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME;
 const API_KEY = process.env.CLOUDINARY_API_KEY;
@@ -17,9 +18,8 @@ if (cloudinaryEnabled) {
 export async function uploadFileToCloud(filePath: string, folder = 'qurilish-erp'): Promise<{ url: string; publicId?: string }> {
   if (!cloudinaryEnabled) {
     // Local fayl URL qaytaradi
-    const backendUrl = process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 5000}`;
     const fileName = path.basename(filePath);
-    return { url: `${backendUrl}/uploads/${fileName}` };
+    return { url: `${getBackendUrl()}/uploads/${fileName}` };
   }
   const result = await cloudinary.uploader.upload(filePath, { folder, resource_type: 'auto' });
   // Cloudinary'ga yuklangandan keyin local faylni o'chirish (disk tejash)

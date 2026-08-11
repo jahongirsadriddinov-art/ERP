@@ -4,7 +4,7 @@ import {
   CheckCircle, Clock, AlertTriangle, ChevronRight, MapPin,
   Phone, User, X, Check, Download, BarChart2,
   DollarSign, MessageCircle, ChevronDown, ChevronUp, Send,
-  TrendingDown, Wallet, LogOut, Camera, Home, UserPlus, Edit, Trash, Search, AlertCircle, ChevronLeft, Loader2, Paperclip, Mic, Video as VideoIcon, Image as ImageIcon, FileText, CornerDownLeft, Share2, SquareCheck, Trash2, MoreHorizontal, Upload, Palette, Sun, Moon, Monitor, PhoneOff, MicOff, VideoOff, Users2, Copy, Bell, Pin, PinOff, CheckCheck, Languages, CreditCard, Calendar, QrCode, WifiOff
+  TrendingDown, Wallet, LogOut, Camera, Home, UserPlus, Edit, Trash, Search, AlertCircle, ChevronLeft, Loader2, Paperclip, Mic, Video as VideoIcon, Image as ImageIcon, FileText, CornerDownLeft, Share2, SquareCheck, Trash2, MoreHorizontal, Upload, Palette, Sun, Moon, Monitor, PhoneOff, MicOff, VideoOff, Users2, Copy, Bell, Pin, PinOff, CheckCheck, Languages, CreditCard, Calendar, QrCode, WifiOff, Euro, RefreshCw
 } from "lucide-react";
 import { toast, Toaster } from "sonner";
 import { createPortal } from "react-dom";
@@ -3090,85 +3090,62 @@ function GpsTrackingPage({ users, gpsLocations, refreshing, onRefresh }: {
   );
 }
 
-function CoursesPanel({ userId }: { userId: string }) {
-  const [coursesList, setCoursesList] = useState<Array<{title: string; provider?: string; year?: number; cert?: string}>>(() => {
-    try { return JSON.parse(localStorage.getItem(`erp_courses_${userId}`) || '[]'); } catch { return []; }
-  });
-  const [addOpen, setAddOpen] = useState(false);
-  const [editIdx, setEditIdx] = useState<number|null>(null);
-  const [form, setFormC] = useState({ title: '', provider: '', year: '', cert: '' });
+// "Kurslarim" (o'quv kurslari) o'rniga — foydalanuvchi "kurs" deganda VALYUTA
+// KURSINI nazarda tutgan edi. Backend'da bu allaqachon tayyor edi
+// (/api/currency/rates — O'zbekiston Markaziy Banki'dan USD/EUR, soatlik
+// keshlanadi), lekin frontendda faqat FinancePage'ning ichki konvertatsiyasi
+// uchun ishlatilgan, alohida ko'rinadigan joyi yo'q edi — shu joy shu bo'ladi.
+function CurrencyPanel() {
+  const [rates, setRates] = useState<{ UZS: number; USD: number; EUR: number; date: string; source: string } | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const saveCourses = async (list: typeof coursesList) => {
-    setCoursesList(list);
-    localStorage.setItem(`erp_courses_${userId}`, JSON.stringify(list));
-    const token = localStorage.getItem('token');
-    fetch(`${API_BASE}/api/users/${userId}/courses`, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-      body: JSON.stringify({ courses: list }),
-    }).catch(()=>{});
+  const load = () => {
+    setLoading(true);
+    fetch(`${API_BASE}/api/currency/rates`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setRates(d); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
   };
-  const openAdd = () => { setFormC({ title: '', provider: '', year: '', cert: '' }); setEditIdx(null); setAddOpen(true); };
-  const openEdit = (idx: number) => {
-    const c = coursesList[idx];
-    setFormC({ title: c.title, provider: c.provider||'', year: String(c.year||''), cert: c.cert||'' });
-    setEditIdx(idx); setAddOpen(true);
-  };
-  const save = () => {
-    if (!form.title.trim()) return;
-    const item = { title: form.title.trim(), provider: form.provider.trim()||undefined, year: form.year ? Number(form.year) : undefined, cert: form.cert.trim()||undefined };
-    const next = editIdx !== null ? coursesList.map((c,i) => i===editIdx ? item : c) : [...coursesList, item];
-    saveCourses(next); setAddOpen(false);
-  };
-  const del = (idx: number) => saveCourses(coursesList.filter((_,i) => i!==idx));
+  useEffect(() => { load(); }, []);
+
+  const rows = rates ? [
+    { code: 'USD', label: 'AQSH dollari', icon: DollarSign, value: rates.USD },
+    { code: 'EUR', label: 'Yevro', icon: Euro, value: rates.EUR },
+  ] : [];
 
   return (
     <div className="space-y-3">
-      {addOpen ? (
-        <div className="surface p-4 space-y-3 rounded-2xl">
-          <h3 className="text-sm font-bold">{editIdx !== null ? 'Kursni tahrirlash' : "Kurs qo'shish"}</h3>
-          {(['title','provider','year','cert'] as const).map((k) => (
-            <div key={k}>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                {k==='title'?"Kurs nomi *":k==='provider'?"Muassasa/Platforma":k==='year'?"Yil":"Sertifikat raqami"}
-              </label>
-              <input type={k==='year'?'number':'text'} value={form[k]} onChange={e => setFormC(p => ({...p, [k]: e.target.value}))}
-                className="w-full bg-muted/60 border border-border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-primary"/>
+      {loading ? (
+        <SkeletonList items={2} withAvatar={false} />
+      ) : rates ? (
+        <>
+          {rows.map(r => (
+            <div key={r.code} className="surface rounded-2xl p-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="icon-chip"><r.icon className="w-4 h-4"/></div>
+                <div>
+                  <p className="text-sm font-semibold">1 {r.code}</p>
+                  <p className="text-xs text-muted-foreground">{r.label}</p>
+                </div>
+              </div>
+              <p className="text-base font-bold">{Math.round(r.value).toLocaleString('uz-UZ')} so'm</p>
             </div>
           ))}
-          <div className="flex gap-2 pt-1">
-            <button onClick={save} className="flex-1 btn btn-primary text-sm py-2.5 rounded-xl">Saqlash</button>
-            <button onClick={() => setAddOpen(false)} className="flex-1 btn btn-outline text-sm py-2.5 rounded-xl">Bekor qilish</button>
-          </div>
-        </div>
+          <p className="text-xs text-muted-foreground text-center pt-1">
+            Manba: {rates.source === 'CBU Uzbekistan' ? "O'zbekiston Markaziy Banki" : 'standart qiymat'} • {rates.date}
+          </p>
+          <button onClick={load} className="w-full btn btn-outline text-sm py-2.5 rounded-xl flex items-center justify-center gap-2">
+            <RefreshCw className="w-4 h-4"/>Yangilash
+          </button>
+        </>
       ) : (
-        <button onClick={openAdd} className="w-full btn btn-primary text-sm py-2.5 rounded-2xl flex items-center justify-center gap-2">
-          <Plus className="w-4 h-4"/>Kurs qo'shish
-        </button>
-      )}
-      {coursesList.length === 0 && !addOpen && (
         <div className="surface p-8 text-center rounded-2xl">
-          <CheckCircle className="w-10 h-10 text-muted-foreground/30 mx-auto mb-2"/>
-          <p className="text-sm font-medium">Kurslar yo'q</p>
-          <p className="text-xs text-muted-foreground mt-1">Sertifikatlaringiz va o'tgan kurslaringizni qo'shing</p>
+          <AlertCircle className="w-10 h-10 text-muted-foreground/30 mx-auto mb-2"/>
+          <p className="text-sm font-medium">Kursni olib bo'lmadi</p>
+          <button onClick={load} className="btn btn-outline text-xs px-4 py-2 rounded-xl mt-3">Qayta urinish</button>
         </div>
       )}
-      {coursesList.map((c, i) => (
-        <div key={i} className="surface p-4 rounded-2xl flex items-start gap-3">
-          <div className="icon-chip flex-shrink-0 mt-0.5"><CheckCircle className="w-4 h-4"/></div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold leading-tight">{c.title}</p>
-            {c.provider && <p className="text-xs text-muted-foreground mt-0.5">{c.provider}</p>}
-            <div className="flex gap-3 mt-1">
-              {c.year && <span className="text-[10px] text-muted-foreground">{c.year}</span>}
-              {c.cert && <span className="text-[10px] text-primary font-medium">#{c.cert}</span>}
-            </div>
-          </div>
-          <div className="flex gap-1 flex-shrink-0">
-            <button onClick={() => openEdit(i)} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground"><Edit className="w-3.5 h-3.5"/></button>
-            <button onClick={() => del(i)} className="p-1.5 rounded-lg hover:bg-red-500/10 text-muted-foreground hover:text-red-600"><Trash className="w-3.5 h-3.5"/></button>
-          </div>
-        </div>
-      ))}
     </div>
   );
 }
@@ -3259,7 +3236,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
   ];
 
   const activeTheme = COLOR_THEMES.find(t => t.id === colorTheme) || COLOR_THEMES[0];
-  const [activePanel, setActivePanel] = useState<null | "bg" | "appearance" | "color" | "perms" | "projects" | "language" | "subscription" | "courses">(null);
+  const [activePanel, setActivePanel] = useState<null | "bg" | "appearance" | "color" | "perms" | "projects" | "language" | "subscription" | "currency">(null);
   const APPEARANCE_LABELS: Record<string, string> = { light: "Yorug'", dark: "Qorong'i", system: "Tizim" };
 
   const [subData, setSubData] = useState<any>(null);
@@ -3282,7 +3259,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
     const panelTitle = {
       bg: "Fon mavzular", appearance: "Ko'rinish rejimi", color: "Rang mavzusi",
       perms: "Ruxsatlar", projects: "Obyektlarim", language: t('profile.language'),
-      subscription: "Obuna holati", courses: "Mening kurslarim",
+      subscription: "Obuna holati", currency: "Valyuta kursi",
     }[activePanel];
     return (
       <motion.div key={activePanel} initial={{ opacity: 0, x: 28 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 28 }}
@@ -3394,8 +3371,8 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
               <LanguageSwitcher value={i18n.language as SiteLang} onChange={changeLanguage}/>
             </div>
           )}
-          {activePanel === "courses" && (
-            <CoursesPanel userId={currentUser.id}/>
+          {activePanel === "currency" && (
+            <CurrencyPanel/>
           )}
           {activePanel === "subscription" && (
             <div className="surface overflow-hidden">
@@ -3582,7 +3559,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
             { key: "language" as const, icon: Languages, label: t('profile.language'), hint: langLabel(i18n.language as SiteLang), swatch: null },
             { key: "perms" as const, icon: CheckCircle, label: t('profile.permissions'), hint: `${perms.filter(([,has])=>has).length}/${perms.length}`, swatch: null },
             { key: "projects" as const, icon: Building2, label: t('profile.myObjects'), hint: String(myProjectCount), swatch: null },
-            { key: "courses" as const, icon: CheckCircle, label: "Mening kurslarim", hint: null as string|null, swatch: null },
+            { key: "currency" as const, icon: DollarSign, label: "Valyuta kursi", hint: null as string|null, swatch: null },
             ...(isAdmin(currentUser.role) ? [{ key: "subscription" as const, icon: CreditCard, label: "Obuna holati",
               hint: subData?.status === 'active' ? (subData.daysLeft !== null ? `${subData.daysLeft} kun` : "Faol") : subData?.status === 'pending' ? "Kutilmoqda" : subData?.status === 'expired' ? "Muddati o'tgan" : subData?.status === 'rejected' ? "Rad etildi" : subLoading ? "..." : "Topilmadi",
               swatch: null }] : []),

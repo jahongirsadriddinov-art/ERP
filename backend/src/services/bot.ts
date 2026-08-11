@@ -10,6 +10,7 @@ import Group from '../models/Group';
 import { initRegistrationScene, isInRegistration } from './registrationScene';
 import { emitToUser, emitToGroup } from './socket';
 import { tb, langLabel, BotLang } from '../i18n/bot';
+import { getBackendUrl } from '../utils/backendUrl';
 
 dotenv.config();
 
@@ -51,7 +52,7 @@ const SITE_URL = process.env.SITE_URL || 'http://localhost:5173';
 const isHttps = SITE_URL.startsWith('https');
 // Bot media fayllarni /uploads orqali serverdan qaytarish uchun — bu backend'ning
 // o'z ochiq manzili (SITE_URL frontend manzili, bunga mos kelmaydi).
-const BACKEND_URL = (process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 5000}`).replace(/\/$/, '');
+const BACKEND_URL = getBackendUrl();
 
 // Klaviaturalar til bo'yicha — foydalanuvchining o'zi tanlagan (yoki saytdan
 // sinxronlangan) tiliga qarab tugma matnlari o'zgaradi.

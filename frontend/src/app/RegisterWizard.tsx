@@ -212,7 +212,7 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
   // ── Kichik UI yordamchilar ──────────────────────────────────────────────────
   const STEPS_ORDER: RegStep[] = ["tarif", "payment", "phone", "bot", "owner", "company", "brand", "summary"];
   const progress = Math.max(0, STEPS_ORDER.indexOf(step)) / (STEPS_ORDER.length - 1);
-  const inputCls = "w-full text-base border border-border/50 rounded-xl px-4 py-3 bg-white/60 dark:bg-black/20 focus:bg-white dark:focus:bg-black/40 focus:outline-none focus:ring-2 focus:ring-primary/50 liquid-transition";
+  const inputCls = "w-full text-sm border border-border/60 rounded-xl px-4 py-3 bg-white/50 dark:bg-black/25 focus:bg-white dark:focus:bg-black/40 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/50 liquid-transition placeholder:text-muted-foreground/60 backdrop-blur-sm";
 
   const goBack = () => {
     const map: Record<RegStep, RegStep | null> = {
@@ -225,16 +225,41 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
 
   return (
     <div className="h-[100dvh] bg-background flex flex-col liquid-transition relative overflow-hidden" style={{ paddingTop: "env(safe-area-inset-top)" }}>
-      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/20 rounded-full blur-[100px]" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-accent/20 rounded-full blur-[100px]" />
+      {/* Premium background orbs */}
+      <div className="absolute top-[-15%] left-[-10%] w-[50%] h-[50%] bg-primary/15 rounded-full blur-[120px]" />
+      <div className="absolute bottom-[-10%] right-[-10%] w-[45%] h-[45%] bg-accent/15 rounded-full blur-[100px]" />
+      <div className="absolute top-[30%] right-[5%] w-[25%] h-[25%] bg-primary/8 rounded-full blur-[80px]" />
 
-      {/* Header: back + progress */}
-      <div className="relative z-10 flex items-center gap-3 px-4 pt-4">
-        <button onClick={goBack} aria-label={t('common.back')} className="w-10 h-10 rounded-full bg-white/50 dark:bg-black/20 flex items-center justify-center shrink-0">
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-        <div className="flex-1 h-1.5 rounded-full bg-border/60 overflow-hidden">
-          <div className="h-full bg-primary liquid-transition" style={{ width: `${step === "warn" ? 0 : progress * 100}%` }} />
+      {/* Premium Header */}
+      <div className="relative z-10 px-4 pt-4 pb-2">
+        {/* Brand row */}
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-lg shadow-primary/20"
+              style={{ background: "linear-gradient(135deg, var(--primary), color-mix(in srgb, var(--primary) 80%, var(--accent)))" }}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                <polyline points="9,22 9,12 15,12 15,22"/>
+              </svg>
+            </div>
+            <div>
+              <p className="text-[13px] font-black tracking-tight" style={{ background: "linear-gradient(135deg, var(--primary), var(--accent))", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>QurilishERP</p>
+              <p className="text-[9px] text-muted-foreground font-medium -mt-0.5">Firma ochish</p>
+            </div>
+          </div>
+          <button onClick={goBack} aria-label={t('common.back')}
+            className="w-9 h-9 rounded-full bg-white/40 dark:bg-black/25 border border-border/50 flex items-center justify-center backdrop-blur-sm hover:bg-white/60 dark:hover:bg-black/40 transition-colors shadow-sm">
+            <ArrowLeft className="w-4 h-4" />
+          </button>
+        </div>
+        {/* Progress bar */}
+        <div className="flex items-center gap-2">
+          <div className="flex-1 h-1 rounded-full bg-border/50 overflow-hidden">
+            <div className="h-full liquid-transition rounded-full" style={{ width: `${step === "warn" ? 4 : progress * 100}%`, background: "linear-gradient(90deg, var(--primary), var(--accent))" }} />
+          </div>
+          {step !== "warn" && step !== "done" && (
+            <span className="text-[10px] text-muted-foreground font-mono">{Math.round(progress * 100)}%</span>
+          )}
         </div>
       </div>
 

@@ -7,8 +7,20 @@ import { scoped, stamped } from '../middleware/scope';
 import { getTenant } from '../middleware/tenantContext';
 import { emitToUser } from '../services/socket';
 import { tb, BotLang } from '../i18n/bot';
+import { sendEmail } from '../services/email';
+import { logAudit } from '../services/audit';
 
 const router = Router();
+
+// Idempotency cache: key → { id, result, expiresAt }
+// Duplicate POST /:id/confirm yoki yangi expense yaratilganda ikki marta yuborilishiga qarshi
+const idempotencyCache = new Map<string, { id: string; result: any; expiresAt: number }>();
+const IDEMPOTENCY_TTL = 24 * 60 * 60 * 1000; // 24 soat
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of idempotencyCache) { if (v.expiresAt < now) idempotencyCache.delete(k); }
+}, 60 * 60 * 1000); // 1 soatda bir tozalaymiz
 
 // Get all transactions
 router.get('/', async (req, res) => {
@@ -25,10 +37,41 @@ router.get('/', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const data = req.body;
-    
+
     // Validate required fields
+    const VALID_TYPES = ['transfer', 'expense', 'income', 'oylik', 'material', 'jihozlar', 'transport', 'boshqa'];
     if (!data.type) {
-      return res.status(400).json({ error: 'Tur kiritilishi shart' });
+      return res.status(400).json({ success: false, errors: [{ field: 'type', message: 'Tur kiritilishi shart' }] });
+    }
+    if (!VALID_TYPES.includes(data.type)) {
+      return res.status(400).json({ success: false, errors: [{ field: 'type', message: `Noto'g'ri tur: ${data.type}` }] });
+    }
+    if (data.type === 'transfer') {
+      const errs: { field: string; message: string }[] = [];
+      if (!data.materialName || String(data.materialName).trim().length < 1)
+        errs.push({ field: 'materialName', message: 'Material nomi kiritilishi shart' });
+      if (!data.quantity || isNaN(Number(data.quantity)) || Number(data.quantity) <= 0)
+        errs.push({ field: 'quantity', message: 'Miqdor musbat son bo\'lishi kerak' });
+      if (!data.toUserId)
+        errs.push({ field: 'toUserId', message: 'Kimga yuborilishini ko\'rsating' });
+      if (errs.length) return res.status(400).json({ success: false, errors: errs });
+    } else {
+      const amount = Number(data.amount);
+      if (!data.amount || isNaN(amount) || amount <= 0) {
+        return res.status(400).json({ success: false, errors: [{ field: 'amount', message: 'Summa musbat son bo\'lishi kerak' }] });
+      }
+      if (amount > 1e13) {
+        return res.status(400).json({ success: false, errors: [{ field: 'amount', message: 'Summa juda katta' }] });
+      }
+    }
+
+    // Idempotency: agar client idempotency key yuborsa — duplicate requestni qaytaramiz
+    const idempKey = (req.headers['x-idempotency-key'] as string || '').trim();
+    if (idempKey) {
+      const cached = idempotencyCache.get(idempKey);
+      if (cached) {
+        return res.status(200).json(cached.result);
+      }
     }
 
     const txData: any = {
@@ -57,6 +100,16 @@ router.post('/', async (req, res) => {
       txData.toUserId = data.toUserId ? String(data.toUserId) : undefined;
       txData.createdById = data.createdById ? String(data.createdById) : undefined;
       txData.status = data.toUserId ? 'pending' : (data.status || 'confirmed');
+    }
+
+    // Non-admin expense yaratsa admin tasdiqlashi kerak
+    const creatorId = txData.createdById || getTenant()?.userId;
+    if (txData.type !== 'transfer' && creatorId) {
+      const creator = await User.findById(creatorId).catch(() => null);
+      if (creator && ['prorab', 'brigadir', 'ishchi'].includes(creator.role)) {
+        txData.requiresAdminApproval = true;
+        txData.status = 'pending';
+      }
     }
 
     const tx = new Transaction(stamped(txData));
@@ -106,7 +159,12 @@ router.post('/', async (req, res) => {
     }
 
     const result = tx.toObject();
-    res.status(201).json({ ...result, id: tx._id });
+    const responseBody = { ...result, id: tx._id };
+    // Idempotency key bo'lsa — natijani cache'ga qo'shamiz (24 soat)
+    if (idempKey) {
+      idempotencyCache.set(idempKey, { id: String(tx._id), result: responseBody, expiresAt: Date.now() + IDEMPOTENCY_TTL });
+    }
+    res.status(201).json(responseBody);
   } catch (err) {
     console.error('Transaction POST error:', err);
     res.status(500).json({ error: 'Server xatoligi: ' + (err as Error).message });
@@ -178,19 +236,28 @@ router.patch('/:id/confirm', async (req, res) => {
       if (tx.toUserId) emitToUser(String(tx.toUserId), 'transaction:new', expPayload);
     }
 
-    // Notify sender
+    // Notify sender (Telegram + Email)
     try {
       const fromUserId = tx.fromUserId || tx.createdById;
       if (fromUserId) {
         const fromUser = await User.findById(fromUserId).catch(() => null) ||
                          await User.findOne({ _id: fromUserId }).catch(() => null);
-        if (fromUser && fromUser.telegramChatId) {
+        if (fromUser) {
           const label = (tx.type === 'transfer' ? tx.materialName : tx.description) || '—';
-          await bot.sendMessage(fromUser.telegramChatId, tb(fromUser.language as BotLang | undefined, 'simpleConfirmedNotify', { label })).catch(console.error);
+          if (fromUser.telegramChatId) {
+            await bot.sendMessage(fromUser.telegramChatId, tb(fromUser.language as BotLang | undefined, 'simpleConfirmedNotify', { label })).catch(console.error);
+          }
+          if (fromUser.email && tx.type !== 'transfer') {
+            await sendEmail(fromUser.email, "Tranzaksiya tasdiqlandi — QurilishERP", `
+              <h2>Tranzaksiya tasdiqlandi ✅</h2>
+              <p><b>${label}</b> — ${(tx.amount || 0).toLocaleString()} so'm</p>
+              <p>Sana: ${tx.confirmedDate}</p>
+            `).catch(console.error);
+          }
         }
       }
     } catch(notifErr) {
-      console.error('Telegram notification error:', notifErr);
+      console.error('Telegram/Email notification error:', notifErr);
     }
 
     const result = tx.toObject();
@@ -201,16 +268,120 @@ router.patch('/:id/confirm', async (req, res) => {
   }
 });
 
-// Reject transaction — xuddi shu tarzda faqat qabul qiluvchi rad eta oladi.
+// Admin chiqim tasdiqlash (expense approval chain)
+router.patch('/:id/approve', async (req, res) => {
+  try {
+    const { note } = req.body;
+    const tx = await Transaction.findOne(scoped({ _id: req.params.id }));
+    if (!tx) return res.status(404).json({ error: 'Topilmadi' });
+    if (tx.status !== 'pending') return res.status(409).json({ error: 'Bu allaqachon qayta ishlangan' });
+    if (!tx.requiresAdminApproval) return res.status(400).json({ error: 'Bu tranzaksiya admin tasdiqlashini talab qilmaydi' });
+
+    const actingUserId = getTenant()?.userId;
+    if (!actingUserId) return res.status(401).json({ error: 'Autentifikatsiya talab etiladi' });
+
+    const actor = await User.findById(actingUserId).catch(() => null);
+    if (!actor || !['direktor', 'orinbosar'].includes(actor.role)) {
+      return res.status(403).json({ error: 'Faqat direktor yoki orinbosar tasdiqlashi mumkin' });
+    }
+
+    const historyEntry = {
+      userId: actingUserId,
+      name: `${actor.firstName} ${actor.lastName || ''}`.trim(),
+      role: actor.role,
+      action: 'approved' as const,
+      date: new Date().toISOString().split('T')[0],
+      note: note || '',
+    };
+
+    tx.approvalHistory = [...(tx.approvalHistory || []), historyEntry];
+    tx.status = 'confirmed';
+    tx.confirmedById = actingUserId;
+    tx.confirmedDate = new Date().toISOString().split('T')[0];
+    await tx.save();
+
+    // Audit log
+    await logAudit({
+      userId: actingUserId,
+      userName: historyEntry.name,
+      userRole: actor.role,
+      action: 'approve',
+      entity: 'transaction',
+      entityId: String(tx._id),
+      description: `Chiqim tasdiqlandi: ${tx.description || '—'} — ${(tx.amount || 0).toLocaleString()} so'm`,
+      newValue: { status: 'confirmed', approvedBy: historyEntry.name },
+      companyId: actor.companyId,
+      req,
+    });
+
+    // Realtime emit
+    const payload = { ...tx.toObject(), id: tx._id };
+    if (tx.createdById) emitToUser(String(tx.createdById), 'transaction:update', payload);
+    if (tx.toUserId) emitToUser(String(tx.toUserId), 'transaction:update', payload);
+
+    // Email notification to creator
+    try {
+      const creatorId = tx.createdById || tx.toUserId;
+      if (creatorId) {
+        const creator = await User.findById(creatorId).catch(() => null);
+        if (creator?.email) {
+          await sendEmail(creator.email, "Chiqim tasdiqlandi — QurilishERP", `
+            <h2>Chiqim tasdiqlandi ✅</h2>
+            <p><b>${tx.description || '—'}</b> — ${(tx.amount || 0).toLocaleString()} so'm</p>
+            <p>Tasdiqlagan: ${historyEntry.name} (${actor.role})</p>
+            <p>Sana: ${historyEntry.date}</p>
+          `).catch(console.error);
+        }
+      }
+    } catch {}
+
+    // Telegram notification
+    try {
+      const creatorId = tx.createdById || tx.toUserId;
+      if (creatorId) {
+        const creator = await User.findById(creatorId).catch(() => null);
+        if (creator?.telegramChatId) {
+          const label = tx.description || '—';
+          await bot.sendMessage(creator.telegramChatId, `✅ Chiqimingiz tasdiqlandi: *${label}* — ${(tx.amount || 0).toLocaleString()} so'm`, { parse_mode: 'Markdown' }).catch(console.error);
+        }
+      }
+    } catch {}
+
+    res.json({ ...tx.toObject(), id: tx._id });
+  } catch (err) {
+    console.error('Approve error:', err);
+    res.status(500).json({ error: 'Server xatoligi' });
+  }
+});
+
+// Reject transaction — qabul qiluvchi yoki admin rad etishi mumkin
 router.patch('/:id/reject', async (req, res) => {
   try {
+    const { note } = req.body;
     const tx = await Transaction.findOne(scoped({ _id: req.params.id }));
     if (!tx) return res.status(404).json({ error: 'Topilmadi' });
     if (tx.status !== 'pending') return res.status(409).json({ error: 'Bu allaqachon qayta ishlangan' });
 
     const actingUserId = getTenant()?.userId;
-    if (!actingUserId || String(tx.toUserId) !== String(actingUserId)) {
-      return res.status(403).json({ error: 'Faqat qabul qiluvchi rad etishi mumkin' });
+    if (!actingUserId) return res.status(401).json({ error: 'Autentifikatsiya talab etiladi' });
+
+    const actor = await User.findById(actingUserId).catch(() => null);
+    const isAdmin = actor && ['direktor', 'orinbosar'].includes(actor.role);
+    const isRecipient = String(tx.toUserId) === String(actingUserId);
+
+    if (!isAdmin && !isRecipient) {
+      return res.status(403).json({ error: 'Faqat qabul qiluvchi yoki admin rad etishi mumkin' });
+    }
+
+    if (tx.requiresAdminApproval && actor) {
+      tx.approvalHistory = [...(tx.approvalHistory || []), {
+        userId: actingUserId,
+        name: `${actor.firstName} ${actor.lastName || ''}`.trim(),
+        role: actor.role,
+        action: 'rejected',
+        date: new Date().toISOString().split('T')[0],
+        note: note || '',
+      }];
     }
 
     tx.status = 'rejected';

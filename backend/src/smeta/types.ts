@@ -16,7 +16,7 @@ export interface ExtractResult {
   pageCount: number;
   rawText: string;         // to'liq matn (\n bilan)
   lines: ExtractedLine[];  // har bir fizik qator + sahifa raqami
-  library: 'pdf-parse';    // qaysi kutubxona ishlatilgani
+  library: 'pdf-parse' | 'xlsx' | 'mammoth' | 'text'; // qaysi kutubxona ishlatilgani
   warnings: string[];      // extraction darajasidagi ogohlantirishlar
 }
 

@@ -4,7 +4,7 @@ import {
   CheckCircle, Clock, AlertTriangle, ChevronRight, MapPin,
   Phone, User, X, Check, Download, BarChart2,
   DollarSign, MessageCircle, ChevronDown, ChevronUp, Send,
-  TrendingDown, Wallet, LogOut, Camera, Home, UserPlus, Edit, Trash, Search, AlertCircle, ChevronLeft, Loader2, Paperclip, Mic, Video as VideoIcon, Image as ImageIcon, FileText, CornerDownLeft, Share2, SquareCheck, Trash2, MoreHorizontal, Upload, Palette, Sun, Moon, Monitor, PhoneOff, MicOff, VideoOff, Users2, Copy, Bell, Pin, PinOff, CheckCheck, Languages, CreditCard, Calendar
+  TrendingDown, Wallet, LogOut, Camera, Home, UserPlus, Edit, Trash, Search, AlertCircle, ChevronLeft, Loader2, Paperclip, Mic, Video as VideoIcon, Image as ImageIcon, FileText, CornerDownLeft, Share2, SquareCheck, Trash2, MoreHorizontal, Upload, Palette, Sun, Moon, Monitor, PhoneOff, MicOff, VideoOff, Users2, Copy, Bell, Pin, PinOff, CheckCheck, Languages, CreditCard, Calendar, QrCode, WifiOff
 } from "lucide-react";
 import { toast, Toaster } from "sonner";
 import { createPortal } from "react-dom";
@@ -24,6 +24,8 @@ const CallOverlay = lazy(() => import("./CallOverlay"));
 const RegisterWizard = lazy(() => import("./RegisterWizard"));
 const DeveloperPanel = lazy(() => import("./DeveloperPanel"));
 const AIAssistant = lazy(() => import("./AIAssistant"));
+const QRScanner = lazy(() => import("./QRScanner"));
+const QRGenerator = lazy(() => import("./QRGenerator"));
 
 // ─── Mobil pastki navbar ko'rinishini boshqarish ────────────────────────────────
 // Katta (ekranning pastigacha yetadigan) modallar ochilganda floating pastki
@@ -52,7 +54,7 @@ export type Role = "direktor" | "orinbosar" | "prorab" | "brigadir" | "ishchi" |
 type NavPage = "dashboard" | "finance" | "reports" | "chat" | "profile";
 export type ExpType = "oylik" | "material" | "jihozlar" | "transport" | "boshqa";
 type TStatus = "pending" | "confirmed" | "rejected";
-type EStatus = "pending" | "confirmed";
+type EStatus = "pending" | "confirmed" | "rejected";
 
 export interface AppUser {
   id: string; name: string; role: Role; phone: string;
@@ -82,6 +84,8 @@ export interface Expense {
   id: string; type: ExpType; amount: number; toUserId?: string;
   projectId: string; description: string; date: string;
   status: EStatus; createdById: string; confirmedById?: string;
+  requiresAdminApproval?: boolean;
+  approvalHistory?: Array<{ userId: string; name: string; role: string; action: 'approved'|'rejected'; date: string; note?: string }>;
 }
 export interface Msg {
   id: string; fromUserId: string; toUserId: string; groupId?: string;
@@ -547,7 +551,7 @@ function AddObjectModal({ users, onClose, onAdd }:
           </div>
           <div>
             <label className="text-sm md:text-xs font-medium block mb-1">{t('addObject.smetaLabel')}</label>
-            <input type="file" accept=".pdf" className="w-full text-sm md:text-xs border border-border rounded px-3 py-1.5 bg-input-background file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-sm md:text-xs file:bg-primary file:text-white hover:file:bg-primary/90" onChange={e=>setSmeta(e.target.files?.[0]||null)}/>
+            <input type="file" accept=".pdf,.xlsx,.xls,.docx,.doc,.csv,.txt" className="w-full text-sm md:text-xs border border-border rounded px-3 py-1.5 bg-input-background file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-sm md:text-xs file:bg-primary file:text-white hover:file:bg-primary/90" onChange={e=>setSmeta(e.target.files?.[0]||null)}/>
             {loading && smeta && (
               <div className="mt-2">
                 <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground"><Loader2 className="w-3 h-3 animate-spin"/>{smetaMsg || t('addObject.smetaLoading')}</div>
@@ -1179,10 +1183,44 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
   const [activeTab, setActiveTab] = useState<string>(() => {
     return localStorage.getItem("admin_activeTab") || "rahbariyat";
   });
-  
+  const [stats, setStats] = useState<{
+    activeProjects: number; totalProjects: number; totalEmployees: number;
+    totalExpenses: number; pendingTransfers: number; todayAttendance: number;
+  } | null>(null);
+  const [backupLoading, setBackupLoading] = useState(false);
+
   useEffect(() => {
     localStorage.setItem("admin_activeTab", activeTab);
   }, [activeTab]);
+
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    fetch(`${API_BASE}/api/dashboard/stats`, {
+      headers: { Authorization: `Bearer ${token}` },
+    }).then(r => r.ok ? r.json() : null).then(d => { if (d) setStats(d); }).catch(() => {});
+  }, []);
+
+  const handleBackup = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    setBackupLoading(true);
+    try {
+      const r = await fetch(`${API_BASE}/api/admin/backup`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!r.ok) { toast.error("Yuklab olishda xatolik"); return; }
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `qurilish-erp-backup-${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success("Ma'lumotlar yuklab olindi");
+    } catch { toast.error("Yuklab olishda xatolik"); }
+    finally { setBackupLoading(false); }
+  };
 
   const brigades = [...new Set(users.filter(u => u.brigade).map(u => u.brigade!))];
 
@@ -1197,8 +1235,32 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
 
   return (
     <>
+    {/* Stats strip — real data from API */}
+    {stats && (
+      <div className="flex-shrink-0 hidden md:flex items-center gap-3 px-3 pt-3 pb-0">
+        {[
+          { label: t('dashboard.activeObjects'), value: stats.activeProjects, color: "text-green-600 dark:text-green-400" },
+          { label: t('dashboard.totalStaff'), value: stats.totalEmployees, color: "text-blue-600 dark:text-blue-300" },
+          { label: t('dashboard.pendingTransfers'), value: stats.pendingTransfers, color: "text-amber-600 dark:text-amber-300" },
+          { label: t('dashboard.todayAttendance'), value: stats.todayAttendance, color: "text-primary" },
+          { label: t('dashboard.totalExpenses'), value: fmt(stats.totalExpenses), color: "text-foreground" },
+        ].map(s => (
+          <div key={s.label} className="surface rounded-lg px-3 py-1.5 flex items-center gap-2 min-w-0">
+            <span className={`text-sm font-bold font-mono ${s.color}`}>{s.value}</span>
+            <span className="text-[10px] text-muted-foreground truncate">{s.label}</span>
+          </div>
+        ))}
+        <div className="ml-auto">
+          <button onClick={handleBackup} disabled={backupLoading}
+            className="flex items-center gap-1.5 text-xs border border-border rounded-lg px-3 py-1.5 hover:bg-muted transition-colors disabled:opacity-60 text-muted-foreground hover:text-foreground">
+            {backupLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin"/> : <Download className="w-3.5 h-3.5"/>}
+            {t('dashboard.backup')}
+          </button>
+        </div>
+      </div>
+    )}
     {/* Desktop: 4-column grid */}
-    <div className="h-full hidden md:grid md:grid-cols-2 xl:grid-cols-4 gap-3 overflow-hidden bg-background p-3">
+    <div className="hidden md:grid md:grid-cols-2 xl:grid-cols-4 gap-3 overflow-hidden bg-background p-3 flex-1 min-h-0">
       {/* Col 1 */}
       <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28 }}
         className="surface flex flex-col overflow-hidden">
@@ -1701,7 +1763,7 @@ function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSe
         </div>
         {project.pdfFile && <button className="flex items-center gap-1 text-sm md:text-xs bg-accent text-white px-2.5 py-1.5 rounded hover:bg-accent/90 font-medium flex-shrink-0 dark:bg-accent/10 dark:text-accent dark:hover:bg-accent/20"><Download className="w-3.5 h-3.5"/>PDF</button>}
         <div className="flex items-center gap-2 flex-shrink-0">
-          <input type="file" id="smeta-upload" className="hidden" accept=".pdf" onChange={async e=>{
+          <input type="file" id="smeta-upload" className="hidden" accept=".pdf,.xlsx,.xls,.docx,.doc,.csv,.txt" onChange={async e=>{
             const file = e.target.files?.[0];
             if(!file) return;
             setUploadingSmeta(true); setSmetaMsg(t('objectDetail.analyzing')); setSmetaPercent(40);
@@ -1871,19 +1933,46 @@ function MaterialDetailsModal({ mat, confT, pendT, onClose, onSend }: { mat: Req
   );
 }
 
+// ─── Currency utils ────────────────────────────────────────────────────────────
+// Global rates — fetched from backend (CBU Uzbekistan) and cached
+let LIVE_USD_RATE = 12900;
+let LIVE_EUR_RATE = 14100;
+let LIVE_RATE_DATE = "";
+
+export async function fetchLiveCurrencyRates(): Promise<void> {
+  try {
+    const res = await fetch(`${API_BASE}/api/currency/rates`);
+    if (res.ok) {
+      const data = await res.json();
+      LIVE_USD_RATE = data.USD || LIVE_USD_RATE;
+      LIVE_EUR_RATE = data.EUR || LIVE_EUR_RATE;
+      LIVE_RATE_DATE = data.date || "";
+    }
+  } catch {}
+}
+
+function fmtUsd(uzs: number): string { return "$" + (uzs / LIVE_USD_RATE).toFixed(2); }
+function fmtEur(uzs: number): string { return "€" + (uzs / LIVE_EUR_RATE).toFixed(2); }
+
 // ─── Finance Page ──────────────────────────────────────────────────────────────
-function FinancePage({ currentUser, users, projects, expenses, onAddExpense, onConfirm }:
-  { currentUser: AppUser; users: AppUser[]; projects: Project[]; expenses: Expense[]; onAddExpense: (e: Expense) => void; onConfirm: (id: string) => void }) {
+function FinancePage({ currentUser, users, projects, expenses, onAddExpense, onConfirm, onApprove, onReject }:
+  { currentUser: AppUser; users: AppUser[]; projects: Project[]; expenses: Expense[]; onAddExpense: (e: Expense) => void; onConfirm: (id: string) => void; onApprove?: (id: string, note?: string) => void; onReject?: (id: string) => void }) {
   const { t } = useTranslation();
   const [showAdd, setShowAdd] = useState(false);
   const [filter, setFilter] = useState<"all"|ExpType>("all");
   const [projFilter, setProjFilter] = useState("all");
   const [detailExp, setDetailExp] = useState<Expense|null>(null);
+  const [showCurrency, setShowCurrency] = useState(false);
+  const [currencyAmount, setCurrencyAmount] = useState("");
+  const [currencyMode, setCurrencyMode] = useState<"uzs2usd"|"usd2uzs"|"uzs2eur"|"eur2uzs">("uzs2usd");
 
   const filteredExpenses = expenses.filter(e => (filter==="all"||e.type===filter) && (projFilter==="all"||e.projectId===projFilter));
 
   const totalExpense = expenses.filter(e=>e.status==="confirmed").reduce((a,e)=>a+e.amount,0);
-  const pendingMe = expenses.filter(e=>e.toUserId===currentUser.id&&e.status==="pending").length;
+  const isAdmin = ['direktor','orinbosar'].includes(currentUser.role);
+  const pendingMe = isAdmin
+    ? expenses.filter(e=>e.requiresAdminApproval&&e.status==="pending").length
+    : expenses.filter(e=>e.toUserId===currentUser.id&&e.status==="pending").length;
   const typeClr: Record<string,string> = {
     oylik:"bg-blue-500/15 text-blue-700 dark:text-blue-300",
     material:"bg-orange-500/15 text-orange-800 dark:text-orange-300",
@@ -1898,13 +1987,42 @@ function FinancePage({ currentUser, users, projects, expenses, onAddExpense, onC
       <div className="surface px-4 py-3 flex items-center justify-between flex-shrink-0">
         <div>
           <h2 className="text-sm font-bold font-['Roboto_Slab',serif]">{t('finance.title')}</h2>
-          <p className="text-sm md:text-xs text-muted-foreground">{t('finance.totalConfirmed')} <span className="font-semibold text-accent">{fmt(totalExpense)}</span></p>
+          <p className="text-sm md:text-xs text-muted-foreground">{t('finance.totalConfirmed')} <span className="font-semibold text-accent">{fmt(totalExpense)}</span> <span className="text-[10px] text-muted-foreground/70">≈ {fmtUsd(totalExpense)}</span></p>
         </div>
         <div className="flex items-center gap-1.5">
           {pendingMe>0&&<span className="text-sm md:text-xs bg-amber-500/15 text-amber-800 dark:text-amber-300 px-2 py-1 rounded-full font-semibold flex items-center gap-1 badge-pulse"><Clock className="w-3 h-3"/>{t('finance.pendingCount', { count: pendingMe })}</span>}
+          <button onClick={()=>setShowCurrency(v=>!v)} title={t('currency.title')} className="btn btn-outline flex items-center gap-1 text-sm md:text-xs px-2.5 py-1.5 rounded-full"><DollarSign className="w-3 h-3"/></button>
           <button onClick={()=>setShowAdd(true)} className="btn btn-accent flex items-center gap-1 text-sm md:text-xs px-3 py-1.5 rounded-full"><Plus className="w-3 h-3"/>{t('finance.addExpense')}</button>
         </div>
       </div>
+      {/* Currency converter mini widget */}
+      {showCurrency && (
+        <div className="surface px-4 py-3 flex-shrink-0 animate-slide-up-fade">
+          <p className="text-[10px] font-semibold text-muted-foreground mb-2">{t('currency.title')} — 1 USD = {LIVE_USD_RATE.toLocaleString()} UZS &nbsp;|&nbsp; 1 EUR = {LIVE_EUR_RATE.toLocaleString()} UZS{LIVE_RATE_DATE ? ` (${LIVE_RATE_DATE})` : ""}</p>
+          <div className="flex items-center gap-2">
+            <select value={currencyMode} onChange={e=>setCurrencyMode(e.target.value as any)} className="text-[10px] bg-muted text-muted-foreground px-2 py-1 rounded-full font-semibold border-0 focus:outline-none cursor-pointer">
+              <option value="uzs2usd">UZS → USD</option>
+              <option value="usd2uzs">USD → UZS</option>
+              <option value="uzs2eur">UZS → EUR</option>
+              <option value="eur2uzs">EUR → UZS</option>
+            </select>
+            <input type="number" value={currencyAmount} onChange={e=>setCurrencyAmount(e.target.value)}
+              placeholder={currencyMode.startsWith("uzs")?"UZS":currencyMode.startsWith("usd")?"USD":"EUR"}
+              className="flex-1 text-sm border border-border rounded-xl px-3 py-1.5 bg-input-background focus:outline-none"/>
+            <span className="text-sm font-bold text-accent font-mono min-w-[90px] text-right">
+              {currencyAmount ? (() => {
+                const n = parseFloat(currencyAmount);
+                if(isNaN(n)) return "—";
+                if(currencyMode==="uzs2usd") return "$" + (n/LIVE_USD_RATE).toFixed(2);
+                if(currencyMode==="usd2uzs") return (n*LIVE_USD_RATE).toLocaleString() + " UZS";
+                if(currencyMode==="uzs2eur") return "€" + (n/LIVE_EUR_RATE).toFixed(2);
+                if(currencyMode==="eur2uzs") return (n*LIVE_EUR_RATE).toLocaleString() + " UZS";
+                return "—";
+              })() : "—"}
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="surface px-4 py-2.5 flex gap-2 flex-wrap flex-shrink-0">
@@ -1926,13 +2044,16 @@ function FinancePage({ currentUser, users, projects, expenses, onAddExpense, onC
               const to=users.find(u=>u.id===e.toUserId);
               const proj=projects.find(p=>p.id===e.projectId);
               const creator=users.find(u=>u.id===e.createdById);
-              const canConfirm=e.toUserId===currentUser.id&&e.status==="pending";
+              const canConfirm=e.toUserId===currentUser.id&&e.status==="pending"&&!e.requiresAdminApproval;
+              const canAdminApprove=isAdmin&&e.requiresAdminApproval&&e.status==="pending";
+              const borderColor = e.status==="confirmed" ? "#22c55e" : e.requiresAdminApproval ? "#e5633a" : "#f59e0b";
               return (
-                <button key={e.id} onClick={()=>setDetailExp(e)} className="w-full text-left surface rounded-2xl p-3 text-sm md:text-xs hover:bg-muted/20 liquid-transition" style={{ borderLeft: `4px solid ${e.status==="confirmed"?"#22c55e":"#f59e0b"}` }}>
+                <button key={e.id} onClick={()=>setDetailExp(e)} className="w-full text-left surface rounded-2xl p-3 text-sm md:text-xs hover:bg-muted/20 liquid-transition" style={{ borderLeft: `4px solid ${borderColor}` }}>
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5 mb-1">
+                      <div className="flex items-center gap-1.5 mb-1 flex-wrap">
                         <span className={`text-[9px] px-1.5 py-0.5 rounded font-semibold ${typeClr[e.type] || "bg-muted text-muted-foreground"}`}>{EXP_LABELS[e.type as ExpType] || e.type}</span>
+                        {e.requiresAdminApproval&&e.status==="pending"&&<span className="text-[9px] px-1.5 py-0.5 rounded font-semibold bg-accent/15 text-accent">{t('approvalChain.needsApproval')}</span>}
                       </div>
                       <p className="font-semibold text-foreground">{e.description || EXP_LABELS[e.type as ExpType]}</p>
                       <p className="text-sm md:text-xs text-muted-foreground mt-0.5">{proj?.name || "—"} • {e.date}</p>
@@ -1941,12 +2062,19 @@ function FinancePage({ currentUser, users, projects, expenses, onAddExpense, onC
                     </div>
                     <div className="text-right flex-shrink-0">
                       <p className="font-bold text-accent">{fmt(e.amount)}</p>
+                      <p className="text-[10px] text-muted-foreground font-mono">{fmtUsd(e.amount)}</p>
                       {e.status==="confirmed"
                         ?<p className="text-[9px] text-green-800 dark:text-green-400 font-semibold mt-1 flex items-center gap-0.5 justify-end"><CheckCircle className="w-2.5 h-2.5"/>{t('finance.confirmed')}</p>
                         :<p className="text-[9px] text-amber-800 dark:text-amber-400 font-semibold mt-1 flex items-center gap-0.5 justify-end"><Clock className="w-2.5 h-2.5"/>{t('finance.pending')}</p>}
                     </div>
                   </div>
                   {canConfirm&&<button onClick={e2=>{e2.stopPropagation();onConfirm(e.id);}} className="mt-2 w-full text-sm md:text-xs bg-green-600 text-white rounded py-1.5 hover:bg-green-700 font-semibold flex items-center justify-center gap-1"><Check className="w-3 h-3"/>{t('finance.confirmAction')}</button>}
+                  {canAdminApprove&&(
+                    <div className="mt-2 flex gap-2" onClick={e2=>e2.stopPropagation()}>
+                      <button onClick={()=>onApprove?.(e.id)} className="flex-1 text-sm md:text-xs bg-green-600 text-white rounded py-1.5 hover:bg-green-700 font-semibold flex items-center justify-center gap-1"><Check className="w-3 h-3"/>{t('approvalChain.approve')}</button>
+                      <button onClick={()=>onReject?.(e.id)} className="flex-1 text-sm md:text-xs bg-red-600 text-white rounded py-1.5 hover:bg-red-700 font-semibold flex items-center justify-center gap-1"><X className="w-3 h-3"/>{t('approvalChain.reject')}</button>
+                    </div>
+                  )}
                 </button>
               );
             })
@@ -1983,7 +2111,7 @@ function ExpenseDetailModal({ expense, users, projects, onClose }: { expense: Ex
         <div className="p-4 space-y-3">
           <div>
             <p className="text-base font-bold text-foreground">{expense.description || EXP_LABELS[expense.type]}</p>
-            <p className="text-lg font-bold text-accent font-mono mt-1">{fmt(expense.amount)}</p>
+            <p className="text-lg font-bold text-accent font-mono mt-1">{fmt(expense.amount)} <span className="text-sm font-normal text-muted-foreground">≈ {fmtUsd(expense.amount)}</span></p>
           </div>
           <div className="surface divide-y divide-border/50 overflow-hidden">
             {rows.map(([label, value]) => (
@@ -1993,6 +2121,19 @@ function ExpenseDetailModal({ expense, users, projects, onClose }: { expense: Ex
               </div>
             ))}
           </div>
+          {expense.approvalHistory && expense.approvalHistory.length > 0 && (
+            <div>
+              <p className="text-[10px] font-semibold text-muted-foreground mb-1.5">{t('approvalChain.history')}</p>
+              <div className="space-y-1.5">
+                {expense.approvalHistory.map((h, i) => (
+                  <div key={i} className={`flex items-start gap-2 text-[10px] rounded-lg px-2.5 py-1.5 ${h.action==='approved'?'bg-green-500/10 text-green-700 dark:text-green-400':'bg-red-500/10 text-red-700 dark:text-red-400'}`}>
+                    {h.action==='approved'?<CheckCircle className="w-3 h-3 mt-0.5 flex-shrink-0"/>:<X className="w-3 h-3 mt-0.5 flex-shrink-0"/>}
+                    <span>{h.action==='approved'?t('approvalChain.approvedBy',{name:h.name}):t('approvalChain.rejectedBy',{name:h.name})} — {h.date}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <button onClick={() => exportExpensesToCsv([expense], users, projects, `chiqim_${expense.date}.csv`)}
             className="btn btn-outline w-full flex items-center justify-center gap-1.5 text-sm md:text-xs py-2.5 rounded-full">
             <Download className="w-3.5 h-3.5"/>{t('reports.exportExcel')}
@@ -2039,33 +2180,45 @@ export function VoicePlayer({ src, mine }: { src: string; mine?: boolean }) {
   };
 
   return (
-    <div className="flex items-center gap-2 mb-1 min-w-[200px] max-w-[250px]">
+    <div className={`flex items-center gap-2.5 min-w-[210px] max-w-[260px] py-0.5`}>
       <audio ref={audioRef} src={src} preload="metadata"
         onLoadedMetadata={e => setDuration((e.target as HTMLAudioElement).duration)}
         onTimeUpdate={e => { const a = e.target as HTMLAudioElement; setCurrentTime(a.currentTime); setProgress(a.duration ? a.currentTime/a.duration*100 : 0); }}
         onEnded={() => { setPlaying(false); setProgress(0); setCurrentTime(0); if (audioRef.current) audioRef.current.currentTime=0; }}
       />
+      {/* Play/Pause button */}
       <button onClick={toggle} aria-label={playing ? t('chat.pause') : t('chat.play')}
-        className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 active:scale-95 transition-all
-          ${mine ? "bg-white/25 text-white hover:bg-white/35" : "bg-primary/15 text-primary hover:bg-primary/25"}`}>
+        className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 active:scale-92 transition-all shadow-md
+          ${mine
+            ? "bg-white/20 text-white hover:bg-white/30 shadow-white/10"
+            : "bg-primary text-white hover:bg-primary/90 shadow-primary/30"
+          }`}>
         {playing
-          ? <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
-          : <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 ml-0.5"><polygon points="5,3 19,12 5,21"/></svg>
+          ? <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
+          : <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 ml-0.5"><polygon points="5,3 20,12 5,21"/></svg>
         }
       </button>
-      <div className="flex-1 flex flex-col gap-1 min-w-0">
-        <div className="relative h-6 flex items-center gap-[2px] cursor-pointer" onClick={seek}>
+      {/* Waveform + time */}
+      <div className="flex-1 flex flex-col gap-1.5 min-w-0">
+        <div className="relative h-7 flex items-center gap-[2px] cursor-pointer rounded-lg px-0.5" onClick={seek}>
           {bars.map((h, i) => {
             const played = (i / bars.length) * 100 <= progress;
-            const activeColor = mine ? "bg-white" : "bg-primary";
-            const idleColor = mine ? "bg-white/30" : "bg-current/20";
             return (
-              <div key={i} className={`flex-1 rounded-full transition-colors ${played ? activeColor : idleColor}`}
-                style={{ height: `${Math.round(h * 100)}%` }}/>
+              <div key={i} className={`flex-1 rounded-full transition-all duration-150
+                ${played
+                  ? mine ? "bg-white/90" : "bg-primary"
+                  : mine ? "bg-white/25" : "bg-primary/20"
+                }`}
+                style={{ height: `${Math.max(18, Math.round(h * 80))}%` }}/>
             );
           })}
+          {/* Playhead indicator */}
+          {playing && progress > 0 && (
+            <div className={`absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full shadow-md transition-all ${mine?"bg-white":"bg-primary"}`}
+              style={{ left: `calc(${progress}% - 5px)` }}/>
+          )}
         </div>
-        <div className={`flex justify-between text-[9px] ${mine ? "text-white/70" : "text-current/50"}`}>
+        <div className={`flex justify-between text-[9px] font-mono px-0.5 ${mine ? "text-white/60" : "text-muted-foreground"}`}>
           <span>{fmtTime(currentTime)}</span>
           <span>{duration > 0 ? fmtTime(duration) : '—'}</span>
         </div>
@@ -2269,7 +2422,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
   const findMsg = (id: string) => messages.find(m => m.id === id) ?? null;
 
   const renderBubble = (m: Msg, mine: boolean) => {
-    if (m.deleted) return <p className="italic opacity-50 text-xs">Xabar o'chirildi</p>;
+    if (m.deleted) return <p className="italic opacity-50 text-xs">{tChat("chat:deletedMessage")}</p>;
     const replyMsg = m.replyToId ? findMsg(m.replyToId) : null;
     return (
       <>
@@ -2320,7 +2473,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
       {/* Contacts List */}
       <div className={`${(selUser||selGroup)?'hidden md:flex':'flex'} w-full md:w-64 flex-shrink-0 border-r border-border flex-col bg-card/60 backdrop-blur-xl`}>
         <div className="px-4 py-3 border-b border-border/50 flex items-center justify-between">
-          <p className="text-base font-bold">Xabarlar</p>
+          <p className="text-base font-bold">{tChat("chat:messages")}</p>
           <button onClick={() => setShowNewGroup(true)} title="Yangi guruh" className="btn btn-primary w-8 h-8 p-0 rounded-full"><Users2 className="w-4 h-4"/></button>
         </div>
         <div className="flex-1 overflow-y-auto scrollbar-hide">
@@ -2373,8 +2526,8 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
               </div>
             </button>
           )}
-          {contacts.length===0 && groups.length===0 && <p className="text-center text-xs text-muted-foreground py-8">Kontaktlar yo'q</p>}
-          {contacts.length===0 && groups.length>0 && <p className="text-center text-xs text-muted-foreground py-4 px-3">Bu kompaniyada boshqa foydalanuvchi yo'q</p>}
+          {contacts.length===0 && groups.length===0 && <p className="text-center text-xs text-muted-foreground py-8">{tChat("chat:noContacts")}</p>}
+          {contacts.length===0 && groups.length>0 && <p className="text-center text-xs text-muted-foreground py-4 px-3">{tChat("chat:noOtherUsers")}</p>}
           {contacts.map(u => {
             const last = lastByUser.get(u.id);
             const ur = unread(u.id);
@@ -2404,7 +2557,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
       <div className={`${!(selUser||selGroup)?'hidden md:flex':'flex'} flex-1 flex-col overflow-hidden bg-background/50`} onClick={e=>e.stopPropagation()}>
         {!(selUser||selGroup) ? (
           <div className="flex-1 flex items-center justify-center text-muted-foreground">
-            <div className="text-center animate-pop-in"><MessageCircle className="w-12 h-12 mx-auto mb-3 opacity-20"/><p className="text-sm">Suhbatdosh tanlang</p></div>
+            <div className="text-center animate-pop-in"><MessageCircle className="w-12 h-12 mx-auto mb-3 opacity-20"/><p className="text-sm">{tChat("chat:selectConversation")}</p></div>
           </div>
         ) : (
           <>
@@ -2449,7 +2602,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
               <div className="bg-primary/5 border-b border-primary/10 px-4 py-2 flex items-center gap-2">
                 <div className="w-0.5 h-7 bg-primary rounded-full flex-shrink-0"/>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[10px] font-semibold text-primary">📌 Muhim xabar</p>
+                  <p className="text-[10px] font-semibold text-primary">📌 {tChat("chat:pinnedMessage")}</p>
                   <p className="text-xs text-muted-foreground truncate">{pinned.type==='audio'?'🎤 Ovoz':pinned.type==='image'?'🖼️ Rasm':pinned.type==='location'?'📍 Joylashuv':pinned.text}</p>
                 </div>
                 <button aria-label="Qadalgan xabarni yopish" onClick={()=>onPin(pinned.id)} className="p-1 text-muted-foreground hover:text-foreground flex-shrink-0"><X className="w-3.5 h-3.5"/></button>
@@ -2483,7 +2636,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
                     >
                       {renderBubble(m, mine)}
                       <div className={`flex items-center justify-end gap-1 mt-1 ${mine?'text-white/60':'text-muted-foreground'}`}>
-                        {m.edited && <span className="text-[9px] italic">tahrirlangan</span>}
+                        {m.edited && <span className="text-[9px] italic">{tChat("chat:editedLabel")}</span>}
                         {m.pinned && <span className="text-[9px]">📌</span>}
                         <span className="text-[9px]">{new Date(m.timestamp).toLocaleTimeString("uz-UZ",{hour:"2-digit",minute:"2-digit"})}</span>
                         {mine && (m.read ? <CheckCheck className="w-3.5 h-3.5"/> : <Check className="w-3 h-3"/>)}
@@ -2572,28 +2725,29 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
                     <button onClick={sendLocation} className="flex items-center gap-3 px-3 py-2 hover:bg-muted/40 rounded-xl transition-colors text-sm"><MapPin className="w-4 h-4 text-green-500"/>{tChat('chat.attachLocation')}</button>
                   </div>
                 )}
-                <div className="nav-pill-desktop flex gap-1 items-end rounded-full px-1.5 py-1.5 max-w-3xl mx-auto">
-                  {!isRecording && (
-                    <button onClick={()=>setShowAttach(!showAttach)} className="w-9 h-9 flex-shrink-0 flex items-center justify-center text-muted-foreground hover:bg-white/10 rounded-full transition-colors">
-                      <Paperclip className="w-5 h-5"/>
-                    </button>
-                  )}
+                <div className="nav-pill-desktop flex gap-1.5 items-end rounded-2xl px-2 py-1.5 max-w-3xl mx-auto">
                   {isRecording ? (
-                    <div className="flex-1 flex items-center gap-3 px-3 py-2">
+                    <div className="flex-1 flex items-center gap-3 px-3 py-2.5">
                       <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse flex-shrink-0"/>
                       <span className="text-sm font-mono text-red-500">{fmtTime(recSec)}</span>
                       <span className="text-xs text-red-400/80 flex-1">{tChat('chat.recording')}</span>
                     </div>
                   ) : (
-                    <textarea rows={1}
-                      className="flex-1 resize-none text-sm bg-transparent focus:outline-none max-h-28 overflow-y-auto leading-relaxed px-2 py-2.5"
-                      placeholder={tChat('chat.inputPlaceholder')}
-                      value={editingId ? editText : text}
-                      onChange={e=>{if(editingId)setEditText(e.target.value);else setText(e.target.value);e.target.style.height='auto';e.target.style.height=Math.min(e.target.scrollHeight,112)+'px';}}
-                      onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();if(editingId)saveEdit();else doSend();}}}
-                    />
+                    <div className="flex-1 relative flex items-end">
+                      <button onClick={()=>setShowAttach(!showAttach)} aria-label="Biriktirish"
+                        className="absolute left-2 bottom-2 w-7 h-7 flex items-center justify-center text-muted-foreground hover:text-foreground rounded-full hover:bg-white/10 transition-colors flex-shrink-0 z-10">
+                        <Paperclip className="w-4 h-4"/>
+                      </button>
+                      <textarea rows={1}
+                        className="w-full resize-none text-sm bg-transparent focus:outline-none max-h-28 overflow-y-auto leading-relaxed pl-9 pr-3 py-2.5"
+                        placeholder={tChat('chat.inputPlaceholder')}
+                        value={editingId ? editText : text}
+                        onChange={e=>{if(editingId)setEditText(e.target.value);else setText(e.target.value);e.target.style.height='auto';e.target.style.height=Math.min(e.target.scrollHeight,112)+'px';}}
+                        onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();if(editingId)saveEdit();else doSend();}}}
+                      />
+                    </div>
                   )}
-                  <div className="flex items-center gap-1 flex-shrink-0">
+                  <div className="flex items-center gap-1 flex-shrink-0 pb-1">
                     {isRecording ? (
                       <>
                         <button aria-label="Yozishni bekor qilish" onClick={cancelRec} className="w-9 h-9 flex items-center justify-center text-muted-foreground hover:bg-white/10 rounded-full transition-colors"><X className="w-4 h-4"/></button>
@@ -2784,6 +2938,64 @@ function resizeImageFile(file: File, maxDim: number, quality = 0.85): Promise<st
   });
 }
 
+// ─── Audit Log mini viewer (Admin only) ──────────────────────────────────────
+function AuditLogSection({ token }: { token: string }) {
+  const [open, setOpen] = useState(false);
+  const [logs, setLogs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const load = async () => {
+    if (!token) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/audit-logs?limit=20`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) { const d = await res.json(); setLogs(d.logs || []); }
+    } catch {}
+    finally { setLoading(false); }
+  };
+
+  const ACTION_LABELS: Record<string,string> = {
+    create: "Yaratdi", update: "Yangiladi", delete: "O'chirdi",
+    approve: "Tasdiqladi", reject: "Rad etdi", confirm: "Tasdiqladi",
+    login: "Kirdi", logout: "Chiqdi", upload: "Yukladi",
+    checkin: "Check-in", checkout: "Check-out", scan_qr: "QR skan",
+  };
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28, delay: 0.22 }}
+      className="surface rounded-2xl overflow-hidden">
+      <button onClick={() => { setOpen(o => { if (!o) load(); return !o; })}
+      } className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-muted/50 transition-colors">
+        <div className="flex items-center gap-3">
+          <div className="icon-chip"><BarChart2 className="w-4 h-4"/></div>
+          <span className="text-sm font-medium">Audit log</span>
+        </div>
+        {open ? <ChevronUp className="w-4 h-4 text-muted-foreground"/> : <ChevronDown className="w-4 h-4 text-muted-foreground"/>}
+      </button>
+      {open && (
+        <div className="border-t border-border px-4 pb-4 pt-2">
+          {loading && <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground"/></div>}
+          {!loading && logs.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">Hech narsa yo'q</p>}
+          <div className="space-y-2 max-h-80 overflow-y-auto scrollbar-hide">
+            {logs.map(log => (
+              <div key={log._id} className="text-xs bg-muted/50 rounded-xl px-3 py-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-semibold text-foreground truncate">{log.userName}</span>
+                  <span className="text-muted-foreground flex-shrink-0">{new Date(log.createdAt).toLocaleTimeString('uz-UZ', { hour:'2-digit', minute:'2-digit' })} {new Date(log.createdAt).toLocaleDateString('uz-UZ', { month:'short', day:'numeric' })}</span>
+                </div>
+                <p className="text-muted-foreground mt-0.5">{ACTION_LABELS[log.action] || log.action} · {log.entity}</p>
+                <p className="text-foreground/70 truncate">{log.description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </motion.div>
+  );
+}
+
 function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdateUser, onCompanyNameChange, onCompanyLogoChange, onBgChange, onColorThemeChange, colorTheme, themeMode, onThemeModeChange, canEditCompany }:
   { currentUser: AppUser; projects: Project[]; onUpdateAvatar: (url: string) => void; onLogout: () => void; onUpdateUser: (u: AppUser) => void; onCompanyNameChange: (name: string) => void; onCompanyLogoChange: (logo: string) => void; onBgChange: (bg: string) => void; onColorThemeChange: (id: string) => void; colorTheme: string; themeMode: "light"|"dark"|"system"; onThemeModeChange: (m: "light"|"dark"|"system") => void; canEditCompany?: boolean }) {
   const { t, i18n } = useTranslation();
@@ -2803,6 +3015,72 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
   const fileRef = useRef<HTMLInputElement>(null);
   const logoRef = useRef<HTMLInputElement>(null);
   const bgRef = useRef<HTMLInputElement>(null);
+
+  // Attendance & GPS state
+  const [todayAttendance, setTodayAttendance] = useState<null | { status: string; checkIn?: string; checkOut?: string; workHours?: number }>(null);
+  const [gpsTracking, setGpsTracking] = useState(false);
+  const gpsWatchRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    const headers: Record<string,string> = {};
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    fetch(`${API_BASE}/api/attendance/today`, { headers })
+      .then(r => r.ok ? r.json() : null).then(d => { if (d) setTodayAttendance(d); }).catch(()=>{});
+  }, []);
+
+  const handleCheckIn = async () => {
+    const token = localStorage.getItem("token");
+    const headers: Record<string,string> = { "Content-Type": "application/json" };
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    try {
+      const pos = await new Promise<GeolocationPosition>((res, rej) =>
+        navigator.geolocation.getCurrentPosition(res, rej, { timeout: 8000 })
+      ).catch(() => null);
+      const body: any = {};
+      if (pos) { body.lat = pos.coords.latitude; body.lng = pos.coords.longitude; }
+      const r = await fetch(`${API_BASE}/api/attendance/checkin`, { method: "POST", headers, body: JSON.stringify(body) });
+      if (r.ok) { const d = await r.json(); setTodayAttendance(d); toast.success(t('attendance.checkedIn')); }
+      else { const e = await r.json().catch(()=>({})); toast.error(e.error || "Xatolik"); }
+    } catch { toast.error("Geolokatsiya xatoligi"); }
+  };
+
+  const handleCheckOut = async () => {
+    const token = localStorage.getItem("token");
+    const headers: Record<string,string> = { "Content-Type": "application/json" };
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    try {
+      const pos = await new Promise<GeolocationPosition>((res, rej) =>
+        navigator.geolocation.getCurrentPosition(res, rej, { timeout: 8000 })
+      ).catch(() => null);
+      const body: any = {};
+      if (pos) { body.lat = pos.coords.latitude; body.lng = pos.coords.longitude; }
+      const r = await fetch(`${API_BASE}/api/attendance/checkout`, { method: "POST", headers, body: JSON.stringify(body) });
+      if (r.ok) { const d = await r.json(); setTodayAttendance(d); toast.success(t('attendance.checkedOut')); }
+      else { const e = await r.json().catch(()=>({})); toast.error(e.error || "Xatolik"); }
+    } catch { toast.error("Xatolik"); }
+  };
+
+  const toggleGps = () => {
+    if (gpsTracking) {
+      if (gpsWatchRef.current !== null) navigator.geolocation.clearWatch(gpsWatchRef.current);
+      gpsWatchRef.current = null;
+      setGpsTracking(false);
+      return;
+    }
+    if (!navigator.geolocation) { toast.error(t('gps.permissionDenied')); return; }
+    const token = localStorage.getItem("token");
+    const headers: Record<string,string> = { "Content-Type": "application/json" };
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    const watchId = navigator.geolocation.watchPosition(pos => {
+      fetch(`${API_BASE}/api/gps`, { method: "POST", headers, body: JSON.stringify({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy }) }).catch(()=>{});
+    }, () => { setGpsTracking(false); toast.error(t('gps.permissionDenied')); }, { enableHighAccuracy: true, maximumAge: 30000 });
+    gpsWatchRef.current = watchId;
+    setGpsTracking(true);
+    toast.success(t('gps.tracking'));
+  };
+
+  useEffect(() => { return () => { if (gpsWatchRef.current !== null) navigator.geolocation.clearWatch(gpsWatchRef.current!); }; }, []);
 
   const [companyName, setCompanyName] = useState(() => localStorage.getItem("erp_companyName") || "QurilishERP");
   const [companyLogo, setCompanyLogo] = useState(() => localStorage.getItem("erp_companyLogo") || "");
@@ -3205,6 +3483,61 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
           ))}
         </motion.div>
 
+        {/* Attendance + GPS card */}
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28, delay: 0.22 }}
+          className="surface rounded-2xl overflow-hidden">
+          {/* Attendance */}
+          <div className="p-4 border-b border-border/50">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <div className="icon-chip"><Calendar className="w-4 h-4"/></div>
+                <span className="text-sm font-semibold">{t('attendance.today')}</span>
+              </div>
+              {todayAttendance?.status && (
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${todayAttendance.status==='present'?'bg-green-500/15 text-green-700 dark:text-green-400':todayAttendance.status==='late'?'bg-amber-500/15 text-amber-700 dark:text-amber-400':'bg-muted text-muted-foreground'}`}>
+                  {todayAttendance.status==='present'?t('attendance.statusPresent'):todayAttendance.status==='late'?t('attendance.statusLate'):t('attendance.statusAbsent')}
+                </span>
+              )}
+            </div>
+            {todayAttendance ? (
+              <div className="text-xs text-muted-foreground space-y-1">
+                {todayAttendance.checkIn && <p>Keldi: <span className="text-foreground font-medium">{new Date(todayAttendance.checkIn).toLocaleTimeString('uz-UZ',{hour:'2-digit',minute:'2-digit'})}</span></p>}
+                {todayAttendance.checkOut && <p>Ketdi: <span className="text-foreground font-medium">{new Date(todayAttendance.checkOut).toLocaleTimeString('uz-UZ',{hour:'2-digit',minute:'2-digit'})}</span></p>}
+                {todayAttendance.workHours != null && <p>{t('attendance.workHours', { h: todayAttendance.workHours.toFixed(1) })}</p>}
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">{t('attendance.notCheckedIn')}</p>
+            )}
+            <div className="flex gap-2 mt-3">
+              {!todayAttendance?.checkIn && (
+                <button onClick={handleCheckIn} className="flex-1 btn btn-primary text-xs py-2 rounded-xl flex items-center justify-center gap-1.5"><Check className="w-3 h-3"/>{t('attendance.checkIn')}</button>
+              )}
+              {todayAttendance?.checkIn && !todayAttendance?.checkOut && (
+                <button onClick={handleCheckOut} className="flex-1 btn btn-outline text-xs py-2 rounded-xl flex items-center justify-center gap-1.5"><X className="w-3 h-3"/>{t('attendance.checkOut')}</button>
+              )}
+            </div>
+          </div>
+          {/* GPS Tracking */}
+          <div className="p-4 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className={`icon-chip ${gpsTracking?'bg-green-500/15':''}`}><MapPin className={`w-4 h-4 ${gpsTracking?'text-green-600 dark:text-green-400':''}`}/></div>
+              <div>
+                <p className="text-sm font-medium">{t('gps.title')}</p>
+                <p className="text-[10px] text-muted-foreground">{gpsTracking ? t('gps.tracking') : t('gps.startTracking')}</p>
+              </div>
+            </div>
+            <button onClick={toggleGps}
+              className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${gpsTracking ? 'bg-green-500' : 'bg-muted'}`}>
+              <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${gpsTracking ? 'translate-x-5' : 'translate-x-0.5'}`}/>
+            </button>
+          </div>
+        </motion.div>
+
+        {/* Audit log — faqat admin */}
+        {(currentUser.role === 'direktor' || currentUser.role === 'orinbosar' || currentUser.role === 'dasturchi') && (
+          <AuditLogSection token={localStorage.getItem("token") || ""} />
+        )}
+
         <motion.button initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28, delay: 0.26 }}
           onClick={() => { localStorage.removeItem("currentUser"); localStorage.removeItem("token"); onLogout(); }}
           className="w-full flex items-center justify-center gap-2.5 text-sm border-2 border-border rounded-2xl px-4 py-3.5 text-muted-foreground hover:bg-red-500/10 hover:text-red-600 hover:border-red-500/30 liquid-transition font-semibold">
@@ -3421,8 +3754,9 @@ function LoginScreen({ onLogin, onRegister }: { onLogin: (u: any, company?: any)
   return (
     <main className="min-h-[100dvh] bg-background flex flex-col items-center justify-center p-4 py-8 liquid-transition relative overflow-y-auto scrollbar-hide" style={{ paddingTop: "max(2rem, env(safe-area-inset-top))", paddingBottom: "max(2rem, env(safe-area-inset-bottom))" }}>
       {/* Background decorations */}
-      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/20 rounded-full blur-[100px]" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-accent/20 rounded-full blur-[100px]" />
+      <div className="absolute top-[-8%] left-[-12%] w-[45%] h-[45%] bg-primary/15 rounded-full blur-[120px] blob-anim pointer-events-none" />
+      <div className="absolute bottom-[-8%] right-[-12%] w-[45%] h-[45%] bg-accent/15 rounded-full blur-[120px] blob-anim-slow pointer-events-none" />
+      <div className="absolute top-[40%] right-[-5%] w-[25%] h-[25%] bg-primary/10 rounded-full blur-[80px] blob-anim pointer-events-none" style={{ animationDelay: '4s' }} />
 
       <motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 26 }}
         className="mb-8 text-center relative z-10">
@@ -3435,8 +3769,8 @@ function LoginScreen({ onLogin, onRegister }: { onLogin: (u: any, company?: any)
       <div className="mb-4 relative z-10">
         <LanguageSwitcher size="sm" value={i18n.language as SiteLang} onChange={l => setSiteLanguage(l)}/>
       </div>
-      <motion.div initial={{ opacity: 0, y: 16, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ type: "spring", stiffness: 260, damping: 24, delay: 0.08 }}
-        className="w-full max-w-sm space-y-4 glass p-7 rounded-[2rem] border border-white/20 shadow-2xl relative z-10 overflow-hidden">
+      <motion.div initial={{ opacity: 0, y: 20, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ type: "spring", stiffness: 280, damping: 26, delay: 0.08 }}
+        className="w-full max-w-sm space-y-4 glass p-7 rounded-[2rem] border border-white/25 shadow-2xl shadow-primary/10 relative z-10 overflow-hidden">
         {error && <div className="bg-red-500/10 text-red-700 dark:text-red-400 text-sm md:text-xs p-3 rounded-lg border border-red-500/20 text-center">{error}</div>}
 
         <AnimatePresence mode="wait">
@@ -3465,7 +3799,7 @@ function LoginScreen({ onLogin, onRegister }: { onLogin: (u: any, company?: any)
                   }} autoFocus/>
               </div>
             </div>
-            <button type="submit" className="w-full bg-gradient-to-r from-primary to-primary/90 text-white text-sm font-semibold py-3.5 rounded-full shadow-lg shadow-primary/25 hover:shadow-primary/40 hover:-translate-y-0.5 liquid-transition">
+            <button type="submit" className="w-full bg-gradient-to-r from-primary via-primary to-blue-700 text-white text-sm font-bold py-3.5 rounded-full shadow-lg shadow-primary/30 hover:shadow-xl hover:shadow-primary/35 hover:-translate-y-0.5 active:scale-[0.98] liquid-transition">
               {t('login.getCode')}
             </button>
           </form>
@@ -3514,7 +3848,7 @@ function LoginScreen({ onLogin, onRegister }: { onLogin: (u: any, company?: any)
               <input type="password" className="w-full text-base text-center border border-border/50 rounded-xl px-4 py-3 bg-white/50 dark:bg-black/20 focus:bg-white dark:focus:bg-black/40 focus:outline-none focus:ring-2 focus:ring-primary/50 liquid-transition shadow-inner"
                 placeholder="••••••••" value={password} onChange={e => { setError(""); setPassword(e.target.value); }} autoFocus/>
             </div>
-            <button type="submit" className="w-full bg-gradient-to-r from-primary to-primary/90 text-white text-sm font-semibold py-3.5 rounded-full shadow-lg shadow-primary/25 hover:shadow-primary/40 hover:-translate-y-0.5 liquid-transition">
+            <button type="submit" className="w-full bg-gradient-to-r from-primary via-primary to-blue-700 text-white text-sm font-bold py-3.5 rounded-full shadow-lg shadow-primary/30 hover:shadow-xl hover:shadow-primary/35 hover:-translate-y-0.5 active:scale-[0.98] liquid-transition">
               {t('login.signIn')}
             </button>
             <button type="button" onClick={() => { setStep("phone"); setPassword(""); }} className="w-full text-sm md:text-xs text-muted-foreground hover:text-foreground py-2 liquid-transition">
@@ -3527,7 +3861,7 @@ function LoginScreen({ onLogin, onRegister }: { onLogin: (u: any, company?: any)
               <label className="text-sm md:text-xs font-medium block mb-2 text-muted-foreground text-center">{t('login.codeLabel')}</label>
               <OtpBoxes value={code} onChange={v => { setError(""); setCode(v); }} error={!!error} autoFocus/>
             </div>
-            <button type="submit" className="w-full bg-gradient-to-r from-primary to-primary/90 text-white text-sm font-semibold py-3.5 rounded-full shadow-lg shadow-primary/25 hover:shadow-primary/40 hover:-translate-y-0.5 liquid-transition">
+            <button type="submit" className="w-full bg-gradient-to-r from-primary via-primary to-blue-700 text-white text-sm font-bold py-3.5 rounded-full shadow-lg shadow-primary/30 hover:shadow-xl hover:shadow-primary/35 hover:-translate-y-0.5 active:scale-[0.98] liquid-transition">
               {t('login.enterSystem')}
             </button>
             <div className="flex flex-col gap-2 pt-2">
@@ -3601,6 +3935,12 @@ export default function App() {
   const activeCallRef = useRef<ActiveCall|null>(null); activeCallRef.current = activeCall;
   const [chatIsOpen, setChatIsOpen] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
+  const [globalSearch, setGlobalSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<any>(null);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [qrScanOpen, setQrScanOpen] = useState(false);
+  const [qrGenData, setQrGenData] = useState<{type:"material"|"object"|"transaction";id:string;name:string}|null>(null);
   const [page, setPage] = useState<NavPage>(() => {
     return (localStorage.getItem("page") as NavPage) || "dashboard";
   });
@@ -3635,6 +3975,46 @@ export default function App() {
   const [themeMode, setThemeMode] = useState<"light"|"dark"|"system">(
     () => (localStorage.getItem("erp_themeMode") as "light"|"dark"|"system") || "system"
   );
+  const [isOffline, setIsOffline] = useState(() => !navigator.onLine);
+  const [syncPending, setSyncPending] = useState(0);
+  const [syncStatus, setSyncStatus] = useState<"idle"|"pending"|"syncing"|"synced">("idle");
+
+  // Offline/online detection + SW sync messages
+  useEffect(() => {
+    const onOnline = () => {
+      setIsOffline(false);
+      // SW ga online siqnali yuboramiz — queue replay
+      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({ type: 'ONLINE' });
+      }
+    };
+    const onOffline = () => setIsOffline(true);
+    window.addEventListener('online', onOnline);
+    window.addEventListener('offline', onOffline);
+
+    // SW xabarlarini tinglash
+    const handleSWMsg = (e: MessageEvent) => {
+      if (e.data?.type === 'SYNC_STATUS') {
+        setSyncPending(e.data.count || 0);
+        setSyncStatus(e.data.status || 'idle');
+        if (e.data.status === 'synced') {
+          setTimeout(() => setSyncStatus('idle'), 3000);
+        }
+      }
+    };
+    navigator.serviceWorker?.addEventListener?.('message', handleSWMsg);
+
+    // Dastlabki pending count
+    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+      navigator.serviceWorker.controller.postMessage({ type: 'GET_PENDING_COUNT' });
+    }
+
+    return () => {
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('offline', onOffline);
+      navigator.serviceWorker?.removeEventListener?.('message', handleSWMsg);
+    };
+  }, []);
 
   // Tanlangan rang temasi × rejim (light/dark/system) ni butun UI ga qo'llaydi.
   // `.dark` klassini <html> ga qo'yadi (barcha dark: utilitalar ishlashi uchun) va
@@ -3679,6 +4059,27 @@ export default function App() {
     localStorage.setItem("page", page);
   }, [page]);
 
+  // Backend global search (debounced, permission-aware)
+  useEffect(() => {
+    if (!searchQuery || searchQuery.length < 2) { setSearchResults(null); return; }
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    setSearchLoading(true);
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/search?q=${encodeURIComponent(searchQuery)}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setSearchResults(data.results);
+        }
+      } catch {}
+      finally { setSearchLoading(false); }
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
   useEffect(() => {
     if (!selProjectMounted.current) { selProjectMounted.current = true; return; }
     if (selProject) {
@@ -3687,6 +4088,11 @@ export default function App() {
       localStorage.removeItem("selProjectId");
     }
   }, [selProject]);
+
+  // Fetch live currency rates once on login
+  useEffect(() => {
+    if (liveUser) { fetchLiveCurrencyRates(); }
+  }, [liveUser?.id]);
 
   useEffect(() => {
     if (liveUser) {
@@ -3875,7 +4281,38 @@ export default function App() {
       <Toaster position="top-center" richColors closeButton/>
     </>
   );
-  if (initialLoading) return <div className="min-h-screen bg-background flex items-center justify-center"><Loader2 className="w-8 h-8 text-primary animate-spin"/></div>;
+  if (initialLoading) return (
+    <div className="min-h-screen bg-background flex flex-col">
+      {/* Header skeleton */}
+      <div className="h-12 bg-card border-b border-border flex items-center px-4 gap-3 flex-shrink-0">
+        <div className="w-6 h-6 rounded bg-muted animate-pulse"/>
+        <div className="w-28 h-4 rounded bg-muted animate-pulse"/>
+        <div className="ml-auto flex gap-2">
+          <div className="w-8 h-8 rounded-full bg-muted animate-pulse"/>
+        </div>
+      </div>
+      {/* Content skeleton */}
+      <div className="flex-1 p-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+        {[0,1,2,3].map(i => (
+          <div key={i} className="bg-card rounded-xl border border-border p-4 space-y-3" style={{ animationDelay: `${i * 80}ms` }}>
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded bg-muted animate-pulse"/>
+              <div className="w-24 h-3 rounded bg-muted animate-pulse"/>
+            </div>
+            {[0,1,2,3].map(j => (
+              <div key={j} className="flex items-center gap-2 py-1">
+                <div className="w-8 h-8 rounded-full bg-muted animate-pulse"/>
+                <div className="flex-1 space-y-1">
+                  <div className="w-32 h-3 rounded bg-muted animate-pulse"/>
+                  <div className="w-20 h-2 rounded bg-muted/60 animate-pulse"/>
+                </div>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 
   const admin = isAdmin(liveUser.role);
   const unreadMsgs = messages.filter(m=>m.toUserId===liveUser.id&&!m.read).length;
@@ -3974,6 +4411,35 @@ export default function App() {
         body: JSON.stringify({ confirmedById: liveUser.id })
       });
       if (res.ok) setExpenses(p=>p.map(ex=>ex.id===id?{...ex,status:"confirmed",confirmedById:liveUser.id}:ex));
+    } catch(err) { console.error(err); }
+  };
+  const handleApproveExpense = async (id: string, note?: string) => {
+    try {
+      const headers: Record<string,string> = {"Content-Type":"application/json"};
+      const token = localStorage.getItem("token");
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+      const res = await fetch(`${API_BASE}/api/transactions/${id}/approve`, {
+        method: "PATCH", headers, body: JSON.stringify({ note: note || "" })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setExpenses(p=>p.map(ex=>ex.id===id?{...ex,...data,status:"confirmed"}:ex));
+        toast.success("Chiqim tasdiqlandi");
+      } else {
+        const err = await res.json().catch(()=>({error:"Xatolik"}));
+        toast.error(err.error || "Tasdiqlashda xatolik");
+      }
+    } catch(err) { console.error(err); toast.error("Server xatoligi"); }
+  };
+  const handleRejectExpense = async (id: string) => {
+    try {
+      const headers: Record<string,string> = {"Content-Type":"application/json"};
+      const token = localStorage.getItem("token");
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+      const res = await fetch(`${API_BASE}/api/transactions/${id}/reject`, {
+        method: "PATCH", headers, body: JSON.stringify({})
+      });
+      if (res.ok) setExpenses(p=>p.map(ex=>ex.id===id?{...ex,status:"rejected"}:ex));
     } catch(err) { console.error(err); }
   };
   const handleSendMsg = async (m: Msg) => {
@@ -4105,6 +4571,14 @@ export default function App() {
               <span className="text-base leading-none">✨</span>
             </button>
           )}
+          <button onClick={()=>setGlobalSearch(true)} title={tApp('search.title')} aria-label={tApp('search.title')}
+            className="btn btn-ghost w-9 h-9 p-0 rounded-full">
+            <Search className="w-[18px] h-[18px]"/>
+          </button>
+          <button onClick={()=>setQrScanOpen(true)} title="QR Skan" aria-label="QR Skan"
+            className="btn btn-ghost w-9 h-9 p-0 rounded-full">
+            <QrCode className="w-[18px] h-[18px]"/>
+          </button>
           <NotificationBell messages={messages} transfers={transfers} expenses={expenses} users={users} currentUser={liveUser}
             onOpenChat={()=>{setPage("chat");setSelProject(null);}} onOpenDashboard={()=>{setPage("dashboard");setSelProject(null);}}/>
           <button onClick={cycleThemeMode} title={themeMode==="light"?"Yorug'":themeMode==="dark"?"Qorong'i":"Tizim bo'yicha"}
@@ -4120,6 +4594,24 @@ export default function App() {
           </button>
         </div>
       </header>
+
+      {/* Offline banner */}
+      {(isOffline || syncPending > 0 || syncStatus === 'synced') && (
+        <div className={`flex items-center justify-center gap-2 px-4 py-1.5 text-xs font-medium flex-shrink-0 transition-colors
+          ${isOffline ? 'bg-destructive/90 text-white' :
+            syncStatus === 'synced' ? 'bg-green-600/90 text-white' :
+            'bg-amber-500/90 text-white'}`}>
+          {isOffline ? (
+            <><WifiOff className="w-3.5 h-3.5"/><span>Internet yo'q — ma'lumotlar keshdan ko'rsatilmoqda</span></>
+          ) : syncStatus === 'syncing' ? (
+            <><Loader2 className="w-3.5 h-3.5 animate-spin"/><span>Sinxronlanmoqda...</span></>
+          ) : syncStatus === 'synced' ? (
+            <><CheckCheck className="w-3.5 h-3.5"/><span>Sinxronlashdi</span></>
+          ) : (
+            <><AlertCircle className="w-3.5 h-3.5"/><span>{syncPending} ta o'zgartirish kutmoqda</span></>
+          )}
+        </div>
+      )}
 
       {/* Top bar — admin only (Mobile/Tablet only) */}
       <div className="block md:hidden">
@@ -4154,7 +4646,8 @@ export default function App() {
         )}
         {page==="finance" && admin && (
           <FinancePage currentUser={liveUser} users={users} projects={projects} expenses={expenses}
-            onAddExpense={handleAddExpense} onConfirm={handleConfirmExpense}/>
+            onAddExpense={handleAddExpense} onConfirm={handleConfirmExpense}
+            onApprove={handleApproveExpense} onReject={handleRejectExpense}/>
         )}
         {page==="reports" && admin && (
           <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 className="w-6 h-6 text-primary animate-spin"/></div>}>
@@ -4196,30 +4689,33 @@ export default function App() {
           onClose={()=>setShowSend(false)} onSend={t=>{handleSendTransfer(t);setShowSend(false);}}/>
       )}
 
-      {/* Mobile Bottom Navigation — iOS 26 "Liquid Glass" pill, spring-animated */}
+      {/* Mobile Bottom Navigation — Premium Liquid Glass, labels + spring-animated */}
       <nav className={`ios-bottom-bar flex items-center justify-around ${(page==='chat' && chatIsOpen) || anyBigModalOpen ? 'ios-bottom-bar-hidden' : ''}`}>
         {NAV.map(n => (
           <motion.button key={n.key} onClick={() => { setPage(n.key); setSelProject(null); }}
-            whileTap={{ scale: 0.86 }}
-            transition={{ type: "spring", stiffness: 500, damping: 28 }}
+            whileTap={{ scale: 0.90 }}
+            transition={{ type: "spring", stiffness: 520, damping: 30 }}
             aria-label={n.label}
             aria-current={page===n.key ? "page" : undefined}
-            className={`flex flex-col items-center justify-center gap-1 w-14 h-14 relative z-10 ${page===n.key?"text-white":"text-white/55"}`}
+            className={`flex flex-col items-center justify-center gap-[3px] px-3 py-2 min-w-[56px] h-[60px] relative z-10 ${page===n.key?"text-white":"text-white/48"}`}
           >
             {page === n.key && (
               <motion.div
                 layoutId="mobileNavLiquidPill"
-                className="absolute w-11 h-11 rounded-full liquid-pill -z-10"
-                transition={{ type: "spring", stiffness: 480, damping: 32 }}
+                className="absolute inset-x-1 top-1 h-10 rounded-2xl liquid-pill -z-10"
+                transition={{ type: "spring", stiffness: 500, damping: 34 }}
               />
             )}
-            <div className={`flex items-center justify-center w-8 h-8 transition-transform duration-300 ${page===n.key?"scale-110":""}`}>
+            <div className={`flex items-center justify-center w-[26px] h-[26px] transition-all duration-200 ${page===n.key?"scale-110":""}`}>
               {n.key === "profile"
-                ? <div className={`rounded-full ${page===n.key?"ring-2 ring-white/70":""}`}><Avatar user={liveUser} size="sm"/></div>
-                : <n.icon className={`w-5 h-5 ${page===n.key?"fill-current":""}`}/>}
+                ? <div className={`rounded-full overflow-hidden transition-all duration-200 ${page===n.key?"ring-2 ring-white/80 shadow-md scale-110":"opacity-60"}`}><Avatar user={liveUser} size="sm"/></div>
+                : <n.icon className="w-[18px] h-[18px]"/>}
             </div>
+            <span className={`text-[9px] font-semibold leading-none tracking-wide transition-all duration-200 ${page===n.key?"opacity-100":"opacity-45"}`}>
+              {n.label}
+            </span>
             {!!n.badge && n.badge>0 && (
-              <span className="badge-pulse absolute top-0 right-2 w-3.5 h-3.5 bg-red-500 text-white rounded-full text-[8px] flex items-center justify-center font-bold shadow-sm border border-black/50">{n.badge}</span>
+              <span className="badge-pulse absolute top-1 right-1 min-w-[16px] h-4 px-0.5 bg-red-500 text-white rounded-full text-[9px] flex items-center justify-center font-bold shadow border border-black/20">{n.badge > 9 ? '9+' : n.badge}</span>
             )}
           </motion.button>
         ))}
@@ -4246,6 +4742,110 @@ export default function App() {
             onUserUpdated={(u) => setUsers(p => p.map(x => x.id === u.id ? u : x))}
           />
         </Suspense>
+      )}
+
+      {/* QR Scanner */}
+      {qrScanOpen && (
+        <Suspense fallback={null}>
+          <QRScanner token={localStorage.getItem("token") || ""}
+            onClose={() => setQrScanOpen(false)}
+            onResult={r => { toast.success(`QR skan: ${r.type === 'material' ? r.data.name : r.type === 'object' ? r.data.name : 'Tranzaksiya'}`); setQrScanOpen(false); }} />
+        </Suspense>
+      )}
+
+      {/* QR Generator */}
+      {qrGenData && (
+        <Suspense fallback={null}>
+          <QRGenerator type={qrGenData.type} id={qrGenData.id} name={qrGenData.name}
+            onClose={() => setQrGenData(null)} />
+        </Suspense>
+      )}
+
+      {/* Global Search modal */}
+      {globalSearch && (
+        <div className="fixed inset-0 bg-black/60 z-[70] flex items-start justify-center pt-16 px-4" onClick={()=>{setGlobalSearch(false);setSearchQuery("");setSearchResults(null);}}>
+          <div className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-lg overflow-hidden animate-slide-up-fade" onClick={e=>e.stopPropagation()}>
+            <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
+              <Search className="w-4 h-4 text-muted-foreground flex-shrink-0"/>
+              <input autoFocus value={searchQuery} onChange={e=>{setSearchQuery(e.target.value);if(e.target.value.length<2)setSearchResults(null);}}
+                placeholder={tApp('search.placeholder')}
+                className="flex-1 bg-transparent text-sm focus:outline-none text-foreground placeholder:text-muted-foreground"/>
+              {searchLoading && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground flex-shrink-0"/>}
+              <button onClick={()=>{setGlobalSearch(false);setSearchQuery("");setSearchResults(null);}} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4 text-muted-foreground"/></button>
+            </div>
+            {searchQuery.length > 1 ? (
+              <div className="max-h-[60vh] overflow-y-auto scrollbar-hide p-3 space-y-3">
+                {searchResults ? (<>
+                  {/* Backend results: Users */}
+                  {(searchResults.users||[]).length > 0 && (
+                    <div><p className="text-[10px] font-semibold text-muted-foreground mb-1.5 px-1">{tApp('search.users')}</p>
+                      {(searchResults.users||[]).slice(0,5).map((u: any) => (
+                        <button key={u.id} onClick={()=>{setGlobalSearch(false);setSearchQuery("");setSearchResults(null);setPage("dashboard");}}
+                          className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-muted liquid-transition text-left">
+                          <User className="w-5 h-5 text-primary flex-shrink-0"/>
+                          <div><p className="text-sm font-medium text-foreground">{u.name}</p><p className="text-[10px] text-muted-foreground">{ROLE_LABELS[u.role as Role] || u.role}</p></div>
+                        </button>))}
+                    </div>
+                  )}
+                  {/* Backend results: Objects */}
+                  {(searchResults.objects||[]).length > 0 && (
+                    <div><p className="text-[10px] font-semibold text-muted-foreground mb-1.5 px-1">{tApp('search.objects')}</p>
+                      {(searchResults.objects||[]).slice(0,5).map((o: any) => (
+                        <button key={o.id} onClick={()=>{setGlobalSearch(false);setSearchQuery("");setSearchResults(null);const p=projects.find(p=>p.id===o.id);if(p)setSelProject(p);setPage("dashboard");}}
+                          className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-muted liquid-transition text-left">
+                          <Building2 className="w-5 h-5 text-primary flex-shrink-0"/>
+                          <div><p className="text-sm font-medium text-foreground">{o.name}</p><p className="text-[10px] text-muted-foreground">{o.location}</p></div>
+                        </button>))}
+                    </div>
+                  )}
+                  {/* Backend results: Materials */}
+                  {(searchResults.materials||[]).length > 0 && (
+                    <div><p className="text-[10px] font-semibold text-muted-foreground mb-1.5 px-1">Materiallar</p>
+                      {(searchResults.materials||[]).slice(0,5).map((m: any) => (
+                        <div key={m.id} className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-muted liquid-transition">
+                          <Package className="w-5 h-5 text-muted-foreground flex-shrink-0"/>
+                          <div className="flex-1 min-w-0"><p className="text-sm font-medium text-foreground truncate">{m.name}</p><p className="text-[10px] text-muted-foreground">{m.remaining} {m.unit} qolgan</p></div>
+                          <button onClick={()=>setQrGenData({type:"material",id:m.id,name:m.name})} className="p-1 rounded hover:bg-muted" title="QR kod"><QrCode className="w-4 h-4 text-muted-foreground"/></button>
+                        </div>))}
+                    </div>
+                  )}
+                  {/* Backend results: Transactions */}
+                  {(searchResults.transactions||[]).length > 0 && (
+                    <div><p className="text-[10px] font-semibold text-muted-foreground mb-1.5 px-1">Tranzaksiyalar</p>
+                      {(searchResults.transactions||[]).slice(0,5).map((t: any) => (
+                        <button key={t.id} onClick={()=>{setGlobalSearch(false);setSearchQuery("");setSearchResults(null);setPage("finance");}}
+                          className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-muted liquid-transition text-left">
+                          <Wallet className="w-5 h-5 text-muted-foreground flex-shrink-0"/>
+                          <div className="min-w-0"><p className="text-sm text-foreground truncate">{t.description||t.materialName}</p><p className="text-[10px] text-muted-foreground">{t.amount?.toLocaleString()} so'm</p></div>
+                        </button>))}
+                    </div>
+                  )}
+                  {/* Backend results: Messages */}
+                  {(searchResults.messages||[]).length > 0 && (
+                    <div><p className="text-[10px] font-semibold text-muted-foreground mb-1.5 px-1">{tApp('search.messages')}</p>
+                      {(searchResults.messages||[]).slice(0,5).map((m: any) => (
+                        <button key={m.id} onClick={()=>{setGlobalSearch(false);setSearchQuery("");setSearchResults(null);setPage("chat");}}
+                          className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-muted liquid-transition text-left">
+                          <MessageCircle className="w-5 h-5 text-muted-foreground flex-shrink-0"/>
+                          <div className="min-w-0"><p className="text-sm text-foreground truncate">{m.text}</p></div>
+                        </button>))}
+                    </div>
+                  )}
+                  {/* No results */}
+                  {Object.values(searchResults).every((arr: any) => !arr?.length) && (
+                    <div className="text-center py-6 text-muted-foreground text-sm">{tApp('search.noResults')}</div>
+                  )}
+                </>) : (
+                  <div className="text-center py-6 text-muted-foreground text-sm">
+                    {searchLoading ? "Qidirilmoqda..." : tApp('search.noResults')}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="px-4 py-6 text-center text-muted-foreground text-sm">{tApp('search.placeholder')}</div>
+            )}
+          </div>
+        </div>
       )}
 
       {/* Bildirishnoma toast'lari */}

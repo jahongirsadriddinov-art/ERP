@@ -13,7 +13,28 @@ const upload = multer({ dest: 'uploads/', limits: { fileSize: 50 * 1024 * 1024 }
 router.post('/', async (req, res) => {
   try {
     const { name, budget, location, foremanId } = req.body;
-    const obj = new ObjectModel(stamped({ name, budget, location, foremanId }));
+
+    // Validate required fields
+    const errors: { field: string; message: string }[] = [];
+    if (!name || typeof name !== 'string' || name.trim().length < 2) {
+      errors.push({ field: 'name', message: 'Obyekt nomi kamida 2 belgi bo\'lishi kerak' });
+    }
+    if (name && name.trim().length > 200) {
+      errors.push({ field: 'name', message: 'Obyekt nomi 200 belgidan oshmasligi kerak' });
+    }
+    if (budget !== undefined && budget !== null && budget !== '') {
+      const b = Number(budget);
+      if (isNaN(b) || b < 0) errors.push({ field: 'budget', message: 'Byudjet manfiy bo\'lmasligi kerak' });
+      if (b > 1e15) errors.push({ field: 'budget', message: 'Byudjet juda katta' });
+    }
+    if (errors.length) return res.status(400).json({ success: false, errors });
+
+    const obj = new ObjectModel(stamped({
+      name: name.trim(),
+      budget: budget ? Number(budget) : undefined,
+      location: location?.trim() || undefined,
+      foremanId: foremanId || undefined,
+    }));
     await obj.save();
     res.status(201).json(obj);
   } catch (err) {

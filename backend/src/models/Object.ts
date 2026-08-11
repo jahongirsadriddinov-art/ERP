@@ -24,4 +24,8 @@ const ObjectSchema: Schema = new Schema({
   companyId: { type: String, index: true } // v1.2 multi-tenant
 }, { timestamps: true });
 
+// Search uchun indekslar
+ObjectSchema.index({ companyId: 1, name: 1 });
+ObjectSchema.index({ name: 'text', location: 'text' });
+
 export default mongoose.model<IObject>('Object', ObjectSchema);

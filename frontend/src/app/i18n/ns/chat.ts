@@ -1,4 +1,7 @@
 export const uz = {
+  // Audio player
+  play: "Ijro etish",
+  pause: "Pauza",
   // Context menu
   reply: "Javob berish",
   edit: "Tahrirlash",
@@ -48,9 +51,21 @@ export const uz = {
   selectCancel: "Bekor",
   selectDelete: "O'chirish",
   deleteSelected: "{{count}} ta o'chirish",
+  // Sidebar
+  messages: "Xabarlar",
+  noContacts: "Kontaktlar yo'q",
+  noOtherUsers: "Bu kompaniyada boshqa foydalanuvchi yo'q",
+  selectConversation: "Suhbatdosh tanlang",
+  // Message states
+  deletedMessage: "Xabar o'chirildi",
+  editedLabel: "tahrirlangan",
+  pinnedMessage: "Qo'yilgan xabar",
 };
 
 export const ru = {
+  // Audio player
+  play: "Воспроизвести",
+  pause: "Пауза",
   // Context menu
   reply: "Ответить",
   edit: "Редактировать",
@@ -100,4 +115,13 @@ export const ru = {
   selectCancel: "Отмена",
   selectDelete: "Удалить",
   deleteSelected: "Удалить ({{count}})",
+  // Sidebar
+  messages: "Сообщения",
+  noContacts: "Контактов нет",
+  noOtherUsers: "В этой компании нет других пользователей",
+  selectConversation: "Выберите собеседника",
+  // Message states
+  deletedMessage: "Сообщение удалено",
+  editedLabel: "изменено",
+  pinnedMessage: "Закреплённое сообщение",
 };

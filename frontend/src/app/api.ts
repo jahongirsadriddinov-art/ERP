@@ -56,8 +56,9 @@ export async function uploadChatMedia(
   const res = await fetch(api('/api/messages/upload'), { method: 'POST', body: fd });
   if (!res.ok) throw new Error('Media yuklanmadi');
   const d = await res.json();
-  // To'liq (absolyut) URL saqlaymiz — qabul qiluvchi ham yuklay oladi
-  return { url: `${API_BASE}${d.url}`, fileName: d.fileName, fileSize: d.fileSize };
+  // Cloudinary full URL bo'lsa prefix qo'shmaymiz, local relative bo'lsa qo'shamiz
+  const finalUrl = d.url?.startsWith('http') ? d.url : `${API_BASE}${d.url}`;
+  return { url: finalUrl, fileName: d.fileName, fileSize: d.fileSize };
 }
 
 // ─── Deterministik smeta parser (AI'siz, POST /api/smeta/parse) ──────────────

@@ -2,6 +2,7 @@ import express from 'express';
 import http from 'http';
 import mongoose from 'mongoose';
 import cors from 'cors';
+import helmet from 'helmet';
 import dotenv from 'dotenv';
 import authRoutes from './routes/auth';
 import registerRoutes from './routes/register';
@@ -15,6 +16,17 @@ import companyRoutes from './routes/companies';
 import subscriptionRoutes from './routes/subscriptions';
 import smetaRoutes from './routes/smeta';
 import aiRoutes from './routes/ai';
+import attendanceRoutes from './routes/attendance';
+import gpsRoutes from './routes/gps';
+import pushRoutes from './routes/push';
+import auditRoutes from './routes/audit';
+import searchRoutes from './routes/search';
+import qrRoutes from './routes/qr';
+import notificationRoutes from './routes/notifications';
+import currencyRoutes from './routes/currency';
+import dashboardRoutes from './routes/dashboard';
+import clientErrorRoutes from './routes/clientErrors';
+import backupRoutes from './routes/backup';
 import { initSocket } from './services/socket';
 import { optionalAuth, blockDeveloper } from './middleware/auth';
 // Import bot to start it
@@ -30,7 +42,15 @@ process.on('unhandledRejection', (reason: any) => {
 
 const app = express();
 
-app.use(cors());
+app.use(helmet({
+  crossOriginEmbedderPolicy: false,  // WebRTC + socket.io uchun kerak
+  contentSecurityPolicy: false,       // Frontend Vercel'da serve bo'lgani uchun backend CSP kerak emas
+}));
+app.use(cors({
+  origin: process.env.SITE_URL || '*',
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  credentials: true,
+}));
 app.use(express.json({ limit: '60mb' }));
 // Yuklangan fayllar (chat media, smeta, va h.k.) doim noyob nom bilan saqlanadi
 // (vaqt tamg'asi + tasodifiy raqam) — demak bir xil URL hech qachon boshqa
@@ -59,6 +79,32 @@ app.use('/api/companies',    optionalAuth, companyRoutes);      // dasturchi (su
 app.use('/api/admin/subscriptions', optionalAuth, subscriptionRoutes); // obunalar boshqaruvi
 app.use('/api/smeta',        optionalAuth, blockDeveloper, smetaRoutes);
 app.use('/api/ai',           optionalAuth, blockDeveloper, aiRoutes);
+app.use('/api/attendance',      optionalAuth, attendanceRoutes);
+app.use('/api/gps',             optionalAuth, gpsRoutes);
+app.use('/api/push',            optionalAuth, pushRoutes);
+app.use('/api/audit-logs',      optionalAuth, auditRoutes);
+app.use('/api/search',          optionalAuth, searchRoutes);
+app.use('/api/qr',              optionalAuth, qrRoutes);
+app.use('/api/notifications',   optionalAuth, notificationRoutes);
+app.use('/api/currency',        optionalAuth, currencyRoutes);
+app.use('/api/dashboard',       optionalAuth, blockDeveloper, dashboardRoutes);
+app.use('/api/errors',          optionalAuth, clientErrorRoutes);
+app.use('/api/admin',           optionalAuth, backupRoutes);
+
+// 404 handler — tanilmagan route lar uchun
+app.use((_req, res) => {
+  res.status(404).json({ success: false, error: "Route topilmadi" });
+});
+
+// Global error handler — catch qilinmagan Express xatolar
+app.use((err: any, _req: any, res: any, _next: any) => {
+  console.error('[Global Error]', err?.message || err);
+  const status = err?.status || err?.statusCode || 500;
+  res.status(status).json({
+    success: false,
+    error: status === 500 ? 'Server xatoligi' : (err?.message || 'Xatolik yuz berdi'),
+  });
+});
 
 const PORT = process.env.PORT || 5000;
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/erp_firma';

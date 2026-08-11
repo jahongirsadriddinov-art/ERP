@@ -1,0 +1,37 @@
+{
+  "name": "QurilishERP — Qurilish boshqaruvi",
+  "short_name": "QurilishERP",
+  "description": "Qurilish firmalari uchun ERP tizimi — loyihalar, materiallar, moliya, xodimlar va real-time chat.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "portrait-primary",
+  "background_color": "#F4F6FA",
+  "theme_color": "#1B3A6B",
+  "lang": "uz",
+  "dir": "ltr",
+  "categories": ["business", "productivity"],
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Bosh sahifa",
+      "url": "/?page=dashboard",
+      "description": "Loyihalar va materiallarni ko'rish"
+    },
+    {
+      "name": "Xabarlar",
+      "url": "/?page=chat",
+      "description": "Chat xabarlarini ochish"
+    }
+  ],
+  "prefer_related_applications": false,
+  "screenshots": []
+}

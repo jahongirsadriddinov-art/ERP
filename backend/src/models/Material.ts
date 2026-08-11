@@ -22,4 +22,8 @@ const MaterialSchema: Schema = new Schema({
   companyId: { type: String, index: true } // v1.2 multi-tenant
 }, { timestamps: true });
 
+// Search va filtrlar uchun
+MaterialSchema.index({ companyId: 1, name: 1 });
+MaterialSchema.index({ name: 'text' });
+
 export default mongoose.model<IMaterial>('Material', MaterialSchema);

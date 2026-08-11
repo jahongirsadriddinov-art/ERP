@@ -4,17 +4,9 @@
     <head>
 
       <meta charset="UTF-8" />
-      <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
       <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 
-      <!-- Tema-chaqnashini (FOUC) oldini olish: React yuklanib, useEffect ishga
-           tushguncha (bu bir necha yuz ms yoki sekin tarmoqda undan ham ko'p
-           vaqt olishi mumkin) sahifa har doim standart yorug' fon bilan
-           chizilar edi — hatto foydalanuvchi qorong'i rejimni tanlagan bo'lsa
-           ham. Shu bloklovchi skript birinchi chizishdan OLDIN to'g'ri
-           rejimni <html>'ga qo'yadi (App.tsx'dagi asosiy useEffect keyin
-           to'liq rang-temani qo'llайdi — bu faqat yorug'/qorong'i sakrashini
-           yo'qotadi, chunki u eng sezilarli farq). -->
+      <!-- Tema-chaqnashini (FOUC) oldini olish -->
       <script>
         (function () {
           try {
@@ -32,28 +24,77 @@
         html.dark { background: #0B1220; }
         body { background: inherit; }
       </style>
+
+      <!-- PWA -->
+      <link rel="manifest" href="/manifest.json" />
+      <meta name="theme-color" content="#1B3A6B" media="(prefers-color-scheme: light)" />
+      <meta name="theme-color" content="#0B1220" media="(prefers-color-scheme: dark)" />
+
+      <!-- Apple PWA -->
       <meta name="apple-mobile-web-app-capable" content="yes" />
       <meta name="mobile-web-app-capable" content="yes" />
       <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+      <meta name="apple-mobile-web-app-title" content="QurilishERP" />
+      <link rel="apple-touch-icon" href="/favicon.svg" />
+
+      <!-- Favicon -->
+      <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+      <link rel="shortcut icon" href="/favicon.svg" />
+
+      <!-- SEO -->
       <title>QurilishERP — Qurilish firmalari uchun boshqaruv tizimi</title>
-      <meta name="description" content="Qurilish firmalari uchun ERP tizimi — loyihalar, materiallar, moliya, xodimlar boshqaruvi, real-time chat va AI yordamchi." />
+      <meta name="description" content="Qurilish firmalari uchun zamonaviy ERP tizimi. Loyihalar, materiallar, moliya, xodimlar boshqaruvi, real-time chat, AI yordamchi va Telegram integratsiyasi." />
+      <meta name="keywords" content="qurilish ERP, qurilish boshqaruvi, loyiha boshqaruvi, smeta, materiallar hisobi, xodimlar boshqaruvi, qurilish moliyasi" />
       <meta name="robots" content="index, follow" />
+      <meta name="author" content="QurilishERP" />
       <link rel="canonical" href="https://www.erp-firma.uz/" />
+
+      <!-- Open Graph -->
       <meta property="og:type" content="website" />
       <meta property="og:site_name" content="QurilishERP" />
       <meta property="og:title" content="QurilishERP — Qurilish firmalari uchun boshqaruv tizimi" />
       <meta property="og:description" content="Loyihalar, materiallar, moliya va xodimlarni bir joyda boshqaring. Real-time chat, AI yordamchi, Telegram integratsiyasi." />
       <meta property="og:locale" content="uz_UZ" />
       <meta property="og:url" content="https://www.erp-firma.uz/" />
-      <meta name="twitter:card" content="summary" />
+      <meta property="og:image" content="https://www.erp-firma.uz/og-image.png" />
+      <meta property="og:image:width" content="1200" />
+      <meta property="og:image:height" content="630" />
+
+      <!-- Twitter Card -->
+      <meta name="twitter:card" content="summary_large_image" />
       <meta name="twitter:title" content="QurilishERP — Qurilish firmalari uchun boshqaruv tizimi" />
       <meta name="twitter:description" content="Loyihalar, materiallar, moliya va xodimlarni bir joyda boshqaring." />
 
-      <!-- Shriftlar — preconnect + asinxron <link> (render-blocking EMAS).
-           media="print" + onload="this.media='all'" — standart "loadCSS"
-           usuli: brauzer faylni erta yuklaydi, lekin sahifa chizilishini
-           kutmaydi (font-display:swap allaqachon bor, shuning uchun matn
-           darhol tizim shrifti bilan ko'rinadi, keyin shriftga almashadi). -->
+      <!-- Structured Data -->
+      <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "QurilishERP",
+        "applicationCategory": "BusinessApplication",
+        "operatingSystem": "Web, Android, iOS",
+        "description": "Qurilish firmalari uchun ERP tizimi — loyihalar, materiallar, moliya, xodimlar boshqaruvi.",
+        "url": "https://www.erp-firma.uz/",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "UZS",
+          "description": "Birinchi oy bepul"
+        },
+        "inLanguage": ["uz", "ru"],
+        "featureList": [
+          "Loyiha boshqaruvi",
+          "Smeta tahlili",
+          "Material tracking",
+          "Moliya hisobi",
+          "Real-time chat",
+          "AI yordamchi",
+          "Telegram integratsiyasi"
+        ]
+      }
+      </script>
+
+      <!-- Fonts — preconnect + async (render-blocking emas) -->
       <link rel="preconnect" href="https://fonts.googleapis.com" />
       <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
       <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" />
@@ -63,32 +104,40 @@
       <style>
         html, body { height: 100%; margin: 0; }
         #root { height: 100%; }
-        /* React hali mount bo'lmaguncha ko'rinadigan statik yuklanish belgisi —
-           `#root` ichida, shuning uchun `createRoot().render()` uni avtomatik
-           almashtiradi (qo'shimcha JS/tozalash kerak emas). */
         #initial-loader {
           height: 100%; display: flex; align-items: center; justify-content: center;
+          flex-direction: column; gap: 16px;
+        }
+        #initial-loader .logo-wrap {
+          width: 56px; height: 56px; border-radius: 18px;
+          background: linear-gradient(135deg, #1B3A6B, #2d5499);
+          display: flex; align-items: center; justify-content: center;
+          box-shadow: 0 8px 32px rgba(27,58,107,0.35);
+          animation: loader-pop 0.5s cubic-bezier(0.34,1.56,0.64,1) both;
         }
         #initial-loader .spinner {
-          width: 34px; height: 34px; border-radius: 50%;
-          border: 3px solid color-mix(in srgb, #1B3A6B 18%, transparent);
-          border-top-color: #1B3A6B;
-          animation: initial-spin 0.7s linear infinite;
+          width: 28px; height: 28px; border-radius: 50%;
+          border: 2.5px solid rgba(255,255,255,0.3);
+          border-top-color: #fff;
+          animation: initial-spin 0.65s linear infinite;
         }
-        html.dark #initial-loader .spinner {
-          border-color: color-mix(in srgb, #3E6DB5 22%, transparent);
-          border-top-color: #3E6DB5;
+        html.dark #initial-loader .logo-wrap {
+          background: linear-gradient(135deg, #3E6DB5, #1B3A6B);
+          box-shadow: 0 8px 32px rgba(62,109,181,0.35);
         }
         @keyframes initial-spin { to { transform: rotate(360deg); } }
+        @keyframes loader-pop {
+          from { opacity: 0; transform: scale(0.75); }
+          to   { opacity: 1; transform: scale(1); }
+        }
       </style>
 
     </head>
 
     <body>
 
-      <div id="root"><div id="initial-loader"><div class="spinner"></div></div></div>
+      <div id="root"><div id="initial-loader"><div class="logo-wrap"><div class="spinner"></div></div></div></div>
       <script type="module" src="/src/main.tsx"></script>
 
     </body>
   </html>
-  

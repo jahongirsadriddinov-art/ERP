@@ -38,4 +38,10 @@ const MessageSchema: Schema = new Schema({
   companyId: { type: String, index: true }, // v1.2 multi-tenant
 }, { timestamps: true });
 
+// Suhbat bo'yicha xabarlarni tezkor yuklash
+MessageSchema.index({ fromUserId: 1, toUserId: 1, timestamp: -1 });
+MessageSchema.index({ groupId: 1, timestamp: -1 });
+// Global search uchun matn indeksi
+MessageSchema.index({ text: 'text' });
+
 export default mongoose.model<IMessage>('Message', MessageSchema);

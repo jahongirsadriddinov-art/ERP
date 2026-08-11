@@ -126,34 +126,40 @@ export default function AIAssistant({ currentUser, users, token, open, onClose, 
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
       <div
-        className="w-full max-w-md max-h-[82vh] sm:max-h-[660px] rounded-2xl shadow-2xl border border-border/50 flex flex-col overflow-hidden animate-pop-in"
+        className="w-full sm:max-w-md h-[88vh] sm:h-auto sm:max-h-[680px] sm:rounded-3xl rounded-t-3xl shadow-2xl border border-border/40 flex flex-col overflow-hidden animate-slide-up-fade"
         style={{ background: 'var(--card)' }}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center gap-2.5 px-4 py-3 border-b border-border/40 flex-shrink-0"
-          style={{ background: 'linear-gradient(135deg, var(--primary)/10, var(--accent)/10)' }}>
-          <div className="w-8 h-8 rounded-full flex items-center justify-center text-base flex-shrink-0"
-            style={{ background: 'linear-gradient(135deg, var(--primary), var(--accent))' }}>
-            <span className="text-white text-sm">✨</span>
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-border/30 flex-shrink-0"
+          style={{ background: 'linear-gradient(135deg, color-mix(in srgb, var(--primary) 8%, transparent), color-mix(in srgb, var(--accent) 6%, transparent))' }}>
+          <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-md"
+            style={{ background: 'linear-gradient(135deg, var(--primary), color-mix(in srgb, var(--primary) 70%, var(--accent)))' }}>
+            <span className="text-white text-lg leading-none">✨</span>
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold leading-none">{t('ai.title')}</p>
-            <p className="text-[10px] text-muted-foreground mt-0.5">{t('ai.subtitle')}</p>
+            <p className="text-sm font-bold leading-tight">{t('ai.title')}</p>
+            <p className="text-[11px] text-muted-foreground mt-0.5 leading-none">{t('ai.subtitle')}</p>
           </div>
-          <button onClick={onClose} aria-label={t('ai.close')} className="p-1.5 rounded-lg hover:bg-muted/50 text-muted-foreground">
+          <button onClick={onClose} aria-label={t('ai.close')}
+            className="w-8 h-8 rounded-xl flex items-center justify-center hover:bg-muted/60 text-muted-foreground transition-colors">
             <X className="w-4 h-4"/>
           </button>
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-3 space-y-2.5 scrollbar-hide">
+        <div className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-hide">
           {msgs.length === 0 && (
-            <div className="text-center py-4">
-              <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-line">{greeting}</p>
-              <div className="flex flex-wrap gap-1.5 justify-center mt-3">
+            <div className="text-center py-6 px-2">
+              <div className="w-14 h-14 rounded-2xl mx-auto mb-4 flex items-center justify-center shadow-lg"
+                style={{ background: 'linear-gradient(135deg, var(--primary), color-mix(in srgb, var(--primary) 70%, var(--accent)))' }}>
+                <span className="text-2xl">✨</span>
+              </div>
+              <p className="text-sm font-semibold text-foreground mb-1">{t('ai.title')}</p>
+              <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-line mb-4">{greeting}</p>
+              <div className="flex flex-wrap gap-2 justify-center">
                 {[
                   t('ai.hints.employeeList'),
                   t('ai.hints.addEmployee'),
@@ -161,7 +167,7 @@ export default function AIAssistant({ currentUser, users, token, open, onClose, 
                   t('ai.hints.todayTasks'),
                 ].map(hint => (
                   <button key={hint} onClick={() => { setInput(hint); inputRef.current?.focus(); }}
-                    className="text-[10px] px-2.5 py-1.5 rounded-full border border-border/60 hover:bg-muted/60 transition-colors">
+                    className="text-[11px] px-3 py-2 rounded-2xl border border-border/70 bg-muted/40 hover:bg-muted/80 transition-colors font-medium">
                     {hint}
                   </button>
                 ))}
@@ -170,50 +176,50 @@ export default function AIAssistant({ currentUser, users, token, open, onClose, 
           )}
           {msgs.map((m, i) => (
             <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[85%] px-3 py-2 rounded-2xl text-xs leading-relaxed ${
+              <div className={`max-w-[85%] px-3.5 py-2.5 rounded-2xl text-[13px] leading-relaxed whitespace-pre-wrap ${
                 m.role === 'user'
-                  ? 'bg-primary text-white rounded-br-sm'
-                  : 'bg-muted/70 text-foreground rounded-bl-sm'
-              }`}>
+                  ? 'rounded-br-md text-white shadow-md'
+                  : 'bg-muted/70 text-foreground rounded-bl-md'
+              }`}
+                style={m.role === 'user' ? { background: 'linear-gradient(135deg, var(--primary), color-mix(in srgb, var(--primary) 80%, var(--accent)))' } : undefined}>
                 {m.content}
               </div>
             </div>
           ))}
           {loading && (
             <div className="flex justify-start">
-              <div className="bg-muted/70 px-3 py-2 rounded-2xl rounded-bl-sm flex items-center gap-1.5">
-                <div className="flex gap-0.5">
+              <div className="bg-muted/70 px-4 py-3 rounded-2xl rounded-bl-md flex items-center gap-2">
+                <div className="flex gap-1">
                   {[0,1,2].map(i => (
-                    <div key={i} className="w-1.5 h-1.5 rounded-full bg-primary/60 animate-bounce" style={{ animationDelay: `${i*150}ms` }}/>
+                    <div key={i} className="w-2 h-2 rounded-full bg-primary/70 animate-bounce" style={{ animationDelay: `${i*160}ms` }}/>
                   ))}
                 </div>
-                <span className="text-[10px] text-muted-foreground">{t('ai.thinking')}</span>
+                <span className="text-[11px] text-muted-foreground">{t('ai.thinking')}</span>
               </div>
             </div>
           )}
-          {/* Confirmation card — only for send_message */}
           {pending && !loading && (
-            <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-3 space-y-2.5">
-              <div className="flex items-start gap-2">
+            <div className="bg-amber-50/80 dark:bg-amber-900/20 border border-amber-200/60 dark:border-amber-700/40 rounded-2xl p-4 space-y-3">
+              <div className="flex items-start gap-2.5">
                 {actionIcon(pending.action.type)}
-                <p className="text-xs leading-relaxed font-medium">{pending.action.description || pending.response}</p>
+                <p className="text-[13px] leading-relaxed font-medium">{pending.action.description || pending.response}</p>
               </div>
               {pending.action.text && (
-                <div className="bg-white/10 dark:bg-black/20 rounded-xl px-3 py-2">
-                  <p className="text-[10px] text-muted-foreground mb-0.5">{t('ai.messageTextLabel')}</p>
-                  <p className="text-xs font-medium">"{pending.action.text}"</p>
+                <div className="bg-white/60 dark:bg-black/20 rounded-xl px-3.5 py-2.5">
+                  <p className="text-[10px] text-muted-foreground mb-1 font-medium uppercase tracking-wide">{t('ai.messageTextLabel')}</p>
+                  <p className="text-[13px] font-medium">"{pending.action.text}"</p>
                 </div>
               )}
               {pending.action.toUserName && (
-                <p className="text-[10px] text-muted-foreground">{t('ai.recipientLabel')}: <span className="font-semibold text-foreground">{pending.action.toUserName}</span></p>
+                <p className="text-[11px] text-muted-foreground">{t('ai.recipientLabel')}: <span className="font-semibold text-foreground">{pending.action.toUserName}</span></p>
               )}
-              <div className="flex gap-2">
+              <div className="flex gap-2 pt-1">
                 <button onClick={confirm}
-                  className="flex-1 bg-green-600 text-white text-xs font-bold py-2 rounded-xl flex items-center justify-center gap-1 active:scale-95 transition-transform">
+                  className="flex-1 bg-green-600 text-white text-[13px] font-bold py-2.5 rounded-2xl flex items-center justify-center gap-1.5 active:scale-95 transition-transform shadow-sm">
                   <Check className="w-3.5 h-3.5"/> {t('ai.confirm')}
                 </button>
                 <button onClick={cancel}
-                  className="flex-1 border border-red-500/40 text-red-500 text-xs font-bold py-2 rounded-xl flex items-center justify-center gap-1 active:scale-95 transition-transform">
+                  className="flex-1 border-2 border-red-400/50 text-red-500 text-[13px] font-bold py-2.5 rounded-2xl flex items-center justify-center gap-1.5 active:scale-95 transition-transform">
                   <X className="w-3.5 h-3.5"/> {t('ai.cancel')}
                 </button>
               </div>
@@ -223,19 +229,19 @@ export default function AIAssistant({ currentUser, users, token, open, onClose, 
         </div>
 
         {/* Input */}
-        <div className="flex items-center gap-2 px-3 py-2.5 border-t border-border/40 flex-shrink-0">
+        <div className="flex items-center gap-2.5 px-4 py-3.5 border-t border-border/30 flex-shrink-0 bg-card/50">
           <input
             ref={inputRef}
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && !e.shiftKey && send()}
             placeholder={t('ai.placeholder')}
-            className="flex-1 text-sm bg-muted/50 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-primary/40 placeholder:text-muted-foreground/60"
+            className="flex-1 text-[14px] bg-muted/50 rounded-2xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-primary/30 placeholder:text-muted-foreground/50 border border-border/40 focus:border-primary/30 transition-all"
             disabled={loading || !!pending}
           />
           <button onClick={send} disabled={loading || !input.trim() || !!pending} aria-label={t('ai.sendAriaLabel')}
-            className="w-9 h-9 rounded-xl flex items-center justify-center disabled:opacity-40 transition-all active:scale-95 flex-shrink-0"
-            style={{ background: 'var(--primary)' }}>
+            className="w-10 h-10 rounded-2xl flex items-center justify-center disabled:opacity-35 transition-all active:scale-92 flex-shrink-0 shadow-md"
+            style={{ background: input.trim() ? 'linear-gradient(135deg, var(--primary), color-mix(in srgb, var(--primary) 80%, var(--accent)))' : 'var(--muted)' }}>
             {loading ? <Loader2 className="w-4 h-4 text-white animate-spin"/> : <Send className="w-4 h-4 text-white"/>}
           </button>
         </div>

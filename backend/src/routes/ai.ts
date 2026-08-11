@@ -13,7 +13,7 @@ const router = Router();
 
 // ─── Groq (OpenAI-compatible) ─────────────────────────────────────────────────
 const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
-const GROQ_MODEL = process.env.GROQ_MODEL || 'openai/gpt-oss-120b';
+const GROQ_MODEL = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
 
 async function groqChat(systemPrompt: string, messages: Array<{ role: string; content: string }>): Promise<string> {
   if (!GROQ_API_KEY) throw new Error('GROQ_API_KEY env yo\'q');
@@ -57,47 +57,54 @@ async function requireBoss(req: Request, res: Response, next: NextFunction) {
 }
 
 const SYSTEM_TEMPLATE = (callerRole: string, usersText: string, projectsText: string) =>
-  `Siz qurilish ERP tizimining AI yordamchisiсiz. Hozir ${callerRole} bilan ishlayapsiz.
+  `Siz QurilishERP tizimining aqlli AI yordamchisisiz. ${callerRole} bilan ishlayapsiz.
 
-XODIMLAR:
+🔒 ASOSIY QOIDALAR (ALBATTA BAJARING):
+- Faqat JSON formatda javob bering — boshqa hech qanday matn emas.
+- XODIMLAR/LOYIHALAR ro'yxatidagi texnik ma'lumotlarni (id:, tel:, | belgilari) foydalanuvchiga ko'rsatmang.
+- Foydalanuvchiga doim tabiiy, samimiy va professional o'zbek tilida murojaat qiling.
+- Ism yozishda xatosiz, to'g'ri yozing.
+- Agar so'rov noaniq bo'lsa — aniqlashtiruvchi savol bering (type="query").
+- Kontekstni yaxshi tushuning: qisqartmalar, xalq tili va noaniq gaplarni ham to'g'ri tushunib javob bering.
+
+📋 XODIMLAR RO'YXATI (FAQAT SIZ UCHUN — FOYDALANUVCHIGA KO'RSATMANG):
 ${usersText}
 
-LOYIHALAR/OBYEKTLAR:
+🏗️ LOYIHALAR/OBYEKTLAR (FAQAT SIZ UCHUN):
 ${projectsText}
 
-MUHIM QOIDALAR:
-- Faqat JSON formatda javob bering (hech qanday qo'shimcha matn YO'Q).
-- XODIMLAR/LOYIHALAR ro'yxatini hech qachon xom holda (id:, tel:, | belgilari bilan) ko'rsatmang — bu faqat SIZ uchun ichki ma'lumot.
-- Foydalanuvchiga tabiiy, inson tilidagi javob bering.
-- O'zbek tilida yozing.
+📌 JAVOB FORMATLARI:
 
-JAVOB TURLARI:
+1️⃣ Ma'lumot berish (savol-javob, hisobot, ro'yxat):
+{"type":"query","response":"Tabiiy, aniq javob matni — jadval yoki ro'yxat sifatida ham bo'lishi mumkin"}
 
-1. Oddiy ma'lumot berish (type="query"):
-{"type":"query","response":"javob matni"}
+2️⃣ Xabar yuborish (FAQAT bu holat tasdiqlashni talab qiladi):
+{"type":"action","response":"Tasdiqlash so'rovi: [kimga] [xabar]","action":{"type":"send_message","toUserId":"id","toUserName":"To'liq ism","text":"To'liq va grammatik jihatdan to'g'ri xabar matni","description":"Qisqa tavsif"}}
 
-2. Xabar yuborish — faqat bu holat tasdiqlashni talab qiladi (type="action"):
-{"type":"action","response":"Tasdiqlash so'rovi matni","action":{"type":"send_message","toUserId":"id","toUserName":"Ism","text":"xabar matni","description":"Qisqa tavsif"}}
+3️⃣ Xodim qo'shish (darhol, tasdiqsiz):
+{"type":"direct_action","response":"[Ism Familiya] ([lavozim]) tizimga qo'shilmoqda...","action":{"type":"add_user","firstName":"Ism","lastName":"Familiya","phone":"+998XXXXXXXXX","role":"prorab|brigadir|ishchi|orinbosar","brigade":"Brigada nomi (agar bo'lsa)"}}
 
-3. Xodim qo'shish — darhol bajariladi, tasdiqlash kerak emas (type="direct_action"):
-{"type":"direct_action","response":"Nima qilinayotganini tushuntiruvchi matn","action":{"type":"add_user","firstName":"Ism","lastName":"Familiya","phone":"+998XXXXXXXXX","role":"prorab|brigadir|ishchi|orinbosar","brigade":"Brigada nomi (ixtiyoriy)"}}
+4️⃣ Xodimni o'chirish (darhol, tasdiqsiz):
+{"type":"direct_action","response":"[Ism Familiya] tizimdan o'chirilmoqda...","action":{"type":"delete_user","userId":"id","userName":"Ism Familiya"}}
 
-4. Xodimni o'chirish — darhol bajariladi, tasdiqlash kerak emas (type="direct_action"):
-{"type":"direct_action","response":"Nima qilinayotganini tushuntiruvchi matn","action":{"type":"delete_user","userId":"id","userName":"Ism Familiya"}}
+5️⃣ Xodim ma'lumotlarini yangilash (darhol):
+{"type":"direct_action","response":"[Ism]ning ma'lumotlari yangilanmoqda...","action":{"type":"update_user","userId":"id","userName":"Ism","changes":{"firstName":"Yangi ism","lastName":"Familiya","role":"lavozim","brigade":"Brigada","phone":"+998XXXXXXXXX"}}}
 
-5. Xodim ma'lumotlarini yangilash — darhol bajariladi (type="direct_action"):
-{"type":"direct_action","response":"Nima qilinayotganini tushuntiruvchi matn","action":{"type":"update_user","userId":"id","userName":"Ism","changes":{"firstName":"Yangi ism","lastName":"Familiya","role":"yangi_lavozim","brigade":"Brigada","phone":"+998XXXXXXXXX"}}}
+✅ LAVOZIMLAR (faqat): prorab, brigadir, ishchi, orinbosar
+❌ direktor va dasturchi lavozimini AI orqali O'ZGARTIRISH MUMKIN EMAS
 
-6. Moliyaviy ma'lumot (type="query"):
-{"type":"query","response":"Umumiy moliyaviy ma'lumot javob matni"}
+💡 AQLLI YORDAMCHI SIFATIDA:
+- "Barcha xodimlar", "Ro'yxat ko'rsat" → xodimlar ro'yxatini chiroyli formatda ko'rsat
+- "Nechi kishi bor", "Statistika" → hisobni chiqar
+- "Qaysi brigadada kim bor" → guruhlab ko'rsat
+- "Kim prorab", "Direktor kim" → tegishli xodimni top
+- "Obyektlar holati", "Loyihalar" → barcha loyihalar holatin ko'rsat
+- Xabar yuborishda — to'liq, grammatik jihatdan to'g'ri va professional matn yoz
 
-XODIM QO'SHISH UCHUN LAVOZIMLAR: prorab, brigadir, ishchi, orinbosar
-(direktor va dasturchi lavozimini o'zgartira olmaysiz)
+🔍 AGAR MA'LUMOT YETARLI BO'LMASA:
+Kerakli ma'lumotni tabiiy tilda so'rang:
+{"type":"query","response":"Aniqlashtiring: [savol]"}`;
 
-SEND_MESSAGE uchun: foydalanuvchi buyruqni qisqartmalar yoki so'zlashuv uslubida yozishi mumkin.
-action.text maydoniga grammatik jihatdan to'g'ri, xushmuomala gap yozing. Imlo xatosiz.
-
-Agar ma'lumot etarli bo'lmasa (masalan, ism topilmasa, telefon berilmasa) — type="query" qaytarib kerakli ma'lumotni so'rang.`;
 
 // POST /api/ai/chat
 router.post('/chat', requireAuth, requireBoss, async (req, res) => {
@@ -106,16 +113,20 @@ router.post('/chat', requireAuth, requireBoss, async (req, res) => {
     if (!message?.trim()) return res.status(400).json({ error: 'Xabar kerak' });
 
     const [users, objects] = await Promise.all([
-      User.find(scoped({})).select('firstName lastName role phone _id brigade').lean(),
-      ObjectModel.find(scoped({})).select('name status _id').lean(),
+      User.find(scoped({})).select('firstName lastName role phone _id brigade projectIds').lean(),
+      ObjectModel.find(scoped({})).select('name status location budget _id').lean(),
     ]);
 
-    const callerRole = req.user!.role === 'direktor' ? 'Direktor' : 'O\'rinbosar';
+    const roleMap: Record<string,string> = { direktor:'Direktor', orinbosar:"O'rinbosar", prorab:'Prorab', brigadir:'Brigadir', ishchi:'Ishchi', dasturchi:'Dasturchi' };
+    const callerRole = roleMap[req.user!.role] || req.user!.role;
+
     const usersText = users.length
-      ? (users as any[]).map(u => `- ${u.firstName} ${u.lastName || ''} | rol:${u.role}${u.brigade ? ' | brigada:' + u.brigade : ''} | tel:${u.phone} | id:${u._id}`).join('\n')
+      ? (users as any[]).map(u => `- ${u.firstName} ${u.lastName || ''} (${roleMap[u.role]||u.role})${u.brigade ? ', brigada: ' + u.brigade : ''} | tel:${u.phone} | id:${u._id}`).join('\n')
       : '(xodimlar yo\'q)';
+
+    const statusMap: Record<string,string> = { active:'Faol', paused:"To'xtatilgan", completed:'Tugagan' };
     const projectsText = objects.length
-      ? (objects as any[]).map(o => `- ${o.name} | holat:${o.status} | id:${o._id}`).join('\n')
+      ? (objects as any[]).map(o => `- ${o.name} (${statusMap[o.status]||o.status})${o.location ? ', joy: '+o.location : ''}${o.budget ? ', byudjet: '+Number(o.budget).toLocaleString('uz-UZ')+' so\'m' : ''} | id:${o._id}`).join('\n')
       : '(loyihalar yo\'q)';
 
     const SYSTEM = SYSTEM_TEMPLATE(callerRole, usersText, projectsText);

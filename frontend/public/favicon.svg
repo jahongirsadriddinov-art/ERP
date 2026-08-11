@@ -1,17 +1,24 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
   <defs>
     <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#D9460F"/>
-      <stop offset="100%" stop-color="#b23a0c"/>
+      <stop offset="0%" stop-color="#1B3A6B"/>
+      <stop offset="100%" stop-color="#0d2149"/>
+    </linearGradient>
+    <linearGradient id="a" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#D2440F"/>
+      <stop offset="100%" stop-color="#a83509"/>
     </linearGradient>
   </defs>
   <rect width="64" height="64" rx="16" fill="url(#g)"/>
-  <g fill="none" stroke="#ffffff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">
-    <rect x="18" y="14" width="18" height="36" rx="1.5"/>
-    <path d="M36 50V24l10 6v20"/>
-    <line x1="23" y1="21" x2="27" y2="21"/>
-    <line x1="23" y1="28" x2="27" y2="28"/>
-    <line x1="23" y1="35" x2="27" y2="35"/>
-    <line x1="23" y1="42" x2="27" y2="42"/>
-  </g>
+  <!-- Building body -->
+  <rect x="14" y="18" width="22" height="32" rx="2" fill="none" stroke="rgba(255,255,255,0.9)" stroke-width="2.8"/>
+  <!-- Windows (left building) -->
+  <line x1="20" y1="26" x2="25" y2="26" stroke="rgba(255,255,255,0.7)" stroke-width="2" stroke-linecap="round"/>
+  <line x1="20" y1="33" x2="25" y2="33" stroke="rgba(255,255,255,0.7)" stroke-width="2" stroke-linecap="round"/>
+  <line x1="20" y1="40" x2="25" y2="40" stroke="rgba(255,255,255,0.7)" stroke-width="2" stroke-linecap="round"/>
+  <!-- Right tower -->
+  <path d="M36 50V26l12 7v17" fill="none" stroke="rgba(255,255,255,0.9)" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Accent dot — orange brand color -->
+  <circle cx="50" cy="16" r="7" fill="url(#a)"/>
+  <text x="50" y="20.5" font-size="9" text-anchor="middle" fill="white" font-family="sans-serif" font-weight="bold">✓</text>
 </svg>

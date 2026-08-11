@@ -7,6 +7,7 @@ import Otp from '../models/Otp';
 import { bot } from '../services/bot';
 import { sendOtpSms } from '../services/eskizService';
 import { scoped, stamped } from '../middleware/scope';
+import { requireAuth, requireOwnerOrAdmin } from '../middleware/auth';
 import { normalizePhone, isValidUzPhone, hashPassword, verifyPassword } from '../utils/tokens';
 import { checkRate } from '../utils/rateLimit';
 
@@ -330,6 +331,12 @@ router.post('/login', async (req, res) => {
 // Faqat dasturchi raqami tekshiriladi, parol doimiy (o'zgarmas). Muvaffaqiyatli
 // bo'lsa super-admin JWT beriladi (isDeveloper=true, companyId yo'q — hamma firmani ko'radi).
 router.post('/dev-login', async (req, res) => {
+  // Brute-force himoyasi: 5 urinish / 10 daqiqa / IP bo'yicha
+  const ip = clientIp(req);
+  const ipCheck = checkRate(`devlogin:ip:${ip}`, 5, 10 * 60 * 1000);
+  if (!ipCheck.allowed) {
+    return res.status(429).json({ error: `Juda ko'p urinish. ${ipCheck.retryAfterSec} soniyadan keyin qayta urining.` });
+  }
   try {
     const { phone, password } = req.body;
     if (!phone || !password) {
@@ -380,14 +387,13 @@ router.post('/dev-login', async (req, res) => {
 });
 
 // Admin: Add new user
-router.post('/users', async (req, res) => {
+router.post('/users', requireAuth, requireOwnerOrAdmin, async (req, res) => {
   const { firstName, lastName, phone, role, brigade, projectIds } = req.body;
 
   if (!firstName || !phone || !role) {
     return res.status(400).json({ error: 'firstName, phone va role kiritilishi shart' });
   }
 
-  // Note: we'd ideally check if the caller is a director/deputy here using auth middleware
   let formattedPhone = phone.replace(/\s+/g, '');
   if (!formattedPhone.startsWith('+')) {
     formattedPhone = '+' + formattedPhone;
@@ -426,7 +432,7 @@ router.post('/users', async (req, res) => {
 });
 
 // Admin: Update user
-router.put('/users/:id', async (req, res) => {
+router.put('/users/:id', requireAuth, requireOwnerOrAdmin, async (req, res) => {
   const { firstName, lastName, phone, role, brigade, projectIds } = req.body;
   try {
     const user = await User.findOne(scoped({ _id: req.params.id }));
@@ -470,7 +476,7 @@ router.put('/users/:id', async (req, res) => {
 });
 
 // Admin: Delete user
-router.delete('/users/:id', async (req, res) => {
+router.delete('/users/:id', requireAuth, requireOwnerOrAdmin, async (req, res) => {
   try {
     const user = await User.findOneAndDelete(scoped({ _id: req.params.id }));
     if (!user) return res.status(404).json({ error: 'Foydalanuvchi topilmadi' });

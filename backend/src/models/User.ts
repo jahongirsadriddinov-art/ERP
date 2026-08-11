@@ -44,4 +44,8 @@ const UserSchema: Schema = new Schema({
   language: { type: String, enum: ['uz', 'uz-cyrl', 'ru'], default: 'uz' }
 }, { timestamps: true });
 
+// Global search uchun indekslar
+UserSchema.index({ companyId: 1, firstName: 1, lastName: 1 });
+UserSchema.index({ firstName: 'text', lastName: 'text', phone: 'text' });
+
 export default mongoose.model<IUser>('User', UserSchema);

@@ -11,6 +11,7 @@ import User from '../models/User';
 import { emitToUser, emitToGroup } from '../services/socket';
 import { scoped, stamped } from '../middleware/scope';
 import { bot } from '../services/bot';
+import { uploadFileToCloud } from '../config/cloudinary';
 
 if (ffmpegPath) ffmpeg.setFfmpegPath(ffmpegPath);
 
@@ -161,14 +162,16 @@ export async function relayMessageToTelegram(chatId: string, senderName: string,
   }
 }
 
-// Media yuklash — server URL qaytaradi (blob emas, hamma ko'radi)
-router.post('/upload', upload.single('file'), (req, res) => {
+// Media yuklash — Cloudinary mavjud bo'lsa shunga, yo'q bo'lsa localga
+router.post('/upload', upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Fayl yuklanmadi' });
-  res.json({
-    url: `/uploads/${req.file.filename}`,
-    fileName: req.file.originalname,
-    fileSize: req.file.size,
-  });
+  try {
+    const { url } = await uploadFileToCloud(req.file.path, 'qurilish-chat');
+    res.json({ url, fileName: req.file.originalname, fileSize: req.file.size });
+  } catch {
+    // Cloudinary muvaffaqiyatsiz bo'lsa local URL qaytaradi
+    res.json({ url: `/uploads/${req.file.filename}`, fileName: req.file.originalname, fileSize: req.file.size });
+  }
 });
 
 // Foydalanuvchi xabarlari: DM + a'zo bo'lgan guruhlar

@@ -3,23 +3,13 @@
 
 @layer utilities {
   .scrollbar-hide::-webkit-scrollbar { display: none; }
-  /* MUHIM: overflow-x ANIQ "hidden" qilinmasa, CSS spec bo'yicha overflow-y:auto
-     bilan birga turgan overflow-x:visible avtomatik "auto"ga aylanadi (bitta
-     o'q auto/scroll bo'lsa, ikkinchisi visible qololmaydi) — ya'ni bu klass
-     ishlatilgan HAR BIR vertikal-scroll konteyner (deyarli hammasi shu klassni
-     ishlatadi) o'zining alohida gorizontal scroll konteksitini ham ochib
-     qo'yardi, root html/body'dagi overflow-x:hidden'dan mustaqil ravishda —
-     shu sabab mobil/planshetda tasodifiy "yon tomonga surilish" paydo bo'lardi
-     (Login sahifasi, chat ro'yxati va h.k.). Bu klass hamma joyda faqat
-     VERTIKAL scroll uchun ishlatiladi — gorizontalni hidden qilish xavfsiz. */
   .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; overflow-x: hidden; }
 
-  /* ── Zamonaviy toza yuzalar (dark-aware, var asosida) ───────────────── */
-  /* Eski "glass" nomlar saqlanadi — endi ular tekis, toza kartalar (yangi uslub). */
+  /* ── Zamonaviy premium yuzalar ───────────────────────────────────────── */
   .glass {
-    background: color-mix(in srgb, var(--card) 82%, transparent);
-    backdrop-filter: blur(14px) saturate(1.4);
-    -webkit-backdrop-filter: blur(14px) saturate(1.4);
+    background: color-mix(in srgb, var(--card) 85%, transparent);
+    backdrop-filter: blur(20px) saturate(1.6);
+    -webkit-backdrop-filter: blur(20px) saturate(1.6);
     border-color: var(--border);
   }
 
@@ -30,8 +20,8 @@
     border-radius: var(--radius);
     box-shadow: var(--shadow-sm);
     transition: background-color 0.3s ease, border-color 0.3s ease,
-                box-shadow 0.28s cubic-bezier(0.2,0.8,0.2,1),
-                transform 0.28s cubic-bezier(0.2,0.8,0.2,1);
+                box-shadow 0.26s cubic-bezier(0.2,0.8,0.2,1),
+                transform 0.26s cubic-bezier(0.2,0.8,0.2,1);
   }
 
   .surface-hover:hover,
@@ -44,33 +34,36 @@
     background: var(--card);
     border: 1px solid var(--border);
     border-radius: calc(var(--radius) + 6px);
-    box-shadow: var(--shadow-lg);
+    box-shadow: var(--shadow-xl);
   }
 
-  /* Ultra-thin floating pill (bottom nav) — har ikkala rejimda ham quyuq */
+  /* Premium bottom nav glass pill */
   .liquid-glass,
   .liquid-glass-dark {
-    background: rgba(10,14,28,0.82);
-    backdrop-filter: blur(28px) saturate(1.8);
-    -webkit-backdrop-filter: blur(28px) saturate(1.8);
-    border: 0.5px solid rgba(255,255,255,0.10);
-    box-shadow: 0 8px 32px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06);
+    background: rgba(8, 12, 24, 0.80);
+    backdrop-filter: blur(32px) saturate(1.8) brightness(1.05);
+    -webkit-backdrop-filter: blur(32px) saturate(1.8) brightness(1.05);
+    border: 0.5px solid rgba(255,255,255,0.12);
+    box-shadow:
+      0 8px 32px rgba(0,0,0,0.40),
+      0 2px 8px rgba(0,0,0,0.20),
+      inset 0 1px 0 rgba(255,255,255,0.08);
   }
 
   .glass-btn {
     background: color-mix(in srgb, var(--foreground) 6%, transparent);
     border: 1px solid var(--border);
     border-radius: calc(var(--radius) - 2px);
-    transition: all 0.2s cubic-bezier(0.2,0.8,0.2,1);
+    transition: all 0.18s cubic-bezier(0.2,0.8,0.2,1);
   }
   .glass-btn:hover { background: color-mix(in srgb, var(--foreground) 10%, transparent); }
 
-  /* ── Yangi dizayn primitivlari ──────────────────────────────────────── */
+  /* ── List rows ────────────────────────────────────────────────────────── */
   .list-row {
     display: flex; align-items: center; gap: 0.875rem;
-    padding: 0.8rem 1rem;
+    padding: 0.85rem 1rem;
     border-bottom: 1px solid var(--border);
-    transition: background-color 0.16s ease;
+    transition: background-color 0.15s ease;
     cursor: pointer;
   }
   .list-row:last-child { border-bottom: 0; }
@@ -91,34 +84,48 @@
     color: var(--accent);
   }
 
+  /* ── Buttons ─────────────────────────────────────────────────────────── */
   .btn {
     display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem;
-    border-radius: calc(var(--radius) - 1px);
+    border-radius: calc(var(--radius) - 2px);
     font-weight: 600;
     transition: transform 0.12s cubic-bezier(0.34,1.56,0.64,1),
-                box-shadow 0.2s ease, background-color 0.18s ease, opacity 0.18s ease;
+                box-shadow 0.18s ease, background-color 0.16s ease, opacity 0.16s ease;
   }
   .btn:active { transform: scale(0.96); }
-  .btn:disabled { opacity: 0.55; pointer-events: none; }
-  .btn-primary { background: var(--primary); color: var(--primary-foreground); }
-  .btn-primary:hover { box-shadow: 0 4px 16px color-mix(in srgb, var(--primary) 40%, transparent); }
-  .btn-accent { background: var(--accent); color: var(--accent-foreground); }
-  .btn-accent:hover { box-shadow: 0 4px 16px color-mix(in srgb, var(--accent) 40%, transparent); }
-  .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--foreground); }
-  .btn-outline:hover { background: color-mix(in srgb, var(--foreground) 5%, transparent); }
+  .btn:disabled { opacity: 0.5; pointer-events: none; }
+  .btn-primary {
+    background: linear-gradient(135deg, var(--primary), color-mix(in srgb, var(--primary) 85%, #000));
+    color: var(--primary-foreground);
+    box-shadow: 0 2px 8px color-mix(in srgb, var(--primary) 30%, transparent);
+  }
+  .btn-primary:hover { box-shadow: 0 6px 20px color-mix(in srgb, var(--primary) 45%, transparent); transform: translateY(-1px); }
+  .btn-accent {
+    background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 85%, #000));
+    color: var(--accent-foreground);
+    box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 30%, transparent);
+  }
+  .btn-accent:hover { box-shadow: 0 6px 20px color-mix(in srgb, var(--accent) 45%, transparent); transform: translateY(-1px); }
+  .dark .btn-accent {
+    background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 75%, #1a0800));
+    box-shadow: 0 2px 12px color-mix(in srgb, var(--accent) 40%, transparent);
+  }
+  .dark .btn-accent:hover { box-shadow: 0 6px 24px color-mix(in srgb, var(--accent) 55%, transparent); }
+  .btn-outline { background: transparent; border: 1.5px solid var(--border); color: var(--foreground); }
+  .btn-outline:hover { background: color-mix(in srgb, var(--foreground) 5%, transparent); border-color: color-mix(in srgb, var(--foreground) 25%, transparent); }
   .btn-ghost { background: transparent; color: var(--muted-foreground); }
   .btn-ghost:hover { background: color-mix(in srgb, var(--foreground) 6%, transparent); color: var(--foreground); }
 
-  /* Desktop/tablet header nav — capsule "liquid glass" pill, theme-aware.
-     Needs real tonal + elevation contrast against the header's own .glass
-     surface, or the pill boundary disappears (color-mix tint alone isn't enough). */
+  /* Desktop nav capsule */
   .nav-pill-desktop {
-    background: color-mix(in srgb, var(--background) 45%, transparent);
-    border: 1px solid color-mix(in srgb, var(--foreground) 15%, transparent);
+    background: color-mix(in srgb, var(--background) 50%, transparent);
+    border: 1px solid color-mix(in srgb, var(--foreground) 12%, transparent);
     box-shadow:
-      0 1px 3px rgba(0,0,0,0.14),
-      0 6px 16px rgba(0,0,0,0.12),
-      inset 0 1px 0 color-mix(in srgb, var(--background) 55%, transparent);
+      0 1px 3px rgba(0,0,0,0.10),
+      0 4px 12px rgba(0,0,0,0.08),
+      inset 0 1px 0 color-mix(in srgb, var(--background) 60%, transparent);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
   }
 
   .chip {
@@ -131,82 +138,78 @@
     text-transform: uppercase; color: var(--muted-foreground);
   }
 
-  /* ── iOS 26 "Liquid Glass" bottom bar ─────────────────────────────────── */
+  /* ── iOS Premium Bottom Navigation Bar ────────────────────────────────── */
   .ios-bottom-bar {
-    @apply fixed left-4 right-4 z-50 sm:hidden rounded-[2rem];
-    bottom: calc(env(safe-area-inset-bottom, 16px) + 14px);
-    padding: 0.45rem 0.6rem;
+    @apply fixed left-3 right-3 z-50 sm:hidden;
+    bottom: calc(env(safe-area-inset-bottom, 12px) + 12px);
+    padding: 6px 8px;
+    border-radius: 26px;
     background:
-      linear-gradient(180deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0.02) 35%, rgba(0,0,0,0.10) 100%),
-      rgba(12,16,30,0.58);
-    /* Oldin blur(32px) saturate(2.2) brightness(1.08) edi — 3 ta filtr birga,
-       juda yuqori saturate qiymati bilan. Bu og'ir birikma har bo'lim
-       almashganda (sirg'anuvchi "liquid pill" animatsiyasi shu panel ICHIDA
-       ishlaydi) GPU'ni qattiq band qilardi va ba'zi telefonlarda binafsha
-       rangli chaqnash/artefakt sifatida ko'rinishi mumkin edi. Kamaytirildi. */
-    backdrop-filter: blur(24px) saturate(1.6);
-    -webkit-backdrop-filter: blur(24px) saturate(1.6);
-    border: 1px solid rgba(255,255,255,0.18);
+      linear-gradient(180deg,
+        rgba(255,255,255,0.16) 0%,
+        rgba(255,255,255,0.04) 40%,
+        rgba(0,0,0,0.08) 100%
+      ),
+      rgba(10,14,26,0.70);
+    backdrop-filter: blur(28px) saturate(1.8) brightness(1.06);
+    -webkit-backdrop-filter: blur(28px) saturate(1.8) brightness(1.06);
+    border: 1px solid rgba(255,255,255,0.20);
     box-shadow:
-      0 22px 46px rgba(0,0,0,0.40),
-      0 4px 14px rgba(0,0,0,0.28),
-      inset 0 1.5px 1px rgba(255,255,255,0.45),
-      inset 0 -1px 8px rgba(255,255,255,0.05);
+      0 24px 48px rgba(0,0,0,0.45),
+      0 6px 18px rgba(0,0,0,0.30),
+      inset 0 1.5px 0 rgba(255,255,255,0.50),
+      inset 0 -1px 6px rgba(255,255,255,0.06);
     transform: translateY(0) scale(1);
     opacity: 1;
-    transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.32s ease;
-    /* Panelni doim o'z GPU qatlamida ushlab turadi — har safar bo'lim
-       almashganda backdrop-filter qatlami qayta yaratilib, chaqnash
-       hosil qilmasin uchun. */
-    will-change: transform;
+    transition:
+      transform 0.46s cubic-bezier(0.34, 1.56, 0.64, 1),
+      opacity 0.30s ease;
+    will-change: transform, opacity;
   }
   .ios-bottom-bar-hidden {
-    transform: translateY(140%) scale(0.9);
+    transform: translateY(130%) scale(0.88);
     opacity: 0;
     pointer-events: none;
   }
-  /* Sliding active-tab pill — the "liquid" glass blob that morphs between tabs */
+
+  /* Active tab "liquid" pill morphs between tabs */
   .liquid-pill {
-    background: linear-gradient(180deg, rgba(255,255,255,0.30), rgba(255,255,255,0.08));
+    background: linear-gradient(180deg,
+      rgba(255,255,255,0.34) 0%,
+      rgba(255,255,255,0.12) 100%
+    );
     box-shadow:
-      inset 0 1px 1px rgba(255,255,255,0.55),
-      inset 0 -2px 4px rgba(255,255,255,0.08),
-      0 2px 12px rgba(255,255,255,0.18);
+      inset 0 1px 1px rgba(255,255,255,0.60),
+      inset 0 -2px 4px rgba(255,255,255,0.10),
+      0 3px 14px rgba(255,255,255,0.20),
+      0 1px 4px rgba(0,0,0,0.12);
     will-change: transform;
   }
+
   .pt-safe-top { padding-top: env(safe-area-inset-top, 0px); }
 
   .btn-press {
-    transition: transform 0.12s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.2s ease, background 0.15s ease;
+    transition: transform 0.12s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.18s ease, background 0.14s ease;
   }
-  .btn-press:active { transform: scale(0.92) !important; }
-  /* "all" emas — faqat animatsiyalanadigan xususiyatlar (brauzer har bir
-     transitionda hamma CSS xususiyatni kuzatib turishi shart emas, shu
-     tufayli sahifa umuman silliqroq va tezroq ishlaydi). */
+  .btn-press:active { transform: scale(0.93) !important; }
+
   .liquid-transition {
     transition-property: transform, opacity, background-color, border-color, box-shadow, color;
-    transition-duration: 0.32s;
+    transition-duration: 0.28s;
     transition-timing-function: cubic-bezier(0.2,0.8,0.2,1);
   }
   .active\:scale-98:active { transform: scale(0.98); }
 }
 
-/* ── Full-height root ────────────────────────────────────────────────── */
-/* width:100% + overflow-x:hidden explicitly (not just the overflow:hidden
-   shorthand) — a fixed-position child (any modal, the bottom nav, dropdowns
-   all use position:fixed) sits outside html/body's normal box and can still
-   force a horizontal rubber-band pan on mobile Safari/Chrome if its content
-   is ever a pixel wider than the viewport, even though overflow:hidden
-   already blocks a true scrollbar. overscroll-behavior-x:none kills that
-   rubber-band gesture outright regardless of the cause. */
-html, body, #root { height: 100%; width: 100%; overflow: hidden; overflow-x: hidden; overscroll-behavior-x: none; max-width: 100vw; }
+/* ── Root layout ─────────────────────────────────────────────────────── */
+html, body, #root {
+  height: 100%; width: 100%;
+  overflow: hidden; overflow-x: hidden;
+  overscroll-behavior-x: none;
+  max-width: 100vw;
+}
 
-/* Matnni belgilash (select) faqat haqiqiy kiritish maydonlarida ishlasin —
-   jadval/karta/xabar matnini uzoq bosib tasodifan belgilab qo'yish
-   (ayniqsa mobil/planshetda) UX'ni buzadi. Ikki marta bosganda brauzer
-   avtomatik zoom qilishining oldi ham olinadi — pinch (ikki barmoq bilan)
-   zoom bunga ta'sir qilmaydi, u alohida gesture va viewport meta'da
-   cheklanmagan. */
+/* Touch optimizations */
 body {
   background: var(--background);
   -webkit-tap-highlight-color: transparent;
@@ -220,55 +223,97 @@ input, textarea, [contenteditable="true"], [contenteditable=""] {
   user-select: text;
 }
 
-/* ── with-bg context (foydalanuvchi rasm fon qo'ygan) ─────────────────── */
-/* Yuzalar yetarlicha quyuq bo'lsin — fon-rasm ustida matn o'qilishi shart. */
-/* MUHIM: Tailwind opasity-modifikatorli klasslar (masalan "bg-background/50",
-   "bg-card/60") DOM'da xuddi shu satr sifatida chiqadi, lekin CSS'da
-   ".bg-background" oddiy klass selektori bunday nomlarni umuman
-   TUTMAYDI — chunki generatsiya qilingan haqiqiy klass nomi
-   ".bg-background\/50" (boshqa selektor). Natijada bu skrim qoidalari
-   shunday elementlarda ishlamay qolar, foydalanuvchi tanlagan fon (ayniqsa
-   yorqin surat/gradient) ustida matn o'qib bo'lmas darajada xira ko'rinardi
-   (masalan bo'sh chat paneli, Profil bo'lim kartalari). Substring
-   ([class*=]) selektor barcha variantlarni (bilan yoki opacity
-   qo'shimchasisiz) birdek tutadi.                                        */
-.with-bg header { background: color-mix(in srgb, var(--card) 90%, transparent) !important; backdrop-filter: blur(28px) saturate(1.6) !important; -webkit-backdrop-filter: blur(28px) saturate(1.6) !important; }
-.with-bg [class*="glass-card"], .with-bg [class*="bg-card"], .with-bg [class*="surface"], .with-bg [class*="stat-card"] { background: color-mix(in srgb, var(--card) 94%, transparent) !important; backdrop-filter: blur(16px) !important; -webkit-backdrop-filter: blur(16px) !important; }
-.with-bg [class*="bg-background"] { background: color-mix(in srgb, var(--background) 86%, transparent) !important; backdrop-filter: blur(12px) !important; }
-.with-bg [class*="bg-muted"], .with-bg [class*="bg-secondary"] { background: color-mix(in srgb, var(--muted) 88%, transparent) !important; }
-/* Kontent zonasi — fon-rasm ustida matn o'qilishi uchun yengil skrim */
-.with-bg main { background: color-mix(in srgb, var(--background) 86%, transparent); }
+/* ── Background image context ───────────────────────────────────────── */
+.with-bg header {
+  background: color-mix(in srgb, var(--card) 90%, transparent) !important;
+  backdrop-filter: blur(28px) saturate(1.6) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(1.6) !important;
+}
+.with-bg [class*="glass-card"],
+.with-bg [class*="bg-card"],
+.with-bg [class*="surface"],
+.with-bg [class*="stat-card"] {
+  background: color-mix(in srgb, var(--card) 94%, transparent) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+}
+.with-bg [class*="bg-background"] {
+  background: color-mix(in srgb, var(--background) 88%, transparent) !important;
+  backdrop-filter: blur(12px) !important;
+}
+.with-bg [class*="bg-muted"],
+.with-bg [class*="bg-secondary"] {
+  background: color-mix(in srgb, var(--muted) 90%, transparent) !important;
+}
+.with-bg main { background: color-mix(in srgb, var(--background) 88%, transparent); }
 
-/* ── Animated blobs ──────────────────────────────────────────────────── */
+/* ── Animated blobs ─────────────────────────────────────────────────── */
 @keyframes blobFloat {
   0%,100% { transform: translate(0,0) scale(1); }
-  33%     { transform: translate(30px,-20px) scale(1.05); }
-  66%     { transform: translate(-20px,15px) scale(0.97); }
+  33%     { transform: translate(28px,-18px) scale(1.06); }
+  66%     { transform: translate(-18px,14px) scale(0.96); }
 }
-.blob-anim      { animation: blobFloat 14s ease-in-out infinite; }
-.blob-anim-slow { animation: blobFloat 22s ease-in-out infinite reverse; }
+.blob-anim      { animation: blobFloat 16s ease-in-out infinite; }
+.blob-anim-slow { animation: blobFloat 24s ease-in-out infinite reverse; }
 
-/* ── Page / modal animations ─────────────────────────────────────────── */
-@keyframes slideUpFade { 0% { opacity:0; transform: translateY(22px) scale(0.96);} 100%{opacity:1; transform:translateY(0) scale(1);} }
-.animate-slide-up-fade { animation: slideUpFade 0.42s cubic-bezier(0.16,1,0.3,1) forwards; }
-@keyframes popIn { 0%{opacity:0; transform:scale(0.84);} 50%{transform:scale(1.05);} 80%{transform:scale(0.97);} 100%{opacity:1; transform:scale(1);} }
-.animate-pop-in { animation: popIn 0.40s cubic-bezier(0.16,1,0.3,1) forwards; }
-@keyframes slideInRight { 0%{opacity:0; transform:translateX(36px);} 100%{opacity:1; transform:translateX(0);} }
-.animate-slide-in-right { animation: slideInRight 0.36s cubic-bezier(0.16,1,0.3,1) forwards; }
+/* ── Page & modal animations ────────────────────────────────────────── */
+@keyframes slideUpFade {
+  from { opacity:0; transform: translateY(20px) scale(0.97); }
+  to   { opacity:1; transform: translateY(0) scale(1); }
+}
+.animate-slide-up-fade { animation: slideUpFade 0.38s cubic-bezier(0.16,1,0.3,1) forwards; }
+
+@keyframes popIn {
+  0%  { opacity:0; transform:scale(0.82); }
+  55% { transform:scale(1.04); }
+  80% { transform:scale(0.98); }
+  100%{ opacity:1; transform:scale(1); }
+}
+.animate-pop-in { animation: popIn 0.38s cubic-bezier(0.16,1,0.3,1) forwards; }
+
+@keyframes slideInRight {
+  from { opacity:0; transform:translateX(32px); }
+  to   { opacity:1; transform:translateX(0); }
+}
+.animate-slide-in-right { animation: slideInRight 0.32s cubic-bezier(0.16,1,0.3,1) forwards; }
+
 @keyframes fadeIn { from{opacity:0;} to{opacity:1;} }
-.animate-fade-in { animation: fadeIn 0.22s ease forwards; }
-@keyframes shimmer { 0%{background-position:-200% 0;} 100%{background-position:200% 0;} }
-.shimmer { background: linear-gradient(90deg, transparent 25%, color-mix(in srgb, var(--foreground) 8%, transparent) 50%, transparent 75%); background-size: 200% 100%; animation: shimmer 1.8s ease-in-out infinite; }
-@keyframes navPop { 0%{transform:scale(1);} 35%{transform:scale(0.86);} 65%{transform:scale(1.15);} 100%{transform:scale(1);} }
-.nav-pop { animation: navPop 0.38s cubic-bezier(0.34,1.56,0.64,1) forwards; }
+.animate-fade-in { animation: fadeIn 0.20s ease forwards; }
 
-/* ── Table (dark-aware) ──────────────────────────────────────────────── */
+@keyframes shimmer {
+  0%  { background-position: 200% 0; }
+  100%{ background-position:-200% 0; }
+}
+.shimmer {
+  background: linear-gradient(90deg,
+    transparent 25%,
+    color-mix(in srgb, var(--foreground) 8%, transparent) 50%,
+    transparent 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.8s ease-in-out infinite;
+}
+
+@keyframes navPop {
+  0%   { transform:scale(1); }
+  35%  { transform:scale(0.88); }
+  65%  { transform:scale(1.12); }
+  100% { transform:scale(1); }
+}
+.nav-pop { animation: navPop 0.36s cubic-bezier(0.34,1.56,0.64,1) forwards; }
+
+/* ── Table ──────────────────────────────────────────────────────────── */
 table { @apply w-full text-left border-collapse; }
-th { @apply font-medium text-xs uppercase tracking-wider py-3 px-4; color: var(--muted-foreground); background: color-mix(in srgb, var(--foreground) 4%, transparent); border-bottom: 1px solid var(--border); }
+th {
+  @apply font-medium text-xs uppercase tracking-wider py-3 px-4;
+  color: var(--muted-foreground);
+  background: color-mix(in srgb, var(--foreground) 4%, transparent);
+  border-bottom: 1px solid var(--border);
+}
 td { @apply py-3 px-4 text-sm; border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent); }
 tr:hover td { background: color-mix(in srgb, var(--foreground) 3%, transparent); }
 
-/* ── Select (dark-aware arrow) ───────────────────────────────────────── */
+/* ── Select arrow ───────────────────────────────────────────────────── */
 select {
   -webkit-appearance: none; appearance: none;
   background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%2394a3b8' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
@@ -276,122 +321,127 @@ select {
   background-repeat: no-repeat;
   background-size: 1.25em 1.25em;
   padding-right: 2rem !important;
-  transition: box-shadow 0.2s, border-color 0.2s;
+  transition: box-shadow 0.18s, border-color 0.18s;
 }
 
-/* ── Focus glow (var asosida — har ikkala rejimda ishlaydi) ──────────── */
+/* ── Focus glow ─────────────────────────────────────────────────────── */
 select:focus,
 input:not([type=file]):focus,
 textarea:focus {
   outline: none;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 20%, transparent) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 22%, transparent) !important;
   border-color: color-mix(in srgb, var(--ring) 55%, var(--border)) !important;
-  transition: all 0.2s cubic-bezier(0.2,0.8,0.2,1);
+  transition: all 0.18s cubic-bezier(0.2,0.8,0.2,1);
 }
 
-/* ── Modal backdrop ──────────────────────────────────────────────────── */
-.modal-backdrop { backdrop-filter: blur(12px) saturate(1.4); -webkit-backdrop-filter: blur(12px) saturate(1.4); }
-.card-hover { transition: box-shadow 0.3s cubic-bezier(0.2,0.8,0.2,1), transform 0.3s cubic-bezier(0.2,0.8,0.2,1); }
+/* ── Modal backdrop ─────────────────────────────────────────────────── */
+.modal-backdrop {
+  backdrop-filter: blur(14px) saturate(1.5);
+  -webkit-backdrop-filter: blur(14px) saturate(1.5);
+}
 
-/* ── Scrollbar — fully hidden ────────────────────────────────────────── */
+/* ── Scrollbars — hidden ────────────────────────────────────────────── */
 ::-webkit-scrollbar { display: none; }
 * { scrollbar-width: none; -ms-overflow-style: none; }
 
-/* ── bg-card default depth ───────────────────────────────────────────── */
+/* ── Card variants ──────────────────────────────────────────────────── */
 .bg-card { box-shadow: var(--shadow-sm); }
 
-/* ── Stat / summary card (dark-aware) ────────────────────────────────── */
 .stat-card {
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow-sm);
-  transition: box-shadow 0.28s cubic-bezier(0.2,0.8,0.2,1), transform 0.28s cubic-bezier(0.2,0.8,0.2,1);
+  transition:
+    box-shadow 0.26s cubic-bezier(0.2,0.8,0.2,1),
+    transform   0.26s cubic-bezier(0.2,0.8,0.2,1);
 }
 .stat-card:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); }
 
-/* ── Accent pill badge ───────────────────────────────────────────────── */
 .badge-accent {
-  background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 82%, #000));
+  background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 80%, #000));
   color: var(--accent-foreground);
-  border-radius: 999px; font-size: 0.625rem; font-weight: 700; padding: 0.15rem 0.5rem;
-  box-shadow: 0 2px 6px color-mix(in srgb, var(--accent) 40%, transparent);
+  border-radius: 999px;
+  font-size: 0.625rem; font-weight: 700; padding: 0.15rem 0.5rem;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 40%, transparent);
 }
 
-.transfer-card { border-radius: var(--radius); transition: box-shadow 0.22s ease; }
+.transfer-card { border-radius: var(--radius); transition: box-shadow 0.20s ease; }
 .transfer-card:hover { box-shadow: var(--shadow-md); }
 
-/* ── Inputs — izchil radius ──────────────────────────────────────────── */
-input:not([type=file]):not([type=checkbox]):not([type=radio]), select, textarea { border-radius: calc(var(--radius) - 2px); }
+/* ── Input radius ───────────────────────────────────────────────────── */
+input:not([type=file]):not([type=checkbox]):not([type=radio]),
+select,
+textarea {
+  border-radius: calc(var(--radius) - 3px);
+}
 
-/* Telefonda juda kichik px-matnlarni kattalashtirish (rem bilan o'lchanmaganlari) */
+/* ── Mobile font fixes ──────────────────────────────────────────────── */
 @media (max-width: 640px) {
-  .text-\[8px\]  { font-size: 10px !important; }
-  .text-\[9px\]  { font-size: 11px !important; }
+  .text-\[8px\]  { font-size: 10px   !important; }
+  .text-\[9px\]  { font-size: 11px   !important; }
   .text-\[10px\] { font-size: 11.5px !important; line-height: 1.35; }
   .text-\[11px\] { font-size: 12.5px !important; }
 
-  /* iOS/Android: agar fokus qilingan input/select/textarea shrift o'lchami
-     16px'dan kichik bo'lsa, brauzer maydonga avtomatik ZOOM qiladi (odatiy
-     platforma xatti-harakati). Ko'p formalar shu yerda "text-sm md:text-xs"
-     (mobil kengligida 14px) ishlatgani uchun har bosishda ekran zoom bo'lib
-     ketardi. 16px past chegara qo'yib oldini olamiz. */
+  /* Prevent iOS auto-zoom on focus */
   input, select, textarea { font-size: max(16px, 1em) !important; }
 }
 
-/* ── BLOK C: Micro-interactions & Design polish ──────────────────────── */
-
-/* Card lift on hover — apply to .surface too (GPU-accelerated) */
+/* ── Surface hover (GPU-accelerated) ───────────────────────────────── */
 .surface:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); }
-/* Disable card lift inside lists / contact rows (avoid unintended shifts) */
 .no-lift:hover, .no-lift .surface:hover { transform: none !important; box-shadow: none !important; }
 
-/* Smooth page content entrance */
-@keyframes pageEnter { 0% { opacity:0; transform: translateY(14px); } 100% { opacity:1; transform: translateY(0); } }
-.page-enter { animation: pageEnter 0.3s cubic-bezier(0.16,1,0.3,1) both; will-change: opacity, transform; }
-
-/* Accordion / collapsible slide */
-@keyframes accordionOpen  { from { opacity:0; transform: scaleY(0.94) translateY(-6px); } to { opacity:1; transform: scaleY(1) translateY(0); } }
-@keyframes accordionClose { from { opacity:1; transform: scaleY(1);   } to { opacity:0; transform: scaleY(0.94); } }
-.accordion-open  { transform-origin: top; animation: accordionOpen  0.22s cubic-bezier(0.16,1,0.3,1) forwards; }
-.accordion-close { transform-origin: top; animation: accordionClose 0.18s cubic-bezier(0.4,0,1,1)   forwards; }
-
-/* Pulse badge (unread count, pending badge) */
-@keyframes badgePulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.18); } }
-.badge-pulse { animation: badgePulse 2s ease-in-out infinite; }
-
-/* Skeleton shimmer loading card */
-@keyframes shimmer {
-  0%   { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+/* ── Page entrance ──────────────────────────────────────────────────── */
+@keyframes pageEnter {
+  from { opacity:0; transform: translateY(12px); }
+  to   { opacity:1; transform: translateY(0); }
 }
+.page-enter {
+  animation: pageEnter 0.28s cubic-bezier(0.16,1,0.3,1) both;
+  will-change: opacity, transform;
+}
+
+/* ── Accordion ──────────────────────────────────────────────────────── */
+@keyframes accordionOpen  { from { opacity:0; transform:scaleY(0.94) translateY(-4px); } to { opacity:1; transform:scaleY(1) translateY(0); } }
+@keyframes accordionClose { from { opacity:1; transform:scaleY(1);   } to { opacity:0; transform:scaleY(0.94); } }
+.accordion-open  { transform-origin:top; animation:accordionOpen  0.20s cubic-bezier(0.16,1,0.3,1) forwards; }
+.accordion-close { transform-origin:top; animation:accordionClose 0.16s cubic-bezier(0.4,0,1,1)   forwards; }
+
+/* ── Notification pulse ─────────────────────────────────────────────── */
+@keyframes badgePulse { 0%,100%{transform:scale(1);} 50%{transform:scale(1.20);} }
+.badge-pulse { animation: badgePulse 2.4s ease-in-out infinite; }
+
+/* ── Skeleton shimmer ───────────────────────────────────────────────── */
 .skeleton {
   border-radius: var(--radius);
   background: linear-gradient(90deg,
     color-mix(in srgb, var(--foreground) 6%, transparent) 25%,
-    color-mix(in srgb, var(--foreground) 11%, transparent) 50%,
+    color-mix(in srgb, var(--foreground) 12%, transparent) 50%,
     color-mix(in srgb, var(--foreground) 6%, transparent) 75%
   );
   background-size: 200% 100%;
   animation: shimmer 1.6s ease-in-out infinite;
 }
 
-/* Smooth tab/nav indicator slide */
-@keyframes tabSlideIn { from { opacity:0; transform:translateX(8px); } to { opacity:1; transform:translateX(0); } }
-.tab-enter { animation: tabSlideIn 0.2s cubic-bezier(0.16,1,0.3,1) both; }
+/* ── Tab slide ──────────────────────────────────────────────────────── */
+@keyframes tabSlideIn { from{opacity:0;transform:translateX(8px);} to{opacity:1;transform:translateX(0);} }
+.tab-enter { animation: tabSlideIn 0.18s cubic-bezier(0.16,1,0.3,1) both; }
 
-/* Button press depth (for primary CTAs — pairs with btn:active scale) */
+/* ── Button active press ────────────────────────────────────────────── */
 .btn-primary:active { box-shadow: 0 2px 8px color-mix(in srgb, var(--primary) 30%, transparent) !important; }
-.btn-accent:active  { box-shadow: 0 2px 8px color-mix(in srgb, var(--accent)  30%, transparent) !important; }
+.btn-accent:active  { box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 30%, transparent)  !important; }
 
-/* Mobil pastki navigatsiya uchun kontent maydoni pastki bo'sh joyi */
-/* ios-bottom-bar: height≈70px, bottom=env(safe-area)+14px → 70+14+16=100px base */
+/* ── Safe padding for content above mobile nav ──────────────────────── */
+/* ios-bottom-bar: ~72px height, bottom≈24px → ~100px total */
 .main-pb-safe { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 100px); }
+@media (min-width: 640px) { .main-pb-safe { padding-bottom: 0; } }
 
-/* ── Accessibility: "Reduce motion" OS sozlamasini hurmat qilish ────────
-   motion/react animatsiyalari main.tsx dagi <MotionConfig reducedMotion="user">
-   orqali hal qilinadi; bu yerda esa sof CSS @keyframes animatsiyalari
-   (pastdagilar) shu foydalanuvchilar uchun deyarli o'chiriladi. */
+/* ── card-hover alias ───────────────────────────────────────────────── */
+.card-hover {
+  transition: box-shadow 0.26s cubic-bezier(0.2,0.8,0.2,1), transform 0.26s cubic-bezier(0.2,0.8,0.2,1);
+}
+
+/* ── Accessibility: reduce motion ───────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.001ms !important;
@@ -400,4 +450,3 @@ input:not([type=file]):not([type=checkbox]):not([type=radio]), select, textarea 
     scroll-behavior: auto !important;
   }
 }
-@media (min-width: 768px) { .main-pb-safe { padding-bottom: 0; } }

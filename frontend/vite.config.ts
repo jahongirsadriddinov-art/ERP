@@ -19,32 +19,69 @@ function figmaAssetResolver() {
 export default defineConfig({
   plugins: [
     figmaAssetResolver(),
-    // The React and Tailwind plugins are both required for Make, even if
-    // Tailwind is not being actively used – do not remove them
     react(),
     tailwindcss(),
   ],
   resolve: {
     alias: {
-      // Alias @ to the src directory
       '@': path.resolve(__dirname, './src'),
     },
   },
 
-  // File types to support raw imports. Never add .css, .tsx, or .ts files to this.
   assetsInclude: ['**/*.svg', '**/*.csv'],
 
   build: {
+    target: 'esnext',
+    cssCodeSplit: true,
+    sourcemap: false,
+    reportCompressedSize: false,
+    chunkSizeWarningLimit: 600,
     rollupOptions: {
       output: {
-        // Vendor kutubxonalar alohida chunkka — deploy'dan deploy'ga kamdan-kam
-        // o'zgaradi, shuning uchun brauzer ularni keshda uzoq saqlaydi (qayta
-        // tashrifda faqat kichik app-chunk qayta yuklanadi).
-        manualChunks: {
-          vendor: ['react', 'react-dom', 'socket.io-client', 'sonner'],
-          'vendor-motion': ['motion'],
+        manualChunks(id) {
+          // React core
+          if (id.includes('node_modules/react') || id.includes('node_modules/react-dom')) {
+            return 'vendor-react';
+          }
+          // Framer Motion
+          if (id.includes('node_modules/motion') || id.includes('node_modules/framer-motion')) {
+            return 'vendor-motion';
+          }
+          // Radix UI
+          if (id.includes('node_modules/@radix-ui')) {
+            return 'vendor-radix';
+          }
+          // MUI — heaviest, isolated
+          if (id.includes('node_modules/@mui') || id.includes('node_modules/@emotion')) {
+            return 'vendor-mui';
+          }
+          // Recharts — only used in reports
+          if (id.includes('node_modules/recharts') || id.includes('node_modules/d3')) {
+            return 'vendor-charts';
+          }
+          // Socket.io
+          if (id.includes('node_modules/socket.io-client') || id.includes('node_modules/engine.io')) {
+            return 'vendor-socket';
+          }
+          // i18n
+          if (id.includes('node_modules/i18next') || id.includes('node_modules/react-i18next')) {
+            return 'vendor-i18n';
+          }
+          // Other large vendors
+          if (id.includes('node_modules/date-fns')) return 'vendor-date';
+          if (id.includes('node_modules/sonner')) return 'vendor-toast';
+          // Remaining node_modules
+          if (id.includes('node_modules')) return 'vendor';
         },
+        chunkFileNames: 'assets/[name]-[hash].js',
+        entryFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash][extname]',
       },
     },
+  },
+
+  server: {
+    port: 5173,
+    host: true,
   },
 })

@@ -93,8 +93,19 @@ app.use(express.json({ limit: '60mb' }));
 // ovoz darhol, tarmoqqa chiqmasdan ko'rinadi.
 app.use('/uploads', express.static('uploads', { maxAge: '365d', immutable: true }));
 
-// Health-check (bazaga bog'liq emas) — Render/uptime darhol 200 oladi
-app.get('/health', (_req, res) => res.json({ ok: true, service: 'quriliserp-backend' }));
+// Health-check — Render/uptime monitoring uchun. commit/deployedAt maydonlari
+// deploy'ning HAQIQATDA qachon va qaysi commit bilan yangilanganini masofadan
+// tekshirish imkonini beradi (Render dashboard'ga kirmasdan) — RENDER_GIT_COMMIT
+// Render tomonidan avtomatik o'rnatiladi, hech qanday qo'lda sozlash shart emas.
+// db: mongoose ulanish holati (0=disconnected,1=connected,2=connecting,3=disconnecting).
+const SERVER_STARTED_AT = new Date().toISOString();
+app.get('/health', (_req, res) => res.json({
+  ok: true,
+  service: 'quriliserp-backend',
+  commit: process.env.RENDER_GIT_COMMIT || null,
+  serverStartedAt: SERVER_STARTED_AT,
+  db: mongoose.connection.readyState,
+}));
 
 // optionalAuth: token bo'lsa o'qib tenant kontekstini o'rnatadi, bo'lmasa ham
 // so'rovni o'tkazadi — shu tufayli eski klientlar sinmaydi (bosqichma-bosqich izolyatsiya).

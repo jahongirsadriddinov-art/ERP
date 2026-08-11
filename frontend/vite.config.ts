@@ -30,10 +30,9 @@ export default defineConfig({
 
   assetsInclude: ['**/*.svg', '**/*.csv'],
 
-  // Recharts + d3 circular import muammosini hal qilish:
-  // pre-bundle recharts → dev va prod da TDZ xatolarini bartaraf etadi
+  // Recharts circular ESM dep ni pre-bundle orqali hal qilamiz
   optimizeDeps: {
-    include: ['recharts'],
+    include: ['react', 'react-dom', 'scheduler', 'recharts'],
   },
 
   build: {
@@ -45,8 +44,16 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
-          // React core
-          if (id.includes('node_modules/react') || id.includes('node_modules/react-dom')) {
+          // ─── React ekotizimi — scheduler va react-is ham shu chunk'da bo'lishi shart.
+          // react-dom scheduler'ga bog'liq: agar scheduler vendor'ga ketsa,
+          // vendor-react → vendor → vendor-react dairesel dep hosil bo'ladi va
+          // "Cannot read properties of undefined (reading 'forwardRef')" xatosi kelib chiqadi.
+          if (
+            id.includes('node_modules/react/') ||
+            id.includes('node_modules/react-dom/') ||
+            id.includes('node_modules/scheduler/') ||
+            id.includes('node_modules/react-is/')
+          ) {
             return 'vendor-react';
           }
           // Framer Motion
@@ -61,8 +68,7 @@ export default defineConfig({
           if (id.includes('node_modules/@mui') || id.includes('node_modules/@emotion')) {
             return 'vendor-mui';
           }
-          // Recharts + barcha d3-* sub-paketlar + victory-vendor — HAMMASI bitta chunk'da
-          // bo'lishi shart (ular orasida circular importlar bor; ajratilsa TDZ xatosi kelib chiqadi)
+          // Recharts + barcha d3-* sub-paketlar — HAMMASI bitta chunk'da bo'lishi shart
           if (
             id.includes('node_modules/recharts') ||
             id.includes('node_modules/d3-') ||

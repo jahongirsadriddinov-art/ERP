@@ -7,6 +7,18 @@ import { API_BASE } from "./app/api.ts";
 import "./app/i18n";
 import "./styles/index.css";
 
+// Chrome-ning built-in Translator/Language Detection API (window.translation)
+// sahifada ishlamasa "Language detection is not supported for this page" xatosini
+// unhandledrejection sifatida chiqaradi. Bu ilovamiz xatosi emas — brauzer xatosi.
+// translate="no" atributi ko'p holda oldini oladi, lekin ba'zi brauzerlarda
+// API sinxron emas, shuning uchun global handler bilan ham to'xtatamiz.
+window.addEventListener('unhandledrejection', (event) => {
+  const msg = event.reason?.message ?? String(event.reason ?? '');
+  if (msg.includes('Language detection is not supported')) {
+    event.preventDefault();
+  }
+});
+
 createRoot(document.getElementById("root")!).render(
   <ErrorBoundary>
     <MotionConfig reducedMotion="user">

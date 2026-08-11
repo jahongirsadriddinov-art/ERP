@@ -3604,50 +3604,52 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
           <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28, delay: 0.22 }}
             className="surface rounded-2xl overflow-hidden">
             <div className="p-4">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <div className="icon-chip"><Calendar className="w-4 h-4"/></div>
-                  <span className="text-sm font-semibold">{t('attendance.today')}</span>
-                </div>
-                {todayAttendance?.status && (
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${todayAttendance.status==='present'?'bg-green-500/15 text-green-700 dark:text-green-400':todayAttendance.status==='late'?'bg-amber-500/15 text-amber-700 dark:text-amber-400':'bg-muted text-muted-foreground'}`}>
-                    {todayAttendance.status==='present'?t('attendance.statusPresent'):todayAttendance.status==='late'?t('attendance.statusLate'):t('attendance.statusAbsent')}
-                  </span>
-                )}
-              </div>
-              {todayAttendance?.checkIn ? (
-                <div className="text-xs text-muted-foreground space-y-1 mb-3">
-                  <p>Keldi: <span className="text-foreground font-medium">{new Date(todayAttendance.checkIn).toLocaleTimeString('uz-UZ',{hour:'2-digit',minute:'2-digit'})}</span></p>
-                  {todayAttendance.checkOut && <p>Ish tugadi: <span className="text-foreground font-medium">{new Date(todayAttendance.checkOut).toLocaleTimeString('uz-UZ',{hour:'2-digit',minute:'2-digit'})}</span></p>}
-                  {todayAttendance.workHours != null && <p>{t('attendance.workHours', { h: todayAttendance.workHours.toFixed(1) })}</p>}
-                </div>
+              {!todayAttendance?.checkIn ? (
+                /* Hali ishga kelmagan — foydalanuvchi talabiga ko'ra FAQAT bitta
+                   tugma ko'rsatiladi, boshqa hech qanday sarlavha/status/matn yo'q.
+                   GPS check-in'dan mustaqil allaqachon fonda ishlab turibdi. */
+                <button onClick={onCheckIn} className="w-full btn btn-primary text-sm py-3 rounded-xl flex items-center justify-center gap-2 font-semibold">
+                  <MapPin className="w-4 h-4"/>Ishga keldim
+                </button>
               ) : (
-                <p className="text-xs text-muted-foreground mb-3">{t('attendance.notCheckedIn')}</p>
-              )}
-              {/* GPS holati */}
-              {todayAttendance?.checkIn && !todayAttendance?.checkOut && (
-                <div className="flex items-center gap-2 mb-3 text-xs text-muted-foreground">
-                  <div className={`w-2 h-2 rounded-full flex-shrink-0 ${gpsTracking ? 'bg-green-500 animate-pulse' : 'bg-muted-foreground/40'}`}/>
-                  <span>{gpsTracking ? 'GPS faol — har 5 daqiqada joylashuv yuboriladi' : 'GPS kutilmoqda...'}</span>
-                </div>
-              )}
-              <div className="flex gap-2">
-                {!todayAttendance?.checkIn && (
-                  <button onClick={onCheckIn} className="flex-1 btn btn-primary text-xs py-2.5 rounded-xl flex items-center justify-center gap-1.5">
-                    <MapPin className="w-3.5 h-3.5"/>Ishga keldim
-                  </button>
-                )}
-                {todayAttendance?.checkIn && !todayAttendance?.checkOut && (
-                  <button onClick={onCheckOut} className="flex-1 btn btn-outline text-xs py-2.5 rounded-xl flex items-center justify-center gap-1.5 border-red-400/40 text-red-600 dark:text-red-400 hover:bg-red-500/10">
-                    <X className="w-3.5 h-3.5"/>Ish tugadi
-                  </button>
-                )}
-                {todayAttendance?.checkOut && (
-                  <div className="flex-1 text-center py-2.5 text-xs text-green-600 dark:text-green-400 font-medium">
-                    ✓ Bugungi ish yakunlandi ({todayAttendance.workHours?.toFixed(1) || 0}h)
+                <>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <div className="icon-chip"><Calendar className="w-4 h-4"/></div>
+                      <span className="text-sm font-semibold">{t('attendance.today')}</span>
+                    </div>
+                    {todayAttendance?.status && (
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${todayAttendance.status==='present'?'bg-green-500/15 text-green-700 dark:text-green-400':todayAttendance.status==='late'?'bg-amber-500/15 text-amber-700 dark:text-amber-400':'bg-muted text-muted-foreground'}`}>
+                        {todayAttendance.status==='present'?t('attendance.statusPresent'):todayAttendance.status==='late'?t('attendance.statusLate'):t('attendance.statusAbsent')}
+                      </span>
+                    )}
                   </div>
-                )}
-              </div>
+                  <div className="text-xs text-muted-foreground space-y-1 mb-3">
+                    <p>Keldi: <span className="text-foreground font-medium">{new Date(todayAttendance.checkIn).toLocaleTimeString('uz-UZ',{hour:'2-digit',minute:'2-digit'})}</span></p>
+                    {todayAttendance.checkOut && <p>Ish tugadi: <span className="text-foreground font-medium">{new Date(todayAttendance.checkOut).toLocaleTimeString('uz-UZ',{hour:'2-digit',minute:'2-digit'})}</span></p>}
+                    {todayAttendance.workHours != null && <p>{t('attendance.workHours', { h: todayAttendance.workHours.toFixed(1) })}</p>}
+                  </div>
+                  {/* GPS holati — endi check-in'dan mustaqil doim faol, shu joyda
+                      shunchaki ishlab turganini ko'rsatadi */}
+                  {!todayAttendance?.checkOut && (
+                    <div className="flex items-center gap-2 mb-3 text-xs text-muted-foreground">
+                      <div className={`w-2 h-2 rounded-full flex-shrink-0 ${gpsTracking ? 'bg-green-500 animate-pulse' : 'bg-muted-foreground/40'}`}/>
+                      <span>{gpsTracking ? 'GPS faol — har 5 daqiqada joylashuv yuboriladi' : 'GPS kutilmoqda...'}</span>
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    {!todayAttendance?.checkOut ? (
+                      <button onClick={onCheckOut} className="flex-1 btn btn-outline text-xs py-2.5 rounded-xl flex items-center justify-center gap-1.5 border-red-400/40 text-red-600 dark:text-red-400 hover:bg-red-500/10">
+                        <X className="w-3.5 h-3.5"/>Ishni tugatdim
+                      </button>
+                    ) : (
+                      <div className="flex-1 text-center py-2.5 text-xs text-green-600 dark:text-green-400 font-medium">
+                        ✓ Bugungi ish yakunlandi ({todayAttendance.workHours?.toFixed(1) || 0}h)
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           </motion.div>
         )}
@@ -4107,14 +4109,25 @@ export default function App() {
   const [gpsRefreshing, setGpsRefreshing] = useState(false);
 
   // Offline/online detection + SW sync messages
+  // MUHIM: brauzerning "online" hodisasi FAQAT haqiqiy offline→online
+  // o'tishida ishga tushadi. Agar so'rov CORS yoki backend xatoligi (masalan
+  // Render deploy'i eskirgan) sababli muvaffaqiyatsiz bo'lsa, SW buni ham
+  // "offline" deb navbatga qo'yadi — lekin foydalanuvchi HAQIQATDA internetdan
+  // hech qachon uzilmagan, shuning uchun "online" hodisasi hech qachon
+  // qayta otilmaydi va navbat abadiy "kutmoqda" holida osilib qoladi (aynan
+  // shu holat production'da CORS tuzatilmasdan oldin ro'y bergan edi — 17 ta
+  // "o'zgartirish kutmoqda" internetga ulangan holda ham ko'rinib turgan edi).
+  // Shu sabab: mount bo'lganda va har 90s'da (navbat bo'sh bo'lmasa) — haqiqiy
+  // "online" hodisasidan mustaqil — replaydan qayta urinib turamiz, shunda
+  // backend tuzalgan zahoti navbat o'zi tozalanadi, foydalanuvchi sahifani
+  // qayta yuklashi yoki internetni o'chirib-yoqishi shart bo'lmaydi.
   useEffect(() => {
-    const onOnline = () => {
-      setIsOffline(false);
-      // SW ga online siqnali yuboramiz — queue replay
+    const requestReplay = () => {
       if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
         navigator.serviceWorker.controller.postMessage({ type: 'ONLINE' });
       }
     };
+    const onOnline = () => { setIsOffline(false); requestReplay(); };
     const onOffline = () => setIsOffline(true);
     window.addEventListener('online', onOnline);
     window.addEventListener('offline', onOffline);
@@ -4131,15 +4144,29 @@ export default function App() {
     };
     navigator.serviceWorker?.addEventListener?.('message', handleSWMsg);
 
-    // Dastlabki pending count
+    // Dastlabki pending count + agar hozir online bo'lsak, eskirgan
+    // (stuck) navbatni ham darhol tozalashga urinamiz.
     if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
       navigator.serviceWorker.controller.postMessage({ type: 'GET_PENDING_COUNT' });
+      if (navigator.onLine) requestReplay();
     }
+
+    // Sahifa qayta ko'rinadigan bo'lganda (tab almashtirish, ilova qayta
+    // ochilishi) ham qayta urinamiz — bu ham haqiqiy "online" hodisasisiz
+    // sodir bo'ladigan qayta ulanish holatlarini qamrab oladi.
+    const onVisible = () => { if (document.visibilityState === 'visible' && navigator.onLine) requestReplay(); };
+    document.addEventListener('visibilitychange', onVisible);
+
+    // Fon rejimida vaqti-vaqti bilan qayta urinish (navbat bo'sh bo'lsa SW
+    // darhol qaytadi — arzon operatsiya).
+    const retryTimer = setInterval(() => { if (navigator.onLine) requestReplay(); }, 90_000);
 
     return () => {
       window.removeEventListener('online', onOnline);
       window.removeEventListener('offline', onOffline);
       navigator.serviceWorker?.removeEventListener?.('message', handleSWMsg);
+      document.removeEventListener('visibilitychange', onVisible);
+      clearInterval(retryTimer);
     };
   }, []);
 
@@ -4201,22 +4228,23 @@ export default function App() {
     setGpsTracking(false);
   };
 
-  // Attendance fetch + GPS auto-resume if already working today
+  // Attendance fetch + GPS kuzatuv
+  // MUHIM: GPS "Ishga keldim" tugmasidan MUSTAQIL — xodim saytga/ilovaga
+  // kirgan zahoti (check-in/check-out bosilgan-bosilmaganidan qat'i nazar)
+  // joylashuvi darhol va keyin har 5 daqiqada avtomatik yuborilib turishi
+  // kerak, direktor/o'rinbosar esa istalgan vaqt "Kuzatuv" sahifasida
+  // "Yangilash"ni bosib eng so'nggi joylashuvni ko'ra oladi — xodim hech
+  // qanday qo'shimcha tugma bosishi shart emas.
   useEffect(() => {
     if (!liveUser) return;
     const workerRoles = ['ishchi', 'prorab', 'brigadir'];
     if (!workerRoles.includes(liveUser.role)) return;
     const token = localStorage.getItem('token') || '';
     const headers = { Authorization: `Bearer ${token}` };
+    startGpsInterval();
     fetch(`${API_BASE}/api/attendance/today`, { headers })
       .then(r => r.ok ? r.json() : null)
-      .then(d => {
-        if (d) {
-          setTodayAttendance(d);
-          // Agar bugun check-in bor, check-out yo'q — GPS avtomatik boshlanadi
-          if (d.checkIn && !d.checkOut) startGpsInterval();
-        }
-      }).catch(()=>{});
+      .then(d => { if (d) setTodayAttendance(d); }).catch(()=>{});
     return () => stopGpsInterval();
   }, [liveUser?.id]);
 
@@ -4232,8 +4260,7 @@ export default function App() {
     if (r.ok) {
       const d = await r.json();
       setTodayAttendance(d);
-      startGpsInterval();
-      toast.success('Ishga keldingiz! GPS kuzatuv boshlandi.');
+      toast.success('Ishga keldingiz!');
     } else {
       const e = await r.json().catch(()=>({}));
       toast.error(e.error || 'Xatolik');
@@ -4252,8 +4279,10 @@ export default function App() {
     if (r.ok) {
       const d = await r.json();
       setTodayAttendance(d);
-      stopGpsInterval();
-      toast.success('Ish yakunlandi. GPS to\'xtatildi.');
+      // MUHIM: GPS shu yerda TO'XTATILMAYDI — kuzatuv "Ishga keldim/Ishni
+      // tugatdim" tugmalaridan mustaqil, ilova ochiq turgan ekan doim ishlab
+      // turishi kerak (foydalanuvchi talabi).
+      toast.success('Ish yakunlandi.');
     } else {
       const e = await r.json().catch(()=>({}));
       toast.error(e.error || 'Xatolik');

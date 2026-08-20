@@ -7,8 +7,10 @@ import Transaction from '../models/Transaction';
 import Material from '../models/Material';
 import Message from '../models/Message';
 import Group from '../models/Group';
+import Attendance from '../models/Attendance';
+import GpsLocation from '../models/GpsLocation';
 import { initRegistrationScene, isInRegistration } from './registrationScene';
-import { emitToUser, emitToGroup } from './socket';
+import { emitToUser, emitToGroup, broadcast } from './socket';
 import { tb, langLabel, BotLang } from '../i18n/bot';
 import { getBackendUrl } from '../utils/backendUrl';
 
@@ -138,10 +140,45 @@ async function relayBotMessageToSite(session: BotChatSession, data: {
 
 const isAdmin = (role: string) => role === 'direktor' || role === 'orinbosar';
 const isDev = (role: string) => role === 'dasturchi';
+const WORKER_ROLES = ['ishchi', 'prorab', 'brigadir'];
+const isWorker = (role: string) => WORKER_ROLES.includes(role);
 
 function fmt(n: number, lang?: BotLang) {
   return Math.round(n).toLocaleString('uz-UZ') + ' ' + tb(lang, 'currencySuffix');
 }
+
+// ─── Yo'qlama (attendance) — botда ────────────────────────────────────────────
+// MUHIM: bot GPS/joylashuvni doim qabul qiladi (pastda saveLocationFromTelegram),
+// clock-in/out holatidan MUSTAQIL — bu saytdagi xatti-harakatdan ATAYLAB farq
+// qiladi (saytда GPS check-in'ga bog'liq). clock-in/out tugmalari FAQAT
+// yo'qlama (davomat) yozuvini boshqaradi, GPS'ni emas.
+function todayDateStr(): string {
+  return new Date().toISOString().split('T')[0];
+}
+async function getAttendanceStatus(userId: string): Promise<{ status: 'NOT_STARTED' | 'WORKING' | 'FINISHED'; record: any }> {
+  const record = await Attendance.findOne({ userId, date: todayDateStr() }).lean();
+  if (!record?.checkIn) return { status: 'NOT_STARTED', record: null };
+  if (!record.checkOut) return { status: 'WORKING', record };
+  return { status: 'FINISHED', record };
+}
+
+// Telegramdan kelgan joylashuvni GpsLocation'ga saqlaydi — saytdagi
+// POST /api/gps bilan bir xil ma'lumot shakli, xuddi shunday socket orqali
+// admin xaritasiga real-time yetkaziladi. Bot HTTP so'rov konteksti ichida
+// ISHLAMAYDI (Express middleware/tenant-context yo'q), shu sabab companyId'ni
+// stamped() o'rniga to'g'ridan-to'g'ri userdan olamiz (relayBotMessageToSite'da
+// qilingani kabi).
+async function saveLocationFromTelegram(chatId: number, lat: number, lng: number, accuracy?: number) {
+  const user = await User.findOne({ telegramChatId: chatId.toString() }).select('companyId').lean();
+  if (!user) return;
+  const loc = await GpsLocation.create({ userId: String(user._id), companyId: user.companyId, lat, lng, accuracy, timestamp: new Date() });
+  broadcast('gps:update', { userId: String(user._id), companyId: user.companyId, lat, lng, accuracy, timestamp: loc.timestamp });
+}
+
+const CHECKIN_ONLY_KEYBOARD = (lang?: BotLang) => ({
+  keyboard: [[{ text: tb(lang, 'kb_checkIn') }]],
+  resize_keyboard: true,
+});
 
 const DEVELOPER_KEYBOARD = (lang?: BotLang) => ({
   keyboard: [
@@ -153,6 +190,34 @@ const DEVELOPER_KEYBOARD = (lang?: BotLang) => ({
   resize_keyboard: true,
 });
 
+// USER_KEYBOARD'ning ustiga "Ish tugatdim" qatori qo'shilgan varianti — ishchi
+// WORKING holatida (checkin bosilgan, checkout hali yo'q) ko'radi.
+const USER_KEYBOARD_WITH_CHECKOUT = (lang?: BotLang) => {
+  const base = USER_KEYBOARD(lang);
+  return { ...base, keyboard: [[{ text: tb(lang, 'kb_checkOut') }], ...base.keyboard] };
+};
+
+// Markaziy klaviatura tanlovchi — HAR BIR joyda (start, kontakt tasdiqlash,
+// til almashtirish, va h.k.) shu orqali chaqiriladi, shunda ishchi/prorab/
+// brigadir uchun "hali ishga kelmagan" holatida FAQAT "Ishga keldim" tugmasi
+// ko'rinishi bitta joyda kafolatlanadi (foydalanuvchi aniq talabi).
+// MUHIM cheklov: bu faqat KLAVIATURA ko'rinishini boshqaradi — Telegram
+// klaviatura tugmalari faqat oddiy matn yuboradi, bot ularni matn sifatida
+// qabul qiladi; platforma darajasida foydalanuvchini biror buyruqni QO'LDA
+// yozishdan (garchi tugma ko'rinmasa ham) to'liq to'sib bo'lmaydi — bu
+// Telegram Bot API'ning o'zi cheklovi, kodning kamchiligi emas.
+async function keyboardForUser(user: any, lang?: BotLang) {
+  if (isDev(user.role)) return DEVELOPER_KEYBOARD(lang);
+  if (isAdmin(user.role)) return ADMIN_KEYBOARD(lang);
+  if (isWorker(user.role)) {
+    const { status } = await getAttendanceStatus(String(user._id));
+    if (status === 'NOT_STARTED') return CHECKIN_ONLY_KEYBOARD(lang);
+    if (status === 'WORKING') return USER_KEYBOARD_WITH_CHECKOUT(lang);
+    return USER_KEYBOARD(lang);
+  }
+  return USER_KEYBOARD(lang);
+}
+
 // ─── /start command ────────────────────────────────────────────────────────────
 bot.onText(/\/start/, async (msg: any) => {
   const chatId = msg.chat.id;
@@ -163,7 +228,7 @@ bot.onText(/\/start/, async (msg: any) => {
   const existing = await User.findOne({ telegramChatId: chatId.toString() }).catch(() => null);
   if (existing) {
     const lang = existing.language as BotLang | undefined;
-    const keyboard = isDev(existing.role) ? DEVELOPER_KEYBOARD(lang) : isAdmin(existing.role) ? ADMIN_KEYBOARD(lang) : USER_KEYBOARD(lang);
+    const keyboard = await keyboardForUser(existing, lang);
     bot.sendMessage(chatId,
       tb(lang, 'startWelcomeBack', { name: existing.firstName }),
       { reply_markup: keyboard }
@@ -209,14 +274,28 @@ bot.on('contact', async (msg: any) => {
     await user.save();
 
     const lang = user.language as BotLang | undefined;
-    bot.sendMessage(chatId,
-      tb(lang, 'contactConfirmed', { name: `${user.firstName} ${user.lastName || ''}`.trim(), role: user.role }),
-      { parse_mode: 'Markdown', reply_markup: isDev(user.role) ? DEVELOPER_KEYBOARD(lang) : isAdmin(user.role) ? ADMIN_KEYBOARD(lang) : USER_KEYBOARD(lang) }
+    let welcomeText = tb(lang, 'contactConfirmed', { name: `${user.firstName} ${user.lastName || ''}`.trim(), role: user.role });
+    // Ishchi/prorab/brigadir uchun — bot GPS'ni doim qabul qilishini va uzluksiz
+    // kuzatuv uchun Telegram'ning Live Location funksiyasidan foydalanishni
+    // shu yerda, ro'yxatdan o'tishning bir martalik onboarding lahzasida aytamiz.
+    if (isWorker(user.role)) welcomeText += `\n\n${tb(lang, 'locationLiveHint')}`;
+    bot.sendMessage(chatId, welcomeText,
+      { parse_mode: 'Markdown', reply_markup: await keyboardForUser(user, lang) }
     );
   } catch (err) {
     console.error(err);
     bot.sendMessage(chatId, tb(undefined, 'genericError'));
   }
+});
+
+// ─── Jonli joylashuv (Live Location) yangilanishlari ──────────────────────────
+// Foydalanuvchi Telegram'ning o'z "Share Live Location" funksiyasini yoqqach,
+// har bir yangi koordinata YANGI 'message' sifatida EMAS, balki asl xabarni
+// TAHRIRLASH ('edited_message') sifatida keladi — shuning uchun alohida handler.
+bot.on('edited_message', async (msg: any) => {
+  if (!msg.location) return;
+  const chatId = msg.chat.id;
+  saveLocationFromTelegram(chatId, msg.location.latitude, msg.location.longitude, msg.location.horizontal_accuracy).catch(() => {});
 });
 
 // ─── Text message handler — main menu ─────────────────────────────────────────
@@ -231,7 +310,7 @@ bot.on('message', async (msg: any) => {
       chatSessions.delete(chatId);
       const u = await User.findById(activeChat.myUserId).catch(() => null);
       const ulang = u?.language as BotLang | undefined;
-      const kb = u && isDev(u.role) ? DEVELOPER_KEYBOARD(ulang) : u && isAdmin(u.role) ? ADMIN_KEYBOARD(ulang) : USER_KEYBOARD(ulang);
+      const kb = u ? await keyboardForUser(u, ulang) : USER_KEYBOARD(ulang);
       bot.sendMessage(chatId, tb(ulang, 'chatSessionEnd', { name: activeChat.targetName }), { reply_markup: kb });
       return;
     }
@@ -261,6 +340,27 @@ bot.on('message', async (msg: any) => {
     } catch (err) {
       console.error('[bot chat relay]', err);
       bot.sendMessage(chatId, tb(activeChat.lang, 'chatSendError'));
+    }
+    return;
+  }
+
+  // ── GPS/joylashuv — chat rejimidan TASHQARIDA ham, HAR DOIM qabul qilinadi ──
+  // MUHIM: bu clock-in/out holatidan MUSTAQIL — foydalanuvchi aniq talabi:
+  // "botда GPS doim ishlasin". Telegram'ning o'zi cheklovi: bot foydalanuvchidan
+  // "jonli joylashuv" (Live Location) ulashishni SO'RAY olmaydi (faqat bir
+  // martalik oddiy joylashuv so'rovi mumkin, quyida /start'da taklif qilinadi) —
+  // doimiy kuzatuv uchun foydalanuvchi buni Telegram interfeysidan o'zi
+  // yoqishi kerak; shundan keyin kelgan HAR BIR yangilanish shu yerda ushlanadi
+  // (bir martalik ulashish uchun 'message', jonli yangilanishlar uchun pastdagi
+  // 'edited_message' handleri).
+  if (msg.location && !msg.text) {
+    saveLocationFromTelegram(chatId, msg.location.latitude, msg.location.longitude, msg.location.horizontal_accuracy).catch(() => {});
+    // Faqat BIR martalik (live_period yo'q) ulashishga qisqa tasdiq — jonli
+    // kuzatuvning har bir yangilanishida xabar bilan bezovta qilmaslik uchun
+    // 'edited_message' branida tasdiq yuborilmaydi.
+    if (!msg.location.live_period) {
+      const u = await User.findOne({ telegramChatId: chatId.toString() }).select('language').catch(() => null);
+      bot.sendMessage(chatId, tb(u?.language as BotLang | undefined, 'locationSaved'));
     }
     return;
   }
@@ -312,6 +412,60 @@ bot.on('message', async (msg: any) => {
       bot.sendMessage(chatId, tb(lang, 'chatWhoTo'), { reply_markup: { inline_keyboard: rows } });
     } catch (err) {
       console.error('[bot chat picker]', err);
+      bot.sendMessage(chatId, tb(lang, 'genericError'));
+    }
+    return;
+  }
+
+  // ── Yo'qlama: Ishga keldim / Ish tugatdim — FAQAT ishchi/prorab/brigadir ──
+  // MUHIM: bu yerda GPS'ga HECH TEGILMAYDI — GPS botда doim, joylashuv
+  // kelgan zahoti ishlaydi (yuqorida). Bu tugmalar FAQAT Attendance yozuvini
+  // (davomat) boshqaradi — saytdagi /api/attendance/checkin|checkout bilan
+  // bir xil mantiq, to'g'ridan-to'g'ri Mongoose orqali (bot HTTP so'rov
+  // konteksti ichida emas, o'z REST API'siga chaqiruv qilish shart emas).
+  if (isWorker(user.role) && text === tb(lang, 'kb_checkIn')) {
+    try {
+      const today = todayDateStr();
+      let record = await Attendance.findOne({ userId: String(user._id), date: today });
+      if (record?.checkIn) {
+        bot.sendMessage(chatId, tb(lang, 'alreadyCheckedIn'), { reply_markup: await keyboardForUser(user, lang) });
+        return;
+      }
+      const now = new Date();
+      const hour = now.getHours();
+      if (!record) record = new Attendance({ userId: String(user._id), companyId: user.companyId, date: today });
+      record.checkIn = now.toISOString();
+      record.status = hour >= 9 ? 'late' : 'present';
+      await record.save();
+      const time = now.toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' });
+      bot.sendMessage(chatId, tb(lang, 'checkInConfirmed', { time }), { reply_markup: await keyboardForUser(user, lang) });
+    } catch (err) {
+      console.error('[bot checkin]', err);
+      bot.sendMessage(chatId, tb(lang, 'genericError'));
+    }
+    return;
+  }
+  if (isWorker(user.role) && text === tb(lang, 'kb_checkOut')) {
+    try {
+      const today = todayDateStr();
+      const record = await Attendance.findOne({ userId: String(user._id), date: today });
+      if (!record?.checkIn) {
+        bot.sendMessage(chatId, tb(lang, 'notCheckedInYet'), { reply_markup: await keyboardForUser(user, lang) });
+        return;
+      }
+      if (record.checkOut) {
+        bot.sendMessage(chatId, tb(lang, 'alreadyCheckedOut'), { reply_markup: await keyboardForUser(user, lang) });
+        return;
+      }
+      const now = new Date();
+      record.checkOut = now.toISOString();
+      const ms = now.getTime() - new Date(record.checkIn).getTime();
+      record.workHours = Math.round((ms / 3600000) * 10) / 10;
+      await record.save();
+      const time = now.toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' });
+      bot.sendMessage(chatId, tb(lang, 'checkOutConfirmed', { time, hours: String(record.workHours) }), { reply_markup: await keyboardForUser(user, lang) });
+    } catch (err) {
+      console.error('[bot checkout]', err);
       bot.sendMessage(chatId, tb(lang, 'genericError'));
     }
     return;
@@ -646,7 +800,7 @@ bot.on('callback_query', async (query: any) => {
       // Real vaqtda sinxronlash — profilda ham darhol shu tilga o'tsin.
       emitToUser(String(user._id), 'user:language', { language: newLang });
       await bot.answerCallbackQuery(query.id, { text: langLabel(newLang) });
-      const kb = isDev(user.role) ? DEVELOPER_KEYBOARD(newLang) : isAdmin(user.role) ? ADMIN_KEYBOARD(newLang) : USER_KEYBOARD(newLang);
+      const kb = await keyboardForUser(user, newLang);
       await bot.sendMessage(chatId, tb(newLang, 'langSaved', { lang: langLabel(newLang) }), { reply_markup: kb });
     } catch (err) {
       console.error('[bot setlang]', err);

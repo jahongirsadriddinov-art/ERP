@@ -1,9 +1,64 @@
 import { Router } from 'express';
 import Attendance from '../models/Attendance';
+import User from '../models/User';
 import { scoped, stamped } from '../middleware/scope';
 import { getTenant } from '../middleware/tenantContext';
 
 const router = Router();
+
+// GET /api/attendance/list — BOSHQARUV ko'rinishi: firmadagi HAR BIR
+// ishchining bugungi yo'qlama holati (kelgan/kelmagan, kelgan/ketgan vaqti,
+// ishlagan davomiylik). /today'dan farqli — u faqat O'ZINI ko'rsatadi, bu esa
+// direktor/orinbosar (va nazorat uchun dasturchi) uchun HAMMA xodimni birdan.
+// Firma ichki HR-ma'lumoti bo'lsa ham, boshqa /api/objects, /api/transactions
+// kabi yo'llardan farqli — dasturchi bu yerda ATAYLAB bloklanmagan (foydalanuvchi
+// aniq talabi bilan): oldindan mavjud /api/gps yo'llari ham xuddi shunday,
+// blockDeveloper qo'llanilmagan.
+router.get('/list', async (req, res) => {
+  try {
+    const tenant = getTenant();
+    if (!tenant?.userId) return res.status(401).json({ error: 'Autentifikatsiya talab etiladi' });
+    const allowed = tenant.role === 'direktor' || tenant.role === 'orinbosar' || tenant.role === 'dasturchi' || tenant.isDeveloper;
+    if (!allowed) return res.status(403).json({ error: 'Ruxsat yo\'q' });
+
+    const workerRoles = ['ishchi', 'prorab', 'brigadir'] as const;
+    const users = await User.find({ ...scoped(), role: { $in: workerRoles } })
+      .select('firstName lastName role phone').lean();
+
+    const today = new Date().toISOString().split('T')[0];
+    const userIds = users.map(u => String(u._id));
+    const records = await Attendance.find({ ...scoped(), date: today, userId: { $in: userIds } }).lean();
+    const byUser = new Map(records.map(r => [r.userId, r]));
+
+    const now = Date.now();
+    const list = users.map(u => {
+      const uid = String(u._id);
+      const rec = byUser.get(uid);
+      let status: 'NOT_STARTED' | 'WORKING' | 'FINISHED' = 'NOT_STARTED';
+      let minutesWorking: number | null = null;
+      if (rec?.checkIn && rec?.checkOut) status = 'FINISHED';
+      else if (rec?.checkIn) {
+        status = 'WORKING';
+        minutesWorking = Math.round((now - new Date(rec.checkIn).getTime()) / 60000);
+      }
+      return {
+        userId: uid,
+        name: u.firstName + (u.lastName ? ' ' + u.lastName : ''),
+        role: u.role,
+        phone: u.phone,
+        status,
+        checkIn: rec?.checkIn || null,
+        checkOut: rec?.checkOut || null,
+        workHours: rec?.workHours ?? null,
+        minutesWorking,
+      };
+    });
+    res.json(list);
+  } catch (err) {
+    console.error('[attendance/list]', err);
+    res.status(500).json({ error: 'Server xatoligi' });
+  }
+});
 
 // GET /api/attendance — o'z yoki kompaniya yozuvlari
 router.get('/', async (req, res) => {

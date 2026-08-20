@@ -5,21 +5,21 @@ const DEFAULT_INTERVAL_MS = 60_000; // backend /api/gps/config berolmasa shu ish
 
 const WORKER_ROLES = ['ishchi', 'prorab', 'brigadir'];
 
-// GPS kuzatuv — "Ishga keldim" tugmasidan MUSTAQIL — xodim saytga/ilovaga
-// kirgan zahoti (check-in/check-out bosilgan-bosilmaganidan qat'i nazar)
-// joylashuvi darhol va keyin har intervalMs'da avtomatik yuborilib turishi
-// kerak, direktor/o'rinbosar esa istalgan vaqt "Kuzatuv" sahifasida
-// "Yangilash"ni bosib eng so'nggi joylashuvni ko'ra oladi — xodim hech
-// qanday qo'shimcha tugma bosishi shart emas. Bu App komponenti darajasida
-// (sahifadan tashqarida) chaqirilishi kerak — shunda navigatsiya GPS'ni
-// to'xtatmaydi, faqat logout/foydalanuvchi almashishi to'xtatadi.
+// GPS kuzatuv — SAYTда endi "Ishga keldim" tugmasiga QAT'IY BOG'LIQ (foydalanuvchi
+// aniq talabi bilan): "Ishga keldim" bosilmaguncha GPS UMUMAN ishlamaydi,
+// "Ishni tugatdim" bosilgach to'xtaydi. (Botда bu boshqacha — u doim location
+// qabul qiladi, chunki Telegram'ning o'zi shunday ishlaydi; qarang bot.ts.)
 //
-// MUHIM: effekt faqat `userId` o'zgarganda qayta ishga tushadi (asl App.tsx
-// implementatsiyasidagi `[liveUser?.id]` bilan bir xil) — `role`ni ham
-// dependency qilib qo'yish xavfsiz (u primitiv string, obyekt referensi
-// emas), lekin `userId` o'rniga butun user obyektini bermaslik SHART —
-// aks holda har bir bog'liqsiz re-render intervalni qayta boshlab yuboradi.
-export function useGeoTracker(userId: string | undefined, role: string | undefined) {
+// Bu App komponenti darajasida (sahifadan tashqarida) chaqirilishi kerak —
+// shunda ichki navigatsiya GPS'ni to'xtatmaydi, faqat logout/foydalanuvchi
+// almashishi yoki isWorking o'zgarishi to'xtatadi/boshlaydi.
+//
+// MUHIM: effekt `userId` VA `isWorking`ga bog'liq — ikkinchisi o'zgarganda
+// (checkin/checkout) effekt qayta ishlab, GPS'ni mos ravishda to'xtatadi/
+// boshlaydi. `role`ni ham dependency qilish xavfsiz (primitiv string), lekin
+// `userId` o'rniga butun user obyektini bermaslik SHART — aks holda har bir
+// bog'liqsiz re-render intervalni qayta boshlab yuboradi.
+export function useGeoTracker(userId: string | undefined, role: string | undefined, isWorking: boolean) {
   const [gpsTracking, setGpsTracking] = useState(false);
   const gpsIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const gpsWarnedRef = useRef(false); // bir marta ogohlantirish uchun — har daqiqada konsolni to'ldirmaslik uchun
@@ -65,7 +65,7 @@ export function useGeoTracker(userId: string | undefined, role: string | undefin
   };
 
   useEffect(() => {
-    if (!userId) return;
+    if (!userId || !isWorking) return;
     if (!role || !WORKER_ROLES.includes(role)) return;
     let cancelled = false;
     const token = localStorage.getItem('token') || '';
@@ -86,7 +86,7 @@ export function useGeoTracker(userId: string | undefined, role: string | undefin
       .catch(() => {}); // standart interval bilan davom etadi
 
     return () => { cancelled = true; stopGpsInterval(); };
-  }, [userId]);
+  }, [userId, isWorking]);
 
   return { gpsTracking };
 }

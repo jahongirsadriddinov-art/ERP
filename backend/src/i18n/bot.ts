@@ -27,6 +27,18 @@ interface BotDict {
   kb_language: string;
   exitChat: string;
 
+  kb_checkIn: string;
+  kb_checkOut: string;
+  checkInPrompt: string;
+  checkInConfirmed: (p: { time: string }) => string;
+  checkOutConfirmed: (p: { time: string; hours: string }) => string;
+  alreadyCheckedIn: string;
+  alreadyCheckedOut: string;
+  notCheckedInYet: string;
+  locationShareBtn: string;
+  locationLiveHint: string;
+  locationSaved: string;
+
   startWelcomeBack: (p: { name: string }) => string;
   startWelcomeNew: string;
   sharePhoneBtn: string;
@@ -130,6 +142,18 @@ const uz: BotDict = {
   kb_generalStats: '📊 Umumiy statistika',
   kb_language: '🌐 Til / Язык',
   exitChat: '🔚 Chatni tugatish',
+
+  kb_checkIn: '✅ Ishga keldim',
+  kb_checkOut: '🔴 Ish tugatdim',
+  checkInPrompt: "Ishni boshlash uchun \"✅ Ishga keldim\" tugmasini bosing.",
+  checkInConfirmed: (p: { time: string }) => `✅ Ishga keldingiz! Vaqt: ${p.time}`,
+  checkOutConfirmed: (p: { time: string; hours: string }) => `🔴 Ish yakunlandi. Vaqt: ${p.time}\n⏱ Ishlagan vaqtingiz: ${p.hours} soat`,
+  alreadyCheckedIn: 'Siz bugun allaqachon ishga kelgansiz.',
+  alreadyCheckedOut: 'Siz bugungi ishni allaqachon yakunlagansiz.',
+  notCheckedInYet: "Avval \"✅ Ishga keldim\" tugmasini bosing.",
+  locationShareBtn: '📍 Joylashuvni ulashish',
+  locationLiveHint: "Doimiy joylashuv kuzatuvi uchun Telegram'ning \"Jonli joylashuv\" (Live Location) funksiyasidan foydalaning: 📎 (skrepka) → Location → Share Live Location.",
+  locationSaved: '📍 Joylashuvingiz qabul qilindi.',
 
   startWelcomeBack: (p: { name: string }) => `✅ Xush kelibsiz, ${p.name}!\n\nSiz tizimga ulanganmiz. Quyidagi menyudan foydalaning:`,
   startWelcomeNew: '👋 Assalomu alaykum! *QurilishERP* botiga xush kelibsiz.\n\nTizimga kirish uchun telefon raqamingizni yuboring:',
@@ -242,6 +266,18 @@ const ru: BotDict = {
   kb_generalStats: '📊 Общая статистика',
   kb_language: '🌐 Til / Язык',
   exitChat: '🔚 Завершить чат',
+
+  kb_checkIn: '✅ Я пришёл',
+  kb_checkOut: '🔴 Я закончил',
+  checkInPrompt: 'Чтобы начать работу, нажмите "✅ Я пришёл".',
+  checkInConfirmed: (p: { time: string }) => `✅ Вы пришли на работу! Время: ${p.time}`,
+  checkOutConfirmed: (p: { time: string; hours: string }) => `🔴 Работа завершена. Время: ${p.time}\n⏱ Отработано: ${p.hours} ч.`,
+  alreadyCheckedIn: 'Вы уже отметили приход сегодня.',
+  alreadyCheckedOut: 'Вы уже завершили сегодняшнюю работу.',
+  notCheckedInYet: 'Сначала нажмите "✅ Я пришёл".',
+  locationShareBtn: '📍 Поделиться геолокацией',
+  locationLiveHint: 'Для постоянного отслеживания используйте функцию Telegram "Трансляция геопозиции": 📎 (скрепка) → Геопозиция → Транслировать геопозицию.',
+  locationSaved: '📍 Ваша геопозиция получена.',
 
   startWelcomeBack: (p) => `✅ Добро пожаловать, ${p.name}!\n\nВы подключены к системе. Используйте меню ниже:`,
   startWelcomeNew: '👋 Здравствуйте! Добро пожаловать в бот *QurilishERP*.\n\nЧтобы войти в систему, отправьте свой номер телефона:',

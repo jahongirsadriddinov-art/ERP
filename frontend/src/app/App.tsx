@@ -3171,112 +3171,6 @@ function CurrencyPanel({ canEdit }: { canEdit: boolean }) {
   );
 }
 
-// "Mening kurslarim" — foydalanuvchi o'zi tugatgan kurs/malaka/sertifikatlarni
-// yozib qo'yadi. Backend (User.courses, PATCH/GET /api/users/:id/...) hech
-// qachon olib tashlanmagan edi — bu faqat frontend UI'ni qayta ulaydi,
-// endi lokal localStorage o'rniga to'g'ridan-to'g'ri serverdan o'qiydi/yozadi.
-type Course = { title: string; provider?: string; year?: number; cert?: string };
-function CoursesPanel({ userId }: { userId: string }) {
-  const [courses, setCourses] = useState<Course[] | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [addOpen, setAddOpen] = useState(false);
-  const [editIdx, setEditIdx] = useState<number | null>(null);
-  const [form, setForm] = useState({ title: '', provider: '', year: '', cert: '' });
-
-  useEffect(() => {
-    const token = localStorage.getItem('token') || '';
-    fetch(`${API_BASE}/api/users/${userId}/profile`, { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.ok ? r.json() : null)
-      .then(d => setCourses(d?.courses || []))
-      .catch(() => setCourses([]))
-      .finally(() => setLoading(false));
-  }, [userId]);
-
-  const saveCourses = async (list: Course[]) => {
-    setSaving(true);
-    const prev = courses;
-    setCourses(list); // optimistik
-    try {
-      const token = localStorage.getItem('token') || '';
-      const r = await fetch(`${API_BASE}/api/users/${userId}/courses`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ courses: list }),
-      });
-      if (!r.ok) { setCourses(prev); toast.error("Saqlab bo'lmadi"); return; }
-    } catch { setCourses(prev); toast.error("Server bilan ulanishda xatolik"); }
-    finally { setSaving(false); }
-  };
-
-  const openAdd = () => { setForm({ title: '', provider: '', year: '', cert: '' }); setEditIdx(null); setAddOpen(true); };
-  const openEdit = (idx: number) => {
-    const c = courses![idx];
-    setForm({ title: c.title, provider: c.provider || '', year: String(c.year || ''), cert: c.cert || '' });
-    setEditIdx(idx); setAddOpen(true);
-  };
-  const save = () => {
-    if (!form.title.trim() || !courses) return;
-    const item: Course = { title: form.title.trim(), provider: form.provider.trim() || undefined, year: form.year ? Number(form.year) : undefined, cert: form.cert.trim() || undefined };
-    const next = editIdx !== null ? courses.map((c, i) => i === editIdx ? item : c) : [...courses, item];
-    saveCourses(next); setAddOpen(false);
-  };
-  const del = (idx: number) => { if (courses) saveCourses(courses.filter((_, i) => i !== idx)); };
-
-  if (loading) return <SkeletonProfile/>;
-
-  return (
-    <div className="space-y-3">
-      {addOpen ? (
-        <div className="surface p-4 space-y-3 rounded-2xl">
-          <h3 className="text-sm font-bold">{editIdx !== null ? 'Kursni tahrirlash' : "Kurs qo'shish"}</h3>
-          {(['title', 'provider', 'year', 'cert'] as const).map((k) => (
-            <div key={k}>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                {k === 'title' ? "Kurs nomi *" : k === 'provider' ? "Muassasa/Platforma" : k === 'year' ? "Yil" : "Sertifikat raqami"}
-              </label>
-              <input type={k === 'year' ? 'number' : 'text'} value={form[k]} onChange={e => setForm(p => ({ ...p, [k]: e.target.value }))}
-                className="w-full bg-muted/60 border border-border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-primary" />
-            </div>
-          ))}
-          <div className="flex gap-2 pt-1">
-            <button onClick={save} disabled={saving} className="flex-1 btn btn-primary text-sm py-2.5 rounded-xl disabled:opacity-60">Saqlash</button>
-            <button onClick={() => setAddOpen(false)} disabled={saving} className="flex-1 btn btn-outline text-sm py-2.5 rounded-xl">Bekor qilish</button>
-          </div>
-        </div>
-      ) : (
-        <button onClick={openAdd} className="w-full btn btn-primary text-sm py-2.5 rounded-2xl flex items-center justify-center gap-2">
-          <Plus className="w-4 h-4"/>Kurs qo'shish
-        </button>
-      )}
-      {courses?.length === 0 && !addOpen && (
-        <div className="surface p-8 text-center rounded-2xl">
-          <CheckCircle className="w-10 h-10 text-muted-foreground/30 mx-auto mb-2"/>
-          <p className="text-sm font-medium">Kurslar yo'q</p>
-          <p className="text-xs text-muted-foreground mt-1">Sertifikatlaringiz va o'tgan kurslaringizni qo'shing</p>
-        </div>
-      )}
-      {courses?.map((c, i) => (
-        <div key={i} className="surface p-4 rounded-2xl flex items-start gap-3">
-          <div className="icon-chip flex-shrink-0 mt-0.5"><CheckCircle className="w-4 h-4"/></div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold leading-tight">{c.title}</p>
-            {c.provider && <p className="text-xs text-muted-foreground mt-0.5">{c.provider}</p>}
-            <div className="flex gap-3 mt-1">
-              {c.year && <span className="text-[10px] text-muted-foreground">{c.year}</span>}
-              {c.cert && <span className="text-[10px] text-primary font-medium">#{c.cert}</span>}
-            </div>
-          </div>
-          <div className="flex gap-1 flex-shrink-0">
-            <button onClick={() => openEdit(i)} aria-label="Tahrirlash" className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground"><Edit className="w-3.5 h-3.5"/></button>
-            <button onClick={() => del(i)} aria-label="O'chirish" className="p-1.5 rounded-lg hover:bg-red-500/10 text-muted-foreground hover:text-red-600"><Trash className="w-3.5 h-3.5"/></button>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdateUser, onCompanyNameChange, onCompanyLogoChange, onBgChange, onColorThemeChange, colorTheme, themeMode, onThemeModeChange, canEditCompany, todayAttendance, onCheckIn, onCheckOut, gpsTracking }:
   { currentUser: AppUser; projects: Project[]; onUpdateAvatar: (url: string) => void; onLogout: () => void; onUpdateUser: (u: AppUser) => void; onCompanyNameChange: (name: string) => void; onCompanyLogoChange: (logo: string) => void; onBgChange: (bg: string) => void; onColorThemeChange: (id: string) => void; colorTheme: string; themeMode: "light"|"dark"|"system"; onThemeModeChange: (m: "light"|"dark"|"system") => void; canEditCompany?: boolean; todayAttendance: null | { status: string; checkIn?: string; checkOut?: string; workHours?: number }; onCheckIn: () => void; onCheckOut: () => void; gpsTracking: boolean }) {
   const { t, i18n } = useTranslation();
@@ -3363,7 +3257,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
   ];
 
   const activeTheme = COLOR_THEMES.find(t => t.id === colorTheme) || COLOR_THEMES[0];
-  const [activePanel, setActivePanel] = useState<null | "bg" | "appearance" | "color" | "perms" | "projects" | "language" | "subscription" | "currency" | "courses">(null);
+  const [activePanel, setActivePanel] = useState<null | "bg" | "appearance" | "color" | "perms" | "projects" | "language" | "subscription" | "currency">(null);
   const APPEARANCE_LABELS: Record<string, string> = { light: "Yorug'", dark: "Qorong'i", system: "Tizim" };
 
   const [subData, setSubData] = useState<any>(null);
@@ -3386,7 +3280,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
     const panelTitle = {
       bg: "Fon mavzular", appearance: "Ko'rinish rejimi", color: "Rang mavzusi",
       perms: "Ruxsatlar", projects: "Obyektlarim", language: t('profile.language'),
-      subscription: "Obuna holati", currency: "Valyuta kursi", courses: "Mening kurslarim",
+      subscription: "Obuna holati", currency: "Valyuta kursi",
     }[activePanel];
     return (
       <motion.div key={activePanel} initial={{ opacity: 0, x: 28 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 28 }}
@@ -3500,9 +3394,6 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
           )}
           {activePanel === "currency" && (
             <CurrencyPanel canEdit={isAdmin(currentUser.role) || !!currentUser.isOwner}/>
-          )}
-          {activePanel === "courses" && (
-            <CoursesPanel userId={currentUser.id}/>
           )}
           {activePanel === "subscription" && (
             <div className="surface overflow-hidden">
@@ -3690,7 +3581,6 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
             { key: "perms" as const, icon: CheckCircle, label: t('profile.permissions'), hint: `${perms.filter(([,has])=>has).length}/${perms.length}`, swatch: null },
             { key: "projects" as const, icon: Building2, label: t('profile.myObjects'), hint: String(myProjectCount), swatch: null },
             { key: "currency" as const, icon: DollarSign, label: "Valyuta kursi", hint: null as string|null, swatch: null },
-            { key: "courses" as const, icon: CheckCircle, label: "Mening kurslarim", hint: null as string|null, swatch: null },
             ...(isAdmin(currentUser.role) ? [{ key: "subscription" as const, icon: CreditCard, label: "Obuna holati",
               hint: subData?.status === 'active' ? (subData.daysLeft !== null ? `${subData.daysLeft} kun` : "Faol") : subData?.status === 'pending' ? "Kutilmoqda" : subData?.status === 'expired' ? "Muddati o'tgan" : subData?.status === 'rejected' ? "Rad etildi" : subLoading ? "..." : "Topilmadi",
               swatch: null }] : []),
@@ -3707,57 +3597,50 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
           ))}
         </motion.div>
 
-        {/* Attendance + GPS card — faqat ishchi/prorab/brigadir uchun */}
-        {(currentUser.role === 'ishchi' || currentUser.role === 'prorab' || currentUser.role === 'brigadir') && (
+        {/* Attendance + GPS card — faqat ishchi/prorab/brigadir uchun.
+            MUHIM: "Ishga keldim" tugmasi endi BU YERDA emas — bosh sahifa
+            darvozasida (App.tsx'dagi asosiy gate'da). Ishchi Profilga
+            kirgan ekan, demak allaqachon check-in bosgan (aks holda gate
+            uni bosh sahifadan chetga chiqarmagan bo'lardi) — shu sabab bu
+            karta faqat "allaqachon kelgan" holatini ko'rsatadi. */}
+        {(currentUser.role === 'ishchi' || currentUser.role === 'prorab' || currentUser.role === 'brigadir') && todayAttendance?.checkIn && (
           <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28, delay: 0.22 }}
             className="surface rounded-2xl overflow-hidden">
             <div className="p-4">
-              {!todayAttendance?.checkIn ? (
-                /* Hali ishga kelmagan — foydalanuvchi talabiga ko'ra FAQAT bitta
-                   tugma ko'rsatiladi, boshqa hech qanday sarlavha/status/matn yo'q.
-                   GPS check-in'dan mustaqil allaqachon fonda ishlab turibdi. */
-                <button onClick={onCheckIn} className="w-full btn btn-primary text-sm py-3 rounded-xl flex items-center justify-center gap-2 font-semibold">
-                  <MapPin className="w-4 h-4"/>Ishga keldim
-                </button>
-              ) : (
-                <>
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <div className="icon-chip"><Calendar className="w-4 h-4"/></div>
-                      <span className="text-sm font-semibold">{t('attendance.today')}</span>
-                    </div>
-                    {todayAttendance?.status && (
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${todayAttendance.status==='present'?'bg-green-500/15 text-green-700 dark:text-green-400':todayAttendance.status==='late'?'bg-amber-500/15 text-amber-700 dark:text-amber-400':'bg-muted text-muted-foreground'}`}>
-                        {todayAttendance.status==='present'?t('attendance.statusPresent'):todayAttendance.status==='late'?t('attendance.statusLate'):t('attendance.statusAbsent')}
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-xs text-muted-foreground space-y-1 mb-3">
-                    <p>Keldi: <span className="text-foreground font-medium">{new Date(todayAttendance.checkIn).toLocaleTimeString('uz-UZ',{hour:'2-digit',minute:'2-digit'})}</span></p>
-                    {todayAttendance.checkOut && <p>Ish tugadi: <span className="text-foreground font-medium">{new Date(todayAttendance.checkOut).toLocaleTimeString('uz-UZ',{hour:'2-digit',minute:'2-digit'})}</span></p>}
-                    {todayAttendance.workHours != null && <p>{t('attendance.workHours', { h: todayAttendance.workHours.toFixed(1) })}</p>}
-                  </div>
-                  {/* GPS holati — endi check-in'dan mustaqil doim faol, shu joyda
-                      shunchaki ishlab turganini ko'rsatadi */}
-                  {!todayAttendance?.checkOut && (
-                    <div className="flex items-center gap-2 mb-3 text-xs text-muted-foreground">
-                      <div className={`w-2 h-2 rounded-full flex-shrink-0 ${gpsTracking ? 'bg-green-500 animate-pulse' : 'bg-muted-foreground/40'}`}/>
-                      <span>{gpsTracking ? 'GPS faol — har daqiqada joylashuv yuboriladi' : 'GPS kutilmoqda...'}</span>
-                    </div>
-                  )}
-                  <div className="flex gap-2">
-                    {!todayAttendance?.checkOut ? (
-                      <button onClick={onCheckOut} className="flex-1 btn btn-outline text-xs py-2.5 rounded-xl flex items-center justify-center gap-1.5 border-red-400/40 text-red-600 dark:text-red-400 hover:bg-red-500/10">
-                        <X className="w-3.5 h-3.5"/>Ishni tugatdim
-                      </button>
-                    ) : (
-                      <div className="flex-1 text-center py-2.5 text-xs text-green-600 dark:text-green-400 font-medium">
-                        ✓ Bugungi ish yakunlandi ({todayAttendance.workHours?.toFixed(1) || 0}h)
-                      </div>
-                    )}
-                  </div>
-                </>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="icon-chip"><Calendar className="w-4 h-4"/></div>
+                  <span className="text-sm font-semibold">{t('attendance.today')}</span>
+                </div>
+                {todayAttendance?.status && (
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${todayAttendance.status==='present'?'bg-green-500/15 text-green-700 dark:text-green-400':todayAttendance.status==='late'?'bg-amber-500/15 text-amber-700 dark:text-amber-400':'bg-muted text-muted-foreground'}`}>
+                    {todayAttendance.status==='present'?t('attendance.statusPresent'):todayAttendance.status==='late'?t('attendance.statusLate'):t('attendance.statusAbsent')}
+                  </span>
+                )}
+              </div>
+              <div className="text-xs text-muted-foreground space-y-1 mb-3">
+                <p>Keldi: <span className="text-foreground font-medium">{new Date(todayAttendance.checkIn).toLocaleTimeString('uz-UZ',{hour:'2-digit',minute:'2-digit'})}</span></p>
+                {todayAttendance.checkOut && <p>Ish tugadi: <span className="text-foreground font-medium">{new Date(todayAttendance.checkOut).toLocaleTimeString('uz-UZ',{hour:'2-digit',minute:'2-digit'})}</span></p>}
+                {todayAttendance.workHours != null && <p>{t('attendance.workHours', { h: todayAttendance.workHours.toFixed(1) })}</p>}
+              </div>
+              {/* GPS holati — endi check-in'ga BOG'LIQ (faqat WORKING holatida ishlaydi) */}
+              {!todayAttendance?.checkOut && (
+                <div className="flex items-center gap-2 mb-3 text-xs text-muted-foreground">
+                  <div className={`w-2 h-2 rounded-full flex-shrink-0 ${gpsTracking ? 'bg-green-500 animate-pulse' : 'bg-muted-foreground/40'}`}/>
+                  <span>{gpsTracking ? 'GPS faol — har daqiqada joylashuv yuboriladi' : 'GPS kutilmoqda...'}</span>
+                </div>
               )}
+              <div className="flex gap-2">
+                {!todayAttendance?.checkOut ? (
+                  <button onClick={onCheckOut} className="flex-1 btn btn-outline text-xs py-2.5 rounded-xl flex items-center justify-center gap-1.5 border-red-400/40 text-red-600 dark:text-red-400 hover:bg-red-500/10">
+                    <X className="w-3.5 h-3.5"/>Ishni tugatdim
+                  </button>
+                ) : (
+                  <div className="flex-1 text-center py-2.5 text-xs text-green-600 dark:text-green-400 font-medium">
+                    ✓ Bugungi ish yakunlandi ({todayAttendance.workHours?.toFixed(1) || 0}h)
+                  </div>
+                )}
+              </div>
             </div>
           </motion.div>
         )}
@@ -4310,23 +4193,32 @@ export default function App() {
   };
 
   const liveUser = currentUser ? (users.find(u => u.id === currentUser.id) ?? currentUser) : null;
+  const isWorkerRole = liveUser ? ['ishchi', 'prorab', 'brigadir'].includes(liveUser.role) : false;
+  // WORKING holati — "Ishga keldim" bosilgan, "Ishni tugatdim" hali bosilmagan.
+  // GPS aynan shu holatga BOG'LIQ (foydalanuvchi talabi: check-in bosilmaguncha
+  // GPS ishlamasin, check-out bosilgach to'xtasin).
+  const isWorking = !!(todayAttendance?.checkIn && !todayAttendance?.checkOut);
 
   // GPS kuzatuv — session-scoped hook (App darajasida, sahifa emas — shu
-  // sabab navigatsiya GPS'ni to'xtatmaydi). To'liq mantiq useGeoTracker.ts'da.
-  const { gpsTracking } = useGeoTracker(liveUser?.id, liveUser?.role);
+  // sabab navigatsiya GPS'ni to'xtatmaydi, lekin isWorking o'zgarishi
+  // to'xtatadi/boshlaydi). To'liq mantiq useGeoTracker.ts'da.
+  const { gpsTracking } = useGeoTracker(liveUser?.id, liveUser?.role, isWorking);
 
-  // Bugungi davomat holatini alohida yuklaymiz (GPS'dan mustaqil — GPS
-  // kuzatuvchi hook o'z ichida ishlaydi, bu yerda faqat "Ishga keldim/
-  // Ishni tugatdim" tugmalari uchun UI holatini olib kelamiz).
+  // Bugungi davomat holatini alohida yuklaymiz. attendanceChecked — ishchi
+  // rol uchun "Ishga keldim" darvozasini (gate) ko'rsatishdan oldin, haqiqiy
+  // holat serverdan kelguncha bir zumlik noto'g'ri (bo'sh) holatni ko'rsatib
+  // qo'ymaslik uchun kerak.
+  const [attendanceChecked, setAttendanceChecked] = useState(false);
   useEffect(() => {
     if (!liveUser) return;
-    const workerRoles = ['ishchi', 'prorab', 'brigadir'];
-    if (!workerRoles.includes(liveUser.role)) return;
+    if (!isWorkerRole) { setAttendanceChecked(true); return; }
     const token = localStorage.getItem('token') || '';
     const headers = { Authorization: `Bearer ${token}` };
     fetch(`${API_BASE}/api/attendance/today`, { headers })
       .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d) setTodayAttendance(d); }).catch(()=>{});
+      .then(d => { if (d) setTodayAttendance(d); else setTodayAttendance(null); })
+      .catch(()=>{})
+      .finally(() => setAttendanceChecked(true));
   }, [liveUser?.id]);
 
   // Ikkala tugma ham bitta umumiy "pending" bayrog'ini ishlatadi — ketma-ket
@@ -4773,12 +4665,46 @@ export default function App() {
     </header>
   );
 
-  if (initialLoading) return (
+  if (initialLoading || (isWorkerRole && !attendanceChecked)) return (
     <>
       <div className="min-h-screen bg-background flex flex-col">
         {headerEl}
         <SkeletonPage variant="dashboard" />
       </div>
+      <Toaster position="top-center" richColors closeButton/>
+    </>
+  );
+
+  // "Ishga keldim" darvozasi (gate) — ishchi/prorab/brigadir hali bugun
+  // check-in bosmagan bo'lsa, BOSHQA HECH NARSA (nav, GPS, hech qanday
+  // sahifa) ishlamaydi — faqat shu tugma ko'rinadi. Check-in bosilgach
+  // (WORKING yoki FINISHED holatida) oddiy ilova ochiladi. Bu qat'iy talab:
+  // avvalgi (bu sessiyada) "GPS check-in'dan mustaqil" qarori endi
+  // foydalanuvchining yangi, aniq so'rovi bilan bekor qilindi.
+  if (isWorkerRole && !todayAttendance?.checkIn) return (
+    <>
+      <main className="min-h-[100dvh] bg-background flex flex-col items-center justify-center p-4 py-8 liquid-transition relative overflow-y-auto scrollbar-hide"
+        style={{ paddingTop: "max(2rem, env(safe-area-inset-top))", paddingBottom: "max(2rem, env(safe-area-inset-bottom))" }}>
+        <div className="absolute top-[-8%] left-[-12%] w-[45%] h-[45%] bg-primary/15 rounded-full blur-[120px] blob-anim pointer-events-none" />
+        <div className="absolute bottom-[-8%] right-[-12%] w-[45%] h-[45%] bg-accent/15 rounded-full blur-[120px] blob-anim-slow pointer-events-none" />
+        <motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 26 }}
+          className="w-full max-w-sm surface rounded-3xl p-8 text-center space-y-5 relative">
+          <div className="w-16 h-16 rounded-full flex items-center justify-center overflow-hidden bg-gradient-to-br from-accent to-accent/75 shadow-sm mx-auto">
+            {companyLogo ? <img src={companyLogo} alt="Logo" className="w-full h-full object-contain"/> : <Building2 className="w-8 h-8 text-white"/>}
+          </div>
+          <div>
+            <p className="text-lg font-bold">Xush kelibsiz, {liveUser.name.split(' ')[0]}!</p>
+            <p className="text-sm text-muted-foreground mt-1">Ishni boshlash uchun "Ishga keldim" tugmasini bosing. GPS kuzatuv va ilovaning boshqa bo'limlari shundan keyin ochiladi.</p>
+          </div>
+          <button onClick={handleCheckIn} disabled={attendancePending}
+            className="w-full btn btn-primary text-base py-4 rounded-2xl flex items-center justify-center gap-2 disabled:opacity-60">
+            {attendancePending ? <Loader2 className="w-5 h-5 animate-spin"/> : <MapPin className="w-5 h-5"/>}
+            Ishga keldim
+          </button>
+          <button onClick={()=>{localStorage.removeItem("currentUser"); localStorage.removeItem("token"); setCurrentUser(null); setAuthView("login");}}
+            className="text-xs text-muted-foreground hover:text-foreground underline">Chiqish</button>
+        </motion.div>
+      </main>
       <Toaster position="top-center" richColors closeButton/>
     </>
   );

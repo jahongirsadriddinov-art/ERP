@@ -98,6 +98,11 @@ export interface Msg {
   mediaUrl?: string; fileName?: string; fileSize?: number;
   location?: { lat: number; lng: number };
   replyToId?: string; edited?: boolean; pinned?: boolean; deleted?: boolean;
+  // Optimistik yuborish holati — faqat lokal, serverga hech qachon
+  // yuborilmaydi/saqlanmaydi. Yo'q (undefined) === serverdan kelgan/
+  // tasdiqlangan xabar. "sending" — hali serverga POST qilinmoqda,
+  // "failed" — yuborilmadi, qayta urinish (retry) ko'rsatiladi.
+  status?: 'sending' | 'failed';
 }
 interface Group {
   id: string; name: string; avatar?: string;
@@ -2647,10 +2652,22 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
                     >
                       {renderBubble(m, mine)}
                       <div className={`flex items-center justify-end gap-1 mt-1 ${mine?'text-white/60':'text-muted-foreground'}`}>
+                        {m.status === 'failed' && (
+                          <button
+                            onClick={e => { e.stopPropagation(); const { status, ...retry } = m; onSend(retry as Msg); }}
+                            className="flex items-center gap-1 text-[9px] text-red-300 hover:text-red-200 underline"
+                            aria-label={tChat('chat.retrySend')}>
+                            <AlertCircle className="w-3 h-3"/>{tChat('chat.retrySend')}
+                          </button>
+                        )}
                         {m.edited && <span className="text-[9px] italic">{tChat("chat.editedLabel")}</span>}
                         {m.pinned && <span className="text-[9px]">📌</span>}
                         <span className="text-[9px]">{new Date(m.timestamp).toLocaleTimeString("uz-UZ",{hour:"2-digit",minute:"2-digit"})}</span>
-                        {mine && (m.read ? <CheckCheck className="w-3.5 h-3.5"/> : <Check className="w-3 h-3"/>)}
+                        {mine && (
+                          m.status === 'sending' ? <Loader2 className="w-3 h-3 animate-spin"/> :
+                          m.status === 'failed' ? null :
+                          m.read ? <CheckCheck className="w-3.5 h-3.5"/> : <Check className="w-3 h-3"/>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -4696,22 +4713,48 @@ export default function App() {
       if (res.ok) setExpenses(p=>p.map(ex=>ex.id===id?{...ex,status:"rejected"}:ex));
     } catch(err) { console.error(err); }
   };
+  // Optimistik yuborish: xabar SERVERGA yuborilishini kutmasdan darhol
+  // "sending" holatida ro'yxatga qo'shiladi (xuddi shu `m.id` — doSend'da
+  // client tomonda generatsiya qilingan `msg${Date.now()}`) — agar shu id
+  // allaqachon ro'yxatda bo'lsa (masalan qayta urinish/"retry" chaqirilsa),
+  // yangi qator qo'shish o'rniga o'sha joyida yangilanadi, dublikat bo'lmaydi.
+  // Muvaffaqiyatli bo'lsa — server tasdiqlagan haqiqiy hujjat bilan
+  // almashtiriladi; muvaffaqiyatsiz bo'lsa — matn yo'qolib ketmaydi, "failed"
+  // deb belgilanadi va foydalanuvchi bosib qayta yubora oladi (ChatPage'dagi
+  // pufakcha shu holatni ko'rsatadi).
   const handleSendMsg = async (m: Msg) => {
+    const tempId = m.id;
+    const optimistic: Msg = { ...m, status: 'sending' };
+    setMessages(p => {
+      const idx = p.findIndex(x => x.id === tempId);
+      if (idx === -1) return [...p, optimistic];
+      const next = [...p]; next[idx] = optimistic; return next;
+    });
     try {
+      const { status, ...body } = m; // status faqat lokal — serverga yubormaymiz
       const res = await fetch(API_BASE + "/api/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(m)
+        body: JSON.stringify(body)
       });
       if (res.ok) {
         const data = await res.json();
         const newMsg = {...data, id: data._id || data.id};
         setMessages(p => {
-          if (p.some(x => x.id === newMsg.id)) return p;
-          return [...p, newMsg];
+          // Socket orqali ALLAQACHON (real id bilan) kelib qolgan bo'lsa —
+          // dublikat qo'shmasdan, faqat vaqtinchalik yozuvni olib tashlaymiz.
+          if (p.some(x => x.id === newMsg.id && x.id !== tempId)) {
+            return p.filter(x => x.id !== tempId);
+          }
+          return p.map(x => x.id === tempId ? newMsg : x);
         });
+      } else {
+        setMessages(p => p.map(x => x.id === tempId ? { ...x, status: 'failed' as const } : x));
       }
-    } catch (err) { console.error(err); }
+    } catch (err) {
+      console.error(err);
+      setMessages(p => p.map(x => x.id === tempId ? { ...x, status: 'failed' as const } : x));
+    }
   };
   const handleMarkRead = async (fromUserId: string) => {
     if (!liveUser) return;

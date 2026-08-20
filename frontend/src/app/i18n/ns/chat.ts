@@ -60,6 +60,7 @@ export const uz = {
   deletedMessage: "Xabar o'chirildi",
   editedLabel: "tahrirlangan",
   pinnedMessage: "Qo'yilgan xabar",
+  retrySend: "Qayta yuborish",
 };
 
 export const ru = {
@@ -124,4 +125,5 @@ export const ru = {
   deletedMessage: "Сообщение удалено",
   editedLabel: "изменено",
   pinnedMessage: "Закреплённое сообщение",
+  retrySend: "Отправить снова",
 };

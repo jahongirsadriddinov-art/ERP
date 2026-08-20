@@ -14,24 +14,45 @@ interface Props {
   token?: string;
 }
 
+// Kamera muvaffaqiyatsizligining aniq turi — har biri boshqa sababga ega va
+// boshqacha xabar/harakat talab qiladi. Avval bularning barchasi bitta
+// "ruxsat bering" xabariga tushirilib yuborilar edi, garchi faqat "denied"
+// uchun to'g'ri bo'lsa ham.
+type CameraIssue = "denied" | "unavailable" | "busy" | "insecure" | "unknown";
+
 export default function QRScanner({ onClose, onResult, token }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const animFrameRef = useRef<number>(0);
+  const stallTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [status, setStatus] = useState<"idle" | "scanning" | "processing" | "success" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
   const [result, setResult] = useState<QRScanResult | null>(null);
-  const [cameraAllowed, setCameraAllowed] = useState<boolean | null>(null);
+  const [cameraIssue, setCameraIssue] = useState<CameraIssue | null>(null);
+  const [stalled, setStalled] = useState(false);
 
   const stopCamera = useCallback(() => {
     if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+    if (stallTimerRef.current) { clearTimeout(stallTimerRef.current); stallTimerRef.current = null; }
     streamRef.current?.getTracks().forEach(t => t.stop());
     streamRef.current = null;
   }, []);
 
   const startCamera = useCallback(async () => {
+    setStalled(false);
+    // MUHIM: getUserMedia'ni chaqirishdan OLDIN tekshiramiz — xavfsiz bo'lmagan
+    // (HTTP, localhost emas) kontekstda navigator.mediaDevices umuman mavjud
+    // bo'lmaydi, va uni chaqirish oddiy TypeError tashlaydi — bu boshqa har
+    // qanday xato bilan bir xil "ruxsat bering" xabarini ko'rsatib, chalkashtirar
+    // edi, holbuki bu holatda ruxsatning hech qanday aloqasi yo'q.
+    if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+      setCameraIssue("insecure");
+      setErrorMsg("Kamera faqat xavfsiz (HTTPS) ulanishda ishlaydi");
+      setStatus("error");
+      return;
+    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
@@ -40,13 +61,25 @@ export default function QRScanner({ onClose, onResult, token }: Props) {
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
-        setCameraAllowed(true);
+        setCameraIssue(null);
         setStatus("scanning");
         scanLoop();
+        // ~9s davomida hech qanday kod topilmasa — jim loop'ni to'xtatmasdan,
+        // qo'shimcha maslahat matnini ko'rsatamiz (avval umuman ko'rsatilmas edi).
+        stallTimerRef.current = setTimeout(() => setStalled(true), 9000);
       }
     } catch (err: any) {
-      setCameraAllowed(false);
-      setErrorMsg(err?.name === "NotAllowedError" ? "Kamera ruxsati berilmagan" : "Kamera ochib bo'lmadi");
+      let issue: CameraIssue = "unknown";
+      let msg = "Kamera ochib bo'lmadi";
+      if (err?.name === "NotAllowedError" || err?.name === "PermissionDeniedError") {
+        issue = "denied"; msg = "Kamera ruxsati berilmagan";
+      } else if (err?.name === "NotFoundError" || err?.name === "OverconstrainedError") {
+        issue = "unavailable"; msg = "Qurilmada kamera topilmadi";
+      } else if (err?.name === "NotReadableError" || err?.name === "TrackStartError") {
+        issue = "busy"; msg = "Kamera boshqa ilova tomonidan band";
+      }
+      setCameraIssue(issue);
+      setErrorMsg(msg);
       setStatus("error");
     }
   }, []);
@@ -70,6 +103,7 @@ export default function QRScanner({ onClose, onResult, token }: Props) {
         inversionAttempts: "dontInvert",
       });
       if (code && code.data) {
+        if (stallTimerRef.current) { clearTimeout(stallTimerRef.current); stallTimerRef.current = null; }
         handleQRData(code.data);
       } else {
         animFrameRef.current = requestAnimationFrame(scanLoop);
@@ -113,6 +147,7 @@ export default function QRScanner({ onClose, onResult, token }: Props) {
     setStatus("idle");
     setResult(null);
     setErrorMsg("");
+    setCameraIssue(null);
     startCamera();
   };
 
@@ -158,7 +193,9 @@ export default function QRScanner({ onClose, onResult, token }: Props) {
                 transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
               />
             </div>
-            <p className="absolute bottom-24 text-white/70 text-sm">QR kodni kamera oldiga tuting</p>
+            <p className="absolute bottom-24 text-white/70 text-sm">
+              {stalled ? "Kod topilmadi — kamerani yaqinlashtiring yoki yorug'likni yaxshilang" : "QR kodni kamera oldiga tuting"}
+            </p>
           </div>
         )}
 
@@ -179,11 +216,27 @@ export default function QRScanner({ onClose, onResult, token }: Props) {
               <div className="w-14 h-14 rounded-full bg-destructive/15 flex items-center justify-center mx-auto">
                 <AlertCircle className="w-7 h-7 text-destructive" />
               </div>
-              {cameraAllowed === false ? (
+              {cameraIssue === "denied" ? (
                 <>
                   <p className="font-semibold text-foreground">Kamera ruxsati kerak</p>
                   <p className="text-sm text-muted-foreground">Brauzer sozlamalaridan kamera ruxsatini bering va sahifani yangilang.</p>
                   <Camera className="w-8 h-8 text-muted-foreground mx-auto" />
+                </>
+              ) : cameraIssue === "unavailable" ? (
+                <>
+                  <p className="font-semibold text-foreground">Kamera topilmadi</p>
+                  <p className="text-sm text-muted-foreground">Bu qurilmada foydalanish mumkin bo'lgan kamera aniqlanmadi.</p>
+                </>
+              ) : cameraIssue === "busy" ? (
+                <>
+                  <p className="font-semibold text-foreground">Kamera band</p>
+                  <p className="text-sm text-muted-foreground">Kamerani boshqa ochiq ilova/oyna ishlatayotgan bo'lishi mumkin — uni yopib qayta urining.</p>
+                  <button onClick={reset} className="btn btn-primary w-full">Qayta urinish</button>
+                </>
+              ) : cameraIssue === "insecure" ? (
+                <>
+                  <p className="font-semibold text-foreground">HTTPS talab qilinadi</p>
+                  <p className="text-sm text-muted-foreground">Kamera faqat xavfsiz (https://) ulanishda ishlaydi — saytga https:// orqali kiring.</p>
                 </>
               ) : (
                 <>

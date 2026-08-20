@@ -20,22 +20,38 @@ function useInjectSkeletonStyles() {
     const style = document.createElement("style");
     style.setAttribute("data-skeleton-system", "true");
     style.textContent = `
+      /* MUHIM: avval "background-position"ni animatsiya qilar edi — bu faqat
+         paint bosqichida hisoblanadi (GPU'da compose bo'lmaydi), ya'ni har bir
+         skeleton elementi har freym qayta chizilardi (jank). Endi bazaviy
+         element bir xil rangda qoladi, ustidan ::after pseudo-element sifatida
+         "yaltiroq" chiziq translateX() bilan (GPU-composited, faqat transform/
+         opacity) suzib o'tadi — vizual natija bir xil, lekin bepul (compositor
+         thread'da), qayta chizilmaydi. */
       @keyframes skeleton-shimmer {
-        0% { background-position: -150% 0; }
-        100% { background-position: 150% 0; }
+        from { transform: translateX(-150%); }
+        to { transform: translateX(150%); }
       }
       .skel-shimmer {
+        position: relative;
+        overflow: hidden;
+        background-color: var(--muted);
+      }
+      .skel-shimmer::after {
+        content: "";
+        position: absolute;
+        inset: 0;
         background-image: linear-gradient(
           100deg,
-          var(--muted) 30%,
+          transparent 30%,
           color-mix(in srgb, var(--muted) 45%, var(--card)) 50%,
-          var(--muted) 70%
+          transparent 70%
         );
-        background-size: 250% 100%;
         animation: skeleton-shimmer 1.7s ease-in-out infinite;
+        will-change: transform;
       }
       @media (prefers-reduced-motion: reduce) {
-        .skel-shimmer { animation: none; opacity: 0.7; }
+        .skel-shimmer::after { animation: none; opacity: 0; }
+        .skel-shimmer { opacity: 0.7; }
       }
     `;
     document.head.appendChild(style);

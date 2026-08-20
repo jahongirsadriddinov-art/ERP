@@ -70,9 +70,19 @@ if ('serviceWorker' in navigator) {
         }
       };
 
-      // Setup push when user logs in (token appears in localStorage)
-      setupPush();
-      window.addEventListener('storage', (e) => { if (e.key === 'token' && e.newValue) setupPush(); });
+      // MUHIM: setupPush() o'zi allaqachon token/ruxsat borligini tekshirib
+      // ketadi (render'ni bloklamaydi) — lekin window.load paytida darhol
+      // chaqirilsa, aynan shu payt mobil tarmoqda ilova uchun ENG KRITIK
+      // so'rovlar (dashboard/objects/transactions) ham ketayotgan bo'ladi va
+      // ular bilan cheklangan bir vaqtdagi ulanishlar uchun raqobatlashadi.
+      // requestIdleCallback bilan brauzer bo'sh vaqt topgandagina ishga
+      // tushiramiz (Safari'da requestIdleCallback yo'q — setTimeout zaxira).
+      const runWhenIdle = (fn: () => void) => {
+        if ('requestIdleCallback' in window) (window as any).requestIdleCallback(fn, { timeout: 4000 });
+        else setTimeout(fn, 2000);
+      };
+      runWhenIdle(setupPush);
+      window.addEventListener('storage', (e) => { if (e.key === 'token' && e.newValue) runWhenIdle(setupPush); });
     } catch {
       // SW registration optional
     }

@@ -4691,24 +4691,97 @@ export default function App() {
       <Toaster position="top-center" richColors closeButton/>
     </>
   );
+  // MUHIM: bular avval initialLoading gate'idan KEYIN hisoblanardi — ya'ni
+  // header (logo/nav/bell/avatar) ham initialLoading tugagunicha umuman
+  // render qilinmasdi, garchi ularning hech biri /api/users, /api/objects,
+  // /api/transactions natijasiga MUHTOJ bo'lmasa ham (bo'sh massivlar bilan
+  // ham xavfsiz ishlaydi — masalan unreadMsgs bo'sh `messages`da shunchaki 0
+  // bo'ladi). Endi yuqoriga ko'chirildi, shunda header ASOSIY ma'lumot hali
+  // yuklanayotganda ham darhol chizilib, bosiladigan bo'ladi — LCP/perceived
+  // performance uchun eng katta yutuq shu yerda (Render cold-start paytida
+  // foydalanuvchi bo'sh skeleton emas, haqiqiy, ishlaydigan header ko'radi).
+  const admin = isAdmin(liveUser.role);
+  const unreadMsgs = messages.filter(m=>m.toUserId===liveUser.id&&!m.read).length;
+  const isGpsAdmin = liveUser?.role === 'direktor' || liveUser?.role === 'orinbosar';
+  const NAV: { key: NavPage; label: string; icon: React.ElementType; badge?: number }[] = [
+    { key: "dashboard", label: tApp('nav.dashboard'), icon: Home },
+    ...(admin ? [
+      { key: "finance" as NavPage, label: tApp('nav.finance'), icon: DollarSign },
+      { key: "reports" as NavPage, label: tApp('nav.reports'), icon: BarChart2 },
+    ] : []),
+    ...(isGpsAdmin ? [{ key: "gps" as NavPage, label: "Kuzatuv", icon: MapPin }] : []),
+    { key: "chat", label: tApp('nav.chat'), icon: MessageCircle, badge: unreadMsgs },
+    { key: "profile", label: tApp('nav.profile'), icon: User },
+  ];
+  // Header — 3 ta mustaqil "orolcha" pill (logo / nav / bell+avatar), orqada
+  // bar yo'q. Bir marta quriladi, ikkalasida (yuklanish skeleti VA asosiy
+  // daraxt) ham xuddi shu elementning o'zi ishlatiladi — ikkita alohida
+  // nusxa yozib, ular vaqt o'tishi bilan bir-biridan farqlanib ketishining
+  // (drift) oldini oladi.
+  const headerEl = (
+    <header className="flex items-center gap-3 px-4 flex-shrink-0 z-50 sticky top-0"
+      style={{ paddingTop: 'max(0.625rem, env(safe-area-inset-top))', paddingBottom: '0.625rem' }}>
+      <div className="nav-pill-desktop flex items-center gap-2.5 px-3 py-2 rounded-full flex-shrink-0">
+        <div className="w-7 h-7 rounded-full flex items-center justify-center overflow-hidden bg-gradient-to-br from-accent to-accent/75 shadow-sm flex-shrink-0">
+          {companyLogo ? <img src={companyLogo} alt="Logo" className="w-full h-full object-contain"/> : <Building2 className="w-3.5 h-3.5 text-white"/>}
+        </div>
+        <span className="text-sm font-bold tracking-tight hidden lg:block whitespace-nowrap">{companyName}</span>
+      </div>
+      <nav className="hidden sm:flex items-center gap-0.5 lg:gap-1 nav-pill-desktop px-1.5 py-1.5 rounded-full w-fit flex-shrink-0">
+        {NAV.map(n=>(
+          <button key={n.key} onClick={()=>{setPage(n.key);setSelProject(null);}}
+            className={`relative flex items-center gap-1.5 lg:gap-2 text-sm md:text-[13px] lg:text-sm px-2.5 md:px-2.5 lg:px-4 py-2 lg:py-2.5 rounded-full z-10 liquid-transition whitespace-nowrap ${page===n.key?"text-primary font-semibold":"text-muted-foreground hover:text-foreground"}`}>
+            {page===n.key && (
+              <motion.div layoutId="desktopNavPill" className="absolute inset-0 rounded-full bg-primary/10 -z-10"
+                transition={{ type: "spring", stiffness: 480, damping: 34 }}/>
+            )}
+            <n.icon className="w-[18px] h-[18px] lg:w-5 lg:h-5 flex-shrink-0"/><span className="hidden md:inline">{n.label}</span>
+            {!!n.badge && n.badge>0 && <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-accent text-accent-foreground rounded-full text-[10px] flex items-center justify-center font-bold shadow-sm">{n.badge}</span>}
+          </button>
+        ))}
+      </nav>
+      <div className="nav-pill-desktop flex items-center gap-1 px-1.5 py-1.5 rounded-full flex-shrink-0 ml-auto">
+        {(liveUser.role === 'direktor' || liveUser.role === 'orinbosar') && (
+          <button onClick={() => setAiOpen(true)} title="AI Yordamchi" aria-label="AI Yordamchi"
+            className="btn btn-ghost w-9 h-9 p-0 rounded-full">
+            <span className="text-base leading-none">✨</span>
+          </button>
+        )}
+        <button onClick={()=>setGlobalSearch(true)} title={tApp('search.title')} aria-label={tApp('search.title')}
+          className="btn btn-ghost w-9 h-9 p-0 rounded-full">
+          <Search className="w-[18px] h-[18px]"/>
+        </button>
+        <button onClick={()=>setQrScanOpen(true)} title="QR Skan" aria-label="QR Skan"
+          className="btn btn-ghost w-9 h-9 p-0 rounded-full">
+          <QrCode className="w-[18px] h-[18px]"/>
+        </button>
+        <NotificationBell messages={messages} transfers={transfers} expenses={expenses} users={users} currentUser={liveUser}
+          onOpenChat={()=>{setPage("chat");setSelProject(null);}} onOpenDashboard={()=>{setPage("dashboard");setSelProject(null);}}/>
+        <button onClick={cycleThemeMode} title={themeMode==="light"?"Yorug'":themeMode==="dark"?"Qorong'i":"Tizim bo'yicha"}
+          className="btn btn-ghost w-9 h-9 p-0 rounded-full">
+          {themeMode==="light"?<Sun className="w-[18px] h-[18px]"/>:themeMode==="dark"?<Moon className="w-[18px] h-[18px]"/>:<Monitor className="w-[18px] h-[18px]"/>}
+        </button>
+        <button onClick={()=>{setPage("profile");setSelProject(null);}} className="flex items-center gap-2 hover:bg-white/5 pl-1 pr-1 sm:pr-3 py-1 rounded-full liquid-transition">
+          <Avatar user={liveUser} size="sm"/>
+          <div className="hidden sm:block text-left">
+            <p className="text-[11px] font-semibold leading-none">{liveUser.name.split(" ")[0]}</p>
+            <p className="text-[9px] text-muted-foreground mt-0.5">{ROLE_LABELS[liveUser.role]}</p>
+          </div>
+        </button>
+      </div>
+    </header>
+  );
+
   if (initialLoading) return (
     <>
       <div className="min-h-screen bg-background flex flex-col">
-        <div className="h-12 bg-card border-b border-border flex items-center px-4 gap-3 flex-shrink-0">
-          <div className="w-6 h-6 rounded bg-muted animate-pulse"/>
-          <div className="w-28 h-4 rounded bg-muted animate-pulse"/>
-          <div className="ml-auto flex gap-2">
-            <div className="w-8 h-8 rounded-full bg-muted animate-pulse"/>
-          </div>
-        </div>
+        {headerEl}
         <SkeletonPage variant="dashboard" />
       </div>
       <Toaster position="top-center" richColors closeButton/>
     </>
   );
 
-  const admin = isAdmin(liveUser.role);
-  const unreadMsgs = messages.filter(m=>m.toUserId===liveUser.id&&!m.read).length;
   const pendingT = transfers.filter(t=>t.toUserId===liveUser.id&&t.status==="pending").length;
   const pendingE = expenses.filter(e=>e.toUserId===liveUser.id&&e.status==="pending").length;
   const totalNotifs = unreadMsgs + pendingT + pendingE;
@@ -4947,82 +5020,20 @@ export default function App() {
   };
 
 
-  // Nav items based on role
-  const isGpsAdmin = liveUser?.role === 'direktor' || liveUser?.role === 'orinbosar';
-  const NAV: { key: NavPage; label: string; icon: React.ElementType; badge?: number }[] = [
-    { key: "dashboard", label: tApp('nav.dashboard'), icon: Home },
-    ...(admin ? [
-      { key: "finance" as NavPage, label: tApp('nav.finance'), icon: DollarSign },
-      { key: "reports" as NavPage, label: tApp('nav.reports'), icon: BarChart2 },
-    ] : []),
-    ...(isGpsAdmin ? [{ key: "gps" as NavPage, label: "Kuzatuv", icon: MapPin }] : []),
-    { key: "chat", label: tApp('nav.chat'), icon: MessageCircle, badge: unreadMsgs },
-    { key: "profile", label: tApp('nav.profile'), icon: User },
-  ];
-
   const currentProject = selProject ? (projects.find(p=>p.id===selProject.id)??selProject) : null;
 
   return (
     <div className={`h-[100dvh] flex flex-col overflow-hidden font-['Inter',sans-serif] ${siteBg ? 'with-bg' : ''}`} style={(() => { if (!siteBg) return { background: 'var(--background)' }; const isImg = !siteBg.startsWith('linear-gradient') && !siteBg.startsWith('radial-gradient'); return isImg ? { backgroundImage: `url(${siteBg})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' } : { background: siteBg }; })()}>
-      {/* Header — 3 ta mustaqil "orolcha" pill (logo / nav / bell+avatar), orqada bar yo'q */}
       {/* MUHIM: safe-area-inset-top yo'q edi — sayt endi PWA (manifest.json/
           sw.js) sifatida "Bosh ekranga qo'shish" orqali TO'LIQ EKRAN (standalone)
           rejimda ochilsa, veb-kontent OS status-bar (soat/tarmoq/batareya)
           ostidagi maydonni ham egallaydi — shu joyga aynan shu header
           chizilib, telefon status-barining o'z belgilari (5G, batareya)
           ilova header'ining ikonkalari bilan bir qatorda ustma-ust
-          chiqib, "hunuk"/"buzilgan" ko'rinishga sabab bo'lardi. */}
-      <header className="flex items-center gap-3 px-4 flex-shrink-0 z-50 sticky top-0"
-        style={{ paddingTop: 'max(0.625rem, env(safe-area-inset-top))', paddingBottom: '0.625rem' }}>
-        <div className="nav-pill-desktop flex items-center gap-2.5 px-3 py-2 rounded-full flex-shrink-0">
-          <div className="w-7 h-7 rounded-full flex items-center justify-center overflow-hidden bg-gradient-to-br from-accent to-accent/75 shadow-sm flex-shrink-0">
-            {companyLogo ? <img src={companyLogo} alt="Logo" className="w-full h-full object-contain"/> : <Building2 className="w-3.5 h-3.5 text-white"/>}
-          </div>
-          <span className="text-sm font-bold tracking-tight hidden lg:block whitespace-nowrap">{companyName}</span>
-        </div>
-        <nav className="hidden sm:flex items-center gap-0.5 lg:gap-1 nav-pill-desktop px-1.5 py-1.5 rounded-full w-fit flex-shrink-0">
-          {NAV.map(n=>(
-            <button key={n.key} onClick={()=>{setPage(n.key);setSelProject(null);}}
-              className={`relative flex items-center gap-1.5 lg:gap-2 text-sm md:text-[13px] lg:text-sm px-2.5 md:px-2.5 lg:px-4 py-2 lg:py-2.5 rounded-full z-10 liquid-transition whitespace-nowrap ${page===n.key?"text-primary font-semibold":"text-muted-foreground hover:text-foreground"}`}>
-              {page===n.key && (
-                <motion.div layoutId="desktopNavPill" className="absolute inset-0 rounded-full bg-primary/10 -z-10"
-                  transition={{ type: "spring", stiffness: 480, damping: 34 }}/>
-              )}
-              <n.icon className="w-[18px] h-[18px] lg:w-5 lg:h-5 flex-shrink-0"/><span className="hidden md:inline">{n.label}</span>
-              {!!n.badge && n.badge>0 && <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-accent text-accent-foreground rounded-full text-[10px] flex items-center justify-center font-bold shadow-sm">{n.badge}</span>}
-            </button>
-          ))}
-        </nav>
-        <div className="nav-pill-desktop flex items-center gap-1 px-1.5 py-1.5 rounded-full flex-shrink-0 ml-auto">
-          {(liveUser.role === 'direktor' || liveUser.role === 'orinbosar') && (
-            <button onClick={() => setAiOpen(true)} title="AI Yordamchi" aria-label="AI Yordamchi"
-              className="btn btn-ghost w-9 h-9 p-0 rounded-full">
-              <span className="text-base leading-none">✨</span>
-            </button>
-          )}
-          <button onClick={()=>setGlobalSearch(true)} title={tApp('search.title')} aria-label={tApp('search.title')}
-            className="btn btn-ghost w-9 h-9 p-0 rounded-full">
-            <Search className="w-[18px] h-[18px]"/>
-          </button>
-          <button onClick={()=>setQrScanOpen(true)} title="QR Skan" aria-label="QR Skan"
-            className="btn btn-ghost w-9 h-9 p-0 rounded-full">
-            <QrCode className="w-[18px] h-[18px]"/>
-          </button>
-          <NotificationBell messages={messages} transfers={transfers} expenses={expenses} users={users} currentUser={liveUser}
-            onOpenChat={()=>{setPage("chat");setSelProject(null);}} onOpenDashboard={()=>{setPage("dashboard");setSelProject(null);}}/>
-          <button onClick={cycleThemeMode} title={themeMode==="light"?"Yorug'":themeMode==="dark"?"Qorong'i":"Tizim bo'yicha"}
-            className="btn btn-ghost w-9 h-9 p-0 rounded-full">
-            {themeMode==="light"?<Sun className="w-[18px] h-[18px]"/>:themeMode==="dark"?<Moon className="w-[18px] h-[18px]"/>:<Monitor className="w-[18px] h-[18px]"/>}
-          </button>
-          <button onClick={()=>{setPage("profile");setSelProject(null);}} className="flex items-center gap-2 hover:bg-white/5 pl-1 pr-1 sm:pr-3 py-1 rounded-full liquid-transition">
-            <Avatar user={liveUser} size="sm"/>
-            <div className="hidden sm:block text-left">
-              <p className="text-[11px] font-semibold leading-none">{liveUser.name.split(" ")[0]}</p>
-              <p className="text-[9px] text-muted-foreground mt-0.5">{ROLE_LABELS[liveUser.role]}</p>
-            </div>
-          </button>
-        </div>
-      </header>
+          chiqib, "hunuk"/"buzilgan" ko'rinishga sabab bo'lardi. Header'ning
+          o'zi endi yuqorida (initialLoading gate'idan OLDIN) headerEl
+          sifatida bir marta quriladi — shu yerda faqat qo'yiladi. */}
+      {headerEl}
 
       {/* Offline banner */}
       {(isOffline || syncPending > 0 || syncStatus === 'synced') && (

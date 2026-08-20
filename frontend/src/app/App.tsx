@@ -325,18 +325,29 @@ function NotificationBell({ messages, transfers, expenses, users, currentUser, o
         )}
       </button>
       {open && (
-        <motion.div initial={{ opacity: 0, y: -8, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{ type: "spring", stiffness: 420, damping: 32 }}
-          // MUHIM: qo'ng'iroq (bell) tugmasi ekranning o'ng chetiga tegib
-          // turmasligi mumkin (mas. tema/avatar tugmalari o'ng tomonda,
-          // undan keyin ham bor) — shu holda absolute+right-0 panelni
-          // O'ZINING kichik konteynerига nisbatan joylashtiradi, ekran
-          // chetidan tashqariga chiqib ketadi. Kichik ekranda (< sm)
-          // fixed+left-4/right-4 bilan har doim ekran ichida, xavfsiz
-          // qoladi; sm dan boshlab avvalgidek bellga yopishib turadi.
-          className="fixed left-4 right-4 top-16 sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2 sm:w-80 sm:max-w-[calc(100vw-2rem)] rounded-2xl overflow-hidden z-50 liquid-glass">
+        <>
+          {/* Mobil'da orqa fon — tashqarisiga bosib yopish uchun (touch'da
+              mousedown-listener'ga tayanish tayinsiz — scroll'dan keyingi
+              qo'yib yuborish tashqi bosish sifatida noto'g'ri ishlab ketishi
+              mumkin). Desktop'da kerak emas — sm:hidden. */}
+          <div className="fixed inset-0 z-40 sm:hidden" onClick={() => setOpen(false)} />
+          <motion.div initial={{ opacity: 0, y: -8, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ type: "spring", stiffness: 420, damping: 32 }}
+            // MUHIM: qo'ng'iroq (bell) tugmasi ekranning o'ng chetiga tegib
+            // turmasligi mumkin (mas. tema/avatar tugmalari o'ng tomonda,
+            // undan keyin ham bor) — shu holda absolute+right-0 panelni
+            // O'ZINING kichik konteynerига nisbatan joylashtiradi, ekran
+            // chetidan tashqariga chiqib ketadi. Kichik ekranda (< sm)
+            // fixed+left-4/right-4 bilan har doim ekran ichida, xavfsiz
+            // qoladi; sm dan boshlab avvalgidek bellga yopishib turadi.
+            // top-16 avval qattiq (hardcoded) 4rem edi — notch/status-bar
+            // maydonini (env(safe-area-inset-top)) hisobga olmas edi, PWA
+            // standalone rejimda panel status-bar ostiga kirib qolardi —
+            // App.tsx'dagi asosiy header/QRScanner'da ishlatilgan xuddi shu
+            // max() naqshiga o'tkazildi.
+            className="fixed left-4 right-4 top-[max(4rem,env(safe-area-inset-top))] sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2 sm:w-80 sm:max-w-[calc(100vw-2rem)] rounded-2xl overflow-hidden z-50 liquid-glass">
           <div className="px-4 py-3 border-b border-white/10"><p className="text-sm font-bold text-white">{tN('chat.notifTitle')}</p></div>
-          <div className="max-h-80 overflow-y-auto scrollbar-hide divide-y divide-white/5">
+          <div className="max-h-[min(20rem,60dvh)] overflow-y-auto scrollbar-hide divide-y divide-white/5">
             {!hasAny && <p className="text-center text-xs text-white/50 py-8">{tN('chat.notifEmpty')}</p>}
             {bySender.map(u => {
               const sender = users.find(x => x.id === u.userId);
@@ -364,7 +375,8 @@ function NotificationBell({ messages, transfers, expenses, users, currentUser, o
               </button>
             ))}
           </div>
-        </motion.div>
+          </motion.div>
+        </>
       )}
     </div>
   );
@@ -3159,6 +3171,112 @@ function CurrencyPanel({ canEdit }: { canEdit: boolean }) {
   );
 }
 
+// "Mening kurslarim" — foydalanuvchi o'zi tugatgan kurs/malaka/sertifikatlarni
+// yozib qo'yadi. Backend (User.courses, PATCH/GET /api/users/:id/...) hech
+// qachon olib tashlanmagan edi — bu faqat frontend UI'ni qayta ulaydi,
+// endi lokal localStorage o'rniga to'g'ridan-to'g'ri serverdan o'qiydi/yozadi.
+type Course = { title: string; provider?: string; year?: number; cert?: string };
+function CoursesPanel({ userId }: { userId: string }) {
+  const [courses, setCourses] = useState<Course[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const [editIdx, setEditIdx] = useState<number | null>(null);
+  const [form, setForm] = useState({ title: '', provider: '', year: '', cert: '' });
+
+  useEffect(() => {
+    const token = localStorage.getItem('token') || '';
+    fetch(`${API_BASE}/api/users/${userId}/profile`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => setCourses(d?.courses || []))
+      .catch(() => setCourses([]))
+      .finally(() => setLoading(false));
+  }, [userId]);
+
+  const saveCourses = async (list: Course[]) => {
+    setSaving(true);
+    const prev = courses;
+    setCourses(list); // optimistik
+    try {
+      const token = localStorage.getItem('token') || '';
+      const r = await fetch(`${API_BASE}/api/users/${userId}/courses`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ courses: list }),
+      });
+      if (!r.ok) { setCourses(prev); toast.error("Saqlab bo'lmadi"); return; }
+    } catch { setCourses(prev); toast.error("Server bilan ulanishda xatolik"); }
+    finally { setSaving(false); }
+  };
+
+  const openAdd = () => { setForm({ title: '', provider: '', year: '', cert: '' }); setEditIdx(null); setAddOpen(true); };
+  const openEdit = (idx: number) => {
+    const c = courses![idx];
+    setForm({ title: c.title, provider: c.provider || '', year: String(c.year || ''), cert: c.cert || '' });
+    setEditIdx(idx); setAddOpen(true);
+  };
+  const save = () => {
+    if (!form.title.trim() || !courses) return;
+    const item: Course = { title: form.title.trim(), provider: form.provider.trim() || undefined, year: form.year ? Number(form.year) : undefined, cert: form.cert.trim() || undefined };
+    const next = editIdx !== null ? courses.map((c, i) => i === editIdx ? item : c) : [...courses, item];
+    saveCourses(next); setAddOpen(false);
+  };
+  const del = (idx: number) => { if (courses) saveCourses(courses.filter((_, i) => i !== idx)); };
+
+  if (loading) return <SkeletonProfile/>;
+
+  return (
+    <div className="space-y-3">
+      {addOpen ? (
+        <div className="surface p-4 space-y-3 rounded-2xl">
+          <h3 className="text-sm font-bold">{editIdx !== null ? 'Kursni tahrirlash' : "Kurs qo'shish"}</h3>
+          {(['title', 'provider', 'year', 'cert'] as const).map((k) => (
+            <div key={k}>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                {k === 'title' ? "Kurs nomi *" : k === 'provider' ? "Muassasa/Platforma" : k === 'year' ? "Yil" : "Sertifikat raqami"}
+              </label>
+              <input type={k === 'year' ? 'number' : 'text'} value={form[k]} onChange={e => setForm(p => ({ ...p, [k]: e.target.value }))}
+                className="w-full bg-muted/60 border border-border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-primary" />
+            </div>
+          ))}
+          <div className="flex gap-2 pt-1">
+            <button onClick={save} disabled={saving} className="flex-1 btn btn-primary text-sm py-2.5 rounded-xl disabled:opacity-60">Saqlash</button>
+            <button onClick={() => setAddOpen(false)} disabled={saving} className="flex-1 btn btn-outline text-sm py-2.5 rounded-xl">Bekor qilish</button>
+          </div>
+        </div>
+      ) : (
+        <button onClick={openAdd} className="w-full btn btn-primary text-sm py-2.5 rounded-2xl flex items-center justify-center gap-2">
+          <Plus className="w-4 h-4"/>Kurs qo'shish
+        </button>
+      )}
+      {courses?.length === 0 && !addOpen && (
+        <div className="surface p-8 text-center rounded-2xl">
+          <CheckCircle className="w-10 h-10 text-muted-foreground/30 mx-auto mb-2"/>
+          <p className="text-sm font-medium">Kurslar yo'q</p>
+          <p className="text-xs text-muted-foreground mt-1">Sertifikatlaringiz va o'tgan kurslaringizni qo'shing</p>
+        </div>
+      )}
+      {courses?.map((c, i) => (
+        <div key={i} className="surface p-4 rounded-2xl flex items-start gap-3">
+          <div className="icon-chip flex-shrink-0 mt-0.5"><CheckCircle className="w-4 h-4"/></div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold leading-tight">{c.title}</p>
+            {c.provider && <p className="text-xs text-muted-foreground mt-0.5">{c.provider}</p>}
+            <div className="flex gap-3 mt-1">
+              {c.year && <span className="text-[10px] text-muted-foreground">{c.year}</span>}
+              {c.cert && <span className="text-[10px] text-primary font-medium">#{c.cert}</span>}
+            </div>
+          </div>
+          <div className="flex gap-1 flex-shrink-0">
+            <button onClick={() => openEdit(i)} aria-label="Tahrirlash" className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground"><Edit className="w-3.5 h-3.5"/></button>
+            <button onClick={() => del(i)} aria-label="O'chirish" className="p-1.5 rounded-lg hover:bg-red-500/10 text-muted-foreground hover:text-red-600"><Trash className="w-3.5 h-3.5"/></button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdateUser, onCompanyNameChange, onCompanyLogoChange, onBgChange, onColorThemeChange, colorTheme, themeMode, onThemeModeChange, canEditCompany, todayAttendance, onCheckIn, onCheckOut, gpsTracking }:
   { currentUser: AppUser; projects: Project[]; onUpdateAvatar: (url: string) => void; onLogout: () => void; onUpdateUser: (u: AppUser) => void; onCompanyNameChange: (name: string) => void; onCompanyLogoChange: (logo: string) => void; onBgChange: (bg: string) => void; onColorThemeChange: (id: string) => void; colorTheme: string; themeMode: "light"|"dark"|"system"; onThemeModeChange: (m: "light"|"dark"|"system") => void; canEditCompany?: boolean; todayAttendance: null | { status: string; checkIn?: string; checkOut?: string; workHours?: number }; onCheckIn: () => void; onCheckOut: () => void; gpsTracking: boolean }) {
   const { t, i18n } = useTranslation();
@@ -3245,7 +3363,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
   ];
 
   const activeTheme = COLOR_THEMES.find(t => t.id === colorTheme) || COLOR_THEMES[0];
-  const [activePanel, setActivePanel] = useState<null | "bg" | "appearance" | "color" | "perms" | "projects" | "language" | "subscription" | "currency">(null);
+  const [activePanel, setActivePanel] = useState<null | "bg" | "appearance" | "color" | "perms" | "projects" | "language" | "subscription" | "currency" | "courses">(null);
   const APPEARANCE_LABELS: Record<string, string> = { light: "Yorug'", dark: "Qorong'i", system: "Tizim" };
 
   const [subData, setSubData] = useState<any>(null);
@@ -3268,7 +3386,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
     const panelTitle = {
       bg: "Fon mavzular", appearance: "Ko'rinish rejimi", color: "Rang mavzusi",
       perms: "Ruxsatlar", projects: "Obyektlarim", language: t('profile.language'),
-      subscription: "Obuna holati", currency: "Valyuta kursi",
+      subscription: "Obuna holati", currency: "Valyuta kursi", courses: "Mening kurslarim",
     }[activePanel];
     return (
       <motion.div key={activePanel} initial={{ opacity: 0, x: 28 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 28 }}
@@ -3382,6 +3500,9 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
           )}
           {activePanel === "currency" && (
             <CurrencyPanel canEdit={isAdmin(currentUser.role) || !!currentUser.isOwner}/>
+          )}
+          {activePanel === "courses" && (
+            <CoursesPanel userId={currentUser.id}/>
           )}
           {activePanel === "subscription" && (
             <div className="surface overflow-hidden">
@@ -3569,6 +3690,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
             { key: "perms" as const, icon: CheckCircle, label: t('profile.permissions'), hint: `${perms.filter(([,has])=>has).length}/${perms.length}`, swatch: null },
             { key: "projects" as const, icon: Building2, label: t('profile.myObjects'), hint: String(myProjectCount), swatch: null },
             { key: "currency" as const, icon: DollarSign, label: "Valyuta kursi", hint: null as string|null, swatch: null },
+            { key: "courses" as const, icon: CheckCircle, label: "Mening kurslarim", hint: null as string|null, swatch: null },
             ...(isAdmin(currentUser.role) ? [{ key: "subscription" as const, icon: CreditCard, label: "Obuna holati",
               hint: subData?.status === 'active' ? (subData.daysLeft !== null ? `${subData.daysLeft} kun` : "Faol") : subData?.status === 'pending' ? "Kutilmoqda" : subData?.status === 'expired' ? "Muddati o'tgan" : subData?.status === 'rejected' ? "Rad etildi" : subLoading ? "..." : "Topilmadi",
               swatch: null }] : []),

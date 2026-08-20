@@ -1300,7 +1300,7 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
           {users.filter(u => u.role === "direktor").map(u => (
             <div key={u.id} className="mb-2">
               <div className="bg-primary text-white rounded-md p-3 flex items-center gap-2">
-                <Avatar user={u} size="sm"/><div><p className="text-sm md:text-xs font-semibold">{u.name}</p><p className="text-sm md:text-xs text-white/70">{ROLE_LABELS[u.role]}</p></div>
+                <Avatar user={u} size="sm"/><div><p className="text-sm md:text-xs font-semibold">{u.name}</p><p className="text-sm md:text-xs text-white/90">{ROLE_LABELS[u.role]}</p></div>
               </div>
               {users.filter(u2 => u2.role === "orinbosar").map(u2 => (
                 <div key={u2.id} className="ml-4 mt-2 border-l-2 border-dashed border-primary/30 pl-3">
@@ -1468,7 +1468,7 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
                       <div key={u.id}>
                         <div className="bg-primary text-white rounded-xl p-3 flex items-center gap-3">
                           <Avatar user={u} size="sm"/>
-                          <div><p className="text-sm font-semibold">{u.name}</p><p className="text-[11px] text-white/70">{ROLE_LABELS[u.role]}</p></div>
+                          <div><p className="text-sm font-semibold">{u.name}</p><p className="text-[11px] text-white/90">{ROLE_LABELS[u.role]}</p></div>
                         </div>
                         {users.filter(u2 => u2.role === "orinbosar").map(u2 => (
                           <div key={u2.id} className="ml-6 mt-2 border-l-2 border-dashed border-primary/30 pl-3">
@@ -2019,7 +2019,7 @@ function FinancePage({ currentUser, users, projects, expenses, onAddExpense, onC
         </div>
         <div className="flex items-center gap-1.5">
           {pendingMe>0&&<span className="text-sm md:text-xs bg-amber-500/15 text-amber-800 dark:text-amber-300 px-2 py-1 rounded-full font-semibold flex items-center gap-1 badge-pulse"><Clock className="w-3 h-3"/>{t('finance.pendingCount', { count: pendingMe })}</span>}
-          <button onClick={()=>setShowCurrency(v=>!v)} title={t('currency.title')} className="btn btn-outline flex items-center gap-1 text-sm md:text-xs px-2.5 py-1.5 rounded-full"><DollarSign className="w-3 h-3"/></button>
+          <button onClick={()=>setShowCurrency(v=>!v)} title={t('currency.title')} aria-label={t('currency.title')} className="btn btn-outline flex items-center gap-1 text-sm md:text-xs px-2.5 py-1.5 rounded-full"><DollarSign className="w-3 h-3"/></button>
           <button onClick={()=>setShowAdd(true)} className="btn btn-accent flex items-center gap-1 text-sm md:text-xs px-3 py-1.5 rounded-full"><Plus className="w-3 h-3"/>{t('finance.addExpense')}</button>
         </div>
       </div>
@@ -2502,7 +2502,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
       <div className={`${(selUser||selGroup)?'hidden md:flex':'flex'} w-full md:w-64 flex-shrink-0 border-r border-border flex-col bg-card/60 backdrop-blur-xl`}>
         <div className="px-4 py-3 border-b border-border/50 flex items-center justify-between">
           <p className="text-base font-bold">{tChat("chat.messages")}</p>
-          <button onClick={() => setShowNewGroup(true)} title="Yangi guruh" className="btn btn-primary w-8 h-8 p-0 rounded-full"><Users2 className="w-4 h-4"/></button>
+          <button onClick={() => setShowNewGroup(true)} title="Yangi guruh" aria-label="Yangi guruh" className="btn btn-primary w-8 h-8 p-0 rounded-full"><Users2 className="w-4 h-4"/></button>
         </div>
         <div className="flex-1 overflow-y-auto scrollbar-hide">
           {/* Guruhlar */}
@@ -2609,8 +2609,8 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
               </div>
               {!selectMode && !selGroup?.devSupport && (
                 <div className="flex items-center gap-1 flex-shrink-0">
-                  <button onClick={() => onStartCall('voice', { peer: selUser || undefined, group: selGroup || undefined })} title="Ovozli qo'ng'iroq" className="btn btn-ghost w-9 h-9 p-0 rounded-full text-primary"><Phone className="w-[18px] h-[18px]"/></button>
-                  <button onClick={() => onStartCall('video', { peer: selUser || undefined, group: selGroup || undefined })} title="Video qo'ng'iroq" className="btn btn-ghost w-9 h-9 p-0 rounded-full text-primary"><VideoIcon className="w-[18px] h-[18px]"/></button>
+                  <button onClick={() => onStartCall('voice', { peer: selUser || undefined, group: selGroup || undefined })} title="Ovozli qo'ng'iroq" aria-label="Ovozli qo'ng'iroq" className="btn btn-ghost w-9 h-9 p-0 rounded-full text-primary"><Phone className="w-[18px] h-[18px]"/></button>
+                  <button onClick={() => onStartCall('video', { peer: selUser || undefined, group: selGroup || undefined })} title="Video qo'ng'iroq" aria-label="Video qo'ng'iroq" className="btn btn-ghost w-9 h-9 p-0 rounded-full text-primary"><VideoIcon className="w-[18px] h-[18px]"/></button>
                 </div>
               )}
               {selectMode && (
@@ -3797,7 +3797,7 @@ function BottomFinanceBar({ expenses, projects }: { expenses: Expense[]; project
         </div>
       )}
       <button onClick={()=>setOpen(!open)} className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-white/5 transition-colors">
-        <div className="flex items-center gap-2"><TrendingDown className="w-4 h-4 text-white/70"/><span className="text-sm md:text-xs text-white/70">Jami chiqimlar</span></div>
+        <div className="flex items-center gap-2"><TrendingDown className="w-4 h-4 text-white/90"/><span className="text-sm md:text-xs text-white/90">Jami chiqimlar</span></div>
         <div className="flex items-center gap-2"><span className="text-sm font-bold font-mono">{fmt(total)}</span>{open?<ChevronUp className="w-4 h-4 text-white/60"/>:<ChevronDown className="w-4 h-4 text-white/60"/>}</div>
       </button>
     </div>
@@ -4758,6 +4758,7 @@ export default function App() {
         <NotificationBell messages={messages} transfers={transfers} expenses={expenses} users={users} currentUser={liveUser}
           onOpenChat={()=>{setPage("chat");setSelProject(null);}} onOpenDashboard={()=>{setPage("dashboard");setSelProject(null);}}/>
         <button onClick={cycleThemeMode} title={themeMode==="light"?"Yorug'":themeMode==="dark"?"Qorong'i":"Tizim bo'yicha"}
+          aria-label={themeMode==="light"?"Yorug'":themeMode==="dark"?"Qorong'i":"Tizim bo'yicha"}
           className="btn btn-ghost w-9 h-9 p-0 rounded-full">
           {themeMode==="light"?<Sun className="w-[18px] h-[18px]"/>:themeMode==="dark"?<Moon className="w-[18px] h-[18px]"/>:<Monitor className="w-[18px] h-[18px]"/>}
         </button>
@@ -5234,7 +5235,7 @@ export default function App() {
                 placeholder={tApp('search.placeholder')}
                 className="flex-1 bg-transparent text-sm focus:outline-none text-foreground placeholder:text-muted-foreground"/>
               {searchLoading && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground flex-shrink-0"/>}
-              <button onClick={()=>{setGlobalSearch(false);setSearchQuery("");setSearchResults(null);}} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4 text-muted-foreground"/></button>
+              <button onClick={()=>{setGlobalSearch(false);setSearchQuery("");setSearchResults(null);}} aria-label="Yopish" className="p-1 rounded hover:bg-muted"><X className="w-4 h-4 text-muted-foreground"/></button>
             </div>
             {searchQuery.length > 1 ? (
               <div className="max-h-[60vh] overflow-y-auto scrollbar-hide p-3 space-y-3">
@@ -5268,7 +5269,7 @@ export default function App() {
                         <div key={m.id} className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-muted liquid-transition">
                           <Package className="w-5 h-5 text-muted-foreground flex-shrink-0"/>
                           <div className="flex-1 min-w-0"><p className="text-sm font-medium text-foreground truncate">{m.name}</p><p className="text-[10px] text-muted-foreground">{m.remaining} {m.unit} qolgan</p></div>
-                          <button onClick={()=>setQrGenData({type:"material",id:m.id,name:m.name})} className="p-1 rounded hover:bg-muted" title="QR kod"><QrCode className="w-4 h-4 text-muted-foreground"/></button>
+                          <button onClick={()=>setQrGenData({type:"material",id:m.id,name:m.name})} className="p-1 rounded hover:bg-muted" title="QR kod" aria-label="QR kod"><QrCode className="w-4 h-4 text-muted-foreground"/></button>
                         </div>))}
                     </div>
                   )}

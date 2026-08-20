@@ -6,6 +6,14 @@ import { broadcast } from '../services/socket';
 
 const router = Router();
 
+// GET /api/gps/config — frontend'ning GPS interval'ini serverdan boshqarish
+// imkonini beradi (GPS_INTERVAL_MS env orqali) — kod o'zgartirmasdan, deploy
+// qilmasdan sozlash mumkin bo'lsin uchun. /api/push/vapidPublicKey bilan bir
+// xil "kichik ochiq konfiguratsiya" pattern'i.
+router.get('/config', (_req, res) => {
+  res.json({ intervalMs: Number(process.env.GPS_INTERVAL_MS) || 60_000 });
+});
+
 // POST /api/gps — GPS koordinata saqlash
 router.post('/', async (req, res) => {
   try {

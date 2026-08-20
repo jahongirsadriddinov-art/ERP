@@ -4307,6 +4307,18 @@ export default function App() {
     if (liveUser) {
       setInitialLoading(true);
 
+      // MUHIM: dasturchi (super-admin) uchun /api/objects va /api/transactions
+      // backendda blockDeveloper middleware orqali ATAYLAB 403 qaytaradi (firma
+      // ichki ma'lumotlariga kirish yo'q — DeveloperPanel buni chindan
+      // ishlatmaydi ham, o'zining /api/companies+/api/users so'rovlari bilan
+      // ishlaydi). Bu effekt oldin rol tekshirmasdan har doim shu uchalasini
+      // (shu jumladan /api/users — DeveloperPanel buni ham mustaqil, o'zi
+      // qayta so'raydi) chaqirar edi — 403'ning o'zi kutilgan, lekin natija
+      // hech qayerda ishlatilmagani uchun keraksiz. Dasturchi uchun butunlay
+      // o'tkazib yuboramiz.
+      if (liveUser.role === 'dasturchi') {
+        setInitialLoading(false);
+      } else {
       // Render free tier cold-start: 30s timeout — agar backend uyg'onmasa
       // foydalanuvchi abadiy loading ekranida qolmasin, ilovani bo'sh holda ochamiz.
       const ctrl = new AbortController();
@@ -4344,6 +4356,7 @@ export default function App() {
           setExpenses(formattedT.filter(t => t.type !== 'transfer' && t.type !== 'income'));
         }
       }).catch(() => { clearTimeout(timeoutId); }).finally(() => setInitialLoading(false));
+      }
 
       // Xabarlar + guruhlar (dastlabki yuklash)
       const fetchMsgs = () => {
@@ -4456,8 +4469,12 @@ export default function App() {
       };
       document.addEventListener('visibilitychange', onVisibility);
 
-      // Fallback polling (socket uzilsa) — kamroq
+      // Fallback polling (socket uzilsa) — kamroq. Dasturchi uchun /api/transactions
+      // blockDeveloper orqali 403 qaytaradi va natija hech qayerda ishlatilmaydi —
+      // shuning uchun bu funksiya dasturchi uchun hech narsa qilmaydi (aks holda
+      // har 12s'da abadiy 403 urinib turaverardi).
       const fetchTx = () => {
+        if (liveUser.role === 'dasturchi') return;
         fetch(`${API_BASE}/api/transactions`).then(r=>r.json()).then(tData => {
           if (Array.isArray(tData)) {
             const formattedT = tData.map((t: any) => ({...t, id: t.id || t._id}));

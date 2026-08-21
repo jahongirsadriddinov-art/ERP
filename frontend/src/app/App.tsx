@@ -14,6 +14,7 @@ import { connectSocket, getSocket, disconnectSocket } from "./socket";
 import { motion, AnimatePresence } from "motion/react";
 import { setSiteLanguage, SiteLang, langLabel } from "./i18n";
 import { installAndroidBackHandler, saveOrShareBlob, openExternalUrl } from "./platform";
+import { AppDownloadCards } from "./AppDownload";
 import LanguageSwitcher from "./i18n/LanguageSwitcher";
 import { Skeleton, SkeletonList, SkeletonPage, SkeletonMessage, SkeletonTable, SkeletonProfile } from "./Skeleton";
 import { useGeoTracker } from "./useGeoTracker";
@@ -3860,6 +3861,11 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
 
         <SecuritySettingsCard />
         <BiometricToggleCard currentUserId={currentUser.id} />
+
+        {/* Ilovani yuklab olish — hali CI birorta ham APK/exe chiqarmagan
+            bo'lsa (yoki hali yuklanmoqda) komponent o'zi HECH NARSA
+            render qilmaydi (loadingFallback=false) — bo'sh joy qolmasin. */}
+        <AppDownloadCards compact title="Ilovani yuklab olish" loadingFallback={false} />
 
         {/* Qo'lda bloklash — 1 daqiqa kutmasdan, darhol PIN ekraniga o'tadi.
             Barcha qurilmalarda (veb/APK/exe) ko'rinadi — biometrikdan farqli,

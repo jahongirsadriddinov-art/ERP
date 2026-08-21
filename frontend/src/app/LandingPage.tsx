@@ -9,6 +9,7 @@ import { motion } from "motion/react";
 import { useTranslation } from "react-i18next";
 import LanguageSwitcher from "./i18n/LanguageSwitcher";
 import { setSiteLanguage, SiteLang } from "./i18n";
+import { AppDownloadCards } from "./AppDownload";
 
 // ─── Marketing/reklama sahifasi — funksionallikka ega emas, faqat login/
 // register'ga olib boradigan kirish nuqtasi. GoogleBot uchun ham, haqiqiy
@@ -345,6 +346,17 @@ export default function LandingPage({ onLogin, onRegister }: { onLogin: () => vo
             </div>
           ))}
         </div>
+      </section>
+
+      {/* ── Ilovani yuklab olish — mavjud bo'lsagina ko'rinadi (CI hali birorta
+          ham APK/exe chiqarmagan bo'lsa, AppDownloadCards hech narsa
+          render qilmaydi — bo'sh bo'lim ko'rsatilmaydi). ───────────────── */}
+      <section className="max-w-3xl mx-auto px-5 pb-16">
+        <div className="text-center mb-8">
+          <h2 className="text-2xl md:text-4xl font-bold font-['Roboto_Slab',serif] tracking-tight">Ilovani yuklab oling</h2>
+          <p className="text-muted-foreground text-sm md:text-base mt-3 max-w-xl mx-auto">Telefon yoki kompyuteringizga o'rnating — brauzerda ham to'liq ishlaydi, ilova ixtiyoriy qulaylik uchun.</p>
+        </div>
+        <AppDownloadCards />
       </section>
 
       {/* ── Final CTA ───────────────────────────────────────────────────── */}

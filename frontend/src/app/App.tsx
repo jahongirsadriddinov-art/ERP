@@ -4006,6 +4006,35 @@ function LoginScreen({ onLogin, onRegister }: { onLogin: (u: any, company?: any)
           </button>
         </div>
       )}
+
+      {/* ─── SEO uchun kirish-oldi kontent (faqat login sahifasida, funksionallikka
+           taalluqli emas) — GoogleBot sahifani render qilganda ko'radigan yagona
+           matn shu login formasi ediki, u faqat "erp-firma.uz" nomi bo'yicha
+           qidiruvda chiqishiga sabab bo'lgan. Haqiqiy mavzuiy kalit so'zlar
+           (firma raqamlashtirish, ishchilar nazorati va h.k.) bo'yicha ham
+           topilishi uchun sahifada shu mavzularni tabiiy tilda tasvirlaydigan
+           real matn bo'lishi kerak — meta "keywords" tegi buning o'rnini
+           bosolmaydi, Google uni 2009-yildan beri reyting uchun ishlatmaydi. */}
+      <section className="w-full max-w-2xl mt-14 mb-4 relative z-10 px-2 text-center">
+        <h2 className="text-lg font-bold text-foreground mb-2">
+          Qurilish firmangizni raqamlashtiring — QurilishERP bilan
+        </h2>
+        <p className="text-sm text-muted-foreground leading-relaxed max-w-xl mx-auto">
+          QurilishERP — qurilish va pudratchi tashkilotlar uchun mo'ljallangan bulutli boshqaruv tizimi.
+          Firma faoliyatini qog'ozdan va tarqoq Excel jadvallaridan bitta tizimga ko'chirish, ya'ni
+          <strong className="text-foreground font-semibold"> qurilish firmasini raqamlashtirish (elektronlashtirish)</strong>,
+          endi bir necha daqiqada boshlanadi. Tizim orqali loyihalarni onlayn boshqarish, smeta va
+          materiallar hisobini yuritish, moliyaviy hisobotlarni avtomatik shakllantirish, xodimlar va
+          ishchilar davomatini (yo'qlamasini) GPS orqali nazorat qilish, ish haqi hisob-kitobini
+          soddalashtirish mumkin. Har bir loyiha, transport, ombor va xodim bo'yicha real vaqtda
+          hisobot olish, jamoa bilan tizim ichidagi chatda yozishish, QR-kod orqali material va
+          obyektlarni tezkor tekshirish, hamda sun'iy intellekt (AI) yordamchidan maslahat olish — barchasi
+          bitta ilovada. Telegram bot integratsiyasi orqali xodimlar ishga kelish/ketishni, GPS
+          joylashuvni va bildirishnomalarni to'g'ridan-to'g'ri Telegram orqali ham boshqarishlari mumkin.
+          QurilishERP — kichik va o'rta qurilish biznesi, pudratchi firmalar, remont-ta'mirlash
+          tashkilotlari va qurilish menejerlari uchun O'zbekistondagi zamonaviy boshqaruv yechimi.
+        </p>
+      </section>
     </main>
   );
 }
@@ -4635,9 +4664,13 @@ export default function App() {
         ))}
       </nav>
       <div className="nav-pill-desktop flex items-center gap-1 px-1.5 py-1.5 rounded-full flex-shrink-0 ml-auto">
+        {/* Mobil pastki navbarda markaziy ✨ AI tugmasi bor — bu yerda ikkinchi
+            nusxasini ko'rsatmaymiz (ikkita bir xil tugma chalkashtiradi).
+            Faqat sm: va undan kattaroq (bottom-bar yashirin bo'lgan) ekranlarda
+            ko'rinadi, shunda desktopda AI'ga kirish yo'li yo'qolib qolmaydi. */}
         {(liveUser.role === 'direktor' || liveUser.role === 'orinbosar') && (
           <button onClick={() => setAiOpen(true)} title="AI Yordamchi" aria-label="AI Yordamchi"
-            className="btn btn-ghost w-9 h-9 p-0 rounded-full">
+            className="hidden sm:flex btn btn-ghost w-9 h-9 p-0 rounded-full">
             <span className="text-base leading-none">✨</span>
           </button>
         )}
@@ -5104,8 +5137,10 @@ export default function App() {
           </motion.button>
         ))}
         {/* Markaziy AI — faqat direktor/orinbosar (AIAssistant'ning o'zi ham
-            shu ikki rolga cheklangan, header'dagi ✨ tugmasi bilan bir xil
-            setAiOpen chaqiradi — ikkinchi kirish nuqtasi, xuddi shu funksiya). */}
+            shu ikki rolga cheklangan). Mobilda AI'ga yagona kirish nuqtasi shu
+            tugma — header'dagi ✨ nusxasi endi faqat sm: va undan katta
+            ekranlarda (bottom-bar yashirin bo'lganda) ko'rinadi, shu bilan
+            ikkita bir xil tugma bir vaqtda ko'rinishining oldi olingan. */}
         {(liveUser.role === 'direktor' || liveUser.role === 'orinbosar') && (
           <motion.button onClick={() => { haptic(); setAiOpen(true); }}
             whileTap={{ scale: 0.94 }}

@@ -193,10 +193,10 @@
   .ios-ai-button {
     position: absolute;
     left: 50%;
-    top: -22px;
+    top: -14px;
     transform: translateX(-50%);
-    width: 60px;
-    height: 60px;
+    width: 58px;
+    height: 58px;
     border-radius: 9999px;
     display: flex;
     align-items: center;
@@ -204,8 +204,8 @@
     background: linear-gradient(145deg, var(--accent) 0%, color-mix(in srgb, var(--accent) 75%, var(--primary)) 100%);
     border: 3px solid color-mix(in srgb, var(--background) 92%, transparent);
     box-shadow:
-      0 10px 24px color-mix(in srgb, var(--accent) 45%, transparent),
-      0 2px 8px rgba(0,0,0,0.35);
+      0 6px 14px color-mix(in srgb, var(--accent) 38%, transparent),
+      0 1px 4px rgba(0,0,0,0.30);
     z-index: 20;
     transition: transform 0.18s ease-out, filter 0.18s ease-out;
   }

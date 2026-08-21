@@ -265,6 +265,25 @@ router.post('/send-code', async (req, res) => {
     formattedPhone = '+' + formattedPhone;
   }
 
+  // MUHIM: bu yo'l avval HECH QANDAY tezlik chegarasiga ega emas edi —
+  // tugma ikki marta bosilsa (yoki qasddan) cheksiz kod yuborilardi
+  // (aniq shikoyat: "kod ikki marta keladi"). /send-otp'dagi bir xil
+  // 3 bosqichli chegara (telefon bo'yicha 60s sovish + soatiga 5 ta,
+  // IP bo'yicha soatiga 10 ta) shu yerga ham qo'llanildi.
+  const ip = clientIp(req);
+  const cooldown = checkRate(`sendcode:cooldown:${formattedPhone}`, 1, 60 * 1000);
+  if (!cooldown.allowed) {
+    return res.status(429).json({ error: `Iltimos ${cooldown.retryAfterSec} soniyadan keyin qayta urining`, retryAfterSec: cooldown.retryAfterSec });
+  }
+  const phoneHourly = checkRate(`sendcode:hourly:phone:${formattedPhone}`, 5, 60 * 60 * 1000);
+  if (!phoneHourly.allowed) {
+    return res.status(429).json({ error: "Juda ko'p urinish. Keyinroq qayta urining." });
+  }
+  const ipHourly = checkRate(`sendcode:hourly:ip:${ip}`, 10, 60 * 60 * 1000);
+  if (!ipHourly.allowed) {
+    return res.status(429).json({ error: "Juda ko'p urinish. Keyinroq qayta urining." });
+  }
+
   try {
     const user = await User.findOne({ phone: formattedPhone });
     if (!user) {

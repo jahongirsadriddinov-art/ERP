@@ -3862,6 +3862,13 @@ function LoginScreen({ onLogin, onRegister, onBack }: { onLogin: (u: any, compan
   const [timeLeft, setTimeLeft] = useState(0);
   const [loginCompanyName] = useState(() => localStorage.getItem("erp_companyName") || "QurilishERP");
   const [loginCompanyLogo] = useState(() => localStorage.getItem("erp_companyLogo") || "");
+  // Ikkilamchi yuborish qarshisiga — tugma tez-tez ikki marta bosilsa (yoki
+  // Enter + tugma bosilishi ustma-ust tushsa) so'rov IKKI MARTA ketmasin
+  // (aniq talab: kod so'ralganda ikki marta kelib qolgan). handleCheckIn/
+  // handleCheckOut'dagi "pending" naqshi bilan bir xil — bitta umumiy
+  // bayroq, uchala forma (telefon/kod/dasturchi) ham shuni ishlatadi,
+  // chunki bir vaqtning o'zida faqat bittasi ko'rinadi.
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (step === "code" && timeLeft > 0) {
@@ -3872,6 +3879,7 @@ function LoginScreen({ onLogin, onRegister, onBack }: { onLogin: (u: any, compan
 
   const handlePhoneSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    if (submitting) return;
     const cleanPhone = phone.replace(/\s+/g, "");
     if (cleanPhone.length < 13) {
       setError(t('login.phoneInvalid'));
@@ -3885,6 +3893,7 @@ function LoginScreen({ onLogin, onRegister, onBack }: { onLogin: (u: any, compan
       return;
     }
 
+    setSubmitting(true);
     try {
       // VAQTINCHA Telegram-kod oqimiga qaytarildi (/send-otp EMAS) — Eskiz
       // akkounti hali production uchun tasdiqlanmagan, real SMS kod olib
@@ -3905,12 +3914,16 @@ function LoginScreen({ onLogin, onRegister, onBack }: { onLogin: (u: any, compan
       setTimeLeft(120);
     } catch (err) {
       setError(t('login.serverError'));
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const handleCodeSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    if (submitting) return;
     const cleanPhone = phone.replace(/\s+/g, "");
+    setSubmitting(true);
     try {
       const res = await fetch(API_BASE + "/api/auth/login", {
         method: "POST",
@@ -3943,6 +3956,8 @@ function LoginScreen({ onLogin, onRegister, onBack }: { onLogin: (u: any, compan
       onLogin(u, data.company);
     } catch (err) {
       setError(t('login.serverError'));
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -3955,6 +3970,8 @@ function LoginScreen({ onLogin, onRegister, onBack }: { onLogin: (u: any, compan
   // Dasturchi login: raqam + parol
   const handleDevLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting) return;
+    setSubmitting(true);
     const cleanPhone = phone.replace(/\s+/g, "");
     try {
       const res = await fetch(API_BASE + "/api/auth/dev-login", {
@@ -3980,6 +3997,8 @@ function LoginScreen({ onLogin, onRegister, onBack }: { onLogin: (u: any, compan
       onLogin(u, data.company);
     } catch (err) {
       setError(t('login.serverError'));
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -4039,7 +4058,7 @@ function LoginScreen({ onLogin, onRegister, onBack }: { onLogin: (u: any, compan
                   }} autoFocus/>
               </div>
             </div>
-            <button type="submit" className="w-full bg-gradient-to-r from-primary via-primary to-blue-700 text-white text-sm font-bold py-3.5 rounded-full shadow-lg shadow-primary/30 hover:shadow-xl hover:shadow-primary/35 hover:-translate-y-0.5 active:scale-[0.98] liquid-transition">
+            <button type="submit" disabled={submitting} className="w-full bg-gradient-to-r from-primary via-primary to-blue-700 text-white text-sm font-bold py-3.5 rounded-full shadow-lg shadow-primary/30 hover:shadow-xl hover:shadow-primary/35 hover:-translate-y-0.5 active:scale-[0.98] liquid-transition disabled:opacity-60 disabled:pointer-events-none">
               {t('login.getCode')}
             </button>
           </form>
@@ -4088,7 +4107,7 @@ function LoginScreen({ onLogin, onRegister, onBack }: { onLogin: (u: any, compan
               <input type="password" className="w-full text-base text-center border border-border/50 rounded-xl px-4 py-3 bg-white/50 dark:bg-black/20 focus:bg-white dark:focus:bg-black/40 focus:outline-none focus:ring-2 focus:ring-primary/50 liquid-transition shadow-inner"
                 placeholder="••••••••" value={password} onChange={e => { setError(""); setPassword(e.target.value); }} autoFocus/>
             </div>
-            <button type="submit" className="w-full bg-gradient-to-r from-primary via-primary to-blue-700 text-white text-sm font-bold py-3.5 rounded-full shadow-lg shadow-primary/30 hover:shadow-xl hover:shadow-primary/35 hover:-translate-y-0.5 active:scale-[0.98] liquid-transition">
+            <button type="submit" disabled={submitting} className="w-full bg-gradient-to-r from-primary via-primary to-blue-700 text-white text-sm font-bold py-3.5 rounded-full shadow-lg shadow-primary/30 hover:shadow-xl hover:shadow-primary/35 hover:-translate-y-0.5 active:scale-[0.98] liquid-transition disabled:opacity-60 disabled:pointer-events-none">
               {t('login.signIn')}
             </button>
             <button type="button" onClick={() => { setStep("phone"); setPassword(""); }} className="w-full text-sm md:text-xs text-muted-foreground hover:text-foreground py-2 liquid-transition">
@@ -4101,7 +4120,7 @@ function LoginScreen({ onLogin, onRegister, onBack }: { onLogin: (u: any, compan
               <label className="text-sm md:text-xs font-medium block mb-2 text-muted-foreground text-center">{t('login.codeLabel')}</label>
               <OtpBoxes value={code} onChange={v => { setError(""); setCode(v); }} error={!!error} autoFocus/>
             </div>
-            <button type="submit" className="w-full bg-gradient-to-r from-primary via-primary to-blue-700 text-white text-sm font-bold py-3.5 rounded-full shadow-lg shadow-primary/30 hover:shadow-xl hover:shadow-primary/35 hover:-translate-y-0.5 active:scale-[0.98] liquid-transition">
+            <button type="submit" disabled={submitting} className="w-full bg-gradient-to-r from-primary via-primary to-blue-700 text-white text-sm font-bold py-3.5 rounded-full shadow-lg shadow-primary/30 hover:shadow-xl hover:shadow-primary/35 hover:-translate-y-0.5 active:scale-[0.98] liquid-transition disabled:opacity-60 disabled:pointer-events-none">
               {t('login.enterSystem')}
             </button>
             <div className="flex flex-col gap-2 pt-2">

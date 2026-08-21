@@ -207,6 +207,20 @@ async function doCheckIn(user: any, lang?: BotLang): Promise<string> {
   const time = now.toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Tashkent' });
   return tb(lang, 'checkInConfirmed', { time });
 }
+// "0.1 soat" kabi yaxlitlangan-noaniq ko'rinish o'rniga aniq daqiqa hisobidan
+// "X soat Y daqiqa" (yoki ru: "X ч Y мин") — checkIn/checkOut ISO
+// vaqt tamg'alaridan to'g'ridan-to'g'ri, yaxlitlashsiz hisoblanadi.
+function fmtWorkDuration(minutes: number, lang?: BotLang): string {
+  if (lang === 'ru') {
+    if (minutes < 60) return `${minutes} мин`;
+    const h = Math.floor(minutes / 60), m = minutes % 60;
+    return m === 0 ? `${h} ч` : `${h} ч ${m} мин`;
+  }
+  if (minutes < 60) return `${minutes} daqiqa`;
+  const h = Math.floor(minutes / 60), m = minutes % 60;
+  return m === 0 ? `${h} soat` : `${h} soat ${m} daqiqa`;
+}
+
 async function doCheckOut(user: any, lang?: BotLang): Promise<string> {
   const today = todayDateStr();
   const record = await Attendance.findOne({ userId: String(user._id), date: today });
@@ -215,10 +229,11 @@ async function doCheckOut(user: any, lang?: BotLang): Promise<string> {
   const now = new Date();
   record.checkOut = now.toISOString();
   const ms = now.getTime() - new Date(record.checkIn).getTime();
-  record.workHours = Math.round((ms / 3600000) * 10) / 10;
+  const minutes = Math.max(0, Math.round(ms / 60000));
+  record.workHours = Math.round((ms / 3600000) * 10) / 10; // eski maydon — hisobotlarda (masalan stats) ishlatiladi, saqlanadi
   await record.save();
   const time = now.toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Tashkent' });
-  return tb(lang, 'checkOutConfirmed', { time, hours: String(record.workHours) });
+  return tb(lang, 'checkOutConfirmed', { time, hours: fmtWorkDuration(minutes, lang) });
 }
 
 // Telegramdan kelgan joylashuvni GpsLocation'ga saqlaydi — saytdagi

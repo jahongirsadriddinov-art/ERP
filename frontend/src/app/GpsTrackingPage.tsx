@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { MapPin, Users2, Clock, Navigation, X } from "lucide-react";
-import { AppUser, Avatar } from "./App";
+import { MapPin, Users2, Clock } from "lucide-react";
+import { AppUser, Avatar, fmtWorkDuration } from "./App";
 import { API_BASE } from "./api";
-import WorkerMap from "./WorkerMap";
+import WorkerMap, { NavigateChoiceModal } from "./WorkerMap";
 
 interface AttendanceEntry {
   userId: string;
@@ -11,39 +11,6 @@ interface AttendanceEntry {
   checkOut: string | null;
   workHours: number | null;
   minutesWorking: number | null;
-}
-
-// Xodim joylashuviga yo'naltirish — qaysi xarita ilovasi orqali ochish
-// tanlovi. Ro'yxat qatoridagi "Xarita" havolasi ham, xaritadagi marker ham
-// shu bir xil komponentdan foydalanadi (ikkalasida ham bitta tanlov oynasi).
-function NavigateChoiceModal({ target, onClose }: { target: { lat: number; lng: number; name: string }; onClose: () => void }) {
-  const { lat, lng, name } = target;
-  const options = [
-    { label: 'Google Maps', url: `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving` },
-    { label: 'Yandex Maps', url: `https://yandex.com/maps/?rtext=~${lat},${lng}&rtt=auto` },
-    { label: "Standart ilova (qurilma)", url: `geo:${lat},${lng}?q=${lat},${lng}(${encodeURIComponent(name)})` },
-  ];
-  return (
-    <div className="fixed inset-0 z-[200] bg-black/50 flex items-end sm:items-center justify-center p-4" onClick={onClose}>
-      <div className="w-full max-w-sm surface rounded-3xl p-5" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <p className="text-sm font-bold flex items-center gap-1.5"><Navigation className="w-4 h-4 text-primary" /> Yo'naltirish</p>
-            <p className="text-xs text-muted-foreground mt-0.5">{name} — qaysi ilova orqali ochilsin?</p>
-          </div>
-          <button onClick={onClose} aria-label="Yopish" className="p-1.5 rounded-lg hover:bg-muted"><X className="w-4 h-4" /></button>
-        </div>
-        <div className="space-y-2">
-          {options.map(o => (
-            <a key={o.label} href={o.url} target="_blank" rel="noopener noreferrer" onClick={onClose}
-              className="block w-full text-center text-sm font-semibold py-3 rounded-2xl border border-border/60 hover:bg-muted liquid-transition">
-              {o.label}
-            </a>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
 }
 
 // Direktor/o'rinbosarning "Kuzatuv" sahifasi — App.tsx'dan ajratildi va
@@ -173,7 +140,7 @@ export default function GpsTrackingPage({ users, gpsLocations, refreshing, onRef
                 ) : (
                   <span className="text-[11px] text-muted-foreground">
                     <span className="text-foreground font-medium">{att.checkIn && fmtTime(att.checkIn)} – {att.checkOut && fmtTime(att.checkOut)}</span>
-                    {att.workHours != null && ` · ${att.workHours} soat ishladi`}
+                    {att.checkIn && att.checkOut && ` · ${fmtWorkDuration(att.checkIn, att.checkOut)} ishladi`}
                   </span>
                 )}
               </div>

@@ -164,6 +164,18 @@ export const EXP_LABELS: Record<ExpType, string> = {
 export const CHART_COLORS = ["#1B3A6B", "#D2440F", "#1B7A4B", "#F0A500", "#7B2D8B"];
 export const fmt = (n?: number) => (n || 0).toLocaleString("uz-UZ") + " so'm";
 
+// Ishlagan vaqtni "X soat Y daqiqa" ko'rinishida, ANIQ ko'rsatadi — saqlangan
+// workHours (0.1 soatgacha yaxlitlangan, masalan 5 daqiqa "0.1 soat" bo'lib
+// chiqadi — noaniq/chalkash) o'rniga to'g'ridan-to'g'ri checkIn/checkOut
+// vaqt tamg'alaridan hisoblanadi, hech narsa yo'qolmaydi.
+export const fmtWorkDuration = (checkIn?: string | null, checkOut?: string | null): string => {
+  if (!checkIn || !checkOut) return "";
+  const minutes = Math.max(0, Math.round((new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 60000));
+  if (minutes < 60) return `${minutes} daqiqa`;
+  const h = Math.floor(minutes / 60), m = minutes % 60;
+  return m === 0 ? `${h} soat` : `${h} soat ${m} daqiqa`;
+};
+
 // CSV eksport — Excel'da to'g'ridan-to'g'ri ochiladi. Uchinchi tomon xlsx
 // kutubxonasi ATAYLAB ishlatilmadi (npm'dagi "xlsx" paketida tuzatilmagan
 // xavfsizlik zaifligi bor — prototype pollution/ReDoS, hech qanday fix yo'q).
@@ -3622,7 +3634,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
               <div className="text-xs text-muted-foreground space-y-1 mb-3">
                 <p>Keldi: <span className="text-foreground font-medium">{new Date(todayAttendance.checkIn).toLocaleTimeString('uz-UZ',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Tashkent'})}</span></p>
                 {todayAttendance.checkOut && <p>Ish tugadi: <span className="text-foreground font-medium">{new Date(todayAttendance.checkOut).toLocaleTimeString('uz-UZ',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Tashkent'})}</span></p>}
-                {todayAttendance.workHours != null && <p>{t('attendance.workHours', { h: todayAttendance.workHours.toFixed(1) })}</p>}
+                {todayAttendance.checkOut && <p>Ishlagan vaqt: <span className="text-foreground font-medium">{fmtWorkDuration(todayAttendance.checkIn, todayAttendance.checkOut)}</span></p>}
               </div>
               {/* GPS holati — check-in'ga bog'liq boshlanadi, lekin check-out
                   bosilgach ham TO'XTAMAYDI (aniqlashtirilgan talab: "GPS har
@@ -3638,7 +3650,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
                   </button>
                 ) : (
                   <div className="flex-1 text-center py-2.5 text-xs text-green-600 dark:text-green-400 font-medium">
-                    ✓ Bugungi ish yakunlandi ({todayAttendance.workHours?.toFixed(1) || 0}h)
+                    ✓ Bugungi ish yakunlandi ({fmtWorkDuration(todayAttendance.checkIn, todayAttendance.checkOut) || "0 daqiqa"})
                   </div>
                 )}
               </div>

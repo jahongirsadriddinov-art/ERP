@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { X, Navigation } from "lucide-react";
@@ -132,7 +133,7 @@ export default function WorkerMap({ users, gpsLocations }: { users: AppUser[]; g
 
 // Xodim joylashuviga yo'naltirish — qaysi xarita ilovasi orqali ochish
 // tanlovi (aniq foydalanuvchi talabi: "Google Maps, Yandex Maps yoki boshqa").
-function NavigateChoiceModal({ target, onClose }: { target: { lat: number; lng: number; name: string }; onClose: () => void }) {
+export function NavigateChoiceModal({ target, onClose }: { target: { lat: number; lng: number; name: string }; onClose: () => void }) {
   const { lat, lng, name } = target;
   const options = [
     { label: 'Google Maps', url: `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving` },
@@ -140,7 +141,11 @@ function NavigateChoiceModal({ target, onClose }: { target: { lat: number; lng: 
     // geo: URI — Android'da o'rnatilgan standart xarita ilovasini tanlash oynasini ochadi.
     { label: "Standart ilova (qurilma)", url: `geo:${lat},${lng}?q=${lat},${lng}(${encodeURIComponent(name)})` },
   ];
-  return (
+  // document.body'ga portal orqali chiqariladi — aks holda xarita konteyneri
+  // (yoki uni o'rab turgan animatsiyalangan sahifa) haqiqiy "fixed"ni buzib,
+  // modal xarita ichida "kesilib qolgan" holda ko'rinardi (App.tsx'dagi
+  // kontekst-menyusida ham xuddi shu sabab bilan portal ishlatilgan).
+  return createPortal(
     <div className="fixed inset-0 z-[200] bg-black/50 flex items-end sm:items-center justify-center p-4" onClick={onClose}>
       <div className="w-full max-w-sm surface rounded-3xl p-5" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
@@ -159,6 +164,7 @@ function NavigateChoiceModal({ target, onClose }: { target: { lat: number; lng: 
           ))}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

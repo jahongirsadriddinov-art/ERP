@@ -4,8 +4,29 @@ name: Android APK build
 # emasligi uchun ishlatiladi — GitHub'ning o'zi shu narsalarni har safar
 # tayyor holda beradigan virtual mashinada quradi. Natija ("Artifacts")
 # har bir run sahifasining pastida yuklab olish uchun paydo bo'ladi.
+#
+# Broadcast (botdan hammaga yangilanish xabari): FAQAT qo'lda, "Run workflow"
+# tugmasi orqali "broadcast" belgisini yoqib ishga tushirilganda yuboriladi —
+# oddiy push'da (har commit'da) HECH QACHON avtomatik yuborilmaydi, aks holda
+# xodimlarni kuniga bir necha marta bezovta qilib yuborardi. Buning uchun bu
+# repo'da "DEPLOY_BROADCAST_SECRET" nomli Actions secret o'rnatilgan bo'lishi
+# kerak — qiymati backend'dagi (Render) shu nomdagi environment variable bilan
+# BIR XIL bo'lishi shart.
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      broadcast:
+        description: "Botdan hammaga yangilanish xabari yuborilsinmi?"
+        type: boolean
+        default: false
+      version:
+        description: "Versiya nomi (masalan v1.3.0) — broadcast yoqilgan bo'lsa talab qilinadi"
+        required: false
+        type: string
+      notes:
+        description: "Yangilanish haqida qisqa izoh (ixtiyoriy)"
+        required: false
+        type: string
   push:
     branches: [main]
     paths:
@@ -55,3 +76,45 @@ jobs:
           name: qurilisherp-debug-apk
           path: frontend/android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
+
+      # Faqat qo'lda ishga tushirilganda va "broadcast" belgisi yoqilganda —
+      # APK backend orqali Cloudinary'ga (ochiq, login talab qilmaydigan URL)
+      # yuklanadi, so'ng dasturchidan boshqa BARCHA foydalanuvchilarga
+      # Telegram bot orqali yuklab olish havolasi yuboriladi.
+      - name: Upload APK + notify users via bot
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.broadcast == true }}
+        env:
+          DEPLOY_SECRET: ${{ secrets.DEPLOY_BROADCAST_SECRET }}
+          BACKEND_URL: https://qurilisherp-backend.onrender.com
+          VERSION: ${{ inputs.version }}
+          NOTES: ${{ inputs.notes }}
+        run: |
+          set -e
+          if [ -z "$DEPLOY_SECRET" ]; then
+            echo "::error::DEPLOY_BROADCAST_SECRET repo secret o'rnatilmagan — Settings > Secrets and variables > Actions'da qo'shing."
+            exit 1
+          fi
+          if [ -z "$VERSION" ]; then
+            echo "::error::broadcast yoqilganda 'version' input'i talab qilinadi."
+            exit 1
+          fi
+
+          APK_PATH="android/app/build/outputs/apk/debug/app-debug.apk"
+
+          UPLOAD_JSON=$(curl -sf -X POST "$BACKEND_URL/api/deploy/upload-artifact" \
+            -H "X-Deploy-Secret: $DEPLOY_SECRET" \
+            -F "file=@${APK_PATH}")
+          APK_URL=$(echo "$UPLOAD_JSON" | node -e "process.stdin.once('data', d => console.log(JSON.parse(d).url))")
+          if [ -z "$APK_URL" ] || [ "$APK_URL" = "undefined" ]; then
+            echo "::error::APK yuklash muvaffaqiyatsiz: $UPLOAD_JSON"
+            exit 1
+          fi
+          echo "APK yuklandi: $APK_URL"
+
+          BROADCAST_BODY=$(jq -n --arg version "$VERSION" --arg apkUrl "$APK_URL" --arg notes "$NOTES" \
+            '{version: $version, apkUrl: $apkUrl, notes: $notes}')
+          RESULT=$(curl -sf -X POST "$BACKEND_URL/api/deploy/broadcast-update" \
+            -H "X-Deploy-Secret: $DEPLOY_SECRET" \
+            -H "Content-Type: application/json" \
+            -d "$BROADCAST_BODY")
+          echo "Broadcast natijasi: $RESULT"

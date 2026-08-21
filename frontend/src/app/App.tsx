@@ -13,7 +13,7 @@ import { API_BASE, parseSmetaFile, uploadChatMedia } from "./api";
 import { connectSocket, getSocket, disconnectSocket } from "./socket";
 import { motion, AnimatePresence } from "motion/react";
 import { setSiteLanguage, SiteLang, langLabel } from "./i18n";
-import { installAndroidBackHandler, haptic } from "./platform";
+import { installAndroidBackHandler, haptic, isNative } from "./platform";
 import LanguageSwitcher from "./i18n/LanguageSwitcher";
 import { Skeleton, SkeletonList, SkeletonPage, SkeletonMessage, SkeletonTable, SkeletonProfile } from "./Skeleton";
 import { useGeoTracker } from "./useGeoTracker";
@@ -28,6 +28,7 @@ const RegisterWizard = lazy(() => import("./RegisterWizard"));
 const DeveloperPanel = lazy(() => import("./DeveloperPanel"));
 const AIAssistant = lazy(() => import("./AIAssistant"));
 const QRScanner = lazy(() => import("./QRScanner"));
+const LandingPage = lazy(() => import("./LandingPage"));
 const QRGenerator = lazy(() => import("./QRGenerator"));
 const GpsTrackingPage = lazy(() => import("./GpsTrackingPage"));
 
@@ -3731,7 +3732,7 @@ function OtpBoxes({ value, onChange, length = 4, autoFocus, error }: { value: st
 }
 
 // ─── Login Screen ─────────────────────────────────────────────────────────────
-function LoginScreen({ onLogin, onRegister }: { onLogin: (u: any, company?: any) => void; onRegister?: () => void }) {
+function LoginScreen({ onLogin, onRegister, onBack }: { onLogin: (u: any, company?: any) => void; onRegister?: () => void; onBack?: () => void }) {
   const { t, i18n } = useTranslation();
   const [phone, setPhone] = useState("+998 ");
   const [code, setCode] = useState("");
@@ -3870,6 +3871,14 @@ function LoginScreen({ onLogin, onRegister }: { onLogin: (u: any, company?: any)
       <div className="absolute bottom-[-8%] right-[-12%] w-[45%] h-[45%] bg-accent/15 rounded-full blur-[120px] blob-anim-slow pointer-events-none" />
       <div className="absolute top-[40%] right-[-5%] w-[25%] h-[25%] bg-primary/10 rounded-full blur-[80px] blob-anim pointer-events-none" style={{ animationDelay: '4s' }} />
 
+      {onBack && (
+        <button type="button" onClick={onBack}
+          className="absolute left-4 z-10 flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground liquid-transition"
+          style={{ top: "max(1.25rem, env(safe-area-inset-top))" }}>
+          <ArrowLeft className="w-4 h-4"/> Bosh sahifa
+        </button>
+      )}
+
       <motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 26 }}
         className="mb-8 text-center relative z-10">
         <div className="w-16 h-16 bg-gradient-to-br from-primary to-primary/80 rounded-3xl flex items-center justify-center mx-auto mb-4 shadow-xl shadow-primary/20 overflow-hidden">
@@ -4007,34 +4016,6 @@ function LoginScreen({ onLogin, onRegister }: { onLogin: (u: any, company?: any)
         </div>
       )}
 
-      {/* ─── SEO uchun kirish-oldi kontent (faqat login sahifasida, funksionallikka
-           taalluqli emas) — GoogleBot sahifani render qilganda ko'radigan yagona
-           matn shu login formasi ediki, u faqat "erp-firma.uz" nomi bo'yicha
-           qidiruvda chiqishiga sabab bo'lgan. Haqiqiy mavzuiy kalit so'zlar
-           (firma raqamlashtirish, ishchilar nazorati va h.k.) bo'yicha ham
-           topilishi uchun sahifada shu mavzularni tabiiy tilda tasvirlaydigan
-           real matn bo'lishi kerak — meta "keywords" tegi buning o'rnini
-           bosolmaydi, Google uni 2009-yildan beri reyting uchun ishlatmaydi. */}
-      <section className="w-full max-w-2xl mt-14 mb-4 relative z-10 px-2 text-center">
-        <h2 className="text-lg font-bold text-foreground mb-2">
-          Qurilish firmangizni raqamlashtiring — QurilishERP bilan
-        </h2>
-        <p className="text-sm text-muted-foreground leading-relaxed max-w-xl mx-auto">
-          QurilishERP — qurilish va pudratchi tashkilotlar uchun mo'ljallangan bulutli boshqaruv tizimi.
-          Firma faoliyatini qog'ozdan va tarqoq Excel jadvallaridan bitta tizimga ko'chirish, ya'ni
-          <strong className="text-foreground font-semibold"> qurilish firmasini raqamlashtirish (elektronlashtirish)</strong>,
-          endi bir necha daqiqada boshlanadi. Tizim orqali loyihalarni onlayn boshqarish, smeta va
-          materiallar hisobini yuritish, moliyaviy hisobotlarni avtomatik shakllantirish, xodimlar va
-          ishchilar davomatini (yo'qlamasini) GPS orqali nazorat qilish, ish haqi hisob-kitobini
-          soddalashtirish mumkin. Har bir loyiha, transport, ombor va xodim bo'yicha real vaqtda
-          hisobot olish, jamoa bilan tizim ichidagi chatda yozishish, QR-kod orqali material va
-          obyektlarni tezkor tekshirish, hamda sun'iy intellekt (AI) yordamchidan maslahat olish — barchasi
-          bitta ilovada. Telegram bot integratsiyasi orqali xodimlar ishga kelish/ketishni, GPS
-          joylashuvni va bildirishnomalarni to'g'ridan-to'g'ri Telegram orqali ham boshqarishlari mumkin.
-          QurilishERP — kichik va o'rta qurilish biznesi, pudratchi firmalar, remont-ta'mirlash
-          tashkilotlari va qurilish menejerlari uchun O'zbekistondagi zamonaviy boshqaruv yechimi.
-        </p>
-      </section>
     </main>
   );
 }
@@ -4056,14 +4037,19 @@ export default function App() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser?.language]);
-  // v1.2: kirish ekrani — login yoki yangi firma ochish (register wizard)
-  const [authView, setAuthView] = useState<"login"|"register">(()=>{
+  // v1.3: kirish-oldi oqim — reklama/landing sahifa (default, faqat veb'da),
+  // undan "Kirish" yoki "Bepul boshlash" orqali login/register'ga o'tiladi.
+  // Android APK/Windows exe'da (o'rnatilgan ilova) foydalanuvchi allaqachon
+  // ilovani tanlab o'rnatgan — har safar reklama sahifasini ko'rsatish shart
+  // emas, to'g'ridan-to'g'ri login'ga o'tadi. Ro'yxatdan o'tish niyati aniq
+  // bo'lsa (link/localStorage) landing'ni baribir chetlab o'tamiz.
+  const [authView, setAuthView] = useState<"landing"|"login"|"register">(()=>{
     if (typeof window !== "undefined") {
       const sp = new URLSearchParams(window.location.search);
       if (sp.get("rid") || sp.has("register")) return "register";
       if (localStorage.getItem("erp_reg")) return "register";
     }
-    return "login";
+    return isNative() ? "login" : "landing";
   });
   const [projects, setProjects] = useState<Project[]>([]);
   const [transfers, setTransfers] = useState<Transfer[]>([]);
@@ -4596,11 +4582,15 @@ export default function App() {
     // filialida o'zining Toaster'i bo'lishi shart.
     return (
       <>
-        {authView === "register"
+        {authView === "landing"
+          ? <Suspense fallback={<div className="min-h-screen bg-background"/>}>
+              <LandingPage onLogin={()=>setAuthView("login")} onRegister={()=>setAuthView("register")}/>
+            </Suspense>
+          : authView === "register"
           ? <Suspense fallback={<div className="min-h-screen bg-background"><SkeletonPage variant="form" /></div>}>
               <RegisterWizard onBack={()=>setAuthView("login")} onDone={(u,company)=>{setCurrentUser(u);setPage("dashboard");setAuthView("login");applyCompany(company);}}/>
             </Suspense>
-          : <LoginScreen onLogin={(u,company)=>{setCurrentUser(u);setPage("dashboard");applyCompany(company);}} onRegister={()=>setAuthView("register")}/>}
+          : <LoginScreen onLogin={(u,company)=>{setCurrentUser(u);setPage("dashboard");applyCompany(company);}} onRegister={()=>setAuthView("register")} onBack={()=>setAuthView("landing")}/>}
         <Toaster position="top-center" richColors closeButton/>
       </>
     );
@@ -4628,8 +4618,13 @@ export default function App() {
   const isGpsAdmin = liveUser?.role === 'direktor' || liveUser?.role === 'orinbosar';
   const NAV: { key: NavPage; label: string; icon: React.ElementType; badge?: number }[] = [
     { key: "dashboard", label: tApp('nav.dashboard'), icon: Home },
+    // Moliya endi HAMMAGA ko'rinadi — oddiy xodim o'z chiqimini kiritib,
+    // faqat o'zinikini ko'radi (backend GET /api/transactions rolga qarab
+    // filtrlaydi); direktor/orinbosar hammasini ko'radi va tasdiqlaydi.
+    // FinancePage'ning o'zi ichida approve/reject tugmalari isAdmin bilan
+    // allaqachon cheklangan — bu yerda faqat sahifaga KIRISH ochilmoqda.
+    { key: "finance" as NavPage, label: tApp('nav.finance'), icon: DollarSign },
     ...(admin ? [
-      { key: "finance" as NavPage, label: tApp('nav.finance'), icon: DollarSign },
       { key: "reports" as NavPage, label: tApp('nav.reports'), icon: BarChart2 },
     ] : []),
     ...(isGpsAdmin ? [{ key: "gps" as NavPage, label: "Kuzatuv", icon: MapPin }] : []),
@@ -5046,7 +5041,7 @@ export default function App() {
             }}
           />
         )}
-        {page==="finance" && admin && (
+        {page==="finance" && (
           <FinancePage currentUser={liveUser} users={users} projects={projects} expenses={expenses}
             onAddExpense={handleAddExpense} onConfirm={handleConfirmExpense}
             onApprove={handleApproveExpense} onReject={handleRejectExpense}/>

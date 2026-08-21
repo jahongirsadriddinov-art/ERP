@@ -17,7 +17,7 @@ import { installAndroidBackHandler } from "./platform";
 import LanguageSwitcher from "./i18n/LanguageSwitcher";
 import { Skeleton, SkeletonList, SkeletonPage, SkeletonMessage, SkeletonTable, SkeletonProfile } from "./Skeleton";
 import { useGeoTracker } from "./useGeoTracker";
-import { isPinSet, useAppLock, markActiveNow, clearPin, PinSetupScreen, PinLockScreen, isBiometricEnabled, setBiometricEnabled, biometricSupported } from "./AppLock";
+import { isPinSet, useAppLock, markActiveNow, clearPin, PinSetupScreen, PinLockScreen, ChangePinModal, isBiometricEnabled, setBiometricEnabled, biometricSupported, getLockTimeoutMin, setLockTimeoutMin, LOCK_TIMEOUT_OPTIONS } from "./AppLock";
 
 // recharts og'ir kutubxona — faqat "Hisobotlar" bo'limiga kirilganda yuklanadi
 // (boshlang'ich bundle hajmini kamaytiradi, sayt tezroq ochiladi).
@@ -3205,6 +3205,37 @@ function BiometricToggleCard() {
   );
 }
 
+// PIN xavfsizlik sozlamalari — avtomatik bloklash vaqti (moslashuvchan) va
+// PIN kodni almashtirish (avval eskisi tekshiriladi).
+function SecuritySettingsCard() {
+  const [timeoutMin, setTimeoutMinState] = useState(() => getLockTimeoutMin());
+  const [changingPin, setChangingPin] = useState(false);
+  return (
+    <div className="surface rounded-2xl p-4 space-y-4">
+      <div>
+        <p className="text-sm font-semibold mb-0.5">Avtomatik bloklash vaqti</p>
+        <p className="text-xs text-muted-foreground mb-3">Ilova fondan shuncha vaqtdan keyin qulflanadi</p>
+        <div className="flex flex-wrap gap-1.5">
+          {LOCK_TIMEOUT_OPTIONS.map(min => (
+            <button key={min} onClick={() => { setLockTimeoutMin(min); setTimeoutMinState(min); }}
+              className={`text-xs px-3 py-1.5 rounded-full font-medium liquid-transition ${timeoutMin === min ? "bg-primary text-white" : "bg-muted text-muted-foreground hover:bg-secondary"}`}>
+              {min < 60 ? `${min} daq` : `${min / 60} soat`}
+            </button>
+          ))}
+        </div>
+      </div>
+      <button onClick={() => setChangingPin(true)}
+        className="w-full flex items-center justify-center gap-2 text-sm font-semibold py-2.5 rounded-xl border border-border/60 hover:bg-muted liquid-transition">
+        <Lock className="w-4 h-4" /> PIN kodni almashtirish
+      </button>
+      {changingPin && (
+        <ChangePinModal onClose={() => setChangingPin(false)}
+          onChanged={() => { setChangingPin(false); toast.success("PIN kod almashtirildi"); }} />
+      )}
+    </div>
+  );
+}
+
 function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdateUser, onCompanyNameChange, onCompanyLogoChange, onBgChange, onColorThemeChange, colorTheme, themeMode, onThemeModeChange, canEditCompany, todayAttendance, onCheckIn, onCheckOut, gpsTracking, onLockNow }:
   { currentUser: AppUser; projects: Project[]; onUpdateAvatar: (url: string) => void; onLogout: () => void; onUpdateUser: (u: AppUser) => void; onCompanyNameChange: (name: string) => void; onCompanyLogoChange: (logo: string) => void; onBgChange: (bg: string) => void; onColorThemeChange: (id: string) => void; colorTheme: string; themeMode: "light"|"dark"|"system"; onThemeModeChange: (m: "light"|"dark"|"system") => void; canEditCompany?: boolean; todayAttendance: null | { status: string; checkIn?: string; checkOut?: string; workHours?: number }; onCheckIn: () => void; onCheckOut: () => void; gpsTracking: boolean; onLockNow: () => void }) {
   const { t, i18n } = useTranslation();
@@ -3684,6 +3715,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
           <AuditLogSection token={localStorage.getItem("token") || ""} />
         )}
 
+        <SecuritySettingsCard />
         {biometricSupported() && <BiometricToggleCard />}
 
         {/* Qo'lda bloklash — 1 daqiqa kutmasdan, darhol PIN ekraniga o'tadi.
@@ -4692,13 +4724,19 @@ export default function App() {
   );
   if (appLocked) return (
     <>
-      <PinLockScreen onUnlock={unlockApp} onForgot={() => {
-        if (confirm("Hisobdan chiqib, qaytadan kirasizmi? PIN kod tozalanadi.")) {
-          clearPin();
+      <PinLockScreen onUnlock={unlockApp}
+        onForgot={() => {
+          if (confirm("Hisobdan chiqib, qaytadan kirasizmi? PIN kod tozalanadi.")) {
+            clearPin();
+            localStorage.removeItem("currentUser"); localStorage.removeItem("token");
+            setCurrentUser(null); setAuthView("login");
+          }
+        }}
+        onLockedOut={() => {
+          toast.error("Ko'p marta noto'g'ri PIN kiritildi — xavfsizlik uchun qayta kirishingiz kerak.");
           localStorage.removeItem("currentUser"); localStorage.removeItem("token");
           setCurrentUser(null); setAuthView("login");
-        }
-      }} />
+        }} />
       <Toaster position="top-center" richColors closeButton/>
     </>
   );
@@ -4779,6 +4817,10 @@ export default function App() {
         <button onClick={()=>setQrScanOpen(true)} title="QR Skan" aria-label="QR Skan"
           className="btn btn-ghost w-9 h-9 p-0 rounded-full">
           <QrCode className="w-[18px] h-[18px]"/>
+        </button>
+        <button onClick={lockAppNow} title="Ilovani bloklash" aria-label="Ilovani bloklash"
+          className="btn btn-ghost w-9 h-9 p-0 rounded-full">
+          <Lock className="w-[18px] h-[18px]"/>
         </button>
         <NotificationBell messages={messages} transfers={transfers} expenses={expenses} users={users} currentUser={liveUser}
           onOpenChat={()=>{setPage("chat");setSelProject(null);}} onOpenDashboard={()=>{setPage("dashboard");setSelProject(null);}}/>

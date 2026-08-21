@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Delete, Fingerprint, LogOut, Building2 } from "lucide-react";
+import { createPortal } from "react-dom";
+import { Delete, Fingerprint, LogOut, Building2, Lock, X } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { isAndroid } from "./platform";
 
@@ -16,10 +17,39 @@ const PIN_HASH_KEY = "erp_pinHash";
 const PIN_SALT_KEY = "erp_pinSalt";
 const BIOMETRIC_KEY = "erp_biometricEnabled";
 const LAST_ACTIVE_KEY = "erp_lastActiveAt";
-// Telegram'ning o'zidagi taxminiy chegara — fondan shundan ko'proq vaqt
-// o'tib qaytsa qulflanadi, tezkor ilova almashtirishda (masalan boshqa
-// ilovaga bir soniyaga o'tib qaytish) bezovta qilmaydi.
-const LOCK_THRESHOLD_MS = 60 * 1000;
+const LOCK_TIMEOUT_KEY = "erp_lockTimeoutMin";
+const FAILED_ATTEMPTS_KEY = "erp_pinFailedAttempts";
+// Standart — Telegram'ning o'zidagi taxminiy chegara: fondan shundan ko'proq
+// vaqt o'tib qaytsa qulflanadi, tezkor ilova almashtirishda (masalan boshqa
+// ilovaga bir soniyaga o'tib qaytish) bezovta qilmaydi. Profilda o'zgartirish
+// mumkin (getLockTimeoutMs/setLockTimeoutMin).
+const DEFAULT_LOCK_TIMEOUT_MIN = 1;
+export const LOCK_TIMEOUT_OPTIONS = [1, 5, 15, 30, 60];
+
+export function getLockTimeoutMin(): number {
+  const v = Number(localStorage.getItem(LOCK_TIMEOUT_KEY));
+  return LOCK_TIMEOUT_OPTIONS.includes(v) ? v : DEFAULT_LOCK_TIMEOUT_MIN;
+}
+export function setLockTimeoutMin(min: number): void {
+  localStorage.setItem(LOCK_TIMEOUT_KEY, String(min));
+}
+function getLockThresholdMs(): number {
+  return getLockTimeoutMin() * 60 * 1000;
+}
+
+// PIN'ni ko'r-ko'rona urinib topishga qarshi — 5 marta ketma-ket noto'g'ri
+// kiritilsa, mahalliy PIN tozalanadi va to'liq qayta login talab qilinadi
+// (4 xonali PIN'da atigi 10 000 kombinatsiya bor — cheklovsiz urinish
+// amalda uni foydasiz qiladi).
+const MAX_FAILED_ATTEMPTS = 5;
+function recordFailedAttempt(): number {
+  const n = (Number(localStorage.getItem(FAILED_ATTEMPTS_KEY)) || 0) + 1;
+  localStorage.setItem(FAILED_ATTEMPTS_KEY, String(n));
+  return n;
+}
+function resetFailedAttempts(): void {
+  localStorage.removeItem(FAILED_ATTEMPTS_KEY);
+}
 
 async function sha256Hex(text: string): Promise<string> {
   const enc = new TextEncoder().encode(text);
@@ -40,11 +70,23 @@ export async function setPin(pin: string): Promise<void> {
   localStorage.setItem(PIN_SALT_KEY, salt);
   localStorage.setItem(PIN_HASH_KEY, await sha256Hex(salt + pin));
 }
-export async function verifyPin(pin: string): Promise<boolean> {
+// Muvaffaqiyatli bo'lsa urinishlar hisobini nolga tushiradi; noto'g'ri bo'lsa
+// hisoblaydi va MAX_FAILED_ATTEMPTS'ga yetganda PIN'ning o'zini tozalaydi
+// (qo'pol kuch bilan taxmin qilishning oldi — chaqiruvchi shu holatda
+// to'liq logout qilishi kerak, `lockedOut: true` shuni bildiradi).
+export async function verifyPin(pin: string): Promise<{ ok: boolean; lockedOut?: boolean; attemptsLeft?: number }> {
   const hash = localStorage.getItem(PIN_HASH_KEY);
-  if (!hash) return false;
+  if (!hash) return { ok: false };
   const salt = localStorage.getItem(PIN_SALT_KEY) || '';
-  return (await sha256Hex(salt + pin)) === hash;
+  const ok = (await sha256Hex(salt + pin)) === hash;
+  if (ok) { resetFailedAttempts(); return { ok: true }; }
+  const attempts = recordFailedAttempt();
+  if (attempts >= MAX_FAILED_ATTEMPTS) {
+    clearPin();
+    resetFailedAttempts();
+    return { ok: false, lockedOut: true };
+  }
+  return { ok: false, attemptsLeft: MAX_FAILED_ATTEMPTS - attempts };
 }
 export function clearPin(): void {
   localStorage.removeItem(PIN_HASH_KEY);
@@ -90,7 +132,7 @@ export function useAppLock(pinIsSet: boolean) {
   const [locked, setLocked] = useState(() => {
     if (!pinIsSet) return false;
     const last = Number(localStorage.getItem(LAST_ACTIVE_KEY) || 0);
-    return !!last && Date.now() - last > LOCK_THRESHOLD_MS;
+    return !!last && Date.now() - last > getLockThresholdMs();
   });
 
   useEffect(() => {
@@ -102,7 +144,7 @@ export function useAppLock(pinIsSet: boolean) {
         markActiveNow();
       } else {
         const last = Number(localStorage.getItem(LAST_ACTIVE_KEY) || 0);
-        if (last && Date.now() - last > LOCK_THRESHOLD_MS) setLocked(true);
+        if (last && Date.now() - last > getLockThresholdMs()) setLocked(true);
         markActiveNow();
       }
     };
@@ -205,10 +247,83 @@ export function PinSetupScreen({ onDone }: { onDone: () => void }) {
   );
 }
 
+// ─── PIN kodni almashtirish (Profil'dan) — avval eskisi tekshiriladi ─────
+export function ChangePinModal({ onClose, onChanged }: { onClose: () => void; onChanged: () => void }) {
+  const [stage, setStage] = useState<"old" | "new" | "confirm">("old");
+  const [oldPin, setOldPin] = useState("");
+  const [newPin, setNewPin] = useState("");
+  const [confirmPin, setConfirmPin] = useState("");
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const current = stage === "old" ? oldPin : stage === "new" ? newPin : confirmPin;
+  const setCurrent = stage === "old" ? setOldPin : stage === "new" ? setNewPin : setConfirmPin;
+
+  const onDigit = async (d: string) => {
+    if (current.length >= PIN_LEN || saving) return;
+    setError("");
+    const next = current + d;
+    setCurrent(next);
+    if (next.length !== PIN_LEN) return;
+
+    if (stage === "old") {
+      const result = await verifyPin(next);
+      if (result.ok) {
+        setTimeout(() => setStage("new"), 150);
+      } else if (result.lockedOut) {
+        onClose(); // App.tsx darajasida lockedOut allaqachon to'liq logout qiladi (App qayta render bo'ladi)
+      } else {
+        setError("Joriy PIN noto'g'ri");
+        setTimeout(() => setOldPin(""), 700);
+      }
+    } else if (stage === "new") {
+      setTimeout(() => setStage("confirm"), 150);
+    } else {
+      if (next === newPin) {
+        setSaving(true);
+        await setPin(next);
+        onChanged();
+      } else {
+        setError("Yangi PIN kodlar mos kelmadi");
+        setTimeout(() => { setNewPin(""); setConfirmPin(""); setStage("new"); }, 700);
+      }
+    }
+  };
+
+  const titles: Record<typeof stage, string> = {
+    old: "Joriy PIN kodni kiriting",
+    new: "Yangi PIN kod o'rnating",
+    confirm: "Yangi PIN kodni tasdiqlang",
+  };
+
+  return createPortal(
+    <div className="fixed inset-0 z-[999] bg-background flex flex-col items-center justify-center p-6"
+      style={{ paddingTop: "max(2rem, env(safe-area-inset-top))", paddingBottom: "max(2rem, env(safe-area-inset-bottom))" }}>
+      <button onClick={onClose} aria-label="Yopish" className="absolute top-4 right-4 p-2 rounded-full hover:bg-muted"
+        style={{ top: "max(1rem, env(safe-area-inset-top))" }}>
+        <X className="w-5 h-5" />
+      </button>
+      <div className="w-16 h-16 rounded-3xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center mb-6 shadow-xl shadow-primary/20">
+        <Lock className="w-8 h-8 text-white" />
+      </div>
+      <h1 className="text-xl font-bold mb-8">{titles[stage]}</h1>
+      <AnimatePresence mode="wait">
+        <motion.div key={stage} initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -16 }}>
+          <PinDots length={PIN_LEN} filled={current.length} />
+        </motion.div>
+      </AnimatePresence>
+      {error && <p className="text-xs text-red-500 mb-4 text-center">{error}</p>}
+      <PinPad onDigit={onDigit} onDelete={() => setCurrent(current.slice(0, -1))} />
+    </div>,
+    document.body
+  );
+}
+
 // ─── Qulf ekrani — fondan uzoq vaqtdan keyin qaytganda ────────────────────
-export function PinLockScreen({ onUnlock, onForgot }: { onUnlock: () => void; onForgot: () => void }) {
+export function PinLockScreen({ onUnlock, onForgot, onLockedOut }: { onUnlock: () => void; onForgot: () => void; onLockedOut: () => void }) {
   const [pin, setPinInput] = useState("");
   const [error, setError] = useState(false);
+  const [attemptsLeft, setAttemptsLeft] = useState<number | null>(null);
   const [biometricTried, setBiometricTried] = useState(false);
   const [biometricBusy, setBiometricBusy] = useState(false);
 
@@ -231,8 +346,17 @@ export function PinLockScreen({ onUnlock, onForgot }: { onUnlock: () => void; on
     const next = pin + d;
     setPinInput(next);
     if (next.length === PIN_LEN) {
-      const ok = await verifyPin(next);
-      if (ok) { onUnlock(); return; }
+      const result = await verifyPin(next);
+      if (result.ok) { onUnlock(); return; }
+      if (result.lockedOut) {
+        // Juda ko'p noto'g'ri urinish — PIN ALLAQACHON tozalandi (endi
+        // hech qanday PIN mavjud emas), shuning uchun tasdiqlash so'ralmaydi
+        // (foydalanuvchida "bekor qilish" degan haqiqiy tanlov yo'q —
+        // ekranda qolsa, hech narsa kirita olmaydigan tuzoqqa tushib qoladi).
+        onLockedOut();
+        return;
+      }
+      setAttemptsLeft(result.attemptsLeft ?? null);
       setError(true);
       setTimeout(() => setPinInput(""), 400);
     }
@@ -249,7 +373,11 @@ export function PinLockScreen({ onUnlock, onForgot }: { onUnlock: () => void; on
       <motion.div animate={error ? { x: [0, -10, 10, -10, 10, 0] } : {}} transition={{ duration: 0.4 }}>
         <PinDots length={PIN_LEN} filled={pin.length} />
       </motion.div>
-      {error && <p className="text-xs text-red-500 mb-4">Noto'g'ri PIN kod</p>}
+      {error && (
+        <p className="text-xs text-red-500 mb-4">
+          Noto'g'ri PIN kod{attemptsLeft != null && attemptsLeft <= 3 ? ` — yana ${attemptsLeft} ta urinish qoldi` : ''}
+        </p>
+      )}
       <PinPad onDigit={onDigit} onDelete={() => setPinInput(pin.slice(0, -1))} />
 
       {isBiometricEnabled() && biometricSupported() && (

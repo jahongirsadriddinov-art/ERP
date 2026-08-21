@@ -704,7 +704,25 @@ bot.on('message', async (msg: any) => {
       try {
         const filter = user.companyId ? { companyId: user.companyId } : {};
         const companyUsers = await User.find(filter).select('firstName lastName role phone');
-        const lines = companyUsers.map(u => `• *${u.firstName} ${u.lastName || ''}* — ${u.role}\n  📞 ${u.phone}`).join('\n');
+        // Ishchi/prorab/brigadir uchun — saytdagi Kuzatuv sahifasi bilan bir
+        // xil "bugungi yo'qlama" ma'lumoti (GET /api/attendance/list bilan
+        // bir xil mantiq, faqat bot HTTP/tenant konteksti ichida ISHLAMAYDI,
+        // shu sabab to'g'ridan-to'g'ri Mongoose orqali).
+        const workerIds = companyUsers.filter((u: any) => isWorker(u.role)).map((u: any) => String(u._id));
+        const today = todayDateStr();
+        const records = workerIds.length
+          ? await Attendance.find({ userId: { $in: workerIds }, date: today }).lean()
+          : [];
+        const byUser = new Map(records.map((r: any) => [r.userId, r]));
+        const lines = companyUsers.map((u: any) => {
+          const base = `• *${u.firstName} ${u.lastName || ''}* — ${u.role}\n  📞 ${u.phone}`;
+          if (!isWorker(u.role)) return base;
+          const rec: any = byUser.get(String(u._id));
+          const att = !rec?.checkIn ? '⚪ Hali kelmagan'
+            : !rec?.checkOut ? `🟢 Ishlayapti (${new Date(rec.checkIn).toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Tashkent' })}dan beri)`
+            : `⚫ Tugatgan (${new Date(rec.checkIn).toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Tashkent' })}–${new Date(rec.checkOut).toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Tashkent' })})`;
+          return `${base}\n  ${att}`;
+        }).join('\n\n');
         bot.sendMessage(chatId, `${tb(user.language, 'admStaffHeader')}\n\n${lines}`, { parse_mode: 'Markdown', reply_markup: await keyboardForUser(user, user.language) });
       } catch {
         bot.sendMessage(chatId, tb(user.language, 'genericError'), { reply_markup: await keyboardForUser(user, user.language) });

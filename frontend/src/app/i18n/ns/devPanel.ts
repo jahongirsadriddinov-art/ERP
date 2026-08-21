@@ -9,6 +9,13 @@ export const uz = {
       users: "Foydalanuvchilar",
       messages: "💬 Xabarlar",
     },
+    stats: {
+      totalFirms: "Firmalar",
+      activeSubs: "Faol obunalar",
+      pending: "Kutilmoqda",
+      totalUsers: "Foydalanuvchilar",
+      expiringSoon: "ta obuna 3 kun ichida tugaydi",
+    },
     errors: {
       loadCompanies: "Firmalarni olishda xatolik (ruxsat yo'q?)",
       connection: "Server bilan ulanishda xatolik",
@@ -93,6 +100,13 @@ export const ru = {
       firms: "Компании ({{count}})",
       users: "Пользователи",
       messages: "💬 Сообщения",
+    },
+    stats: {
+      totalFirms: "Компании",
+      activeSubs: "Активные подписки",
+      pending: "Ожидается",
+      totalUsers: "Пользователи",
+      expiringSoon: "подписок истекают в течение 3 дней",
     },
     errors: {
       loadCompanies: "Ошибка при получении компаний (нет доступа?)",

@@ -176,29 +176,57 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
     else setErr(t('devPanel.errors.assignCompany'));
   };
 
+  // Umumiy ko'rinish statistikasi — allaqachon yuklangan companies/users/subs
+  // massivlaridan hisoblanadi, alohida so'rov shart emas.
+  const activeSubsCount = subs.filter(s => s.status === "active").length;
+  const pendingSubsCount = subs.filter(s => s.status === "pending").length;
+  const expiringSoonCount = subs.filter(s => s.status === "active" && typeof s.daysLeft === "number" && s.daysLeft <= 3).length;
+
   return (
     <div className="min-h-screen bg-background" style={{ paddingTop: "env(safe-area-inset-top)" }}>
-      <header className="glass sticky top-0 z-20 px-4 py-3 flex items-center justify-between border-b border-border/50">
-        <div className="flex items-center gap-2">
-          <div className="w-9 h-9 rounded-xl bg-slate-800 text-white flex items-center justify-center text-sm font-bold">🛠</div>
-          <div>
-            <p className="text-sm font-bold leading-tight">{t('devPanel.title')}</p>
-            <p className="text-[11px] text-muted-foreground leading-tight">{t('devPanel.headerSubtitle', { name: currentUser.name })}</p>
+      <header className="glass sticky top-0 z-20 px-4 py-3 flex items-center justify-between gap-2 border-b border-border/50">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-slate-700 to-slate-900 text-white flex items-center justify-center text-sm font-bold shadow-sm shrink-0">🛠</div>
+          <div className="min-w-0">
+            <p className="text-sm font-bold leading-tight truncate">{t('devPanel.title')}</p>
+            <p className="text-[11px] text-muted-foreground leading-tight truncate">{t('devPanel.headerSubtitle', { name: currentUser.name })}</p>
           </div>
         </div>
         <button onClick={() => { localStorage.removeItem("currentUser"); localStorage.removeItem("token"); onLogout(); }}
-          className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-red-600 border border-border rounded-xl px-3 py-2">
-          <LogOut className="w-4 h-4" /> {t('devPanel.logout')}
+          className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-red-600 border border-border rounded-xl px-3 py-2 shrink-0">
+          <LogOut className="w-4 h-4" /> <span className="hidden sm:inline">{t('devPanel.logout')}</span>
         </button>
       </header>
 
-      <div className="mx-4 mt-3 nav-pill-desktop flex gap-1 flex-wrap p-1 rounded-full">
-        <button onClick={() => setTab("subscriptions")} className={`relative flex-1 py-2 rounded-full text-[13px] font-semibold liquid-transition ${tab === "subscriptions" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
+      {/* Umumiy ko'rinish — statistika kartochkalari, barcha tab'larda ko'rinadi */}
+      {!loading && (
+        <div className="mx-4 mt-3 grid grid-cols-2 md:grid-cols-4 gap-2.5">
+          {[
+            { label: t('devPanel.stats.totalFirms'), value: companies.length, accent: "text-primary" },
+            { label: t('devPanel.stats.activeSubs'), value: activeSubsCount, accent: "text-green-600 dark:text-green-400" },
+            { label: t('devPanel.stats.pending'), value: pendingSubsCount, accent: pendingSubsCount > 0 ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground" },
+            { label: t('devPanel.stats.totalUsers'), value: users.length, accent: "text-accent" },
+          ].map(s => (
+            <div key={s.label} className="surface rounded-2xl px-3.5 py-3">
+              <p className="text-[10px] text-muted-foreground font-semibold truncate">{s.label}</p>
+              <p className={`text-xl font-bold font-mono mt-0.5 ${s.accent}`}>{s.value}</p>
+            </div>
+          ))}
+        </div>
+      )}
+      {expiringSoonCount > 0 && (
+        <div className="mx-4 mt-2.5 flex items-center gap-2 text-[11px] font-semibold text-orange-700 dark:text-orange-400 bg-orange-500/10 border border-orange-500/20 rounded-xl px-3 py-2">
+          ⚠️ {expiringSoonCount} {t('devPanel.stats.expiringSoon')}
+        </div>
+      )}
+
+      <div className="mx-4 mt-3 nav-pill-desktop grid grid-cols-2 sm:flex sm:flex-wrap gap-1 p-1 rounded-2xl sm:rounded-full">
+        <button onClick={() => setTab("subscriptions")} className={`relative py-2 rounded-full text-[13px] font-semibold liquid-transition sm:flex-1 ${tab === "subscriptions" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
           {t('devPanel.tabs.subscriptions')} {subs.filter(s => s.status === "pending").length > 0 && <span className="ml-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full badge-pulse">{subs.filter(s => s.status === "pending").length}</span>}
         </button>
-        <button onClick={() => setTab("firms")} className={`flex-1 py-2 rounded-full text-[13px] font-semibold liquid-transition ${tab === "firms" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>{t('devPanel.tabs.firms', { count: companies.length })}</button>
-        <button onClick={() => setTab("users")} className={`flex-1 py-2 rounded-full text-[13px] font-semibold liquid-transition ${tab === "users" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>{t('devPanel.tabs.users')}</button>
-        <button onClick={() => setTab("messages")} className={`flex-1 py-2 rounded-full text-[13px] font-semibold liquid-transition ${tab === "messages" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
+        <button onClick={() => setTab("firms")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition sm:flex-1 ${tab === "firms" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>{t('devPanel.tabs.firms', { count: companies.length })}</button>
+        <button onClick={() => setTab("users")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition sm:flex-1 ${tab === "users" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>{t('devPanel.tabs.users')}</button>
+        <button onClick={() => setTab("messages")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition sm:flex-1 ${tab === "messages" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
           {t('devPanel.tabs.messages')}
         </button>
       </div>
@@ -428,28 +456,28 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
         ) : (
           users.length === 0 ? <p className="text-center text-sm text-muted-foreground py-12">{t('devPanel.users.empty')}</p> :
           users.map(u => (
-            <div key={u.id} className="surface rounded-2xl p-3.5 flex items-center justify-between gap-3">
+            <div key={u.id} className="surface rounded-2xl p-3.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-sm font-semibold truncate">{u.name}</p>
                 <p className="text-[11px] text-muted-foreground font-mono">{u.phone}</p>
                 <p className={`text-[11px] truncate ${u.companyId ? "text-muted-foreground" : "text-red-500 font-semibold"}`}>{u.companyId ? companyName(u.companyId) : t('devPanel.users.noCompany')}{u.isOwner ? t('devPanel.users.ownerSuffix') : ""}</p>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap sm:shrink-0">
                 {u.role !== "dasturchi" && (
                   <select value={u.companyId || ""} onChange={e => assignCompany(u, e.target.value)}
                     title={t('devPanel.users.assignTitle')}
-                    className={`text-xs border rounded-lg px-2 py-1.5 bg-transparent max-w-[110px] ${u.companyId ? "border-border/60" : "border-red-500/50 text-red-600"}`}>
+                    className={`flex-1 sm:flex-initial min-w-0 text-xs border rounded-lg px-2 py-1.5 bg-transparent sm:max-w-[110px] ${u.companyId ? "border-border/60" : "border-red-500/50 text-red-600"}`}>
                     <option value="">{t('devPanel.users.noCompanyOption')}</option>
                     {companies.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
                 )}
                 <select value={u.role} onChange={e => changeRole(u, e.target.value)} disabled={u.role === "dasturchi"}
-                  className="text-xs border border-border/60 rounded-lg px-2 py-1.5 bg-transparent">
+                  className="flex-1 sm:flex-initial min-w-0 text-xs border border-border/60 rounded-lg px-2 py-1.5 bg-transparent">
                   {["direktor","orinbosar","prorab","brigadir","ishchi"].map(r => <option key={r} value={r}>{ROLE_LABELS[r as Role]}</option>)}
                   {u.role === "dasturchi" && <option value="dasturchi">{t('devPanel.users.developerOption')}</option>}
                 </select>
                 <button onClick={() => deleteUser(u)} disabled={u.id === currentUser.id} aria-label={t('devPanel.users.deleteAria')}
-                  className="w-9 h-9 rounded-lg border border-red-500/30 text-red-600 hover:bg-red-500/10 flex items-center justify-center disabled:opacity-30">
+                  className="w-9 h-9 rounded-lg border border-red-500/30 text-red-600 hover:bg-red-500/10 flex items-center justify-center disabled:opacity-30 shrink-0">
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>

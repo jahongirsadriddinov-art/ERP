@@ -29,6 +29,16 @@ on:
       - 'frontend/**'
       - '.github/workflows/android-build.yml'
 
+# Tez ketma-ket bir necha push bo'lsa (masalan tez orada bir necha marta
+# tuzatish kiritilsa) — har biri o'zining to'liq Android+Windows build'ini
+# ishga tushirib, HAMMASI alohida-alohida botga "yangi versiya" deb xabar
+# yuborardi (bir nechta deyarli bir xil, ketma-ket xabar — chalkash va
+# behuda CI vaqti). Endi yangi push eskisini BEKOR qiladi — faqat ENG
+# OXIRGI kod uchun build tugab, botga bitta xabar boradi.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-android:
     runs-on: ubuntu-latest

@@ -261,13 +261,7 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
         {/* Brand row */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-lg shadow-primary/20"
-              style={{ background: "linear-gradient(135deg, var(--primary), color-mix(in srgb, var(--primary) 80%, var(--accent)))" }}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
-                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-                <polyline points="9,22 9,12 15,12 15,22"/>
-              </svg>
-            </div>
+            <img src="/favicon-96.png" alt="QurilishERP" className="w-9 h-9 rounded-xl shadow-lg shadow-primary/20" />
             <div>
               <p className="text-[13px] font-black tracking-tight" style={{ background: "linear-gradient(135deg, var(--primary), var(--accent))", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>QurilishERP</p>
               <p className="text-[9px] text-muted-foreground font-medium -mt-0.5">Firma ochish</p>

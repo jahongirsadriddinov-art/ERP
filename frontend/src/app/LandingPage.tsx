@@ -124,9 +124,7 @@ export default function LandingPage({ onLogin, onRegister }: { onLogin: () => vo
         style={{ paddingTop: "env(safe-area-inset-top)" }}>
         <div className="max-w-6xl mx-auto px-5 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-md shadow-primary/20">
-              <Building2 className="w-5 h-5 text-white" />
-            </div>
+            <img src="/favicon-96.png" alt="QurilishERP" className="w-9 h-9 rounded-xl shadow-md shadow-primary/20" />
             <span className="font-bold text-lg font-['Roboto_Slab',serif]">QurilishERP</span>
           </div>
           <div className="flex items-center gap-2">
@@ -376,9 +374,7 @@ export default function LandingPage({ onLogin, onRegister }: { onLogin: () => vo
       <footer className="border-t border-border/50 py-10" style={{ paddingBottom: "max(2.5rem, env(safe-area-inset-bottom))" }}>
         <div className="max-w-6xl mx-auto px-5 flex flex-col md:flex-row items-center justify-between gap-5">
           <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center">
-              <Building2 className="w-3.5 h-3.5 text-white" />
-            </div>
+            <img src="/favicon-48.png" alt="QurilishERP" className="w-7 h-7 rounded-lg" />
             <span className="font-bold text-sm">QurilishERP</span>
             <span className="text-xs text-muted-foreground">© {year}</span>
           </div>

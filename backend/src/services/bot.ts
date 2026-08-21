@@ -13,6 +13,7 @@ import { initRegistrationScene, isInRegistration } from './registrationScene';
 import { emitToUser, emitToGroup, broadcast } from './socket';
 import { tb, langLabel, BotLang } from '../i18n/bot';
 import { getBackendUrl } from '../utils/backendUrl';
+import { uploadFileToCloud } from '../config/cloudinary';
 
 dotenv.config();
 
@@ -93,8 +94,17 @@ interface BotChatSession { targetType: 'user' | 'group'; targetId: string; targe
 const chatSessions = new Map<number, BotChatSession>();
 const chatExitKeyboard = (lang?: BotLang) => ({ keyboard: [[{ text: tb(lang, 'exitChat') }]], resize_keyboard: true });
 
-// Telegramdan kelgan faylni (photo/video/voice/document) yuklab, /uploads ichiga
-// saqlaydi va saytdagi Message.mediaUrl bilan bir xil ko'rinishdagi to'liq URL qaytaradi.
+// Telegramdan kelgan faylni (photo/video/voice/document) yuklab, saytdagi
+// Message.mediaUrl bilan bir xil ko'rinishdagi to'liq URL qaytaradi.
+// MUHIM: avval bu funksiya HAR DOIM lokal diskka ('/uploads') yozib, hech
+// qachon Cloudinary'ga urinib ko'rmasdi — oddiy sayt yuklashlari
+// (uploadFileToCloud, cloudinary.ts) esa avval Cloudinary'ga urinadi.
+// Render'ning bepul/standart tarifida disk EPHEMERAL — har safar server
+// qayta ishga tushganda (deploy, spin-down/wake, restart) '/uploads' ichidagi
+// hamma narsa YO'QOLADI. Shu sabab bot orqali yuborilgan video/rasm/fayl
+// vaqti-vaqti bilan saytda "topilmadi" bo'lib qolardi. Endi bot ham sayt
+// bilan bir xil yo'ldan o'tadi: avval vaqtinchalik faylga yozib, keyin
+// uploadFileToCloud() chaqiradi (Cloudinary sozlangan bo'lsa doimiy saqlanadi).
 async function downloadTelegramFileToUploads(fileId: string, ext: string): Promise<{ url: string; size: number }> {
   const fileLink = await bot.getFileLink(fileId);
   const resp = await fetch(fileLink);
@@ -102,8 +112,18 @@ async function downloadTelegramFileToUploads(fileId: string, ext: string): Promi
   const filename = `chat_${Date.now()}_${Math.round(Math.random() * 1e6)}${ext}`;
   const destDir = path.join(process.cwd(), 'uploads');
   if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
-  fs.writeFileSync(path.join(destDir, filename), buf);
-  return { url: `${BACKEND_URL}/uploads/${filename}`, size: buf.length };
+  const tempPath = path.join(destDir, filename);
+  fs.writeFileSync(tempPath, buf);
+  try {
+    const { url } = await uploadFileToCloud(tempPath, 'qurilish-chat');
+    return { url, size: buf.length };
+  } catch (err) {
+    // Cloudinary muvaffaqiyatsiz bo'lsa — kamida shu server ishga tushib
+    // turgan davrda ishlaydigan lokal URL bilan davom etamiz (butunlay
+    // muvaffaqiyatsizlikdan ko'ra yaxshiroq).
+    console.error('[bot media upload]', err);
+    return { url: `${BACKEND_URL}/uploads/${filename}`, size: buf.length };
+  }
 }
 
 // Bot suhbatidan yaratilgan xabarni saqlaydi, socket orqali saytga yuboradi.

@@ -274,6 +274,14 @@ export default function QRScanner({ onClose, onResult, token }: Props) {
                     <div className="flex justify-between"><span className="text-muted-foreground">Joylashuv:</span><span className="font-medium">{result.data.location}</span></div>
                   </>
                 )}
+                {result.type === "transaction" && (
+                  <>
+                    {result.data.amount != null && <div className="flex justify-between"><span className="text-muted-foreground">Summa:</span><span className="font-medium">{Number(result.data.amount).toLocaleString('uz-UZ')} so'm</span></div>}
+                    {result.data.description && <div className="flex justify-between"><span className="text-muted-foreground">Tavsif:</span><span className="font-medium">{result.data.description}</span></div>}
+                    {result.data.status && <div className="flex justify-between"><span className="text-muted-foreground">Holati:</span><span className="font-medium">{result.data.status === 'confirmed' ? 'Tasdiqlangan' : result.data.status === 'rejected' ? 'Rad etilgan' : 'Kutilmoqda'}</span></div>}
+                    {result.data.date && <div className="flex justify-between"><span className="text-muted-foreground">Sana:</span><span className="font-medium">{result.data.date}</span></div>}
+                  </>
+                )}
               </div>
               <div className="flex gap-2">
                 <button onClick={reset} className="btn btn-outline flex-1">Yana skan</button>

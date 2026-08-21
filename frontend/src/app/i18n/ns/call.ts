@@ -16,6 +16,8 @@ export const uz = {
     unmute: "Ovozni yoqish",
     cameraOn: "Kamerani yoqish",
     cameraOff: "Kamerani o'chirish",
+    flipCamera: "Kamerani almashtirish",
+    cameraFlipError: "Kamerani almashtirib bo'lmadi",
     hangup: "Qo'ng'iroqni tugatish",
   },
 };
@@ -38,6 +40,8 @@ export const ru = {
     unmute: "Включить звук",
     cameraOn: "Включить камеру",
     cameraOff: "Выключить камеру",
+    flipCamera: "Переключить камеру",
+    cameraFlipError: "Не удалось переключить камеру",
     hangup: "Завершить звонок",
   },
 };

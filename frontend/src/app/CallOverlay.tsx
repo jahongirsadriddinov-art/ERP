@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Phone, PhoneOff, Mic, MicOff, Video as VideoIcon, VideoOff, Users2 } from "lucide-react";
+import { Phone, PhoneOff, Mic, MicOff, Video as VideoIcon, VideoOff, Users2, SwitchCamera, ZoomIn } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import { getSocket } from "./socket";
@@ -39,6 +39,14 @@ export default function CallOverlay({ currentUser, users, call, onClose }:
   const [status, setStatus] = useState<'incoming'|'ringing'|'connected'>(call.direction === 'in' ? 'incoming' : 'ringing');
   const [muted, setMuted] = useState(false);
   const [camOff, setCamOff] = useState(call.mode === 'voice');
+  // Old/orqa kamera almashtirish + zoom — faqat video qo'ng'iroqda, faqat
+  // qurilma/brauzer qo'llab-quvvatlasa (getCapabilities/zoom har joyda ham
+  // yo'q — shu sabab UI faqat qo'llab-quvvatlansa ko'rinadi, aks holda
+  // yashirin, "ishlamaydigan tugma" ko'rsatilmaydi).
+  const [facingMode, setFacingMode] = useState<'user'|'environment'>('user');
+  const [flipping, setFlipping] = useState(false);
+  const [zoomCaps, setZoomCaps] = useState<{ min: number; max: number; step: number } | null>(null);
+  const [zoom, setZoom] = useState<number | null>(null);
 
   const userById = (id: string) => users.find(u => u.id === id);
   const title = call.groupId ? t('call.groupCall') : (userById(call.peerId || '')?.name || call.fromName || t('call.defaultTitle'));
@@ -72,10 +80,11 @@ export default function CallOverlay({ currentUser, users, call, onClose }:
     let cancelled = false;
     (async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: call.mode === 'video' });
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: call.mode === 'video' ? { facingMode } : false });
         if (cancelled) { stream.getTracks().forEach(t => t.stop()); return; }
         localStream.current = stream;
         if (localRef.current) { localRef.current.srcObject = stream; localRef.current.play().catch(()=>{}); }
+        readZoomCapabilities(stream);
         // Re-add tracks to any peer connections created before stream was ready (race condition fix)
         Object.values(pcs.current).forEach(pc => {
           stream.getTracks().forEach(t => { try { pc.addTrack(t, stream); } catch {} });
@@ -141,6 +150,61 @@ export default function CallOverlay({ currentUser, users, call, onClose }:
   const toggleMute = () => { const m = !muted; localStream.current?.getAudioTracks().forEach(t => t.enabled = !m); setMuted(m); };
   const toggleCam = () => { const c = !camOff; localStream.current?.getVideoTracks().forEach(t => t.enabled = !c); setCamOff(c); };
 
+  // Zoom qo'llab-quvvatlanishini tekshiradi (har qurilma/brauzerda ham yo'q —
+  // shu sabab UI faqat qo'llab-quvvatlansa ko'rsatiladi).
+  const readZoomCapabilities = (stream: MediaStream) => {
+    const track = stream.getVideoTracks()[0];
+    if (!track || typeof (track as any).getCapabilities !== 'function') { setZoomCaps(null); return; }
+    const caps: any = (track as any).getCapabilities();
+    if (caps?.zoom) {
+      setZoomCaps({ min: caps.zoom.min, max: caps.zoom.max, step: caps.zoom.step || 0.1 });
+      const settings: any = track.getSettings ? track.getSettings() : {};
+      setZoom(settings.zoom ?? caps.zoom.min);
+    } else {
+      setZoomCaps(null); setZoom(null);
+    }
+  };
+
+  const applyZoom = async (value: number) => {
+    const track = localStream.current?.getVideoTracks()[0];
+    if (!track) return;
+    try { await (track as any).applyConstraints({ advanced: [{ zoom: value }] }); setZoom(value); } catch {}
+  };
+
+  // Old/orqa kamera almashtirish — yangi getUserMedia bilan qayta so'raladi
+  // (video track'ni oddiy "restart" qilib bo'lmaydi, facingMode o'zgarishi
+  // yangi qurilmani tanlashni talab qiladi), so'ng ESKI video track HAR BIR
+  // faol RTCPeerConnection'da replaceTrack() bilan almashtiriladi — qayta
+  // offer/answer shart emas, suhbatdosh tomonida uzilish sezilmaydi.
+  const flipCamera = async () => {
+    if (flipping || call.mode !== 'video') return;
+    setFlipping(true);
+    const next = facingMode === 'user' ? 'environment' : 'user';
+    try {
+      const newStream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: next } });
+      const newTrack = newStream.getVideoTracks()[0];
+      if (!newTrack) { newStream.getTracks().forEach(t => t.stop()); return; }
+
+      const oldTrack = localStream.current?.getVideoTracks()[0];
+      Object.values(pcs.current).forEach(pc => {
+        const sender = pc.getSenders().find(s => s.track?.kind === 'video');
+        sender?.replaceTrack(newTrack).catch(() => {});
+      });
+      if (localStream.current) {
+        if (oldTrack) { localStream.current.removeTrack(oldTrack); oldTrack.stop(); }
+        localStream.current.addTrack(newTrack);
+      }
+      if (localRef.current) { localRef.current.srcObject = localStream.current; localRef.current.play().catch(()=>{}); }
+      newTrack.enabled = !camOff;
+      setFacingMode(next);
+      if (localStream.current) readZoomCapabilities(localStream.current);
+    } catch {
+      toast.error(t('call.cameraFlipError'));
+    } finally {
+      setFlipping(false);
+    }
+  };
+
   const remoteEntries = Object.entries(remote);
 
   return (
@@ -167,12 +231,22 @@ export default function CallOverlay({ currentUser, users, call, onClose }:
             {remoteEntries.map(([pid, stream]) => <RemoteAudio key={pid} stream={stream}/>)}
           </div>
         )}
-        {/* Lokal PiP (mirror + larger for readability) */}
+        {/* Lokal PiP — faqat old (selfie) kamerada ko'zguga o'xshab teskari
+            ko'rsatiladi; orqa kamerada bu tabiiy ko'rinishni buzardi. */}
         {call.mode === 'video' && (
           <video ref={localRef} autoPlay muted playsInline
             className="absolute bottom-4 right-4 w-32 h-48 object-cover rounded-2xl border-2 border-white/30 shadow-xl bg-black"
-            style={{ transform: 'scaleX(-1)' }}
+            style={{ transform: facingMode === 'user' ? 'scaleX(-1)' : 'none' }}
           />
+        )}
+        {/* Zoom slider — faqat qurilma/brauzer qo'llab-quvvatlasa ko'rinadi */}
+        {call.mode === 'video' && !camOff && zoomCaps && zoom != null && (
+          <div className="absolute bottom-4 left-4 right-40 flex items-center gap-2 bg-black/40 backdrop-blur-sm rounded-full px-3 py-2">
+            <ZoomIn className="w-4 h-4 text-white flex-shrink-0"/>
+            <input type="range" min={zoomCaps.min} max={zoomCaps.max} step={zoomCaps.step} value={zoom}
+              onChange={e => applyZoom(parseFloat(e.target.value))}
+              className="flex-1 accent-white h-1"/>
+          </div>
         )}
       </div>
 
@@ -187,6 +261,12 @@ export default function CallOverlay({ currentUser, users, call, onClose }:
           <>
             <button onClick={toggleMute} aria-label={muted ? t('call.unmute') : t('call.mute')} className={`w-14 h-14 rounded-full flex items-center justify-center text-white active:scale-95 ${muted?'bg-white/30':'bg-white/10'}`}>{muted?<MicOff className="w-5 h-5"/>:<Mic className="w-5 h-5"/>}</button>
             {call.mode === 'video' && <button onClick={toggleCam} aria-label={camOff ? t('call.cameraOn') : t('call.cameraOff')} className={`w-14 h-14 rounded-full flex items-center justify-center text-white active:scale-95 ${camOff?'bg-white/30':'bg-white/10'}`}>{camOff?<VideoOff className="w-5 h-5"/>:<VideoIcon className="w-5 h-5"/>}</button>}
+            {call.mode === 'video' && !camOff && (
+              <button onClick={flipCamera} disabled={flipping} aria-label={t('call.flipCamera')}
+                className="w-14 h-14 rounded-full flex items-center justify-center text-white bg-white/10 active:scale-95 disabled:opacity-50">
+                <SwitchCamera className={`w-5 h-5 ${flipping ? 'animate-pulse' : ''}`}/>
+              </button>
+            )}
             <button onClick={hangup} aria-label={t('call.hangup')} className="w-16 h-16 rounded-full bg-red-500 text-white flex items-center justify-center active:scale-95 shadow-lg"><PhoneOff className="w-6 h-6"/></button>
           </>
         )}

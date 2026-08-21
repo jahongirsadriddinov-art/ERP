@@ -13,7 +13,7 @@ import { API_BASE, parseSmetaFile, uploadChatMedia } from "./api";
 import { connectSocket, getSocket, disconnectSocket } from "./socket";
 import { motion, AnimatePresence } from "motion/react";
 import { setSiteLanguage, SiteLang, langLabel } from "./i18n";
-import { installAndroidBackHandler, isNative } from "./platform";
+import { installAndroidBackHandler } from "./platform";
 import LanguageSwitcher from "./i18n/LanguageSwitcher";
 import { Skeleton, SkeletonList, SkeletonPage, SkeletonMessage, SkeletonTable, SkeletonProfile } from "./Skeleton";
 import { useGeoTracker } from "./useGeoTracker";
@@ -4038,21 +4038,18 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser?.language]);
   // v1.3: kirish-oldi oqim — reklama/landing sahifa FAQAT birinchi marta
-  // (ushbu brauzerda hech qachon tashrif buyurmagan bo'lsa) ko'rsatiladi;
-  // undan "Kirish"/"Bepul boshlash" orqali login/register'ga o'tiladi.
-  // Ikkinchi va keyingi tashriflarda ("erp_visited" localStorage'da bor)
-  // to'g'ridan-to'g'ri login ochiladi — qaytgan foydalanuvchiga har safar
-  // reklama ko'rsatish shart emas. Android APK/Windows exe'da (o'rnatilgan
-  // ilova) ham xuddi shunday — to'g'ridan-to'g'ri login'ga o'tadi.
-  // Ro'yxatdan o'tish niyati aniq bo'lsa (link/localStorage) landing'ni
-  // baribir chetlab o'tamiz.
+  // (ushbu qurilma/o'rnatishda hech qachon ochilmagan bo'lsa — veb, Android
+  // APK va Windows exe barchasida bir xil qoida) ko'rsatiladi; undan
+  // "Kirish"/"Bepul boshlash" orqali login/register'ga o'tiladi. Ikkinchi va
+  // keyingi ochilishlarda ("erp_visited" localStorage'da bor) to'g'ridan-
+  // to'g'ri login ochiladi. Ro'yxatdan o'tish niyati aniq bo'lsa
+  // (link/localStorage) landing'ni baribir chetlab o'tamiz.
   const [authView, setAuthView] = useState<"landing"|"login"|"register">(()=>{
     if (typeof window !== "undefined") {
       const sp = new URLSearchParams(window.location.search);
       if (sp.get("rid") || sp.has("register")) return "register";
       if (localStorage.getItem("erp_reg")) return "register";
     }
-    if (isNative()) return "login";
     if (typeof window !== "undefined") {
       if (localStorage.getItem("erp_visited")) return "login";
       localStorage.setItem("erp_visited", "1");
@@ -4119,7 +4116,7 @@ export default function App() {
   // aniqlangandan keyin chaqiriladi).
   const [todayAttendance, setTodayAttendance] = useState<null | { status: string; checkIn?: string; checkOut?: string; workHours?: number }>(null);
   // GPS admin ko'rinishi uchun
-  const [gpsLocations, setGpsLocations] = useState<Array<{userId: string; lat: number; lng: number; accuracy?: number; timestamp: string}>>([]);
+  const [gpsLocations, setGpsLocations] = useState<Array<{userId: string; lat: number; lng: number; accuracy?: number; timestamp: string; source?: 'site'|'bot_live'|'bot_once'}>>([]);
   const [gpsRefreshing, setGpsRefreshing] = useState(false);
 
   // Offline/online detection + SW sync messages
@@ -4498,7 +4495,7 @@ export default function App() {
         if (!payload?.userId) return;
         setGpsLocations(prev => {
           const idx = prev.findIndex(g => g.userId === payload.userId);
-          const item = { userId: payload.userId, lat: payload.lat, lng: payload.lng, accuracy: payload.accuracy, timestamp: payload.timestamp };
+          const item = { userId: payload.userId, lat: payload.lat, lng: payload.lng, accuracy: payload.accuracy, timestamp: payload.timestamp, source: payload.source };
           return idx >= 0 ? prev.map((g, i) => i === idx ? item : g) : [...prev, item];
         });
       };

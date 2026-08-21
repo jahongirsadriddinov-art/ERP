@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Building2, DollarSign, Users, MessageCircle, MapPin, Send,
   ChevronDown, CheckCircle, Smartphone, Laptop,
@@ -84,6 +84,24 @@ export default function LandingPage({ onLogin, onRegister }: { onLogin: () => vo
   const { t, i18n } = useTranslation();
   const [openFaq, setOpenFaq] = useState<number | null>(0);
   const year = useYear();
+
+  // Landing sahifa doim OCHIQ (light) rejimda ko'rinsin — foydalanuvchining
+  // dark tema tanlovi (yoki tizim tanlovi) bo'lsa ham. index.html'dagi FOUC
+  // oldini olish skripti sahifa yuklanishida <html> ga "dark" klassini
+  // qo'yadi — shu klassni faqat LandingPage ko'rsatilib turgan vaqtga
+  // vaqtincha olib tashlaymiz, keyin (login/ilova ochilganda) foydalanuvchi
+  // haqiqiy tanlovi qaytariladi.
+  useEffect(() => {
+    const root = document.documentElement;
+    const hadDark = root.classList.contains('dark');
+    const prevColorScheme = root.style.colorScheme;
+    root.classList.remove('dark');
+    root.style.colorScheme = 'light';
+    return () => {
+      if (hadDark) root.classList.add('dark');
+      root.style.colorScheme = prevColorScheme;
+    };
+  }, []);
 
   return (
     <main className="h-[100dvh] overflow-y-auto scrollbar-hide bg-background overflow-x-hidden">

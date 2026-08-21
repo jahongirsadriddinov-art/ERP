@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { MapPin, Users2, Clock } from "lucide-react";
+import { MapPin, Users2, Clock, Navigation, X } from "lucide-react";
 import { AppUser, Avatar } from "./App";
 import { API_BASE } from "./api";
+import WorkerMap from "./WorkerMap";
 
 interface AttendanceEntry {
   userId: string;
@@ -10,6 +11,39 @@ interface AttendanceEntry {
   checkOut: string | null;
   workHours: number | null;
   minutesWorking: number | null;
+}
+
+// Xodim joylashuviga yo'naltirish — qaysi xarita ilovasi orqali ochish
+// tanlovi. Ro'yxat qatoridagi "Xarita" havolasi ham, xaritadagi marker ham
+// shu bir xil komponentdan foydalanadi (ikkalasida ham bitta tanlov oynasi).
+function NavigateChoiceModal({ target, onClose }: { target: { lat: number; lng: number; name: string }; onClose: () => void }) {
+  const { lat, lng, name } = target;
+  const options = [
+    { label: 'Google Maps', url: `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving` },
+    { label: 'Yandex Maps', url: `https://yandex.com/maps/?rtext=~${lat},${lng}&rtt=auto` },
+    { label: "Standart ilova (qurilma)", url: `geo:${lat},${lng}?q=${lat},${lng}(${encodeURIComponent(name)})` },
+  ];
+  return (
+    <div className="fixed inset-0 z-[200] bg-black/50 flex items-end sm:items-center justify-center p-4" onClick={onClose}>
+      <div className="w-full max-w-sm surface rounded-3xl p-5" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <p className="text-sm font-bold flex items-center gap-1.5"><Navigation className="w-4 h-4 text-primary" /> Yo'naltirish</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{name} — qaysi ilova orqali ochilsin?</p>
+          </div>
+          <button onClick={onClose} aria-label="Yopish" className="p-1.5 rounded-lg hover:bg-muted"><X className="w-4 h-4" /></button>
+        </div>
+        <div className="space-y-2">
+          {options.map(o => (
+            <a key={o.label} href={o.url} target="_blank" rel="noopener noreferrer" onClick={onClose}
+              className="block w-full text-center text-sm font-semibold py-3 rounded-2xl border border-border/60 hover:bg-muted liquid-transition">
+              {o.label}
+            </a>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // Direktor/o'rinbosarning "Kuzatuv" sahifasi — App.tsx'dan ajratildi va
@@ -23,12 +57,13 @@ interface AttendanceEntry {
 // (GET /api/attendance/list, faqat direktor/orinbosar/dasturchi).
 export default function GpsTrackingPage({ users, gpsLocations, refreshing, onRefresh }: {
   users: AppUser[];
-  gpsLocations: Array<{userId: string; lat: number; lng: number; accuracy?: number; timestamp: string}>;
+  gpsLocations: Array<{userId: string; lat: number; lng: number; accuracy?: number; timestamp: string; source?: 'site'|'bot_live'|'bot_once'}>;
   refreshing: boolean;
   onRefresh: () => void;
 }) {
   const [attendance, setAttendance] = useState<AttendanceEntry[]>([]);
   const [attLoading, setAttLoading] = useState(true);
+  const [navTarget, setNavTarget] = useState<{ lat: number; lng: number; name: string } | null>(null);
 
   const loadAttendance = () => {
     setAttLoading(true);
@@ -40,8 +75,16 @@ export default function GpsTrackingPage({ users, gpsLocations, refreshing, onRef
       .finally(() => setAttLoading(false));
   };
 
-  useEffect(() => { onRefresh(); loadAttendance(); }, []);
   const refreshAll = () => { onRefresh(); loadAttendance(); };
+
+  useEffect(() => {
+    refreshAll();
+    // Avtomatik yangilanish — har 2 daqiqada (aniq talab qilingan), qo'lda
+    // "Yangilash" tugmasidan tashqari. Sahifadan chiqqanda tozalanadi.
+    const interval = setInterval(refreshAll, 2 * 60 * 1000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const workerRoles = ['ishchi', 'prorab', 'brigadir'];
   const workers = users.filter(u => workerRoles.includes(u.role));
@@ -67,6 +110,8 @@ export default function GpsTrackingPage({ users, gpsLocations, refreshing, onRef
             {refreshing || attLoading ? 'Yangilanmoqda...' : 'Yangilash'}
           </button>
         </div>
+
+        {workers.length > 0 && <WorkerMap users={workers} gpsLocations={gpsLocations} />}
 
         {workers.length === 0 && (
           <div className="surface rounded-2xl p-8 text-center">
@@ -104,8 +149,8 @@ export default function GpsTrackingPage({ users, gpsLocations, refreshing, onRef
                       <div className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${min! < 10 ? 'bg-green-500/15 text-green-700 dark:text-green-400' : min! < 30 ? 'bg-amber-500/15 text-amber-700 dark:text-amber-400' : 'bg-red-500/15 text-red-700 dark:text-red-400'}`}>
                         {statusLabel(min!)}
                       </div>
-                      <a href={`https://maps.google.com/?q=${loc.lat},${loc.lng}`} target="_blank" rel="noopener noreferrer"
-                        className="text-[10px] text-primary underline block">Xarita</a>
+                      <button onClick={() => setNavTarget({ lat: loc.lat, lng: loc.lng, name: u.name })}
+                        className="text-[10px] text-primary underline block ml-auto">Xarita</button>
                     </div>
                   ) : (
                     <span className="text-[10px] text-muted-foreground/50">Offline</span>
@@ -142,6 +187,7 @@ export default function GpsTrackingPage({ users, gpsLocations, refreshing, onRef
           </div>
         )}
       </div>
+      {navTarget && <NavigateChoiceModal target={navTarget} onClose={() => setNavTarget(null)} />}
     </div>
   );
 }

@@ -27,6 +27,7 @@ import currencyRoutes from './routes/currency';
 import dashboardRoutes from './routes/dashboard';
 import clientErrorRoutes from './routes/clientErrors';
 import backupRoutes from './routes/backup';
+import deployRoutes from './routes/deploy';
 import { initSocket } from './services/socket';
 import { optionalAuth, blockDeveloper } from './middleware/auth';
 // Import bot to start it + get bot instance for webhook route
@@ -142,6 +143,9 @@ app.use('/api/currency',        optionalAuth, currencyRoutes);
 app.use('/api/dashboard',       optionalAuth, blockDeveloper, dashboardRoutes);
 app.use('/api/errors',          optionalAuth, clientErrorRoutes);
 app.use('/api/admin',           optionalAuth, backupRoutes);
+// deployRoutes o'zining maxfiy kalit (X-Deploy-Secret) tekshiruvini o'zi
+// qiladi — optionalAuth/JWT shart emas (CI muhitidan chaqiriladi).
+app.use('/api/deploy',          deployRoutes);
 
 // Telegram bot webhook — faqat TELEGRAM_WEBHOOK_URL o'rnatilgan bo'lsa faol bo'ladi.
 // Polling rejimida bu route hech qachon chaqirilmaydi.

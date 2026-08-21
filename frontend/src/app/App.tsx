@@ -17,6 +17,7 @@ import { installAndroidBackHandler } from "./platform";
 import LanguageSwitcher from "./i18n/LanguageSwitcher";
 import { Skeleton, SkeletonList, SkeletonPage, SkeletonMessage, SkeletonTable, SkeletonProfile } from "./Skeleton";
 import { useGeoTracker } from "./useGeoTracker";
+import { isPinSet, useAppLock, markActiveNow, clearPin, PinSetupScreen, PinLockScreen, isBiometricEnabled, setBiometricEnabled, biometricSupported } from "./AppLock";
 
 // recharts og'ir kutubxona — faqat "Hisobotlar" bo'limiga kirilganda yuklanadi
 // (boshlang'ich bundle hajmini kamaytiradi, sayt tezroq ochiladi).
@@ -3184,6 +3185,26 @@ function CurrencyPanel({ canEdit }: { canEdit: boolean }) {
   );
 }
 
+// Barmoq izi/Face ID orqali ochish — faqat qurilma qo'llab-quvvatlasa
+// ko'rinadi (Android). Yoqilganda ilova qulfi ekranida PIN o'rniga avval
+// biometrikni sinab ko'radi, muvaffaqiyatsiz bo'lsa PIN'ga qaytadi.
+function BiometricToggleCard() {
+  const [enabled, setEnabled] = useState(() => isBiometricEnabled());
+  return (
+    <div className="surface rounded-2xl p-4 flex items-center justify-between gap-3">
+      <div className="min-w-0">
+        <p className="text-sm font-semibold">Barmoq izi / Face ID</p>
+        <p className="text-xs text-muted-foreground mt-0.5">Ilova qulfini PIN o'rniga biometrik bilan oching</p>
+      </div>
+      <button onClick={() => { const next = !enabled; setBiometricEnabled(next); setEnabled(next); }}
+        aria-label="Barmoq izi / Face ID"
+        className={`relative w-12 h-7 rounded-full flex-shrink-0 liquid-transition ${enabled ? "bg-primary" : "bg-muted"}`}>
+        <span className={`absolute top-0.5 w-6 h-6 rounded-full bg-white shadow liquid-transition ${enabled ? "left-[22px]" : "left-0.5"}`} />
+      </button>
+    </div>
+  );
+}
+
 function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdateUser, onCompanyNameChange, onCompanyLogoChange, onBgChange, onColorThemeChange, colorTheme, themeMode, onThemeModeChange, canEditCompany, todayAttendance, onCheckIn, onCheckOut, gpsTracking }:
   { currentUser: AppUser; projects: Project[]; onUpdateAvatar: (url: string) => void; onLogout: () => void; onUpdateUser: (u: AppUser) => void; onCompanyNameChange: (name: string) => void; onCompanyLogoChange: (logo: string) => void; onBgChange: (bg: string) => void; onColorThemeChange: (id: string) => void; colorTheme: string; themeMode: "light"|"dark"|"system"; onThemeModeChange: (m: "light"|"dark"|"system") => void; canEditCompany?: boolean; todayAttendance: null | { status: string; checkIn?: string; checkOut?: string; workHours?: number }; onCheckIn: () => void; onCheckOut: () => void; gpsTracking: boolean }) {
   const { t, i18n } = useTranslation();
@@ -3662,6 +3683,8 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
         {(currentUser.role === 'direktor' || currentUser.role === 'orinbosar' || currentUser.role === 'dasturchi') && (
           <AuditLogSection token={localStorage.getItem("token") || ""} />
         )}
+
+        {biometricSupported() && <BiometricToggleCard />}
 
         <motion.button initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28, delay: 0.26 }}
           onClick={() => { localStorage.removeItem("currentUser"); localStorage.removeItem("token"); onLogout(); }}
@@ -4225,6 +4248,16 @@ export default function App() {
   };
 
   const liveUser = currentUser ? (users.find(u => u.id === currentUser.id) ?? currentUser) : null;
+  // Ilova qulfi (PIN/biometrik) — faqat kirilgan bo'lsa ma'noli, lekin hook
+  // shart-siz (har renderda) chaqirilishi kerak — shu sabab pinIsSet hisobi
+  // ham liveUser'ga bog'liq bo'lmagan, doim bir xil tartibda chaqiriladi.
+  // isPinSet() localStorage'ni to'g'ridan-to'g'ri o'qiydi (React state emas),
+  // shuning uchun PIN yangi o'rnatilgach qayta render bo'lishi uchun alohida
+  // hisoblagich (pinRefresh) kerak — currentUser'ni soxta o'zgartirishdan
+  // ko'ra aniqroq.
+  const [, setPinRefresh] = useState(0);
+  const pinIsSet = isPinSet();
+  const { locked: appLocked, unlock: unlockApp } = useAppLock(!!liveUser && pinIsSet);
   const isWorkerRole = liveUser ? ['ishchi', 'prorab', 'brigadir'].includes(liveUser.role) : false;
   // GPS shu holatga BOG'LIQ: "Ishga keldim" bosilmaguncha ishlamaydi (foydalanuvchi
   // talabi). MUHIM: lekin "Ishni tugatdim" bosilgach GPS TO'XTAMAYDI — faqat
@@ -4623,6 +4656,27 @@ export default function App() {
       </>
     );
   }
+  // Ilova qulfi — login'dan keyin BIR MARTA PIN o'rnatiladi (majburiy), keyin
+  // ilova >1 daq. fondan qaytganda shu PIN (yoki yoqilgan bo'lsa biometrik)
+  // so'raladi. Dasturchi panelidan HAM oldin — barcha rollarga bir xil.
+  if (!pinIsSet) return (
+    <>
+      <PinSetupScreen onDone={() => { markActiveNow(); setPinRefresh(v => v + 1); }} />
+      <Toaster position="top-center" richColors closeButton/>
+    </>
+  );
+  if (appLocked) return (
+    <>
+      <PinLockScreen onUnlock={unlockApp} onForgot={() => {
+        if (confirm("Hisobdan chiqib, qaytadan kirasizmi? PIN kod tozalanadi.")) {
+          clearPin();
+          localStorage.removeItem("currentUser"); localStorage.removeItem("token");
+          setCurrentUser(null); setAuthView("login");
+        }
+      }} />
+      <Toaster position="top-center" richColors closeButton/>
+    </>
+  );
   // Dasturchi (super-admin) — alohida panel: barcha firmalar va foydalanuvchilar
   if (liveUser.role === "dasturchi") return (
     <>

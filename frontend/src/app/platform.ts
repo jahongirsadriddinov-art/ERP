@@ -62,6 +62,20 @@ export function setWindowTitle(title: string) {
     .catch(() => { document.title = title; });
 }
 
+// Yengil bosish tuyg'usi (haptic feedback) — bottom navbar va AI tugmasi
+// bosilganda chaqiriladi. Native Android'da (Capacitor) haqiqiy qurilma
+// vibratsiyasi, web'da esa Vibration API fallback (qo'llab-quvvatlamasa
+// jim o'tkazib yuboradi — hech qanday brauzerda xato tashlamaydi).
+export function haptic() {
+  if (isCapacitor()) {
+    import('@capacitor/haptics')
+      .then(({ Haptics, ImpactStyle }) => Haptics.impact({ style: ImpactStyle.Light }))
+      .catch(() => { navigator.vibrate?.(10); });
+    return;
+  }
+  navigator.vibrate?.(10);
+}
+
 // Desktop notification (Tauri yoki Web Push)
 export async function sendNativeNotification(title: string, body: string) {
   if (isTauri()) {

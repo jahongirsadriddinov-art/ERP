@@ -138,12 +138,13 @@
     text-transform: uppercase; color: var(--muted-foreground);
   }
 
-  /* ── iOS Premium Bottom Navigation Bar ────────────────────────────────── */
+  /* ── iOS Premium Bottom Navigation Bar — floating capsule ─────────────── */
   .ios-bottom-bar {
-    @apply fixed left-3 right-3 z-50 sm:hidden;
-    bottom: calc(env(safe-area-inset-bottom, 12px) + 12px);
+    @apply fixed left-3.5 right-3.5 z-50 sm:hidden;
+    bottom: calc(env(safe-area-inset-bottom, 14px) + 14px);
     padding: 6px 8px;
-    border-radius: 26px;
+    min-height: 64px;
+    border-radius: 28px;
     background:
       linear-gradient(180deg,
         rgba(255,255,255,0.16) 0%,
@@ -184,6 +185,51 @@
       0 3px 14px rgba(255,255,255,0.20),
       0 1px 4px rgba(0,0,0,0.12);
     will-change: transform;
+  }
+
+  /* ── Markaziy AI tugmasi — capsule ustidan "cut-out" holida chiqib turadi ──
+     Faqat transform/opacity animatsiya qilinadi (60fps, GPU-friendly) —
+     box-shadow'ning o'zi statik, pulse esa alohida ::after halqa orqali. */
+  .ios-ai-button {
+    position: absolute;
+    left: 50%;
+    top: -22px;
+    transform: translateX(-50%);
+    width: 60px;
+    height: 60px;
+    border-radius: 9999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(145deg, var(--accent) 0%, color-mix(in srgb, var(--accent) 75%, var(--primary)) 100%);
+    border: 3px solid color-mix(in srgb, var(--background) 92%, transparent);
+    box-shadow:
+      0 10px 24px color-mix(in srgb, var(--accent) 45%, transparent),
+      0 2px 8px rgba(0,0,0,0.35);
+    z-index: 20;
+    transition: transform 0.18s ease-out, filter 0.18s ease-out;
+  }
+  .ios-ai-button:active {
+    transform: translateX(-50%) scale(0.94);
+    filter: brightness(1.12);
+  }
+  /* Juda yengil, doimiy "nafas olish" — faqat transform/opacity, box-shadow YO'Q */
+  .ios-ai-button::after {
+    content: "";
+    position: absolute;
+    inset: -6px;
+    border-radius: inherit;
+    background: color-mix(in srgb, var(--accent) 55%, transparent);
+    opacity: 0.55;
+    z-index: -1;
+    animation: ios-ai-pulse 2.4s ease-in-out infinite;
+  }
+  @keyframes ios-ai-pulse {
+    0%, 100% { transform: scale(1); opacity: 0.35; }
+    50% { transform: scale(1.14); opacity: 0.05; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .ios-ai-button::after { animation: none; opacity: 0.15; }
   }
 
   .pt-safe-top { padding-top: env(safe-area-inset-top, 0px); }
@@ -434,8 +480,9 @@ textarea {
 .btn-accent:active  { box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 30%, transparent)  !important; }
 
 /* ── Safe padding for content above mobile nav ──────────────────────── */
-/* ios-bottom-bar: ~72px height, bottom≈24px → ~100px total */
-.main-pb-safe { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 100px); }
+/* ios-bottom-bar: ~64-70px height + bottom≈28px + 32px buffer → ~128px total.
+   Content must never sit under the floating capsule (or its AI cut-out). */
+.main-pb-safe { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 128px); }
 @media (min-width: 640px) { .main-pb-safe { padding-bottom: 0; } }
 
 /* ── card-hover alias ───────────────────────────────────────────────── */

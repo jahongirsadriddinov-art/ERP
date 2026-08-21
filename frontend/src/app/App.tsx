@@ -13,7 +13,7 @@ import { API_BASE, parseSmetaFile, uploadChatMedia } from "./api";
 import { connectSocket, getSocket, disconnectSocket } from "./socket";
 import { motion, AnimatePresence } from "motion/react";
 import { setSiteLanguage, SiteLang, langLabel } from "./i18n";
-import { installAndroidBackHandler } from "./platform";
+import { installAndroidBackHandler, haptic } from "./platform";
 import LanguageSwitcher from "./i18n/LanguageSwitcher";
 import { Skeleton, SkeletonList, SkeletonPage, SkeletonMessage, SkeletonTable, SkeletonProfile } from "./Skeleton";
 import { useGeoTracker } from "./useGeoTracker";
@@ -5067,10 +5067,18 @@ export default function App() {
           onClose={()=>setShowSend(false)} onSend={t=>{handleSendTransfer(t);setShowSend(false);}}/>
       )}
 
-      {/* Mobile Bottom Navigation — Premium Liquid Glass, labels + spring-animated */}
+      {/* Mobile Bottom Navigation — floating capsule + markaziy AI tugmasi.
+          MUHIM: bu FAQAT vizual/layout qayta ishlash — routing/state/handlerlar
+          teginilmagan (bir xil setPage/setSelProject/setAiOpen). Hisobotlar va
+          Profil bu ro'yxatdan olib tashlangan (Hisobotlar planshet/desktop
+          kengligida yuqori nav orqali, Profil header'dagi avatar orqali hali
+          ham to'liq ochiladi — funksiyaning o'zi yo'qolmagan, faqat pastki
+          navbardan chiqarilgan). Admin uchun qolgan 4 ta band (dashboard/
+          finance/gps/chat) markazidagi bo'shliqqa AI tugmasi mukammal sig'adi —
+          AI absolute pozitsiyalangani uchun flex oqimini buzmaydi. */}
       <nav className={`ios-bottom-bar flex items-center justify-around ${(page==='chat' && chatIsOpen) || anyBigModalOpen ? 'ios-bottom-bar-hidden' : ''}`}>
-        {NAV.map(n => (
-          <motion.button key={n.key} onClick={() => { setPage(n.key); setSelProject(null); }}
+        {NAV.filter(n => n.key !== 'reports' && n.key !== 'profile').map(n => (
+          <motion.button key={n.key} onClick={() => { haptic(); setPage(n.key); setSelProject(null); }}
             whileTap={{ scale: 0.90 }}
             transition={{ type: "spring", stiffness: 520, damping: 30 }}
             aria-label={n.label}
@@ -5085,9 +5093,7 @@ export default function App() {
               />
             )}
             <div className={`flex items-center justify-center w-[26px] h-[26px] transition-all duration-200 ${page===n.key?"scale-110":""}`}>
-              {n.key === "profile"
-                ? <div className={`rounded-full overflow-hidden transition-all duration-200 ${page===n.key?"ring-2 ring-white/80 shadow-md scale-110":"opacity-60"}`}><Avatar user={liveUser} size="sm"/></div>
-                : <n.icon className="w-[18px] h-[18px]"/>}
+              <n.icon className="w-[18px] h-[18px]"/>
             </div>
             <span className={`text-[9px] font-semibold leading-none tracking-wide transition-all duration-200 ${page===n.key?"opacity-100":"opacity-45"}`}>
               {n.label}
@@ -5097,6 +5103,18 @@ export default function App() {
             )}
           </motion.button>
         ))}
+        {/* Markaziy AI — faqat direktor/orinbosar (AIAssistant'ning o'zi ham
+            shu ikki rolga cheklangan, header'dagi ✨ tugmasi bilan bir xil
+            setAiOpen chaqiradi — ikkinchi kirish nuqtasi, xuddi shu funksiya). */}
+        {(liveUser.role === 'direktor' || liveUser.role === 'orinbosar') && (
+          <motion.button onClick={() => { haptic(); setAiOpen(true); }}
+            whileTap={{ scale: 0.94 }}
+            transition={{ type: "spring", stiffness: 520, damping: 28 }}
+            aria-label="AI Yordamchi"
+            className="ios-ai-button">
+            <span className="text-2xl leading-none">✨</span>
+          </motion.button>
+        )}
       </nav>
 
       {/* Qo'ng'iroq (WebRTC) */}

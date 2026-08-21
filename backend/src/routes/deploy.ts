@@ -99,7 +99,8 @@ router.post('/broadcast-update', async (req, res) => {
       { key: 'latest' },
       { key: 'latest', version, notes: notes || '', apkUrl: apkUrl || undefined, exeUrl: exeUrl || undefined, updatedAt: new Date() },
       { upsert: true }
-    ).catch(err => console.error('[broadcast-update] AppRelease saqlash xatosi:', err));
+    ).then(() => console.log(`[broadcast-update] AppRelease saqlandi: v${version}`))
+      .catch(err => console.error('[broadcast-update] AppRelease saqlash xatosi:', err));
 
     const introLines = [`🆕 *QurilishERP — yangi versiya (${version})*`];
     if (notes) introLines.push(String(notes));
@@ -107,17 +108,35 @@ router.post('/broadcast-update', async (req, res) => {
 
     // MUHIM: avval APK/exe uchun tashqi URL'ga ochiladigan TUGMA yuborilardi —
     // bosilganda brauzerga chiqib ketardi va (kengaytma bug'i tuzalgunga
-    // qadar) ba'zan notanish/kengaytmasiz fayl bo'lib ochilardi. Aniq talab:
-    // fayl to'g'ridan-to'g'ri botning O'ZIDA (Telegram hujjat sifatida)
-    // yuborilsin — Telegram o'zining ichki fayl ko'rish/yuklab olishidan
-    // foydalanadi, hech qanday tashqi sahifaga chiqmaydi.
-    // Birinchi muvaffaqiyatli sendDocument'dan qaytgan file_id keyingi
-    // HAMMA qabul qiluvchi uchun qayta ishlatiladi (Cloudinary'dan qayta-
-    // qayta yuklanmaydi — tezroq). Agar fayl juda katta bo'lib Telegram
-    // rad etsa (Bot API limiti ~50MB) — o'sha va keyingi userlarga oddiy
-    // havola bilan zaxira qilinadi (hech kim faylsiz qolmasin).
-    let apkFileId: string | undefined; let apkTooLarge = false;
-    let exeFileId: string | undefined; let exeTooLarge = false;
+    // qadar) ba'zan notanish/kengaytmasiz fayl bo'lib ochilardi. Keyin
+    // sendDocument'ga to'g'ridan-to'g'ri Cloudinary URL berildi — lekin bu
+    // holda Telegram SERVERI o'zi URL'ni yuklab olishga harakat qiladi, va
+    // bu yo'lda nom/kengaytma/Content-Type qanday aniqlanishi bizning
+    // nazoratimizdan tashqarida (fileOptions faqat baytlarni O'ZIMIZ
+    // yuklaganda ishlaydi, URL berilganda e'tiborga olinmasligi mumkin).
+    // Endi backend'ning O'ZI Cloudinary'dan baytlarni oldindan yuklab,
+    // Telegram'ga TO'G'RIDAN-TO'G'RI multipart sifatida yuboradi — nom va
+    // MIME tur ANIQ biz aytgandek bo'ladi, hech qanday noaniqlik qolmaydi.
+    // Birinchi muvaffaqiyatli yuborishdan qaytgan file_id keyingi HAMMA
+    // qabul qiluvchi uchun qayta ishlatiladi (baytlarni qayta-qayta
+    // yubormaydi — tezroq). Agar fayl juda katta bo'lib Telegram rad etsa
+    // (Bot API limiti ~50MB) — o'sha va keyingi userlarga oddiy havola
+    // bilan zaxira qilinadi (hech kim faylsiz qolmasin).
+    const fetchBuffer = async (url: string): Promise<Buffer> => {
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error(`Fayl yuklab olinmadi: HTTP ${resp.status}`);
+      return Buffer.from(await resp.arrayBuffer());
+    };
+    let apkBuffer: Buffer | null = null; let apkFileId: string | undefined; let apkTooLarge = false;
+    let exeBuffer: Buffer | null = null; let exeFileId: string | undefined; let exeTooLarge = false;
+    if (apkUrl) {
+      try { apkBuffer = await fetchBuffer(apkUrl); }
+      catch (err) { console.error('[broadcast-update] APK fetchBuffer xatosi:', (err as Error).message); apkTooLarge = true; }
+    }
+    if (exeUrl) {
+      try { exeBuffer = await fetchBuffer(exeUrl); }
+      catch (err) { console.error('[broadcast-update] EXE fetchBuffer xatosi:', (err as Error).message); exeTooLarge = true; }
+    }
 
     let sent = 0, failed = 0;
     for (const u of users) {
@@ -130,9 +149,9 @@ router.post('/broadcast-update', async (req, res) => {
           reply_markup: buttons.length ? { inline_keyboard: buttons } : undefined,
         });
 
-        if (apkUrl && !apkTooLarge) {
+        if (apkUrl && !apkTooLarge && apkBuffer) {
           try {
-            const msg = await bot.sendDocument(u.telegramChatId, apkFileId || apkUrl, {},
+            const msg = await bot.sendDocument(u.telegramChatId, apkFileId || apkBuffer, {},
               apkFileId ? undefined : { filename: 'QurilishERP.apk', contentType: 'application/vnd.android.package-archive' });
             if (!apkFileId) apkFileId = msg.document?.file_id;
           } catch (docErr) {
@@ -140,10 +159,12 @@ router.post('/broadcast-update', async (req, res) => {
             apkTooLarge = true;
             await bot.sendMessage(u.telegramChatId, `📱 Android (APK): ${apkUrl}`).catch(() => {});
           }
+        } else if (apkUrl && apkTooLarge) {
+          await bot.sendMessage(u.telegramChatId, `📱 Android (APK): ${apkUrl}`).catch(() => {});
         }
-        if (exeUrl && !exeTooLarge) {
+        if (exeUrl && !exeTooLarge && exeBuffer) {
           try {
-            const msg = await bot.sendDocument(u.telegramChatId, exeFileId || exeUrl, {},
+            const msg = await bot.sendDocument(u.telegramChatId, exeFileId || exeBuffer, {},
               exeFileId ? undefined : { filename: 'QurilishERP-setup.exe', contentType: 'application/x-msdownload' });
             if (!exeFileId) exeFileId = msg.document?.file_id;
           } catch (docErr) {
@@ -151,6 +172,8 @@ router.post('/broadcast-update', async (req, res) => {
             exeTooLarge = true;
             await bot.sendMessage(u.telegramChatId, `💻 Windows dasturi: ${exeUrl}`).catch(() => {});
           }
+        } else if (exeUrl && exeTooLarge) {
+          await bot.sendMessage(u.telegramChatId, `💻 Windows dasturi: ${exeUrl}`).catch(() => {});
         }
         sent++;
       } catch (err) {

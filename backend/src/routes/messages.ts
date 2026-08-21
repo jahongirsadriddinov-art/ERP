@@ -172,7 +172,7 @@ export async function relayMessageToTelegram(chatId: string, senderName: string,
 router.post('/upload', upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Fayl yuklanmadi' });
   try {
-    const { url } = await uploadFileToCloud(req.file.path, 'qurilish-chat');
+    const { url } = await uploadFileToCloud(req.file.path, 'qurilish-chat', req.file.originalname);
     res.json({ url, fileName: req.file.originalname, fileSize: req.file.size });
   } catch {
     // Cloudinary muvaffaqiyatsiz bo'lsa local URL qaytaradi — MUHIM: mutlaq

@@ -7,6 +7,7 @@ import { connectSocket } from "./socket";
 import type { AppUser, Msg, Role } from "./App";
 import { ROLE_LABELS, VoicePlayer } from "./App";
 import { SkeletonList, SkeletonMessage } from "./Skeleton";
+import { openExternalUrl } from "./platform";
 
 // Har bir tarifda BIRINCHI OY BEPUL — backend/src/routes/subscriptions.ts PLAN_CONFIG bilan bir xil.
 const DEV_PLAN_CONFIG: Record<string, { label: string; days: number; amount: number }> = {
@@ -418,10 +419,10 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
                               <VoicePlayer src={m.mediaUrl} mine={mine}/>
                             )}
                             {m.type==='file' && m.mediaUrl && (
-                              <a href={m.mediaUrl} download={m.fileName} className="flex items-center gap-2 mb-1 hover:opacity-75 transition-opacity">
+                              <button onClick={()=>openExternalUrl(m.mediaUrl!)} className="flex items-center gap-2 mb-1 hover:opacity-75 transition-opacity text-left">
                                 <FileText className="w-4 h-4 flex-shrink-0"/>
                                 <span className="truncate max-w-[140px] font-medium">{m.fileName || t('devPanel.messages.fileFallback')}</span>
-                              </a>
+                              </button>
                             )}
                             {m.type==='location' && m.location && (
                               <a href={`https://maps.google.com/?q=${m.location.lat},${m.location.lng}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 bg-black/10 rounded-xl px-2.5 py-1.5 mb-1 hover:bg-black/20 transition-colors">

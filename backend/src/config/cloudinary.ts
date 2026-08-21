@@ -14,14 +14,42 @@ if (cloudinaryEnabled) {
   cloudinary.config({ cloud_name: CLOUD_NAME!, api_key: API_KEY!, api_secret: API_SECRET! });
 }
 
-// Cloudinary mavjud bo'lsa shunga, yo'q bo'lsa localga yuklaydi
-export async function uploadFileToCloud(filePath: string, folder = 'qurilish-erp'): Promise<{ url: string; publicId?: string }> {
+const IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.bmp', '.tiff', '.heic', '.heif']);
+const VIDEO_EXTS = new Set(['.mp4', '.mov', '.webm', '.avi', '.mkv', '.mp3', '.wav', '.m4a', '.ogg', '.3gp', '.aac']);
+
+// Cloudinary mavjud bo'lsa shunga, yo'q bo'lsa localga yuklaydi.
+// `originalName` — multer vaqtinchalik faylni KENGAYTMASIZ nomlaydi
+// (masalan "3f2a91bc..."), shuning uchun asl fayl nomi (kengaytmasi bilan)
+// ALOHIDA beriladi (req.file.originalname).
+export async function uploadFileToCloud(filePath: string, folder = 'qurilish-erp', originalName?: string): Promise<{ url: string; publicId?: string }> {
   if (!cloudinaryEnabled) {
     // Local fayl URL qaytaradi
     const fileName = path.basename(filePath);
     return { url: `${getBackendUrl()}/uploads/${fileName}` };
   }
-  const result = await cloudinary.uploader.upload(filePath, { folder, resource_type: 'auto' });
+  const ext = originalName ? path.extname(originalName).toLowerCase() : '';
+  const opts: any = { folder };
+  if (IMAGE_EXTS.has(ext)) opts.resource_type = 'image';
+  else if (VIDEO_EXTS.has(ext)) opts.resource_type = 'video';
+  else {
+    // MUHIM: rasm/video BO'LMAGAN har qanday fayl (APK, EXE, PDF, DOCX,
+    // ZIP va h.k.) Cloudinary'da 'raw' resurs turi sifatida saqlanadi —
+    // BUNDA (rasm/video'dan farqli) Cloudinary yuklab olingan faylga
+    // kengaytmani AVTOMATIK BIRIKTIRMAYDI. public_id tasodifiy hash
+    // bo'lib qolaversa, natijaviy URL/fayl nomi butunlay kengaytmasiz
+    // chiqadi — Android buni APK deb TANIMAYDI ("ilova o'rniga g'alati
+    // fayl ochiladi"), Windows ham EXE deb bilmaydi, PDF/DOCX ham hech
+    // qayerda to'g'ri ochilmaydi. Yechim: kengaytmani public_id'ning
+    // O'ZIGA aniq qo'shamiz (faqat 'raw' uchun — image/video'ga
+    // tegilmaydi, ular Cloudinary'ning o'z format-boshqaruvi bilan
+    // ishlayveradi, aks holda .jpg.jpg kabi ikkilangan kengaytma xavfi bor).
+    opts.resource_type = 'raw';
+    if (originalName) {
+      const base = path.basename(originalName, ext).replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 60) || 'file';
+      opts.public_id = `${base}-${Date.now()}${ext}`;
+    }
+  }
+  const result = await cloudinary.uploader.upload(filePath, opts);
   // Cloudinary'ga yuklangandan keyin local faylni o'chirish (disk tejash)
   try { fs.unlinkSync(filePath); } catch {}
   return { url: result.secure_url, publicId: result.public_id };

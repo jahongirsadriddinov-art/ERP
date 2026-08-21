@@ -24,7 +24,7 @@ router.post('/upload-artifact', upload.single('file'), async (req, res) => {
     }
     if (!req.file) return res.status(400).json({ error: 'file talab etiladi (multipart/form-data)' });
 
-    const { url } = await uploadFileToCloud(req.file.path, 'qurilish-releases');
+    const { url } = await uploadFileToCloud(req.file.path, 'qurilish-releases', req.file.originalname);
     res.json({ ok: true, url });
   } catch (err) {
     console.error('[upload-artifact]', err);

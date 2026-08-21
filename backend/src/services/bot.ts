@@ -135,7 +135,7 @@ async function downloadTelegramFileToUploads(fileId: string, ext: string): Promi
   const tempPath = path.join(destDir, filename);
   fs.writeFileSync(tempPath, buf);
   try {
-    const { url } = await uploadFileToCloud(tempPath, 'qurilish-chat');
+    const { url } = await uploadFileToCloud(tempPath, 'qurilish-chat', filename);
     return { url, size: buf.length };
   } catch (err) {
     // Cloudinary muvaffaqiyatsiz bo'lsa — kamida shu server ishga tushib

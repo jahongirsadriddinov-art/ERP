@@ -13,7 +13,7 @@ import { API_BASE, parseSmetaFile, uploadChatMedia } from "./api";
 import { connectSocket, getSocket, disconnectSocket } from "./socket";
 import { motion, AnimatePresence } from "motion/react";
 import { setSiteLanguage, SiteLang, langLabel } from "./i18n";
-import { installAndroidBackHandler } from "./platform";
+import { installAndroidBackHandler, saveOrShareBlob, openExternalUrl } from "./platform";
 import LanguageSwitcher from "./i18n/LanguageSwitcher";
 import { Skeleton, SkeletonList, SkeletonPage, SkeletonMessage, SkeletonTable, SkeletonProfile } from "./Skeleton";
 import { useGeoTracker } from "./useGeoTracker";
@@ -194,11 +194,10 @@ function csvCell(v: string | number): string {
 export function downloadCsv(filename: string, headers: string[], rows: (string | number)[][]) {
   const lines = [headers, ...rows].map(r => r.map(csvCell).join(";"));
   const blob = new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = filename;
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  // saveOrShareBlob: Android APK'da <a download> ISHLAMAYDI (WebView'da
+  // Downloads integratsiyasi yo'q — hech qanday xato ham chiqmasdi, shu
+  // sabab "hisobotni yuklab bo'lmayapti" edi). Web/exe'da eski usul saqlanadi.
+  saveOrShareBlob(filename, blob).then(r => { if (!r.ok) toast.error("Fayl saqlanmadi"); });
 }
 export function exportExpensesToCsv(expenses: Expense[], users: AppUser[], projects: Project[], filename: string) {
   const headers = ["Sana", "Tavsif", "Turi", "Kimga", "Obyekt", "Summa (so'm)", "Holati", "Kim qo'shdi", "Kim tasdiqladi"];
@@ -1678,7 +1677,7 @@ function SmetaResultView({ smeta }: { smeta: SmetaResult }) {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto scrollbar-hide space-y-3 p-4 pb-24 animate-slide-up-fade">
+    <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide space-y-3 p-4 pb-24 animate-slide-up-fade">
       {/* Meta + byudjet (parser natijasidan) */}
       <div className="glass-card rounded-xl p-4 border border-border">
         {smeta.meta?.objectName && <p className="text-sm font-bold leading-snug">{smeta.meta.objectName}</p>}
@@ -1804,7 +1803,14 @@ function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSe
   
   return (
     <div className="flex flex-col flex-1 min-h-0 bg-background/50">
-      <div className="glass border-b border-border px-4 py-3 flex items-center gap-3 flex-shrink-0 z-10 sticky top-0">
+      {/* MUHIM: header va tab-panel ILGARI ikkalasi ALOHIDA sticky (top-0 va
+          top-[53px], qattiq piksel) edi — header uzun nom/status+smeta
+          tugmasi tor ekranda IKKI QATORGA o'tganda balandligi 53px'dan
+          oshib, tab-panel ustidan bosib qolar edi ("qo'shilib ketgan"
+          ko'rinish). Endi ikkalasi BITTA sticky konteynerda — header
+          balandligidan qat'i nazar tab-panel doim to'g'ri joyda turadi. */}
+      <div className="flex-shrink-0 z-10 sticky top-0">
+      <div className="glass border-b border-border px-4 py-3 flex flex-wrap items-center gap-3">
         <button onClick={onBack} className="flex items-center gap-1.5 text-sm md:text-xs text-muted-foreground hover:text-foreground transition-colors"><ArrowLeft className="w-4 h-4"/>{t('common.back')}</button>
         <div className="w-px h-4 bg-border"/>
         <Building2 className="w-4 h-4 text-primary flex-shrink-0"/>
@@ -1837,8 +1843,11 @@ function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSe
           </p>
           <p className="text-sm md:text-xs text-muted-foreground">{project.location}</p>
         </div>
+        {/* Tor ekranda (telefon) bu qator status-select bilan "qo'shilib
+            ketardi" — endi w-full bilan navbatdagi qatorga tushadi, katta
+            ekranda (sm+) xuddi eskisidek bir qatorda turaveradi. */}
+        <div className="flex items-center gap-2 flex-shrink-0 w-full sm:w-auto justify-end">
         {project.pdfFile && <button className="flex items-center gap-1 text-sm md:text-xs bg-accent text-white px-2.5 py-1.5 rounded hover:bg-accent/90 font-medium flex-shrink-0 dark:bg-accent/10 dark:text-accent dark:hover:bg-accent/20"><Download className="w-3.5 h-3.5"/>PDF</button>}
-        <div className="flex items-center gap-2 flex-shrink-0">
           <input type="file" id="smeta-upload" className="hidden" accept=".pdf,.xlsx,.xls,.docx,.doc,.csv,.txt" onChange={async e=>{
             const file = e.target.files?.[0];
             if(!file) return;
@@ -1872,7 +1881,7 @@ function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSe
           <button onClick={()=>{setInitialTransferData(undefined);setShowSend(true);}} className="flex items-center gap-1 text-sm md:text-xs bg-primary text-white px-2.5 py-1.5 rounded hover:bg-primary/90 font-medium liquid-transition shadow-sm"><Send className="w-3.5 h-3.5"/>{t('common.send')}</button>
         </div>
       </div>
-      <div className="glass border-b border-border px-3 py-2 flex gap-1 flex-shrink-0 z-10 sticky top-[53px] overflow-x-auto scrollbar-hide">
+      <div className="glass border-b border-border px-3 py-2 flex gap-1 overflow-x-auto scrollbar-hide">
         {([["required",t('objectDetail.tabRequired'),project.requiredMaterials.length], ...(project.smeta ? [["smeta",t('objectDetail.tabSmeta'),project.smeta.resources.length] as [string,string,number]] : []), ["pending",t('objectDetail.tabPending'),pendT.length],["confirmed",t('objectDetail.tabConfirmed'),confT.length]] as [string,string,number][]).map(([k,l,c])=>(
           <button key={k} onClick={()=>setTab(k as any)} className={`relative flex items-center gap-1.5 text-sm md:text-xs py-2 px-3 rounded-full font-medium liquid-transition whitespace-nowrap ${tab===k?"text-primary":"text-muted-foreground hover:text-foreground"}`}>
             {tab===k && (
@@ -1882,6 +1891,7 @@ function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSe
             {l}<span className={`text-[9px] px-1.5 py-0.5 rounded-full font-semibold ${tab===k?"bg-primary text-white":"bg-muted text-muted-foreground"}`}>{c}</span>
           </button>
         ))}
+      </div>
       </div>
       <div className="flex-1 flex flex-col min-h-0">
         {tab==="smeta" && project.smeta && <SmetaResultView smeta={project.smeta}/>}
@@ -1902,7 +1912,14 @@ function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSe
                 qolardi. min-w-max jadvalni siqib qisqartirish o'rniga
                 o'z tabiiy kengligida saqlaydi, konteyner esa uni gorizontal
                 aylantirishga imkon beradi. */}
-            <div className="flex-1 overflow-auto scrollbar-hide pb-20 sm:pb-2">
+            {/* min-h-0 SHART: flex-1 + overflow-auto bo'lsagina scroll
+                ishlaydi deb o'ylanardi, lekin bu yo'q bo'lsa flex element
+                o'z ICHIDAGI kontent balandligidan kichik bo'lishni "rad
+                etadi" (flex bolalarining standart min-height:auto) — natijada
+                jadval pastga cheksiz o'sib, ko'rinmas qismi hech qanday
+                scrollsiz shunchaki kesilib qolardi ("davomini ko'rish uchun
+                scroll bo'lmayapti"). */}
+            <div className="flex-1 min-h-0 overflow-auto scrollbar-hide pb-20 sm:pb-2">
               <table className="w-full min-w-max text-left border-collapse text-[11px] leading-tight">
                 <thead className="sticky top-0 z-10 bg-card">
                   <tr className="border-b border-border">
@@ -2535,10 +2552,16 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
           <VoicePlayer src={m.mediaUrl} mine={mine}/>
         )}
         {m.type==='file' && m.mediaUrl && (
-          <a href={m.mediaUrl} download={m.fileName} className="flex items-center gap-2 mb-1 hover:opacity-75 transition-opacity">
+          // MUHIM: oddiy <a download> boshqa origin (Cloudinary) uchun
+          // brauzer tomonidan e'tiborga OLINMAYDI, Android APK'ning WebView'ida
+          // esa <a> bosilishi ilova ichida "navigatsiya" qilib, hech qanday
+          // yuklab olishsiz sahifani ochib/buzib qo'yishi mumkin edi.
+          // openExternalUrl — Android'da tizim brauzeri/yuklab olish
+          // menejeriga, web'da yangi tabga to'g'ri yo'naltiradi.
+          <button onClick={()=>openExternalUrl(m.mediaUrl!)} className="flex items-center gap-2 mb-1 hover:opacity-75 transition-opacity text-left">
             <FileText className="w-5 h-5 flex-shrink-0"/>
             <div className="min-w-0"><p className="text-xs font-medium truncate max-w-[150px]">{m.fileName}</p><p className="text-[10px] opacity-60">{fmtSize(m.fileSize)}</p></div>
-          </a>
+          </button>
         )}
         {m.type==='location' && m.location && (
           <a href={`https://maps.google.com/?q=${m.location.lat},${m.location.lng}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 bg-black/10 rounded-xl px-3 py-2 mb-1 hover:bg-black/20 transition-colors">

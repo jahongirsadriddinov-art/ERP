@@ -1780,10 +1780,15 @@ function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSe
         <div className="w-px h-4 bg-border"/>
         <Building2 className="w-4 h-4 text-primary flex-shrink-0"/>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold truncate flex items-center gap-2">
-            {project.name}
+          <p className="text-sm font-semibold flex items-center gap-2">
+            {/* MUHIM: truncate avval butun qatorga (matn + select'ga birga)
+                qo'yilgan edi — nom uzun bo'lsa, `overflow:hidden` butun
+                qatorni qirqib, status tanlovini ko'rinmas qilib qo'yardi
+                ("obyekt statusini o'zgartiradigan tugma yo'qolib qoldi").
+                Endi faqat nomning o'zi qirqiladi, select doim ko'rinadi. */}
+            <span className="truncate min-w-0">{project.name}</span>
             <select
-              className="text-xs bg-transparent border-none font-semibold focus:outline-none cursor-pointer liquid-transition outline-none"
+              className="text-xs bg-transparent border-none font-semibold focus:outline-none cursor-pointer liquid-transition outline-none flex-shrink-0"
               style={{ color: project.status === "active" ? "#22c55e" : project.status === "paused" ? "#f59e0b" : "#3b82f6" }}
               value={project.status}
               onChange={async (e) => {
@@ -1861,9 +1866,15 @@ function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSe
               </div>
               <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0">{filteredMats.length} ta · {fmt(project.budget)}</span>
             </div>
-            {/* Zich jadval — barcha materiallar minimal joyda */}
-            <div className="flex-1 overflow-y-auto scrollbar-hide pb-20 sm:pb-2">
-              <table className="w-full text-left border-collapse text-[11px] leading-tight">
+            {/* Zich jadval — barcha materiallar minimal joyda. MUHIM:
+                overflow-x-auto avval yo'q edi — 5 ustunli jadval tor
+                (mobil) ekranga sig'masdan, o'ng tomondagi ustunlar (Narx,
+                Summa) ko'rish/scroll qilib bo'lmaydigan holda "yo'qolib"
+                qolardi. min-w-max jadvalni siqib qisqartirish o'rniga
+                o'z tabiiy kengligida saqlaydi, konteyner esa uni gorizontal
+                aylantirishga imkon beradi. */}
+            <div className="flex-1 overflow-auto scrollbar-hide pb-20 sm:pb-2">
+              <table className="w-full min-w-max text-left border-collapse text-[11px] leading-tight">
                 <thead className="sticky top-0 z-10 bg-card">
                   <tr className="border-b border-border">
                     <th className="px-2 py-1 font-semibold">{t('objectDetail.colName')}</th>
@@ -2041,8 +2052,8 @@ function FinancePage({ currentUser, users, projects, expenses, onAddExpense, onC
       {showCurrency && (
         <div className="surface px-4 py-3 flex-shrink-0 animate-slide-up-fade">
           <p className="text-[10px] font-semibold text-muted-foreground mb-2">{t('currency.title')} — 1 USD = {LIVE_USD_RATE.toLocaleString()} UZS &nbsp;|&nbsp; 1 EUR = {LIVE_EUR_RATE.toLocaleString()} UZS{LIVE_RATE_DATE ? ` (${LIVE_RATE_DATE})` : ""}</p>
-          <div className="flex items-center gap-2">
-            <select value={currencyMode} onChange={e=>setCurrencyMode(e.target.value as any)} className="text-[10px] bg-muted text-muted-foreground px-2 py-1 rounded-full font-semibold border-0 focus:outline-none cursor-pointer">
+          <div className="flex flex-wrap items-center gap-2">
+            <select value={currencyMode} onChange={e=>setCurrencyMode(e.target.value as any)} className="text-[10px] bg-muted text-muted-foreground px-2 py-1 rounded-full font-semibold border-0 focus:outline-none cursor-pointer flex-shrink-0">
               <option value="uzs2usd">UZS → USD</option>
               <option value="usd2uzs">USD → UZS</option>
               <option value="uzs2eur">UZS → EUR</option>
@@ -2050,8 +2061,8 @@ function FinancePage({ currentUser, users, projects, expenses, onAddExpense, onC
             </select>
             <input type="number" value={currencyAmount} onChange={e=>setCurrencyAmount(e.target.value)}
               placeholder={currencyMode.startsWith("uzs")?"UZS":currencyMode.startsWith("usd")?"USD":"EUR"}
-              className="flex-1 text-sm border border-border rounded-xl px-3 py-1.5 bg-input-background focus:outline-none"/>
-            <span className="text-sm font-bold text-accent font-mono min-w-[90px] text-right">
+              className="flex-1 min-w-[80px] text-sm border border-border rounded-xl px-3 py-1.5 bg-input-background focus:outline-none"/>
+            <span className="text-sm font-bold text-accent font-mono ml-auto text-right">
               {currencyAmount ? (() => {
                 const n = parseFloat(currencyAmount);
                 if(isNaN(n)) return "—";

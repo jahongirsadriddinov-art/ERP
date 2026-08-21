@@ -105,6 +105,20 @@ export default function LandingPage({ onLogin, onRegister }: { onLogin: () => vo
 
   return (
     <main className="h-[100dvh] overflow-y-auto scrollbar-hide bg-background overflow-x-hidden">
+      {/* FAQPage structured data — Google'da savol-javoblar to'g'ridan-to'g'ri
+          qidiruv natijasida (rich result) chiqishi uchun. FAQS massividan
+          avtomatik hosil qilinadi — matn bilan sinxronlikdan chiqib
+          qolmaydi. GoogleBot JS'ni bajarib bunday dinamik <script> teglarni
+          ham o'qiydi (rasmiy hujjatlashtirilgan, statik bo'lishi shart emas). */}
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify({
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        mainEntity: FAQS.map(f => ({
+          "@type": "Question",
+          name: f.q,
+          acceptedAnswer: { "@type": "Answer", text: f.a },
+        })),
+      }) }} />
       {/* ── Sticky top nav ─────────────────────────────────────────────── */}
       <header className="sticky top-0 z-40 backdrop-blur-xl bg-background/70 border-b border-border/50"
         style={{ paddingTop: "env(safe-area-inset-top)" }}>

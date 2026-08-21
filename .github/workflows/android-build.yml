@@ -89,6 +89,23 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
+      # Rust/Cargo bog'liqliklarini keshlash — bularsiz HAR bir push'da
+      # Tauri yuzlab crate'ni noldan yuklab kompilyatsiya qilardi (bu
+      # aynan Windows build'ning eng sekin qismi, ~10-15 daqiqa). Keshlansa,
+      # Cargo.lock o'zgarmagan keyingi build'larda faqat o'zgargan
+      # fayllar qayta kompilyatsiya qilinadi — sezilarli tezroq. Rasmiy
+      # actions/cache — Tauri'ga xos uchinchi tomon action emas.
+      - name: Cache Cargo registry + target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            frontend/src-tauri/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('frontend/src-tauri/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
       - name: Install frontend deps
         run: npm ci
 

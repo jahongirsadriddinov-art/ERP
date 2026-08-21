@@ -162,6 +162,35 @@ async function getAttendanceStatus(userId: string): Promise<{ status: 'NOT_START
   return { status: 'FINISHED', record };
 }
 
+// Tasdiqlangandan (inline "Ha") keyin haqiqiy check-in/check-out — saytdagi
+// /api/attendance/checkin|checkout bilan bir xil mantiq, to'g'ridan-to'g'ri
+// Mongoose orqali (bot HTTP so'rov konteksti ichida emas).
+async function doCheckIn(user: any, lang?: BotLang): Promise<string> {
+  const today = todayDateStr();
+  let record = await Attendance.findOne({ userId: String(user._id), date: today });
+  if (record?.checkIn) return tb(lang, 'alreadyCheckedIn');
+  const now = new Date();
+  if (!record) record = new Attendance({ userId: String(user._id), companyId: user.companyId, date: today });
+  record.checkIn = now.toISOString();
+  record.status = now.getHours() >= 9 ? 'late' : 'present';
+  await record.save();
+  const time = now.toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' });
+  return tb(lang, 'checkInConfirmed', { time });
+}
+async function doCheckOut(user: any, lang?: BotLang): Promise<string> {
+  const today = todayDateStr();
+  const record = await Attendance.findOne({ userId: String(user._id), date: today });
+  if (!record?.checkIn) return tb(lang, 'notCheckedInYet');
+  if (record.checkOut) return tb(lang, 'alreadyCheckedOut');
+  const now = new Date();
+  record.checkOut = now.toISOString();
+  const ms = now.getTime() - new Date(record.checkIn).getTime();
+  record.workHours = Math.round((ms / 3600000) * 10) / 10;
+  await record.save();
+  const time = now.toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' });
+  return tb(lang, 'checkOutConfirmed', { time, hours: String(record.workHours) });
+}
+
 // Telegramdan kelgan joylashuvni GpsLocation'ga saqlaydi — saytdagi
 // POST /api/gps bilan bir xil ma'lumot shakli, xuddi shunday socket orqali
 // admin xaritasiga real-time yetkaziladi. Bot HTTP so'rov konteksti ichida
@@ -420,54 +449,26 @@ bot.on('message', async (msg: any) => {
   // ── Yo'qlama: Ishga keldim / Ish tugatdim — FAQAT ishchi/prorab/brigadir ──
   // MUHIM: bu yerda GPS'ga HECH TEGILMAYDI — GPS botда doim, joylashuv
   // kelgan zahoti ishlaydi (yuqorida). Bu tugmalar FAQAT Attendance yozuvini
-  // (davomat) boshqaradi — saytdagi /api/attendance/checkin|checkout bilan
-  // bir xil mantiq, to'g'ridan-to'g'ri Mongoose orqali (bot HTTP so'rov
-  // konteksti ichida emas, o'z REST API'siga chaqiruv qilish shart emas).
+  // (davomat) boshqaradi. Tugma bosilganda DARHOL bajarilmaydi — tasodifan
+  // bosilib ketishning oldini olish uchun avval inline "Ha/Yo'q" tasdiqlash
+  // so'raladi (saytda ham xuddi shunday — window.confirm orqali); haqiqiy
+  // amal callback_query handlerida (pastda) bajariladi.
   if (isWorker(user.role) && text === tb(lang, 'kb_checkIn')) {
-    try {
-      const today = todayDateStr();
-      let record = await Attendance.findOne({ userId: String(user._id), date: today });
-      if (record?.checkIn) {
-        bot.sendMessage(chatId, tb(lang, 'alreadyCheckedIn'), { reply_markup: await keyboardForUser(user, lang) });
-        return;
-      }
-      const now = new Date();
-      const hour = now.getHours();
-      if (!record) record = new Attendance({ userId: String(user._id), companyId: user.companyId, date: today });
-      record.checkIn = now.toISOString();
-      record.status = hour >= 9 ? 'late' : 'present';
-      await record.save();
-      const time = now.toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' });
-      bot.sendMessage(chatId, tb(lang, 'checkInConfirmed', { time }), { reply_markup: await keyboardForUser(user, lang) });
-    } catch (err) {
-      console.error('[bot checkin]', err);
-      bot.sendMessage(chatId, tb(lang, 'genericError'));
-    }
+    bot.sendMessage(chatId, tb(lang, 'checkInConfirmPrompt'), {
+      reply_markup: { inline_keyboard: [[
+        { text: tb(lang, 'confirmYes'), callback_data: 'confirm_checkin' },
+        { text: tb(lang, 'confirmNo'), callback_data: 'cancel_checkin' },
+      ]] },
+    });
     return;
   }
   if (isWorker(user.role) && text === tb(lang, 'kb_checkOut')) {
-    try {
-      const today = todayDateStr();
-      const record = await Attendance.findOne({ userId: String(user._id), date: today });
-      if (!record?.checkIn) {
-        bot.sendMessage(chatId, tb(lang, 'notCheckedInYet'), { reply_markup: await keyboardForUser(user, lang) });
-        return;
-      }
-      if (record.checkOut) {
-        bot.sendMessage(chatId, tb(lang, 'alreadyCheckedOut'), { reply_markup: await keyboardForUser(user, lang) });
-        return;
-      }
-      const now = new Date();
-      record.checkOut = now.toISOString();
-      const ms = now.getTime() - new Date(record.checkIn).getTime();
-      record.workHours = Math.round((ms / 3600000) * 10) / 10;
-      await record.save();
-      const time = now.toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' });
-      bot.sendMessage(chatId, tb(lang, 'checkOutConfirmed', { time, hours: String(record.workHours) }), { reply_markup: await keyboardForUser(user, lang) });
-    } catch (err) {
-      console.error('[bot checkout]', err);
-      bot.sendMessage(chatId, tb(lang, 'genericError'));
-    }
+    bot.sendMessage(chatId, tb(lang, 'checkOutConfirmPrompt'), {
+      reply_markup: { inline_keyboard: [[
+        { text: tb(lang, 'confirmYes'), callback_data: 'confirm_checkout' },
+        { text: tb(lang, 'confirmNo'), callback_data: 'cancel_checkout' },
+      ]] },
+    });
     return;
   }
 
@@ -478,15 +479,15 @@ bot.on('message', async (msg: any) => {
         const Company = require('../models/Company').default;
         const firms = await Company.find({}).select('name branchId status').lean();
         if (firms.length === 0) {
-          bot.sendMessage(chatId, tb(user.language, 'devNoFirms'), { reply_markup: DEVELOPER_KEYBOARD(user.language) });
+          bot.sendMessage(chatId, tb(user.language, 'devNoFirms'), { reply_markup: await keyboardForUser(user, user.language) });
           return;
         }
         const lines = firms.map((c: any, i: number) =>
           `${i + 1}. *${c.name}* (${c.branchId || '—'}) — ${c.status || '?'}`
         ).join('\n');
-        bot.sendMessage(chatId, `${tb(user.language, 'devFirmsHeader')}\n\n${lines}`, { parse_mode: 'Markdown', reply_markup: DEVELOPER_KEYBOARD(user.language) });
+        bot.sendMessage(chatId, `${tb(user.language, 'devFirmsHeader')}\n\n${lines}`, { parse_mode: 'Markdown', reply_markup: await keyboardForUser(user, user.language) });
       } catch {
-        bot.sendMessage(chatId, tb(user.language, 'genericError'), { reply_markup: DEVELOPER_KEYBOARD(user.language) });
+        bot.sendMessage(chatId, tb(user.language, 'genericError'), { reply_markup: await keyboardForUser(user, user.language) });
       }
       return;
     }
@@ -501,9 +502,9 @@ bot.on('message', async (msg: any) => {
         const lines = (allUsers as any[]).map(u =>
           `• *${u.firstName} ${u.lastName || ''}* — ${u.role}\n  ${u.phone || '—'} | ${cMap[String(u.companyId)] || '—'}`
         ).join('\n');
-        bot.sendMessage(chatId, `${tb(user.language, 'devUsersHeader')}\n\n${lines}`, { parse_mode: 'Markdown', reply_markup: DEVELOPER_KEYBOARD(user.language) });
+        bot.sendMessage(chatId, `${tb(user.language, 'devUsersHeader')}\n\n${lines}`, { parse_mode: 'Markdown', reply_markup: await keyboardForUser(user, user.language) });
       } catch {
-        bot.sendMessage(chatId, tb(user.language, 'genericError'), { reply_markup: DEVELOPER_KEYBOARD(user.language) });
+        bot.sendMessage(chatId, tb(user.language, 'genericError'), { reply_markup: await keyboardForUser(user, user.language) });
       }
       return;
     }
@@ -514,7 +515,7 @@ bot.on('message', async (msg: any) => {
         const Company = require('../models/Company').default;
         const subs = await Subscription.find({}).sort({ createdAt: -1 }).limit(20).lean();
         if (subs.length === 0) {
-          bot.sendMessage(chatId, tb(user.language, 'devNoSubs'), { reply_markup: DEVELOPER_KEYBOARD(user.language) });
+          bot.sendMessage(chatId, tb(user.language, 'devNoSubs'), { reply_markup: await keyboardForUser(user, user.language) });
           return;
         }
         const companies = await Company.find({}).select('name').lean();
@@ -524,9 +525,9 @@ bot.on('message', async (msg: any) => {
           const statusIcon = s.status === 'active' ? '✅' : s.status === 'pending' ? '⏳' : '❌';
           return `${statusIcon} *${cMap[String(s.companyId)] || '—'}* — ${s.selectedPlan || s.plan || '—'}`;
         }).join('\n');
-        bot.sendMessage(chatId, `${tb(user.language, 'devSubsHeader')}\n\n${lines}`, { parse_mode: 'Markdown', reply_markup: DEVELOPER_KEYBOARD(user.language) });
+        bot.sendMessage(chatId, `${tb(user.language, 'devSubsHeader')}\n\n${lines}`, { parse_mode: 'Markdown', reply_markup: await keyboardForUser(user, user.language) });
       } catch {
-        bot.sendMessage(chatId, tb(user.language, 'genericError'), { reply_markup: DEVELOPER_KEYBOARD(user.language) });
+        bot.sendMessage(chatId, tb(user.language, 'genericError'), { reply_markup: await keyboardForUser(user, user.language) });
       }
       return;
     }
@@ -543,15 +544,15 @@ bot.on('message', async (msg: any) => {
         ]);
         bot.sendMessage(chatId,
           tb(user.language, 'devStatsBody', { firmCount, userCount, activeSubs, pendingSubs }),
-          { parse_mode: 'Markdown', reply_markup: DEVELOPER_KEYBOARD(user.language) }
+          { parse_mode: 'Markdown', reply_markup: await keyboardForUser(user, user.language) }
         );
       } catch {
-        bot.sendMessage(chatId, tb(user.language, 'genericError'), { reply_markup: DEVELOPER_KEYBOARD(user.language) });
+        bot.sendMessage(chatId, tb(user.language, 'genericError'), { reply_markup: await keyboardForUser(user, user.language) });
       }
       return;
     }
 
-    bot.sendMessage(chatId, tb(user.language, 'chooseFromMenu'), { reply_markup: DEVELOPER_KEYBOARD(user.language) });
+    bot.sendMessage(chatId, tb(user.language, 'chooseFromMenu'), { reply_markup: await keyboardForUser(user, user.language) });
     return;
   }
 
@@ -562,7 +563,7 @@ bot.on('message', async (msg: any) => {
         const companyFilter = user.companyId ? { companyId: user.companyId } : {};
         const pending = await Transaction.find({ ...companyFilter, status: 'pending' }).sort({ createdAt: -1 }).limit(10);
         if (pending.length === 0) {
-          bot.sendMessage(chatId, tb(user.language, 'admNoPending'), { reply_markup: ADMIN_KEYBOARD(user.language) });
+          bot.sendMessage(chatId, tb(user.language, 'admNoPending'), { reply_markup: await keyboardForUser(user, user.language) });
           return;
         }
         for (const tx of pending) {
@@ -597,10 +598,10 @@ bot.on('message', async (msg: any) => {
         const pendTotal = pending.reduce((s: number, t: any) => s + (t.amount || 0), 0);
         bot.sendMessage(chatId,
           tb(user.language, 'admFinanceStatusBody', { total: fmt(total, user.language), pendTotal: fmt(pendTotal, user.language), diff: fmt(total - pendTotal, user.language) }),
-          { parse_mode: 'Markdown', reply_markup: ADMIN_KEYBOARD(user.language) }
+          { parse_mode: 'Markdown', reply_markup: await keyboardForUser(user, user.language) }
         );
       } catch {
-        bot.sendMessage(chatId, tb(user.language, 'genericError'), { reply_markup: ADMIN_KEYBOARD(user.language) });
+        bot.sendMessage(chatId, tb(user.language, 'genericError'), { reply_markup: await keyboardForUser(user, user.language) });
       }
       return;
     }
@@ -611,13 +612,13 @@ bot.on('message', async (msg: any) => {
         const filter = user.companyId ? { companyId: user.companyId } : {};
         const objects = await ObjectModel.find(filter).limit(20);
         if (objects.length === 0) {
-          bot.sendMessage(chatId, tb(user.language, 'admNoObjects'), { reply_markup: ADMIN_KEYBOARD(user.language) });
+          bot.sendMessage(chatId, tb(user.language, 'admNoObjects'), { reply_markup: await keyboardForUser(user, user.language) });
           return;
         }
         const lines = objects.map((o: any, i: number) => `${i + 1}. *${o.name}*\n   📍 ${o.location || '—'} | Budjet: ${fmt(o.budget || 0, user.language)}`).join('\n\n');
-        bot.sendMessage(chatId, `${tb(user.language, 'admObjectsHeader')}\n\n${lines}`, { parse_mode: 'Markdown', reply_markup: ADMIN_KEYBOARD(user.language) });
+        bot.sendMessage(chatId, `${tb(user.language, 'admObjectsHeader')}\n\n${lines}`, { parse_mode: 'Markdown', reply_markup: await keyboardForUser(user, user.language) });
       } catch {
-        bot.sendMessage(chatId, tb(user.language, 'genericError'), { reply_markup: ADMIN_KEYBOARD(user.language) });
+        bot.sendMessage(chatId, tb(user.language, 'genericError'), { reply_markup: await keyboardForUser(user, user.language) });
       }
       return;
     }
@@ -627,9 +628,9 @@ bot.on('message', async (msg: any) => {
         const filter = user.companyId ? { companyId: user.companyId } : {};
         const companyUsers = await User.find(filter).select('firstName lastName role phone');
         const lines = companyUsers.map(u => `• *${u.firstName} ${u.lastName || ''}* — ${u.role}\n  📞 ${u.phone}`).join('\n');
-        bot.sendMessage(chatId, `${tb(user.language, 'admStaffHeader')}\n\n${lines}`, { parse_mode: 'Markdown', reply_markup: ADMIN_KEYBOARD(user.language) });
+        bot.sendMessage(chatId, `${tb(user.language, 'admStaffHeader')}\n\n${lines}`, { parse_mode: 'Markdown', reply_markup: await keyboardForUser(user, user.language) });
       } catch {
-        bot.sendMessage(chatId, tb(user.language, 'genericError'), { reply_markup: ADMIN_KEYBOARD(user.language) });
+        bot.sendMessage(chatId, tb(user.language, 'genericError'), { reply_markup: await keyboardForUser(user, user.language) });
       }
       return;
     }
@@ -644,10 +645,10 @@ bot.on('message', async (msg: any) => {
         const pendCount = allTx.filter((t: any) => t.status === 'pending').length;
         bot.sendMessage(chatId,
           tb(user.language, 'admReportBody', { transfersCount: transfers.length, confExp: fmt(confExp, user.language), pendCount }),
-          { parse_mode: 'Markdown', reply_markup: ADMIN_KEYBOARD(user.language) }
+          { parse_mode: 'Markdown', reply_markup: await keyboardForUser(user, user.language) }
         );
       } catch {
-        bot.sendMessage(chatId, tb(user.language, 'genericError'), { reply_markup: ADMIN_KEYBOARD(user.language) });
+        bot.sendMessage(chatId, tb(user.language, 'genericError'), { reply_markup: await keyboardForUser(user, user.language) });
       }
       return;
     }
@@ -657,7 +658,7 @@ bot.on('message', async (msg: any) => {
         const Subscription = require('../models/Subscription').default;
         const sub = user.companyId ? await Subscription.findOne({ companyId: user.companyId }).sort({ createdAt: -1 }) : null;
         if (!sub) {
-          bot.sendMessage(chatId, tb(user.language, 'subNotFound'), { reply_markup: ADMIN_KEYBOARD(user.language) });
+          bot.sendMessage(chatId, tb(user.language, 'subNotFound'), { reply_markup: await keyboardForUser(user, user.language) });
           return;
         }
         const now = new Date();
@@ -674,14 +675,14 @@ bot.on('message', async (msg: any) => {
         const endDate = sub.currentPeriodEnd ? sub.currentPeriodEnd.toLocaleDateString('uz-UZ') : '—';
         await bot.sendMessage(chatId,
           tb(user.language, 'subStatusMsg', { status: statusText, end: endDate }),
-          { parse_mode: 'HTML', reply_markup: ADMIN_KEYBOARD(user.language) }
+          { parse_mode: 'HTML', reply_markup: await keyboardForUser(user, user.language) }
         );
-      } catch { bot.sendMessage(chatId, tb(user.language, 'genericError'), { reply_markup: ADMIN_KEYBOARD(user.language) }); }
+      } catch { bot.sendMessage(chatId, tb(user.language, 'genericError'), { reply_markup: await keyboardForUser(user, user.language) }); }
       return;
     }
 
     // Unknown admin message — show keyboard
-    bot.sendMessage(chatId, tb(user.language, 'chooseFromMenu'), { reply_markup: ADMIN_KEYBOARD(user.language) });
+    bot.sendMessage(chatId, tb(user.language, 'chooseFromMenu'), { reply_markup: await keyboardForUser(user, user.language) });
     return;
   }
 
@@ -695,7 +696,7 @@ bot.on('message', async (msg: any) => {
       }).sort({ createdAt: -1 }).limit(10);
 
       if (txs.length === 0) {
-        bot.sendMessage(chatId, tb(user.language, 'usrNoIncomingTransfers'), { reply_markup: USER_KEYBOARD(user.language) });
+        bot.sendMessage(chatId, tb(user.language, 'usrNoIncomingTransfers'), { reply_markup: await keyboardForUser(user, user.language) });
         return;
       }
       for (const tx of txs) {
@@ -716,7 +717,7 @@ bot.on('message', async (msg: any) => {
         }
       }
     } catch {
-      bot.sendMessage(chatId, tb(user.language, 'genericError'), { reply_markup: USER_KEYBOARD(user.language) });
+      bot.sendMessage(chatId, tb(user.language, 'genericError'), { reply_markup: await keyboardForUser(user, user.language) });
     }
     return;
   }
@@ -729,16 +730,16 @@ bot.on('message', async (msg: any) => {
       }).sort({ createdAt: -1 }).limit(10);
 
       if (txs.length === 0) {
-        bot.sendMessage(chatId, tb(user.language, 'usrNoSentTransfers'), { reply_markup: USER_KEYBOARD(user.language) });
+        bot.sendMessage(chatId, tb(user.language, 'usrNoSentTransfers'), { reply_markup: await keyboardForUser(user, user.language) });
         return;
       }
       const lines = txs.map(tx => {
         const st = tx.status === 'confirmed' ? '✅' : tx.status === 'rejected' ? '❌' : '⏳';
         return tb(user.language, 'usrSentTransferRow', { icon: st, name: tx.materialName || '—', qty: tx.quantity ?? '—', unit: tx.unit || '', date: tx.date || '—' });
       }).join('\n\n');
-      bot.sendMessage(chatId, `${tb(user.language, 'usrSentTransfersHeader')}\n\n${lines}`, { parse_mode: 'Markdown', reply_markup: USER_KEYBOARD(user.language) });
+      bot.sendMessage(chatId, `${tb(user.language, 'usrSentTransfersHeader')}\n\n${lines}`, { parse_mode: 'Markdown', reply_markup: await keyboardForUser(user, user.language) });
     } catch {
-      bot.sendMessage(chatId, tb(user.language, 'genericError'), { reply_markup: USER_KEYBOARD(user.language) });
+      bot.sendMessage(chatId, tb(user.language, 'genericError'), { reply_markup: await keyboardForUser(user, user.language) });
     }
     return;
   }
@@ -751,7 +752,7 @@ bot.on('message', async (msg: any) => {
       }).sort({ createdAt: -1 }).limit(10);
 
       if (txs.length === 0) {
-        bot.sendMessage(chatId, tb(user.language, 'usrNoIncomingPayments'), { reply_markup: USER_KEYBOARD(user.language) });
+        bot.sendMessage(chatId, tb(user.language, 'usrNoIncomingPayments'), { reply_markup: await keyboardForUser(user, user.language) });
         return;
       }
       for (const tx of txs) {
@@ -772,13 +773,13 @@ bot.on('message', async (msg: any) => {
         }
       }
     } catch {
-      bot.sendMessage(chatId, tb(user.language, 'genericError'), { reply_markup: USER_KEYBOARD(user.language) });
+      bot.sendMessage(chatId, tb(user.language, 'genericError'), { reply_markup: await keyboardForUser(user, user.language) });
     }
     return;
   }
 
   // Unknown non-admin message
-  bot.sendMessage(chatId, tb(user.language, 'chooseFromMenu'), { reply_markup: USER_KEYBOARD(user.language) });
+  bot.sendMessage(chatId, tb(user.language, 'chooseFromMenu'), { reply_markup: await keyboardForUser(user, user.language) });
 });
 
 // ─── Inline button handler — confirm / reject ──────────────────────────────────
@@ -789,6 +790,27 @@ bot.on('callback_query', async (query: any) => {
 
   const user = await User.findOne({ telegramChatId: chatId?.toString() }).catch(() => null);
   const lang = user?.language as BotLang | undefined;
+
+  // ── Yo'qlama tasdiqlash (Ishga keldim / Ish tugatdim) ─────────────────────
+  if (data === 'confirm_checkin' || data === 'confirm_checkout') {
+    if (!user || !isWorker(user.role)) { await bot.answerCallbackQuery(query.id); return; }
+    try {
+      await bot.answerCallbackQuery(query.id);
+      const resultText = data === 'confirm_checkin' ? await doCheckIn(user, lang) : await doCheckOut(user, lang);
+      if (messageId) await bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: messageId }).catch(() => {});
+      await bot.sendMessage(chatId, resultText, { reply_markup: await keyboardForUser(user, lang) });
+    } catch (err) {
+      console.error('[bot attendance confirm]', err);
+      await bot.sendMessage(chatId, tb(lang, 'genericError'));
+    }
+    return;
+  }
+  if (data === 'cancel_checkin' || data === 'cancel_checkout') {
+    await bot.answerCallbackQuery(query.id);
+    if (messageId) await bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: messageId }).catch(() => {});
+    if (user) await bot.sendMessage(chatId, tb(lang, 'actionCancelled'), { reply_markup: await keyboardForUser(user, lang) });
+    return;
+  }
 
   // ── Til o'zgartirish ───────────────────────────────────────────────────────
   if (data.startsWith('setlang_')) {

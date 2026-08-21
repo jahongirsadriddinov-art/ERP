@@ -3623,16 +3623,16 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
                 {todayAttendance.checkOut && <p>Ish tugadi: <span className="text-foreground font-medium">{new Date(todayAttendance.checkOut).toLocaleTimeString('uz-UZ',{hour:'2-digit',minute:'2-digit'})}</span></p>}
                 {todayAttendance.workHours != null && <p>{t('attendance.workHours', { h: todayAttendance.workHours.toFixed(1) })}</p>}
               </div>
-              {/* GPS holati — endi check-in'ga BOG'LIQ (faqat WORKING holatida ishlaydi) */}
-              {!todayAttendance?.checkOut && (
-                <div className="flex items-center gap-2 mb-3 text-xs text-muted-foreground">
-                  <div className={`w-2 h-2 rounded-full flex-shrink-0 ${gpsTracking ? 'bg-green-500 animate-pulse' : 'bg-muted-foreground/40'}`}/>
-                  <span>{gpsTracking ? 'GPS faol — har daqiqada joylashuv yuboriladi' : 'GPS kutilmoqda...'}</span>
-                </div>
-              )}
+              {/* GPS holati — check-in'ga bog'liq boshlanadi, lekin check-out
+                  bosilgach ham TO'XTAMAYDI (aniqlashtirilgan talab: "GPS har
+                  doim olinsin"), shu sabab bu yerda checkOut tekshirilmaydi. */}
+              <div className="flex items-center gap-2 mb-3 text-xs text-muted-foreground">
+                <div className={`w-2 h-2 rounded-full flex-shrink-0 ${gpsTracking ? 'bg-green-500 animate-pulse' : 'bg-muted-foreground/40'}`}/>
+                <span>{gpsTracking ? 'GPS faol — har daqiqada joylashuv yuboriladi' : 'GPS kutilmoqda...'}</span>
+              </div>
               <div className="flex gap-2">
                 {!todayAttendance?.checkOut ? (
-                  <button onClick={onCheckOut} className="flex-1 btn btn-outline text-xs py-2.5 rounded-xl flex items-center justify-center gap-1.5 border-red-400/40 text-red-600 dark:text-red-400 hover:bg-red-500/10">
+                  <button onClick={() => { if (confirm("Ishni tugatmoqchimisiz?")) onCheckOut(); }} className="flex-1 btn btn-outline text-xs py-2.5 rounded-xl flex items-center justify-center gap-1.5 border-red-400/40 text-red-600 dark:text-red-400 hover:bg-red-500/10">
                     <X className="w-3.5 h-3.5"/>Ishni tugatdim
                   </button>
                 ) : (
@@ -4194,10 +4194,12 @@ export default function App() {
 
   const liveUser = currentUser ? (users.find(u => u.id === currentUser.id) ?? currentUser) : null;
   const isWorkerRole = liveUser ? ['ishchi', 'prorab', 'brigadir'].includes(liveUser.role) : false;
-  // WORKING holati — "Ishga keldim" bosilgan, "Ishni tugatdim" hali bosilmagan.
-  // GPS aynan shu holatga BOG'LIQ (foydalanuvchi talabi: check-in bosilmaguncha
-  // GPS ishlamasin, check-out bosilgach to'xtasin).
-  const isWorking = !!(todayAttendance?.checkIn && !todayAttendance?.checkOut);
+  // GPS shu holatga BOG'LIQ: "Ishga keldim" bosilmaguncha ishlamaydi (foydalanuvchi
+  // talabi). MUHIM: lekin "Ishni tugatdim" bosilgach GPS TO'XTAMAYDI — faqat
+  // check-in mavjudligiga qaraladi, check-out'ga emas ("GPS har doim olinsin,
+  // faqat check-in'dan keyin" — aniqlashtirilgan talab). Sessiya davomida bir
+  // marta boshlangach, faqat logout/foydalanuvchi almashishi to'xtatadi.
+  const isWorking = !!todayAttendance?.checkIn;
 
   // GPS kuzatuv — session-scoped hook (App darajasida, sahifa emas — shu
   // sabab navigatsiya GPS'ni to'xtatmaydi, lekin isWorking o'zgarishi
@@ -4696,7 +4698,7 @@ export default function App() {
             <p className="text-lg font-bold">Xush kelibsiz, {liveUser.name.split(' ')[0]}!</p>
             <p className="text-sm text-muted-foreground mt-1">Ishni boshlash uchun "Ishga keldim" tugmasini bosing. GPS kuzatuv va ilovaning boshqa bo'limlari shundan keyin ochiladi.</p>
           </div>
-          <button onClick={handleCheckIn} disabled={attendancePending}
+          <button onClick={() => { if (confirm("Ishga kelganingizni tasdiqlaysizmi?")) handleCheckIn(); }} disabled={attendancePending}
             className="w-full btn btn-primary text-base py-4 rounded-2xl flex items-center justify-center gap-2 disabled:opacity-60">
             {attendancePending ? <Loader2 className="w-5 h-5 animate-spin"/> : <MapPin className="w-5 h-5"/>}
             Ishga keldim

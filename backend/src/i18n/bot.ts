@@ -38,6 +38,11 @@ interface BotDict {
   locationShareBtn: string;
   locationLiveHint: string;
   locationSaved: string;
+  checkInConfirmPrompt: string;
+  checkOutConfirmPrompt: string;
+  confirmYes: string;
+  confirmNo: string;
+  actionCancelled: string;
 
   startWelcomeBack: (p: { name: string }) => string;
   startWelcomeNew: string;
@@ -154,6 +159,11 @@ const uz: BotDict = {
   locationShareBtn: '📍 Joylashuvni ulashish',
   locationLiveHint: "Doimiy joylashuv kuzatuvi uchun Telegram'ning \"Jonli joylashuv\" (Live Location) funksiyasidan foydalaning: 📎 (skrepka) → Location → Share Live Location.",
   locationSaved: '📍 Joylashuvingiz qabul qilindi.',
+  checkInConfirmPrompt: 'Ishga kelganingizni tasdiqlaysizmi?',
+  checkOutConfirmPrompt: 'Ishni tugatganingizni tasdiqlaysizmi?',
+  confirmYes: '✅ Ha',
+  confirmNo: "❌ Yo'q",
+  actionCancelled: 'Bekor qilindi.',
 
   startWelcomeBack: (p: { name: string }) => `✅ Xush kelibsiz, ${p.name}!\n\nSiz tizimga ulanganmiz. Quyidagi menyudan foydalaning:`,
   startWelcomeNew: '👋 Assalomu alaykum! *QurilishERP* botiga xush kelibsiz.\n\nTizimga kirish uchun telefon raqamingizni yuboring:',
@@ -278,6 +288,11 @@ const ru: BotDict = {
   locationShareBtn: '📍 Поделиться геолокацией',
   locationLiveHint: 'Для постоянного отслеживания используйте функцию Telegram "Трансляция геопозиции": 📎 (скрепка) → Геопозиция → Транслировать геопозицию.',
   locationSaved: '📍 Ваша геопозиция получена.',
+  checkInConfirmPrompt: 'Подтверждаете, что пришли на работу?',
+  checkOutConfirmPrompt: 'Подтверждаете завершение работы?',
+  confirmYes: '✅ Да',
+  confirmNo: '❌ Нет',
+  actionCancelled: 'Отменено.',
 
   startWelcomeBack: (p) => `✅ Добро пожаловать, ${p.name}!\n\nВы подключены к системе. Используйте меню ниже:`,
   startWelcomeNew: '👋 Здравствуйте! Добро пожаловать в бот *QurilishERP*.\n\nЧтобы войти в систему, отправьте свой номер телефона:',

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">QurilishERP</string>
+    <string name="title_activity_main">QurilishERP</string>
+    <string name="package_name">uz.erp_firma.qurilisherp</string>
+    <string name="custom_url_scheme">uz.erp_firma.qurilisherp</string>
+</resources>

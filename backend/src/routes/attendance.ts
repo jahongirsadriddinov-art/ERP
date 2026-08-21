@@ -3,6 +3,7 @@ import Attendance from '../models/Attendance';
 import User from '../models/User';
 import { scoped, stamped } from '../middleware/scope';
 import { getTenant } from '../middleware/tenantContext';
+import { todayInTashkent, tashkentHour } from '../utils/tz';
 
 const router = Router();
 
@@ -25,7 +26,7 @@ router.get('/list', async (req, res) => {
     const users = await User.find({ ...scoped(), role: { $in: workerRoles } })
       .select('firstName lastName role phone').lean();
 
-    const today = new Date().toISOString().split('T')[0];
+    const today = todayInTashkent();
     const userIds = users.map(u => String(u._id));
     const records = await Attendance.find({ ...scoped(), date: today, userId: { $in: userIds } }).lean();
     const byUser = new Map(records.map(r => [r.userId, r]));
@@ -85,10 +86,9 @@ router.post('/checkin', async (req, res) => {
     const userId = tenant?.userId;
     if (!userId) return res.status(401).json({ error: 'Autentifikatsiya talab etiladi' });
 
-    const today = new Date().toISOString().split('T')[0];
+    const today = todayInTashkent();
     const now = new Date();
-    const hour = now.getHours();
-    const status = hour >= 9 ? 'late' : 'present'; // 9:00 dan keyin kech keldi
+    const status = tashkentHour(now) >= 9 ? 'late' : 'present'; // 9:00 dan keyin kech keldi
 
     let record = await Attendance.findOne({ userId, date: today });
     if (record?.checkIn) return res.status(400).json({ error: 'Bugun allaqachon kirishni qayd etgansiz' });
@@ -115,7 +115,7 @@ router.post('/checkout', async (req, res) => {
     const userId = tenant?.userId;
     if (!userId) return res.status(401).json({ error: 'Autentifikatsiya talab etiladi' });
 
-    const today = new Date().toISOString().split('T')[0];
+    const today = todayInTashkent();
     const record = await Attendance.findOne({ userId, date: today });
     if (!record) return res.status(400).json({ error: 'Avval kirish qayd etilmagan' });
     if (record.checkOut) return res.status(400).json({ error: 'Chiqish allaqachon qayd etilgan' });
@@ -141,7 +141,7 @@ router.get('/today', async (req, res) => {
   try {
     const tenant = getTenant();
     if (!tenant?.userId) return res.status(401).json({ error: 'Autentifikatsiya talab etiladi' });
-    const today = new Date().toISOString().split('T')[0];
+    const today = todayInTashkent();
     const record = await Attendance.findOne({ userId: tenant.userId, date: today });
     res.json(record ? { ...record.toObject(), id: record._id } : null);
   } catch { res.status(500).json({ error: 'Server xatoligi' }); }

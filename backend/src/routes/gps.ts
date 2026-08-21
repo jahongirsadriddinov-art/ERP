@@ -22,11 +22,11 @@ router.post('/', async (req, res) => {
     const { lat, lng, accuracy, projectId } = req.body;
     if (lat == null || lng == null) return res.status(400).json({ error: 'lat va lng talab etiladi' });
 
-    const loc = new GpsLocation(stamped({ userId: tenant.userId, lat, lng, accuracy, projectId }));
+    const loc = new GpsLocation(stamped({ userId: tenant.userId, lat, lng, accuracy, projectId, source: 'site' }));
     await loc.save();
 
     // Barcha ulangan foydalanuvchilarga real-time emit (adminlar kuzatish uchun)
-    const payload = { userId: tenant.userId, companyId: tenant.companyId, lat, lng, accuracy, timestamp: loc.timestamp, projectId };
+    const payload = { userId: tenant.userId, companyId: tenant.companyId, lat, lng, accuracy, timestamp: loc.timestamp, projectId, source: 'site' as const };
     broadcast('gps:update', payload);
 
     res.json({ ok: true, id: loc._id });

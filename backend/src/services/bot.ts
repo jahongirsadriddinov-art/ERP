@@ -14,6 +14,7 @@ import { emitToUser, emitToGroup, broadcast } from './socket';
 import { tb, langLabel, BotLang } from '../i18n/bot';
 import { getBackendUrl } from '../utils/backendUrl';
 import { uploadFileToCloud } from '../config/cloudinary';
+import { todayInTashkent, tashkentHour } from '../utils/tz';
 
 dotenv.config();
 
@@ -94,6 +95,13 @@ interface BotChatSession { targetType: 'user' | 'group'; targetId: string; targe
 const chatSessions = new Map<number, BotChatSession>();
 const chatExitKeyboard = (lang?: BotLang) => ({ keyboard: [[{ text: tb(lang, 'exitChat') }]], resize_keyboard: true });
 
+// "Ishga keldim" tasdiqlangandan keyin, HAQIQIY check-in yozuvi yaratilishidan
+// OLDIN — foydalanuvchi Telegram'ning jonli joylashuvini (Live Location)
+// ulashishini kutayotgan holat. Faqat shu chatId'dan live_period bilan
+// joylashuv kelgach check-in yakunlanadi (aniq foydalanuvchi talabi: "ishga
+// keldim bosganda real vaqt joylashuvini yuborish majburiy bo'lsin").
+const pendingCheckinLocation = new Map<number, { userId: string; lang?: BotLang }>();
+
 // Telegramdan kelgan faylni (photo/video/voice/document) yuklab, saytdagi
 // Message.mediaUrl bilan bir xil ko'rinishdagi to'liq URL qaytaradi.
 // MUHIM: avval bu funksiya HAR DOIM lokal diskka ('/uploads') yozib, hech
@@ -173,7 +181,7 @@ function fmt(n: number, lang?: BotLang) {
 // qiladi (saytда GPS check-in'ga bog'liq). clock-in/out tugmalari FAQAT
 // yo'qlama (davomat) yozuvini boshqaradi, GPS'ni emas.
 function todayDateStr(): string {
-  return new Date().toISOString().split('T')[0];
+  return todayInTashkent();
 }
 async function getAttendanceStatus(userId: string): Promise<{ status: 'NOT_STARTED' | 'WORKING' | 'FINISHED'; record: any }> {
   const record = await Attendance.findOne({ userId, date: todayDateStr() }).lean();
@@ -192,9 +200,11 @@ async function doCheckIn(user: any, lang?: BotLang): Promise<string> {
   const now = new Date();
   if (!record) record = new Attendance({ userId: String(user._id), companyId: user.companyId, date: today });
   record.checkIn = now.toISOString();
-  record.status = now.getHours() >= 9 ? 'late' : 'present';
+  record.status = tashkentHour(now) >= 9 ? 'late' : 'present';
   await record.save();
-  const time = now.toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' });
+  // MUHIM: bot server (Render) UTC'da ishlaydi — timeZone aniq ko'rsatilmasa
+  // foydalanuvchiga UTC vaqti ko'rsatiladi, Toshkent vaqti emas.
+  const time = now.toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Tashkent' });
   return tb(lang, 'checkInConfirmed', { time });
 }
 async function doCheckOut(user: any, lang?: BotLang): Promise<string> {
@@ -207,7 +217,7 @@ async function doCheckOut(user: any, lang?: BotLang): Promise<string> {
   const ms = now.getTime() - new Date(record.checkIn).getTime();
   record.workHours = Math.round((ms / 3600000) * 10) / 10;
   await record.save();
-  const time = now.toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' });
+  const time = now.toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Tashkent' });
   return tb(lang, 'checkOutConfirmed', { time, hours: String(record.workHours) });
 }
 
@@ -217,11 +227,11 @@ async function doCheckOut(user: any, lang?: BotLang): Promise<string> {
 // ISHLAMAYDI (Express middleware/tenant-context yo'q), shu sabab companyId'ni
 // stamped() o'rniga to'g'ridan-to'g'ri userdan olamiz (relayBotMessageToSite'da
 // qilingani kabi).
-async function saveLocationFromTelegram(chatId: number, lat: number, lng: number, accuracy?: number) {
+async function saveLocationFromTelegram(chatId: number, lat: number, lng: number, accuracy?: number, source: 'bot_live' | 'bot_once' = 'bot_once') {
   const user = await User.findOne({ telegramChatId: chatId.toString() }).select('companyId').lean();
   if (!user) return;
-  const loc = await GpsLocation.create({ userId: String(user._id), companyId: user.companyId, lat, lng, accuracy, timestamp: new Date() });
-  broadcast('gps:update', { userId: String(user._id), companyId: user.companyId, lat, lng, accuracy, timestamp: loc.timestamp });
+  const loc = await GpsLocation.create({ userId: String(user._id), companyId: user.companyId, lat, lng, accuracy, timestamp: new Date(), source });
+  broadcast('gps:update', { userId: String(user._id), companyId: user.companyId, lat, lng, accuracy, timestamp: loc.timestamp, source });
 }
 
 const CHECKIN_ONLY_KEYBOARD = (lang?: BotLang) => ({
@@ -344,7 +354,7 @@ bot.on('contact', async (msg: any) => {
 bot.on('edited_message', async (msg: any) => {
   if (!msg.location) return;
   const chatId = msg.chat.id;
-  saveLocationFromTelegram(chatId, msg.location.latitude, msg.location.longitude, msg.location.horizontal_accuracy).catch(() => {});
+  saveLocationFromTelegram(chatId, msg.location.latitude, msg.location.longitude, msg.location.horizontal_accuracy, 'bot_live').catch(() => {});
 });
 
 // ─── Text message handler — main menu ─────────────────────────────────────────
@@ -403,11 +413,31 @@ bot.on('message', async (msg: any) => {
   // (bir martalik ulashish uchun 'message', jonli yangilanishlar uchun pastdagi
   // 'edited_message' handleri).
   if (msg.location && !msg.text) {
-    saveLocationFromTelegram(chatId, msg.location.latitude, msg.location.longitude, msg.location.horizontal_accuracy).catch(() => {});
+    const isLive = !!msg.location.live_period;
+    saveLocationFromTelegram(chatId, msg.location.latitude, msg.location.longitude, msg.location.horizontal_accuracy, isLive ? 'bot_live' : 'bot_once').catch(() => {});
+
+    // "Ishga keldim" tasdiqlangandan keyin jonli joylashuv kutilayotgan bo'lsa —
+    // shu yerda yakunlaymiz (faqat live_period bilan kelgan joylashuv qabul
+    // qilinadi, bir martalik pin yetarli emas — aniq talab qilingan).
+    const pending = pendingCheckinLocation.get(chatId);
+    if (pending) {
+      if (isLive) {
+        pendingCheckinLocation.delete(chatId);
+        const u = await User.findById(pending.userId).catch(() => null);
+        if (u) {
+          const resultText = await doCheckIn(u, pending.lang);
+          await bot.sendMessage(chatId, resultText, { reply_markup: await keyboardForUser(u, pending.lang) });
+        }
+      } else {
+        await bot.sendMessage(chatId, tb(pending.lang, 'checkInStillNeedsLive'));
+      }
+      return;
+    }
+
     // Faqat BIR martalik (live_period yo'q) ulashishga qisqa tasdiq — jonli
     // kuzatuvning har bir yangilanishida xabar bilan bezovta qilmaslik uchun
     // 'edited_message' branida tasdiq yuborilmaydi.
-    if (!msg.location.live_period) {
+    if (!isLive) {
       const u = await User.findOne({ telegramChatId: chatId.toString() }).select('language').catch(() => null);
       bot.sendMessage(chatId, tb(u?.language as BotLang | undefined, 'locationSaved'));
     }
@@ -816,9 +846,19 @@ bot.on('callback_query', async (query: any) => {
     if (!user || !isWorker(user.role)) { await bot.answerCallbackQuery(query.id); return; }
     try {
       await bot.answerCallbackQuery(query.id);
-      const resultText = data === 'confirm_checkin' ? await doCheckIn(user, lang) : await doCheckOut(user, lang);
       if (messageId) await bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: messageId }).catch(() => {});
-      await bot.sendMessage(chatId, resultText, { reply_markup: await keyboardForUser(user, lang) });
+      if (data === 'confirm_checkout') {
+        const resultText = await doCheckOut(user, lang);
+        await bot.sendMessage(chatId, resultText, { reply_markup: await keyboardForUser(user, lang) });
+        return;
+      }
+      // confirm_checkin — MAJBURIY: check-in yozuvi FAQAT jonli joylashuv
+      // (Live Location) kelgandan keyin yaratiladi (pastdagi 'message'
+      // handlerida). Telegram bot API cheklovi: bot buni tugma orqali
+      // to'g'ridan-to'g'ri "so'ray" olmaydi (faqat bir martalik joylashuv
+      // so'rovi mumkin) — shu sabab aniq matnli yo'riqnoma beramiz.
+      pendingCheckinLocation.set(chatId, { userId: String(user._id), lang });
+      await bot.sendMessage(chatId, tb(lang, 'checkInNeedsLiveLocation'));
     } catch (err) {
       console.error('[bot attendance confirm]', err);
       await bot.sendMessage(chatId, tb(lang, 'genericError'));
@@ -828,6 +868,7 @@ bot.on('callback_query', async (query: any) => {
   if (data === 'cancel_checkin' || data === 'cancel_checkout') {
     await bot.answerCallbackQuery(query.id);
     if (messageId) await bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: messageId }).catch(() => {});
+    pendingCheckinLocation.delete(chatId);
     if (user) await bot.sendMessage(chatId, tb(lang, 'actionCancelled'), { reply_markup: await keyboardForUser(user, lang) });
     return;
   }

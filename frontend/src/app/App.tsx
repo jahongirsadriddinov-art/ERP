@@ -442,12 +442,12 @@ function AddUserModal({ currentUser, users, projects, onClose, onAdd }:
           </div>
           <div>
             <label className="text-sm md:text-xs font-medium block mb-1">{t('addUser.phoneLabel')}</label>
-            <input className="w-full text-sm md:text-xs border border-border rounded px-3 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary font-mono"
+            <input inputMode="tel" className="w-full text-sm md:text-xs border border-border rounded px-3 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary font-mono"
               value={form.phone} onChange={e => {
                 setErr("");
                 const val = e.target.value;
-                if (val.startsWith("+998 ")) setForm({...form, phone: val});
-                else if (val === "+998") setForm({...form, phone: "+998 "});
+                if (val.startsWith("+998 ")) setForm({...form, phone: "+998 " + val.slice(5).replace(/\D/g, "").slice(0, 9)});
+                else if (val === "+998" || val === "") setForm({...form, phone: "+998 "});
               }} required/>
             <p className="text-sm md:text-xs text-muted-foreground mt-1">{t('addUser.smsHint')}</p>
           </div>
@@ -1166,8 +1166,8 @@ function EditUserModal({ user, currentUser, onClose, onUpdate }: { user: AppUser
           </div>
           <div>
             <label className="text-sm md:text-xs font-medium block mb-1">{t('editUser.phoneLabel')}</label>
-            <input className="w-full text-sm md:text-xs border border-border rounded px-2.5 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary font-mono disabled:opacity-50"
-              placeholder="+998901234567" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} required
+            <input inputMode="tel" className="w-full text-sm md:text-xs border border-border rounded px-2.5 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary font-mono disabled:opacity-50"
+              placeholder="+998901234567" value={form.phone} onChange={e => setForm({...form, phone: e.target.value.replace(/[^\d+]/g, "")})} required
               disabled={!(currentUser.role === 'direktor' || currentUser.role === 'orinbosar')} />
           </div>
           <div>
@@ -3548,8 +3548,8 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
                 <label className="text-[10px] text-muted-foreground block mb-1.5 ml-1 uppercase tracking-wider font-bold">{t('profile.phoneLabel')}</label>
                 <div className="relative">
                   <Phone className="w-4 h-4 text-muted-foreground absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none"/>
-                  <input className="w-full text-sm border border-border/50 rounded-2xl pl-11 pr-4 py-3 bg-white/50 dark:bg-black/20 focus:bg-white dark:focus:bg-black/40 focus:outline-none focus:ring-2 focus:ring-primary/50 liquid-transition shadow-inner font-mono"
-                    value={form.phone} onChange={e => setForm({...form, phone: e.target.value})}/>
+                  <input inputMode="tel" className="w-full text-sm border border-border/50 rounded-2xl pl-11 pr-4 py-3 bg-white/50 dark:bg-black/20 focus:bg-white dark:focus:bg-black/40 focus:outline-none focus:ring-2 focus:ring-primary/50 liquid-transition shadow-inner font-mono"
+                    value={form.phone} onChange={e => setForm({...form, phone: e.target.value.replace(/[^\d+]/g, "")})}/>
                 </div>
               </div>
               {form.phone !== currentUser.phone && (
@@ -3911,12 +3911,12 @@ function LoginScreen({ onLogin, onRegister, onBack }: { onLogin: (u: any, compan
               <label htmlFor="login-phone" className="text-sm md:text-xs font-medium block mb-1.5 ml-1 text-muted-foreground">{t('login.phoneLabel')}</label>
               <div className="relative">
                 <Phone className="w-4 h-4 text-muted-foreground absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none"/>
-                <input id="login-phone" type="text" className="w-full text-sm border border-border/50 rounded-2xl pl-11 pr-4 py-3 bg-white/50 dark:bg-black/20 focus:bg-white dark:focus:bg-black/40 focus:outline-none focus:ring-2 focus:ring-primary/50 font-mono liquid-transition shadow-inner"
+                <input id="login-phone" type="text" inputMode="tel" className="w-full text-sm border border-border/50 rounded-2xl pl-11 pr-4 py-3 bg-white/50 dark:bg-black/20 focus:bg-white dark:focus:bg-black/40 focus:outline-none focus:ring-2 focus:ring-primary/50 font-mono liquid-transition shadow-inner"
                   value={phone} onChange={e => {
                     setError("");
                     const val = e.target.value;
-                    if (val.startsWith("+998 ")) setPhone(val);
-                    else if (val === "+998") setPhone("+998 ");
+                    if (val.startsWith("+998 ")) setPhone("+998 " + val.slice(5).replace(/\D/g, "").slice(0, 9));
+                    else if (val === "+998" || val === "") setPhone("+998 ");
                   }} autoFocus/>
               </div>
             </div>
@@ -4037,19 +4037,27 @@ export default function App() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser?.language]);
-  // v1.3: kirish-oldi oqim — reklama/landing sahifa (default, faqat veb'da),
-  // undan "Kirish" yoki "Bepul boshlash" orqali login/register'ga o'tiladi.
-  // Android APK/Windows exe'da (o'rnatilgan ilova) foydalanuvchi allaqachon
-  // ilovani tanlab o'rnatgan — har safar reklama sahifasini ko'rsatish shart
-  // emas, to'g'ridan-to'g'ri login'ga o'tadi. Ro'yxatdan o'tish niyati aniq
-  // bo'lsa (link/localStorage) landing'ni baribir chetlab o'tamiz.
+  // v1.3: kirish-oldi oqim — reklama/landing sahifa FAQAT birinchi marta
+  // (ushbu brauzerda hech qachon tashrif buyurmagan bo'lsa) ko'rsatiladi;
+  // undan "Kirish"/"Bepul boshlash" orqali login/register'ga o'tiladi.
+  // Ikkinchi va keyingi tashriflarda ("erp_visited" localStorage'da bor)
+  // to'g'ridan-to'g'ri login ochiladi — qaytgan foydalanuvchiga har safar
+  // reklama ko'rsatish shart emas. Android APK/Windows exe'da (o'rnatilgan
+  // ilova) ham xuddi shunday — to'g'ridan-to'g'ri login'ga o'tadi.
+  // Ro'yxatdan o'tish niyati aniq bo'lsa (link/localStorage) landing'ni
+  // baribir chetlab o'tamiz.
   const [authView, setAuthView] = useState<"landing"|"login"|"register">(()=>{
     if (typeof window !== "undefined") {
       const sp = new URLSearchParams(window.location.search);
       if (sp.get("rid") || sp.has("register")) return "register";
       if (localStorage.getItem("erp_reg")) return "register";
     }
-    return isNative() ? "login" : "landing";
+    if (isNative()) return "login";
+    if (typeof window !== "undefined") {
+      if (localStorage.getItem("erp_visited")) return "login";
+      localStorage.setItem("erp_visited", "1");
+    }
+    return "landing";
   });
   const [projects, setProjects] = useState<Project[]>([]);
   const [transfers, setTransfers] = useState<Transfer[]>([]);

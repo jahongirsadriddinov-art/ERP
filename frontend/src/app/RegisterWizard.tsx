@@ -438,7 +438,7 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
               </div>
               <RegField label={t('register.phoneFieldLabel')}>
                 <input inputMode="tel" className={inputCls + " font-mono"} value={phone}
-                  onChange={e => { setError(""); const v = e.target.value; if (v.startsWith("+998 ")) setPhone(v); else if (v === "+998") setPhone("+998 "); }}
+                  onChange={e => { setError(""); const v = e.target.value; if (v.startsWith("+998 ")) setPhone("+998 " + v.slice(5).replace(/\D/g, "").slice(0, 9)); else if (v === "+998" || v === "") setPhone("+998 "); }}
                   autoFocus />
               </RegField>
             </div>

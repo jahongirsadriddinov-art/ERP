@@ -29,8 +29,19 @@ router.get('/', async (req, res) => {
 });
 
 // Update user — dasturchi faqat companyId ni o'zgartira oladi (tenant bug fix uchun)
+// XAVFSIZLIK: avval bu yerda hech qanday egalik/rol tekshiruvi yo'q edi —
+// istalgan autentifikatsiyalangan xodim (masalan oddiy ishchi) o'zi bilan
+// bir firmadagi BOSHQA istalgan foydalanuvchining (hatto direktorning)
+// ismini/tilini o'zgartira olardi. Pastdagi /courses yo'lida bir xil
+// tekshiruv allaqachon bor edi — shu yerga ham qo'llanildi: faqat o'zini
+// yoki (direktor/orinbosar bo'lsa) boshqani tahrirlashi mumkin.
 router.put('/:id', async (req, res) => {
   try {
+    const tenant = getTenant();
+    if (!tenant?.isDeveloper && String(req.params.id) !== String(tenant?.userId) &&
+        tenant?.role !== 'direktor' && tenant?.role !== 'orinbosar') {
+      return res.status(403).json({ error: 'Ruxsat yo\'q' });
+    }
     const { firstName, lastName, companyId, language } = req.body;
     const user = await User.findOne(scoped({ _id: req.params.id }));
     if (!user) return res.status(404).json({ error: 'Foydalanuvchi topilmadi' });
@@ -110,9 +121,24 @@ router.get('/:id/profile', async (req, res) => {
   } catch { res.status(500).json({ error: 'Server xatoligi' }); }
 });
 
-// Delete user — dasturchi o'chira olmaydi (firma ichki boshqaruvi)
+// Delete user — dasturchi o'chira olmaydi (firma ichki boshqaruvi).
+// XAVFSIZLIK: bu yerda ILGARI rol tekshiruvi UMUMAN yo'q edi — frontend
+// "O'chirish" tugmasini faqat direktor/orinbosarga ko'rsatsa ham, bu
+// FAQAT interfeys cheklovi edi; istalgan autentifikatsiyalangan xodim
+// (masalan oddiy ishchi) to'g'ridan-to'g'ri so'rov yuborib, hatto
+// direktorning o'zini o'chirib yubora olardi. Endi faqat direktor/
+// orinbosar o'chira oladi (companies.ts'dagi deleteCompany kabi
+// pattern — o'zini o'chirmaslik tekshiruvi frontendda mavjud, bu yerda
+// ham qo'shildi, chunki backend hech qachon frontendga ishonmasligi kerak).
 router.delete('/:id', blockDeveloper, async (req, res) => {
   try {
+    const tenant = getTenant();
+    if (tenant?.role !== 'direktor' && tenant?.role !== 'orinbosar') {
+      return res.status(403).json({ error: 'Faqat direktor yoki o\'rinbosar xodimni o\'chira oladi' });
+    }
+    if (String(req.params.id) === String(tenant?.userId)) {
+      return res.status(400).json({ error: 'O\'z hisobingizni o\'chira olmaysiz' });
+    }
     const user = await User.findOneAndDelete(scoped({ _id: req.params.id }));
     if (!user) return res.status(404).json({ error: 'Foydalanuvchi topilmadi' });
     res.json({ message: 'O\'chirildi' });

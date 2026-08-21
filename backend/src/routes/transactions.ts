@@ -122,13 +122,25 @@ router.post('/', async (req, res) => {
 
     // direktor/orinbosardan BOSHQA har qanday rol chiqim yaratsa — admin
     // tasdiqlashi shart (allow-list emas, deny-list: yangi rol qo'shilsa ham
-    // ushbu qoida avtomatik ishlab turadi).
+    // ushbu qoida avtomatik ishlab turadi). Bunday holatda ANIQ kim
+    // tasdiqlashini xodimning O'ZI tanlashi SHART (aniq talab) — bo'sh
+    // "istalgan admin tasdiqlasin" endi qabul qilinmaydi.
     const creatorId = txData.createdById || getTenant()?.userId;
     if (txData.type !== 'transfer' && creatorId) {
       const creator = await User.findById(creatorId).catch(() => null);
       if (creator && !['direktor', 'orinbosar'].includes(creator.role)) {
         txData.requiresAdminApproval = true;
         txData.status = 'pending';
+
+        const approverId = data.approverId ? String(data.approverId) : undefined;
+        if (!approverId) {
+          return res.status(400).json({ success: false, errors: [{ field: 'approverId', message: 'Kim tasdiqlashini tanlang' }] });
+        }
+        const approver = await User.findOne({ _id: approverId, companyId: creator.companyId }).catch(() => null);
+        if (!approver || !['direktor', 'orinbosar'].includes(approver.role)) {
+          return res.status(400).json({ success: false, errors: [{ field: 'approverId', message: 'Noto\'g\'ri tasdiqlovchi tanlandi' }] });
+        }
+        txData.approverId = approverId;
       }
     }
 
@@ -166,8 +178,28 @@ router.post('/', async (req, res) => {
           }
         }
 
-        // Always notify admins about new pending transactions (informational only —
-        // faqat qabul qiluvchi tasdiqlashi/rad etishi kerak, shuning uchun tugmalarsiz).
+        // Chiqim uchun ANIQ tasdiqlovchi tanlangan bo'lsa — o'sha odamga
+        // to'g'ridan-to'g'ri, harakat tugmalari bilan xabar (bu yuqoridagi
+        // toUserId xabaridan FARQLI: u "pul oldingizmi" deb so'raydi, bu esa
+        // "chiqimni tasdiqlaysizmi" deb so'raydi — ikkalasi ham kelishi mumkin).
+        if (tx.requiresAdminApproval && tx.approverId) {
+          const approverUser = await User.findById(tx.approverId).catch(() => null);
+          if (approverUser && approverUser.telegramChatId) {
+            const aLang = approverUser.language as BotLang | undefined;
+            const requester = await User.findById(tx.createdById).catch(() => null);
+            const requesterName = requester ? `${requester.firstName} ${requester.lastName || ''}`.trim() : '—';
+            const msg = tb(aLang, 'approverPaymentNew', { amount: `${(tx.amount || 0).toLocaleString()} so'm`, reason: tx.description || '—', date: tx.date || '—', requester: requesterName });
+            await bot.sendMessage(approverUser.telegramChatId, msg, {
+              parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[
+                { text: tb(aLang, 'confirmBtn'), callback_data: `confirm_${tx._id}` },
+                { text: tb(aLang, 'rejectBtn'), callback_data: `reject_${tx._id}` },
+              ]] }
+            }).catch(console.error);
+          }
+        }
+
+        // Boshqa (tanlanmagan) adminlarga — shunchaki xabardorlik uchun,
+        // tugmasiz (ular baribir tasdiqlay olmaydi — yuqoridagi tekshiruvga qarang).
         const adminMsg = tx.type === 'transfer'
           ? `📦 *Yangi yukxat*\n${tx.materialName} — ${tx.quantity} ${tx.unit}\nYuboruvchi: ${tx.fromUserName || '—'}\nQabul qiluvchi: ${tx.toUserName || '—'}`
           : `💰 *Yangi to'lov so'rovi*\n${tx.description || '—'} — ${(tx.amount || 0).toLocaleString()} so'm`;
@@ -304,6 +336,13 @@ router.patch('/:id/approve', async (req, res) => {
     if (!actor || !['direktor', 'orinbosar'].includes(actor.role)) {
       return res.status(403).json({ error: 'Faqat direktor yoki orinbosar tasdiqlashi mumkin' });
     }
+    // Xodim chiqim yaratganda ANIQ tasdiqlovchi tanlagan bo'lsa — FAQAT
+    // o'sha odam tasdiqlay oladi, boshqa admin emas (aniq talab). Eski
+    // (approverId'siz) yozuvlar uchun eski xatti-harakat saqlanadi — har
+    // qanday admin tasdiqlay oladi.
+    if (tx.approverId && String(tx.approverId) !== String(actingUserId)) {
+      return res.status(403).json({ error: 'Bu chiqimni faqat tanlangan tasdiqlovchi tasdiqlay oladi' });
+    }
 
     const historyEntry = {
       userId: actingUserId,
@@ -391,6 +430,13 @@ router.patch('/:id/reject', async (req, res) => {
 
     if (!isAdmin && !isRecipient) {
       return res.status(403).json({ error: 'Faqat qabul qiluvchi yoki admin rad etishi mumkin' });
+    }
+    // Agar chiqim uchun ANIQ tasdiqlovchi tanlangan bo'lsa — faqat o'sha admin
+    // rad eta oladi (boshqa admin emas). isRecipient yo'li (transfer qabul
+    // qiluvchisi) bunga bog'liq emas — approverId faqat admin-tasdiqlash
+    // oqimiga tegishli, shuning uchun isAdmin bo'lgan holatdagina tekshiramiz.
+    if (isAdmin && tx.approverId && String(tx.approverId) !== String(actingUserId)) {
+      return res.status(403).json({ error: 'Bu chiqimni faqat tanlangan tasdiqlovchi rad eta oladi' });
     }
 
     if (tx.requiresAdminApproval && actor) {

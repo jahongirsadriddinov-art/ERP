@@ -245,10 +245,23 @@ router.get('/me', async (req, res) => {
 });
 
 // ─── Dasturchi (super-admin) sozlamalari ─────────────────────────────────────
-// Xavfsizlik uchun .env dan o'qiladi; agar berilmasa quyidagi standart ishlatiladi.
-// TAVSIYA: backend/.env ga DEVELOPER_PHONE va kuchli DEVELOPER_PASSWORD qo'shing.
+// XAVFSIZLIK: agar DEVELOPER_PHONE/DEVELOPER_PASSWORD .env'da o'rnatilmagan
+// bo'lsa, quyidagi ZAXIRA qiymatlar ishlatiladi — bular ENDI SHU KOD ORQALI
+// OMMAVIY MA'LUM (git tarixida, va shu suhbatda ham ko'rsatilgan), demak
+// muhit o'zgaruvchilari o'rnatilmagan holatda ISTALGAN kishi shu telefon/
+// parol bilan super-admin (BARCHA firmalarni ko'radigan) hisobga kira oladi.
+// Server ishga tushmay qolishining oldini olish uchun bu yerda majburlab
+// to'xtatilmaydi (agar aslida to'g'ri o'rnatilgan bo'lsa, ishlab turgan
+// production'ni bekorga yiqitib qo'yish xavfi bor edi) — lekin Render
+// loglarida DARHOL ko'rinadigan ogohlantirish chiqaradi.
 const DEVELOPER_PHONE = normalizePhone(process.env.DEVELOPER_PHONE || '+998900960890');
 const DEVELOPER_PASSWORD = process.env.DEVELOPER_PASSWORD || 'Dasturchi_2026';
+if (!process.env.DEVELOPER_PHONE || !process.env.DEVELOPER_PASSWORD) {
+  console.error('🚨🚨🚨 XAVFSIZLIK OGOHLANTIRISHI: DEVELOPER_PHONE va/yoki DEVELOPER_PASSWORD .env\'da ' +
+    'o\'rnatilmagan! Standart (kodda yozilgan, OMMAVIY MA\'LUM) qiymatlar ishlatilmoqda — bu holatda ' +
+    'ISTALGAN kishi super-admin hisobga kira oladi. Render > Environment bo\'limida ikkalasini ham ' +
+    'DARHOL kuchli, o\'ziga xos qiymatlarga o\'rnating.');
+}
 
 // ─── DEPRECATED — Telegram-kod orqali login (SMS OTP bilan almashtirildi) ────
 // Frontend endi /send-otp va /verify-otp ni chaqiradi. Bu ikkisi ATAYLAB

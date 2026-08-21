@@ -82,6 +82,7 @@ interface BotDict {
   transferIncoming: (p: { amount: string; unit: string; name: string }) => string;
   transferNewFull: (p: { name: string; qty: string; unit: string; sender: string; date: string }) => string;
   paymentNew: (p: { amount: string; reason: string; date: string }) => string;
+  approverPaymentNew: (p: { amount: string; reason: string; date: string; requester: string }) => string;
   confirmBtn: string;
   acceptBtn: string;
   acceptedByMeBtn: string;
@@ -205,6 +206,7 @@ const uz: BotDict = {
   transferIncoming: (p: { amount: string; unit: string; name: string }) => `📦 Sizga *${p.amount} ${p.unit} ${p.name}* yuborildi. Qabul qildingizmi?`,
   transferNewFull: (p: { name: string; qty: string; unit: string; sender: string; date: string }) => `📦 *Yangi yukxat keldi!*\n\n📌 Material: *${p.name}*\nMiqdor: *${p.qty} ${p.unit}*\nYuboruvchi: ${p.sender}\nSana: ${p.date}\n\nQabul qilasizmi?`,
   paymentNew: (p: { amount: string; reason: string; date: string }) => `💰 *Sizga to'lov yuborildi*\n\nSumma: *${p.amount}*\nSabab: ${p.reason}\nSana: ${p.date}\n\nQabul qildingizmi?`,
+  approverPaymentNew: (p: { amount: string; reason: string; date: string; requester: string }) => `💰 *Yangi chiqim tasdiqlashingizni kutmoqda*\n\nKim: ${p.requester}\nSumma: *${p.amount}*\nSabab: ${p.reason}\nSana: ${p.date}\n\nSiz tanlangan tasdiqlovchisiz — faqat siz tasdiqlay/rad eta olasiz.`,
   confirmBtn: '✅ Tasdiqlash',
   acceptBtn: '✅ Qabul qilish',
   acceptedByMeBtn: '✅ Qabul qilganman',
@@ -336,6 +338,7 @@ const ru: BotDict = {
   transferIncoming: (p) => `📦 Вам отправлено *${p.amount} ${p.unit} ${p.name}*. Вы приняли?`,
   transferNewFull: (p) => `📦 *Новая накладная!*\n\n📌 Материал: *${p.name}*\nКоличество: *${p.qty} ${p.unit}*\nОтправитель: ${p.sender}\nДата: ${p.date}\n\nПринимаете?`,
   paymentNew: (p) => `💰 *Вам отправлен платёж*\n\nСумма: *${p.amount}*\nПричина: ${p.reason}\nДата: ${p.date}\n\nВы приняли?`,
+  approverPaymentNew: (p) => `💰 *Новый расход ожидает вашего подтверждения*\n\nОт кого: ${p.requester}\nСумма: *${p.amount}*\nПричина: ${p.reason}\nДата: ${p.date}\n\nВы выбранный утверждающий — только вы можете подтвердить/отклонить.`,
   confirmBtn: '✅ Подтвердить',
   acceptBtn: '✅ Принять',
   acceptedByMeBtn: '✅ Я принял',

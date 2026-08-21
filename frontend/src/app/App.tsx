@@ -17,6 +17,7 @@ import { installAndroidBackHandler } from "./platform";
 import LanguageSwitcher from "./i18n/LanguageSwitcher";
 import { Skeleton, SkeletonList, SkeletonPage, SkeletonMessage, SkeletonTable, SkeletonProfile } from "./Skeleton";
 import { useGeoTracker } from "./useGeoTracker";
+import PullToRefresh from "./PullToRefresh";
 import { isPinSet, useAppLock, markActiveNow, clearPin, PinSetupScreen, PinLockScreen, ChangePinModal, isBiometricEnabled, setBiometricEnabled, biometricAvailable, nativeBiometricSupported, registerWebAuthnBiometric, getLockTimeoutMin, setLockTimeoutMin, LOCK_TIMEOUT_OPTIONS } from "./AppLock";
 
 // recharts og'ir kutubxona — faqat "Hisobotlar" bo'limiga kirilganda yuklanadi
@@ -92,6 +93,9 @@ export interface Expense {
   status: EStatus; createdById: string; confirmedById?: string;
   requiresAdminApproval?: boolean;
   approvalHistory?: Array<{ userId: string; name: string; role: string; action: 'approved'|'rejected'; date: string; note?: string }>;
+  // Xodim chiqim yaratganda ANIQ kim tasdiqlashini tanlaydi (direktor/orinbosarlardan
+  // biri) — belgilansa, FAQAT o'sha odam tasdiqlay/rad eta oladi.
+  approverId?: string;
 }
 export interface Msg {
   id: string; fromUserId: string; toUserId: string; groupId?: string;
@@ -895,15 +899,22 @@ function SendTransferModal({ currentUser, projects, allUsers, onClose, onSend, i
 function AddExpenseModal({ currentUser, projects, allUsers, onClose, onAdd }:
   { currentUser: AppUser; projects: Project[]; allUsers: AppUser[]; onClose: () => void; onAdd: (e: Expense) => void }) {
   const { t } = useTranslation();
-  const [form, setForm] = useState({ type: "oylik" as ExpType, amount: "", projectId: projects[0]?.id || "", description: "", toUserId: "", date: new Date().toISOString().split("T")[0] });
+  const [form, setForm] = useState({ type: "oylik" as ExpType, amount: "", projectId: projects[0]?.id || "", description: "", toUserId: "", approverId: "", date: new Date().toISOString().split("T")[0] });
   const [err, setErr] = useState("");
   const [boshqaRows, setBoshqaRows] = useState<{ name: string; price: string }[]>([{ name: "", price: "" }]);
 
   const boshqaTotal = boshqaRows.reduce((s, r) => s + (Number(r.price) || 0), 0);
+  // Admin (direktor/orinbosar) o'zi chiqim yaratsa — tasdiqlash shart emas
+  // (backendda ham xuddi shu qoida: creator direktor/orinbosar bo'lsa
+  // requiresAdminApproval qo'yilmaydi). Boshqa har qanday rol — kim
+  // tasdiqlashini ANIQ tanlashi SHART.
+  const needsApprover = !isAdmin(currentUser.role);
+  const approverOptions = allUsers.filter(u => (u.role === 'direktor' || u.role === 'orinbosar') && u.id !== currentUser.id);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     setErr("");
+    if (needsApprover && !form.approverId) { setErr(t('addExpense.errApproverRequired')); return; }
 
     if (form.type === "boshqa") {
       const valid = boshqaRows.filter(r => r.name.trim() && r.price);
@@ -913,6 +924,7 @@ function AddExpenseModal({ currentUser, projects, allUsers, onClose, onAdd }:
         type: "boshqa",
         amount: boshqaTotal,
         toUserId: form.toUserId || undefined,
+        approverId: needsApprover ? form.approverId : undefined,
         projectId: form.projectId,
         description: valid.map(r => `${r.name}: ${Number(r.price).toLocaleString()} so'm`).join("; "),
         date: form.date,
@@ -930,6 +942,7 @@ function AddExpenseModal({ currentUser, projects, allUsers, onClose, onAdd }:
       type: form.type,
       amount: +form.amount,
       toUserId: form.toUserId || undefined,
+      approverId: needsApprover ? form.approverId : undefined,
       projectId: form.projectId,
       description: form.description,
       date: form.date,
@@ -1039,6 +1052,22 @@ function AddExpenseModal({ currentUser, projects, allUsers, onClose, onAdd }:
               {allUsers.filter(u => u.id !== currentUser.id).map(u => <option key={u.id} value={u.id}>{u.name} ({ROLE_LABELS[u.role]})</option>)}
             </select>
           </div>
+
+          {needsApprover && (
+            <div>
+              <label className="text-[10px] font-bold block mb-1.5 text-muted-foreground uppercase tracking-wider">
+                {t('addExpense.approverLabel')} <span className="text-accent normal-case">*</span>
+              </label>
+              <select className="w-full text-sm border border-border rounded-lg px-2.5 py-2.5 bg-input-background focus:outline-none"
+                value={form.approverId} onChange={e => { setErr(""); setForm({...form, approverId: e.target.value}); }} required>
+                <option value="">{t('addExpense.approverPlaceholder')}</option>
+                {approverOptions.map(u => <option key={u.id} value={u.id}>{u.name} ({ROLE_LABELS[u.role]})</option>)}
+              </select>
+              {approverOptions.length === 0 && (
+                <p className="text-[10px] text-amber-700 dark:text-amber-400 mt-1">{t('addExpense.noApprovers')}</p>
+              )}
+            </div>
+          )}
 
           <div className="flex gap-2 pt-1">
             <button type="button" onClick={onClose} className="flex-1 text-sm border border-border rounded-xl px-3 py-2.5 hover:bg-muted liquid-transition font-medium">{t('addExpense.cancel')}</button>
@@ -2098,7 +2127,11 @@ function FinancePage({ currentUser, users, projects, expenses, onAddExpense, onC
               const proj=projects.find(p=>p.id===e.projectId);
               const creator=users.find(u=>u.id===e.createdById);
               const canConfirm=e.toUserId===currentUser.id&&e.status==="pending"&&!e.requiresAdminApproval;
-              const canAdminApprove=isAdmin&&e.requiresAdminApproval&&e.status==="pending";
+              // approverId belgilangan bo'lsa — FAQAT o'sha admin tasdiqlay oladi
+              // (backend PATCH /:id/approve'dagi bir xil qoida). approverId yo'q
+              // (eski) yozuvlar uchun — eski xatti-harakat, istalgan admin tasdiqlaydi.
+              const canAdminApprove=isAdmin&&e.requiresAdminApproval&&e.status==="pending"&&(!e.approverId||e.approverId===currentUser.id);
+              const approver=e.approverId?users.find(u=>u.id===e.approverId):undefined;
               const borderColor = e.status==="confirmed" ? "#22c55e" : e.requiresAdminApproval ? "#e5633a" : "#f59e0b";
               return (
                 <button key={e.id} onClick={()=>setDetailExp(e)} className="w-full text-left surface rounded-2xl p-3 text-sm md:text-xs hover:bg-muted/20 liquid-transition" style={{ borderLeft: `4px solid ${borderColor}` }}>
@@ -2112,6 +2145,7 @@ function FinancePage({ currentUser, users, projects, expenses, onAddExpense, onC
                       <p className="text-sm md:text-xs text-muted-foreground mt-0.5">{proj?.name || "—"} • {e.date}</p>
                       {to&&<p className="text-sm md:text-xs text-muted-foreground">{t('finance.to')} <span className="font-medium">{to.name}</span></p>}
                       {creator&&<p className="text-sm md:text-xs text-muted-foreground">{t('finance.createdBy')} {creator.name}</p>}
+                      {approver&&e.status==="pending"&&<p className="text-sm md:text-xs text-muted-foreground">{t('approvalChain.approver')} <span className="font-medium">{approver.name}</span></p>}
                     </div>
                     <div className="text-right flex-shrink-0">
                       <p className="font-bold text-accent">{fmt(e.amount)}</p>
@@ -2146,12 +2180,14 @@ function ExpenseDetailModal({ expense, users, projects, onClose }: { expense: Ex
   const proj = projects.find(p => p.id === expense.projectId);
   const creator = users.find(u => u.id === expense.createdById);
   const confirmer = users.find(u => u.id === expense.confirmedById);
+  const approver = expense.approverId ? users.find(u => u.id === expense.approverId) : undefined;
   const rows: [string, string][] = [
     [t('reports.table.date'), expense.date],
     [t('reports.table.type'), EXP_LABELS[expense.type]],
     [t('finance.to'), to?.name || "—"],
     [t('reports.table.project'), proj?.name || "—"],
     [t('finance.createdBy'), creator?.name || "—"],
+    ...(approver && expense.status === 'pending' ? [[t('approvalChain.approver'), approver.name] as [string, string]] : []),
     ...(confirmer ? [[t('finance.confirmedBy'), confirmer.name] as [string, string]] : []),
   ];
   return (
@@ -4978,6 +5014,7 @@ export default function App() {
         description: e.description,
         projectId: e.projectId || undefined,
         toUserId: e.toUserId || undefined,
+        approverId: e.approverId || undefined,
         createdById: e.createdById,
         date: e.date,
         status: e.status
@@ -4987,7 +5024,7 @@ export default function App() {
       else {
         const errData = await res.json();
         console.error('Expense error:', errData);
-        toast.error(errData.error || 'Noma\'lum xato');
+        toast.error(errData.error || errData.errors?.[0]?.message || 'Noma\'lum xato');
       }
     } catch(err) { console.error(err); }
   };
@@ -5198,6 +5235,7 @@ export default function App() {
           chiqib, "hunuk"/"buzilgan" ko'rinishga sabab bo'lardi. Header'ning
           o'zi endi yuqorida (initialLoading gate'idan OLDIN) headerEl
           sifatida bir marta quriladi — shu yerda faqat qo'yiladi. */}
+      <PullToRefresh />
       {headerEl}
 
       {/* Offline banner */}

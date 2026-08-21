@@ -149,7 +149,16 @@ export async function registerWebAuthnBiometric(userId: string): Promise<boolean
         rp: { name: "QurilishERP" },
         user: { id: randomBytes(16), name: userId || "erp-user", displayName: "QurilishERP" },
         pubKeyCredParams: [{ type: "public-key", alg: -7 }, { type: "public-key", alg: -257 }],
-        authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required" },
+        // residentKey: "discouraged" — MUHIM: shu bo'lmasa Android'dagi Chrome
+        // buni "passkey" deb hisoblab, Face ID/barmoq izi o'rniga "Google
+        // Password Manager'ga passkey saqlansinmi?" degan qo'shimcha
+        // dialogni ko'rsatadi (chunki faqat discoverable/resident kalitlar
+        // "passkey" hisoblanadi va bulutga sinxronlash uchun taklif
+        // qilinadi). Bizga bulutga sinxronlanadigan passkey shart emas —
+        // shu qurilmaga bog'liq, mahalliy qulf sifatida ishlatiladi (yuqoridagi
+        // izohga qarang) — shuning uchun "discouraged" qilib to'g'ridan-to'g'ri
+        // Face ID/Touch ID/barmoq izi/Windows Hello so'rovini chiqaramiz.
+        authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required", residentKey: "discouraged" },
         timeout: 60000,
       },
     }) as PublicKeyCredential | null;

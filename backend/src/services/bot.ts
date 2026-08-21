@@ -637,8 +637,15 @@ bot.on('message', async (msg: any) => {
   if (admin) {
     if (text === tb(user.language, 'kb_pendingApprovals')) {
       try {
+        // ANIQ tasdiqlovchi tanlangan chiqimlar — faqat o'sha admin ro'yxatida
+        // ko'rinadi (boshqa adminlarga umuman ko'rsatilmaydi, chunki ular
+        // baribir tasdiqlay olmaydi — yuqoridagi callback tekshiruviga qarang).
+        // approverId yo'q (eski) yozuvlar va transferlar hammaga ko'rinadi.
         const companyFilter = user.companyId ? { companyId: user.companyId } : {};
-        const pending = await Transaction.find({ ...companyFilter, status: 'pending' }).sort({ createdAt: -1 }).limit(10);
+        const pending = await Transaction.find({
+          ...companyFilter, status: 'pending',
+          $or: [{ approverId: { $exists: false } }, { approverId: null }, { approverId: String(user._id) }],
+        }).sort({ createdAt: -1 }).limit(10);
         if (pending.length === 0) {
           bot.sendMessage(chatId, tb(user.language, 'admNoPending'), { reply_markup: await keyboardForUser(user, user.language) });
           return;
@@ -1033,8 +1040,14 @@ bot.on('callback_query', async (query: any) => {
         await bot.answerCallbackQuery(query.id, { text: tb(lang, 'alreadyProcessed') });
         return;
       }
-      // Qabul qiluvchi YOKI o'sha kompaniya adminlari tasdiqlashi/rad etishi mumkin
-      const isAdminOfCompany = user && isAdmin(user.role) && user.companyId && String(tx.companyId) === String(user.companyId);
+      // Qabul qiluvchi YOKI o'sha kompaniya adminlari tasdiqlashi/rad etishi mumkin —
+      // LEKIN agar chiqim uchun xodim ANIQ tasdiqlovchi tanlagan bo'lsa (tx.approverId),
+      // botda ham FAQAT o'sha admin tasdiqlay/rad eta oladi, boshqa admin emas (saytdagi
+      // PATCH /:id/approve va /:id/reject'dagi bir xil qoida — bu yer avval tekshirilmagan
+      // edi, ya'ni istalgan admin botdan tasdiqlab yubora olardi, tanlangan tasdiqlovchidan
+      // qat'i nazar). Eski (approverId'siz) yozuvlar uchun eski xatti-harakat saqlanadi.
+      const isAdminOfCompany = user && isAdmin(user.role) && user.companyId && String(tx.companyId) === String(user.companyId)
+        && (!tx.approverId || String(tx.approverId) === String(user._id));
       if (!user || (String(tx.toUserId) !== String(user._id) && !isAdminOfCompany)) {
         await bot.answerCallbackQuery(query.id, { text: tb(lang, 'notYoursOnlyRecipient') });
         return;

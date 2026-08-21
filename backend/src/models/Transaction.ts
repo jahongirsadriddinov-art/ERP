@@ -45,6 +45,12 @@ export interface ITransaction extends Document {
   // Expense approval chain
   approvalHistory?: Array<{ userId: string; name: string; role: string; action: 'approved' | 'rejected'; date: string; note?: string }>;
   requiresAdminApproval?: boolean; // chiqim admin tasdiqlashini talab qiladi
+  // Xodim chiqim yaratganda ANIQ kim tasdiqlashini tanlaydi (direktor/
+  // orinbosarlardan biri) — belgilansa, FAQAT o'sha odam tasdiqlay oladi,
+  // boshqa har qanday admin emas (aniq talab: "kim tastiqlashini
+  // belgilashi shart"). Bo'sh bo'lsa (eski yozuvlar) — har qanday admin
+  // tasdiqlay oladi, eski xatti-harakat saqlanadi.
+  approverId?: string;
 
   companyId?: string; // v1.2 multi-tenant (nullable)
 }
@@ -84,6 +90,7 @@ const TransactionSchema: Schema = new Schema({
   sourceTransferId: { type: String },
   approvalHistory: [{ userId: String, name: String, role: String, action: String, date: String, note: String }],
   requiresAdminApproval: { type: Boolean, default: false },
+  approverId: { type: String },
   companyId: { type: String, index: true } // v1.2 multi-tenant
 }, { timestamps: true });
 

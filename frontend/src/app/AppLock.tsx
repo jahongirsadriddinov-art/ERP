@@ -145,34 +145,36 @@ const PIN_LEN = 4;
 // ─── Birinchi login'dan keyin — PIN o'rnatish (majburiy, bir marta) ──────
 export function PinSetupScreen({ onDone }: { onDone: () => void }) {
   const [stage, setStage] = useState<"enter" | "confirm">("enter");
-  const [pin, setPin] = useState("");
+  // MUHIM: bu yerdagi lokal state'lar modul darajasidagi `setPin` (import
+  // qilingan, localStorage'ga yozadigan) funksiyasi bilan NOM TO'QNASHUVIGA
+  // uchramasin deb ataylab "firstPin"/"confirmPin" deb nomlangan — avval
+  // shu ikkisi ham "pin"/"setPin" edi va lokal useState setter chaqirilib,
+  // import qilingan haqiqiy saqlovchi funksiya HECH QACHON chaqirilmagan,
+  // shu sabab PIN hech qachon saqlanmay, ekran "qotib qolgandek" ko'rinardi.
+  const [firstPin, setFirstPin] = useState("");
   const [confirmPin, setConfirmPin] = useState("");
   const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
 
-  const current = stage === "enter" ? pin : confirmPin;
-  const setCurrent = stage === "enter" ? setPin : setConfirmPin;
+  const current = stage === "enter" ? firstPin : confirmPin;
+  const setCurrent = stage === "enter" ? setFirstPin : setConfirmPin;
 
   const onDigit = (d: string) => {
-    if (current.length >= PIN_LEN) return;
+    if (current.length >= PIN_LEN || saving) return;
     setError("");
     const next = current + d;
     setCurrent(next);
     if (next.length === PIN_LEN) {
       if (stage === "enter") {
         setTimeout(() => setStage("confirm"), 150);
+      } else if (next === firstPin) {
+        setSaving(true);
+        setPin(next).then(onDone);
       } else {
-        if (next === pin) {
-          setSetPinLocalStorage(next);
-        } else {
-          setError("PIN kodlar mos kelmadi, qaytadan urinib ko'ring");
-          setTimeout(() => { setPin(""); setConfirmPin(""); setStage("enter"); }, 700);
-        }
+        setError("PIN kodlar mos kelmadi, qaytadan urinib ko'ring");
+        setTimeout(() => { setFirstPin(""); setConfirmPin(""); setStage("enter"); }, 700);
       }
     }
-  };
-  const setSetPinLocalStorage = async (finalPin: string) => {
-    await setPin(finalPin);
-    onDone();
   };
 
   return (

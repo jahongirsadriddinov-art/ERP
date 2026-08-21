@@ -13,6 +13,7 @@ import messageRoutes from './routes/messages';
 import groupRoutes from './routes/groups';
 import materialRoutes from './routes/materials';
 import companyRoutes from './routes/companies';
+import companySelfRoutes from './routes/company';
 import subscriptionRoutes from './routes/subscriptions';
 import smetaRoutes from './routes/smeta';
 import aiRoutes from './routes/ai';
@@ -129,6 +130,7 @@ app.use('/api/messages',     optionalAuth, messageRoutes);      // dasturchi: su
 app.use('/api/groups',       optionalAuth, groupRoutes);        // dasturchi: support chat
 app.use('/api/materials',    optionalAuth, blockDeveloper, materialRoutes);
 app.use('/api/companies',    optionalAuth, companyRoutes);      // dasturchi (super-admin) only
+app.use('/api/company',      optionalAuth, companySelfRoutes);  // firmaning O'ZI — o'z nomi/logotipini ko'rish/o'zgartirish
 app.use('/api/admin/subscriptions', optionalAuth, subscriptionRoutes); // obunalar boshqaruvi
 app.use('/api/smeta',        optionalAuth, blockDeveloper, smetaRoutes);
 app.use('/api/ai',           optionalAuth, blockDeveloper, aiRoutes);

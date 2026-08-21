@@ -3377,9 +3377,30 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
   const handleLogoFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return;
     try {
-      const url = await resizeImageFile(file, 500, 0.9);
-      setCompanyLogo(url); localStorage.setItem("erp_companyLogo", url); onCompanyLogoChange(url);
-    } catch { toast.error("Logotipni yuklab bo'lmadi"); }
+      const dataUrl = await resizeImageFile(file, 500, 0.9);
+      // MUHIM: avval bu yerda tugardi — logotip localStorage'da base64
+      // sifatida saqlanardi (Company modelidagi izoh aytganidek "server URL,
+      // base64 EMAS" bo'lishi kerak edi), shu sabab FAQAT o'zgartirgan
+      // odamning o'z brauzerida ko'rinardi. Endi haqiqiy fayl sifatida
+      // yuklanadi (mavjud /api/messages/upload — Cloudinary'ga yuboradi,
+      // chat media bilan bir xil) va SHU URL firmaga saqlanadi.
+      const blob = await (await fetch(dataUrl)).blob();
+      const form = new FormData();
+      form.append('file', blob, `company-logo-${Date.now()}.jpg`);
+      const token = localStorage.getItem('token') || '';
+      const upRes = await fetch(`${API_BASE}/api/messages/upload`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form });
+      const upData = await upRes.json().catch(() => ({}));
+      if (!upRes.ok || !upData.url) throw new Error(upData.error || 'Yuklash muvaffaqiyatsiz');
+
+      const res = await fetch(`${API_BASE}/api/company/me`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ logoUrl: upData.url }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Server xatoligi');
+      setCompanyLogo(upData.url); onCompanyLogoChange(upData.url);
+      toast.success("Logotip yangilandi — firmadagi hammaga ko'rinadi");
+    } catch (err) { toast.error(err instanceof Error ? err.message : "Logotipni yuklab bo'lmadi"); }
     finally { e.target.value = ""; }
   };
   const handleBgFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -3395,11 +3416,30 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
     onUpdateUser({...currentUser, name: form.name, phone: form.phone});
     setIsEditing(false);
   };
-  const saveBrand = () => {
-    setCompanyName(brandInput);
-    localStorage.setItem("erp_companyName", brandInput);
-    onCompanyNameChange(brandInput);
-    setEditingBrand(false);
+  const [savingBrand, setSavingBrand] = useState(false);
+  const saveBrand = async () => {
+    const trimmed = brandInput.trim();
+    if (trimmed.length < 2) { toast.error("Firma nomi kamida 2 belgi bo'lishi kerak"); return; }
+    setSavingBrand(true);
+    try {
+      const token = localStorage.getItem('token') || '';
+      const res = await fetch(`${API_BASE}/api/company/me`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ name: trimmed }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Server xatoligi');
+      // MUHIM: avval FAQAT localStorage'ga yozilardi — o'zgartirgan odamning
+      // o'z brauzeridan boshqa hech kimga (hatto shu odamning boshqa
+      // qurilmasiga ham) ko'rinmasdi. Endi bazaga yozildi va boshqa ochiq
+      // sessiyalar socket orqali (company:update) darhol yangilanadi.
+      setCompanyName(trimmed);
+      onCompanyNameChange(trimmed);
+      setEditingBrand(false);
+      toast.success("Firma nomi yangilandi — hammaga ko'rinadi");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Saqlab bo\'lmadi');
+    } finally { setSavingBrand(false); }
   };
 
   const applyBgTemplate = (value: string) => {
@@ -3666,9 +3706,9 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
             {canEditCompany && editingBrand ? (
               <div className="flex items-center gap-2">
                 <input className="flex-1 text-white font-bold text-lg bg-transparent border-b-2 border-white/60 focus:border-white focus:outline-none pb-0.5"
-                  value={brandInput} onChange={e => setBrandInput(e.target.value)} autoFocus onKeyDown={e => e.key === 'Enter' && saveBrand()}/>
-                <button aria-label="Saqlash" onClick={saveBrand} className="w-7 h-7 bg-white/20 text-white rounded-full flex items-center justify-center border border-white/30 hover:bg-white/30 liquid-transition"><Check className="w-3.5 h-3.5"/></button>
-                <button aria-label="Bekor qilish" onClick={() => setEditingBrand(false)} className="w-7 h-7 bg-black/20 text-white rounded-full flex items-center justify-center hover:bg-black/30 liquid-transition"><X className="w-3.5 h-3.5"/></button>
+                  value={brandInput} onChange={e => setBrandInput(e.target.value)} autoFocus disabled={savingBrand} onKeyDown={e => e.key === 'Enter' && saveBrand()}/>
+                <button aria-label="Saqlash" onClick={saveBrand} disabled={savingBrand} className="w-7 h-7 bg-white/20 text-white rounded-full flex items-center justify-center border border-white/30 hover:bg-white/30 liquid-transition disabled:opacity-50">{savingBrand ? <Loader2 className="w-3.5 h-3.5 animate-spin"/> : <Check className="w-3.5 h-3.5"/>}</button>
+                <button aria-label="Bekor qilish" onClick={() => setEditingBrand(false)} disabled={savingBrand} className="w-7 h-7 bg-black/20 text-white rounded-full flex items-center justify-center hover:bg-black/30 liquid-transition disabled:opacity-50"><X className="w-3.5 h-3.5"/></button>
               </div>
             ) : (
               <div className="flex items-center gap-2">
@@ -4574,6 +4614,20 @@ export default function App() {
     if (liveUser) { fetchLiveCurrencyRates(); }
   }, [liveUser?.id]);
 
+  // Firma nomi/logotipini serverdan yangilaymiz — login/register javobidan
+  // KEYIN qo'shilgan/o'zgargan bo'lishi mumkin (masalan sahifa oddiy qayta
+  // yuklansa, saqlangan sessiyadan davom etiladi — login handshake qayta
+  // ishlamaydi, shu sabab bu yerda ALOHIDA so'raladi, aks holda eskirgan
+  // localStorage nusxasi ko'rsatilib qolaverardi).
+  useEffect(() => {
+    if (!liveUser || liveUser.role === 'dasturchi') return;
+    const token = localStorage.getItem('token') || '';
+    fetch(`${API_BASE}/api/company/me`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.available) applyCompany(d); })
+      .catch(() => {});
+  }, [liveUser?.id]);
+
   useEffect(() => {
     if (liveUser) {
       setInitialLoading(true);
@@ -4735,6 +4789,11 @@ export default function App() {
         });
       };
 
+      // Firma nomi/logotipi biror admin tomonidan o'zgartirilsa — SHU FIRMADAGI
+      // barcha ochiq sessiyalarda darhol yangilanadi (avval faqat o'zgartirgan
+      // odamning O'Z brauzeridagi localStorage'da qolib ketardi).
+      const onCompanyUpdate = (company: any) => applyCompany(company);
+
       socket.on("message:new", onNew);
       socket.on("message:edit", onEdit);
       socket.on("message:delete", onDelete);
@@ -4748,6 +4807,7 @@ export default function App() {
       socket.on("transaction:new", onTxNew);
       socket.on("user:language", onLanguage);
       socket.on("gps:update", onGpsUpdate);
+      socket.on("company:update", onCompanyUpdate);
 
       // App background'dan qaytganda socket ulanishini tiklash (Android/Tauri)
       const onVisibility = () => {
@@ -4789,6 +4849,7 @@ export default function App() {
         socket.off("transaction:update", onTxUpdate);
         socket.off("transaction:new", onTxNew);
         socket.off("gps:update", onGpsUpdate);
+        socket.off("company:update", onCompanyUpdate);
       };
     }
   }, [liveUser?.id]);

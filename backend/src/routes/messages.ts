@@ -10,6 +10,7 @@ import Group from '../models/Group';
 import User from '../models/User';
 import { emitToUser, emitToGroup } from '../services/socket';
 import { scoped, stamped } from '../middleware/scope';
+import { requireAuth } from '../middleware/auth';
 import { bot } from '../services/bot';
 import { uploadFileToCloud } from '../config/cloudinary';
 import { getBackendUrl } from '../utils/backendUrl';
@@ -168,8 +169,14 @@ export async function relayMessageToTelegram(chatId: string, senderName: string,
   }
 }
 
-// Media yuklash — Cloudinary mavjud bo'lsa shunga, yo'q bo'lsa localga
-router.post('/upload', upload.single('file'), async (req, res) => {
+// Media yuklash — Cloudinary mavjud bo'lsa shunga, yo'q bo'lsa localga.
+// XAVFSIZLIK: avval bu yo'lda HECH QANDAY autentifikatsiya tekshiruvi yo'q
+// edi — istalgan kishi (login qilmasdan ham) fayl yuklab, bizning
+// Cloudinary hisobimizni cheksiz (shu jumladan zararli maqsadda fayl
+// xostlash uchun) suiiste'mol qila olardi. requireAuth avval multer'dan —
+// autentifikatsiyasiz so'rov katta faylni qayta ishlashga vaqt sarflamasdan
+// darhol rad etiladi.
+router.post('/upload', requireAuth, upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Fayl yuklanmadi' });
   try {
     const { url } = await uploadFileToCloud(req.file.path, 'qurilish-chat', req.file.originalname);

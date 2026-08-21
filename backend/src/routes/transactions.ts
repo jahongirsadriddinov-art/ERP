@@ -23,9 +23,20 @@ setInterval(() => {
 }, 60 * 60 * 1000); // 1 soatda bir tozalaymiz
 
 // Get all transactions
+// Ko'rinish (visibility) qoidasi: direktor/orinbosar firmaning BARCHA
+// tranzaksiyalarini ko'radi (moliyani nazorat qilish ularning vazifasi).
+// Boshqa har qanday rol (ishchi, prorab, brigadir va h.k.) FAQAT o'zi
+// yaratgan yoki o'ziga tegishli (yuboruvchi/qabul qiluvchi) yozuvlarni
+// ko'radi — boshqa xodimlarning shaxsiy chiqim/maosh yozuvlari ko'rinmaydi.
+// companyId izolyatsiyasi scoped() orqali baribir ustidan qo'llanadi.
 router.get('/', async (req, res) => {
   try {
-    const transactions = await Transaction.find(scoped()).sort({ createdAt: -1 });
+    const tenant = getTenant();
+    const isFinanceAdmin = tenant?.isDeveloper || tenant?.role === 'direktor' || tenant?.role === 'orinbosar';
+    const filter = isFinanceAdmin || !tenant?.userId
+      ? scoped()
+      : scoped({ $or: [{ createdById: tenant.userId }, { toUserId: tenant.userId }, { fromUserId: tenant.userId }] });
+    const transactions = await Transaction.find(filter).sort({ createdAt: -1 });
     res.json(transactions.map(t => ({ ...t.toObject(), id: t._id })));
   } catch (err) {
     console.error(err);
@@ -98,15 +109,24 @@ router.post('/', async (req, res) => {
       txData.description = data.description;
       txData.projectId = data.projectId ? String(data.projectId) : undefined;
       txData.toUserId = data.toUserId ? String(data.toUserId) : undefined;
-      txData.createdById = data.createdById ? String(data.createdById) : undefined;
+      // MUHIM: createdById HECH QACHON so'rov tanasidan olinmaydi — faqat
+      // tekshirilgan JWT kontekstidan (companyId/stamped() bilan bir xil
+      // qoida). Aks holda har qanday xodim boshqa birovning (masalan
+      // direktorning) ID'sini yuborib, quyidagi admin-tasdiqlash talabini
+      // chetlab o'tishi yoki tranzaksiyani boshqa birovga yopishtirishi
+      // mumkin edi. Faqat autentifikatsiyasiz (legacy) so'rovlarda body'dagi
+      // qiymatga qaytiladi — eski xatti-harakat saqlanadi.
+      txData.createdById = getTenant()?.userId || (data.createdById ? String(data.createdById) : undefined);
       txData.status = data.toUserId ? 'pending' : (data.status || 'confirmed');
     }
 
-    // Non-admin expense yaratsa admin tasdiqlashi kerak
+    // direktor/orinbosardan BOSHQA har qanday rol chiqim yaratsa — admin
+    // tasdiqlashi shart (allow-list emas, deny-list: yangi rol qo'shilsa ham
+    // ushbu qoida avtomatik ishlab turadi).
     const creatorId = txData.createdById || getTenant()?.userId;
     if (txData.type !== 'transfer' && creatorId) {
       const creator = await User.findById(creatorId).catch(() => null);
-      if (creator && ['prorab', 'brigadir', 'ishchi'].includes(creator.role)) {
+      if (creator && !['direktor', 'orinbosar'].includes(creator.role)) {
         txData.requiresAdminApproval = true;
         txData.status = 'pending';
       }

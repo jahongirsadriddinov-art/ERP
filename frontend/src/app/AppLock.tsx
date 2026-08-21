@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Delete, Fingerprint, LogOut, Building2, Lock, X } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
@@ -172,17 +172,50 @@ function PinDots({ length, filled }: { length: number; filled: number }) {
   );
 }
 
-function PinPad({ onDigit, onDelete }: { onDigit: (d: string) => void; onDelete: () => void }) {
+// `value` — hozirgi kiritilgan raqamlar (chaqiruvchi ekranining current
+// state'i). Ko'rinadigan katta tugmalar bilan bir qatorda, ko'rinmas haqiqiy
+// <input> ham qo'yilgan — shu orqali qurilmaning O'Z NUMPAD/klaviaturasidan
+// (Windows exe'da jismoniy klaviatura, Android'da tashqi klaviatura yoki
+// tizim klaviaturasi) ham PIN teriladi, xuddi OtpBoxes'dagi bir xil,
+// bu kodda allaqachon o'rnatilgan naqsh bo'yicha. Har ikkala usul ham bir
+// xil onDigit/onDelete orqali ishlaydi — mavjud bosqich/tekshiruv mantig'i
+// (masalan "4 xonaga to'lgach avtomatik keyingi bosqich") o'zgarishsiz qoladi.
+function PinPad({ value, onDigit, onDelete }: { value: string; onDigit: (d: string) => void; onDelete: () => void }) {
+  const hiddenRef = useRef<HTMLInputElement | null>(null);
+  useEffect(() => { hiddenRef.current?.focus(); }, []);
+
+  const handleRealChange = (raw: string) => {
+    const digits = raw.replace(/\D/g, "");
+    if (digits.length > value.length) {
+      for (const d of digits.slice(value.length)) onDigit(d);
+    } else if (digits.length < value.length) {
+      for (let i = 0; i < value.length - digits.length; i++) onDelete();
+    }
+  };
+
   const keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "", "0", "del"];
   return (
-    <div className="grid grid-cols-3 gap-3 w-full max-w-[280px] mx-auto">
-      {keys.map((k, i) => k === "" ? <div key={i} /> : (
-        <button key={i} type="button"
-          onClick={() => k === "del" ? onDelete() : onDigit(k)}
-          className="h-16 rounded-2xl bg-muted/50 hover:bg-muted active:scale-95 flex items-center justify-center text-xl font-semibold liquid-transition">
-          {k === "del" ? <Delete className="w-5 h-5" /> : k}
-        </button>
-      ))}
+    <div className="relative w-full max-w-[280px] mx-auto">
+      <input
+        ref={hiddenRef}
+        type="text"
+        inputMode="numeric"
+        autoComplete="off"
+        value={value}
+        onChange={e => handleRealChange(e.target.value)}
+        aria-label="PIN kod"
+        className="absolute inset-0 opacity-0"
+        style={{ pointerEvents: "none" }}
+      />
+      <div className="grid grid-cols-3 gap-3">
+        {keys.map((k, i) => k === "" ? <div key={i} /> : (
+          <button key={i} type="button"
+            onClick={() => { hiddenRef.current?.focus(); k === "del" ? onDelete() : onDigit(k); }}
+            className="h-16 rounded-2xl bg-muted/50 hover:bg-muted active:scale-95 flex items-center justify-center text-xl font-semibold liquid-transition">
+            {k === "del" ? <Delete className="w-5 h-5" /> : k}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -242,7 +275,7 @@ export function PinSetupScreen({ onDone }: { onDone: () => void }) {
         </motion.div>
       </AnimatePresence>
       {error && <p className="text-xs text-red-500 mb-4 text-center">{error}</p>}
-      <PinPad onDigit={onDigit} onDelete={() => setCurrent(current.slice(0, -1))} />
+      <PinPad value={current} onDigit={onDigit} onDelete={() => setCurrent(current.slice(0, -1))} />
     </main>
   );
 }
@@ -313,7 +346,7 @@ export function ChangePinModal({ onClose, onChanged }: { onClose: () => void; on
         </motion.div>
       </AnimatePresence>
       {error && <p className="text-xs text-red-500 mb-4 text-center">{error}</p>}
-      <PinPad onDigit={onDigit} onDelete={() => setCurrent(current.slice(0, -1))} />
+      <PinPad value={current} onDigit={onDigit} onDelete={() => setCurrent(current.slice(0, -1))} />
     </div>,
     document.body
   );
@@ -378,7 +411,7 @@ export function PinLockScreen({ onUnlock, onForgot, onLockedOut }: { onUnlock: (
           Noto'g'ri PIN kod{attemptsLeft != null && attemptsLeft <= 3 ? ` — yana ${attemptsLeft} ta urinish qoldi` : ''}
         </p>
       )}
-      <PinPad onDigit={onDigit} onDelete={() => setPinInput(pin.slice(0, -1))} />
+      <PinPad value={pin} onDigit={onDigit} onDelete={() => setPinInput(pin.slice(0, -1))} />
 
       {isBiometricEnabled() && biometricSupported() && (
         <button onClick={attemptBiometric} disabled={biometricBusy}

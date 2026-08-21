@@ -4,7 +4,7 @@ import {
   CheckCircle, Clock, AlertTriangle, ChevronRight, MapPin,
   Phone, User, X, Check, Download, BarChart2,
   DollarSign, MessageCircle, ChevronDown, ChevronUp, Send,
-  TrendingDown, Wallet, LogOut, Camera, Home, UserPlus, Edit, Trash, Search, AlertCircle, ChevronLeft, Loader2, Paperclip, Mic, Video as VideoIcon, Image as ImageIcon, FileText, CornerDownLeft, Share2, SquareCheck, Trash2, MoreHorizontal, Upload, Palette, Sun, Moon, Monitor, PhoneOff, MicOff, VideoOff, Users2, Copy, Bell, Pin, PinOff, CheckCheck, Languages, CreditCard, Calendar, QrCode, WifiOff, Euro, RefreshCw
+  TrendingDown, Wallet, LogOut, Camera, Home, UserPlus, Edit, Trash, Search, AlertCircle, ChevronLeft, Loader2, Paperclip, Mic, Video as VideoIcon, Image as ImageIcon, FileText, CornerDownLeft, Share2, SquareCheck, Trash2, MoreHorizontal, Upload, Palette, Sun, Moon, Monitor, PhoneOff, MicOff, VideoOff, Users2, Copy, Bell, Pin, PinOff, CheckCheck, Languages, CreditCard, Calendar, QrCode, WifiOff, Euro, RefreshCw, Lock
 } from "lucide-react";
 import { toast, Toaster } from "sonner";
 import { createPortal } from "react-dom";
@@ -3205,8 +3205,8 @@ function BiometricToggleCard() {
   );
 }
 
-function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdateUser, onCompanyNameChange, onCompanyLogoChange, onBgChange, onColorThemeChange, colorTheme, themeMode, onThemeModeChange, canEditCompany, todayAttendance, onCheckIn, onCheckOut, gpsTracking }:
-  { currentUser: AppUser; projects: Project[]; onUpdateAvatar: (url: string) => void; onLogout: () => void; onUpdateUser: (u: AppUser) => void; onCompanyNameChange: (name: string) => void; onCompanyLogoChange: (logo: string) => void; onBgChange: (bg: string) => void; onColorThemeChange: (id: string) => void; colorTheme: string; themeMode: "light"|"dark"|"system"; onThemeModeChange: (m: "light"|"dark"|"system") => void; canEditCompany?: boolean; todayAttendance: null | { status: string; checkIn?: string; checkOut?: string; workHours?: number }; onCheckIn: () => void; onCheckOut: () => void; gpsTracking: boolean }) {
+function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdateUser, onCompanyNameChange, onCompanyLogoChange, onBgChange, onColorThemeChange, colorTheme, themeMode, onThemeModeChange, canEditCompany, todayAttendance, onCheckIn, onCheckOut, gpsTracking, onLockNow }:
+  { currentUser: AppUser; projects: Project[]; onUpdateAvatar: (url: string) => void; onLogout: () => void; onUpdateUser: (u: AppUser) => void; onCompanyNameChange: (name: string) => void; onCompanyLogoChange: (logo: string) => void; onBgChange: (bg: string) => void; onColorThemeChange: (id: string) => void; colorTheme: string; themeMode: "light"|"dark"|"system"; onThemeModeChange: (m: "light"|"dark"|"system") => void; canEditCompany?: boolean; todayAttendance: null | { status: string; checkIn?: string; checkOut?: string; workHours?: number }; onCheckIn: () => void; onCheckOut: () => void; gpsTracking: boolean; onLockNow: () => void }) {
   const { t, i18n } = useTranslation();
   const changeLanguage = async (lang: SiteLang) => {
     setSiteLanguage(lang);
@@ -3685,6 +3685,14 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
         )}
 
         {biometricSupported() && <BiometricToggleCard />}
+
+        {/* Qo'lda bloklash — 1 daqiqa kutmasdan, darhol PIN ekraniga o'tadi.
+            Barcha qurilmalarda (veb/APK/exe) ko'rinadi — biometrikdan farqli,
+            bunga maxsus native imkoniyat kerak emas. */}
+        <button onClick={onLockNow}
+          className="w-full flex items-center justify-center gap-2.5 text-sm border-2 border-border rounded-2xl px-4 py-3.5 text-foreground hover:bg-primary/5 hover:border-primary/30 liquid-transition font-semibold">
+          <Lock className="w-4 h-4"/>Ilovani hozir bloklash
+        </button>
 
         <motion.button initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28, delay: 0.26 }}
           onClick={() => { localStorage.removeItem("currentUser"); localStorage.removeItem("token"); onLogout(); }}
@@ -4257,7 +4265,7 @@ export default function App() {
   // ko'ra aniqroq.
   const [, setPinRefresh] = useState(0);
   const pinIsSet = isPinSet();
-  const { locked: appLocked, unlock: unlockApp } = useAppLock(!!liveUser && pinIsSet);
+  const { locked: appLocked, unlock: unlockApp, lock: lockAppNow } = useAppLock(!!liveUser && pinIsSet);
   const isWorkerRole = liveUser ? ['ishchi', 'prorab', 'brigadir'].includes(liveUser.role) : false;
   // GPS shu holatga BOG'LIQ: "Ishga keldim" bosilmaguncha ishlamaydi (foydalanuvchi
   // talabi). MUHIM: lekin "Ishni tugatdim" bosilgach GPS TO'XTAMAYDI — faqat
@@ -4499,8 +4507,25 @@ export default function App() {
         const preview = m.type && m.type !== 'text' ? m.text : (m.text || "");
         const viewingChat = pageRef.current === 'chat' && chatOpenRef.current;
         if (!viewingChat) toast(name, { description: preview });
-        if (typeof document !== "undefined" && document.hidden && "Notification" in window && Notification.permission === "granted") {
-          try { new Notification(name, { body: preview }); } catch {}
+        // MUHIM: `new Notification(...)` konstruktori to'g'ridan-to'g'ri
+        // chaqirilsa — Android'da (Chrome/WebView, jumladan Capacitor)
+        // ko'pincha HECH NARSA ko'rsatmaydi, jim tarzda muvaffaqiyatsiz
+        // bo'ladi (bu android'ning o'zi cheklovi — MDN/web.dev'da
+        // hujjatlashtirilgan: mobil'da faqat ServiceWorkerRegistration.
+        // showNotification() ishlaydi). Shu sabab "faqat ichki (toast)
+        // bildirishnoma keladi, telefonning o'zi ko'rsatgan bildirishnoma
+        // kelmaydi" degan shikoyat aynan shu qatordan kelib chiqqan —
+        // service worker orqali chaqirilganda (sw.js'dagi push handleri
+        // bilan bir xil parametrlar) haqiqiy tizim bildirishnomasi chiqadi.
+        if (typeof document !== "undefined" && document.hidden && "Notification" in window && Notification.permission === "granted" && "serviceWorker" in navigator) {
+          navigator.serviceWorker.ready.then(reg => reg.showNotification(name, {
+            body: preview,
+            icon: '/favicon-192.png',
+            badge: '/favicon-192.png',
+            tag: 'qurilish-chat-' + m.fromUserId,
+            data: { url: '/?page=chat' },
+            vibrate: [200, 100, 200],
+          } as NotificationOptions)).catch(() => {});
         }
       };
       const onEdit = (payload: any) => setMessages(prev => prev.map(x => x.id===(payload.id||payload._id) ? {...x, ...withId(payload)} : x));
@@ -5152,7 +5177,8 @@ export default function App() {
               todayAttendance={todayAttendance}
               onCheckIn={handleCheckIn}
               onCheckOut={handleCheckOut}
-              gpsTracking={gpsTracking}/>
+              gpsTracking={gpsTracking}
+              onLockNow={lockAppNow}/>
           </div>
         )}
         {page==="gps" && isGpsAdmin && (

@@ -22,7 +22,20 @@ declare global {
   }
 }
 
-const JWT_SECRET = process.env.JWT_SECRET || 'secret';
+// XAVFSIZLIK: agar JWT_SECRET muhit o'zgaruvchisi o'rnatilmagan bo'lsa,
+// pastdagi 'secret' zaxira qiymati ishlatiladi — bu OMMAVIY MA'LUM,
+// oldindan bashorat qilinadigan satr, shuning uchun shu holatda ISTALGAN
+// kishi haqiqiy (hatto "dasturchi"/super-admin) token yasab olishi mumkin.
+// Ataylab serverni O'CHIRIB QO'YMAYMIZ (production'da JWT_SECRET aslida
+// to'g'ri o'rnatilgan bo'lsa ham, shu tekshiruv xato bilan butun saytni
+// yiqitib qo'yishi mumkin edi) — lekin buni Render loglarida DARHOL
+// ko'rinadigan qilib ogohlantiramiz.
+export const JWT_SECRET = process.env.JWT_SECRET || 'secret';
+if (!process.env.JWT_SECRET) {
+  console.error('⚠️⚠️⚠️ XAVFSIZLIK OGOHLANTIRISHI: JWT_SECRET muhit o\'zgaruvchisi o\'rnatilmagan! ' +
+    'Standart (ommaviy ma\'lum) kalit ishlatilmoqda — bu holatda istalgan kishi haqiqiy token yasashi mumkin. ' +
+    'Render > Environment bo\'limida JWT_SECRET ni kuchli tasodifiy qiymatga o\'rnating.');
+}
 
 function readToken(req: Request): string | null {
   const header = req.headers.authorization;

@@ -2,6 +2,7 @@ package uz.erp_firma.qurilisherp;
 
 import android.Manifest;
 import android.content.pm.PackageManager;
+import android.os.Build;
 import android.os.Bundle;
 import android.webkit.PermissionRequest;
 import androidx.core.app.ActivityCompat;
@@ -26,11 +27,25 @@ import java.util.List;
 // qarab WebView so'rovini granted/denied qilamiz.
 public class MainActivity extends BridgeActivity {
     private static final int MEDIA_PERMISSION_REQUEST_CODE = 9001;
+    private static final int NOTIFICATION_PERMISSION_REQUEST_CODE = 9002;
     private PermissionRequest pendingWebRequest;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        // Android 13+ (API 33) — bildirishnoma ko'rsatish uchun runtime
+        // ruxsat TALAB QILINADI, faqat manifestda e'lon qilishning o'zi
+        // yetarli emas. Sahifadagi Notification.requestPermission() (JS)
+        // buni o'zi so'ramaydi — WebView shunchaki APP'ning O'ZIDA shu
+        // ruxsat bor-yo'qligini tekshiradi. Shu sabab bu yerda ANIQ,
+        // ilova ishga tushishi bilan (bir marta) so'raymiz — "ruxsat
+        // berish joyi ishlamayapti" degan shikoyatning aynan ildizi shu.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.POST_NOTIFICATIONS}, NOTIFICATION_PERMISSION_REQUEST_CODE);
+            }
+        }
 
         this.bridge.getWebView().setWebChromeClient(new BridgeWebChromeClient(this.bridge) {
             @Override

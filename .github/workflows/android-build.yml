@@ -1,26 +1,22 @@
-name: Android APK build
+name: Build & release apps
 
-# Bu build mahalliy kompyuterda Android SDK/JDK/Gradle o'rnatilishi shart
-# emasligi uchun ishlatiladi — GitHub'ning o'zi shu narsalarni har safar
-# tayyor holda beradigan virtual mashinada quradi. Natija ("Artifacts")
-# har bir run sahifasining pastida yuklab olish uchun paydo bo'ladi.
+# Har safar main'ga frontend o'zgarishi bilan push qilinganda: APK (Android)
+# va exe (Windows) ikkalasi ham quriladi, so'ng backend orqali ochiq
+# (login talab qilmaydigan) URL'ga yuklanadi va Telegram bot orqali
+# dasturchidan boshqa BARCHA foydalanuvchiga "yangi versiya chiqdi"
+# xabari avtomatik yuboriladi — aniq foydalanuvchi talabi bo'yicha, har
+# push'da (qo'lda ishga tushirish shart emas).
 #
-# Broadcast (botdan hammaga yangilanish xabari): FAQAT qo'lda, "Run workflow"
-# tugmasi orqali "broadcast" belgisini yoqib ishga tushirilganda yuboriladi —
-# oddiy push'da (har commit'da) HECH QACHON avtomatik yuborilmaydi, aks holda
-# xodimlarni kuniga bir necha marta bezovta qilib yuborardi. Buning uchun bu
-# repo'da "DEPLOY_BROADCAST_SECRET" nomli Actions secret o'rnatilgan bo'lishi
-# kerak — qiymati backend'dagi (Render) shu nomdagi environment variable bilan
-# BIR XIL bo'lishi shart.
+# Buning uchun "DEPLOY_BROADCAST_SECRET" nomli Actions secret shu repo'da
+# o'rnatilgan bo'lishi kerak (Settings > Secrets and variables > Actions),
+# qiymati Render'dagi bir xil nomdagi environment variable bilan BIR XIL.
+# Secret yo'q/bo'sh bo'lsa — broadcast qadami xatosiz o'tkazib yuboriladi
+# (build'ning o'zi buzilmaydi), faqat xabar yuborilmaydi.
 on:
   workflow_dispatch:
     inputs:
-      broadcast:
-        description: "Botdan hammaga yangilanish xabari yuborilsinmi?"
-        type: boolean
-        default: false
       version:
-        description: "Versiya nomi (masalan v1.3.0) — broadcast yoqilgan bo'lsa talab qilinadi"
+        description: "Versiya nomi (bo'sh qoldirsa avtomatik hosil qilinadi)"
         required: false
         type: string
       notes:
@@ -34,7 +30,7 @@ on:
       - '.github/workflows/android-build.yml'
 
 jobs:
-  build:
+  build-android:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -77,44 +73,101 @@ jobs:
           path: frontend/android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
 
-      # Faqat qo'lda ishga tushirilganda va "broadcast" belgisi yoqilganda —
-      # APK backend orqali Cloudinary'ga (ochiq, login talab qilmaydigan URL)
-      # yuklanadi, so'ng dasturchidan boshqa BARCHA foydalanuvchilarga
-      # Telegram bot orqali yuklab olish havolasi yuboriladi.
-      - name: Upload APK + notify users via bot
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.broadcast == true }}
+  build-windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install frontend deps
+        run: npm ci
+
+      # Xuddi mahalliy "npm run build:windows" bilan bir xil — mashinada
+      # qo'lda qilingan build bilan aynan bir xil natija, boshqa
+      # qo'shimcha, sinalmagan Action ishlatilmaydi.
+      - name: Build web bundle + Tauri (Windows exe/msi)
+        run: npm run build:windows
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qurilisherp-windows-exe
+          path: |
+            frontend/src-tauri/target/release/bundle/nsis/*.exe
+            frontend/src-tauri/target/release/bundle/msi/*.msi
+          retention-days: 30
+
+  # APK va exe ikkalasi ham tayyor bo'lgach — backend'ga yuklab, botdan
+  # broadcast qiladi. Push'da HAR DOIM ishga tushadi (aniq talab bo'yicha);
+  # qo'lda ishga tushirilsa ham xuddi shunday, faqat versiya/izoh qo'lda
+  # kiritilgan bo'lishi mumkin.
+  broadcast:
+    needs: [build-android, build-windows]
+    runs-on: ubuntu-latest
+    if: always() && needs.build-android.result == 'success' && needs.build-windows.result == 'success'
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: qurilisherp-debug-apk
+          path: artifacts/apk
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: qurilisherp-windows-exe
+          path: artifacts/exe
+
+      - name: Upload APK + exe, notify all users via bot
         env:
           DEPLOY_SECRET: ${{ secrets.DEPLOY_BROADCAST_SECRET }}
           BACKEND_URL: https://qurilisherp-backend.onrender.com
-          VERSION: ${{ inputs.version }}
+          VERSION_INPUT: ${{ inputs.version }}
           NOTES: ${{ inputs.notes }}
         run: |
           set -e
           if [ -z "$DEPLOY_SECRET" ]; then
-            echo "::error::DEPLOY_BROADCAST_SECRET repo secret o'rnatilmagan — Settings > Secrets and variables > Actions'da qo'shing."
-            exit 1
+            echo "::warning::DEPLOY_BROADCAST_SECRET o'rnatilmagan (Settings > Secrets and variables > Actions) — build tayyor, lekin bildirishnoma YUBORILMAYDI."
+            exit 0
           fi
+
+          VERSION="$VERSION_INPUT"
           if [ -z "$VERSION" ]; then
-            echo "::error::broadcast yoqilganda 'version' input'i talab qilinadi."
+            VERSION="$(date -u +%Y.%m.%d)-${GITHUB_SHA::7}"
+          fi
+
+          APK_PATH=$(find artifacts/apk -iname "*.apk" | head -1)
+          EXE_PATH=$(find artifacts/exe -iname "*setup*.exe" -o -iname "*.exe" | head -1)
+
+          upload() {
+            local path="$1"
+            curl -sf -X POST "$BACKEND_URL/api/deploy/upload-artifact" \
+              -H "X-Deploy-Secret: $DEPLOY_SECRET" \
+              -F "file=@${path}" \
+            | node -e "process.stdin.once('data', d => console.log(JSON.parse(d).url))"
+          }
+
+          APK_URL=""
+          EXE_URL=""
+          if [ -n "$APK_PATH" ]; then APK_URL=$(upload "$APK_PATH"); echo "APK: $APK_URL"; fi
+          if [ -n "$EXE_PATH" ]; then EXE_URL=$(upload "$EXE_PATH"); echo "EXE: $EXE_URL"; fi
+
+          if [ -z "$APK_URL" ] && [ -z "$EXE_URL" ]; then
+            echo "::error::Na APK, na exe yuklanmadi — broadcast o'tkazib yuborildi."
             exit 1
           fi
 
-          APK_PATH="android/app/build/outputs/apk/debug/app-debug.apk"
-
-          UPLOAD_JSON=$(curl -sf -X POST "$BACKEND_URL/api/deploy/upload-artifact" \
-            -H "X-Deploy-Secret: $DEPLOY_SECRET" \
-            -F "file=@${APK_PATH}")
-          APK_URL=$(echo "$UPLOAD_JSON" | node -e "process.stdin.once('data', d => console.log(JSON.parse(d).url))")
-          if [ -z "$APK_URL" ] || [ "$APK_URL" = "undefined" ]; then
-            echo "::error::APK yuklash muvaffaqiyatsiz: $UPLOAD_JSON"
-            exit 1
-          fi
-          echo "APK yuklandi: $APK_URL"
-
-          BROADCAST_BODY=$(jq -n --arg version "$VERSION" --arg apkUrl "$APK_URL" --arg notes "$NOTES" \
-            '{version: $version, apkUrl: $apkUrl, notes: $notes}')
+          BODY=$(jq -n --arg version "$VERSION" --arg apkUrl "$APK_URL" --arg exeUrl "$EXE_URL" --arg notes "$NOTES" \
+            '{version: $version} + (if $apkUrl != "" then {apkUrl: $apkUrl} else {} end) + (if $exeUrl != "" then {exeUrl: $exeUrl} else {} end) + (if $notes != "" then {notes: $notes} else {} end)')
           RESULT=$(curl -sf -X POST "$BACKEND_URL/api/deploy/broadcast-update" \
             -H "X-Deploy-Secret: $DEPLOY_SECRET" \
             -H "Content-Type: application/json" \
-            -d "$BROADCAST_BODY")
+            -d "$BODY")
           echo "Broadcast natijasi: $RESULT"

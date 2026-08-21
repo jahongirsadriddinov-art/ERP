@@ -29,10 +29,22 @@ if (!token) {
 const webhookUrl = process.env.TELEGRAM_WEBHOOK_URL;
 const useWebhook = !!webhookUrl;
 
-export const bot = new TelegramBot(token, { polling: !useWebhook });
+export const bot = new TelegramBot(token, useWebhook ? { polling: false } : {
+  polling: { params: { allowed_updates: ['message', 'edited_message', 'callback_query'] } },
+});
 
 if (useWebhook) {
-  bot.setWebHook(`${webhookUrl}/api/bot/webhook`, { max_connections: 40 })
+  // MUHIM: allowed_updates ANIQ ko'rsatilmasa, Telegram shu webhook uchun
+  // OLDINGI sozlamani ishlatadi (birinchi marta hech qachon o'rnatilmagan
+  // bo'lsa — standart to'plam, odatda bularning barchasini o'z ichiga oladi,
+  // lekin buni ANIQ yozib qo'yish yanada ishonchli: 'edited_message'
+  // aynan Telegram'ning "Jonli joylashuv" (Live Location) davomiy
+  // yangilanishlari uchun zarur — shu yo'q bo'lib qolsa, ish boshlashda
+  // birinchi joylashuv kelib, keyingi yangilanishlar UMUMAN kelmay qoladi.
+  bot.setWebHook(`${webhookUrl}/api/bot/webhook`, {
+    max_connections: 40,
+    allowed_updates: ['message', 'edited_message', 'callback_query'],
+  })
     .then(() => console.log(`✅ Telegram bot webhook ishga tushdi: ${webhookUrl}/api/bot/webhook`))
     .catch((err: Error) => console.error('⚠️ Telegram webhook o\'rnatishda xato:', err.message));
 } else {

@@ -7,7 +7,7 @@ import Otp from '../models/Otp';
 import { bot } from '../services/bot';
 import { sendOtpSms } from '../services/eskizService';
 import { scoped, stamped } from '../middleware/scope';
-import { requireAuth, requireOwnerOrAdmin } from '../middleware/auth';
+import { requireAuth, requireOwnerOrAdmin, JWT_SECRET } from '../middleware/auth';
 import { normalizePhone, isValidUzPhone, hashPassword, verifyPassword } from '../utils/tokens';
 import { checkRate } from '../utils/rateLimit';
 
@@ -58,7 +58,7 @@ async function issueSession(user: IUser, res: any) {
       branchId: company?.branchId,
       isOwner: user.isOwner || false
     },
-    process.env.JWT_SECRET || 'secret',
+    JWT_SECRET,
     { expiresIn: '7d' }
   );
 

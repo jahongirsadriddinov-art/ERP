@@ -110,7 +110,12 @@ export function useAppLock(pinIsSet: boolean) {
     return () => document.removeEventListener('visibilitychange', onChange);
   }, [pinIsSet]);
 
-  return { locked, unlock: () => setLocked(false) };
+  // "lock" — qo'lda darhol bloklash tugmasi uchun (Profil'da). GPS kuzatuv
+  // shu holatga BOG'LIQ EMAS — useGeoTracker App.tsx'da ushbu qulfdan oldin
+  // (shartsiz) chaqiriladi, shuning uchun ekran bloklangan paytda ham
+  // joylashuv yuborilishda davom etadi (aniq talab: "joylashuvni hardoim
+  // oladigan bo'lsin").
+  return { locked, unlock: () => setLocked(false), lock: () => { markActiveNow(); setLocked(true); } };
 }
 
 // ─── PIN kiritish klaviaturasi (umumiy — o'rnatish va qulf ochishda ham) ──

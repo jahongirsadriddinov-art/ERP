@@ -13,7 +13,7 @@ import { API_BASE, parseSmetaFile, uploadChatMedia } from "./api";
 import { connectSocket, getSocket, disconnectSocket } from "./socket";
 import { motion, AnimatePresence } from "motion/react";
 import { setSiteLanguage, SiteLang, langLabel } from "./i18n";
-import { installAndroidBackHandler, haptic, isNative } from "./platform";
+import { installAndroidBackHandler, isNative } from "./platform";
 import LanguageSwitcher from "./i18n/LanguageSwitcher";
 import { Skeleton, SkeletonList, SkeletonPage, SkeletonMessage, SkeletonTable, SkeletonProfile } from "./Skeleton";
 import { useGeoTracker } from "./useGeoTracker";
@@ -2519,7 +2519,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-semibold truncate">{g.name}</p>
-                    {last && <p className="text-[10px] text-muted-foreground ml-1 flex-shrink-0">{new Date(last.timestamp).toLocaleTimeString("uz-UZ",{hour:"2-digit",minute:"2-digit"})}</p>}
+                    {last && <p className="text-[10px] text-muted-foreground ml-1 flex-shrink-0">{new Date(last.timestamp).toLocaleTimeString("uz-UZ",{hour:"2-digit",minute:"2-digit",timeZone:"Asia/Tashkent"})}</p>}
                   </div>
                   <p className="text-xs text-muted-foreground truncate">{lastText}</p>
                 </div>
@@ -2537,7 +2537,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-semibold truncate">Dasturchi</p>
-                    {last && <p className="text-[10px] text-muted-foreground ml-1 flex-shrink-0">{new Date(last.timestamp).toLocaleTimeString("uz-UZ",{hour:"2-digit",minute:"2-digit"})}</p>}
+                    {last && <p className="text-[10px] text-muted-foreground ml-1 flex-shrink-0">{new Date(last.timestamp).toLocaleTimeString("uz-UZ",{hour:"2-digit",minute:"2-digit",timeZone:"Asia/Tashkent"})}</p>}
                   </div>
                   <p className="text-xs text-muted-foreground truncate">{lastText}</p>
                 </div>
@@ -2572,7 +2572,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-semibold truncate">{u.name}</p>
-                    {last && <p className="text-[10px] text-muted-foreground ml-1 flex-shrink-0">{new Date(last.timestamp).toLocaleTimeString("uz-UZ",{hour:"2-digit",minute:"2-digit"})}</p>}
+                    {last && <p className="text-[10px] text-muted-foreground ml-1 flex-shrink-0">{new Date(last.timestamp).toLocaleTimeString("uz-UZ",{hour:"2-digit",minute:"2-digit",timeZone:"Asia/Tashkent"})}</p>}
                   </div>
                   <p className="text-xs text-muted-foreground truncate">{isOnline(u.id) && !last ? "onlayn" : lastText}</p>
                 </div>
@@ -2675,7 +2675,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
                         )}
                         {m.edited && <span className="text-[9px] italic">{tChat("chat.editedLabel")}</span>}
                         {m.pinned && <span className="text-[9px]">📌</span>}
-                        <span className="text-[9px]">{new Date(m.timestamp).toLocaleTimeString("uz-UZ",{hour:"2-digit",minute:"2-digit"})}</span>
+                        <span className="text-[9px]">{new Date(m.timestamp).toLocaleTimeString("uz-UZ",{hour:"2-digit",minute:"2-digit",timeZone:"Asia/Tashkent"})}</span>
                         {mine && (
                           m.status === 'sending' ? <Loader2 className="w-3 h-3 animate-spin"/> :
                           m.status === 'failed' ? null :
@@ -3024,7 +3024,7 @@ function AuditLogSection({ token }: { token: string }) {
               <div key={log._id} className="text-xs bg-muted/50 rounded-xl px-3 py-2">
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-semibold text-foreground truncate">{log.userName}</span>
-                  <span className="text-muted-foreground flex-shrink-0">{new Date(log.createdAt).toLocaleTimeString('uz-UZ', { hour:'2-digit', minute:'2-digit' })} {new Date(log.createdAt).toLocaleDateString('uz-UZ', { month:'short', day:'numeric' })}</span>
+                  <span className="text-muted-foreground flex-shrink-0">{new Date(log.createdAt).toLocaleTimeString('uz-UZ', { hour:'2-digit', minute:'2-digit', timeZone:'Asia/Tashkent' })} {new Date(log.createdAt).toLocaleDateString('uz-UZ', { month:'short', day:'numeric', timeZone:'Asia/Tashkent' })}</span>
                 </div>
                 <p className="text-muted-foreground mt-0.5">{ACTION_LABELS[log.action] || log.action} · {log.entity}</p>
                 <p className="text-foreground/70 truncate">{log.description}</p>
@@ -3438,7 +3438,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
                     {subData.currentPeriodEnd && (
                       <div className="flex items-center justify-between px-5 py-4">
                         <div className="flex items-center gap-2 text-muted-foreground"><Calendar className="w-3.5 h-3.5"/><span className="text-sm font-medium">Tugash sanasi</span></div>
-                        <span className="text-sm font-semibold">{new Date(subData.currentPeriodEnd).toLocaleDateString('uz-UZ', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>
+                        <span className="text-sm font-semibold">{new Date(subData.currentPeriodEnd).toLocaleDateString('uz-UZ', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Asia/Tashkent' })}</span>
                       </div>
                     )}
                     {subData.amount > 0 && (
@@ -3620,8 +3620,8 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
                 )}
               </div>
               <div className="text-xs text-muted-foreground space-y-1 mb-3">
-                <p>Keldi: <span className="text-foreground font-medium">{new Date(todayAttendance.checkIn).toLocaleTimeString('uz-UZ',{hour:'2-digit',minute:'2-digit'})}</span></p>
-                {todayAttendance.checkOut && <p>Ish tugadi: <span className="text-foreground font-medium">{new Date(todayAttendance.checkOut).toLocaleTimeString('uz-UZ',{hour:'2-digit',minute:'2-digit'})}</span></p>}
+                <p>Keldi: <span className="text-foreground font-medium">{new Date(todayAttendance.checkIn).toLocaleTimeString('uz-UZ',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Tashkent'})}</span></p>
+                {todayAttendance.checkOut && <p>Ish tugadi: <span className="text-foreground font-medium">{new Date(todayAttendance.checkOut).toLocaleTimeString('uz-UZ',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Tashkent'})}</span></p>}
                 {todayAttendance.workHours != null && <p>{t('attendance.workHours', { h: todayAttendance.workHours.toFixed(1) })}</p>}
               </div>
               {/* GPS holati — check-in'ga bog'liq boshlanadi, lekin check-out
@@ -4255,11 +4255,22 @@ export default function App() {
     try {
       const token = localStorage.getItem('token') || '';
       const headers: Record<string,string> = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
+      // MAJBURIY: joylashuv olinmasa "Ishga keldim" tasdiqlanmaydi — botdagi
+      // jonli joylashuv talabi bilan bir xil qoida (aniq foydalanuvchi talabi).
+      // Avval xatoni aniq ajratamiz (ruxsat rad etilganmi yoki vaqt tugadimi)
+      // — bir xil "Xatolik" bilan cheklanib qolmaslik uchun.
+      let geoErr: GeolocationPositionError | null = null;
       const pos = await new Promise<GeolocationPosition>((res, rej) =>
-        navigator.geolocation.getCurrentPosition(res, rej, { timeout: 8000 })
-      ).catch(() => null);
-      const body: any = {};
-      if (pos) { body.lat = pos.coords.latitude; body.lng = pos.coords.longitude; }
+        navigator.geolocation.getCurrentPosition(res, rej, { timeout: 10000, enableHighAccuracy: true })
+      ).catch((err: GeolocationPositionError) => { geoErr = err; return null; });
+      if (!pos) {
+        const denied = geoErr?.code === 1; // GeolocationPositionError.PERMISSION_DENIED
+        toast.error(denied
+          ? "Ishga kelish uchun joylashuv ruxsati kerak. Brauzer/ilova sozlamalaridan joylashuvga ruxsat bering va qayta urinib ko'ring."
+          : "Joylashuvni aniqlab bo'lmadi. GPS yoqilganini tekshirib, qayta urinib ko'ring.");
+        return;
+      }
+      const body: any = { lat: pos.coords.latitude, lng: pos.coords.longitude };
       const r = await fetch(`${API_BASE}/api/attendance/checkin`, { method: 'POST', headers, body: JSON.stringify(body) });
       if (r.ok) {
         const d = await r.json();
@@ -4667,13 +4678,9 @@ export default function App() {
         ))}
       </nav>
       <div className="nav-pill-desktop flex items-center gap-1 px-1.5 py-1.5 rounded-full flex-shrink-0 ml-auto">
-        {/* Mobil pastki navbarda markaziy ✨ AI tugmasi bor — bu yerda ikkinchi
-            nusxasini ko'rsatmaymiz (ikkita bir xil tugma chalkashtiradi).
-            Faqat sm: va undan kattaroq (bottom-bar yashirin bo'lgan) ekranlarda
-            ko'rinadi, shunda desktopda AI'ga kirish yo'li yo'qolib qolmaydi. */}
         {(liveUser.role === 'direktor' || liveUser.role === 'orinbosar') && (
           <button onClick={() => setAiOpen(true)} title="AI Yordamchi" aria-label="AI Yordamchi"
-            className="hidden sm:flex btn btn-ghost w-9 h-9 p-0 rounded-full">
+            className="btn btn-ghost w-9 h-9 p-0 rounded-full">
             <span className="text-base leading-none">✨</span>
           </button>
         )}
@@ -5103,18 +5110,10 @@ export default function App() {
           onClose={()=>setShowSend(false)} onSend={t=>{handleSendTransfer(t);setShowSend(false);}}/>
       )}
 
-      {/* Mobile Bottom Navigation — floating capsule + markaziy AI tugmasi.
-          MUHIM: bu FAQAT vizual/layout qayta ishlash — routing/state/handlerlar
-          teginilmagan (bir xil setPage/setSelProject/setAiOpen). Hisobotlar va
-          Profil bu ro'yxatdan olib tashlangan (Hisobotlar planshet/desktop
-          kengligida yuqori nav orqali, Profil header'dagi avatar orqali hali
-          ham to'liq ochiladi — funksiyaning o'zi yo'qolmagan, faqat pastki
-          navbardan chiqarilgan). Admin uchun qolgan 4 ta band (dashboard/
-          finance/gps/chat) markazidagi bo'shliqqa AI tugmasi mukammal sig'adi —
-          AI absolute pozitsiyalangani uchun flex oqimini buzmaydi. */}
+      {/* Mobile Bottom Navigation — Premium Liquid Glass, labels + spring-animated */}
       <nav className={`ios-bottom-bar flex items-center justify-around ${(page==='chat' && chatIsOpen) || anyBigModalOpen ? 'ios-bottom-bar-hidden' : ''}`}>
-        {NAV.filter(n => n.key !== 'reports' && n.key !== 'profile').map(n => (
-          <motion.button key={n.key} onClick={() => { haptic(); setPage(n.key); setSelProject(null); }}
+        {NAV.map(n => (
+          <motion.button key={n.key} onClick={() => { setPage(n.key); setSelProject(null); }}
             whileTap={{ scale: 0.90 }}
             transition={{ type: "spring", stiffness: 520, damping: 30 }}
             aria-label={n.label}
@@ -5129,7 +5128,9 @@ export default function App() {
               />
             )}
             <div className={`flex items-center justify-center w-[26px] h-[26px] transition-all duration-200 ${page===n.key?"scale-110":""}`}>
-              <n.icon className="w-[18px] h-[18px]"/>
+              {n.key === "profile"
+                ? <div className={`rounded-full overflow-hidden transition-all duration-200 ${page===n.key?"ring-2 ring-white/80 shadow-md scale-110":"opacity-60"}`}><Avatar user={liveUser} size="sm"/></div>
+                : <n.icon className="w-[18px] h-[18px]"/>}
             </div>
             <span className={`text-[9px] font-semibold leading-none tracking-wide transition-all duration-200 ${page===n.key?"opacity-100":"opacity-45"}`}>
               {n.label}
@@ -5139,20 +5140,6 @@ export default function App() {
             )}
           </motion.button>
         ))}
-        {/* Markaziy AI — faqat direktor/orinbosar (AIAssistant'ning o'zi ham
-            shu ikki rolga cheklangan). Mobilda AI'ga yagona kirish nuqtasi shu
-            tugma — header'dagi ✨ nusxasi endi faqat sm: va undan katta
-            ekranlarda (bottom-bar yashirin bo'lganda) ko'rinadi, shu bilan
-            ikkita bir xil tugma bir vaqtda ko'rinishining oldi olingan. */}
-        {(liveUser.role === 'direktor' || liveUser.role === 'orinbosar') && (
-          <motion.button onClick={() => { haptic(); setAiOpen(true); }}
-            whileTap={{ scale: 0.94 }}
-            transition={{ type: "spring", stiffness: 520, damping: 28 }}
-            aria-label="AI Yordamchi"
-            className="ios-ai-button">
-            <span className="text-2xl leading-none">✨</span>
-          </motion.button>
-        )}
       </nav>
 
       {/* Qo'ng'iroq (WebRTC) */}

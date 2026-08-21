@@ -50,7 +50,7 @@ export default function GpsTrackingPage({ users, gpsLocations, refreshing, onRef
   const statusColor = (min: number) => min < 10 ? 'bg-green-500' : min < 30 ? 'bg-amber-400' : 'bg-red-400';
   const statusLabel = (min: number) => min < 10 ? `${min} daq. oldin` : min < 60 ? `${min} daq. oldin` : `${Math.floor(min/60)}s ${min%60}d oldin`;
   const roleLabel: Record<string, string> = { ishchi: 'Ishchi', prorab: 'Prorab', brigadir: 'Brigadir', orinbosar: "O'rinbosar", direktor: 'Direktor' };
-  const fmtTime = (iso: string) => new Date(iso).toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' });
+  const fmtTime = (iso: string) => new Date(iso).toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Tashkent' });
   const attendanceById = new Map(attendance.map(a => [a.userId, a]));
 
   return (

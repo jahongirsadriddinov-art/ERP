@@ -190,11 +190,18 @@ export default function LandingPage({ onLogin, onRegister }: { onLogin: () => vo
         </div>
 
         {/* Bizga ishonch bildirgan firmalar — faqat nom, soxta logotip/sharh yo'q */}
-        <div className="relative max-w-4xl mx-auto px-5 pb-16 md:pb-20">
-          <p className="text-center text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-5">Bizga ishonch bildirgan firmalar</p>
-          <div className="flex flex-wrap items-center justify-center gap-3">
-            {PARTNERS.map(name => (
-              <span key={name} className="surface rounded-full px-4 py-2 text-xs font-semibold text-foreground/80">{name}</span>
+        <div className="relative max-w-5xl mx-auto px-5 pb-16 md:pb-20">
+          <p className="text-center text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-6">Bizga ishonch bildirgan firmalar</p>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {PARTNERS.map((name, i) => (
+              <motion.div key={name} initial={{ opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
+                transition={{ delay: i * 0.06 }}
+                className="surface rounded-2xl p-5 flex flex-col items-center text-center gap-3 hover:-translate-y-1 liquid-transition">
+                <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-primary/15 to-accent/15 flex items-center justify-center flex-shrink-0">
+                  <Building2 className="w-5 h-5 text-primary" />
+                </div>
+                <p className="text-sm font-bold text-foreground leading-snug">{name}</p>
+              </motion.div>
             ))}
           </div>
         </div>

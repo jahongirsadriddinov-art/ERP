@@ -260,7 +260,7 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
                   <span>📦 {s.selectedPlan ? planLabel(s.selectedPlan) : "—"}</span>
                   <span className="font-semibold text-foreground">{s.amount ? t('devPanel.subscriptions.amount', { amount: s.amount.toLocaleString() }) : "—"}</span>
                 </div>
-                {s.requestedAt && <p className="text-[11px] text-muted-foreground mb-3">{t('devPanel.subscriptions.requestedAt')} {new Date(s.requestedAt).toLocaleString("uz-UZ")}</p>}
+                {s.requestedAt && <p className="text-[11px] text-muted-foreground mb-3">{t('devPanel.subscriptions.requestedAt')} {new Date(s.requestedAt).toLocaleString("uz-UZ", { timeZone: "Asia/Tashkent" })}</p>}
                 {expiryWarning && (
                   <div className="mb-3">
                     <p className="text-[11px] text-orange-700 dark:text-orange-400 font-semibold mb-2">{t('devPanel.subscriptions.expiryWarning', { days: s.daysLeft })}</p>
@@ -432,7 +432,7 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
                             {m.text && !['🖼️ Rasm','🎥 Video','🎤 Ovozli xabar','📍 Lokatsiya'].includes(m.text) && (
                               <p className="break-words">{m.text}</p>
                             )}
-                            <p className={`text-[9px] mt-0.5 ${mine?'text-white/60':'text-muted-foreground'}`}>{new Date(m.timestamp).toLocaleTimeString('uz-UZ',{hour:'2-digit',minute:'2-digit'})}</p>
+                            <p className={`text-[9px] mt-0.5 ${mine?'text-white/60':'text-muted-foreground'}`}>{new Date(m.timestamp).toLocaleTimeString('uz-UZ',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Tashkent'})}</p>
                           </div>
                         </div>
                       );

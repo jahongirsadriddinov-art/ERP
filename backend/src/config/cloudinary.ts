@@ -21,7 +21,12 @@ const VIDEO_EXTS = new Set(['.mp4', '.mov', '.webm', '.avi', '.mkv', '.mp3', '.w
 // `originalName` — multer vaqtinchalik faylni KENGAYTMASIZ nomlaydi
 // (masalan "3f2a91bc..."), shuning uchun asl fayl nomi (kengaytmasi bilan)
 // ALOHIDA beriladi (req.file.originalname).
-export async function uploadFileToCloud(filePath: string, folder = 'qurilish-erp', originalName?: string): Promise<{ url: string; publicId?: string }> {
+export async function uploadFileToCloud(
+  filePath: string,
+  folder = 'qurilish-erp',
+  originalName?: string,
+  opts2?: { stablePublicId?: string },
+): Promise<{ url: string; publicId?: string }> {
   if (!cloudinaryEnabled) {
     // Local fayl URL qaytaradi
     const fileName = path.basename(filePath);
@@ -48,6 +53,16 @@ export async function uploadFileToCloud(filePath: string, folder = 'qurilish-erp
       const base = path.basename(originalName, ext).replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 60) || 'file';
       opts.public_id = `${base}-${Date.now()}${ext}`;
     }
+  }
+  // stablePublicId — har safar BIR XIL, O'ZGARMAS public_id + overwrite:true.
+  // Deploy artifaktlari (APK/exe) uchun ishlatiladi: manzil (URL) hech qachon
+  // o'zgarmaydi (landing page/profil doim "eng oxirgi" versiyaga ishonchli
+  // havola beradi, DB yozuvi shart emas), va eski versiyalar Cloudinary'da
+  // cheksiz to'planib qolmaydi (har CI build eskisini ALMASHTIRADI).
+  if (opts2?.stablePublicId) {
+    opts.public_id = opts2.stablePublicId;
+    opts.overwrite = true;
+    opts.invalidate = true; // CDN keshini ham yangilaydi — eski APK keshda qolib ketmasin
   }
   const result = await cloudinary.uploader.upload(filePath, opts);
   // Cloudinary'ga yuklangandan keyin local faylni o'chirish (disk tejash)

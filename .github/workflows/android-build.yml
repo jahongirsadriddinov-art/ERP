@@ -163,18 +163,22 @@ jobs:
           APK_PATH=$(find artifacts/apk -iname "*.apk" | head -1)
           EXE_PATH=$(find artifacts/exe -iname "*setup*.exe" -o -iname "*.exe" | head -1)
 
+          # kind=apk/exe -> backend O'ZGARMAS (stable, overwrite:true) URL bilan
+          # yuklaydi — landing page/Profildagi "yuklab olish" tugmalari doim
+          # shu bitta havolaga ishonadi, har safar yangi (timestamp'li) URL
+          # kerak emas.
           upload() {
-            local path="$1"
+            local path="$1" kind="$2"
             curl -sf -X POST "$BACKEND_URL/api/deploy/upload-artifact" \
               -H "X-Deploy-Secret: $DEPLOY_SECRET" \
-              -F "file=@${path}" \
+              -F "file=@${path}" -F "kind=${kind}" \
             | node -e "process.stdin.once('data', d => console.log(JSON.parse(d).url))"
           }
 
           APK_URL=""
           EXE_URL=""
-          if [ -n "$APK_PATH" ]; then APK_URL=$(upload "$APK_PATH"); echo "APK: $APK_URL"; fi
-          if [ -n "$EXE_PATH" ]; then EXE_URL=$(upload "$EXE_PATH"); echo "EXE: $EXE_URL"; fi
+          if [ -n "$APK_PATH" ]; then APK_URL=$(upload "$APK_PATH" "apk"); echo "APK: $APK_URL"; fi
+          if [ -n "$EXE_PATH" ]; then EXE_URL=$(upload "$EXE_PATH" "exe"); echo "EXE: $EXE_URL"; fi
 
           if [ -z "$APK_URL" ] && [ -z "$EXE_URL" ]; then
             echo "::error::Na APK, na exe yuklanmadi — broadcast o'tkazib yuborildi."

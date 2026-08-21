@@ -242,27 +242,40 @@ export function useAppLock(pinIsSet: boolean) {
 
   useEffect(() => {
     if (!pinIsSet) return;
+    // XAVFSIZLIK MUHIM: qulf EKRANINING O'ZI ko'rsatilayotganda (locked=true)
+    // faollik vaqtini "hozir"ga YANGILAMAYMIZ. Avval bu yerda shartsiz
+    // markActiveNow() chaqirilardi — PIN ekrani ochiq turgan holatda sahifa
+    // qayta yuklansa (masalan tortib-yangilash yoki WebView'ning o'zining
+    // tabiiy pull-to-refresh imo-ishorasi — overscroll-behavior-y bilan
+    // cheklanmagan, PIN ekrani doim "eng tepada" bo'lgani uchun har doim
+    // shu imo-ishoraga ochiq), effekt DARHOL ishga tushib "faollik hozir
+    // bo'ldi" deb belgilab qo'yardi. Natijada KEYINGI (masalan yana bir
+    // tortib-yangilash) qayta yuklanishda useState boshlang'ich hisobi
+    // "hozirgina faol bo'lgan" deb noto'g'ri xulosa chiqarib, PIN SO'RALMASDAN
+    // to'g'ridan-to'g'ri saytga kirib ketardi.
+    if (locked) return;
     markActiveNow();
 
     const onChange = () => {
       if (document.visibilityState === 'hidden') {
         markActiveNow();
-      } else {
-        const last = Number(localStorage.getItem(LAST_ACTIVE_KEY) || 0);
-        if (last && Date.now() - last > getLockThresholdMs()) setLocked(true);
-        markActiveNow();
+        return;
       }
+      const last = Number(localStorage.getItem(LAST_ACTIVE_KEY) || 0);
+      const staleNow = !!last && Date.now() - last > getLockThresholdMs();
+      if (staleNow) setLocked(true); // bu yerda markActiveNow() CHAQIRILMAYDI — xuddi shu sabab
+      else markActiveNow();
     };
     document.addEventListener('visibilitychange', onChange);
     return () => document.removeEventListener('visibilitychange', onChange);
-  }, [pinIsSet]);
+  }, [pinIsSet, locked]);
 
   // "lock" — qo'lda darhol bloklash tugmasi uchun (Profil'da). GPS kuzatuv
   // shu holatga BOG'LIQ EMAS — useGeoTracker App.tsx'da ushbu qulfdan oldin
   // (shartsiz) chaqiriladi, shuning uchun ekran bloklangan paytda ham
   // joylashuv yuborilishda davom etadi (aniq talab: "joylashuvni hardoim
   // oladigan bo'lsin").
-  return { locked, unlock: () => setLocked(false), lock: () => { markActiveNow(); setLocked(true); } };
+  return { locked, unlock: () => { markActiveNow(); setLocked(false); }, lock: () => { markActiveNow(); setLocked(true); } };
 }
 
 // ─── PIN kiritish klaviaturasi (umumiy — o'rnatish va qulf ochishda ham) ──

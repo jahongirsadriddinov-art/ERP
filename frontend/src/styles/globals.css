@@ -207,7 +207,17 @@ html, body, #root {
   height: 100dvh; /* Android klaviatura ochilganda avtomatik kichrayadi */
   width: 100%;
   overflow: hidden; overflow-x: hidden;
-  overscroll-behavior-x: none;
+  /* MUHIM: -y ("contain") shart — bo'lmasa brauzer/WebView'ning O'ZINING
+     tabiiy pastga-tortib-yangilash (pull-to-refresh) imo-ishorasi hamon
+     ishlayveradi (overflow:hidden bunga to'sqinlik qilmaydi — bular ikki
+     ALOHIDA mexanizm). Bu ilovaning istalgan sahifasida — jumladan PIN
+     qulf ekranida — kutilmagan TO'LIQ SAHIFA qayta yuklanishiga (va shu
+     orqali xavfsizlik teshigiga, AppLock.tsx'dagi izohga qarang) sabab
+     bo'lardi. Android APK'dagi ATAYLAB qilingan pastga-tortib-yangilash
+     (PullToRefresh.tsx, faqat isAndroid()) buning o'rniga ishlatiladi —
+     bu CSS xossasi unga ta'sir qilmaydi (u toza JS teginish kuzatuvi).
+  */
+  overscroll-behavior: contain;
   max-width: 100vw;
 }
 

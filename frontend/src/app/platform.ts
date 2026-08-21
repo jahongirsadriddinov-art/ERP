@@ -14,6 +14,12 @@ export const isAndroid = (): boolean =>
 
 export const isNative = (): boolean => isTauri() || isCapacitor();
 
+// "Sichqoncha asosiy kirish qurilmasi" — laptop/desktop (Windows exe yoki
+// oddiy desktop brauzer), teginish-asosiy telefon/planshetdan farqli.
+// PIN klaviatura kiritish kabi "faqat desktopda mos" narsalar uchun.
+export const isDesktopPointer = (): boolean =>
+  typeof window !== 'undefined' && window.matchMedia?.('(hover: hover) and (pointer: fine)').matches;
+
 // Android back button handler — Capacitor orqali
 // ChatView da: orqaga chat ro'yxatiga; root sahifada: chiqish dialog
 let _backHandlerInstalled = false;

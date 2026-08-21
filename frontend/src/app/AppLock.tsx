@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Delete, Fingerprint, LogOut, Building2, Lock, X } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { isAndroid } from "./platform";
+import { isAndroid, isDesktopPointer } from "./platform";
 
 // ─── Ilova qulfi (PIN kod + ixtiyoriy biometrik) ──────────────────────────
 // To'liq telefon+kod login har safar qayta so'ralmasin uchun — Telegram'dagi
@@ -99,22 +99,118 @@ export function isBiometricEnabled(): boolean {
 export function setBiometricEnabled(v: boolean): void {
   localStorage.setItem(BIOMETRIC_KEY, v ? '1' : '0');
 }
-// Hozircha faqat Android — Windows'da (Tauri exe) Windows Hello uchun mos,
-// sinovdan o'tgan native plagin yo'q, shuning uchun bu yerda ATAYLAB
-// yoqilmagan (ishlamaydigan tugma ko'rsatishdan ko'ra yashirish afzal).
-export const biometricSupported = (): boolean => isAndroid();
+const WEBAUTHN_CRED_KEY = "erp_webauthnCredId";
 
-export async function tryBiometricUnlock(): Promise<boolean> {
-  if (!biometricSupported()) return false;
+// Android — @capacitor/native-biometric, avvaldan tayyor, ro'yxatdan
+// o'tish shart emas.
+export const nativeBiometricSupported = (): boolean => isAndroid();
+
+// Veb (shu jumladan iOS Safari, Windows exe'ning WebView'i, va h.k.) —
+// WebAuthn ("Face ID/Touch ID/Windows Hello ilova kod so'ramasdan turib
+// tasdiqlashi mumkin bo'lgan brauzer standarti"). MUHIM: bu yerda WebAuthn
+// SERVERGA HECH QANDAY narsa yubormaydigan, faqat MAHALLIY tekshiruv
+// sifatida ishlatiladi — chaqiruv/credential butunlay shu qurilmada
+// yaratiladi va tekshiriladi (haqiqiy parolsiz-login uchun odatda server
+// challenge/public key saqlashi kerak bo'ladi, lekin bu yerga kerak emas —
+// PIN kabi, faqat allaqachon amal qilayotgan sessiyani ochish/berkitish
+// uchun mahalliy qulf).
+export async function isWebAuthnAvailable(): Promise<boolean> {
   try {
-    const { NativeBiometric } = await import('capacitor-native-biometric');
-    const avail = await NativeBiometric.isAvailable();
-    if (!avail?.isAvailable) return false;
-    await NativeBiometric.verifyIdentity({ reason: "Ilovaga kirish uchun tasdiqlang", title: "QurilishERP" });
+    if (!window.PublicKeyCredential) return false;
+    const fn = (window.PublicKeyCredential as any).isUserVerifyingPlatformAuthenticatorAvailable;
+    if (typeof fn !== 'function') return false;
+    return await fn.call(window.PublicKeyCredential);
+  } catch {
+    return false;
+  }
+}
+
+function randomBytes(n: number): Uint8Array {
+  const arr = new Uint8Array(n);
+  crypto.getRandomValues(arr);
+  return arr;
+}
+function toBase64(buf: ArrayBuffer): string {
+  return btoa(String.fromCharCode(...new Uint8Array(buf)));
+}
+function fromBase64(s: string): Uint8Array {
+  return Uint8Array.from(atob(s), c => c.charCodeAt(0));
+}
+
+// Biometrikni birinchi marta yoqishda chaqiriladi — Face ID/Touch ID/
+// Windows Hello orqali bitta "kalit" yaratadi va uning ID'sini (nafaqat
+// maxfiy qismini — bu ID ochiq, faqat "shu kalit shu qurilmada bor"ligini
+// bildiradi) localStorage'da saqlaydi.
+export async function registerWebAuthnBiometric(userId: string): Promise<boolean> {
+  try {
+    const cred = await navigator.credentials.create({
+      publicKey: {
+        challenge: randomBytes(32),
+        rp: { name: "QurilishERP" },
+        user: { id: randomBytes(16), name: userId || "erp-user", displayName: "QurilishERP" },
+        pubKeyCredParams: [{ type: "public-key", alg: -7 }, { type: "public-key", alg: -257 }],
+        authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required" },
+        timeout: 60000,
+      },
+    }) as PublicKeyCredential | null;
+    if (!cred) return false;
+    localStorage.setItem(WEBAUTHN_CRED_KEY, toBase64(cred.rawId));
     return true;
   } catch {
-    return false; // bekor qilindi, ro'yxatdan o'tmagan, yoki qurilmada mavjud emas
+    return false; // bekor qilindi yoki qurilmada platform authenticator yo'q
   }
+}
+
+export function isWebAuthnRegistered(): boolean {
+  return !!localStorage.getItem(WEBAUTHN_CRED_KEY);
+}
+
+async function verifyWebAuthnBiometric(): Promise<boolean> {
+  const credId = localStorage.getItem(WEBAUTHN_CRED_KEY);
+  if (!credId) return false;
+  try {
+    const assertion = await navigator.credentials.get({
+      publicKey: {
+        challenge: randomBytes(32),
+        allowCredentials: [{ id: fromBase64(credId), type: "public-key" }],
+        userVerification: "required",
+        timeout: 60000,
+      },
+    });
+    return !!assertion;
+  } catch {
+    return false;
+  }
+}
+
+// Biometrik tugmasi Profilda ko'rinishi uchun — Android'da nativega
+// tayyorlik shart emas, boshqa platformalarda esa avval ro'yxatdan
+// o'tilgan bo'lishi kerak (registerWebAuthnBiometric chaqirilgan bo'lsin).
+export async function biometricAvailable(): Promise<boolean> {
+  if (nativeBiometricSupported()) return true;
+  return (await isWebAuthnAvailable()) ; // ro'yxatdan o'tish keyinroq, yoqish paytida
+}
+// Sinxron, tezkor tekshiruv (masalan qulf ekranida darhol chaqirish uchun)
+// — allaqachon yoqilgan/ro'yxatdan o'tgan holatni tekshiradi, YANGI
+// moslikni emas (shu uchun useEffect'da avval biometricAvailable() bilan
+// asinxron tekshirilgan bo'lishi kerak, bu funksiya faqat "ishlatsa
+// bo'ladimi" degan tezkor savolga javob beradi).
+export const biometricSupported = (): boolean => nativeBiometricSupported() || isWebAuthnRegistered();
+
+export async function tryBiometricUnlock(): Promise<boolean> {
+  if (nativeBiometricSupported()) {
+    try {
+      const { NativeBiometric } = await import('capacitor-native-biometric');
+      const avail = await NativeBiometric.isAvailable();
+      if (!avail?.isAvailable) return false;
+      await NativeBiometric.verifyIdentity({ reason: "Ilovaga kirish uchun tasdiqlang", title: "QurilishERP" });
+      return true;
+    } catch {
+      return false; // bekor qilindi, ro'yxatdan o'tmagan, yoki qurilmada mavjud emas
+    }
+  }
+  if (isWebAuthnRegistered()) return verifyWebAuthnBiometric();
+  return false;
 }
 
 export function markActiveNow(): void {
@@ -173,16 +269,17 @@ function PinDots({ length, filled }: { length: number; filled: number }) {
 }
 
 // `value` — hozirgi kiritilgan raqamlar (chaqiruvchi ekranining current
-// state'i). Ko'rinadigan katta tugmalar bilan bir qatorda, ko'rinmas haqiqiy
-// <input> ham qo'yilgan — shu orqali qurilmaning O'Z NUMPAD/klaviaturasidan
-// (Windows exe'da jismoniy klaviatura, Android'da tashqi klaviatura yoki
-// tizim klaviaturasi) ham PIN teriladi, xuddi OtpBoxes'dagi bir xil,
-// bu kodda allaqachon o'rnatilgan naqsh bo'yicha. Har ikkala usul ham bir
-// xil onDigit/onDelete orqali ishlaydi — mavjud bosqich/tekshiruv mantig'i
-// (masalan "4 xonaga to'lgach avtomatik keyingi bosqich") o'zgarishsiz qoladi.
+// state'i). Ko'rinadigan katta tugmalar bilan bir qatorda, FAQAT laptop/
+// desktopda (sichqoncha asosiy kirish qurilmasi bo'lganda) ko'rinmas
+// haqiqiy <input> ham qo'yiladi — shu orqali jismoniy klaviatura/numpad'dan
+// ham PIN teriladi (xuddi OtpBoxes'dagi bir xil naqsh). Telefon/planshetda
+// BU QO'YILMAYDI — aks holda ekran klaviaturasi qo'shimcha, keraksiz holda
+// chiqib, maxsus katta tugmalar bilan ikki karra bo'lib qolardi (aniq
+// talab: "numpad faqat laptop/desktopda ishlasin, qolganda faqat ekrandagi").
 function PinPad({ value, onDigit, onDelete }: { value: string; onDigit: (d: string) => void; onDelete: () => void }) {
   const hiddenRef = useRef<HTMLInputElement | null>(null);
-  useEffect(() => { hiddenRef.current?.focus(); }, []);
+  const useHiddenInput = isDesktopPointer();
+  useEffect(() => { if (useHiddenInput) hiddenRef.current?.focus(); }, [useHiddenInput]);
 
   const handleRealChange = (raw: string) => {
     const digits = raw.replace(/\D/g, "");
@@ -196,17 +293,19 @@ function PinPad({ value, onDigit, onDelete }: { value: string; onDigit: (d: stri
   const keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "", "0", "del"];
   return (
     <div className="relative w-full max-w-[280px] mx-auto">
-      <input
-        ref={hiddenRef}
-        type="text"
-        inputMode="numeric"
-        autoComplete="off"
-        value={value}
-        onChange={e => handleRealChange(e.target.value)}
-        aria-label="PIN kod"
-        className="absolute inset-0 opacity-0"
-        style={{ pointerEvents: "none" }}
-      />
+      {useHiddenInput && (
+        <input
+          ref={hiddenRef}
+          type="text"
+          inputMode="numeric"
+          autoComplete="off"
+          value={value}
+          onChange={e => handleRealChange(e.target.value)}
+          aria-label="PIN kod"
+          className="absolute inset-0 opacity-0"
+          style={{ pointerEvents: "none" }}
+        />
+      )}
       <div className="grid grid-cols-3 gap-3">
         {keys.map((k, i) => k === "" ? <div key={i} /> : (
           <button key={i} type="button"

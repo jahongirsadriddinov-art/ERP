@@ -17,7 +17,7 @@ import { installAndroidBackHandler } from "./platform";
 import LanguageSwitcher from "./i18n/LanguageSwitcher";
 import { Skeleton, SkeletonList, SkeletonPage, SkeletonMessage, SkeletonTable, SkeletonProfile } from "./Skeleton";
 import { useGeoTracker } from "./useGeoTracker";
-import { isPinSet, useAppLock, markActiveNow, clearPin, PinSetupScreen, PinLockScreen, ChangePinModal, isBiometricEnabled, setBiometricEnabled, biometricSupported, getLockTimeoutMin, setLockTimeoutMin, LOCK_TIMEOUT_OPTIONS } from "./AppLock";
+import { isPinSet, useAppLock, markActiveNow, clearPin, PinSetupScreen, PinLockScreen, ChangePinModal, isBiometricEnabled, setBiometricEnabled, biometricAvailable, nativeBiometricSupported, registerWebAuthnBiometric, getLockTimeoutMin, setLockTimeoutMin, LOCK_TIMEOUT_OPTIONS } from "./AppLock";
 
 // recharts og'ir kutubxona — faqat "Hisobotlar" bo'limiga kirilganda yuklanadi
 // (boshlang'ich bundle hajmini kamaytiradi, sayt tezroq ochiladi).
@@ -3196,20 +3196,53 @@ function CurrencyPanel({ canEdit }: { canEdit: boolean }) {
   );
 }
 
-// Barmoq izi/Face ID orqali ochish — faqat qurilma qo'llab-quvvatlasa
-// ko'rinadi (Android). Yoqilganda ilova qulfi ekranida PIN o'rniga avval
-// biometrikni sinab ko'radi, muvaffaqiyatsiz bo'lsa PIN'ga qaytadi.
-function BiometricToggleCard() {
+// Barmoq izi/Face ID orqali ochish. Android'da @capacitor/native-biometric
+// (ro'yxatdan o'tish shart emas), boshqa platformalarda (veb, iOS Safari,
+// Windows exe) WebAuthn orqali — bu holatda YOQISHNING O'ZIDA bir marta
+// Face ID/Touch ID/Windows Hello so'raladi (kalit shu qurilmada yaratiladi).
+// Qurilma umuman qo'llab-quvvatlamasa — karta o'zi ko'rsatilmaydi
+// (ishlamaydigan tugma o'rniga).
+function BiometricToggleCard({ currentUserId }: { currentUserId: string }) {
+  const [available, setAvailable] = useState<boolean | null>(null);
   const [enabled, setEnabled] = useState(() => isBiometricEnabled());
+  const [busy, setBusy] = useState(false);
+  const isNative = nativeBiometricSupported();
+
+  useEffect(() => {
+    let cancelled = false;
+    biometricAvailable().then(ok => { if (!cancelled) setAvailable(ok); });
+    return () => { cancelled = true; };
+  }, []);
+
+  if (available !== true) return null;
+
+  const toggle = async () => {
+    if (busy) return;
+    const next = !enabled;
+    if (next && !isNative) {
+      // Veb/WebAuthn — avval ro'yxatdan o'tkazamiz, muvaffaqiyatli
+      // bo'lmasa (bekor qildi, qurilmada Face ID/Touch ID sozlanmagan)
+      // yoqilmaydi.
+      setBusy(true);
+      const ok = await registerWebAuthnBiometric(currentUserId);
+      setBusy(false);
+      if (!ok) { toast.error("Face ID/Touch ID sozlanmadi"); return; }
+    }
+    setBiometricEnabled(next);
+    setEnabled(next);
+  };
+
+  const label = isNative ? "Barmoq izi / Face ID" : "Face ID / Touch ID / Windows Hello";
+
   return (
     <div className="surface rounded-2xl p-4 flex items-center justify-between gap-3">
       <div className="min-w-0">
-        <p className="text-sm font-semibold">Barmoq izi / Face ID</p>
+        <p className="text-sm font-semibold">{label}</p>
         <p className="text-xs text-muted-foreground mt-0.5">Ilova qulfini PIN o'rniga biometrik bilan oching</p>
       </div>
-      <button onClick={() => { const next = !enabled; setBiometricEnabled(next); setEnabled(next); }}
-        aria-label="Barmoq izi / Face ID"
-        className={`relative w-12 h-7 rounded-full flex-shrink-0 liquid-transition ${enabled ? "bg-primary" : "bg-muted"}`}>
+      <button onClick={toggle} disabled={busy}
+        aria-label={label}
+        className={`relative w-12 h-7 rounded-full flex-shrink-0 liquid-transition disabled:opacity-50 ${enabled ? "bg-primary" : "bg-muted"}`}>
         <span className={`absolute top-0.5 w-6 h-6 rounded-full bg-white shadow liquid-transition ${enabled ? "left-[22px]" : "left-0.5"}`} />
       </button>
     </div>
@@ -3727,7 +3760,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
         )}
 
         <SecuritySettingsCard />
-        {biometricSupported() && <BiometricToggleCard />}
+        <BiometricToggleCard currentUserId={currentUser.id} />
 
         {/* Qo'lda bloklash — 1 daqiqa kutmasdan, darhol PIN ekraniga o'tadi.
             Barcha qurilmalarda (veb/APK/exe) ko'rinadi — biometrikdan farqli,

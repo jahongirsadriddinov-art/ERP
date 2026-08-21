@@ -4649,7 +4649,7 @@ export default function App() {
       }
 
       // ── Real-time (Socket.io) ──────────────────────────────────────────────
-      const socket = connectSocket(liveUser.id);
+      const socket = connectSocket(liveUser.id, liveUser.companyId);
       const withId = (p: any): Msg => ({ ...p, id: p.id || p._id });
 
       const onNew = (payload: any) => {

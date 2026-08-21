@@ -51,14 +51,64 @@ export default function CallOverlay({ currentUser, users, call, onClose }:
   const userById = (id: string) => users.find(u => u.id === id);
   const title = call.groupId ? t('call.groupCall') : (userById(call.peerId || '')?.name || call.fromName || t('call.defaultTitle'));
 
+  // "connected" holatga o'tgani — hali HAQIQIY media (audio/video BAYT)
+  // kelayotganini bildirmaydi. Ochiq/bepul TURN (openrelay.metered.ca)
+  // ba'zan ICE'ni "connected" deb ko'rsatib, lekin relay orqali haqiqiy
+  // trafikni o'tkazolmay qoladi — natijada qora ekran/ovozsiz "ulangan"
+  // qo'ng'iroq. Har bir ulanish uchun bir necha soniyadan keyin getStats()
+  // orqali chindan bayt kelayotganini tekshiramiz; kelmasa ICE'ni qayta
+  // ishga tushiramiz (restartIce + yangi offer) — jimgina "buzilib" qolish
+  // o'rniga avtomatik tuzatishga harakat qilamiz.
+  const statsTimers = useRef<Record<string, ReturnType<typeof setInterval>>>({});
+  const lastBytes = useRef<Record<string, number>>({});
+  const restarted = useRef<Record<string, boolean>>({});
+
+  const watchMediaFlow = (peerId: string, pc: RTCPeerConnection) => {
+    if (statsTimers.current[peerId]) return;
+    statsTimers.current[peerId] = setInterval(async () => {
+      if (pc.connectionState !== 'connected') return;
+      try {
+        const stats = await pc.getStats();
+        let bytes = 0;
+        stats.forEach(r => { if (r.type === 'inbound-rtp' && !r.isRemote) bytes += r.bytesReceived || 0; });
+        const prev = lastBytes.current[peerId] || 0;
+        if (bytes <= prev && !restarted.current[peerId]) {
+          // 5+ soniya davomida bitta ham bayt kelmadi — "ulangan" lekin
+          // media oqmayapti. Bir marta ICE restart bilan tuzatishga urinamiz
+          // (takroriy urinish qilmaymiz — foydalanuvchini qayta-qayta
+          // "ulanmoqda" holatida ilib qo'ymaslik uchun).
+          restarted.current[peerId] = true;
+          try {
+            pc.restartIce();
+            if (call.direction === 'out' || pc.signalingState === 'stable') {
+              const offer = await pc.createOffer({ iceRestart: true });
+              await pc.setLocalDescription(offer);
+              socket?.emit('call:offer', { to: peerId, from: currentUser.id, fromName: currentUser.name, mode: call.mode, groupId: call.groupId, sdp: offer });
+            }
+          } catch {}
+        }
+        lastBytes.current[peerId] = bytes;
+      } catch {}
+    }, 5000);
+  };
+
   const makePC = (peerId: string) => {
     if (pcs.current[peerId]) return pcs.current[peerId];
     const pc = new RTCPeerConnection(ICE_CONFIG);
     localStream.current?.getTracks().forEach(t => pc.addTrack(t, localStream.current!));
     pc.onicecandidate = e => { if (e.candidate) socket?.emit('call:ice', { to: peerId, from: currentUser.id, candidate: e.candidate }); };
-    pc.ontrack = e => { setRemote(prev => ({ ...prev, [peerId]: e.streams[0] })); setStatus('connected'); };
+    pc.ontrack = e => { setRemote(prev => ({ ...prev, [peerId]: e.streams[0] })); setStatus('connected'); watchMediaFlow(peerId, pc); };
     pc.oniceconnectionstatechange = () => {
-      if (pc.iceConnectionState === 'failed') toast.error(t('call.connectionError'));
+      if (pc.iceConnectionState === 'failed') {
+        // Avval ham TURN orqali urinib ko'rilmagan bo'lsa — ICE restart
+        // bilan qayta ulanishga harakat qilamiz, faqat keyin xato ko'rsatamiz.
+        if (!restarted.current[peerId]) {
+          restarted.current[peerId] = true;
+          try { pc.restartIce(); } catch {}
+        } else {
+          toast.error(t('call.connectionError'));
+        }
+      }
     };
     pcs.current[peerId] = pc;
     return pc;
@@ -104,8 +154,16 @@ export default function CallOverlay({ currentUser, users, call, onClose }:
       if (pc && pc.remoteDescription) { try { await pc.addIceCandidate(new RTCIceCandidate(d.candidate)); } catch {} }
       else { (pendingIce.current[d.from] ||= []).push(d.candidate); }
     };
-    const onOffer = async (d: any) => { // guruh mesh — boshqa a'zodan yangi offer
-      if (!call.groupId || d.groupId !== call.groupId || d.from === currentUser.id) return;
+    const onOffer = async (d: any) => {
+      // Ikki holat: (1) guruh mesh — boshqa a'zodan YANGI offer; (2) 1:1
+      // qo'ng'iroqda ICE-restart uchun QAYTA muvofiqlashtirish offer'i
+      // (watchMediaFlow/oniceconnectionstatechange yuborgan) — bunda
+      // ALLAQACHON shu peer uchun pc mavjud. Qo'ng'iroqni BOSHLOVCHI birinchi
+      // offer bunga kirmaydi — u App.tsx darajasida (CallOverlay hali
+      // ochilmagan bo'ladi) alohida ushlanadi.
+      const isGroupPeer = call.groupId && d.groupId === call.groupId && d.from !== currentUser.id;
+      const isRenegotiate1to1 = !call.groupId && d.from === call.peerId && !!pcs.current[d.from];
+      if (!isGroupPeer && !isRenegotiate1to1) return;
       const pc = makePC(d.from);
       await pc.setRemoteDescription(new RTCSessionDescription(d.sdp));
       await flushIce(d.from);
@@ -113,7 +171,12 @@ export default function CallOverlay({ currentUser, users, call, onClose }:
       socket?.emit('call:answer', { to: d.from, from: currentUser.id, sdp: ans });
     };
     const onJoin = (d: any) => { if (call.groupId && d.groupId === call.groupId && d.from !== currentUser.id) offerTo(d.from); };
-    const closePeer = (peerId: string) => { pcs.current[peerId]?.close(); delete pcs.current[peerId]; setRemote(prev => { const c = { ...prev }; delete c[peerId]; return c; }); };
+    const closePeer = (peerId: string) => {
+      pcs.current[peerId]?.close(); delete pcs.current[peerId];
+      if (statsTimers.current[peerId]) { clearInterval(statsTimers.current[peerId]); delete statsTimers.current[peerId]; }
+      delete lastBytes.current[peerId]; delete restarted.current[peerId];
+      setRemote(prev => { const c = { ...prev }; delete c[peerId]; return c; });
+    };
     const onEnd = (d: any) => { closePeer(d.from); if (Object.keys(pcs.current).length === 0) onClose(); };
     const onReject = (d: any) => { toast(t('call.declined')); onEnd(d); };
 
@@ -129,6 +192,7 @@ export default function CallOverlay({ currentUser, users, call, onClose }:
       socket?.off('call:answer', onAnswer); socket?.off('call:ice', onIce); socket?.off('call:offer', onOffer);
       socket?.off('call:join', onJoin); socket?.off('call:end', onEnd); socket?.off('call:reject', onReject);
       Object.values(pcs.current).forEach(pc => pc.close()); pcs.current = {};
+      Object.values(statsTimers.current).forEach(clearInterval); statsTimers.current = {};
       localStream.current?.getTracks().forEach(t => t.stop());
     };
   }, []);

@@ -3,13 +3,18 @@ import { API_BASE } from "./api";
 
 let socket: Socket | null = null;
 
-export function connectSocket(userId: string): Socket {
+export function connectSocket(userId: string, companyId?: string): Socket {
   if (socket) {
     if ((socket as any).io?.opts?.query?.userId === userId) return socket;
     socket.disconnect();
   }
   socket = io(API_BASE, {
-    query: { userId },
+    // companyId — serverda GPS kabi "broadcast" hodisalarni faqat SHU
+    // firma foydalanuvchilariga yetkazish uchun (xavfsizlik: avval BUTUN
+    // ulangan foydalanuvchilarga — boshqa firmalarga ham — global
+    // broadcast qilinardi, GPS koordinatalari kabi maxfiy ma'lumot
+    // boshqa firmaga oqib chiqishi mumkin edi).
+    query: companyId ? { userId, companyId } : { userId },
     // MUHIM: "websocket" birinchi bo'lsa, socket.io boshlang'ich polling
     // handshake'ni butunlay o'tkazib yuborib, to'g'ridan-to'g'ri WS upgrade
     // so'rovi yuboradi — Render kabi proksi/load-balancer ortidagi platformalar

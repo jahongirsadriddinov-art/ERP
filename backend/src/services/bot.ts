@@ -10,7 +10,7 @@ import Group from '../models/Group';
 import Attendance from '../models/Attendance';
 import GpsLocation from '../models/GpsLocation';
 import { initRegistrationScene, isInRegistration } from './registrationScene';
-import { emitToUser, emitToGroup, broadcast } from './socket';
+import { emitToUser, emitToGroup, emitToCompany } from './socket';
 import { tb, langLabel, BotLang } from '../i18n/bot';
 import { getBackendUrl } from '../utils/backendUrl';
 import { uploadFileToCloud } from '../config/cloudinary';
@@ -258,7 +258,9 @@ async function saveLocationFromTelegram(chatId: number, lat: number, lng: number
   const user = await User.findOne({ telegramChatId: chatId.toString() }).select('companyId').lean();
   if (!user) return;
   const loc = await GpsLocation.create({ userId: String(user._id), companyId: user.companyId, lat, lng, accuracy, timestamp: new Date(), source });
-  broadcast('gps:update', { userId: String(user._id), companyId: user.companyId, lat, lng, accuracy, timestamp: loc.timestamp, source });
+  // MUHIM: avval global broadcast() — BOSHQA firmalarga ham GPS koordinatasi
+  // sızardi. Endi faqat SHU foydalanuvchining o'z firma xonasiga.
+  emitToCompany(user.companyId, 'gps:update', { userId: String(user._id), companyId: user.companyId, lat, lng, accuracy, timestamp: loc.timestamp, source });
 }
 
 const CHECKIN_ONLY_KEYBOARD = (lang?: BotLang) => ({

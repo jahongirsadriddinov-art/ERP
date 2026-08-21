@@ -34,6 +34,10 @@ export function initSocket(httpServer: HttpServer): Server {
       addUserSocket(userId, socket.id);
       broadcastPresence();
     }
+    // Firma xonasi — GPS kabi haqiqiy-vaqt hodisalarni FAQAT shu firma
+    // foydalanuvchilariga yetkazish uchun (emitToCompany quyida).
+    const companyId = String(socket.handshake.query.companyId || '');
+    if (companyId) socket.join(`company:${companyId}`);
 
     // Guruh room'lariga qo'shilish
     socket.on('join:group', (groupId: string) => { if (groupId) socket.join(`group:${groupId}`); });
@@ -73,5 +77,12 @@ export const emitToGroup = (groupId: string, event: string, payload: any) =>
   io?.to(`group:${groupId}`).emit(event, payload);
 export const broadcast = (event: string, payload: any) =>
   io?.emit(event, payload);
+// companyId berilmasa (masalan eski/companyId'siz yozuv) — xavfsiz tomonga
+// og'ish uchun HECH KIMGA yubormaymiz (global broadcast'ga qaytish o'rniga),
+// aks holda aynan tuzatilayotgan sızish yana paydo bo'lardi.
+export const emitToCompany = (companyId: string | undefined, event: string, payload: any) => {
+  if (!companyId) return;
+  io?.to(`company:${companyId}`).emit(event, payload);
+};
 export const getIO = () => io;
 export const isOnline = (userId: string) => userSockets.has(userId);

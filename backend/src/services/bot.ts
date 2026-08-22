@@ -56,17 +56,16 @@ if (useWebhook) {
   // ko'rinishga sabab bo'lardi.
   const cleanBase = webhookUrl!.replace(/\/+$/, '').replace(/\/api\/bot\/webhook$/, '');
   const fullWebhookUrl = `${cleanBase}/api/bot/webhook`;
-  // MUHIM: allowed_updates ANIQ ko'rsatilmasa, Telegram shu webhook uchun
-  // OLDINGI sozlamani ishlatadi (birinchi marta hech qachon o'rnatilmagan
-  // bo'lsa — standart to'plam, odatda bularning barchasini o'z ichiga oladi,
-  // lekin buni ANIQ yozib qo'yish yanada ishonchli: 'edited_message'
-  // aynan Telegram'ning "Jonli joylashuv" (Live Location) davomiy
-  // yangilanishlari uchun zarur — shu yo'q bo'lib qolsa, ish boshlashda
-  // birinchi joylashuv kelib, keyingi yangilanishlar UMUMAN kelmay qoladi.
-  bot.setWebHook(fullWebhookUrl, {
+
+  const registerWebhook = () => bot.setWebHook(fullWebhookUrl, {
     max_connections: 40,
+    // MUHIM: allowed_updates ANIQ ko'rsatilmasa, Telegram shu webhook uchun
+    // OLDINGI sozlamani ishlatadi — 'edited_message' aynan Telegram'ning
+    // "Jonli joylashuv" (Live Location) davomiy yangilanishlari uchun zarur.
     allowed_updates: ['message', 'edited_message', 'callback_query'],
-  })
+  });
+
+  registerWebhook()
     .then(() => console.log(`✅ Telegram bot webhook ishga tushdi: ${fullWebhookUrl}`))
     .catch((err: Error) => {
       // XAVFSIZLIK ZAXIRASI: webhook o'rnatilmasa (noto'g'ri URL, Telegram
@@ -84,6 +83,21 @@ if (useWebhook) {
       bot.startPolling()
         .catch((pollErr: Error) => console.error('⚠️ Polling fallback ham muvaffaqiyatsiz:', pollErr.message));
     });
+
+  // O'ZINI-O'ZI TUZATISH: agar BOSHQA bir joyda (masalan dasturchining
+  // mahalliy kompyuterida, TELEGRAM_WEBHOOK_URL sozlanmagan holda) shu bot
+  // tokeni bilan pollingga urinilsa — node-telegram-bot-api kutubxonasi
+  // (telegramPolling.js, _unsetWebHook) buni ANIQLAB, xatoni o'zi hal qilish
+  // uchun bizning webhook'imizni AVTOMATIK O'CHIRIB TASHLAYDI (bu bizning
+  // kodimiz emas — Telegram'ning "polling va webhook bir-birini istisno
+  // qiladi" qoidasiga kutubxonaning javobi). Natijada bot butunlay
+  // "o'lik" ko'rinar edi — aynan shu sodir bo'lgan holat. Buning oldini
+  // to'liq olib bo'lmaydi (boshqa joydagi pollingni bu yerdan
+  // to'xtatolmaymiz), lekin har 5 daqiqada webhook'ni QAYTA o'rnatib,
+  // uzilish oynasini bir necha soniyagacha qisqartiramiz.
+  setInterval(() => {
+    registerWebhook().catch((err: Error) => console.error('⚠️ Webhook qayta tasdiqlashda xato:', err.message));
+  }, 5 * 60 * 1000);
 } else {
   // Polling rejimi — local dev uchun
   console.log('✅ Telegram bot polling rejimida ishga tushdi');

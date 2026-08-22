@@ -1,26 +1,37 @@
 import { Router } from 'express';
 import multer from 'multer';
+import fs from 'fs';
+import path from 'path';
 import User from '../models/User';
 import AppRelease from '../models/AppRelease';
 import { bot } from '../services/bot';
-import { uploadFileToCloud } from '../config/cloudinary';
+import { getBackendUrl } from '../utils/backendUrl';
 
 const router = Router();
 
 // GET /api/deploy/latest — HAMMAGA OCHIQ (auth/secret talab qilmaydi — login
 // qilmagan mehmon ham landing page'dan yuklab olishi kerak). Faqat versiya
-// matni + Cloudinary havolalarini qaytaradi, boshqa hech qanday maxfiy
-// ma'lumot yo'q.
+// matni + havolalarni qaytaradi, boshqa hech qanday maxfiy ma'lumot yo'q.
 router.get('/latest', async (_req, res) => {
   try {
     const rel = await AppRelease.findOne({ key: 'latest' }).lean();
     if (!rel) return res.json({ available: false });
+    // MUHIM: APK/EXE endi O'ZGARMAS nom bilan '/uploads'da saqlanadi
+    // (Cloudinary emas — yuqoridagi izohga qarang), o'sha static route esa
+    // 365 kunlik "immutable" keshlash sarlavhasi bilan xizmat qiladi (bu
+    // chat-media fayllar uchun TO'G'RI, ular haqiqatan ham o'zgarmas — lekin
+    // release fayli HAR YANGI VERSIYADA bir xil URL'da ALMASHTIRILADI).
+    // Shu sabab mijozning (brauzer) o'zi eski nusxani abadiy keshlab
+    // qolmasligi uchun URL'ga versiyaga bog'liq so'rov parametri qo'shamiz —
+    // versiya o'zgarsa, URL "yangi" bo'lib ko'rinadi, brauzer qayta yuklaydi.
+    const v = encodeURIComponent(rel.version || '');
+    const withVersion = (u?: string | null) => (u ? `${u}${u.includes('?') ? '&' : '?'}v=${v}` : null);
     res.json({
       available: true,
       version: rel.version,
       notes: rel.notes || '',
-      apkUrl: rel.apkUrl || null,
-      exeUrl: rel.exeUrl || null,
+      apkUrl: withVersion(rel.apkUrl),
+      exeUrl: withVersion(rel.exeUrl),
       updatedAt: rel.updatedAt,
     });
   } catch (err) {
@@ -29,15 +40,25 @@ router.get('/latest', async (_req, res) => {
   }
 });
 
-// Xuddi messages.ts'dagi chat-media yuklash bilan bir xil vaqtinchalik
-// disk-storage naqshi — fayl darhol Cloudinary'ga yuklanib, keyin diskdan
-// o'chiriladi (deploy-artifact.ts o'zi buni bajaradi).
 const upload = multer({ dest: 'uploads/', limits: { fileSize: 200 * 1024 * 1024 } });
 
-// POST /api/deploy/upload-artifact — CI qurgan APK/exe faylini Cloudinary'ga
-// yuklab, ochiq (login talab qilmaydigan) URL qaytaradi — GitHub Actions
-// "artifact"lari login talab qilgani uchun Telegram orqali oddiy foydalanuvchiga
+// POST /api/deploy/upload-artifact — CI qurgan APK/exe faylini saqlab, ochiq
+// (login talab qilmaydigan) URL qaytaradi — GitHub Actions "artifact"lari
+// login talab qilgani uchun Telegram orqali oddiy foydalanuvchiga
 // to'g'ridan-to'g'ri yuborib bo'lmaydi, shuning uchun shu oraliq qadam kerak.
+//
+// XAVFSIZLIK/TARIX: avval bu yo'l Cloudinary'ga yuklardi — lekin Cloudinary'ning
+// o'z xavfsizlik siyosati .apk/.exe kengaytmalarini UMUMAN rad etadi
+// ("resources with extension apk/exe are not allowed"), ".bin" deb
+// niqoblash bilan vaqtincha aylanib o'tilgan edi — Cloudinary keyinchalik
+// buni ham berkitib qo'ydi ("resources with extension bin are not allowed").
+// Aniq, takroran bildirilgan foydalanuvchi talabi: "claudinary ni apk bn
+// exe... ochirip qoy". Endi bu yo'l Cloudinary'ga UMUMAN TEGMAYDI — botning
+// qo'lda-tashlab-broadcast qilish yo'li (services/bot.ts, broadcastVersionFile)
+// bilan BIR XIL naqsh: fayl to'g'ridan-to'g'ri shu serverning o'z
+// '/uploads' papkasiga, O'ZGARMAS nom bilan yoziladi (Render diskidan
+// ephemeral — qayta ishga tushirilganda o'chadi, lekin bu allaqachon
+// qo'lda-broadcast yo'lida qabul qilingan cheklov, yangilik emas).
 router.post('/upload-artifact', upload.single('file'), async (req, res) => {
   try {
     const secret = req.headers['x-deploy-secret'];
@@ -47,19 +68,20 @@ router.post('/upload-artifact', upload.single('file'), async (req, res) => {
     }
     if (!req.file) return res.status(400).json({ error: 'file talab etiladi (multipart/form-data)' });
 
-    // kind: 'apk' | 'exe' — berilsa, O'ZGARMAS (stable) public_id bilan
-    // yuklanadi (har safar bir xil URL, eskisi almashtiriladi). Landing
-    // page/Profildagi "yuklab olish" tugmalari shu doim-bir-xil URL'ga
-    // ishonib, DB'da alohida "eng oxirgi versiya" yozuvi saqlash shart
-    // emas. `kind` berilmasa — eski (timestamp-unique) xatti-harakat.
-    // MUHIM: kengaytma bu yerda QO'SHILMAYDI — uploadFileToCloud o'zi
-    // qo'shadi (APK/EXE kabi "xavfli" kengaytmalar uchun Cloudinary'ga
-    // ZARARSIZ ".bin" bilan yuklanadi, haqiqiy kengaytma faqat yetkazishda
-    // qaytariladi — cloudinary.ts'dagi RISKY_EXTS izohiga qarang).
     const kind = typeof req.body?.kind === 'string' ? req.body.kind : undefined;
-    const stablePublicId = kind === 'apk' || kind === 'exe' ? 'QurilishERP-latest' : undefined;
-
-    const { url } = await uploadFileToCloud(req.file.path, 'qurilish-releases', req.file.originalname, { stablePublicId });
+    const ext = (kind === 'apk' || kind === 'exe') ? `.${kind}` : (path.extname(req.file.originalname || '') || '.bin');
+    const destDir = path.join(process.cwd(), 'uploads');
+    if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
+    // kind berilsa — O'ZGARMAS (stable) nom bilan yoziladi (har safar bir xil
+    // URL, eskisi almashtiriladi). Landing page/Profildagi "yuklab olish"
+    // tugmalari shu doim-bir-xil URL'ga ishonadi, DB'da alohida "eng oxirgi
+    // versiya" yozuvi saqlash shart emas. `kind` berilmasa — vaqt tamg'asi
+    // bilan noyob nom.
+    const stableName = (kind === 'apk' || kind === 'exe') ? `QurilishERP-latest${ext}` : `artifact-${Date.now()}${ext}`;
+    const destPath = path.join(destDir, stableName);
+    fs.copyFileSync(req.file.path, destPath);
+    fs.unlinkSync(req.file.path);
+    const url = `${getBackendUrl()}/uploads/${stableName}`;
     res.json({ ok: true, url });
   } catch (err) {
     console.error('[upload-artifact]', err);
@@ -108,7 +130,7 @@ router.post('/broadcast-update', async (req, res) => {
     // versiyani ko'rsatadi (foydalanuvchi kutib o'tirmaydi).
     await AppRelease.findOneAndUpdate(
       { key: 'latest' },
-      { key: 'latest', version, notes: notes || '', apkUrl: apkUrl || undefined, exeUrl: exeUrl || undefined, updatedAt: new Date() },
+      { $set: { key: 'latest', version, notes: notes || '', apkUrl: apkUrl || undefined, exeUrl: exeUrl || undefined, updatedAt: new Date() } },
       { upsert: true }
     ).then(() => console.log(`[broadcast-update] AppRelease saqlandi: v${version}`))
       .catch(err => console.error('[broadcast-update] AppRelease saqlash xatosi:', err));
@@ -120,12 +142,13 @@ router.post('/broadcast-update', async (req, res) => {
     // MUHIM: avval APK/exe uchun tashqi URL'ga ochiladigan TUGMA yuborilardi —
     // bosilganda brauzerga chiqib ketardi va (kengaytma bug'i tuzalgunga
     // qadar) ba'zan notanish/kengaytmasiz fayl bo'lib ochilardi. Keyin
-    // sendDocument'ga to'g'ridan-to'g'ri Cloudinary URL berildi — lekin bu
+    // sendDocument'ga to'g'ridan-to'g'ri tashqi URL berildi — lekin bu
     // holda Telegram SERVERI o'zi URL'ni yuklab olishga harakat qiladi, va
     // bu yo'lda nom/kengaytma/Content-Type qanday aniqlanishi bizning
     // nazoratimizdan tashqarida (fileOptions faqat baytlarni O'ZIMIZ
     // yuklaganda ishlaydi, URL berilganda e'tiborga olinmasligi mumkin).
-    // Endi backend'ning O'ZI Cloudinary'dan baytlarni oldindan yuklab,
+    // Endi backend'ning O'ZI (endi o'z '/uploads'idan, Cloudinary'dan EMAS —
+    // yuqoridagi upload-artifact izohiga qarang) baytlarni oldindan yuklab,
     // Telegram'ga TO'G'RIDAN-TO'G'RI multipart sifatida yuboradi — nom va
     // MIME tur ANIQ biz aytgandek bo'ladi, hech qanday noaniqlik qolmaydi.
     // Birinchi muvaffaqiyatli yuborishdan qaytgan file_id keyingi HAMMA
@@ -133,13 +156,12 @@ router.post('/broadcast-update', async (req, res) => {
     // yubormaydi — tezroq). Agar fayl juda katta bo'lib Telegram rad etsa
     // (Bot API limiti ~50MB) — o'sha va keyingi userlarga oddiy havola
     // bilan zaxira qilinadi (hech kim faylsiz qolmasin).
-    // MUHIM: apkUrl/exeUrl endi /api/files/proxy orqali "o'ralgan" (mijoz —
-    // brauzer/ilova — uchun, ba'zi tarmoqlarda Cloudinary'ga to'g'ridan-
-    // to'g'ri ulanish bloklanishi mumkinligi sababli). LEKIN bu chaqiruv
-    // backend'ning O'ZIDAN — Render server-server ulanishida Cloudinary'ga
-    // hech qanday bloklash yo'q, shu sabab proksi orqali o'zimizga o'zimiz
-    // qo'shimcha (keraksiz, sekinlashtiradigan) qadam qo'shmasdan, ichidagi
-    // ASL Cloudinary manzilini ochib, to'g'ridan-to'g'ri O'SHANDAN olamiz.
+    // apkUrl/exeUrl endi Cloudinary'ga umuman bog'liq emas — to'g'ridan-to'g'ri
+    // shu serverning o'z '/uploads' manzili (upload-artifact yozadi). Bu
+    // unwrap eski (Cloudinary davridan qolgan, /api/files/proxy orqali
+    // "o'ralgan") havolalar hali qandaydir joyda saqlanib qolgan bo'lsa ham
+    // ishlashda davom etishi uchun zararsiz zaxira — endigi normal holatda
+    // hech narsani o'zgartirmaydi (pathname /api/files/proxy emas).
     const unwrapProxyUrl = (url: string): string => {
       try {
         const u = new URL(url);

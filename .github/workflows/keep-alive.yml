@@ -1,0 +1,29 @@
+name: Keep backend awake
+
+# Render'ning bepul tarifi ~15 daqiqa trafiksiz qolsa xizmatni "uxlatib"
+# qo'yadi — keyingi haqiqiy so'rov 30-50 soniyalik "sovuq start"ga
+# to'g'ri keladi (login, bot javobi va h.k. sekinlashadi/vaqti-vaqti
+# bilan xatoga o'xshab ko'rinadi). Har 10 daqiqada /health'ga oddiy
+# so'rov yuborib, xizmatni doim "uyg'oq" ushlab turamiz.
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch: {}
+
+concurrency:
+  group: keep-alive
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping backend /health
+        run: |
+          set -e
+          STATUS=$(curl -s -o /tmp/health.json -w "%{http_code}" --max-time 55 https://qurilisherp-backend.onrender.com/health || echo "000")
+          echo "HTTP status: $STATUS"
+          cat /tmp/health.json 2>/dev/null || true
+          if [ "$STATUS" != "200" ]; then
+            echo "::warning::Backend /health $STATUS qaytardi (sovuq start davomida kutilgan bo'lishi mumkin)"
+          fi

@@ -122,7 +122,25 @@ router.post('/broadcast-update', async (req, res) => {
     // yubormaydi — tezroq). Agar fayl juda katta bo'lib Telegram rad etsa
     // (Bot API limiti ~50MB) — o'sha va keyingi userlarga oddiy havola
     // bilan zaxira qilinadi (hech kim faylsiz qolmasin).
-    const fetchBuffer = async (url: string): Promise<Buffer> => {
+    // MUHIM: apkUrl/exeUrl endi /api/files/proxy orqali "o'ralgan" (mijoz —
+    // brauzer/ilova — uchun, ba'zi tarmoqlarda Cloudinary'ga to'g'ridan-
+    // to'g'ri ulanish bloklanishi mumkinligi sababli). LEKIN bu chaqiruv
+    // backend'ning O'ZIDAN — Render server-server ulanishida Cloudinary'ga
+    // hech qanday bloklash yo'q, shu sabab proksi orqali o'zimizga o'zimiz
+    // qo'shimcha (keraksiz, sekinlashtiradigan) qadam qo'shmasdan, ichidagi
+    // ASL Cloudinary manzilini ochib, to'g'ridan-to'g'ri O'SHANDAN olamiz.
+    const unwrapProxyUrl = (url: string): string => {
+      try {
+        const u = new URL(url);
+        if (u.pathname === '/api/files/proxy') {
+          const inner = u.searchParams.get('url');
+          if (inner) return inner;
+        }
+      } catch {}
+      return url;
+    };
+    const fetchBuffer = async (rawUrl: string): Promise<Buffer> => {
+      const url = unwrapProxyUrl(rawUrl);
       const resp = await fetch(url);
       if (!resp.ok) throw new Error(`Fayl yuklab olinmadi: HTTP ${resp.status}`);
       return Buffer.from(await resp.arrayBuffer());

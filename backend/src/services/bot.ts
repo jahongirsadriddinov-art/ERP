@@ -33,7 +33,29 @@ export const bot = new TelegramBot(token, useWebhook ? { polling: false } : {
   polling: { params: { allowed_updates: ['message', 'edited_message', 'callback_query'] } },
 });
 
+// Polling'dagi xatolarni birxil joyda ushlaymiz — webhook ishlab
+// tursa umuman chaqirilmaydi (zararsiz), lekin webhook muvaffaqiyatsiz
+// bo'lib pollingga qaytilsa (pastda) ham, oddiy local dev polling
+// rejimida ham bir xil, tanish xabarlar chiqishi uchun.
+bot.on('polling_error', (err: any) => {
+  if (err?.code === 'ETELEGRAM' && (err?.response?.statusCode === 409 || String(err?.message).includes('409'))) {
+    console.warn('⚠️ Telegram 409 Conflict: boshqa bot instance polling qilmoqda. Production\'da TELEGRAM_WEBHOOK_URL sozlang.');
+  } else if (err?.code === 'EFATAL') {
+    console.warn('⚠️ Telegram polling to\'xtatildi (EFATAL):', err?.message);
+  } else {
+    console.error('Telegram polling xatosi:', err?.message || err);
+  }
+});
+
 if (useWebhook) {
+  // Manzilni tozalaymiz — foydalanuvchi TELEGRAM_WEBHOOK_URL'ga oxiriga "/"
+  // yoki hatto to'liq "/api/bot/webhook" qo'shib qo'yishi (juda oson xato)
+  // "//api/bot/webhook" yoki "/api/bot/webhook/api/bot/webhook" kabi
+  // NOTO'G'RI URL hosil qilib, Telegram uni ro'yxatdan o'tkazsa ham, bizning
+  // haqiqiy route'imizga hech qachon kelib tushmay, bot BUTUNLAY "o'lik"
+  // ko'rinishga sabab bo'lardi.
+  const cleanBase = webhookUrl!.replace(/\/+$/, '').replace(/\/api\/bot\/webhook$/, '');
+  const fullWebhookUrl = `${cleanBase}/api/bot/webhook`;
   // MUHIM: allowed_updates ANIQ ko'rsatilmasa, Telegram shu webhook uchun
   // OLDINGI sozlamani ishlatadi (birinchi marta hech qachon o'rnatilmagan
   // bo'lsa — standart to'plam, odatda bularning barchasini o'z ichiga oladi,
@@ -41,25 +63,29 @@ if (useWebhook) {
   // aynan Telegram'ning "Jonli joylashuv" (Live Location) davomiy
   // yangilanishlari uchun zarur — shu yo'q bo'lib qolsa, ish boshlashda
   // birinchi joylashuv kelib, keyingi yangilanishlar UMUMAN kelmay qoladi.
-  bot.setWebHook(`${webhookUrl}/api/bot/webhook`, {
+  bot.setWebHook(fullWebhookUrl, {
     max_connections: 40,
     allowed_updates: ['message', 'edited_message', 'callback_query'],
   })
-    .then(() => console.log(`✅ Telegram bot webhook ishga tushdi: ${webhookUrl}/api/bot/webhook`))
-    .catch((err: Error) => console.error('⚠️ Telegram webhook o\'rnatishda xato:', err.message));
+    .then(() => console.log(`✅ Telegram bot webhook ishga tushdi: ${fullWebhookUrl}`))
+    .catch((err: Error) => {
+      // XAVFSIZLIK ZAXIRASI: webhook o'rnatilmasa (noto'g'ri URL, Telegram
+      // rad etishi va h.k.) — bot polling'siz HAM, webhook'siz HAM (ya'ni
+      // BUTUNLAY o'lik) qolib ketmasin uchun pollingga qaytamiz. Bu holat
+      // avval sodir bo'lgan: "webhook qo'ysam bot ishlamay qoldi".
+      console.error('⚠️ Telegram webhook o\'rnatishda xato — pollingga qaytilmoqda:', err.message);
+      // MUHIM: TelegramBotPolling o'z sozlamalarini startPolling()ning
+      // argumentidan EMAS, balki bot.options.polling'dan o'qiydi (bu yerda
+      // konstruktorda { polling: false } qilib qo'yilgan edi) — shu sabab
+      // allowed_updates'ni ANIQ shu yerga, ishga tushirishdan OLDIN yozib
+      // qo'yamiz, aks holda 'edited_message' (jonli joylashuv) yana
+      // yo'qolib qolardi.
+      bot.options.polling = { params: { allowed_updates: ['message', 'edited_message', 'callback_query'] } };
+      bot.startPolling()
+        .catch((pollErr: Error) => console.error('⚠️ Polling fallback ham muvaffaqiyatsiz:', pollErr.message));
+    });
 } else {
   // Polling rejimi — local dev uchun
-  bot.on('polling_error', (err: any) => {
-    if (err?.code === 'ETELEGRAM' && (err?.response?.statusCode === 409 || String(err?.message).includes('409'))) {
-      // Bu xato Render + local dev bir vaqtda ishlaganda kelib chiqadi.
-      // Production'da TELEGRAM_WEBHOOK_URL o'rnating — muammo to'liq hal bo'ladi.
-      console.warn('⚠️ Telegram 409 Conflict: boshqa bot instance polling qilmoqda. Production\'da TELEGRAM_WEBHOOK_URL sozlang.');
-    } else if (err?.code === 'EFATAL') {
-      console.warn('⚠️ Telegram polling to\'xtatildi (EFATAL):', err?.message);
-    } else {
-      console.error('Telegram polling xatosi:', err?.message || err);
-    }
-  });
   console.log('✅ Telegram bot polling rejimida ishga tushdi');
 }
 

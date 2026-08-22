@@ -12,6 +12,16 @@ export const cloudinaryEnabled = !!(CLOUD_NAME && API_KEY && API_SECRET);
 
 if (cloudinaryEnabled) {
   cloudinary.config({ cloud_name: CLOUD_NAME!, api_key: API_KEY!, api_secret: API_SECRET! });
+  console.log('✅ Cloudinary ulandi — fayllar doimiy saqlanadi');
+} else {
+  // XAVFSIZLIK/BARQARORLIK OGOHLANTIRISHI: uchtadan BIRTASI bo'lmasa ham
+  // (CLOUD_NAME/API_KEY/API_SECRET) — jimgina Render'ning EPHEMERAL
+  // '/uploads' papkasiga qaytiladi. Bu qayta deploy/restart'da (bugun
+  // kechqurun bo'lgani kabi, tez-tez) BUTUNLAY YO'QOLADI — chat media,
+  // firma logotipi, APK/exe yuklab olish havolalari va h.k. barchasi
+  // o'lik havolaga aylanadi. Avval bu HECH QAYERDA ko'rinmas edi —
+  // uzoq vaqt sezilmasdan qolib ketishi mumkin edi.
+  console.error('⚠️⚠️⚠️ Cloudinary sozlanmagan (CLOUDINARY_CLOUD_NAME/API_KEY/API_SECRET) — fayllar EPHEMERAL diskka yoziladi, keyingi deploy/restart\'da YO\'QOLADI!');
 }
 
 const IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.bmp', '.tiff', '.heic', '.heif']);
@@ -28,8 +38,17 @@ export async function uploadFileToCloud(
   opts2?: { stablePublicId?: string },
 ): Promise<{ url: string; publicId?: string }> {
   if (!cloudinaryEnabled) {
-    // Local fayl URL qaytaradi
-    const fileName = path.basename(filePath);
+    // Local fayl URL qaytaradi. MUHIM: multer vaqtinchalik faylni
+    // KENGAYTMASIZ saqlaydi — Cloudinary yo'lida bo'lgani kabi, kengaytmasiz
+    // qaytarilsa yuklab olingan fayl APK/EXE/PDF sifatida TANILMAYDI. Shu
+    // sabab bu (degradatsiya qilingan, faqat Cloudinary sozlanmaganda
+    // ishlaydigan) yo'lda ham asl kengaytmani saqlab qolamiz.
+    const ext = originalName ? path.extname(originalName).toLowerCase() : '';
+    let fileName = path.basename(filePath);
+    if (ext && !fileName.endsWith(ext)) {
+      const renamed = `${filePath}${ext}`;
+      try { fs.renameSync(filePath, renamed); fileName = path.basename(renamed); } catch {}
+    }
     return { url: `${getBackendUrl()}/uploads/${fileName}` };
   }
   const ext = originalName ? path.extname(originalName).toLowerCase() : '';

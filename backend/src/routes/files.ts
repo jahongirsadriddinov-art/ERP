@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { Readable } from 'stream';
 
 const router = Router();
 
@@ -28,13 +29,30 @@ router.get('/proxy', async (req, res) => {
   }
 
   try {
-    const upstream = await fetch(parsed.toString());
+    // MUHIM: video/ovoz elementlari (<video>/<audio>) brauzerda ISHLASHI
+    // uchun HTTP Range so'rovlari (qisman yuklab olish, "206 Partial
+    // Content") qo'llab-quvvatlanishi SHART — aks holda ko'pchilik
+    // brauzer/WebView "oldindan ko'rish" yoki hatto ijro etishning O'ZINI
+    // butunlay rad etadi (jimgina, xatosiz — aynan shu "ovozli xabar
+    // umuman eshitilmaydi, video ochilmaydi" muammosiga sabab bo'lgan).
+    // Kiruvchi so'rovdagi Range sarlavhasini ANIQ Cloudinary'ga uzatamiz
+    // va uning javobini (status + sarlavhalar) o'zgarishsiz qaytaramiz.
+    const upstreamHeaders: Record<string, string> = {};
+    const range = req.headers.range;
+    if (range) upstreamHeaders['Range'] = range;
+
+    const upstream = await fetch(parsed.toString(), { headers: upstreamHeaders });
     if (!upstream.ok || !upstream.body) {
       return res.status(upstream.status || 502).json({ error: 'Manba fayl olinmadi' });
     }
+
+    res.status(upstream.status); // 200 yoki 206 (Range so'ralgan bo'lsa)
     res.setHeader('Content-Type', upstream.headers.get('content-type') || 'application/octet-stream');
+    res.setHeader('Accept-Ranges', upstream.headers.get('accept-ranges') || 'bytes');
     const len = upstream.headers.get('content-length');
     if (len) res.setHeader('Content-Length', len);
+    const contentRange = upstream.headers.get('content-range');
+    if (contentRange) res.setHeader('Content-Range', contentRange);
     const cd = upstream.headers.get('content-disposition');
     if (cd) res.setHeader('Content-Disposition', cd);
     // Fayl kontenti hech qachon o'zgarmaydi (Cloudinary public_id'lari
@@ -43,11 +61,13 @@ router.get('/proxy', async (req, res) => {
     // chunki "QurilishERP-latest.apk" kabi ATAYLAB QAYTA YOZILADIGAN
     // manzillar bor, ular uchun immutable NOTO'G'RI bo'lardi.
     res.setHeader('Cache-Control', 'public, max-age=86400');
-    const buf = Buffer.from(await upstream.arrayBuffer());
-    res.send(buf);
+
+    // Butun faylni xotiraga bufferlash o'rniga OQIM (stream) sifatida
+    // uzatamiz — katta video fayllarda ancha tezroq va xotira tejamli.
+    Readable.fromWeb(upstream.body as any).pipe(res);
   } catch (err) {
     console.error('[files/proxy]', err);
-    res.status(502).json({ error: 'Manba fayl olib bo\'lmadi' });
+    if (!res.headersSent) res.status(502).json({ error: 'Manba fayl olib bo\'lmadi' });
   }
 });
 

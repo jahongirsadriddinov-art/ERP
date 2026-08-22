@@ -262,7 +262,7 @@ async function doCheckIn(user: any, lang?: BotLang): Promise<string> {
 // "0.1 soat" kabi yaxlitlangan-noaniq ko'rinish o'rniga aniq daqiqa hisobidan
 // "X soat Y daqiqa" (yoki ru: "X ч Y мин") — checkIn/checkOut ISO
 // vaqt tamg'alaridan to'g'ridan-to'g'ri, yaxlitlashsiz hisoblanadi.
-function fmtWorkDuration(minutes: number, lang?: BotLang): string {
+export function fmtWorkDuration(minutes: number, lang?: BotLang): string {
   if (lang === 'ru') {
     if (minutes < 60) return `${minutes} мин`;
     const h = Math.floor(minutes / 60), m = minutes % 60;
@@ -334,7 +334,7 @@ const USER_KEYBOARD_WITH_CHECKOUT = (lang?: BotLang) => {
 // qabul qiladi; platforma darajasida foydalanuvchini biror buyruqni QO'LDA
 // yozishdan (garchi tugma ko'rinmasa ham) to'liq to'sib bo'lmaydi — bu
 // Telegram Bot API'ning o'zi cheklovi, kodning kamchiligi emas.
-async function keyboardForUser(user: any, lang?: BotLang) {
+export async function keyboardForUser(user: any, lang?: BotLang) {
   if (isDev(user.role)) return DEVELOPER_KEYBOARD(lang);
   if (isAdmin(user.role)) return ADMIN_KEYBOARD(lang);
   if (isWorker(user.role)) {

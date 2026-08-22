@@ -4,6 +4,29 @@ import User from '../models/User';
 import { scoped, stamped } from '../middleware/scope';
 import { getTenant } from '../middleware/tenantContext';
 import { todayInTashkent, tashkentHour } from '../utils/tz';
+import { bot, keyboardForUser, fmtWorkDuration } from '../services/bot';
+import { tb, BotLang } from '../i18n/bot';
+
+// MUHIM: xodim "Ishga keldim"/"Ishni yakunlash"ni SAYTDAN bossa, botning
+// o'zi bundan XABARSIZ qolardi — Telegram'dagi klaviatura (tugmalar to'plami)
+// faqat BOT bilan bevosita muloqotda (masalan /start yoki biror tugma
+// bosilganda) yangilanardi. Natijada foydalanuvchi saytdan ishni tugatgan
+// bo'lsa ham, botni ochsa hali ham ESKI (masalan hali "Ishga keldim"gina
+// bor yoki hali "ishlayapman" holatidagi) klaviaturani ko'rardi. Endi har
+// ikkala amalda ham botga TO'G'RIDAN-TO'G'RI yangilangan klaviatura bilan
+// xabar yuboriladi — sayt yoki bot, qaysi biridan foydalanilishidan qat'i
+// nazar ikkalasi ham DOIM sinxron.
+async function pushBotKeyboardRefresh(userId: string, buildMessage: (lang?: BotLang) => string) {
+  try {
+    const user = await User.findById(userId).select('telegramChatId language role companyId').lean();
+    if (!user?.telegramChatId) return;
+    const lang = user.language as BotLang | undefined;
+    const keyboard = await keyboardForUser(user, lang);
+    await bot.sendMessage(user.telegramChatId, buildMessage(lang), { reply_markup: keyboard });
+  } catch (err) {
+    console.error('[attendance] bot klaviatura yangilash xatosi:', err);
+  }
+}
 
 const router = Router();
 
@@ -104,6 +127,12 @@ router.post('/checkin', async (req, res) => {
     await record.save();
 
     res.json({ ...record.toObject(), id: record._id });
+
+    // Bot klaviaturasini darhol yangilaymiz (sayt orqali qilingan bo'lsa ham) —
+    // aks holda foydalanuvchi botni ochsa ESKI (masalan hali "Ishga keldim"gina
+    // bor) klaviaturani ko'raverardi, chunki bot bu o'zgarishdan bexabar edi.
+    const checkInTime = now.toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Tashkent' });
+    pushBotKeyboardRefresh(userId, lang => tb(lang, 'checkInConfirmed', { time: checkInTime })).catch(() => {});
   } catch { res.status(500).json({ error: 'Server xatoligi' }); }
 });
 
@@ -127,12 +156,18 @@ router.post('/checkout', async (req, res) => {
     if (note) record.note = (record.note ? record.note + ' | ' : '') + note;
 
     // Ishlangan soatlar hisoblash
+    let workedMinutes = 0;
     if (record.checkIn) {
       const ms = now.getTime() - new Date(record.checkIn).getTime();
+      workedMinutes = Math.max(0, Math.round(ms / 60000));
       record.workHours = Math.round((ms / 3600000) * 10) / 10;
     }
     await record.save();
     res.json({ ...record.toObject(), id: record._id });
+
+    // Bot klaviaturasini darhol yangilaymiz (sayt orqali qilingan bo'lsa ham).
+    const checkOutTime = now.toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Tashkent' });
+    pushBotKeyboardRefresh(userId, lang => tb(lang, 'checkOutConfirmed', { time: checkOutTime, hours: fmtWorkDuration(workedMinutes, lang) })).catch(() => {});
   } catch { res.status(500).json({ error: 'Server xatoligi' }); }
 });
 

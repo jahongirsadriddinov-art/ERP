@@ -57,11 +57,29 @@ interface BotDict {
   versionBroadcastDone: (p: { sent: string; failed: string }) => string;
   broadcastPrompt: string;
   confirmTextBroadcast: (p: { text: string }) => string;
-  siteEnabledMsg: string;
-  siteDisabledMsg: string;
-  botEnabledMsg: string;
-  botDisabledMsg: string;
+  siteEnabledMsg: (p: { time: string }) => string;
+  siteDisabledMsg: (p: { time: string }) => string;
+  botEnabledMsg: (p: { time: string }) => string;
+  botDisabledMsg: (p: { time: string }) => string;
   botMaintenanceMsg: string;
+  kb_refreshStatus: string;
+  botStillDisabledMsg: string;
+  botNowEnabledMsg: string;
+  kb_devSettings: string;
+  kb_devLabels: string;
+  kb_devMsgs: string;
+  kb_devReorder: string;
+  kb_devReset: string;
+  kb_devBack: string;
+  devSettingsIntro: string;
+  devSettingsPickLabel: string;
+  devSettingsPickMsg: string;
+  editLabelPrompt: (p: { current: string }) => string;
+  editLabelSaved: (p: { label: string }) => string;
+  editMsgSaved: (p: { label: string }) => string;
+  devReorderIntro: string;
+  devResetConfirm: string;
+  devResetDone: string;
 
   startWelcomeBack: (p: { name: string }) => string;
   startWelcomeNew: string;
@@ -198,11 +216,29 @@ const uz: BotDict = {
   versionBroadcastDone: (p: { sent: string; failed: string }) => `✅ Yuborildi: ${p.sent} ta foydalanuvchiga${Number(p.failed) > 0 ? ` (${p.failed} ta muvaffaqiyatsiz)` : ''}.`,
   broadcastPrompt: "✍️ Endi xabar matnini yozing YOKI yangi APK/EXE faylini tashlang — shu hammaga yuboriladi.",
   confirmTextBroadcast: (p: { text: string }) => `📢 Quyidagi xabarni BARCHA foydalanuvchilarga yubormoqchimisiz?\n\n"${p.text}"`,
-  siteEnabledMsg: "🟢 Sayt yoqildi. Endi hamma foydalana oladi.",
-  siteDisabledMsg: "🔴 Sayt o'chirildi. Sizdan boshqa hech kim kira olmaydi — qayta yoqishni unutmang.",
-  botEnabledMsg: "🟢 Bot yoqildi. Endi hamma foydalana oladi.",
-  botDisabledMsg: "🔴 Bot o'chirildi. Sizdan boshqa hech kim bot bilan ishlay olmaydi — qayta yoqishni unutmang.",
-  botMaintenanceMsg: "🛠 Bot hozir texnik ishlar tufayli vaqtincha ishlamayapti. Birozdan so'ng qayta urinib ko'ring.",
+  siteEnabledMsg: (p) => `✅ Sayt hozir FAOL ishlamoqda\n🕐 Yoqilgan vaqt: ${p.time}\n\nBarcha foydalanuvchilar kira oladi.`,
+  siteDisabledMsg: (p) => `🔴 Sayt hozir O'CHIRILGAN (texnik ishlar rejimi)\n🕐 O'chirilgan vaqt: ${p.time}\n\nSizdan boshqa hech kim kira olmaydi — qayta yoqishni unutmang.`,
+  botEnabledMsg: (p) => `✅ Bot hozir FAOL ishlamoqda\n🕐 Yoqilgan vaqt: ${p.time}\n\nBarcha foydalanuvchilar foydalana oladi.`,
+  botDisabledMsg: (p) => `🔴 Bot hozir O'CHIRILGAN (texnik ishlar rejimi)\n🕐 O'chirilgan vaqt: ${p.time}\n\nSizdan boshqa hech kim bot bilan ishlay olmaydi — qayta yoqishni unutmang.`,
+  botMaintenanceMsg: "🛠 Bot hozir texnik ishlar tufayli faol emas.\n\nPastdagi \"🔄 Yangilash\" tugmasini bosib, istalgan payt holatni qayta tekshirishingiz mumkin.",
+  kb_refreshStatus: "🔄 Yangilash",
+  botStillDisabledMsg: "⏳ Hali emas — bot tez orada qayta ishga tushadi. Iltimos, birozdan so'ng qayta urinib ko'ring.",
+  botNowEnabledMsg: "✅ Bot yana faol ishlamoqda! Xush kelibsiz.",
+  kb_devSettings: "⚙️ Tugmalarni sozlash",
+  kb_devLabels: "🔤 Tugma matnlari",
+  kb_devMsgs: "📝 Xabar matnlari",
+  kb_devReorder: "🔀 Tartibni o'zgartirish",
+  kb_devReset: "↩️ Standartga qaytarish",
+  kb_devBack: "◀️ Orqaga",
+  devSettingsIntro: "⚙️ Nimani sozlaysiz?\n\n🔤 Tugma matnlari — menyudagi tugmalar yozuvi/ikonkasi\n📝 Xabar matnlari — sayt/bot yoqilganda-o'chirilganda yuboriladigan xabarlar\n🔀 Tartib — tugmalar joylashuvi",
+  devSettingsPickLabel: "✏️ O'zgartirmoqchi bo'lgan tugmani tanlang:",
+  devSettingsPickMsg: "📝 O'zgartirmoqchi bo'lgan xabarni tanlang:",
+  editLabelPrompt: (p) => `✏️ Joriy matn: "${p.current}"\n\nYangi matn (kerak bo'lsa ikonka bilan, masalan: 📣 Elon yuborish) yozing. Xabar matnlarida {time} yozsangiz — haqiqiy vaqt bilan almashadi.`,
+  editLabelSaved: (p) => `✅ Saqlandi: "${p.label}"`,
+  editMsgSaved: (p) => `✅ Xabar saqlandi:\n\n${p.label}`,
+  devReorderIntro: "🔀 Tugmalarni yuqoriga/pastga surish uchun ▲/▼ tugmalarini bosing. Tugagach \"◀️ Orqaga\" bosing.",
+  devResetConfirm: "❓ Hamma tugma matni, xabar matnlari va tartib STANDART holatga qaytarilsinmi?",
+  devResetDone: "✅ Standart holatga qaytarildi.",
 
   startWelcomeBack: (p: { name: string }) => `✅ Xush kelibsiz, ${p.name}!\n\nSiz tizimga ulanganmiz. Quyidagi menyudan foydalaning:`,
   startWelcomeNew: '👋 Assalomu alaykum! *QurilishERP* botiga xush kelibsiz.\n\nTizimga kirish uchun telefon raqamingizni yuboring:',
@@ -347,11 +383,29 @@ const ru: BotDict = {
   versionBroadcastDone: (p) => `✅ Отправлено: ${p.sent} пользователям${Number(p.failed) > 0 ? ` (${p.failed} неудачно)` : ''}.`,
   broadcastPrompt: "✍️ Теперь напишите текст сообщения ИЛИ отправьте новый APK/EXE файл — это будет отправлено всем.",
   confirmTextBroadcast: (p) => `📢 Отправить это сообщение ВСЕМ пользователям?\n\n"${p.text}"`,
-  siteEnabledMsg: "🟢 Сайт включён. Теперь все могут пользоваться.",
-  siteDisabledMsg: "🔴 Сайт отключён. Кроме вас никто не сможет войти — не забудьте включить обратно.",
-  botEnabledMsg: "🟢 Бот включён. Теперь все могут пользоваться.",
-  botDisabledMsg: "🔴 Бот отключён. Кроме вас никто не сможет пользоваться ботом — не забудьте включить обратно.",
-  botMaintenanceMsg: "🛠 Бот временно не работает из-за технических работ. Попробуйте позже.",
+  siteEnabledMsg: (p) => `✅ Сайт сейчас АКТИВЕН\n🕐 Время включения: ${p.time}\n\nВсе пользователи могут войти.`,
+  siteDisabledMsg: (p) => `🔴 Сайт сейчас ОТКЛЮЧЁН (режим техобслуживания)\n🕐 Время отключения: ${p.time}\n\nКроме вас никто не сможет войти — не забудьте включить обратно.`,
+  botEnabledMsg: (p) => `✅ Бот сейчас АКТИВЕН\n🕐 Время включения: ${p.time}\n\nВсе пользователи могут пользоваться.`,
+  botDisabledMsg: (p) => `🔴 Бот сейчас ОТКЛЮЧЁН (режим техобслуживания)\n🕐 Время отключения: ${p.time}\n\nКроме вас никто не сможет пользоваться ботом — не забудьте включить обратно.`,
+  botMaintenanceMsg: "🛠 Бот сейчас не работает из-за технических работ.\n\nНажмите \"🔄 Обновить\" ниже, чтобы в любой момент проверить статус.",
+  kb_refreshStatus: "🔄 Обновить",
+  botStillDisabledMsg: "⏳ Ещё нет — бот скоро снова заработает. Попробуйте чуть позже.",
+  botNowEnabledMsg: "✅ Бот снова работает! Добро пожаловать.",
+  kb_devSettings: "⚙️ Настроить кнопки",
+  kb_devLabels: "🔤 Текст кнопок",
+  kb_devMsgs: "📝 Текст сообщений",
+  kb_devReorder: "🔀 Изменить порядок",
+  kb_devReset: "↩️ Сбросить по умолчанию",
+  kb_devBack: "◀️ Назад",
+  devSettingsIntro: "⚙️ Что настроить?\n\n🔤 Текст кнопок — надписи/иконки в меню\n📝 Текст сообщений — что отправляется при включении/отключении сайта/бота\n🔀 Порядок — расположение кнопок",
+  devSettingsPickLabel: "✏️ Выберите кнопку, которую хотите изменить:",
+  devSettingsPickMsg: "📝 Выберите сообщение, которое хотите изменить:",
+  editLabelPrompt: (p) => `✏️ Текущий текст: "${p.current}"\n\nВведите новый текст (при желании с иконкой, например: 📣 Отправить объявление). В тексте сообщений можно написать {time} — заменится на реальное время.`,
+  editLabelSaved: (p) => `✅ Сохранено: "${p.label}"`,
+  editMsgSaved: (p) => `✅ Сообщение сохранено:\n\n${p.label}`,
+  devReorderIntro: "🔀 Нажмите ▲/▼, чтобы переместить кнопки вверх/вниз. По завершении нажмите \"◀️ Назад\".",
+  devResetConfirm: "❓ Сбросить весь текст кнопок, текст сообщений и порядок до СТАНДАРТНОГО состояния?",
+  devResetDone: "✅ Сброшено до стандартного состояния.",
 
   startWelcomeBack: (p) => `✅ Добро пожаловать, ${p.name}!\n\nВы подключены к системе. Используйте меню ниже:`,
   startWelcomeNew: '👋 Здравствуйте! Добро пожаловать в бот *QurilishERP*.\n\nЧтобы войти в систему, отправьте свой номер телефона:',

@@ -172,9 +172,12 @@ const pendingTextBroadcast = new Map<number, string>();
 let cachedBotEnabled: boolean | null = null;
 let botEnabledCachedAt = 0;
 const BOT_STATUS_CACHE_MS = 5000;
-async function isBotEnabled(): Promise<boolean> {
+// force=true — "🔄 Yangilash" tugmasi bosilganda ISHONCHLI (keshsiz) javob
+// berish uchun — foydalanuvchi aynan shu tugmani ATAYLAB "hozir tekshir"
+// degani uchun bosadi, 5 soniyalik eski keshdan javob berish noto'g'ri.
+async function isBotEnabled(force = false): Promise<boolean> {
   const now = Date.now();
-  if (cachedBotEnabled === null || now - botEnabledCachedAt > BOT_STATUS_CACHE_MS) {
+  if (force || cachedBotEnabled === null || now - botEnabledCachedAt > BOT_STATUS_CACHE_MS) {
     try {
       const s = await AppSettings.findOne({ key: 'global' }).select('botEnabled').lean();
       cachedBotEnabled = s?.botEnabled !== false;
@@ -185,6 +188,52 @@ async function isBotEnabled(): Promise<boolean> {
   }
   return cachedBotEnabled;
 }
+
+// Bot o'chirilganda oddiy foydalanuvchi ko'radigan YAGONA tugma — hech qanday
+// funksiya ishlamaydi, faqat holatni qayta tekshirish mumkin.
+const RESTRICTED_KEYBOARD = (lang?: BotLang) => ({
+  keyboard: [[{ text: tb(lang, 'kb_refreshStatus') }]],
+  resize_keyboard: true,
+});
+
+// Dasturchi o'z menyusidagi tugma matnini o'zgartirgan bo'lsa — o'shani,
+// bo'lmasa standart (i18n) matnni qaytaradi. Keyboard yasashda VA matn
+// solishtirishda (dispatch) ikkalasida ham shu funksiya ishlatiladi —
+// aks holda o'zgartirilgan tugma bosilganda hech narsa topilmay qolardi.
+function devLabel(settings: any, key: string, lang?: BotLang): string {
+  const custom = settings?.devButtonLabels?.[key];
+  return (typeof custom === 'string' && custom.trim()) ? custom.trim() : tb(lang, key as any);
+}
+
+// Dasturchi menyusida MATNI o'zgartirib bo'ladigan tugmalar (kb_openSite —
+// web_app tugmasi, bosilganda bot'ga matn kelmaydi, shuning uchun dispatch
+// bilan to'qnashuv yo'q — lekin xavfsizlik uchun baribir tashqarida
+// qoldiramiz; kb_language BARCHA rollar uchun umumiy global handler bilan
+// solishtiriladi — shu yerda o'zgartirilsa o'sha handler buzilardi, shu
+// sabab u ham tashqarida).
+const DEV_LABEL_KEYS = ['kb_broadcast', 'kb_disableSite', 'kb_enableSite', 'kb_disableBot', 'kb_enableBot', 'kb_firmsList', 'kb_allUsers', 'kb_allSubscriptions', 'kb_generalStats', 'kb_devSettings'] as const;
+// Tartibini o'zgartirib bo'ladigan "atom"lar — siteToggle/botToggle holatga
+// qarab ikki xil matndan (yoqilgan/o'chirilgan) birini ko'rsatadi, lekin
+// POZITSIYA sifatida bitta joy egallaydi.
+const DEFAULT_DEV_ORDER = ['kb_broadcast', 'siteToggle', 'botToggle', 'kb_firmsList', 'kb_allUsers', 'kb_allSubscriptions', 'kb_generalStats', 'kb_devSettings'];
+
+// Sayt/bot yoqilganda-o'chirilganda va bot texnik ishlar rejimida ko'rinadigan
+// XABAR matnlari — bular ham dasturchi tomonidan qo'lda tahrirlanishi mumkin
+// (aniq talab: "boradigan xabarni ham ozim qolda tahrirlaydigan bolsin").
+const DEV_MSG_KEYS = ['siteEnabledMsg', 'siteDisabledMsg', 'botEnabledMsg', 'botDisabledMsg', 'botMaintenanceMsg', 'botStillDisabledMsg', 'botNowEnabledMsg'] as const;
+// Dasturchi o'zgartirgan bo'lsa shu xabar matnini, bo'lmasa standartini
+// qaytaradi. {time} o'rnini haqiqiy joriy vaqt bilan almashtiradi.
+function devEffectiveMsg(settings: any, key: string, lang?: BotLang): string {
+  const custom = settings?.devMessageTexts?.[key];
+  const time = new Date().toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Tashkent' });
+  if (typeof custom === 'string' && custom.trim()) return custom.trim().replace(/\{time\}/g, time);
+  return tb(lang, key as any, { time } as any);
+}
+
+// "Tugma/Xabar matnini o'zgartirish" oqimida — dasturchi qaysi narsani
+// tahrirlayotgani kutilmoqda. Prefiks bilan ikkalasi ham shu bitta xaritada:
+// 'label:kb_broadcast' — tugma matni, 'msg:siteEnabledMsg' — xabar matni.
+const pendingLabelEdit = new Map<number, string>();
 
 // Telegramdan kelgan faylni (photo/video/voice/document) yuklab, saytdagi
 // Message.mediaUrl bilan bir xil ko'rinishdagi to'liq URL qaytaradi.
@@ -340,27 +389,89 @@ const CHECKIN_ONLY_KEYBOARD = (lang?: BotLang) => ({
   resize_keyboard: true,
 });
 
-// Dinamik — sayt/bot hozir yoqiq/o'chiqligiga qarab tugma matni o'zgaradi
-// ("O'chirish" ↔ "Yoqish"), shu sabab bazadan (AppSettings) o'qib chiqadi.
-const DEVELOPER_KEYBOARD = async (lang?: BotLang) => {
-  const settings = await AppSettings.findOne({ key: 'global' }).select('siteEnabled botEnabled').lean();
+// atom (siteToggle/botToggle — holatga qarab 2 xil matndan birini
+// ko'rsatadi) yoki oddiy kalitni joriy (custom-aware) matnga aylantiradi.
+// DEVELOPER_KEYBOARD VA devReorderMenu ikkalasida ham bir xil ishlatiladi.
+function buildAtomLabel(settings: any, lang?: BotLang) {
   const siteOn = settings?.siteEnabled !== false;
   const botOn = settings?.botEnabled !== false;
+  return (atom: string): string => {
+    if (atom === 'siteToggle') return siteOn ? devLabel(settings, 'kb_disableSite', lang) : devLabel(settings, 'kb_enableSite', lang);
+    if (atom === 'botToggle') return botOn ? devLabel(settings, 'kb_disableBot', lang) : devLabel(settings, 'kb_enableBot', lang);
+    return devLabel(settings, atom, lang);
+  };
+}
+
+// Dinamik — sayt/bot hozir yoqiq/o'chiqligiga qarab tugma matni o'zgaradi
+// ("O'chirish" ↔ "Yoqish"), shu sabab bazadan (AppSettings) o'qib chiqadi.
+// Dasturchi "⚙️ Tugmalarni sozlash" orqali matnlarni/tartibni o'zgartirgan
+// bo'lsa — shu yerda ham hisobga olinadi (devButtonLabels/devButtonOrder).
+const DEVELOPER_KEYBOARD = async (lang?: BotLang) => {
+  const settings: any = await AppSettings.findOne({ key: 'global' }).select('siteEnabled botEnabled devButtonLabels devButtonOrder').lean();
+  const atomLabel = buildAtomLabel(settings, lang);
+  const custom: string[] = Array.isArray(settings?.devButtonOrder) ? settings.devButtonOrder.filter((a: string) => DEFAULT_DEV_ORDER.includes(a)) : [];
+  const order = custom.length ? [...custom, ...DEFAULT_DEV_ORDER.filter(a => !custom.includes(a))] : null;
+  const rows: { text: string }[][] = order
+    ? order.map(atom => [{ text: atomLabel(atom) }])
+    : [
+        [{ text: atomLabel('kb_broadcast') }],
+        [{ text: atomLabel('siteToggle') }, { text: atomLabel('botToggle') }],
+        [{ text: atomLabel('kb_firmsList') }, { text: atomLabel('kb_allUsers') }],
+        [{ text: atomLabel('kb_allSubscriptions') }, { text: atomLabel('kb_generalStats') }],
+      ];
   return {
     keyboard: [
       [openSiteBtn(lang)],
-      [{ text: tb(lang, 'kb_broadcast') }],
-      [
-        { text: siteOn ? tb(lang, 'kb_disableSite') : tb(lang, 'kb_enableSite') },
-        { text: botOn ? tb(lang, 'kb_disableBot') : tb(lang, 'kb_enableBot') },
-      ],
-      [{ text: tb(lang, 'kb_firmsList') }, { text: tb(lang, 'kb_allUsers') }],
-      [{ text: tb(lang, 'kb_allSubscriptions') }, { text: tb(lang, 'kb_generalStats') }],
+      ...rows,
       [{ text: tb(lang, 'kb_language') }],
+      [{ text: atomLabel('kb_devSettings') }],
     ],
     resize_keyboard: true,
   };
 };
+
+// "⚙️ Tugmalarni sozlash" bosilganda ochiladigan TOP-LEVEL inline menyu —
+// tugma matnlari / xabar matnlari / tartib / standartga qaytarish.
+function devSettingsMenu(lang?: BotLang) {
+  return {
+    inline_keyboard: [
+      [{ text: tb(lang, 'kb_devLabels'), callback_data: 'devlabels' }],
+      [{ text: tb(lang, 'kb_devMsgs'), callback_data: 'devmsgs' }],
+      [{ text: tb(lang, 'kb_devReorder'), callback_data: 'devreorder' }],
+      [{ text: tb(lang, 'kb_devReset'), callback_data: 'devresetask' }],
+    ],
+  };
+}
+
+// Har bir o'zgartirilishi mumkin TUGMA matni uchun bitta qator.
+function devLabelsMenu(settings: any, lang?: BotLang) {
+  const rows = DEV_LABEL_KEYS.map(k => [{ text: `✏️ ${devLabel(settings, k, lang)}`, callback_data: `editlbl_${k}` }]);
+  rows.push([{ text: tb(lang, 'kb_devBack'), callback_data: 'devsettingsback' }]);
+  return { inline_keyboard: rows };
+}
+
+// Har bir o'zgartirilishi mumkin XABAR matni uchun bitta qator (qisqartirib
+// ko'rsatiladi — Telegram tugma matni uzun bo'lsa chiroyli ko'rinmaydi).
+function devMsgsMenu(settings: any, lang?: BotLang) {
+  const preview = (s: string) => (s.length > 28 ? s.slice(0, 27) + '…' : s).replace(/\n/g, ' ');
+  const rows = DEV_MSG_KEYS.map(k => [{ text: `📝 ${preview(devEffectiveMsg(settings, k, lang))}`, callback_data: `editmsg_${k}` }]);
+  rows.push([{ text: tb(lang, 'kb_devBack'), callback_data: 'devsettingsback' }]);
+  return { inline_keyboard: rows };
+}
+
+// Tartib o'zgartirish ekrani — har bir tugma uchun ▲/▼, o'rtada joriy matn.
+function devReorderMenu(settings: any, lang?: BotLang) {
+  const atomLabel = buildAtomLabel(settings, lang);
+  const custom: string[] = Array.isArray(settings?.devButtonOrder) ? settings.devButtonOrder.filter((a: string) => DEFAULT_DEV_ORDER.includes(a)) : [];
+  const order = custom.length ? [...custom, ...DEFAULT_DEV_ORDER.filter(a => !custom.includes(a))] : [...DEFAULT_DEV_ORDER];
+  const rows = order.map((atom, i) => [
+    { text: i > 0 ? '▲' : ' ', callback_data: i > 0 ? `mvup_${atom}` : 'noop' },
+    { text: atomLabel(atom), callback_data: 'noop' },
+    { text: i < order.length - 1 ? '▼' : ' ', callback_data: i < order.length - 1 ? `mvdn_${atom}` : 'noop' },
+  ]);
+  rows.push([{ text: tb(lang, 'kb_devBack'), callback_data: 'devsettingsback' }]);
+  return { inline_keyboard: rows };
+}
 
 // USER_KEYBOARD'ning ustiga "Ish tugatdim" qatori qo'shilgan varianti — ishchi
 // WORKING holatida (checkin bosilgan, checkout hali yo'q) ko'radi.
@@ -476,13 +587,28 @@ bot.on('message', async (msg: any) => {
   if (isInRegistration(chatId)) return; // self-signup scene o'zi ushlaydi
 
   // ── Texnik ishlar rejimi (botEnabled=false) — dasturchidan boshqa hech kim
-  // botdan foydalana olmaydi (u qayta yoqishi kerak bo'lgani uchun). /start
-  // ham shu tekshiruvdan o'tadi — chunki registerScene ustidagi tekshiruv
-  // shundan keyin keladi (pastroqda, alohida).
+  // botdan foydalana olmaydi (u qayta yoqishi kerak bo'lgani uchun): hech
+  // qaysi funksiya ko'rinmaydi, klaviatura FAQAT "🔄 Yangilash" tugmasidan
+  // iborat bo'ladi. /start ham shu tekshiruvdan o'tadi — registerScene
+  // ustidagi tekshiruv shundan keyin keladi (pastroqda, alohida).
   if (!(await isBotEnabled())) {
     const mUser = await User.findOne({ telegramChatId: chatId.toString() }).select('role language').catch(() => null);
     if (!mUser || !isDev(mUser.role)) {
-      bot.sendMessage(chatId, tb(mUser?.language as BotLang | undefined, 'botMaintenanceMsg')).catch(() => {});
+      const mLang = mUser?.language as BotLang | undefined;
+      const settings: any = await AppSettings.findOne({ key: 'global' }).select('devMessageTexts').lean();
+      // "🔄 Yangilash" ATAYLAB bosilgan bo'lsa — keshsiz, ISHONCHLI holatni
+      // shu zahoti qayta tekshiramiz (aks holda 5 soniyalik eski keshdan
+      // "hali ham o'chiq" deb javob berilishi mumkin edi).
+      if (msg.text === tb(mLang, 'kb_refreshStatus')) {
+        const stillOff = !(await isBotEnabled(true));
+        if (stillOff) {
+          bot.sendMessage(chatId, devEffectiveMsg(settings, 'botStillDisabledMsg', mLang), { reply_markup: RESTRICTED_KEYBOARD(mLang) }).catch(() => {});
+        } else if (mUser) {
+          bot.sendMessage(chatId, devEffectiveMsg(settings, 'botNowEnabledMsg', mLang), { reply_markup: await keyboardForUser(mUser, mLang) }).catch(() => {});
+        }
+        return;
+      }
+      bot.sendMessage(chatId, devEffectiveMsg(settings, 'botMaintenanceMsg', mLang), { reply_markup: RESTRICTED_KEYBOARD(mLang) }).catch(() => {});
       return;
     }
   }
@@ -565,6 +691,26 @@ bot.on('message', async (msg: any) => {
     if (!isLive) {
       const u = await User.findOne({ telegramChatId: chatId.toString() }).select('language').catch(() => null);
       bot.sendMessage(chatId, tb(u?.language as BotLang | undefined, 'locationSaved'));
+    }
+    return;
+  }
+
+  // ── "⚙️ Tugmalarni sozlash" ichida tugma/xabar matnini tahrirlash — tanlangan
+  // kalitning KEYINGI matn xabari shu kalitga saqlanadi.
+  if (pendingLabelEdit.has(chatId)) {
+    const tag = pendingLabelEdit.get(chatId) as string;
+    pendingLabelEdit.delete(chatId);
+    const elUser = await User.findOne({ telegramChatId: chatId.toString() }).catch(() => null);
+    if (elUser && isDev(elUser.role) && msg.text) {
+      const elLang = elUser.language as BotLang | undefined;
+      const [kind, key] = tag.split(':');
+      const field = kind === 'label' ? 'devButtonLabels' : 'devMessageTexts';
+      await AppSettings.findOneAndUpdate(
+        { key: 'global' },
+        { $set: { key: 'global', [`${field}.${key}`]: msg.text.trim(), updatedAt: new Date() } },
+        { upsert: true }
+      );
+      await bot.sendMessage(chatId, tb(elLang, kind === 'label' ? 'editLabelSaved' : 'editMsgSaved', { label: msg.text.trim() }), { reply_markup: await keyboardForUser(elUser, elLang) });
     }
     return;
   }
@@ -694,7 +840,14 @@ bot.on('message', async (msg: any) => {
 
   // ── DEVELOPER commands ────────────────────────────────────────────────────
   if (developer) {
-    if (text === tb(user.language, 'kb_firmsList')) {
+    // Tugma matnlari dasturchi tomonidan o'zgartirilgan bo'lishi mumkin —
+    // solishtirish HAM shu (custom-aware) qiymatlar bilan qilinadi, aks
+    // holda o'zgartirilgan tugma bosilganda hech qaysi shart to'g'ri
+    // kelmay, oxirgi "chooseFromMenu" javobiga tushib qolardi.
+    const devSettings: any = await AppSettings.findOne({ key: 'global' }).select('devButtonLabels devMessageTexts').lean();
+    const L = (k: string) => devLabel(devSettings, k, user.language as BotLang | undefined);
+
+    if (text === L('kb_firmsList')) {
       try {
         const Company = require('../models/Company').default;
         const firms = await Company.find({}).select('name branchId status').lean();
@@ -712,7 +865,7 @@ bot.on('message', async (msg: any) => {
       return;
     }
 
-    if (text === tb(user.language, 'kb_allUsers')) {
+    if (text === L('kb_allUsers')) {
       try {
         const allUsers = await User.find({}).select('firstName lastName role phone companyId').lean().limit(30);
         const Company = require('../models/Company').default;
@@ -729,7 +882,7 @@ bot.on('message', async (msg: any) => {
       return;
     }
 
-    if (text === tb(user.language, 'kb_allSubscriptions')) {
+    if (text === L('kb_allSubscriptions')) {
       try {
         const Subscription = require('../models/Subscription').default;
         const Company = require('../models/Company').default;
@@ -752,7 +905,7 @@ bot.on('message', async (msg: any) => {
       return;
     }
 
-    if (text === tb(user.language, 'kb_generalStats')) {
+    if (text === L('kb_generalStats')) {
       try {
         const Company = require('../models/Company').default;
         const Subscription = require('../models/Subscription').default;
@@ -773,23 +926,30 @@ bot.on('message', async (msg: any) => {
     }
 
     // ── "Xabar yuborish" — keyingi xabar (matn/apk/exe) hammaga yuboriladi ──
-    if (text === tb(user.language, 'kb_broadcast')) {
+    if (text === L('kb_broadcast')) {
       pendingBroadcastChoice.add(chatId);
       bot.sendMessage(chatId, tb(user.language, 'broadcastPrompt'));
       return;
     }
 
     // ── Sayt/bot yoqish-o'chirish (texnik ishlar rejimi) ────────────────────
-    if (text === tb(user.language, 'kb_disableSite') || text === tb(user.language, 'kb_enableSite')) {
-      const enable = text === tb(user.language, 'kb_enableSite');
-      await AppSettings.findOneAndUpdate({ key: 'global' }, { key: 'global', siteEnabled: enable, updatedAt: new Date() }, { upsert: true });
-      bot.sendMessage(chatId, tb(user.language, enable ? 'siteEnabledMsg' : 'siteDisabledMsg'), { reply_markup: await keyboardForUser(user, user.language) });
+    if (text === L('kb_disableSite') || text === L('kb_enableSite')) {
+      const enable = text === L('kb_enableSite');
+      await AppSettings.findOneAndUpdate({ key: 'global' }, { $set: { key: 'global', siteEnabled: enable, updatedAt: new Date() } }, { upsert: true });
+      bot.sendMessage(chatId, devEffectiveMsg(devSettings, enable ? 'siteEnabledMsg' : 'siteDisabledMsg', user.language as BotLang | undefined), { reply_markup: await keyboardForUser(user, user.language) });
       return;
     }
-    if (text === tb(user.language, 'kb_disableBot') || text === tb(user.language, 'kb_enableBot')) {
-      const enable = text === tb(user.language, 'kb_enableBot');
-      await AppSettings.findOneAndUpdate({ key: 'global' }, { key: 'global', botEnabled: enable, updatedAt: new Date() }, { upsert: true });
-      bot.sendMessage(chatId, tb(user.language, enable ? 'botEnabledMsg' : 'botDisabledMsg'), { reply_markup: await keyboardForUser(user, user.language) });
+    if (text === L('kb_disableBot') || text === L('kb_enableBot')) {
+      const enable = text === L('kb_enableBot');
+      await AppSettings.findOneAndUpdate({ key: 'global' }, { $set: { key: 'global', botEnabled: enable, updatedAt: new Date() } }, { upsert: true });
+      cachedBotEnabled = enable; botEnabledCachedAt = Date.now(); // o'zining keyingi so'rovi eski keshga urilmasin
+      bot.sendMessage(chatId, devEffectiveMsg(devSettings, enable ? 'botEnabledMsg' : 'botDisabledMsg', user.language as BotLang | undefined), { reply_markup: await keyboardForUser(user, user.language) });
+      return;
+    }
+
+    // ── "⚙️ Tugmalarni sozlash" — matn/tartibni o'zgartirish menyusi ────────
+    if (text === L('kb_devSettings')) {
+      await bot.sendMessage(chatId, tb(user.language, 'devSettingsIntro'), { reply_markup: devSettingsMenu(user.language as BotLang | undefined) });
       return;
     }
 
@@ -1061,10 +1221,79 @@ bot.on('callback_query', async (query: any) => {
   if (!user || !isDev(user.role)) {
     if (!(await isBotEnabled())) {
       await bot.answerCallbackQuery(query.id).catch(() => {});
-      if (chatId) bot.sendMessage(chatId, tb(lang, 'botMaintenanceMsg')).catch(() => {});
+      if (chatId) {
+        const settings: any = await AppSettings.findOne({ key: 'global' }).select('devMessageTexts').lean();
+        bot.sendMessage(chatId, devEffectiveMsg(settings, 'botMaintenanceMsg', lang), { reply_markup: RESTRICTED_KEYBOARD(lang) }).catch(() => {});
+      }
       return;
     }
   }
+
+  // ── Dasturchi — "⚙️ Tugmalarni sozlash" bo'limi (tugma/xabar matnlari,
+  // tartib, standartga qaytarish). Barchasi faqat dasturchi uchun. ────────
+  if (user && isDev(user.role) && (
+    data === 'devlabels' || data === 'devmsgs' || data === 'devreorder' || data === 'devsettingsback' ||
+    data === 'devresetask' || data === 'devresetyes' || data === 'devresetno' ||
+    data.startsWith('editlbl_') || data.startsWith('editmsg_') || data.startsWith('mvup_') || data.startsWith('mvdn_')
+  )) {
+    await bot.answerCallbackQuery(query.id).catch(() => {});
+    const settings: any = await AppSettings.findOne({ key: 'global' }).lean();
+    const editScreen = async (msgText: string, markup: any) => {
+      if (!messageId) { await bot.sendMessage(chatId, msgText, { reply_markup: markup }); return; }
+      await bot.editMessageText(msgText, { chat_id: chatId, message_id: messageId, reply_markup: markup })
+        .catch(() => bot.sendMessage(chatId, msgText, { reply_markup: markup }));
+    };
+
+    if (data === 'devsettingsback') { await editScreen(tb(lang, 'devSettingsIntro'), devSettingsMenu(lang)); return; }
+    if (data === 'devlabels') { await editScreen(tb(lang, 'devSettingsPickLabel'), devLabelsMenu(settings, lang)); return; }
+    if (data === 'devmsgs') { await editScreen(tb(lang, 'devSettingsPickMsg'), devMsgsMenu(settings, lang)); return; }
+    if (data === 'devreorder') { await editScreen(tb(lang, 'devReorderIntro'), devReorderMenu(settings, lang)); return; }
+
+    if (data.startsWith('editlbl_')) {
+      const key = data.slice('editlbl_'.length);
+      if (!(DEV_LABEL_KEYS as readonly string[]).includes(key)) return;
+      pendingLabelEdit.set(chatId, `label:${key}`);
+      await bot.sendMessage(chatId, tb(lang, 'editLabelPrompt', { current: devLabel(settings, key, lang) }));
+      return;
+    }
+    if (data.startsWith('editmsg_')) {
+      const key = data.slice('editmsg_'.length);
+      if (!(DEV_MSG_KEYS as readonly string[]).includes(key)) return;
+      pendingLabelEdit.set(chatId, `msg:${key}`);
+      await bot.sendMessage(chatId, tb(lang, 'editLabelPrompt', { current: devEffectiveMsg(settings, key, lang) }));
+      return;
+    }
+    if (data.startsWith('mvup_') || data.startsWith('mvdn_')) {
+      const up = data.startsWith('mvup_');
+      const atom = data.slice(up ? 'mvup_'.length : 'mvdn_'.length);
+      const custom: string[] = Array.isArray(settings?.devButtonOrder) ? settings.devButtonOrder.filter((a: string) => DEFAULT_DEV_ORDER.includes(a)) : [];
+      const order = custom.length ? [...custom, ...DEFAULT_DEV_ORDER.filter(a => !custom.includes(a))] : [...DEFAULT_DEV_ORDER];
+      const i = order.indexOf(atom);
+      const j = up ? i - 1 : i + 1;
+      if (i >= 0 && j >= 0 && j < order.length) {
+        [order[i], order[j]] = [order[j], order[i]];
+        await AppSettings.findOneAndUpdate({ key: 'global' }, { $set: { key: 'global', devButtonOrder: order, updatedAt: new Date() } }, { upsert: true });
+      }
+      const fresh: any = await AppSettings.findOne({ key: 'global' }).lean();
+      await editScreen(tb(lang, 'devReorderIntro'), devReorderMenu(fresh, lang));
+      return;
+    }
+    if (data === 'devresetask') {
+      await editScreen(tb(lang, 'devResetConfirm'), { inline_keyboard: [[
+        { text: tb(lang, 'confirmYes'), callback_data: 'devresetyes' },
+        { text: tb(lang, 'confirmNo'), callback_data: 'devresetno' },
+      ]] });
+      return;
+    }
+    if (data === 'devresetno') { await editScreen(tb(lang, 'devSettingsIntro'), devSettingsMenu(lang)); return; }
+    if (data === 'devresetyes') {
+      await AppSettings.findOneAndUpdate({ key: 'global' }, { $set: { key: 'global', devButtonLabels: {}, devButtonOrder: [], devMessageTexts: {}, updatedAt: new Date() } }, { upsert: true });
+      await bot.sendMessage(chatId, tb(lang, 'devResetDone'), { reply_markup: await keyboardForUser(user, lang) });
+      return;
+    }
+    return;
+  }
+  if (data === 'noop') { await bot.answerCallbackQuery(query.id).catch(() => {}); return; }
 
   // ── Yo'qlama tasdiqlash (Ishga keldim / Ish tugatdim) ─────────────────────
   if (data === 'confirm_checkin' || data === 'confirm_checkout') {
@@ -1503,9 +1732,14 @@ async function broadcastVersionFile(fileId: string, kind: 'apk' | 'exe', fromCha
 
   const version = todayInTashkent();
   const publicUrl = `${getBackendUrl()}/uploads/${stableName}`;
+  // XAVFSIZLIK/TO'G'RILIK: $set ICHIDA — aks holda bu operatorsiz "to'liq
+  // almashtirish" hujjati bo'lib, faqat kind (apk YOKI exe)ning o'zini
+  // saqlab, IKKINCHISINI (masalan avval saqlangan exeUrl'ni) BUTUNLAY
+  // O'CHIRIB TASHLAR edi — har safar faqat bittasi (apk yoki exe)
+  // broadcast qilinganda ikkinchisi saytdan "yo'qolib" qolardi.
   await AppRelease.findOneAndUpdate(
     { key: 'latest' },
-    { key: 'latest', version, [kind === 'apk' ? 'apkUrl' : 'exeUrl']: publicUrl, updatedAt: new Date() },
+    { $set: { key: 'latest', version, [kind === 'apk' ? 'apkUrl' : 'exeUrl']: publicUrl, updatedAt: new Date() } },
     { upsert: true }
   ).catch(err => console.error('[version broadcast] AppRelease saqlash xatosi:', err));
 

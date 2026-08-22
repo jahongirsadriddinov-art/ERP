@@ -29,6 +29,7 @@ import dashboardRoutes from './routes/dashboard';
 import clientErrorRoutes from './routes/clientErrors';
 import backupRoutes from './routes/backup';
 import deployRoutes from './routes/deploy';
+import filesRoutes from './routes/files';
 import { initSocket } from './services/socket';
 import { optionalAuth, blockDeveloper } from './middleware/auth';
 // Import bot to start it + get bot instance for webhook route
@@ -142,6 +143,7 @@ app.use('/api/search',          optionalAuth, searchRoutes);
 app.use('/api/qr',              optionalAuth, qrRoutes);
 app.use('/api/notifications',   optionalAuth, notificationRoutes);
 app.use('/api/currency',        optionalAuth, currencyRoutes);
+app.use('/api/files',           filesRoutes); // Cloudinary proksi — auth shart emas (bloklangan tarmoqlar uchun)
 app.use('/api/dashboard',       optionalAuth, blockDeveloper, dashboardRoutes);
 app.use('/api/errors',          optionalAuth, clientErrorRoutes);
 app.use('/api/admin',           optionalAuth, backupRoutes);

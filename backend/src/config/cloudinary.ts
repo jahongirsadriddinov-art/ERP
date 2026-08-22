@@ -86,7 +86,14 @@ export async function uploadFileToCloud(
   const result = await cloudinary.uploader.upload(filePath, opts);
   // Cloudinary'ga yuklangandan keyin local faylni o'chirish (disk tejash)
   try { fs.unlinkSync(filePath); } catch {}
-  return { url: result.secure_url, publicId: result.public_id };
+  // MUHIM: mijozga Cloudinary'ning O'ZINING manzilini emas, balki bizning
+  // /api/files/proxy orqali "o'ralgan" manzilni qaytaramiz — ba'zi
+  // tarmoqlar/provayderlar (O'zbekistonda xabar qilingan aniq holat)
+  // res.cloudinary.com'ga to'g'ridan-to'g'ri ulanolmasligi/beqaror
+  // ulanishi mumkin, lekin bizning o'z backend domenimizga (ilova
+  // allaqachon shunga ishonib ishlaydi) ular albatta ulana oladi.
+  const proxiedUrl = `${getBackendUrl()}/api/files/proxy?url=${encodeURIComponent(result.secure_url)}`;
+  return { url: proxiedUrl, publicId: result.public_id };
 }
 
 export async function deleteFromCloud(publicId: string): Promise<void> {

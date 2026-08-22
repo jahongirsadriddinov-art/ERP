@@ -31,7 +31,7 @@ import backupRoutes from './routes/backup';
 import deployRoutes from './routes/deploy';
 import filesRoutes from './routes/files';
 import { initSocket } from './services/socket';
-import { optionalAuth, blockDeveloper } from './middleware/auth';
+import { optionalAuth, requireAuth, blockDeveloper } from './middleware/auth';
 // Import bot to start it + get bot instance for webhook route
 import { bot } from './services/bot';
 
@@ -118,35 +118,58 @@ app.get('/health', (_req, res) => res.json({
   db: mongoose.connection.readyState,
 }));
 
-// optionalAuth: token bo'lsa o'qib tenant kontekstini o'rnatadi, bo'lmasa ham
-// so'rovni o'tkazadi — shu tufayli eski klientlar sinmaydi (bosqichma-bosqich izolyatsiya).
-app.use('/api/auth', optionalAuth, authRoutes);
+// XAVFSIZLIK — MUHIM TUZATISH: bu yo'llarning DEYARLI HAMMASI avval
+// optionalAuth bilan ulangan edi ("eski klientlar sinmasin" degan eski,
+// vaqti o'tgan bosqichma-bosqich-migratsiya sababi bilan) — ya'ni token
+// UMUMAN YUBORILMASA HAM so'rov handler'gacha yetib borardi. Ko'p
+// handler'lar (masalan objects.ts'ning GET /) o'zining ICHIDA qo'shimcha
+// "tenant bormi" tekshiruvini qilmasdi — ular to'g'ridan-to'g'ri scoped()
+// dan foydalanardi, scoped() esa hech qanday tenant konteksti bo'lmasa
+// FILTRSIZ (companyId bo'yicha CHEKLOVSIZ) so'rov qaytaradi. Amalda
+// tekshirilib TASDIQLANDI: hech qanday token'siz oddiy so'rov BARCHA
+// FIRMALARNING obyektlarini (smeta, byudjet va h.k.) qaytarardi — bu
+// haqiqiy, faol ma'lumot sizib chiqishi edi, "boshqa firma ma'lumotlari
+// boshqa firmada ko'rinishi" xabar qilingan muammoning bir ko'rinishi.
+//
+// Endi firma-ichki/shaxsiy ma'lumot bilan ishlaydigan HAR BIR yo'l
+// requireAuth bilan — token yo'q/yaroqsiz/o'chirilgan hisobga tegishli
+// bo'lsa DARHOL 401. Faqat HAQIQATAN HAM ochiq bo'lishi kerak bo'lgan
+// yo'llar (login/ro'yxatdan o'tish, valyuta kursi ochiq zaxirasi, VAPID
+// ochiq kaliti, Cloudinary proksi, CI deploy webhook'i) optionalAuth/
+// wrapper'siz qoldirildi — ularning har biri o'zi ANIQ sababga ega.
+app.use('/api/auth', optionalAuth, authRoutes); // ichida login/send-code kabi pre-auth yo'llar bor
 app.use('/api/register', registerRoutes); // v1.2 self-signup (pre-auth, ochiq)
 // Firma ichki ma'lumotlari — dasturchi kira olmaydi (blockDeveloper).
 // Dasturchi faqat: companies, subscriptions, messages/groups (support chat).
-app.use('/api/objects',      optionalAuth, blockDeveloper, objectRoutes);
-app.use('/api/users',        optionalAuth, usersRoutes);        // dasturchi: read-only via DeveloperPanel
-app.use('/api/transactions', optionalAuth, blockDeveloper, transactionRoutes);
-app.use('/api/messages',     optionalAuth, messageRoutes);      // dasturchi: support chat
-app.use('/api/groups',       optionalAuth, groupRoutes);        // dasturchi: support chat
-app.use('/api/materials',    optionalAuth, blockDeveloper, materialRoutes);
-app.use('/api/companies',    optionalAuth, companyRoutes);      // dasturchi (super-admin) only
-app.use('/api/company',      optionalAuth, companySelfRoutes);  // firmaning O'ZI — o'z nomi/logotipini ko'rish/o'zgartirish
-app.use('/api/admin/subscriptions', optionalAuth, subscriptionRoutes); // obunalar boshqaruvi
-app.use('/api/smeta',        optionalAuth, blockDeveloper, smetaRoutes);
-app.use('/api/ai',           optionalAuth, blockDeveloper, aiRoutes);
-app.use('/api/attendance',      optionalAuth, attendanceRoutes);
-app.use('/api/gps',             optionalAuth, gpsRoutes);
+app.use('/api/objects',      requireAuth, blockDeveloper, objectRoutes);
+app.use('/api/users',        requireAuth, usersRoutes);        // dasturchi: read-only via DeveloperPanel
+app.use('/api/transactions', requireAuth, blockDeveloper, transactionRoutes);
+app.use('/api/messages',     requireAuth, messageRoutes);      // dasturchi: support chat
+app.use('/api/groups',       requireAuth, groupRoutes);        // dasturchi: support chat
+app.use('/api/materials',    requireAuth, blockDeveloper, materialRoutes);
+app.use('/api/companies',    requireAuth, companyRoutes);      // dasturchi (super-admin) only
+app.use('/api/company',      requireAuth, companySelfRoutes);  // firmaning O'ZI — o'z nomi/logotipini ko'rish/o'zgartirish
+app.use('/api/admin/subscriptions', requireAuth, subscriptionRoutes); // obunalar boshqaruvi
+app.use('/api/smeta',        requireAuth, blockDeveloper, smetaRoutes);
+app.use('/api/ai',           requireAuth, blockDeveloper, aiRoutes);
+app.use('/api/attendance',      requireAuth, attendanceRoutes);
+app.use('/api/gps',             requireAuth, gpsRoutes);
+// push.ts ICHIDA /vapidPublicKey ATAYLAB auth talab qilmaydi (ochiq
+// konfiguratsiya) — qolgan yo'llari (masalan /subscribe) o'zi ichida
+// tenant tekshiruvini qiladi, shu sabab bu yerda optionalAuth qoldirildi.
 app.use('/api/push',            optionalAuth, pushRoutes);
-app.use('/api/audit-logs',      optionalAuth, auditRoutes);
-app.use('/api/search',          optionalAuth, searchRoutes);
-app.use('/api/qr',              optionalAuth, qrRoutes);
-app.use('/api/notifications',   optionalAuth, notificationRoutes);
+app.use('/api/audit-logs',      requireAuth, auditRoutes);
+app.use('/api/search',          requireAuth, searchRoutes);
+app.use('/api/qr',              requireAuth, qrRoutes);
+app.use('/api/notifications',   requireAuth, notificationRoutes);
+// currency.ts'ning GET /rates ATAYLAB firma konteksti bo'lmasa ham ochiq
+// CBU/standart kursini qaytaradi (o'zining ichida shunday loyihalangan);
+// PUT /custom o'zi requireAuth talab qiladi — shu sabab bu yerda optionalAuth.
 app.use('/api/currency',        optionalAuth, currencyRoutes);
 app.use('/api/files',           filesRoutes); // Cloudinary proksi — auth shart emas (bloklangan tarmoqlar uchun)
-app.use('/api/dashboard',       optionalAuth, blockDeveloper, dashboardRoutes);
-app.use('/api/errors',          optionalAuth, clientErrorRoutes);
-app.use('/api/admin',           optionalAuth, backupRoutes);
+app.use('/api/dashboard',       requireAuth, blockDeveloper, dashboardRoutes);
+app.use('/api/errors',          optionalAuth, clientErrorRoutes); // login ekranidan oldingi xatolar ham yozilishi kerak
+app.use('/api/admin',           requireAuth, backupRoutes);
 // deployRoutes o'zining maxfiy kalit (X-Deploy-Secret) tekshiruvini o'zi
 // qiladi — optionalAuth/JWT shart emas (CI muhitidan chaqiriladi).
 app.use('/api/deploy',          deployRoutes);

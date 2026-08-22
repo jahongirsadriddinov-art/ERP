@@ -121,7 +121,7 @@ const openSiteBtn = (lang?: BotLang) => isHttps
 // Dasturchi "⚙️ Tugmalarni sozlash" orqali matn/tartibni o'zgartirgan bo'lsa
 // — shu yerda hisobga olinadi (adminButtonLabels/adminButtonOrder).
 const ADMIN_KEYBOARD = async (lang?: BotLang) => {
-  const settings: any = await AppSettings.findOne({ key: 'global' }).select('adminButtonLabels adminButtonOrder').lean();
+  const settings: any = await getAppSettingsCached();
   const L = (k: string) => scopedLabel(settings, 'admin', k, lang);
   const hasCustomOrder = Array.isArray(settings?.adminButtonOrder) && settings.adminButtonOrder.some((a: string) => (ADMIN_LABEL_KEYS as readonly string[]).includes(a));
   const rows: { text: string }[][] = hasCustomOrder
@@ -140,7 +140,7 @@ const ADMIN_KEYBOARD = async (lang?: BotLang) => {
 };
 
 const USER_KEYBOARD = async (lang?: BotLang) => {
-  const settings: any = await AppSettings.findOne({ key: 'global' }).select('userButtonLabels userButtonOrder').lean();
+  const settings: any = await getAppSettingsCached();
   const L = (k: string) => scopedLabel(settings, 'user', k, lang);
   const hasCustomOrder = Array.isArray(settings?.userButtonOrder) && settings.userButtonOrder.some((a: string) => (USER_LABEL_KEYS as readonly string[]).includes(a));
   const rows: { text: string }[][] = hasCustomOrder
@@ -176,7 +176,12 @@ const pendingCheckinLocation = new Map<number, { userId: string; lang?: BotLang 
 // TASDIQSIZ, darhol hammaga yuboriladi. Dasturchi botga to'g'ridan-to'g'ri
 // (shu tugmani bosmasdan) .apk/.exe tashlasa ham xuddi shunday — tasdiqsiz,
 // darhol yuboriladi (pastroqda, alohida blok).
-const pendingBroadcastChoice = new Set<number>();
+// XAVFSIZLIK: qiymat — QUROLLANGAN payt (ms). Dasturchi "⏹ Yakunlash"ni
+// bosishni UNUTIB qo'ysa, keyingi (hatto oddiy, tasodifiy) xabari ham
+// TASDIQSIZ hammaga ketardi — real xavf. Shu sabab BELGILANGAN VAQTDAN
+// (BROADCAST_ARM_TIMEOUT_MS) keyin avtomatik "sovutiladi" (o'chadi).
+const pendingBroadcastChoice = new Map<number, number>();
+const BROADCAST_ARM_TIMEOUT_MS = 15 * 60 * 1000; // 15 daqiqa
 
 // Bot yoqiq/o'chiqligi — dasturchi shu botning o'zidan boshqaradi (pastda,
 // kb_disableBot/kb_enableBot). auth.ts'dagi isSiteEnabled() bilan bir xil
@@ -200,6 +205,37 @@ async function isBotEnabled(force = false): Promise<boolean> {
     }
   }
   return cachedBotEnabled;
+}
+
+// Klaviatura tugma matnlari/tartibi/xabarlar uchun (devButtonLabels,
+// adminButtonLabels, userButtonLabels, devMessageTexts, va h.k.) BITTA
+// umumiy 5s-keshlangan AppSettings hujjati — PERFORMANS: avval har bir
+// DEVELOPER_KEYBOARD/ADMIN_KEYBOARD/USER_KEYBOARD chaqiruvi (ya'ni HAR bir
+// bot javobida ko'rsatiladigan klaviatura) VA har bir kiruvchi matn xabar
+// o'zining ALOHIDA AppSettings.findOne() so'rovini yuborardi — kichik
+// hujjat bo'lsa ham, bu botning HAR bir harakatida qo'shimcha, keraksiz
+// bazaga murojaat degani edi (aniq talab: "siteni botni sekin
+// ishlatvotgan narsalar... bartaraf et"). Endi hammasi shu BITTA keshdan
+// o'qiydi. Yozishdan keyin (label/tartib/xabar o'zgartirilganda, yoqish-
+// o'chirishda) cachedAppSettings = null qilinadi — dasturchining O'ZI
+// darhol yangilangan holatni ko'radi, 5s kutmaydi.
+let cachedAppSettings: any = null;
+let appSettingsCachedAt = 0;
+const APP_SETTINGS_CACHE_MS = 5000;
+async function getAppSettingsCached(): Promise<any> {
+  const now = Date.now();
+  if (!cachedAppSettings || now - appSettingsCachedAt > APP_SETTINGS_CACHE_MS) {
+    try {
+      cachedAppSettings = await AppSettings.findOne({ key: 'global' }).lean();
+      appSettingsCachedAt = now;
+    } catch {
+      // Xatolik — eski (yoki null) qiymat bilan davom etamiz, standart
+      // matnlarga tushib qolish xavfsiz (devLabel/devEffectiveMsg va h.k.
+      // barchasi settings=null/undefined bo'lsa ham standart i18n matnga
+      // tushadi, xato tashlamaydi).
+    }
+  }
+  return cachedAppSettings;
 }
 
 // Bot o'chirilganda oddiy foydalanuvchi ko'radigan YAGONA tugma — hech qanday
@@ -502,7 +538,7 @@ function buildAtomLabel(settings: any, lang?: BotLang) {
 // Dasturchi "⚙️ Tugmalarni sozlash" orqali matnlarni/tartibni o'zgartirgan
 // bo'lsa — shu yerda ham hisobga olinadi (devButtonLabels/devButtonOrder).
 const DEVELOPER_KEYBOARD = async (lang?: BotLang) => {
-  const settings: any = await AppSettings.findOne({ key: 'global' }).select('siteEnabled botEnabled devButtonLabels devButtonOrder').lean();
+  const settings: any = await getAppSettingsCached();
   const atomLabel = buildAtomLabel(settings, lang);
   const custom: string[] = Array.isArray(settings?.devButtonOrder) ? settings.devButtonOrder.filter((a: string) => DEFAULT_DEV_ORDER.includes(a)) : [];
   const order = custom.length ? [...custom, ...DEFAULT_DEV_ORDER.filter(a => !custom.includes(a))] : null;
@@ -821,6 +857,7 @@ bot.on('message', async (msg: any) => {
         { $set: { key: 'global', [`${field}.${key}`]: value, updatedAt: new Date() } },
         { upsert: true }
       );
+      cachedAppSettings = null; // keyingi keyboardForUser() darhol yangi matnni ko'rsatsin
       if (kind === 'label') {
         await bot.sendMessage(chatId, tb(elLang, 'editLabelSaved', { label: msg.text.trim() }), { reply_markup: await keyboardForUser(elUser, elLang) });
         if (msg.entities?.some((e: any) => e.type === 'custom_emoji')) {
@@ -845,10 +882,21 @@ bot.on('message', async (msg: any) => {
   // "⏹ Yakunlash" bosilguncha shu rejim davom etadi (bir nechta fayl+matnni
   // ketma-ket tashlash mumkin).
   if (pendingBroadcastChoice.has(chatId)) {
+    const armedAt = pendingBroadcastChoice.get(chatId) as number;
+    const expired = Date.now() - armedAt > BROADCAST_ARM_TIMEOUT_MS;
     const bcUser = await User.findOne({ telegramChatId: chatId.toString() }).catch(() => null);
+    const bcLang = bcUser?.language as BotLang | undefined;
     if (!bcUser || !isDev(bcUser.role)) { pendingBroadcastChoice.delete(chatId); }
+    else if (expired) {
+      // Unutib qo'yilgan "qurollangan" holat — xavfsizlik uchun avtomatik
+      // yopildi, keyingi (oddiy) xabar endi HAMMAGA emas, unga o'ziga
+      // ketadi ("hech qanday so'rovlarsiz" tasdiqsiz-broadcast rejimi
+      // cheksiz ochiq qolsa, dasturchi bir kunmas-bir kun tasodifiy
+      // xabarni ham hammaga yuborib qo'yishi mumkin edi).
+      pendingBroadcastChoice.delete(chatId);
+      await bot.sendMessage(chatId, tb(bcLang, 'broadcastAutoEnded'), { reply_markup: await keyboardForUser(bcUser, bcLang) });
+    }
     else {
-      const bcLang = bcUser.language as BotLang | undefined;
       if (msg.text === tb(bcLang, 'kb_broadcastEnd')) {
         pendingBroadcastChoice.delete(chatId);
         await bot.sendMessage(chatId, tb(bcLang, 'broadcastEnded'), { reply_markup: await keyboardForUser(bcUser, bcLang) });
@@ -919,7 +967,7 @@ bot.on('message', async (msg: any) => {
   const lang = user.language as BotLang | undefined;
   // Admin/ishchi menyusi tugmalari dasturchi tomonidan o'zgartirilgan bo'lishi
   // mumkin — pastdagi HAMMA solishtirish shu (custom-aware) qiymatlar bilan.
-  const kbSettings: any = await AppSettings.findOne({ key: 'global' }).select('adminButtonLabels userButtonLabels').lean();
+  const kbSettings: any = await getAppSettingsCached();
   const SL = (scope: KbScope, key: string) => scopedLabel(kbSettings, scope, key, lang);
 
   // ── Til tanlash — hamma rol uchun ─────────────────────────────────────────
@@ -991,7 +1039,7 @@ bot.on('message', async (msg: any) => {
     // solishtirish HAM shu (custom-aware) qiymatlar bilan qilinadi, aks
     // holda o'zgartirilgan tugma bosilganda hech qaysi shart to'g'ri
     // kelmay, oxirgi "chooseFromMenu" javobiga tushib qolardi.
-    const devSettings: any = await AppSettings.findOne({ key: 'global' }).select('devButtonLabels devMessageTexts').lean();
+    const devSettings: any = await getAppSettingsCached();
     const L = (k: string) => devLabel(devSettings, k, user.language as BotLang | undefined);
 
     if (text === L('kb_firmsList')) {
@@ -1075,7 +1123,7 @@ bot.on('message', async (msg: any) => {
     // ── "Xabar yuborish" — shu paytdan "⏹ Yakunlash"gacha yuborilgan HAR
     // BIR matn/apk/exe fayl tasdiqsiz, darhol hammaga ketadi.
     if (text === L('kb_broadcast')) {
-      pendingBroadcastChoice.add(chatId);
+      pendingBroadcastChoice.set(chatId, Date.now());
       bot.sendMessage(chatId, tb(user.language, 'broadcastPrompt'), { reply_markup: BROADCAST_MODE_KEYBOARD(user.language as BotLang | undefined) });
       return;
     }
@@ -1084,6 +1132,7 @@ bot.on('message', async (msg: any) => {
     if (text === L('kb_disableSite') || text === L('kb_enableSite')) {
       const enable = text === L('kb_enableSite');
       await AppSettings.findOneAndUpdate({ key: 'global' }, { $set: { key: 'global', siteEnabled: enable, updatedAt: new Date() } }, { upsert: true });
+      cachedAppSettings = null;
       { const m = devEffectiveMsgFull(devSettings, enable ? 'siteEnabledMsg' : 'siteDisabledMsg', user.language as BotLang | undefined, true);
         bot.sendMessage(chatId, m.text, { entities: m.entities, reply_markup: await keyboardForUser(user, user.language) }); }
       return;
@@ -1092,6 +1141,7 @@ bot.on('message', async (msg: any) => {
       const enable = text === L('kb_enableBot');
       await AppSettings.findOneAndUpdate({ key: 'global' }, { $set: { key: 'global', botEnabled: enable, updatedAt: new Date() } }, { upsert: true });
       cachedBotEnabled = enable; botEnabledCachedAt = Date.now(); // o'zining keyingi so'rovi eski keshga urilmasin
+      cachedAppSettings = null;
       { const m = devEffectiveMsgFull(devSettings, enable ? 'botEnabledMsg' : 'botDisabledMsg', user.language as BotLang | undefined, true);
         bot.sendMessage(chatId, m.text, { entities: m.entities, reply_markup: await keyboardForUser(user, user.language) }); }
       return;
@@ -1438,6 +1488,7 @@ bot.on('callback_query', async (query: any) => {
       if (i >= 0 && j >= 0 && j < order.length) {
         [order[i], order[j]] = [order[j], order[i]];
         await AppSettings.findOneAndUpdate({ key: 'global' }, { $set: { key: 'global', [orderField(scope)]: order, updatedAt: new Date() } }, { upsert: true });
+        cachedAppSettings = null;
       }
       const fresh: any = await AppSettings.findOne({ key: 'global' }).lean();
       await editScreen(`${tb(lang, SCOPE_TITLE_KEY[scope])}\n\n${tb(lang, 'devReorderIntro')}`, devReorderMenu(fresh, scope, lang));
@@ -1460,6 +1511,7 @@ bot.on('callback_query', async (query: any) => {
         devMessageTexts: {},
         updatedAt: new Date(),
       } }, { upsert: true });
+      cachedAppSettings = null;
       await bot.sendMessage(chatId, tb(lang, 'devResetDone'), { reply_markup: await keyboardForUser(user, lang) });
       return;
     }

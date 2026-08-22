@@ -57,6 +57,7 @@ interface BotDict {
   broadcastPrompt: string;
   kb_broadcastEnd: string;
   broadcastEnded: string;
+  broadcastAutoEnded: string;
   broadcastUnsupportedType: string;
   siteEnabledMsg: (p: { time: string }) => string;
   siteDisabledMsg: (p: { time: string }) => string;
@@ -223,6 +224,7 @@ const uz: BotDict = {
   broadcastPrompt: "✍️ Endi xabar matnini yozing YOKI APK/EXE faylini tashlang — DARHOL, hech qanday so'rovsiz, aynan shu holicha (emoji/formatlash o'zgarmasdan) hammaga yuboriladi. Bir nechtasini ketma-ket tashlashingiz mumkin. Tugatgach pastdagi \"⏹ Yakunlash\"ni bosing.",
   kb_broadcastEnd: "⏹ Yakunlash",
   broadcastEnded: "⏹ Xabar yuborish rejimi tugadi.",
+  broadcastAutoEnded: "⏹ Xavfsizlik uchun \"Xabar yuborish\" rejimi 15 daqiqa harakatsizlikdan so'ng avtomatik yopildi (siz \"⏹ Yakunlash\"ni bosishni unutgan bo'lishingiz mumkin edi). Bu xabaringiz endi ODDIY buyruq sifatida qaraladi, hech kimga yuborilmadi.",
   broadcastUnsupportedType: "⚠️ Bu turdagi xabar qo'llab-quvvatlanmaydi — faqat matn yoki APK/EXE fayl yuboring, yoki \"⏹ Yakunlash\"ni bosing.",
   siteEnabledMsg: (p) => `✅ Sayt hozir FAOL ishlamoqda\n🕐 Yoqilgan vaqt: ${p.time}\n\nBarcha foydalanuvchilar kira oladi.`,
   siteDisabledMsg: (p) => `🔴 Sayt hozir O'CHIRILGAN (texnik ishlar rejimi)\n🕐 O'chirilgan vaqt: ${p.time}\n\nSizdan boshqa hech kim kira olmaydi — qayta yoqishni unutmang.`,
@@ -397,6 +399,7 @@ const ru: BotDict = {
   broadcastPrompt: "✍️ Теперь пишите текст сообщения ИЛИ отправляйте APK/EXE файл — СРАЗУ, без подтверждения, точно в таком виде (эмодзи/форматирование не меняются) уйдёт всем. Можно отправить несколько подряд. По завершении нажмите \"⏹ Завершить\".",
   kb_broadcastEnd: "⏹ Завершить",
   broadcastEnded: "⏹ Режим отправки сообщения завершён.",
+  broadcastAutoEnded: "⏹ Для безопасности режим \"Отправить сообщение\" автоматически закрылся после 15 минут бездействия (возможно, вы забыли нажать \"⏹ Завершить\"). Это ваше сообщение теперь считается ОБЫЧНОЙ командой, никому не отправлено.",
   broadcastUnsupportedType: "⚠️ Этот тип сообщения не поддерживается — отправьте только текст или APK/EXE файл, либо нажмите \"⏹ Завершить\".",
   siteEnabledMsg: (p) => `✅ Сайт сейчас АКТИВЕН\n🕐 Время включения: ${p.time}\n\nВсе пользователи могут войти.`,
   siteDisabledMsg: (p) => `🔴 Сайт сейчас ОТКЛЮЧЁН (режим техобслуживания)\n🕐 Время отключения: ${p.time}\n\nКроме вас никто не сможет войти — не забудьте включить обратно.`,

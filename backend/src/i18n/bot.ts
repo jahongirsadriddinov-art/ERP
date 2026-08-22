@@ -52,11 +52,12 @@ interface BotDict {
   checkInStillNeedsLive: string;
   morningCheckInReminder: string;
   eveningCheckOutReminder: string;
-  confirmVersionBroadcast: (p: { fileName: string }) => string;
   versionBroadcastStarted: string;
   versionBroadcastDone: (p: { sent: string; failed: string }) => string;
   broadcastPrompt: string;
-  confirmTextBroadcast: (p: { text: string }) => string;
+  kb_broadcastEnd: string;
+  broadcastEnded: string;
+  broadcastUnsupportedType: string;
   siteEnabledMsg: (p: { time: string }) => string;
   siteDisabledMsg: (p: { time: string }) => string;
   botEnabledMsg: (p: { time: string }) => string;
@@ -71,12 +72,18 @@ interface BotDict {
   kb_devReorder: string;
   kb_devReset: string;
   kb_devBack: string;
+  scopeAdmin: string;
+  scopeUser: string;
+  kb_devSettingsScopeDev: string;
+  kb_devSettingsScopeAdmin: string;
+  kb_devSettingsScopeUser: string;
   devSettingsIntro: string;
   devSettingsPickLabel: string;
   devSettingsPickMsg: string;
   editLabelPrompt: (p: { current: string }) => string;
   editLabelSaved: (p: { label: string }) => string;
-  editMsgSaved: (p: { label: string }) => string;
+  editMsgSaved: string;
+  premiumEmojiButtonWarning: string;
   devReorderIntro: string;
   devResetConfirm: string;
   devResetDone: string;
@@ -211,11 +218,12 @@ const uz: BotDict = {
   checkInStillNeedsLive: "Bu bir martalik joylashuv ekan. Ishga kelishni tasdiqlash uchun aynan \"Jonli joylashuv\" (Live Location) kerak: 📎 → Location → Share Live Location.",
   morningCheckInReminder: "🌅 Xayrli tong! Ishga keldingizmi?\n\nAgar kelgan bo'lsangiz, quyidagi tugmani bosing va so'ralganda jonli joylashuvingizni ulashing.",
   eveningCheckOutReminder: "🌆 Ishni tugatdingizmi?\n\nAgar tugatgan bo'lsangiz, quyidagi tugmani bosing.",
-  confirmVersionBroadcast: (p: { fileName: string }) => `📦 *${p.fileName}*\n\nBu faylni YANGI VERSIYA sifatida barcha foydalanuvchilarga yubormoqchimisiz?`,
   versionBroadcastStarted: "⏳ Yuborilmoqda... Bu bir necha daqiqa davom etishi mumkin.",
   versionBroadcastDone: (p: { sent: string; failed: string }) => `✅ Yuborildi: ${p.sent} ta foydalanuvchiga${Number(p.failed) > 0 ? ` (${p.failed} ta muvaffaqiyatsiz)` : ''}.`,
-  broadcastPrompt: "✍️ Endi xabar matnini yozing YOKI yangi APK/EXE faylini tashlang — shu hammaga yuboriladi.",
-  confirmTextBroadcast: (p: { text: string }) => `📢 Quyidagi xabarni BARCHA foydalanuvchilarga yubormoqchimisiz?\n\n"${p.text}"`,
+  broadcastPrompt: "✍️ Endi xabar matnini yozing YOKI APK/EXE faylini tashlang — DARHOL, hech qanday so'rovsiz, aynan shu holicha (emoji/formatlash o'zgarmasdan) hammaga yuboriladi. Bir nechtasini ketma-ket tashlashingiz mumkin. Tugatgach pastdagi \"⏹ Yakunlash\"ni bosing.",
+  kb_broadcastEnd: "⏹ Yakunlash",
+  broadcastEnded: "⏹ Xabar yuborish rejimi tugadi.",
+  broadcastUnsupportedType: "⚠️ Bu turdagi xabar qo'llab-quvvatlanmaydi — faqat matn yoki APK/EXE fayl yuboring, yoki \"⏹ Yakunlash\"ni bosing.",
   siteEnabledMsg: (p) => `✅ Sayt hozir FAOL ishlamoqda\n🕐 Yoqilgan vaqt: ${p.time}\n\nBarcha foydalanuvchilar kira oladi.`,
   siteDisabledMsg: (p) => `🔴 Sayt hozir O'CHIRILGAN (texnik ishlar rejimi)\n🕐 O'chirilgan vaqt: ${p.time}\n\nSizdan boshqa hech kim kira olmaydi — qayta yoqishni unutmang.`,
   botEnabledMsg: (p) => `✅ Bot hozir FAOL ishlamoqda\n🕐 Yoqilgan vaqt: ${p.time}\n\nBarcha foydalanuvchilar foydalana oladi.`,
@@ -230,12 +238,18 @@ const uz: BotDict = {
   kb_devReorder: "🔀 Tartibni o'zgartirish",
   kb_devReset: "↩️ Standartga qaytarish",
   kb_devBack: "◀️ Orqaga",
+  scopeAdmin: "Admin (Direktor/Orinbosar)",
+  scopeUser: "Ishchi",
+  kb_devSettingsScopeDev: "🤖 Dasturchi menyusi",
+  kb_devSettingsScopeAdmin: "👔 Admin menyusi (Direktor/Orinbosar)",
+  kb_devSettingsScopeUser: "👷 Ishchi menyusi",
   devSettingsIntro: "⚙️ Nimani sozlaysiz?\n\n🔤 Tugma matnlari — menyudagi tugmalar yozuvi/ikonkasi\n📝 Xabar matnlari — sayt/bot yoqilganda-o'chirilganda yuboriladigan xabarlar\n🔀 Tartib — tugmalar joylashuvi",
   devSettingsPickLabel: "✏️ O'zgartirmoqchi bo'lgan tugmani tanlang:",
   devSettingsPickMsg: "📝 O'zgartirmoqchi bo'lgan xabarni tanlang:",
   editLabelPrompt: (p) => `✏️ Joriy matn: "${p.current}"\n\nYangi matn (kerak bo'lsa ikonka bilan, masalan: 📣 Elon yuborish) yozing. Xabar matnlarida {time} yozsangiz — haqiqiy vaqt bilan almashadi.`,
   editLabelSaved: (p) => `✅ Saqlandi: "${p.label}"`,
-  editMsgSaved: (p) => `✅ Xabar saqlandi:\n\n${p.label}`,
+  editMsgSaved: "✅ Xabar saqlandi. Aynan shunday (emoji/formatlash bilan) yuboriladi:",
+  premiumEmojiButtonWarning: "⚠️ Eslatma: Telegram tugma yozuvlarida premium/maxsus emoji ko'rinmaydi (oddiy belgi sifatida chiqadi) — bu Telegram platformasining o'zi qo'ygan cheklov, botda tuzatib bo'lmaydi. Faqat XABAR matnlarida (📝 Xabar matnlari bo'limida) premium emoji to'liq saqlanadi.",
   devReorderIntro: "🔀 Tugmalarni yuqoriga/pastga surish uchun ▲/▼ tugmalarini bosing. Tugagach \"◀️ Orqaga\" bosing.",
   devResetConfirm: "❓ Hamma tugma matni, xabar matnlari va tartib STANDART holatga qaytarilsinmi?",
   devResetDone: "✅ Standart holatga qaytarildi.",
@@ -378,11 +392,12 @@ const ru: BotDict = {
   checkInStillNeedsLive: 'Это разовая геопозиция. Для подтверждения прихода нужна именно трансляция геопозиции: 📎 → Геопозиция → Транслировать геопозицию.',
   morningCheckInReminder: '🌅 Доброе утро! Вы пришли на работу?\n\nЕсли да — нажмите кнопку ниже и отправьте трансляцию геопозиции, когда будет запрошено.',
   eveningCheckOutReminder: '🌆 Вы закончили работу?\n\nЕсли да — нажмите кнопку ниже.',
-  confirmVersionBroadcast: (p) => `📦 *${p.fileName}*\n\nОтправить этот файл как НОВУЮ ВЕРСИЮ всем пользователям?`,
   versionBroadcastStarted: '⏳ Отправка... Это может занять несколько минут.',
   versionBroadcastDone: (p) => `✅ Отправлено: ${p.sent} пользователям${Number(p.failed) > 0 ? ` (${p.failed} неудачно)` : ''}.`,
-  broadcastPrompt: "✍️ Теперь напишите текст сообщения ИЛИ отправьте новый APK/EXE файл — это будет отправлено всем.",
-  confirmTextBroadcast: (p) => `📢 Отправить это сообщение ВСЕМ пользователям?\n\n"${p.text}"`,
+  broadcastPrompt: "✍️ Теперь пишите текст сообщения ИЛИ отправляйте APK/EXE файл — СРАЗУ, без подтверждения, точно в таком виде (эмодзи/форматирование не меняются) уйдёт всем. Можно отправить несколько подряд. По завершении нажмите \"⏹ Завершить\".",
+  kb_broadcastEnd: "⏹ Завершить",
+  broadcastEnded: "⏹ Режим отправки сообщения завершён.",
+  broadcastUnsupportedType: "⚠️ Этот тип сообщения не поддерживается — отправьте только текст или APK/EXE файл, либо нажмите \"⏹ Завершить\".",
   siteEnabledMsg: (p) => `✅ Сайт сейчас АКТИВЕН\n🕐 Время включения: ${p.time}\n\nВсе пользователи могут войти.`,
   siteDisabledMsg: (p) => `🔴 Сайт сейчас ОТКЛЮЧЁН (режим техобслуживания)\n🕐 Время отключения: ${p.time}\n\nКроме вас никто не сможет войти — не забудьте включить обратно.`,
   botEnabledMsg: (p) => `✅ Бот сейчас АКТИВЕН\n🕐 Время включения: ${p.time}\n\nВсе пользователи могут пользоваться.`,
@@ -397,12 +412,18 @@ const ru: BotDict = {
   kb_devReorder: "🔀 Изменить порядок",
   kb_devReset: "↩️ Сбросить по умолчанию",
   kb_devBack: "◀️ Назад",
+  scopeAdmin: "Админ (Директор/Заместитель)",
+  scopeUser: "Работник",
+  kb_devSettingsScopeDev: "🤖 Меню разработчика",
+  kb_devSettingsScopeAdmin: "👔 Меню админа (Директор/Заместитель)",
+  kb_devSettingsScopeUser: "👷 Меню работника",
   devSettingsIntro: "⚙️ Что настроить?\n\n🔤 Текст кнопок — надписи/иконки в меню\n📝 Текст сообщений — что отправляется при включении/отключении сайта/бота\n🔀 Порядок — расположение кнопок",
   devSettingsPickLabel: "✏️ Выберите кнопку, которую хотите изменить:",
   devSettingsPickMsg: "📝 Выберите сообщение, которое хотите изменить:",
   editLabelPrompt: (p) => `✏️ Текущий текст: "${p.current}"\n\nВведите новый текст (при желании с иконкой, например: 📣 Отправить объявление). В тексте сообщений можно написать {time} — заменится на реальное время.`,
   editLabelSaved: (p) => `✅ Сохранено: "${p.label}"`,
-  editMsgSaved: (p) => `✅ Сообщение сохранено:\n\n${p.label}`,
+  editMsgSaved: "✅ Сообщение сохранено. Будет отправлено точно так (с эмодзи/форматированием):",
+  premiumEmojiButtonWarning: "⚠️ Примечание: премиум/особые эмодзи не отображаются в тексте КНОПОК (показывается обычный символ) — это ограничение самого Telegram, бот исправить не может. Только в тексте СООБЩЕНИЙ (раздел 📝 Текст сообщений) премиум-эмодзи сохраняется полностью.",
   devReorderIntro: "🔀 Нажмите ▲/▼, чтобы переместить кнопки вверх/вниз. По завершении нажмите \"◀️ Назад\".",
   devResetConfirm: "❓ Сбросить весь текст кнопок, текст сообщений и порядок до СТАНДАРТНОГО состояния?",
   devResetDone: "✅ Сброшено до стандартного состояния.",

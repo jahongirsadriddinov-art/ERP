@@ -19,7 +19,13 @@ const WORKER_ROLES = ['ishchi', 'prorab', 'brigadir'];
 // boshlaydi. `role`ni ham dependency qilish xavfsiz (primitiv string), lekin
 // `userId` o'rniga butun user obyektini bermaslik SHART — aks holda har bir
 // bog'liqsiz re-render intervalni qayta boshlab yuboradi.
-export function useGeoTracker(userId: string | undefined, role: string | undefined, isWorking: boolean) {
+// enabled=false (masalan sayt texnik ishlar rejimida bo'lganda) — kuzatuv
+// UMUMAN boshlanmaydi/darhol to'xtaydi. Aniq talab: "sayt ochirilgan
+// bolsa ham locatsiya ochmasin, joylashuv uzatip turishi ochmasin" — bunsiz
+// ilova qulflangan ekranda ham fonda GPS so'rashda/yuborishda davom etaverar,
+// tarmoq/batareyani behuda sarflab, 503 bilan rad etiladigan so'rovlar
+// yuborardi.
+export function useGeoTracker(userId: string | undefined, role: string | undefined, isWorking: boolean, enabled: boolean = true) {
   const [gpsTracking, setGpsTracking] = useState(false);
   const gpsIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const gpsWarnedRef = useRef(false); // bir marta ogohlantirish uchun — har daqiqada konsolni to'ldirmaslik uchun
@@ -65,6 +71,7 @@ export function useGeoTracker(userId: string | undefined, role: string | undefin
   };
 
   useEffect(() => {
+    if (!enabled) return;
     if (!userId || !isWorking) return;
     if (!role || !WORKER_ROLES.includes(role)) return;
     let cancelled = false;
@@ -86,7 +93,7 @@ export function useGeoTracker(userId: string | undefined, role: string | undefin
       .catch(() => {}); // standart interval bilan davom etadi
 
     return () => { cancelled = true; stopGpsInterval(); };
-  }, [userId, isWorking]);
+  }, [userId, isWorking, enabled]);
 
   return { gpsTracking };
 }

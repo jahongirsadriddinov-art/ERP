@@ -13,7 +13,7 @@ import { API_BASE, parseSmetaFile, uploadChatMedia } from "./api";
 import { connectSocket, getSocket, disconnectSocket } from "./socket";
 import { motion, AnimatePresence } from "motion/react";
 import { setSiteLanguage, SiteLang, langLabel } from "./i18n";
-import { installAndroidBackHandler, saveOrShareBlob, openExternalUrl } from "./platform";
+import { installAndroidBackHandler, saveOrShareBlob, openExternalUrl, isNative } from "./platform";
 import { AppDownloadCards } from "./AppDownload";
 import LanguageSwitcher from "./i18n/LanguageSwitcher";
 import { Skeleton, SkeletonList, SkeletonPage, SkeletonMessage, SkeletonTable, SkeletonProfile } from "./Skeleton";
@@ -4470,13 +4470,21 @@ export default function App() {
   // yoki hali javob kelmagan holatda — HECH QACHON saytni yolg'on
   // "o'chiq" deb bloklamaymiz (fail-open, backend bilan bir xil qoida).
   const [siteEnabled, setSiteEnabled] = useState(true);
-  useEffect(() => {
-    let cancelled = false;
-    fetch(`${API_BASE}/api/status`)
+  const [statusChecking, setStatusChecking] = useState(false);
+  // Ilova (Capacitor/Tauri)da texnik-ishlar ekranida "sahifani yangilash"
+  // tabiiy imkoni yo'q (brauzer emas) — shu sabab qayta tekshirish uchun
+  // aniq tugma kerak (aniq talab: "ochganda apk da exe refresh qip
+  // bomayapdi u menuda" — bu funksiya o'sha tugma bilan chaqiriladi).
+  const checkSiteStatus = () => {
+    setStatusChecking(true);
+    return fetch(`${API_BASE}/api/status`)
       .then(r => r.json())
-      .then(d => { if (!cancelled) setSiteEnabled(d?.siteEnabled !== false); })
-      .catch(() => {});
-    return () => { cancelled = true; };
+      .then(d => setSiteEnabled(d?.siteEnabled !== false))
+      .catch(() => {})
+      .finally(() => setStatusChecking(false));
+  };
+  useEffect(() => { checkSiteStatus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Ilova qulfi (PIN/biometrik) — faqat kirilgan bo'lsa ma'noli, lekin hook
@@ -4499,8 +4507,10 @@ export default function App() {
 
   // GPS kuzatuv — session-scoped hook (App darajasida, sahifa emas — shu
   // sabab navigatsiya GPS'ni to'xtatmaydi, lekin isWorking o'zgarishi
-  // to'xtatadi/boshlaydi). To'liq mantiq useGeoTracker.ts'da.
-  const { gpsTracking } = useGeoTracker(liveUser?.id, liveUser?.role, isWorking);
+  // to'xtatadi/boshlaydi). To'liq mantiq useGeoTracker.ts'da. siteEnabled=false
+  // (texnik ishlar rejimi) bo'lsa ham darhol to'xtaydi — foydalanuvchi aniq
+  // talabi: "sayt ochirilgan bolsa ham joylashuv uzatip turishi ochmasin".
+  const { gpsTracking } = useGeoTracker(liveUser?.id, liveUser?.role, isWorking, siteEnabled);
 
   // Bugungi davomat holatini alohida yuklaymiz. attendanceChecked — ishchi
   // rol uchun "Ishga keldim" darvozasini (gate) ko'rsatishdan oldin, haqiqiy
@@ -4907,13 +4917,24 @@ export default function App() {
   // MUHIM: dasturchi bu ekranni ko'rmaydi (u qayta yoqishi kerak bo'lgani
   // uchun) — backend ham aynan shu istisnoni qiladi (auth.ts, isDeveloper).
   if (!siteEnabled && liveUser?.role !== 'dasturchi') {
+    // Native ilova (APK/exe) foydalanuvchisiga "sayt" emas — "ilova" deyish
+    // kerak, chunki u brauzerda emas, ilovaning o'zida turibdi (aniq talab).
+    const surface = isNative() ? "Ilova" : "Sayt";
     return (
       <>
         <div className="min-h-screen bg-background flex items-center justify-center p-6 text-center">
           <div className="max-w-sm space-y-4">
             <div className="text-5xl">🛠️</div>
-            <h1 className="text-xl font-semibold text-foreground">Sayt texnik ishlar tufayli vaqtincha ishlamayapti</h1>
+            <h1 className="text-xl font-semibold text-foreground">{surface} texnik ishlar tufayli vaqtincha ishlamayapti</h1>
             <p className="text-sm text-muted-foreground">Birozdan so'ng qayta urinib ko'ring. Uzr so'raymiz.</p>
+            <button
+              onClick={checkSiteStatus}
+              disabled={statusChecking}
+              className="mx-auto flex items-center gap-2 rounded-full bg-primary text-primary-foreground px-5 py-2.5 text-sm font-medium liquid-transition disabled:opacity-60"
+            >
+              <RefreshCw className={`w-4 h-4 ${statusChecking ? 'animate-spin' : ''}`}/>
+              {statusChecking ? "Tekshirilmoqda..." : "Qayta tekshirish"}
+            </button>
           </div>
         </div>
         <Toaster position="top-center" richColors closeButton/>

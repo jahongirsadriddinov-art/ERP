@@ -52,9 +52,12 @@ router.post('/upload-artifact', upload.single('file'), async (req, res) => {
     // page/Profildagi "yuklab olish" tugmalari shu doim-bir-xil URL'ga
     // ishonib, DB'da alohida "eng oxirgi versiya" yozuvi saqlash shart
     // emas. `kind` berilmasa — eski (timestamp-unique) xatti-harakat.
+    // MUHIM: kengaytma bu yerda QO'SHILMAYDI — uploadFileToCloud o'zi
+    // qo'shadi (APK/EXE kabi "xavfli" kengaytmalar uchun Cloudinary'ga
+    // ZARARSIZ ".bin" bilan yuklanadi, haqiqiy kengaytma faqat yetkazishda
+    // qaytariladi — cloudinary.ts'dagi RISKY_EXTS izohiga qarang).
     const kind = typeof req.body?.kind === 'string' ? req.body.kind : undefined;
-    const ext = kind === 'apk' ? '.apk' : kind === 'exe' ? '.exe' : undefined;
-    const stablePublicId = ext ? `QurilishERP-latest${ext}` : undefined;
+    const stablePublicId = kind === 'apk' || kind === 'exe' ? 'QurilishERP-latest' : undefined;
 
     const { url } = await uploadFileToCloud(req.file.path, 'qurilish-releases', req.file.originalname, { stablePublicId });
     res.json({ ok: true, url });

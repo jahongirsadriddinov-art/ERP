@@ -47,14 +47,27 @@ router.get('/proxy', async (req, res) => {
     }
 
     res.status(upstream.status); // 200 yoki 206 (Range so'ralgan bo'lsa)
-    res.setHeader('Content-Type', upstream.headers.get('content-type') || 'application/octet-stream');
+
+    // filename/type — APK/EXE kabi Cloudinary rad etadigan kengaytmali
+    // fayllar U YERDA ZARARSIZ ".bin" nomi bilan saqlanadi (cloudinary.ts,
+    // RISKY_EXTS), shu sabab bu yerda ANIQ berilgan bo'lsa, HAQIQIY
+    // nom/turi bilan almashtiramiz — foydalanuvchi/Android/Windows uchun
+    // fayl to'g'ri tanilishi uchun.
+    const overrideFilename = typeof req.query.filename === 'string' ? req.query.filename : null;
+    const overrideType = typeof req.query.type === 'string' ? req.query.type : null;
+
+    res.setHeader('Content-Type', overrideType || upstream.headers.get('content-type') || 'application/octet-stream');
     res.setHeader('Accept-Ranges', upstream.headers.get('accept-ranges') || 'bytes');
     const len = upstream.headers.get('content-length');
     if (len) res.setHeader('Content-Length', len);
     const contentRange = upstream.headers.get('content-range');
     if (contentRange) res.setHeader('Content-Range', contentRange);
-    const cd = upstream.headers.get('content-disposition');
-    if (cd) res.setHeader('Content-Disposition', cd);
+    if (overrideFilename) {
+      res.setHeader('Content-Disposition', `attachment; filename="${overrideFilename.replace(/["\r\n]/g, '_')}"`);
+    } else {
+      const cd = upstream.headers.get('content-disposition');
+      if (cd) res.setHeader('Content-Disposition', cd);
+    }
     // Fayl kontenti hech qachon o'zgarmaydi (Cloudinary public_id'lari
     // barqaror/overwrite bo'lgan holatlarda ham brauzer keshi 1 kunlik
     // "yangi tekshirish" bilan yetarli — uzoqroq immutable qilinmaydi,

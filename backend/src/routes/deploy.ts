@@ -60,7 +60,15 @@ router.post('/upload-artifact', upload.single('file'), async (req, res) => {
     res.json({ ok: true, url });
   } catch (err) {
     console.error('[upload-artifact]', err);
-    res.status(500).json({ error: 'Server xatoligi' });
+    // MUHIM: bu yo'l maxfiy kalit bilan himoyalangan (faqat ishonchli CI
+    // chaqiradi, oddiy foydalanuvchi emas) — shu sabab HAQIQIY xato
+    // matnini qaytarish xavfsiz va o'ta foydali: Render loglariga
+    // kirish imkoni yo'q, aks holda "Server xatoligi" degan umumiy
+    // xabardan tashqari hech narsa ko'rinmas edi (aynan shu sodir
+    // bo'lgan — CI logida sabab butunlay yashiringan edi).
+    const anyErr = err as any;
+    const detail = anyErr?.error?.message || anyErr?.message || String(err);
+    res.status(500).json({ error: 'Server xatoligi', detail });
   }
 });
 

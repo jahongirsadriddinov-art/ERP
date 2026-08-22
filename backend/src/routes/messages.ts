@@ -285,9 +285,21 @@ router.post('/', async (req, res) => {
 });
 
 // O'qildi (MUHIM: '/:id' dan oldin bo'lishi shart)
+// XAVFSIZLIK: avval toUserId ham req.body'dan ("kimning pochtasi o'qilgan
+// deb belgilanadi") olinardi — istalgan autentifikatsiyalangan foydalanuvchi
+// BOSHQA birovning xabarlarini o'zi o'qimasdan turib "o'qildi" deb
+// belgilashi (soxta read-receipt) mumkin edi. Endi toUserId FAQAT
+// so'rov yuborayotgan (autentifikatsiyalangan) foydalanuvchining o'zi —
+// faqat o'ziga kelgan xabarlarni o'qildi qila oladi. fromUserId (qaysi
+// suhbatdosh) tanlash mijozga qoladi — bu shunchaki qaysi suhbat oynasi
+// ekanini bildiradi, boshqa birovning nomidan hech narsa qilmaydi.
 router.patch('/read', async (req, res) => {
   try {
-    const { fromUserId, toUserId } = req.body;
+    const toUserId = getTenant()?.userId;
+    const { fromUserId } = req.body;
+    if (!toUserId || !fromUserId) {
+      return res.status(400).json({ error: 'fromUserId talab qilinadi' });
+    }
     await Message.updateMany(
       scoped({ fromUserId: String(fromUserId), toUserId: String(toUserId), read: false }),
       { $set: { read: true } }

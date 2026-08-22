@@ -10,6 +10,7 @@ import Group from '../models/Group';
 import Attendance from '../models/Attendance';
 import GpsLocation from '../models/GpsLocation';
 import AppRelease from '../models/AppRelease';
+import AppSettings from '../models/AppSettings';
 import { initRegistrationScene, isInRegistration } from './registrationScene';
 import { emitToUser, emitToGroup, emitToCompany } from './socket';
 import { tb, langLabel, BotLang } from '../i18n/bot';
@@ -159,6 +160,31 @@ const pendingCheckinLocation = new Map<number, { userId: string; lang?: BotLang 
 // hammaga (Cloudinary'ga BUTUNLAY BOG'LIQ BO'LMAGAN, to'liq qo'lda
 // boshqariladigan) yo'l bilan yuborish uchun kutilayotgan holat.
 const pendingVersionBroadcast = new Map<number, { fileId: string; fileName: string; kind: 'apk' | 'exe' }>();
+// "📢 Xabar yuborish" bosilgandan keyin — dasturchining KEYINGI xabari
+// (matn YOKI apk/exe fayl) shu deb kutiladi.
+const pendingBroadcastChoice = new Set<number>();
+const pendingTextBroadcast = new Map<number, string>();
+
+// Bot yoqiq/o'chiqligi — dasturchi shu botning o'zidan boshqaradi (pastda,
+// kb_disableBot/kb_enableBot). auth.ts'dagi isSiteEnabled() bilan bir xil
+// naqsh: 5 soniyalik keshlash, xatolikda "yoqiq" deb hisoblanadi (o'zini
+// yolg'on o'chirib qo'ymasligi uchun).
+let cachedBotEnabled: boolean | null = null;
+let botEnabledCachedAt = 0;
+const BOT_STATUS_CACHE_MS = 5000;
+async function isBotEnabled(): Promise<boolean> {
+  const now = Date.now();
+  if (cachedBotEnabled === null || now - botEnabledCachedAt > BOT_STATUS_CACHE_MS) {
+    try {
+      const s = await AppSettings.findOne({ key: 'global' }).select('botEnabled').lean();
+      cachedBotEnabled = s?.botEnabled !== false;
+      botEnabledCachedAt = now;
+    } catch {
+      return true;
+    }
+  }
+  return cachedBotEnabled;
+}
 
 // Telegramdan kelgan faylni (photo/video/voice/document) yuklab, saytdagi
 // Message.mediaUrl bilan bir xil ko'rinishdagi to'liq URL qaytaradi.
@@ -314,15 +340,27 @@ const CHECKIN_ONLY_KEYBOARD = (lang?: BotLang) => ({
   resize_keyboard: true,
 });
 
-const DEVELOPER_KEYBOARD = (lang?: BotLang) => ({
-  keyboard: [
-    [openSiteBtn(lang)],
-    [{ text: tb(lang, 'kb_firmsList') }, { text: tb(lang, 'kb_allUsers') }],
-    [{ text: tb(lang, 'kb_allSubscriptions') }, { text: tb(lang, 'kb_generalStats') }],
-    [{ text: tb(lang, 'kb_language') }],
-  ],
-  resize_keyboard: true,
-});
+// Dinamik — sayt/bot hozir yoqiq/o'chiqligiga qarab tugma matni o'zgaradi
+// ("O'chirish" ↔ "Yoqish"), shu sabab bazadan (AppSettings) o'qib chiqadi.
+const DEVELOPER_KEYBOARD = async (lang?: BotLang) => {
+  const settings = await AppSettings.findOne({ key: 'global' }).select('siteEnabled botEnabled').lean();
+  const siteOn = settings?.siteEnabled !== false;
+  const botOn = settings?.botEnabled !== false;
+  return {
+    keyboard: [
+      [openSiteBtn(lang)],
+      [{ text: tb(lang, 'kb_broadcast') }],
+      [
+        { text: siteOn ? tb(lang, 'kb_disableSite') : tb(lang, 'kb_enableSite') },
+        { text: botOn ? tb(lang, 'kb_disableBot') : tb(lang, 'kb_enableBot') },
+      ],
+      [{ text: tb(lang, 'kb_firmsList') }, { text: tb(lang, 'kb_allUsers') }],
+      [{ text: tb(lang, 'kb_allSubscriptions') }, { text: tb(lang, 'kb_generalStats') }],
+      [{ text: tb(lang, 'kb_language') }],
+    ],
+    resize_keyboard: true,
+  };
+};
 
 // USER_KEYBOARD'ning ustiga "Ish tugatdim" qatori qo'shilgan varianti — ishchi
 // WORKING holatida (checkin bosilgan, checkout hali yo'q) ko'radi.
@@ -437,6 +475,18 @@ bot.on('message', async (msg: any) => {
   const chatId = msg.chat.id;
   if (isInRegistration(chatId)) return; // self-signup scene o'zi ushlaydi
 
+  // ── Texnik ishlar rejimi (botEnabled=false) — dasturchidan boshqa hech kim
+  // botdan foydalana olmaydi (u qayta yoqishi kerak bo'lgani uchun). /start
+  // ham shu tekshiruvdan o'tadi — chunki registerScene ustidagi tekshiruv
+  // shundan keyin keladi (pastroqda, alohida).
+  if (!(await isBotEnabled())) {
+    const mUser = await User.findOne({ telegramChatId: chatId.toString() }).select('role language').catch(() => null);
+    if (!mUser || !isDev(mUser.role)) {
+      bot.sendMessage(chatId, tb(mUser?.language as BotLang | undefined, 'botMaintenanceMsg')).catch(() => {});
+      return;
+    }
+  }
+
   // ── Bot ichidan chat rejimi — matn, rasm/video/ovoz/fayl/lokatsiya bo'lishi mumkin ──
   const activeChat = chatSessions.get(chatId);
   if (activeChat) {
@@ -517,6 +567,27 @@ bot.on('message', async (msg: any) => {
       bot.sendMessage(chatId, tb(u?.language as BotLang | undefined, 'locationSaved'));
     }
     return;
+  }
+
+  // ── "📢 Xabar yuborish" bosilgandan keyingi KEYINGI xabar — matn bo'lsa
+  // shu matnni, fayl (apk/exe) bo'lsa pastdagi mavjud oqimga tushib
+  // O'SHANI hammaga yuborish uchun tasdiq so'raladi.
+  if (pendingBroadcastChoice.has(chatId)) {
+    const bcUser = await User.findOne({ telegramChatId: chatId.toString() }).catch(() => null);
+    pendingBroadcastChoice.delete(chatId);
+    if (bcUser && isDev(bcUser.role) && msg.text && !msg.document) {
+      const bcLang = bcUser.language as BotLang | undefined;
+      pendingTextBroadcast.set(chatId, msg.text);
+      await bot.sendMessage(chatId, tb(bcLang, 'confirmTextBroadcast', { text: msg.text }), {
+        reply_markup: { inline_keyboard: [[
+          { text: tb(bcLang, 'confirmYes'), callback_data: 'confirm_text_broadcast' },
+          { text: tb(bcLang, 'confirmNo'), callback_data: 'cancel_text_broadcast' },
+        ]] },
+      });
+      return;
+    }
+    // Fayl (apk/exe) yuborilgan bo'lsa — pastdagi mavjud oqim o'zi ushlaydi
+    // (davom etamiz, return QILMAYMIZ).
   }
 
   // ── Dasturchi APK/EXE fayl tashlasa — YANGI VERSIYA sifatida hammaga
@@ -698,6 +769,27 @@ bot.on('message', async (msg: any) => {
       } catch {
         bot.sendMessage(chatId, tb(user.language, 'genericError'), { reply_markup: await keyboardForUser(user, user.language) });
       }
+      return;
+    }
+
+    // ── "Xabar yuborish" — keyingi xabar (matn/apk/exe) hammaga yuboriladi ──
+    if (text === tb(user.language, 'kb_broadcast')) {
+      pendingBroadcastChoice.add(chatId);
+      bot.sendMessage(chatId, tb(user.language, 'broadcastPrompt'));
+      return;
+    }
+
+    // ── Sayt/bot yoqish-o'chirish (texnik ishlar rejimi) ────────────────────
+    if (text === tb(user.language, 'kb_disableSite') || text === tb(user.language, 'kb_enableSite')) {
+      const enable = text === tb(user.language, 'kb_enableSite');
+      await AppSettings.findOneAndUpdate({ key: 'global' }, { key: 'global', siteEnabled: enable, updatedAt: new Date() }, { upsert: true });
+      bot.sendMessage(chatId, tb(user.language, enable ? 'siteEnabledMsg' : 'siteDisabledMsg'), { reply_markup: await keyboardForUser(user, user.language) });
+      return;
+    }
+    if (text === tb(user.language, 'kb_disableBot') || text === tb(user.language, 'kb_enableBot')) {
+      const enable = text === tb(user.language, 'kb_enableBot');
+      await AppSettings.findOneAndUpdate({ key: 'global' }, { key: 'global', botEnabled: enable, updatedAt: new Date() }, { upsert: true });
+      bot.sendMessage(chatId, tb(user.language, enable ? 'botEnabledMsg' : 'botDisabledMsg'), { reply_markup: await keyboardForUser(user, user.language) });
       return;
     }
 
@@ -965,6 +1057,15 @@ bot.on('callback_query', async (query: any) => {
   const user = await User.findOne({ telegramChatId: chatId?.toString() }).catch(() => null);
   const lang = user?.language as BotLang | undefined;
 
+  // ── Texnik ishlar rejimi — tugma bosishlari ham shu tekshiruvdan o'tadi.
+  if (!user || !isDev(user.role)) {
+    if (!(await isBotEnabled())) {
+      await bot.answerCallbackQuery(query.id).catch(() => {});
+      if (chatId) bot.sendMessage(chatId, tb(lang, 'botMaintenanceMsg')).catch(() => {});
+      return;
+    }
+  }
+
   // ── Yo'qlama tasdiqlash (Ishga keldim / Ish tugatdim) ─────────────────────
   if (data === 'confirm_checkin' || data === 'confirm_checkout') {
     if (!user || !isWorker(user.role)) { await bot.answerCallbackQuery(query.id); return; }
@@ -1013,6 +1114,26 @@ bot.on('callback_query', async (query: any) => {
       await broadcastVersionFile(pending.fileId, pending.kind, chatId, lang);
     } catch (err) {
       console.error('[version broadcast]', err);
+      await bot.sendMessage(chatId, tb(lang, 'genericError'), { reply_markup: await keyboardForUser(user, lang) });
+    }
+    return;
+  }
+
+  if (data === 'confirm_text_broadcast' || data === 'cancel_text_broadcast') {
+    await bot.answerCallbackQuery(query.id);
+    if (messageId) await bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: messageId }).catch(() => {});
+    const pendingText = pendingTextBroadcast.get(chatId);
+    pendingTextBroadcast.delete(chatId);
+    if (!user || !isDev(user.role) || !pendingText) return;
+    if (data === 'cancel_text_broadcast') {
+      await bot.sendMessage(chatId, tb(lang, 'actionCancelled'), { reply_markup: await keyboardForUser(user, lang) });
+      return;
+    }
+    await bot.sendMessage(chatId, tb(lang, 'versionBroadcastStarted'));
+    try {
+      await broadcastTextMessage(pendingText, chatId, lang);
+    } catch (err) {
+      console.error('[text broadcast]', err);
       await bot.sendMessage(chatId, tb(lang, 'genericError'), { reply_markup: await keyboardForUser(user, lang) });
     }
     return;
@@ -1403,6 +1524,27 @@ async function broadcastVersionFile(fileId: string, kind: 'apk' | 'exe', fromCha
     } catch (err) {
       failed++;
       console.error('[version broadcast] send error:', (err as Error).message);
+    }
+    await new Promise(r => setTimeout(r, 50));
+  }
+  await bot.sendMessage(fromChatId, tb(fromLang, 'versionBroadcastDone', { sent: String(sent), failed: String(failed) }));
+}
+
+async function broadcastTextMessage(text: string, fromChatId: number, fromLang?: BotLang) {
+  const users = await User.find({
+    role: { $ne: 'dasturchi' },
+    telegramChatId: { $exists: true, $ne: '' },
+  }).select('telegramChatId').lean();
+
+  let sent = 0, failed = 0;
+  for (const u of users) {
+    if (!u.telegramChatId) continue;
+    try {
+      await bot.sendMessage(u.telegramChatId, text);
+      sent++;
+    } catch (err) {
+      failed++;
+      console.error('[text broadcast] send error:', (err as Error).message);
     }
     await new Promise(r => setTimeout(r, 50));
   }

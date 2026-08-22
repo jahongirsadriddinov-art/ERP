@@ -4462,6 +4462,23 @@ export default function App() {
   };
 
   const liveUser = currentUser ? (users.find(u => u.id === currentUser.id) ?? currentUser) : null;
+
+  // Texnik ishlar rejimi — dasturchi botdan yoqib/o'chiradi (backend
+  // requireAuth/optionalAuth ham xuddi shu holatga qarab 503 qaytaradi;
+  // shu yerda esa foydalanuvchi login ekranidan OLDIN ham aniq xabar
+  // ko'rsin uchun, ketma-ket muvaffaqiyatsiz so'rovlar o'rniga). Xatolik
+  // yoki hali javob kelmagan holatda — HECH QACHON saytni yolg'on
+  // "o'chiq" deb bloklamaymiz (fail-open, backend bilan bir xil qoida).
+  const [siteEnabled, setSiteEnabled] = useState(true);
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${API_BASE}/api/status`)
+      .then(r => r.json())
+      .then(d => { if (!cancelled) setSiteEnabled(d?.siteEnabled !== false); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
   // Ilova qulfi (PIN/biometrik) — faqat kirilgan bo'lsa ma'noli, lekin hook
   // shart-siz (har renderda) chaqirilishi kerak — shu sabab pinIsSet hisobi
   // ham liveUser'ga bog'liq bo'lmagan, doim bir xil tartibda chaqiriladi.
@@ -4886,6 +4903,23 @@ export default function App() {
       return false;
     });
   }, [liveUser?.id]);
+
+  // MUHIM: dasturchi bu ekranni ko'rmaydi (u qayta yoqishi kerak bo'lgani
+  // uchun) — backend ham aynan shu istisnoni qiladi (auth.ts, isDeveloper).
+  if (!siteEnabled && liveUser?.role !== 'dasturchi') {
+    return (
+      <>
+        <div className="min-h-screen bg-background flex items-center justify-center p-6 text-center">
+          <div className="max-w-sm space-y-4">
+            <div className="text-5xl">🛠️</div>
+            <h1 className="text-xl font-semibold text-foreground">Sayt texnik ishlar tufayli vaqtincha ishlamayapti</h1>
+            <p className="text-sm text-muted-foreground">Birozdan so'ng qayta urinib ko'ring. Uzr so'raymiz.</p>
+          </div>
+        </div>
+        <Toaster position="top-center" richColors closeButton/>
+      </>
+    );
+  }
 
   if (!liveUser) {
     // MUHIM: <Toaster/> asosiy (pastdagi, liveUser bor holatdagi) return ichida

@@ -25,6 +25,11 @@ interface BotDict {
   kb_allSubscriptions: string;
   kb_generalStats: string;
   kb_language: string;
+  kb_broadcast: string;
+  kb_disableSite: string;
+  kb_enableSite: string;
+  kb_disableBot: string;
+  kb_enableBot: string;
   exitChat: string;
 
   kb_checkIn: string;
@@ -50,6 +55,13 @@ interface BotDict {
   confirmVersionBroadcast: (p: { fileName: string }) => string;
   versionBroadcastStarted: string;
   versionBroadcastDone: (p: { sent: string; failed: string }) => string;
+  broadcastPrompt: string;
+  confirmTextBroadcast: (p: { text: string }) => string;
+  siteEnabledMsg: string;
+  siteDisabledMsg: string;
+  botEnabledMsg: string;
+  botDisabledMsg: string;
+  botMaintenanceMsg: string;
 
   startWelcomeBack: (p: { name: string }) => string;
   startWelcomeNew: string;
@@ -154,6 +166,11 @@ const uz: BotDict = {
   kb_allSubscriptions: '💳 Barcha obunalar',
   kb_generalStats: '📊 Umumiy statistika',
   kb_language: '🌐 Til / Язык',
+  kb_broadcast: '📢 Xabar yuborish',
+  kb_disableSite: '🔴 Saytni o\'chirish',
+  kb_enableSite: '🟢 Saytni yoqish',
+  kb_disableBot: '🔴 Botni o\'chirish',
+  kb_enableBot: '🟢 Botni yoqish',
   exitChat: '🔚 Chatni tugatish',
 
   kb_checkIn: '✅ Ishga keldim',
@@ -179,6 +196,13 @@ const uz: BotDict = {
   confirmVersionBroadcast: (p: { fileName: string }) => `📦 *${p.fileName}*\n\nBu faylni YANGI VERSIYA sifatida barcha foydalanuvchilarga yubormoqchimisiz?`,
   versionBroadcastStarted: "⏳ Yuborilmoqda... Bu bir necha daqiqa davom etishi mumkin.",
   versionBroadcastDone: (p: { sent: string; failed: string }) => `✅ Yuborildi: ${p.sent} ta foydalanuvchiga${Number(p.failed) > 0 ? ` (${p.failed} ta muvaffaqiyatsiz)` : ''}.`,
+  broadcastPrompt: "✍️ Endi xabar matnini yozing YOKI yangi APK/EXE faylini tashlang — shu hammaga yuboriladi.",
+  confirmTextBroadcast: (p: { text: string }) => `📢 Quyidagi xabarni BARCHA foydalanuvchilarga yubormoqchimisiz?\n\n"${p.text}"`,
+  siteEnabledMsg: "🟢 Sayt yoqildi. Endi hamma foydalana oladi.",
+  siteDisabledMsg: "🔴 Sayt o'chirildi. Sizdan boshqa hech kim kira olmaydi — qayta yoqishni unutmang.",
+  botEnabledMsg: "🟢 Bot yoqildi. Endi hamma foydalana oladi.",
+  botDisabledMsg: "🔴 Bot o'chirildi. Sizdan boshqa hech kim bot bilan ishlay olmaydi — qayta yoqishni unutmang.",
+  botMaintenanceMsg: "🛠 Bot hozir texnik ishlar tufayli vaqtincha ishlamayapti. Birozdan so'ng qayta urinib ko'ring.",
 
   startWelcomeBack: (p: { name: string }) => `✅ Xush kelibsiz, ${p.name}!\n\nSiz tizimga ulanganmiz. Quyidagi menyudan foydalaning:`,
   startWelcomeNew: '👋 Assalomu alaykum! *QurilishERP* botiga xush kelibsiz.\n\nTizimga kirish uchun telefon raqamingizni yuboring:',
@@ -291,6 +315,11 @@ const ru: BotDict = {
   kb_allSubscriptions: '💳 Все подписки',
   kb_generalStats: '📊 Общая статистика',
   kb_language: '🌐 Til / Язык',
+  kb_broadcast: '📢 Отправить сообщение',
+  kb_disableSite: '🔴 Отключить сайт',
+  kb_enableSite: '🟢 Включить сайт',
+  kb_disableBot: '🔴 Отключить бота',
+  kb_enableBot: '🟢 Включить бота',
   exitChat: '🔚 Завершить чат',
 
   kb_checkIn: '✅ Я пришёл',
@@ -316,6 +345,13 @@ const ru: BotDict = {
   confirmVersionBroadcast: (p) => `📦 *${p.fileName}*\n\nОтправить этот файл как НОВУЮ ВЕРСИЮ всем пользователям?`,
   versionBroadcastStarted: '⏳ Отправка... Это может занять несколько минут.',
   versionBroadcastDone: (p) => `✅ Отправлено: ${p.sent} пользователям${Number(p.failed) > 0 ? ` (${p.failed} неудачно)` : ''}.`,
+  broadcastPrompt: "✍️ Теперь напишите текст сообщения ИЛИ отправьте новый APK/EXE файл — это будет отправлено всем.",
+  confirmTextBroadcast: (p) => `📢 Отправить это сообщение ВСЕМ пользователям?\n\n"${p.text}"`,
+  siteEnabledMsg: "🟢 Сайт включён. Теперь все могут пользоваться.",
+  siteDisabledMsg: "🔴 Сайт отключён. Кроме вас никто не сможет войти — не забудьте включить обратно.",
+  botEnabledMsg: "🟢 Бот включён. Теперь все могут пользоваться.",
+  botDisabledMsg: "🔴 Бот отключён. Кроме вас никто не сможет пользоваться ботом — не забудьте включить обратно.",
+  botMaintenanceMsg: "🛠 Бот временно не работает из-за технических работ. Попробуйте позже.",
 
   startWelcomeBack: (p) => `✅ Добро пожаловать, ${p.name}!\n\nВы подключены к системе. Используйте меню ниже:`,
   startWelcomeNew: '👋 Здравствуйте! Добро пожаловать в бот *QurilishERP*.\n\nЧтобы войти в систему, отправьте свой номер телефона:',

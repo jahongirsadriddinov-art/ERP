@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { runWithTenant, TenantContext } from './tenantContext';
 import User from '../models/User';
+import AppSettings from '../models/AppSettings';
 
 // JWT payload — login vaqtida shu maydonlar imzolanadi.
 export interface JwtPayload {
@@ -37,6 +38,28 @@ if (!process.env.JWT_SECRET) {
     'Standart (ommaviy ma\'lum) kalit ishlatilmoqda — bu holatda istalgan kishi haqiqiy token yasashi mumkin. ' +
     'Render > Environment bo\'limida JWT_SECRET ni kuchli tasodifiy qiymatga o\'rnating.');
 }
+
+// Sayt yoqiq/o'chiqligi — dasturchi botdan boshqaradi (services/bot.ts).
+// HAR so'rovda bazaga murojaat qilmaslik uchun qisqa (5s) keshlanadi —
+// texnik ishlar holati bir necha soniya kechikib tarqalishi qabul qilinadi,
+// buning evaziga oddiy ishlashda qo'shimcha DB yukini oldini oladi.
+let cachedSiteEnabled: boolean | null = null;
+let siteEnabledCachedAt = 0;
+const SITE_STATUS_CACHE_MS = 5000;
+async function isSiteEnabled(): Promise<boolean> {
+  const now = Date.now();
+  if (cachedSiteEnabled === null || now - siteEnabledCachedAt > SITE_STATUS_CACHE_MS) {
+    try {
+      const s = await AppSettings.findOne({ key: 'global' }).select('siteEnabled').lean();
+      cachedSiteEnabled = s?.siteEnabled !== false;
+      siteEnabledCachedAt = now;
+    } catch {
+      return true; // xatolik saytni "yolg'on" yopib qo'ymasin
+    }
+  }
+  return cachedSiteEnabled;
+}
+const MAINTENANCE_RESPONSE = { error: "Sayt hozir texnik ishlar tufayli vaqtincha ishlamayapti. Birozdan so'ng qayta urinib ko'ring.", maintenance: true };
 
 function readToken(req: Request): string | null {
   const header = req.headers.authorization;
@@ -90,6 +113,11 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     if (!fresh) {
       return res.status(401).json({ error: 'Hisobingiz topilmadi — qayta kiring' });
     }
+    // Texnik ishlar rejimi — dasturchidan boshqa hech kim (u qayta yoqishi
+    // kerak bo'lgani uchun) o'tolmaydi.
+    if (!fresh.isDeveloper && !(await isSiteEnabled())) {
+      return res.status(503).json(MAINTENANCE_RESPONSE);
+    }
     req.user = fresh;
     const ctx: TenantContext = {
       userId: fresh.userId,
@@ -119,6 +147,9 @@ export async function optionalAuth(req: Request, res: Response, next: NextFuncti
     const payload = jwt.verify(token, JWT_SECRET) as JwtPayload;
     const fresh = await loadFreshUser(payload);
     if (!fresh) return next(); // o'chirilgan hisob — mehmon sifatida davom
+    if (!fresh.isDeveloper && !(await isSiteEnabled())) {
+      return res.status(503).json(MAINTENANCE_RESPONSE);
+    }
     req.user = fresh;
     const ctx: TenantContext = {
       userId: fresh.userId,

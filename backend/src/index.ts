@@ -30,6 +30,7 @@ import clientErrorRoutes from './routes/clientErrors';
 import backupRoutes from './routes/backup';
 import deployRoutes from './routes/deploy';
 import filesRoutes from './routes/files';
+import statusRoutes from './routes/status';
 import { initSocket } from './services/socket';
 import { optionalAuth, requireAuth, blockDeveloper } from './middleware/auth';
 // Import bot to start it + get bot instance for webhook route
@@ -167,6 +168,7 @@ app.use('/api/notifications',   requireAuth, notificationRoutes);
 // PUT /custom o'zi requireAuth talab qiladi — shu sabab bu yerda optionalAuth.
 app.use('/api/currency',        optionalAuth, currencyRoutes);
 app.use('/api/files',           filesRoutes); // Cloudinary proksi — auth shart emas (bloklangan tarmoqlar uchun)
+app.use('/api/status',          statusRoutes); // sayt yoqiq/o'chiqligi — login ekranidan OLDIN ham so'raladi, auth shart emas
 app.use('/api/dashboard',       requireAuth, blockDeveloper, dashboardRoutes);
 app.use('/api/errors',          optionalAuth, clientErrorRoutes); // login ekranidan oldingi xatolar ham yozilishi kerak
 app.use('/api/admin',           requireAuth, backupRoutes);

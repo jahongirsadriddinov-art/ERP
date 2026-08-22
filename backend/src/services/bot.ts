@@ -865,7 +865,7 @@ bot.on('message', async (msg: any) => {
         if (ext === '.apk' || ext === '.exe') {
           const kind: 'apk' | 'exe' = ext === '.apk' ? 'apk' : 'exe';
           await bot.sendMessage(chatId, tb(bcLang, 'versionBroadcastStarted'));
-          await broadcastVersionFile(msg.document.file_id, kind, chatId, bcLang);
+          await broadcastVersionFile(msg.document.file_id, kind, chatId, bcLang, msg.caption, msg.caption_entities);
           return;
         }
       }
@@ -887,7 +887,7 @@ bot.on('message', async (msg: any) => {
         const kind: 'apk' | 'exe' = ext === '.apk' ? 'apk' : 'exe';
         const dLang = docUser.language as BotLang | undefined;
         await bot.sendMessage(chatId, tb(dLang, 'versionBroadcastStarted'));
-        await broadcastVersionFile(msg.document.file_id, kind, chatId, dLang);
+        await broadcastVersionFile(msg.document.file_id, kind, chatId, dLang, msg.caption, msg.caption_entities);
         return;
       }
     }
@@ -1839,7 +1839,13 @@ async function sendEveningReminders() {
 // tushirilganda yo'qoladi), lekin bu yo'l aynan "yangi versiya chiqqanda
 // qo'lda tashlayman" tsikliga bog'liq bo'lgani uchun, deploy vaqti bilan
 // mos keladi (har safar yangi versiya — yangi tashlash — yangi nusxa).
-async function broadcastVersionFile(fileId: string, kind: 'apk' | 'exe', fromChatId: number, fromLang?: BotLang) {
+// customCaption/customCaptionEntities — dasturchi faylni yuborayotganda
+// O'ZI yozgan izoh (Telegram'da hujjatga qo'shiladigan "caption", VA uning
+// alohida formatlash/PREMIUM EMOJI ma'lumoti — msg.caption_entities, bu
+// msg.entities'dan BUTUNLAY BOSHQA maydon). Berilsa — aynan o'sha ishlatiladi
+// (hech narsa o'zgarmasdan); berilmasa (masalan izohsiz tashlangan bo'lsa)
+// standart "🆕 QurilishERP — yangi versiya (sana)" ishlatiladi.
+async function broadcastVersionFile(fileId: string, kind: 'apk' | 'exe', fromChatId: number, fromLang?: BotLang, customCaption?: string, customCaptionEntities?: any[]) {
   const stableName = `QurilishERP-latest.${kind}`;
   try {
     const fileLink = await bot.getFileLink(fileId);
@@ -1871,11 +1877,12 @@ async function broadcastVersionFile(fileId: string, kind: 'apk' | 'exe', fromCha
   }).select('telegramChatId language').lean();
 
   let sent = 0, failed = 0;
-  const caption = `🆕 QurilishERP — yangi versiya (${version})`;
+  const caption = customCaption ?? `🆕 QurilishERP — yangi versiya (${version})`;
+  const captionEntities = customCaption ? customCaptionEntities : undefined;
   for (const u of users) {
     if (!u.telegramChatId) continue;
     try {
-      await bot.sendDocument(u.telegramChatId, fileId, { caption });
+      await bot.sendDocument(u.telegramChatId, fileId, { caption, caption_entities: captionEntities?.length ? captionEntities : undefined });
       sent++;
     } catch (err) {
       failed++;

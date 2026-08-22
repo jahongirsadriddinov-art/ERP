@@ -177,12 +177,31 @@ jobs:
           # yuklaydi — landing page/Profildagi "yuklab olish" tugmalari doim
           # shu bitta havolaga ishonadi, har safar yangi (timestamp'li) URL
           # kerak emas.
+          # MUHIM: avval "curl -sf" ishlatilardi — xato holatida JIM (hech
+          # qanday sabab ko'rsatmasdan) muvaffaqiyatsiz bo'lardi, log'da
+          # faqat "Na APK, na exe yuklanmadi" ko'rinardi, HAQIQIY sabab
+          # (HTTP status, server javobi) hech qayerda ko'rinmasdi. Endi
+          # status va javob tanasi ANIQ log'ga yoziladi.
           upload() {
             local path="$1" kind="$2"
-            curl -sf -X POST "$BACKEND_URL/api/deploy/upload-artifact" \
+            local resp status body
+            resp=$(curl -s --max-time 120 -w '\n%{http_code}' -X POST "$BACKEND_URL/api/deploy/upload-artifact" \
               -H "X-Deploy-Secret: $DEPLOY_SECRET" \
-              -F "file=@${path}" -F "kind=${kind}" \
-            | node -e "process.stdin.once('data', d => console.log(JSON.parse(d).url))"
+              -F "file=@${path}" -F "kind=${kind}")
+            status=$(echo "$resp" | tail -n1)
+            body=$(echo "$resp" | sed '$d')
+            if [ "$status" != "200" ]; then
+              echo "::warning::${kind} yuklash muvaffaqiyatsiz (HTTP ${status}): ${body}" >&2
+              return 0
+            fi
+            echo "$body" | node -e "
+              let d = '';
+              process.stdin.on('data', c => d += c);
+              process.stdin.on('end', () => {
+                try { console.log(JSON.parse(d).url || ''); }
+                catch (e) { console.error('JSON tahlil xatosi:', e.message, '| tana:', d); }
+              });
+            "
           }
 
           APK_URL=""

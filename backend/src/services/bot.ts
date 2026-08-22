@@ -9,6 +9,7 @@ import Message from '../models/Message';
 import Group from '../models/Group';
 import Attendance from '../models/Attendance';
 import GpsLocation from '../models/GpsLocation';
+import AppRelease from '../models/AppRelease';
 import { initRegistrationScene, isInRegistration } from './registrationScene';
 import { emitToUser, emitToGroup, emitToCompany } from './socket';
 import { tb, langLabel, BotLang } from '../i18n/bot';
@@ -153,6 +154,11 @@ const chatExitKeyboard = (lang?: BotLang) => ({ keyboard: [[{ text: tb(lang, 'ex
 // joylashuv kelgach check-in yakunlanadi (aniq foydalanuvchi talabi: "ishga
 // keldim bosganda real vaqt joylashuvini yuborish majburiy bo'lsin").
 const pendingCheckinLocation = new Map<number, { userId: string; lang?: BotLang }>();
+
+// Dasturchi botga to'g'ridan-to'g'ri .apk/.exe tashlab, tasdiqlagach —
+// hammaga (Cloudinary'ga BUTUNLAY BOG'LIQ BO'LMAGAN, to'liq qo'lda
+// boshqariladigan) yo'l bilan yuborish uchun kutilayotgan holat.
+const pendingVersionBroadcast = new Map<number, { fileId: string; fileName: string; kind: 'apk' | 'exe' }>();
 
 // Telegramdan kelgan faylni (photo/video/voice/document) yuklab, saytdagi
 // Message.mediaUrl bilan bir xil ko'rinishdagi to'liq URL qaytaradi.
@@ -511,6 +517,30 @@ bot.on('message', async (msg: any) => {
       bot.sendMessage(chatId, tb(u?.language as BotLang | undefined, 'locationSaved'));
     }
     return;
+  }
+
+  // ── Dasturchi APK/EXE fayl tashlasa — YANGI VERSIYA sifatida hammaga
+  // yuborish (Cloudinary'ga UMUMAN BOG'LIQ EMAS, to'liq qo'lda boshqariladigan
+  // muqobil yo'l — aniq foydalanuvchi talabi). Faqat dasturchi, faqat aktiv
+  // support-chat rejimidan TASHQARIDA (u holat yuqorida allaqachon ushlangan).
+  if (msg.document && !msg.text) {
+    const fileName: string = msg.document.file_name || '';
+    const ext = path.extname(fileName).toLowerCase();
+    if (ext === '.apk' || ext === '.exe') {
+      const docUser = await User.findOne({ telegramChatId: chatId.toString() }).catch(() => null);
+      if (docUser && isDev(docUser.role)) {
+        const kind: 'apk' | 'exe' = ext === '.apk' ? 'apk' : 'exe';
+        pendingVersionBroadcast.set(chatId, { fileId: msg.document.file_id, fileName, kind });
+        const dLang = docUser.language as BotLang | undefined;
+        await bot.sendMessage(chatId, tb(dLang, 'confirmVersionBroadcast', { fileName }), {
+          reply_markup: { inline_keyboard: [[
+            { text: tb(dLang, 'confirmYes'), callback_data: 'confirm_version_broadcast' },
+            { text: tb(dLang, 'confirmNo'), callback_data: 'cancel_version_broadcast' },
+          ]] },
+        });
+        return;
+      }
+    }
   }
 
   if (msg.contact || !msg.text) return;
@@ -967,6 +997,27 @@ bot.on('callback_query', async (query: any) => {
     return;
   }
 
+  // ── Dasturchi APK/EXE broadcast tasdiqlash ──────────────────────────────
+  if (data === 'confirm_version_broadcast' || data === 'cancel_version_broadcast') {
+    await bot.answerCallbackQuery(query.id);
+    if (messageId) await bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: messageId }).catch(() => {});
+    const pending = pendingVersionBroadcast.get(chatId);
+    pendingVersionBroadcast.delete(chatId);
+    if (!user || !isDev(user.role) || !pending) return;
+    if (data === 'cancel_version_broadcast') {
+      await bot.sendMessage(chatId, tb(lang, 'actionCancelled'), { reply_markup: await keyboardForUser(user, lang) });
+      return;
+    }
+    await bot.sendMessage(chatId, tb(lang, 'versionBroadcastStarted'));
+    try {
+      await broadcastVersionFile(pending.fileId, pending.kind, chatId, lang);
+    } catch (err) {
+      console.error('[version broadcast]', err);
+      await bot.sendMessage(chatId, tb(lang, 'genericError'), { reply_markup: await keyboardForUser(user, lang) });
+    }
+    return;
+  }
+
   // ── Til o'zgartirish ───────────────────────────────────────────────────────
   if (data.startsWith('setlang_')) {
     const newLang = data.replace('setlang_', '') as BotLang;
@@ -1303,6 +1354,59 @@ async function sendEveningReminders() {
     }
     await new Promise(r => setTimeout(r, 50));
   }
+}
+
+// ─── Dasturchi qo'lda tashlagan APK/EXE'ni hammaga tarqatish ───────────────
+// Cloudinary'ga UMUMAN bog'liq emas — fayl Telegram'ning o'z serverida
+// allaqachon bor (dasturchi uni botga yuborgan payt yuklangan), shuning
+// uchun QAYTA yuklash shart emas: file_id barcha qabul qiluvchiga qayta
+// ishlatiladi, Telegram buni serverida o'zi tez ko'chiradi.
+//
+// Saytdagi "yuklab olish" bo'limi uchun Render'ning O'Z (vaqtinchalik)
+// diskiga ham bitta nusxa saqlanadi — bu ham EPHEMERAL (qayta ishga
+// tushirilganda yo'qoladi), lekin bu yo'l aynan "yangi versiya chiqqanda
+// qo'lda tashlayman" tsikliga bog'liq bo'lgani uchun, deploy vaqti bilan
+// mos keladi (har safar yangi versiya — yangi tashlash — yangi nusxa).
+async function broadcastVersionFile(fileId: string, kind: 'apk' | 'exe', fromChatId: number, fromLang?: BotLang) {
+  const stableName = `QurilishERP-latest.${kind}`;
+  try {
+    const fileLink = await bot.getFileLink(fileId);
+    const resp = await fetch(fileLink);
+    const buf = Buffer.from(await resp.arrayBuffer());
+    const destDir = path.join(process.cwd(), 'uploads');
+    if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
+    fs.writeFileSync(path.join(destDir, stableName), buf);
+  } catch (err) {
+    console.error('[version broadcast] lokal nusxa saqlashda xato (baribir davom etamiz):', err);
+  }
+
+  const version = todayInTashkent();
+  const publicUrl = `${getBackendUrl()}/uploads/${stableName}`;
+  await AppRelease.findOneAndUpdate(
+    { key: 'latest' },
+    { key: 'latest', version, [kind === 'apk' ? 'apkUrl' : 'exeUrl']: publicUrl, updatedAt: new Date() },
+    { upsert: true }
+  ).catch(err => console.error('[version broadcast] AppRelease saqlash xatosi:', err));
+
+  const users = await User.find({
+    role: { $ne: 'dasturchi' },
+    telegramChatId: { $exists: true, $ne: '' },
+  }).select('telegramChatId language').lean();
+
+  let sent = 0, failed = 0;
+  const caption = `🆕 QurilishERP — yangi versiya (${version})`;
+  for (const u of users) {
+    if (!u.telegramChatId) continue;
+    try {
+      await bot.sendDocument(u.telegramChatId, fileId, { caption });
+      sent++;
+    } catch (err) {
+      failed++;
+      console.error('[version broadcast] send error:', (err as Error).message);
+    }
+    await new Promise(r => setTimeout(r, 50));
+  }
+  await bot.sendMessage(fromChatId, tb(fromLang, 'versionBroadcastDone', { sent: String(sent), failed: String(failed) }));
 }
 
 setInterval(() => {

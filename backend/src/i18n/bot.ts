@@ -47,6 +47,9 @@ interface BotDict {
   checkInStillNeedsLive: string;
   morningCheckInReminder: string;
   eveningCheckOutReminder: string;
+  confirmVersionBroadcast: (p: { fileName: string }) => string;
+  versionBroadcastStarted: string;
+  versionBroadcastDone: (p: { sent: string; failed: string }) => string;
 
   startWelcomeBack: (p: { name: string }) => string;
   startWelcomeNew: string;
@@ -173,6 +176,9 @@ const uz: BotDict = {
   checkInStillNeedsLive: "Bu bir martalik joylashuv ekan. Ishga kelishni tasdiqlash uchun aynan \"Jonli joylashuv\" (Live Location) kerak: 📎 → Location → Share Live Location.",
   morningCheckInReminder: "🌅 Xayrli tong! Ishga keldingizmi?\n\nAgar kelgan bo'lsangiz, quyidagi tugmani bosing va so'ralganda jonli joylashuvingizni ulashing.",
   eveningCheckOutReminder: "🌆 Ishni tugatdingizmi?\n\nAgar tugatgan bo'lsangiz, quyidagi tugmani bosing.",
+  confirmVersionBroadcast: (p: { fileName: string }) => `📦 *${p.fileName}*\n\nBu faylni YANGI VERSIYA sifatida barcha foydalanuvchilarga yubormoqchimisiz?`,
+  versionBroadcastStarted: "⏳ Yuborilmoqda... Bu bir necha daqiqa davom etishi mumkin.",
+  versionBroadcastDone: (p: { sent: string; failed: string }) => `✅ Yuborildi: ${p.sent} ta foydalanuvchiga${Number(p.failed) > 0 ? ` (${p.failed} ta muvaffaqiyatsiz)` : ''}.`,
 
   startWelcomeBack: (p: { name: string }) => `✅ Xush kelibsiz, ${p.name}!\n\nSiz tizimga ulanganmiz. Quyidagi menyudan foydalaning:`,
   startWelcomeNew: '👋 Assalomu alaykum! *QurilishERP* botiga xush kelibsiz.\n\nTizimga kirish uchun telefon raqamingizni yuboring:',
@@ -307,6 +313,9 @@ const ru: BotDict = {
   checkInStillNeedsLive: 'Это разовая геопозиция. Для подтверждения прихода нужна именно трансляция геопозиции: 📎 → Геопозиция → Транслировать геопозицию.',
   morningCheckInReminder: '🌅 Доброе утро! Вы пришли на работу?\n\nЕсли да — нажмите кнопку ниже и отправьте трансляцию геопозиции, когда будет запрошено.',
   eveningCheckOutReminder: '🌆 Вы закончили работу?\n\nЕсли да — нажмите кнопку ниже.',
+  confirmVersionBroadcast: (p) => `📦 *${p.fileName}*\n\nОтправить этот файл как НОВУЮ ВЕРСИЮ всем пользователям?`,
+  versionBroadcastStarted: '⏳ Отправка... Это может занять несколько минут.',
+  versionBroadcastDone: (p) => `✅ Отправлено: ${p.sent} пользователям${Number(p.failed) > 0 ? ` (${p.failed} неудачно)` : ''}.`,
 
   startWelcomeBack: (p) => `✅ Добро пожаловать, ${p.name}!\n\nВы подключены к системе. Используйте меню ниже:`,
   startWelcomeNew: '👋 Здравствуйте! Добро пожаловать в бот *QurilishERP*.\n\nЧтобы войти в систему, отправьте свой номер телефона:',

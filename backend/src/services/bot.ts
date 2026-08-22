@@ -864,6 +864,12 @@ bot.on('message', async (msg: any) => {
         const ext = path.extname(fileName).toLowerCase();
         if (ext === '.apk' || ext === '.exe') {
           const kind: 'apk' | 'exe' = ext === '.apk' ? 'apk' : 'exe';
+          if (msg.media_group_id) {
+            // Albom (bir nechta fayl bitta harakatda) — qisqa vaqt to'plab,
+            // BIRGALIKDA, bitta (topilgan) izoh bilan yuboriladi.
+            scheduleMediaGroupBroadcast(msg.media_group_id, chatId, bcLang, msg.document.file_id, kind, msg.caption, msg.caption_entities);
+            return;
+          }
           await bot.sendMessage(chatId, tb(bcLang, 'versionBroadcastStarted'));
           await broadcastVersionFile(msg.document.file_id, kind, chatId, bcLang, msg.caption, msg.caption_entities);
           return;
@@ -886,6 +892,10 @@ bot.on('message', async (msg: any) => {
       if (docUser && isDev(docUser.role)) {
         const kind: 'apk' | 'exe' = ext === '.apk' ? 'apk' : 'exe';
         const dLang = docUser.language as BotLang | undefined;
+        if (msg.media_group_id) {
+          scheduleMediaGroupBroadcast(msg.media_group_id, chatId, dLang, msg.document.file_id, kind, msg.caption, msg.caption_entities);
+          return;
+        }
         await bot.sendMessage(chatId, tb(dLang, 'versionBroadcastStarted'));
         await broadcastVersionFile(msg.document.file_id, kind, chatId, dLang, msg.caption, msg.caption_entities);
         return;
@@ -1891,6 +1901,95 @@ async function broadcastVersionFile(fileId: string, kind: 'apk' | 'exe', fromCha
     await new Promise(r => setTimeout(r, 50));
   }
   await bot.sendMessage(fromChatId, tb(fromLang, 'versionBroadcastDone', { sent: String(sent), failed: String(failed) }));
+}
+
+// Dasturchi APK VA EXE'ni BIR ALBOM sifatida (Telegram "media group" —
+// bir nechta faylni bitta xabarga bog'lab yuborish) tashlaganda ishlatiladi.
+// MUHIM: Telegram albomda izohni (caption) faqat BITTA elementga biriktiradi
+// — qaysi faylga tekkani tasodifiy (odatda birinchisiga). Avval har bir
+// faylni ALOHIDA broadcastVersionFile() bilan yuborardik — natijada bittasi
+// dasturchining haqiqiy izohi bilan, ikkinchisi esa standart ("yangi versiya")
+// izoh bilan ketardi (aniq xabar qilingan xato: "yana ikkita bop ketip
+// qovtti"). Endi IKKALASI ham bitta guruh (sendMediaGroup) sifatida, BITTA
+// (albomdagi qaysi fayl bo'lishidan qat'iy nazar topilgan) izoh bilan ketadi.
+async function broadcastVersionFiles(items: { fileId: string; kind: 'apk' | 'exe' }[], fromChatId: number, fromLang?: BotLang, customCaption?: string, customCaptionEntities?: any[]) {
+  if (items.length === 1) {
+    return broadcastVersionFile(items[0].fileId, items[0].kind, fromChatId, fromLang, customCaption, customCaptionEntities);
+  }
+  const version = todayInTashkent();
+  const setFields: any = { key: 'latest', version, updatedAt: new Date() };
+  for (const item of items) {
+    const stableName = `QurilishERP-latest.${item.kind}`;
+    try {
+      const fileLink = await bot.getFileLink(item.fileId);
+      const resp = await fetch(fileLink);
+      const buf = Buffer.from(await resp.arrayBuffer());
+      const destDir = path.join(process.cwd(), 'uploads');
+      if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
+      fs.writeFileSync(path.join(destDir, stableName), buf);
+      setFields[item.kind === 'apk' ? 'apkUrl' : 'exeUrl'] = `${getBackendUrl()}/uploads/${stableName}`;
+    } catch (err) {
+      console.error('[version broadcast/group] lokal nusxa saqlashda xato (baribir davom etamiz):', err);
+    }
+  }
+  await AppRelease.findOneAndUpdate({ key: 'latest' }, { $set: setFields }, { upsert: true })
+    .catch(err => console.error('[version broadcast/group] AppRelease saqlash xatosi:', err));
+
+  const users = await User.find({
+    role: { $ne: 'dasturchi' },
+    telegramChatId: { $exists: true, $ne: '' },
+  }).select('telegramChatId').lean();
+
+  const caption = customCaption ?? `🆕 QurilishERP — yangi versiya (${version})`;
+  const captionEntities = customCaption ? customCaptionEntities : undefined;
+  const media = items.map((item, i) => ({
+    type: 'document' as const,
+    media: item.fileId,
+    ...(i === 0 ? { caption, caption_entities: captionEntities?.length ? captionEntities : undefined } : {}),
+  }));
+
+  let sent = 0, failed = 0;
+  for (const u of users) {
+    if (!u.telegramChatId) continue;
+    try {
+      await bot.sendMediaGroup(u.telegramChatId, media);
+      sent++;
+    } catch (err) {
+      failed++;
+      console.error('[version broadcast/group] send error:', (err as Error).message);
+    }
+    await new Promise(r => setTimeout(r, 50));
+  }
+  await bot.sendMessage(fromChatId, tb(fromLang, 'versionBroadcastDone', { sent: String(sent), failed: String(failed) }));
+}
+
+// "📢 Xabar yuborish" rejimida dasturchi bir nechta faylni ALBOM sifatida
+// (bitta harakatda, umumiy media_group_id bilan) tashlasa — Telegram bu
+// har biri UCHUN alohida 'message' hodisasi yuboradi, lekin bir zumda
+// (odatda millisekundlar ichida). Shu sabab har bir keluvchi elementni
+// qisqa vaqt (debounce) davomida to'playmiz, so'ng BIRGALIKDA (bitta
+// albom, bitta izoh bilan) broadcast qilamiz.
+const pendingMediaGroup = new Map<string, {
+  chatId: number; lang?: BotLang;
+  items: { fileId: string; kind: 'apk' | 'exe' }[];
+  caption?: string; captionEntities?: any[];
+  timer: ReturnType<typeof setTimeout>;
+}>();
+function scheduleMediaGroupBroadcast(groupId: string, chatId: number, lang: BotLang | undefined, fileId: string, kind: 'apk' | 'exe', caption?: string, captionEntities?: any[]) {
+  let entry = pendingMediaGroup.get(groupId);
+  if (!entry) {
+    entry = { chatId, lang, items: [], timer: setTimeout(() => {}, 0) };
+    pendingMediaGroup.set(groupId, entry);
+    bot.sendMessage(chatId, tb(lang, 'versionBroadcastStarted')).catch(() => {});
+  }
+  entry.items.push({ fileId, kind });
+  if (caption && !entry.caption) { entry.caption = caption; entry.captionEntities = captionEntities; }
+  clearTimeout(entry.timer);
+  entry.timer = setTimeout(() => {
+    pendingMediaGroup.delete(groupId);
+    broadcastVersionFiles(entry!.items, entry!.chatId, entry!.lang, entry!.caption, entry!.captionEntities)
+      .catch(err => console.error('[media group broadcast]', err));
+  }, 1500);
 }
 
 // entities — dasturchi yozgan xabardagi Telegram formatlash/PREMIUM EMOJI

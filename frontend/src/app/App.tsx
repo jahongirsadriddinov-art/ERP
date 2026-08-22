@@ -2109,17 +2109,23 @@ function FinancePage({ currentUser, users, projects, expenses, onAddExpense, onC
             <input type="number" value={currencyAmount} onChange={e=>setCurrencyAmount(e.target.value)}
               placeholder={currencyMode.startsWith("uzs")?"UZS":currencyMode.startsWith("usd")?"USD":"EUR"}
               className="flex-1 min-w-[80px] text-sm border border-border rounded-xl px-3 py-1.5 bg-input-background focus:outline-none"/>
-            <span className="text-sm font-bold text-accent font-mono ml-auto text-right">
-              {currencyAmount ? (() => {
-                const n = parseFloat(currencyAmount);
-                if(isNaN(n)) return "—";
-                if(currencyMode==="uzs2usd") return "$" + (n/LIVE_USD_RATE).toFixed(2);
-                if(currencyMode==="usd2uzs") return (n*LIVE_USD_RATE).toLocaleString() + " UZS";
-                if(currencyMode==="uzs2eur") return "€" + (n/LIVE_EUR_RATE).toFixed(2);
-                if(currencyMode==="eur2uzs") return (n*LIVE_EUR_RATE).toLocaleString() + " UZS";
-                return "—";
-              })() : "—"}
-            </span>
+            {(() => {
+              const n = parseFloat(currencyAmount);
+              const result = currencyAmount && !isNaN(n) ? (
+                currencyMode==="uzs2usd" ? "$" + (n/LIVE_USD_RATE).toFixed(2) :
+                currencyMode==="usd2uzs" ? (n*LIVE_USD_RATE).toLocaleString() + " UZS" :
+                currencyMode==="uzs2eur" ? "€" + (n/LIVE_EUR_RATE).toFixed(2) :
+                currencyMode==="eur2uzs" ? (n*LIVE_EUR_RATE).toLocaleString() + " UZS" : null
+              ) : null;
+              return (
+                <button type="button" disabled={!result} title={result ? t('currency.copyHint') : undefined}
+                  onClick={() => { if (!result) return; navigator.clipboard?.writeText(result).then(() => toast.success(t('currency.copied'))).catch(() => {}); }}
+                  className="ml-auto flex items-center gap-1.5 text-sm font-bold text-accent font-mono text-right liquid-transition rounded-lg px-1.5 py-0.5 -mr-1.5 hover:bg-accent/10 active:scale-95 disabled:cursor-default disabled:hover:bg-transparent">
+                  {result || "—"}
+                  {result && <Copy className="w-3 h-3 opacity-50 flex-shrink-0"/>}
+                </button>
+              );
+            })()}
           </div>
         </div>
       )}

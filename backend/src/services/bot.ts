@@ -1203,12 +1203,18 @@ export async function notifyAdmins(message: string, inlineKeyboard?: any[][]) {
   }
 }
 
-// ─── Ertalabki "Ishga keldingizmi?" eslatmasi ──────────────────────────────
-// Aniq talab: soat 5, 6, 7, 8, 9 (Toshkent vaqti) da, hali BUGUN ishga
-// kelmagan (Attendance.checkIn yo'q) barcha ishchi/prorab/brigadir'larga
-// avtomatik eslatma. Tugma to'g'ridan-to'g'ri xuddi "Ishga keldim"
-// bosilgandek ishlaydi (confirm_checkin) — shundan keyingi jonli joylashuv
-// talabi o'zgarmaydi (mavjud pendingCheckinLocation oqimi).
+// ─── Ertalabki "Ishga keldingizmi?" / kechki "Ishni tugatdingizmi?" ────────
+// Aniq talab: ertalab 5,6,7,8,9 da hali BUGUN ishga kelmagan har bir
+// ishchi/prorab/brigadir'ga, kechqurun 18,19,20,21,22,23,0 da esa hali
+// ISHNI TUGATMAGAN (checkIn bor, checkOut yo'q) har biriga avtomatik
+// eslatma. Tugmalar to'g'ridan-to'g'ri xuddi "Ishga keldim"/"Ish tugadi"
+// bosilgandek ishlaydi (confirm_checkin/confirm_checkout).
+//
+// Bir foydalanuvchiga soat-soat qatorasiga bir xil eslatma "uyilib"
+// qolmasin uchun (masalan 6da, 7da, 8da — 3 marta bir xil xabar) — har
+// safar YANGI eslatma yuborishdan OLDIN, O'SHA foydalanuvchining oldingi
+// eslatmasi (agar hali javob berilmagan bo'lsa) tugmasi olib tashlanib
+// "eskirgan" qilib belgilanadi.
 //
 // node-cron kabi kutubxona ATAYLAB qo'shilmadi — loyihada allaqachon shu
 // pattern bor (masalan transactions.ts'dagi idempotency tozalash): oddiy
@@ -1216,8 +1222,20 @@ export async function notifyAdmins(message: string, inlineKeyboard?: any[][]) {
 // server bitta soat ichida ikki marta yubormasligini ta'minlaydi (server
 // qayta ishga tushsa xotiradagi belgi yo'qoladi — eng yomon holatda o'sha
 // soat uchun eslatma yana bir marta yuborilishi mumkin, xavfli emas).
-const REMINDER_HOURS = new Set([5, 6, 7, 8, 9]);
-let lastReminderKey = '';
+const REMINDER_HOURS_IN = new Set([5, 6, 7, 8, 9]);
+const REMINDER_HOURS_OUT = new Set([18, 19, 20, 21, 22, 23, 0]); // "kechki 12" — yarim tun
+let lastReminderKeyIn = '';
+let lastReminderKeyOut = '';
+// telegramChatId → oldingi eslatma xabarining message_id'si (keyingisini
+// yuborishdan oldin shuni "eskirgan" qilamiz).
+const lastReminderMsg = new Map<string, number>();
+
+async function retireOldReminder(chatId: string) {
+  const oldMsgId = lastReminderMsg.get(chatId);
+  if (!oldMsgId) return;
+  lastReminderMsg.delete(chatId);
+  await bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: oldMsgId }).catch(() => {});
+}
 
 async function sendMorningReminders() {
   const today = todayInTashkent();
@@ -1233,11 +1251,15 @@ async function sendMorningReminders() {
 
   for (const w of workers) {
     if (alreadyIn.has(String((w as any)._id))) continue;
+    const chatId = w.telegramChatId;
+    if (!chatId) continue; // query allaqachon filtrlagan, faqat TS uchun
     const lang = w.language as BotLang | undefined;
     try {
-      await bot.sendMessage(w.telegramChatId, tb(lang, 'morningCheckInReminder'), {
+      await retireOldReminder(chatId);
+      const msg = await bot.sendMessage(chatId, tb(lang, 'morningCheckInReminder'), {
         reply_markup: { inline_keyboard: [[{ text: tb(lang, 'kb_checkIn'), callback_data: 'confirm_checkin' }]] },
       });
+      lastReminderMsg.set(chatId, msg.message_id);
     } catch (err) {
       console.error('[morning reminder] send error:', (err as Error).message);
     }
@@ -1245,13 +1267,61 @@ async function sendMorningReminders() {
   }
 }
 
+async function sendEveningReminders() {
+  const workers = await User.find({
+    role: { $in: ['ishchi', 'prorab', 'brigadir'] },
+    telegramChatId: { $exists: true, $ne: '' },
+  }).select('telegramChatId language').lean();
+  if (workers.length === 0) return;
+
+  const workerIds = workers.map((w: any) => String(w._id));
+  // MUHIM: sana bo'yicha EMAS, "checkIn bor-u checkOut yo'q" bo'yicha
+  // qidiramiz — soat 0 (yarim tun) eslatmasida "bugun" allaqachon
+  // KEYINGI kalendar kuniga o'tib ketgan bo'ladi, lekin ochiq smena hali
+  // "kechagi" sana bilan yozilgan — sana bo'yicha filtrlasak shu smenani
+  // o'tkazib yuborardik.
+  const openShifts = await Attendance.find({
+    userId: { $in: workerIds },
+    checkIn: { $exists: true, $ne: null },
+    $or: [{ checkOut: { $exists: false } }, { checkOut: null }],
+  }).select('userId').lean();
+  const stillWorking = new Set(openShifts.map((a: any) => a.userId));
+
+  for (const w of workers) {
+    if (!stillWorking.has(String((w as any)._id))) continue;
+    const chatId = w.telegramChatId;
+    if (!chatId) continue; // query allaqachon filtrlagan, faqat TS uchun
+    const lang = w.language as BotLang | undefined;
+    try {
+      await retireOldReminder(chatId);
+      const msg = await bot.sendMessage(chatId, tb(lang, 'eveningCheckOutReminder'), {
+        reply_markup: { inline_keyboard: [[{ text: tb(lang, 'kb_checkOut'), callback_data: 'confirm_checkout' }]] },
+      });
+      lastReminderMsg.set(chatId, msg.message_id);
+    } catch (err) {
+      console.error('[evening reminder] send error:', (err as Error).message);
+    }
+    await new Promise(r => setTimeout(r, 50));
+  }
+}
+
 setInterval(() => {
   const hour = tashkentHour();
-  if (!REMINDER_HOURS.has(hour)) return;
-  const key = `${todayInTashkent()}-${hour}`;
-  if (lastReminderKey === key) return;
-  lastReminderKey = key;
-  sendMorningReminders().catch(err => console.error('[morning reminder]', err));
+  const today = todayInTashkent();
+  if (REMINDER_HOURS_IN.has(hour)) {
+    const key = `${today}-${hour}`;
+    if (lastReminderKeyIn !== key) {
+      lastReminderKeyIn = key;
+      sendMorningReminders().catch(err => console.error('[morning reminder]', err));
+    }
+  }
+  if (REMINDER_HOURS_OUT.has(hour)) {
+    const key = `${today}-${hour}`;
+    if (lastReminderKeyOut !== key) {
+      lastReminderKeyOut = key;
+      sendEveningReminders().catch(err => console.error('[evening reminder]', err));
+    }
+  }
 }, 60_000);
 
 // v1.2 self-signup scene'ni ulaymiz (alohida fayl, eski handlerlar buzilmaydi)

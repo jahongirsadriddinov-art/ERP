@@ -11,6 +11,7 @@ import User from '../models/User';
 import { emitToUser, emitToGroup } from '../services/socket';
 import { scoped, stamped } from '../middleware/scope';
 import { requireAuth } from '../middleware/auth';
+import { getTenant } from '../middleware/tenantContext';
 import { bot } from '../services/bot';
 import { uploadFileToCloud } from '../config/cloudinary';
 import { getBackendUrl } from '../utils/backendUrl';
@@ -217,9 +218,16 @@ router.get('/', async (req, res) => {
 // Xabar yuborish (DM yoki guruh) + real-time broadcast
 router.post('/', async (req, res) => {
   try {
-    const { fromUserId, toUserId, groupId, text, type, mediaUrl, fileName, fileSize, location, replyToId } = req.body;
+    const { toUserId, groupId, text, type, mediaUrl, fileName, fileSize, location, replyToId } = req.body;
+    // XAVFSIZLIK: fromUserId AVVAL to'g'ridan-to'g'ri so'rov tanasidan
+    // olinardi — istalgan autentifikatsiyalangan foydalanuvchi o'zini
+    // BOSHQA birov (hatto boshqa firma xodimi) sifatida ko'rsatib xabar
+    // yubora olardi (soxta jo'natuvchi — impersonatsiya). Endi faqat
+    // tekshirilgan JWT kontekstidan — body'dagi qiymat butunlay e'tiborga
+    // olinmaydi.
+    const fromUserId = getTenant()?.userId;
     if (!fromUserId || (!toUserId && !groupId) || (!text?.trim() && !mediaUrl && !location)) {
-      return res.status(400).json({ error: 'fromUserId, (toUserId yoki groupId) va text/media kerak' });
+      return res.status(400).json({ error: 'Avtorizatsiya va (toUserId yoki groupId) va text/media kerak' });
     }
     let msgData: any = stamped({
       fromUserId: String(fromUserId),

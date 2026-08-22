@@ -1163,6 +1163,57 @@ export async function notifyAdmins(message: string, inlineKeyboard?: any[][]) {
   }
 }
 
+// ─── Ertalabki "Ishga keldingizmi?" eslatmasi ──────────────────────────────
+// Aniq talab: soat 5, 6, 7, 8, 9 (Toshkent vaqti) da, hali BUGUN ishga
+// kelmagan (Attendance.checkIn yo'q) barcha ishchi/prorab/brigadir'larga
+// avtomatik eslatma. Tugma to'g'ridan-to'g'ri xuddi "Ishga keldim"
+// bosilgandek ishlaydi (confirm_checkin) — shundan keyingi jonli joylashuv
+// talabi o'zgarmaydi (mavjud pendingCheckinLocation oqimi).
+//
+// node-cron kabi kutubxona ATAYLAB qo'shilmadi — loyihada allaqachon shu
+// pattern bor (masalan transactions.ts'dagi idempotency tozalash): oddiy
+// setInterval, har daqiqada Toshkent soatini tekshiradi. lastReminderKey
+// server bitta soat ichida ikki marta yubormasligini ta'minlaydi (server
+// qayta ishga tushsa xotiradagi belgi yo'qoladi — eng yomon holatda o'sha
+// soat uchun eslatma yana bir marta yuborilishi mumkin, xavfli emas).
+const REMINDER_HOURS = new Set([5, 6, 7, 8, 9]);
+let lastReminderKey = '';
+
+async function sendMorningReminders() {
+  const today = todayInTashkent();
+  const workers = await User.find({
+    role: { $in: ['ishchi', 'prorab', 'brigadir'] },
+    telegramChatId: { $exists: true, $ne: '' },
+  }).select('telegramChatId language').lean();
+  if (workers.length === 0) return;
+
+  const workerIds = workers.map((w: any) => String(w._id));
+  const already = await Attendance.find({ userId: { $in: workerIds }, date: today, checkIn: { $exists: true, $ne: null } }).select('userId').lean();
+  const alreadyIn = new Set(already.map((a: any) => a.userId));
+
+  for (const w of workers) {
+    if (alreadyIn.has(String((w as any)._id))) continue;
+    const lang = w.language as BotLang | undefined;
+    try {
+      await bot.sendMessage(w.telegramChatId, tb(lang, 'morningCheckInReminder'), {
+        reply_markup: { inline_keyboard: [[{ text: tb(lang, 'kb_checkIn'), callback_data: 'confirm_checkin' }]] },
+      });
+    } catch (err) {
+      console.error('[morning reminder] send error:', (err as Error).message);
+    }
+    await new Promise(r => setTimeout(r, 50)); // Telegram rate-limit zaxirasi
+  }
+}
+
+setInterval(() => {
+  const hour = tashkentHour();
+  if (!REMINDER_HOURS.has(hour)) return;
+  const key = `${todayInTashkent()}-${hour}`;
+  if (lastReminderKey === key) return;
+  lastReminderKey = key;
+  sendMorningReminders().catch(err => console.error('[morning reminder]', err));
+}, 60_000);
+
 // v1.2 self-signup scene'ni ulaymiz (alohida fayl, eski handlerlar buzilmaydi)
 initRegistrationScene(bot);
 

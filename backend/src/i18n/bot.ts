@@ -45,6 +45,7 @@ interface BotDict {
   actionCancelled: string;
   checkInNeedsLiveLocation: string;
   checkInStillNeedsLive: string;
+  morningCheckInReminder: string;
 
   startWelcomeBack: (p: { name: string }) => string;
   startWelcomeNew: string;
@@ -169,6 +170,7 @@ const uz: BotDict = {
   actionCancelled: 'Bekor qilindi.',
   checkInNeedsLiveLocation: "📍 Ishga kelganingizni tasdiqlash uchun jonli joylashuvingizni ulashing:\n\n📎 (skrepka) → Location → Share Live Location\n\nOddiy (bir martalik) joylashuv YETARLI EMAS — aynan \"Jonli joylashuv\"ni tanlang. Ulashgandan so'ng ishga kelishingiz avtomatik tasdiqlanadi.",
   checkInStillNeedsLive: "Bu bir martalik joylashuv ekan. Ishga kelishni tasdiqlash uchun aynan \"Jonli joylashuv\" (Live Location) kerak: 📎 → Location → Share Live Location.",
+  morningCheckInReminder: "🌅 Xayrli tong! Ishga keldingizmi?\n\nAgar kelgan bo'lsangiz, quyidagi tugmani bosing va so'ralganda jonli joylashuvingizni ulashing.",
 
   startWelcomeBack: (p: { name: string }) => `✅ Xush kelibsiz, ${p.name}!\n\nSiz tizimga ulanganmiz. Quyidagi menyudan foydalaning:`,
   startWelcomeNew: '👋 Assalomu alaykum! *QurilishERP* botiga xush kelibsiz.\n\nTizimga kirish uchun telefon raqamingizni yuboring:',
@@ -301,6 +303,7 @@ const ru: BotDict = {
   actionCancelled: 'Отменено.',
   checkInNeedsLiveLocation: '📍 Чтобы подтвердить приход на работу, отправьте трансляцию геопозиции:\n\n📎 (скрепка) → Геопозиция → Транслировать геопозицию\n\nОбычной (разовой) геопозиции НЕДОСТАТОЧНО — выберите именно "Транслировать геопозицию". После отправки приход подтвердится автоматически.',
   checkInStillNeedsLive: 'Это разовая геопозиция. Для подтверждения прихода нужна именно трансляция геопозиции: 📎 → Геопозиция → Транслировать геопозицию.',
+  morningCheckInReminder: '🌅 Доброе утро! Вы пришли на работу?\n\nЕсли да — нажмите кнопку ниже и отправьте трансляцию геопозиции, когда будет запрошено.',
 
   startWelcomeBack: (p) => `✅ Добро пожаловать, ${p.name}!\n\nВы подключены к системе. Используйте меню ниже:`,
   startWelcomeNew: '👋 Здравствуйте! Добро пожаловать в бот *QurilishERP*.\n\nЧтобы войти в систему, отправьте свой номер телефона:',

@@ -22,6 +22,7 @@ interface BotDict {
   kb_incomingPayments: string;
   kb_firmsList: string;
   kb_allUsers: string;
+  kb_chatHistory: string;
   kb_allSubscriptions: string;
   kb_generalStats: string;
   kb_language: string;
@@ -149,6 +150,8 @@ interface BotDict {
   devNoFirms: string;
   devFirmsHeader: string;
   devUsersHeader: string;
+  devNoMessages: string;
+  devChatHistoryHeader: string;
   devNoSubs: string;
   devSubsHeader: string;
   devStatsBody: (p: { firmCount: number; userCount: number; activeSubs: number; pendingSubs: number }) => string;
@@ -210,6 +213,7 @@ const uz: BotDict = {
   kb_incomingPayments: "📬 Menga kelgan to'lovlar",
   kb_firmsList: "🏢 Firmalar ro'yxati",
   kb_allUsers: '👥 Barcha foydalanuvchilar',
+  kb_chatHistory: '💬 Chat tarixi',
   kb_allSubscriptions: '💳 Barcha obunalar',
   kb_generalStats: '📊 Umumiy statistika',
   kb_language: '🌐 Til / Язык',
@@ -337,6 +341,8 @@ const uz: BotDict = {
   devNoFirms: "Firma yo'q.",
   devFirmsHeader: '🏢 *Firmalar:*',
   devUsersHeader: '👥 *Foydalanuvchilar:*',
+  devNoMessages: "Xabarlar yo'q.",
+  devChatHistoryHeader: "💬 *Chat tarixi (oxirgi 50 ta):*",
   devNoSubs: "Obuna yo'q.",
   devSubsHeader: '💳 *Obunalar:*',
   devStatsBody: (p: { firmCount: number; userCount: number; activeSubs: number; pendingSubs: number }) =>
@@ -406,6 +412,7 @@ const ru: BotDict = {
   kb_incomingPayments: '📬 Полученные платежи',
   kb_firmsList: '🏢 Список компаний',
   kb_allUsers: '👥 Все пользователи',
+  kb_chatHistory: '💬 История чата',
   kb_allSubscriptions: '💳 Все подписки',
   kb_generalStats: '📊 Общая статистика',
   kb_language: '🌐 Til / Язык',
@@ -533,6 +540,8 @@ const ru: BotDict = {
   devNoFirms: 'Компаний нет.',
   devFirmsHeader: '🏢 *Компании:*',
   devUsersHeader: '👥 *Пользователи:*',
+  devNoMessages: 'Сообщений нет.',
+  devChatHistoryHeader: '💬 *История чата (последние 50):*',
   devNoSubs: 'Подписок нет.',
   devSubsHeader: '💳 *Подписки:*',
   devStatsBody: (p) =>

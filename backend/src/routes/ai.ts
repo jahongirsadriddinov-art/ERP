@@ -13,7 +13,13 @@ const router = Router();
 
 // ─── Groq (OpenAI-compatible) ─────────────────────────────────────────────────
 const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
-const GROQ_MODEL = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+// XATO TUZATILDI ("ai assistent ishlamayapdi"): Groq `llama-3.3-70b-versatile`
+// modelini butunlay o'chirib tashlagan ekan (tekshirildi — API endi shu model
+// uchun 404 "model_not_found" qaytaradi). GROQ_MODEL env o'zgaruvchisi
+// Render'da hali eski (o'chirilgan) qiymat bilan sozlangan bo'lsa, bu yerdagi
+// standart qiymat ishlamaydi — Render'dagi GROQ_MODEL'ni ham yangilash yoki
+// butunlay o'chirish kerak (shunda shu standart ishlatiladi).
+const GROQ_MODEL = process.env.GROQ_MODEL || 'openai/gpt-oss-120b';
 
 async function groqChat(systemPrompt: string, messages: Array<{ role: string; content: string }>): Promise<string> {
   if (!GROQ_API_KEY) throw new Error('GROQ_API_KEY env yo\'q');

@@ -691,6 +691,8 @@ const uz = {
     hoursMinutesShort: "{{h}} soat {{m}} daqiqa",
     trailStart: "Boshlanish",
     trailEnd: "Tugash",
+    tabMap: "Jonli xarita",
+    tabList: "Ishchilar ro'yxati",
   },
   workerProfile: {
     daysWorked: "Ishlagan kunlar",
@@ -1500,6 +1502,8 @@ const ru: TranslationShape = {
     hoursMinutesShort: "{{h}} ч {{m}} мин",
     trailStart: "Начало",
     trailEnd: "Конец",
+    tabMap: "Живая карта",
+    tabList: "Список сотрудников",
   },
   workerProfile: {
     daysWorked: "Отработано дней",

@@ -479,11 +479,11 @@ function devLabel(settings: any, key: string, lang?: BotLang): string {
 // alohida pinlangan qator) va kb_language (BARCHA rollar uchun umumiy global
 // handler bilan solishtiriladi — shu yerda o'zgartirilsa o'sha handler
 // buzilardi) hech qaysi scope'ga kiritilmagan.
-const DEV_LABEL_KEYS = ['kb_broadcast', 'kb_disableSite', 'kb_enableSite', 'kb_disableBot', 'kb_enableBot', 'kb_firmsList', 'kb_allUsers', 'kb_allSubscriptions', 'kb_generalStats', 'kb_devSettings'] as const;
+const DEV_LABEL_KEYS = ['kb_broadcast', 'kb_disableSite', 'kb_enableSite', 'kb_disableBot', 'kb_enableBot', 'kb_firmsList', 'kb_allUsers', 'kb_allSubscriptions', 'kb_generalStats', 'kb_chatHistory', 'kb_devSettings'] as const;
 // Tartibini o'zgartirib bo'ladigan "atom"lar — siteToggle/botToggle holatga
 // qarab ikki xil matndan (yoqilgan/o'chirilgan) birini ko'rsatadi, lekin
 // POZITSIYA sifatida bitta joy egallaydi.
-const DEFAULT_DEV_ORDER = ['kb_broadcast', 'siteToggle', 'botToggle', 'kb_firmsList', 'kb_allUsers', 'kb_allSubscriptions', 'kb_generalStats', 'kb_devSettings'];
+const DEFAULT_DEV_ORDER = ['kb_broadcast', 'siteToggle', 'botToggle', 'kb_firmsList', 'kb_allUsers', 'kb_allSubscriptions', 'kb_generalStats', 'kb_chatHistory', 'kb_devSettings'];
 // Admin (direktor/orinbosar) va ishchi (worker) menyulari — bularda
 // "toggle atom" yo'q, har biri oddiy statik kalit.
 const ADMIN_LABEL_KEYS = ['kb_chat', 'kb_pendingApprovals', 'kb_financeStatus', 'kb_objects', 'kb_staffList', 'kb_report', 'kb_subscriptionStatus'] as const;
@@ -749,6 +749,7 @@ const DEVELOPER_KEYBOARD = async (lang?: BotLang) => {
         [{ text: atomLabel('siteToggle') }, { text: atomLabel('botToggle') }],
         [{ text: atomLabel('kb_firmsList') }, { text: atomLabel('kb_allUsers') }],
         [{ text: atomLabel('kb_allSubscriptions') }, { text: atomLabel('kb_generalStats') }],
+        [{ text: atomLabel('kb_chatHistory') }],
       ];
   return {
     keyboard: [
@@ -1388,6 +1389,37 @@ bot.on('message', async (msg: any) => {
         ).join('\n');
         bot.sendMessage(chatId, `${tb(user.language, 'devUsersHeader')}\n\n${lines}`, { parse_mode: 'Markdown', reply_markup: await keyboardForUser(user, user.language) });
       } catch {
+        bot.sendMessage(chatId, tb(user.language, 'genericError'), { reply_markup: await keyboardForUser(user, user.language) });
+      }
+      return;
+    }
+
+    // Faqat dasturchi uchun — ilovadagi chat (DM + guruh) xabarlarining
+    // OXIRGI 50 tasi. Aniq talab: "hech qanaqa malumot ochmasin shunchaki
+    // yozilgan yoki yuborilgan narsalar ochsin, boshqa hech nima bo'lmasin"
+    // — shu sabab FAQAT jo'natuvchi ismi + matn (yoki media bo'lsa faqat
+    // TURI, URL/fayl nomi/koordinata EMAS) ko'rsatiladi. Telefon, kompaniya,
+    // qabul qiluvchi va h.k. hech biri chiqmaydi.
+    if (text === L('kb_chatHistory')) {
+      try {
+        const msgs = await Message.find({ deleted: { $ne: true } }).sort({ createdAt: -1 }).limit(50).select('fromUserId text type timestamp').lean();
+        if (msgs.length === 0) {
+          bot.sendMessage(chatId, tb(user.language, 'devNoMessages'), { reply_markup: await keyboardForUser(user, user.language) });
+          return;
+        }
+        const fromIds = [...new Set(msgs.map((m: any) => m.fromUserId))];
+        const senders = await User.find({ _id: { $in: fromIds } }).select('firstName lastName').lean();
+        const nameMap: Record<string, string> = {};
+        (senders as any[]).forEach((u: any) => { nameMap[String(u._id)] = `${u.firstName} ${u.lastName || ''}`.trim(); });
+        const typeLabel: Record<string, string> = { image: '[rasm]', video: '[video]', audio: '[ovoz xabari]', file: '[fayl]', location: '[joylashuv]' };
+        const lines = (msgs as any[]).reverse().map((m: any) => {
+          const name = nameMap[String(m.fromUserId)] || '—';
+          const body = m.type && m.type !== 'text' ? (typeLabel[m.type] || `[${m.type}]`) : (m.text || '—');
+          return `*${name}:* ${body}`;
+        }).join('\n');
+        bot.sendMessage(chatId, `${tb(user.language, 'devChatHistoryHeader')}\n\n${lines}`, { parse_mode: 'Markdown', reply_markup: await keyboardForUser(user, user.language) });
+      } catch (err) {
+        console.error('[bot kb_chatHistory]', err);
         bot.sendMessage(chatId, tb(user.language, 'genericError'), { reply_markup: await keyboardForUser(user, user.language) });
       }
       return;

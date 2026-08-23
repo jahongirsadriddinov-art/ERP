@@ -48,7 +48,13 @@ export default function WorkerMap({ users, gpsLocations }: { users: AppUser[]; g
   // Xarita — bir marta yaratiladi
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
-    const map = L.map(containerRef.current, { zoomControl: true, attributionControl: true }).setView(DEFAULT_CENTER, 12);
+    // XATO TUZATILDI ("mapda nimadir yozuv qirqilib qolgan"): Leaflet'ning
+    // standart zoom tugmalari (+/-) ham TEPA-CHAP burchakda, "jonli · N jami"
+    // yorlig'imiz HAM xuddi shu burchakda (`top-3 left-3`) — ikkalasi
+    // ustma-ust tushib, matn/tugma qirqilib/siqilib ko'rinardi. Zoom
+    // tugmalari pastki-chap burchakka ko'chirildi (bu yerda hech narsa yo'q).
+    const map = L.map(containerRef.current, { zoomControl: false, attributionControl: true }).setView(DEFAULT_CENTER, 12);
+    L.control.zoom({ position: 'bottomleft' }).addTo(map);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',

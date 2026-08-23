@@ -40,6 +40,12 @@ export default function GpsTrackingPage({ users, gpsLocations, refreshing, onRef
   // TO'LIQ profili (davomat tarixi, yuborgan/qabul qilgan materiallar,
   // olgan ish haqi, chiqimlari, tanlangan kun bo'yicha GPS izi) ochiladi.
   const [profileWorker, setProfileWorker] = useState<AppUser | null>(null);
+  // Aniq talab: "alohida bolim yarat... ichida asosiy jonli gps kuzatuv
+  // turadi, ikkinchi bolimda ishchilar royxati" — bitta uzun sahifa
+  // o'rniga IKKI ALOHIDA yorliq (ObjectDetailPage'dagi tab pattern'i bilan
+  // bir xil): "map" = faqat jonli xarita, "list" = ishchilar ro'yxati
+  // (bosilganda batafsil profil ochiladi).
+  const [tab, setTab] = useState<'map' | 'list'>('map');
 
   const loadAttendance = () => {
     setAttLoading(true);
@@ -86,7 +92,20 @@ export default function GpsTrackingPage({ users, gpsLocations, refreshing, onRef
           </button>
         </div>
 
-        {workers.length > 0 && <WorkerMap users={workers} gpsLocations={gpsLocations} />}
+        {/* Yorliqlar — "Jonli xarita" (asosiy jonli GPS kuzatuv) va "Ishchilar
+            ro'yxati" (bosilganda batafsil profil) ikki ALOHIDA bo'lim. */}
+        <div className="flex gap-1.5 surface rounded-full p-1">
+          <button onClick={() => setTab('map')}
+            className={`flex-1 flex items-center justify-center gap-1.5 text-xs font-semibold py-2 rounded-full liquid-transition ${tab === 'map' ? 'bg-primary text-white' : 'text-muted-foreground hover:bg-muted/50'}`}>
+            <MapPin className="w-3.5 h-3.5"/>{t('gps.tabMap')}
+          </button>
+          <button onClick={() => setTab('list')}
+            className={`flex-1 flex items-center justify-center gap-1.5 text-xs font-semibold py-2 rounded-full liquid-transition ${tab === 'list' ? 'bg-primary text-white' : 'text-muted-foreground hover:bg-muted/50'}`}>
+            <Users2 className="w-3.5 h-3.5"/>{t('gps.tabList')}
+          </button>
+        </div>
+
+        {tab === 'map' && workers.length > 0 && <WorkerMap users={workers} gpsLocations={gpsLocations} />}
 
         {workers.length === 0 && (
           <div className="surface rounded-2xl p-8 text-center">
@@ -95,7 +114,7 @@ export default function GpsTrackingPage({ users, gpsLocations, refreshing, onRef
           </div>
         )}
 
-        {workers.map(u => {
+        {tab === 'list' && workers.map(u => {
           const loc = gpsLocations.find(g => g.userId === u.id);
           const min = loc ? minutesAgo(loc.timestamp) : null;
           const att = attendanceById.get(u.id);
@@ -175,7 +194,7 @@ export default function GpsTrackingPage({ users, gpsLocations, refreshing, onRef
           );
         })}
 
-        {workers.length > 0 && gpsLocations.length === 0 && !refreshing && (
+        {tab === 'list' && workers.length > 0 && gpsLocations.length === 0 && !refreshing && (
           <div className="surface rounded-2xl p-6 text-center">
             <p className="text-sm text-muted-foreground">{t('gps.noGpsInfo')}</p>
           </div>

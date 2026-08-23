@@ -1766,8 +1766,13 @@ function SmetaResultView({ smeta }: { smeta: SmetaResult }) {
     s.works.push(w);
   }
 
+  // touch-pan-y BU YERGA QO'YILMAYDI — ichkaridagi jadval o'ralari o'zlarining
+  // touch-pan-x'iga ega (pastda); agar bu yerga ham touch-pan-y qo'yilsa,
+  // ichki jadval ustida ikkalasining kesishmasi BO'SH bo'lib, hech qanday
+  // yo'nalishda scroll ishlamay qoladi (Talab jadvalida xuddi shu xato
+  // tuzatilgan, batafsil izoh o'sha yerda).
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide space-y-3 p-4 pb-24 animate-slide-up-fade touch-pan-y">
+    <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide space-y-3 p-4 pb-24 animate-slide-up-fade">
       {/* Meta + byudjet (parser natijasidan) */}
       <div className="glass-card rounded-xl p-4 border border-border">
         {smeta.meta?.objectName && <p className="text-sm font-bold leading-snug">{smeta.meta.objectName}</p>}
@@ -2031,16 +2036,20 @@ function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSe
                 yuqoriga-pastga suriladi), ICHKI faqat gorizontal (qator
                 matni chapga-o'ngga suriladi) — ikki yo'nalish endi bir-biriga
                 xalaqit bermaydi. */}
-            {/* XATO TUZATILDI ("chapga-o'ngga qimirlatib bo'lmayapti — faqat
-                tepaga-pastga"): ikkita ALOHIDA overflow konteyner (yuqoridagi
-                izohda tushuntirilgan) o'zi YETARLI emas edi — ayniqsa Android
-                APK'ning WebView'ida brauzer TOUCH IMO-ISHORASINI qaysi
-                konteynerga yo'naltirishni hal qilishda ko'proq "ehtiyotkor"
-                (aniq touch-action ko'rsatilmasa, ko'pincha vertikalni afzal
-                ko'radi). touch-pan-y/touch-pan-x har bir konteynerga aynan
-                QAYSI o'qda imo-ishora qabul qilishini ANIQ aytadi — endi
-                gorizontal svayp har doim ICHKI konteynerga boradi. */}
-            <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden scrollbar-hide pb-20 sm:pb-2 touch-pan-y">
+            {/* XATO TUZATILDI (2-marta): oldingi urinishda TASHQI konteynerga
+                touch-pan-y VA ICHKI konteynerga touch-pan-x BIRGA qo'yilgan
+                edi — bu yanada YOMONROQ xato edi: CSS spetsifikatsiyasiga
+                ko'ra, ICHKI elementning amaldagi touch-action'i BARCHA ota-
+                elementlar bilan KESISHMA (intersection) sifatida hisoblanadi,
+                pan-y va pan-x kesishmasi esa BO'SH — natijada aynan jadval
+                ustida hech qanday yo'nalishda (na tepaga-pastga, na
+                chapga-o'ngga) scroll ISHLAMAY qoldi ("umuman ishlamayapdi").
+                TO'G'RI yechim: TASHQIga HECH NARSA qo'yilmaydi (standart
+                avtomatik xulq — sahifa har joyidan vertikal suriladi), FAQAT
+                ICHKI (jadvalning o'zi)ga touch-pan-x — shunda aynan jadval
+                ustida gorizontal imo-ishora ustuvor bo'ladi, sahifa esa
+                jadvaldan TASHQARIDA odatdagidek vertikal suriladi. */}
+            <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden scrollbar-hide pb-20 sm:pb-2">
               <div className="overflow-x-auto scrollbar-hide touch-pan-x">
                 <table className="w-full min-w-max text-left border-collapse text-[11px] leading-tight">
                   <thead className="sticky top-0 z-10 bg-card">
@@ -2735,7 +2744,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
             const lastText = last ? `${userById(last.fromUserId)?.name?.split(' ')[0] || ''}: ${msgTypePreview(tChat, last)}` : tChat('chat.memberCount', { count: g.memberIds?.length || 0 });
             return (
               <button key={g.id} onClick={() => { setSelGroup(g); setSelUser(null); setSelectMode(false); setSelected(new Set()); }}
-                className={`w-full flex items-center gap-3 mx-2 my-0.5 px-3 py-2.5 rounded-2xl hover:bg-muted/50 liquid-transition text-left border-l-2 ${selGroup?.id===g.id?'bg-secondary/60 border-primary':'border-transparent'}`}>
+                className={`w-full flex items-center gap-3 mx-2 my-0.5 px-3 py-2.5 rounded-2xl hover:bg-muted/50 liquid-transition text-left ${selGroup?.id===g.id?'bg-secondary/60 ring-1 ring-primary/40':''}`}>
                 <div className="w-10 h-10 rounded-full bg-primary/15 text-primary flex items-center justify-center flex-shrink-0 overflow-hidden">
                   {g.avatar ? <img src={g.avatar} className="w-full h-full object-cover"/> : <Users2 className="w-[18px] h-[18px]"/>}
                 </div>
@@ -2764,7 +2773,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
             const lastText = last ? msgTypePreview(tChat, last) : tChat('chat.devSupportSubtitle');
             return (
               <button key={g.id} onClick={() => { setSelGroup(g); setSelUser(null); setSelectMode(false); setSelected(new Set()); }}
-                className={`w-full flex items-center gap-3 mx-2 my-0.5 px-3 py-2.5 rounded-2xl hover:bg-muted/50 liquid-transition text-left border-l-2 ${selGroup?.id===g.id?'bg-secondary/60 border-primary':'border-transparent'}`}>
+                className={`w-full flex items-center gap-3 mx-2 my-0.5 px-3 py-2.5 rounded-2xl hover:bg-muted/50 liquid-transition text-left ${selGroup?.id===g.id?'bg-secondary/60 ring-1 ring-primary/40':''}`}>
                 <div className="w-10 h-10 rounded-full bg-orange-500/15 flex items-center justify-center flex-shrink-0 text-xl">🛠</div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
@@ -2779,7 +2788,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
           {/* Dasturchi virtual entry — only for company members who don't yet have devSupport group */}
           {currentUser.role !== 'dasturchi' && currentUser.companyId && onGetDevSupport && !groups.some(g => g.devSupport) && (
             <button onClick={async () => { const g = await onGetDevSupport(); if (g) { setSelGroup(g); setSelUser(null); } }}
-              className="w-full flex items-center gap-3 mx-2 my-0.5 px-3 py-2.5 rounded-2xl hover:bg-muted/50 liquid-transition text-left border-l-2 border-transparent">
+              className="w-full flex items-center gap-3 mx-2 my-0.5 px-3 py-2.5 rounded-2xl hover:bg-muted/50 liquid-transition text-left">
               <div className="w-10 h-10 rounded-full bg-orange-500/15 text-orange-500 flex items-center justify-center flex-shrink-0 text-lg">🛠</div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold truncate">{tChat('common.roles.dasturchi')}</p>
@@ -2795,7 +2804,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
             const lastText = last ? msgTypePreview(tChat, last) : '...';
             return (
               <button key={u.id} onClick={() => { setSelUser(u); setSelGroup(null); setSelectMode(false); setSelected(new Set()); }}
-                className={`w-full flex items-center gap-3 mx-2 my-0.5 px-3 py-2.5 rounded-2xl hover:bg-muted/50 liquid-transition text-left border-l-2 ${selUser?.id===u.id?'bg-secondary/60 border-primary':'border-transparent'}`}>
+                className={`w-full flex items-center gap-3 mx-2 my-0.5 px-3 py-2.5 rounded-2xl hover:bg-muted/50 liquid-transition text-left ${selUser?.id===u.id?'bg-secondary/60 ring-1 ring-primary/40':''}`}>
                 <div className="relative flex-shrink-0">
                   <Avatar user={u} size="md"/>
                   {isOnline(u.id) && <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-card"/>}

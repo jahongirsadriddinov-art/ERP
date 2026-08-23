@@ -150,6 +150,13 @@ const uz = {
       rose: "Atirgul", slate: "Tosh", amber: "Oltin rang", teal: "Moviy-yashil",
     },
   },
+  appDownload: {
+    androidLabel: "Android (APK)",
+    androidHint: "Telefon/planshet uchun",
+    windowsLabel: "Windows dasturi",
+    windowsHint: "Kompyuter uchun (.exe)",
+    sourceNote: "Fayl to'g'ridan-to'g'ri bizning serverimizdan (Cloudinary orqali) keladi",
+  },
   landing: {
     navLogin: "Kirish",
     navRegister: "Bepul boshlash",
@@ -935,6 +942,13 @@ const ru: TranslationShape = {
       navy: "Классика", ocean: "Океан", forest: "Лес", purple: "Фиолетовый",
       rose: "Роза", slate: "Графит", amber: "Янтарь", teal: "Бирюзовый",
     },
+  },
+  appDownload: {
+    androidLabel: "Android (APK)",
+    androidHint: "Для телефона/планшета",
+    windowsLabel: "Программа для Windows",
+    windowsHint: "Для компьютера (.exe)",
+    sourceNote: "Файл поступает напрямую с нашего сервера (через Cloudinary)",
   },
   landing: {
     navLogin: "Войти",

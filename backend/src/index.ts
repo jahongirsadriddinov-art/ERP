@@ -169,8 +169,17 @@ app.use('/api/company',      requireAuth, companySelfRoutes);  // firmaning O'ZI
 app.use('/api/admin/subscriptions', requireAuth, subscriptionRoutes); // obunalar boshqaruvi
 app.use('/api/smeta',        requireAuth, blockDeveloper, smetaRoutes);
 app.use('/api/ai',           requireAuth, blockDeveloper, aiRoutes);
-app.use('/api/attendance',      requireAuth, attendanceRoutes);
-app.use('/api/gps',             requireAuth, gpsRoutes);
+// XAVFSIZLIK — TOPILMA (audit): bu ikkalasida ILGARI blockDeveloper YO'Q edi —
+// yuqoridagi qoidaga (159-160 qatorlar: "dasturchi faqat companies/
+// subscriptions/messages/groups") zid ravishda, scoped() dasturchi uchun
+// companyId filtrini butunlay o'chiradi (middleware/scope.ts) va gps.ts/
+// attendance.ts ICHIDA "isBoss"/"allowed" tekshiruvlari tenant.isDeveloper'ni
+// ham ruxsat berilgan boshqaruvchi deb hisoblaydi — natijada dasturchi
+// BARCHA firmalarning xodimlar davomat yozuvlarini va (jiddiyroq) JONLI/
+// tarixiy GPS joylashuvini ko'ra olardi, garchi bu aniq "firma ichki
+// ma'lumot" (yuqoridagi izohdagi ruxsat etilgan ro'yxatda yo'q).
+app.use('/api/attendance',      requireAuth, blockDeveloper, attendanceRoutes);
+app.use('/api/gps',             requireAuth, blockDeveloper, gpsRoutes);
 // push.ts ICHIDA /vapidPublicKey ATAYLAB auth talab qilmaydi (ochiq
 // konfiguratsiya) — qolgan yo'llari (masalan /subscribe) o'zi ichida
 // tenant tekshiruvini qiladi, shu sabab bu yerda optionalAuth qoldirildi.

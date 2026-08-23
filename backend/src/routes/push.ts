@@ -29,10 +29,21 @@ router.post('/subscribe', async (req, res) => {
 });
 
 // DELETE /api/push/unsubscribe
+// XAVFSIZLIK — TOPILMA (audit): bu yerda hech qanday egalik tekshiruvi yo'q
+// edi — router `optionalAuth` bilan ulangan, va handler `endpoint`ni
+// to'g'ridan-to'g'ri so'rov tanasidan olib, egasidan qat'i nazar SHU
+// endpoint'ga tegishli yozuvni o'chirardi. `endpoint` qiymati brauzer Push
+// API'si tomonidan generatsiya qilinadigan uzun, taxmin qilib bo'lmaydigan
+// URL bo'lsa-da, bu baribir IDOR naqshi: boshqa foydalanuvchining push
+// obunasini o'zining ekanini isbotlamasdan o'chirish imkoni. Endi
+// POST /subscribe'dagi bilan bir xil qoida — faqat tekshirilgan tenant
+// kontekstidagi userId'ga tegishli yozuv o'chiriladi.
 router.delete('/unsubscribe', async (req, res) => {
   try {
+    const tenant = getTenant();
+    if (!tenant?.userId) return res.status(401).json({ error: 'Autentifikatsiya talab etiladi' });
     const { endpoint } = req.body;
-    if (endpoint) await PushSubscription.deleteOne({ endpoint });
+    if (endpoint) await PushSubscription.deleteOne({ endpoint, userId: tenant.userId });
     res.json({ ok: true });
   } catch { res.status(500).json({ error: 'Server xatoligi' }); }
 });

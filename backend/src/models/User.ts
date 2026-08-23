@@ -21,6 +21,13 @@ export interface IUser extends Document {
   position?: string;       // lavozim (default: Direktor)
   language?: 'uz' | 'uz-cyrl' | 'ru'; // sayt/bot interfeysi tili — profildan yoki botdan o'zgartiriladi, ikkalasi sinxron
   courses?: Array<{ title: string; provider?: string; year?: number; cert?: string }>;
+  // Ishga kelish/tugatish eslatmasining OXIRGI yuborilgan Telegram xabar
+  // ID'si — keyingisini yuborishdan oldin shu o'chiriladi. Bazada (xotirada
+  // emas) saqlanadi, chunki avval oddiy in-memory Map ishlatilgan edi —
+  // server har safar qayta ishga tushganda (Render'ga har push'da bo'lgani
+  // kabi) bu xotira tozalanib, "oldingi eslatma o'chirilmasdan yangisi
+  // yuborilib qolish" xatosiga sabab bo'lardi (aniq xabar qilingan bug).
+  lastReminderMsgId?: number;
 }
 
 const UserSchema: Schema = new Schema({
@@ -44,6 +51,7 @@ const UserSchema: Schema = new Schema({
   position: { type: String },
   language: { type: String, enum: ['uz', 'uz-cyrl', 'ru'], default: 'uz' },
   courses: [{ title: String, provider: String, year: Number, cert: String }],
+  lastReminderMsgId: { type: Number },
 }, { timestamps: true });
 
 // Global search uchun indekslar

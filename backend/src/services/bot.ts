@@ -2146,17 +2146,18 @@ const REMINDER_HOURS_IN = new Set([5, 6, 7, 8, 9]);
 const REMINDER_HOURS_OUT = new Set([18, 19, 20, 21, 22, 23, 0]); // "kechki 12" — yarim tun
 let lastReminderKeyIn = '';
 let lastReminderKeyOut = '';
-// telegramChatId → oldingi eslatma xabarining message_id'si (keyingisini
-// yuborishdan oldin shuni "eskirgan" qilamiz).
-const lastReminderMsg = new Map<string, number>();
 
-async function retireOldReminder(chatId: string) {
-  const oldMsgId = lastReminderMsg.get(chatId);
+// Oldingi eslatma xabarini o'chiradi — endi User.lastReminderMsgId'dan
+// (BAZADAN, xotiradagi Map'dan EMAS) o'qiladi. XATO TUZATILDI: avval
+// bu holat oddiy in-memory Map'da saqlanardi — server har safar qayta
+// ishga tushganda (masalan har push'da Render qayta deploy qilganda)
+// xotira butunlay tozalanib, keyingi eslatma "oldingisini o'chirmasdan"
+// yuborilib qolardi (aniq xabar qilingan xato: "bittasini yuborishidan
+// oldin undan oldin yuborilganini o'chirishi kere hardoim"). Bazada
+// saqlash — qayta ishga tushirish, bir nechta server nusxasi (agar
+// bo'lsa) bilan ham ishonchli ishlaydi.
+async function retireOldReminder(chatId: string, oldMsgId: number | null | undefined) {
   if (!oldMsgId) return;
-  lastReminderMsg.delete(chatId);
-  // Aniq talab: keyingisini yuborishdan oldin OLDINGISI O'CHIRILSIN (faqat
-  // tugmasini olib tashlash emas) — chatda eski eslatmalar to'planib
-  // qolmasin.
   await bot.deleteMessage(chatId, oldMsgId).catch(() => {});
 }
 
@@ -2165,7 +2166,7 @@ async function sendMorningReminders() {
   const workers = await User.find({
     role: { $in: ['ishchi', 'prorab', 'brigadir'] },
     telegramChatId: { $exists: true, $ne: '' },
-  }).select('telegramChatId language').lean();
+  }).select('telegramChatId language lastReminderMsgId').lean();
   if (workers.length === 0) return;
 
   const workerIds = workers.map((w: any) => String(w._id));
@@ -2178,11 +2179,11 @@ async function sendMorningReminders() {
     if (!chatId) continue; // query allaqachon filtrlagan, faqat TS uchun
     const lang = w.language as BotLang | undefined;
     try {
-      await retireOldReminder(chatId);
+      await retireOldReminder(chatId, (w as any).lastReminderMsgId);
       const msg = await bot.sendMessage(chatId, tb(lang, 'morningCheckInReminder'), {
         reply_markup: { inline_keyboard: [[{ text: tb(lang, 'kb_checkIn'), callback_data: 'confirm_checkin' }]] },
       });
-      lastReminderMsg.set(chatId, msg.message_id);
+      await User.updateOne({ _id: (w as any)._id }, { $set: { lastReminderMsgId: msg.message_id } });
     } catch (err) {
       console.error('[morning reminder] send error:', (err as Error).message);
     }
@@ -2194,7 +2195,7 @@ async function sendEveningReminders() {
   const workers = await User.find({
     role: { $in: ['ishchi', 'prorab', 'brigadir'] },
     telegramChatId: { $exists: true, $ne: '' },
-  }).select('telegramChatId language').lean();
+  }).select('telegramChatId language lastReminderMsgId').lean();
   if (workers.length === 0) return;
 
   const workerIds = workers.map((w: any) => String(w._id));
@@ -2216,11 +2217,11 @@ async function sendEveningReminders() {
     if (!chatId) continue; // query allaqachon filtrlagan, faqat TS uchun
     const lang = w.language as BotLang | undefined;
     try {
-      await retireOldReminder(chatId);
+      await retireOldReminder(chatId, (w as any).lastReminderMsgId);
       const msg = await bot.sendMessage(chatId, tb(lang, 'eveningCheckOutReminder'), {
         reply_markup: { inline_keyboard: [[{ text: tb(lang, 'kb_checkOut'), callback_data: 'confirm_checkout' }]] },
       });
-      lastReminderMsg.set(chatId, msg.message_id);
+      await User.updateOne({ _id: (w as any)._id }, { $set: { lastReminderMsgId: msg.message_id } });
     } catch (err) {
       console.error('[evening reminder] send error:', (err as Error).message);
     }

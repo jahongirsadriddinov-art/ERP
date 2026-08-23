@@ -1979,13 +1979,18 @@ function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSe
         {tab==="smeta" && project.smeta && <SmetaResultView smeta={project.smeta}/>}
         {tab==="required" && (
           <div className="flex-1 flex flex-col min-h-0">
-            {/* Kompakt tepa: qidiruv + soni + byudjet (bitta yupqa qator) */}
-            <div className="flex-shrink-0 flex items-center gap-2 px-2.5 py-1.5 border-b border-border/50 bg-muted/10">
+            {/* Kompakt tepa: qidiruv + soni + byudjet (bitta yupqa qator).
+                "Sodda chiroyli compact" dizayn talabi: pill-shakldagi qidiruv
+                + alohida chip'lar (avvalgi qattiq chiziqli input + oddiy matn
+                o'rniga) — zich joy egallashda davom etadi, faqat ko'rinishi
+                boshqa joylardagi (.surface, rounded-full chip) uslubga mos. */}
+            <div className="flex-shrink-0 flex items-center gap-2 px-2.5 py-2 border-b border-border/50 bg-muted/10">
               <div className="relative flex-1 min-w-0">
-                <Search className="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground"/>
-                <input type="text" placeholder={t('objectDetail.searchMaterial')} value={matSearch} onChange={e=>setMatSearch(e.target.value)} className="w-full pl-7 pr-2 py-1 text-[11px] bg-input-background border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary"/>
+                <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"/>
+                <input type="text" placeholder={t('objectDetail.searchMaterial')} value={matSearch} onChange={e=>setMatSearch(e.target.value)} className="w-full pl-8 pr-3 py-1.5 text-[11px] bg-input-background border border-border rounded-full focus:outline-none focus:ring-1 focus:ring-primary liquid-transition"/>
               </div>
-              <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0">{filteredMats.length} ta · {fmt(project.budget)}</span>
+              <span className="text-[10px] font-semibold text-muted-foreground whitespace-nowrap shrink-0 bg-muted/60 px-2 py-1 rounded-full">{filteredMats.length} ta</span>
+              <span className="text-[10px] font-semibold text-primary whitespace-nowrap shrink-0 bg-primary/10 px-2 py-1 rounded-full">{fmt(project.budget)}</span>
             </div>
             {/* Zich jadval — barcha materiallar minimal joyda. MUHIM:
                 overflow-x-auto avval yo'q edi — 5 ustunli jadval tor
@@ -2017,28 +2022,32 @@ function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSe
                 <table className="w-full min-w-max text-left border-collapse text-[11px] leading-tight">
                   <thead className="sticky top-0 z-10 bg-card">
                     <tr className="border-b border-border">
-                      <th className="px-2 py-1 font-semibold">{t('objectDetail.colName')}</th>
-                      <th className="px-2 py-1 font-semibold whitespace-nowrap">{t('objectDetail.colUnit')}</th>
-                      <th className="px-2 py-1 font-semibold text-right whitespace-nowrap">{t('objectDetail.colQty')}</th>
-                      <th className="px-2 py-1 font-semibold text-right whitespace-nowrap">{t('objectDetail.colPrice')}</th>
-                      <th className="px-2 py-1 font-semibold text-right whitespace-nowrap">{t('objectDetail.colAmount')}</th>
+                      <th className="px-2.5 py-2 font-semibold text-[10px] uppercase tracking-wide text-muted-foreground">{t('objectDetail.colName')}</th>
+                      <th className="px-2.5 py-2 font-semibold text-[10px] uppercase tracking-wide text-muted-foreground whitespace-nowrap">{t('objectDetail.colUnit')}</th>
+                      <th className="px-2.5 py-2 font-semibold text-[10px] uppercase tracking-wide text-muted-foreground text-right whitespace-nowrap">{t('objectDetail.colQty')}</th>
+                      <th className="px-2.5 py-2 font-semibold text-[10px] uppercase tracking-wide text-muted-foreground text-right whitespace-nowrap">{t('objectDetail.colPrice')}</th>
+                      <th className="px-2.5 py-2 font-semibold text-[10px] uppercase tracking-wide text-muted-foreground text-right whitespace-nowrap">{t('objectDetail.colAmount')}</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredMats.map(m => {
+                    {filteredMats.map((m, i) => {
                       const total = m.price != null ? m.price * m.quantity : null;
                       return (
-                        <tr key={m.id} onClick={() => setSelectedMat(m)} className="cursor-pointer hover:bg-muted/30 border-b border-border/25">
-                          <td className="px-2 py-0.5 font-medium text-primary whitespace-nowrap leading-tight" title={m.name}>{m.name}</td>
-                          <td className="px-2 py-0.5 text-muted-foreground whitespace-nowrap">{m.unit}</td>
-                          <td className="px-2 py-0.5 font-mono text-right whitespace-nowrap">{fmtNum(m.quantity)}</td>
-                          <td className="px-2 py-0.5 font-mono text-right whitespace-nowrap">{m.price != null ? fmtNum(m.price) : "-"}</td>
-                          <td className="px-2 py-0.5 font-mono text-right font-semibold whitespace-nowrap">{total != null ? fmtNum(total) : "-"}</td>
+                        <tr key={m.id} onClick={() => setSelectedMat(m)}
+                          className={`cursor-pointer hover:bg-primary/5 border-b border-border/25 liquid-transition ${i % 2 === 1 ? "bg-muted/15" : ""}`}>
+                          <td className="px-2.5 py-1.5 font-semibold text-primary whitespace-nowrap leading-tight" title={m.name}>{m.name}</td>
+                          <td className="px-2.5 py-1.5 text-muted-foreground whitespace-nowrap">{m.unit}</td>
+                          <td className="px-2.5 py-1.5 font-mono text-right whitespace-nowrap">{fmtNum(m.quantity)}</td>
+                          <td className="px-2.5 py-1.5 font-mono text-right whitespace-nowrap text-muted-foreground">{m.price != null ? fmtNum(m.price) : "—"}</td>
+                          <td className="px-2.5 py-1.5 font-mono text-right font-semibold whitespace-nowrap">{total != null ? fmtNum(total) : "—"}</td>
                         </tr>
                       );
                     })}
                     {filteredMats.length === 0 && (
-                      <tr><td colSpan={5} className="px-2 py-6 text-center text-muted-foreground">{project.requiredMaterials.length === 0 ? t('objectDetail.noSmeta') : t('common.notFound')}</td></tr>
+                      <tr><td colSpan={5} className="px-2 py-10 text-center text-muted-foreground">
+                        <Package className="w-8 h-8 mx-auto mb-2 opacity-25"/>
+                        {project.requiredMaterials.length === 0 ? t('objectDetail.noSmeta') : t('common.notFound')}
+                      </td></tr>
                     )}
                   </tbody>
                 </table>

@@ -372,15 +372,15 @@ function RoleBadge({ role }: { role: Role }) {
 }
 
 // ─── Notification Bell (liquid-glass dropdown, real data) ─────────────────────
-function timeAgoShort(iso?: string): string {
+function timeAgoShort(iso: string | undefined, t: (key: string) => string): string {
   if (!iso) return "";
   const diffMs = Date.now() - new Date(iso).getTime();
   const min = Math.floor(diffMs / 60000);
-  if (min < 1) return "hozir";
-  if (min < 60) return `${min}m`;
+  if (min < 1) return t('chat.justNow');
+  if (min < 60) return `${min}${t('chat.minAbbr')}`;
   const h = Math.floor(min / 60);
-  if (h < 24) return `${h}s`;
-  return `${Math.floor(h / 24)}k`;
+  if (h < 24) return `${h}${t('chat.hourAbbr')}`;
+  return `${Math.floor(h / 24)}${t('chat.dayAbbr')}`;
 }
 
 function NotificationBell({ messages, transfers, expenses, users, currentUser, onOpenChat, onOpenDashboard }:
@@ -411,7 +411,7 @@ function NotificationBell({ messages, transfers, expenses, users, currentUser, o
 
   return (
     <div className="relative" ref={ref}>
-      <button onClick={() => setOpen(o => !o)} title="Bildirishnomalar"
+      <button onClick={() => setOpen(o => !o)} title={tN('chat.notifTitle')}
         className="btn btn-ghost w-9 h-9 p-0 rounded-full relative">
         <Bell className="w-[18px] h-[18px]"/>
         {badgeCount > 0 && (
@@ -450,7 +450,7 @@ function NotificationBell({ messages, transfers, expenses, users, currentUser, o
                   className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/5 text-left transition-colors">
                   <div className="w-9 h-9 rounded-full bg-primary/25 text-primary flex items-center justify-center flex-shrink-0"><MessageCircle className="w-4 h-4"/></div>
                   <div className="flex-1 min-w-0"><p className="text-xs font-semibold text-white truncate">{sender?.name || tN('chat.notifFrom')}</p><p className="text-[11px] text-white/60 truncate">{u.count > 1 ? tN('chat.notifNewMessages', { count: u.count }) : (u.last.type && u.last.type !== "text" ? tN('chat.notifMediaMessage') : (u.last.text || tN('chat.notifNewMessage')))}</p></div>
-                  <span className="text-[10px] text-white/40 flex-shrink-0">{timeAgoShort(u.last.timestamp)}</span>
+                  <span className="text-[10px] text-white/40 flex-shrink-0">{timeAgoShort(u.last.timestamp, tN)}</span>
                 </button>
               );
             })}
@@ -2801,8 +2801,8 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
               </div>
               {!selectMode && !selGroup?.devSupport && (
                 <div className="flex items-center gap-1 flex-shrink-0">
-                  <button onClick={() => onStartCall('voice', { peer: selUser || undefined, group: selGroup || undefined })} title="Ovozli qo'ng'iroq" aria-label="Ovozli qo'ng'iroq" className="btn btn-ghost w-9 h-9 p-0 rounded-full text-primary"><Phone className="w-[18px] h-[18px]"/></button>
-                  <button onClick={() => onStartCall('video', { peer: selUser || undefined, group: selGroup || undefined })} title="Video qo'ng'iroq" aria-label="Video qo'ng'iroq" className="btn btn-ghost w-9 h-9 p-0 rounded-full text-primary"><VideoIcon className="w-[18px] h-[18px]"/></button>
+                  <button onClick={() => onStartCall('voice', { peer: selUser || undefined, group: selGroup || undefined })} title={tChat('chat.voiceCall')} aria-label={tChat('chat.voiceCall')} className="btn btn-ghost w-9 h-9 p-0 rounded-full text-primary"><Phone className="w-[18px] h-[18px]"/></button>
+                  <button onClick={() => onStartCall('video', { peer: selUser || undefined, group: selGroup || undefined })} title={tChat('chat.videoCall')} aria-label={tChat('chat.videoCall')} className="btn btn-ghost w-9 h-9 p-0 rounded-full text-primary"><VideoIcon className="w-[18px] h-[18px]"/></button>
                 </div>
               )}
               {selectMode && (
@@ -2835,7 +2835,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
                   <p className="text-[10px] font-semibold text-primary">📌 {tChat("chat.pinnedMessage")}</p>
                   <p className="text-xs text-muted-foreground truncate">{msgReplyPreview(tChat, pinned)}</p>
                 </div>
-                <button aria-label="Qadalgan xabarni yopish" onClick={()=>onPin(pinned.id)} className="p-1 text-muted-foreground hover:text-foreground flex-shrink-0"><X className="w-3.5 h-3.5"/></button>
+                <button aria-label={tChat('chat.closePinnedAria')} onClick={()=>onPin(pinned.id)} className="p-1 text-muted-foreground hover:text-foreground flex-shrink-0"><X className="w-3.5 h-3.5"/></button>
               </div>
             )}
 
@@ -2951,7 +2951,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
                   <p className="text-[10px] font-semibold text-primary">{replyTo.fromUserId===currentUser.id?tChat('chat.you'):userById(replyTo.fromUserId)?.name}</p>
                   <p className="text-xs text-muted-foreground truncate">{msgReplyPreview(tChat, replyTo)}</p>
                 </div>
-                <button aria-label="Javobni bekor qilish" onClick={()=>setReplyTo(null)} className="p-1 text-muted-foreground hover:text-foreground flex-shrink-0"><X className="w-4 h-4"/></button>
+                <button aria-label={tChat('chat.cancelReplyAria')} onClick={()=>setReplyTo(null)} className="p-1 text-muted-foreground hover:text-foreground flex-shrink-0"><X className="w-4 h-4"/></button>
               </div>
             )}
 
@@ -2963,7 +2963,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
                   <p className="text-[10px] font-semibold text-amber-800 dark:text-amber-400">Tahrirlash</p>
                   <p className="text-xs text-muted-foreground truncate">{messages.find(m=>m.id===editingId)?.text}</p>
                 </div>
-                <button aria-label="Tahrirlashni bekor qilish" onClick={()=>{setEditingId(null);setEditText("");}} className="p-1 text-muted-foreground hover:text-foreground flex-shrink-0"><X className="w-4 h-4"/></button>
+                <button aria-label={tChat('chat.cancelEditAria')} onClick={()=>{setEditingId(null);setEditText("");}} className="p-1 text-muted-foreground hover:text-foreground flex-shrink-0"><X className="w-4 h-4"/></button>
               </div>
             )}
 
@@ -3262,6 +3262,7 @@ function AuditLogSection({ token }: { token: string }) {
 // keshlanadi), lekin frontendda faqat FinancePage'ning ichki konvertatsiyasi
 // uchun ishlatilgan, alohida ko'rinadigan joyi yo'q edi — shu joy shu bo'ladi.
 function CurrencyPanel({ canEdit }: { canEdit: boolean }) {
+  const { t } = useTranslation();
   const [rates, setRates] = useState<{ UZS: number; USD: number; EUR: number; date: string; source: string; cbuUsd?: number; cbuEur?: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
@@ -3292,11 +3293,11 @@ function CurrencyPanel({ canEdit }: { canEdit: boolean }) {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ usdRate: form.usd ? Number(form.usd) : null, eurRate: form.eur ? Number(form.eur) : null }),
       });
-      if (!r.ok) { const e = await r.json().catch(()=>({})); toast.error(e.error || 'Xatolik'); return; }
-      toast.success("Valyuta kursi saqlandi");
+      if (!r.ok) { const e = await r.json().catch(()=>({})); toast.error(e.error || t('currency.genericError')); return; }
+      toast.success(t('currency.rateSaved'));
       setEditing(false);
       load();
-    } catch { toast.error("Server bilan ulanishda xatolik"); }
+    } catch { toast.error(t('currency.serverError')); }
     finally { setSaving(false); }
   };
 
@@ -3311,16 +3312,16 @@ function CurrencyPanel({ canEdit }: { canEdit: boolean }) {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ usdRate: null, eurRate: null }),
       });
-      toast.success("CBU kursiga qaytarildi");
+      toast.success(t('currency.resetToCbuDone'));
       setEditing(false);
       load();
-    } catch { toast.error("Server bilan ulanishda xatolik"); }
+    } catch { toast.error(t('currency.serverError')); }
     finally { setSaving(false); }
   };
 
   const rows = rates ? [
-    { code: 'USD', label: 'AQSH dollari', icon: DollarSign, value: rates.USD },
-    { code: 'EUR', label: 'Yevro', icon: Euro, value: rates.EUR },
+    { code: 'USD', label: t('currency.usdName'), icon: DollarSign, value: rates.USD },
+    { code: 'EUR', label: t('currency.eurName'), icon: Euro, value: rates.EUR },
   ] : [];
 
   return (

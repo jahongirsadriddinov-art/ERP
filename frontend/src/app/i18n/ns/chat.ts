@@ -71,6 +71,10 @@ export const uz = {
   pinnedMessage: "Qo'yilgan xabar",
   retrySend: "Qayta yuborish",
   newGroupToast: "Yangi guruh: {{name}}",
+  justNow: "hozir",
+  minAbbr: "m",
+  hourAbbr: "s",
+  dayAbbr: "k",
   selectedCount: "{{count}} ta",
   cancelSelectAria: "Tanlashni bekor qilish",
   deleteSelectedAria: "Tanlanganlarni o'chirish",
@@ -78,6 +82,11 @@ export const uz = {
   sendVoiceAria: "Ovozli xabarni yuborish",
   sendMessageAria: "Xabar yuborish",
   recordVoiceAria: "Ovozli xabar yozish",
+  voiceCall: "Ovozli qo'ng'iroq",
+  videoCall: "Video qo'ng'iroq",
+  closePinnedAria: "Qadalgan xabarni yopish",
+  cancelReplyAria: "Javobni bekor qilish",
+  cancelEditAria: "Tahrirlashni bekor qilish",
 };
 
 export const ru = {
@@ -153,6 +162,10 @@ export const ru = {
   pinnedMessage: "Закреплённое сообщение",
   retrySend: "Отправить снова",
   newGroupToast: "Новая группа: {{name}}",
+  justNow: "сейчас",
+  minAbbr: "м",
+  hourAbbr: "ч",
+  dayAbbr: "д",
   selectedCount: "{{count}}",
   cancelSelectAria: "Отменить выбор",
   deleteSelectedAria: "Удалить выбранные",
@@ -160,4 +173,9 @@ export const ru = {
   sendVoiceAria: "Отправить голосовое сообщение",
   sendMessageAria: "Отправить сообщение",
   recordVoiceAria: "Записать голосовое сообщение",
+  voiceCall: "Голосовой звонок",
+  videoCall: "Видеозвонок",
+  closePinnedAria: "Закрыть закреплённое сообщение",
+  cancelReplyAria: "Отменить ответ",
+  cancelEditAria: "Отменить редактирование",
 };

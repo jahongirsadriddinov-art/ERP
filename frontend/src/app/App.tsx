@@ -236,7 +236,16 @@ function csvCell(v: string | number): string {
 }
 export function downloadCsv(filename: string, headers: string[], rows: (string | number)[][]) {
   const lines = [headers, ...rows].map(r => r.map(csvCell).join(";"));
-  const blob = new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv;charset=utf-8;" });
+  // XATO TUZATILDI ("chiqim tafsilotini yuklaganda... formati noto'g'ir"):
+  // BOM + ";" ajratkich o'zi YETARLI emas edi — Excel qaysi belgini
+  // ajratkich deb hisoblashni FOYDALANUVCHI KOMPYUTERINING til/mintaqa
+  // sozlamasidan (Windows Control Panel) o'qiydi, fayl ICHIDAGI belgidan
+  // emas. Agar u boshqa (masalan ",") bo'lsa, butun qator BITTA katakka
+  // ("A1"da hammasi qatorlab) tushib qolardi — aynan shu holat sodir
+  // bo'lgan. "sep=;" — Excel tomonidan rasman qo'llab-quvvatlanadigan
+  // maxsus BIRINCHI QATOR ko'rsatmasi, mintaqa sozlamasidan qat'i nazar
+  // ";"ni MAJBURIY ajratkich sifatida ishlatishga majburlaydi.
+  const blob = new Blob(["﻿sep=;\r\n" + lines.join("\r\n")], { type: "text/csv;charset=utf-8;" });
   // saveOrShareBlob: Android APK'da <a download> ISHLAMAYDI (WebView'da
   // Downloads integratsiyasi yo'q — hech qanday xato ham chiqmasdi, shu
   // sabab "hisobotni yuklab bo'lmayapti" edi). Web/exe'da eski usul saqlanadi.

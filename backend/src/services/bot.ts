@@ -469,6 +469,10 @@ async function doCheckIn(user: any, lang?: BotLang): Promise<string> {
   // MUHIM: bot server (Render) UTC'da ishlaydi — timeZone aniq ko'rsatilmasa
   // foydalanuvchiga UTC vaqti ko'rsatiladi, Toshkent vaqti emas.
   const time = now.toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Tashkent' });
+  // Sayt/ilova ochiq bo'lsa DARHOL biladi — botdan qilingan check-in
+  // saytda "Ishga keldim" tugmasi eskirgan holatda ko'rinib qolishining
+  // oldini oladi (xuddi /api/attendance/checkin qiladigani kabi).
+  emitToUser(String(user._id), 'attendance:update', { ...record.toObject(), id: record._id });
   return tb(lang, 'checkInConfirmed', { time });
 }
 // "0.1 soat" kabi yaxlitlangan-noaniq ko'rinish o'rniga aniq daqiqa hisobidan
@@ -497,6 +501,7 @@ async function doCheckOut(user: any, lang?: BotLang): Promise<string> {
   record.workHours = Math.round((ms / 3600000) * 10) / 10; // eski maydon — hisobotlarda (masalan stats) ishlatiladi, saqlanadi
   await record.save();
   const time = now.toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Tashkent' });
+  emitToUser(String(user._id), 'attendance:update', { ...record.toObject(), id: record._id });
   return tb(lang, 'checkOutConfirmed', { time, hours: fmtWorkDuration(minutes, lang) });
 }
 
@@ -1819,7 +1824,10 @@ async function retireOldReminder(chatId: string) {
   const oldMsgId = lastReminderMsg.get(chatId);
   if (!oldMsgId) return;
   lastReminderMsg.delete(chatId);
-  await bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: oldMsgId }).catch(() => {});
+  // Aniq talab: keyingisini yuborishdan oldin OLDINGISI O'CHIRILSIN (faqat
+  // tugmasini olib tashlash emas) — chatda eski eslatmalar to'planib
+  // qolmasin.
+  await bot.deleteMessage(chatId, oldMsgId).catch(() => {});
 }
 
 async function sendMorningReminders() {

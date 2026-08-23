@@ -6,6 +6,7 @@ import { getTenant } from '../middleware/tenantContext';
 import { todayInTashkent, tashkentHour } from '../utils/tz';
 import { bot, keyboardForUser, fmtWorkDuration } from '../services/bot';
 import { tb, BotLang } from '../i18n/bot';
+import { emitToUser } from '../services/socket';
 
 // MUHIM: xodim "Ishga keldim"/"Ishni yakunlash"ni SAYTDAN bossa, botning
 // o'zi bundan XABARSIZ qolardi — Telegram'dagi klaviatura (tugmalar to'plami)
@@ -126,13 +127,20 @@ router.post('/checkin', async (req, res) => {
     if (note) record.note = note;
     await record.save();
 
-    res.json({ ...record.toObject(), id: record._id });
+    const payload = { ...record.toObject(), id: record._id };
+    res.json(payload);
 
     // Bot klaviaturasini darhol yangilaymiz (sayt orqali qilingan bo'lsa ham) —
     // aks holda foydalanuvchi botni ochsa ESKI (masalan hali "Ishga keldim"gina
     // bor) klaviaturani ko'raverardi, chunki bot bu o'zgarishdan bexabar edi.
     const checkInTime = now.toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Tashkent' });
     pushBotKeyboardRefresh(userId, lang => tb(lang, 'checkInConfirmed', { time: checkInTime })).catch(() => {});
+    // Saytdagi/ilovadagi BOSHQA ochiq sessiyalarga (masalan ilova ochiq
+    // turgan holda check-in botdan qilingan bo'lsa) DARHOL xabar beramiz —
+    // aks holda "Ishga keldim" tugmasi eskirgan holatda ko'rinaverardi,
+    // faqat qo'lda sahifani yangilash yordam berardi (aniq xabar qilingan
+    // xato: "site ga ilovaga kirsam ham ishga keldim tugmasi turibdi").
+    emitToUser(userId, 'attendance:update', payload);
   } catch { res.status(500).json({ error: 'Server xatoligi' }); }
 });
 
@@ -163,11 +171,13 @@ router.post('/checkout', async (req, res) => {
       record.workHours = Math.round((ms / 3600000) * 10) / 10;
     }
     await record.save();
-    res.json({ ...record.toObject(), id: record._id });
+    const payload = { ...record.toObject(), id: record._id };
+    res.json(payload);
 
     // Bot klaviaturasini darhol yangilaymiz (sayt orqali qilingan bo'lsa ham).
     const checkOutTime = now.toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Tashkent' });
     pushBotKeyboardRefresh(userId, lang => tb(lang, 'checkOutConfirmed', { time: checkOutTime, hours: fmtWorkDuration(workedMinutes, lang) })).catch(() => {});
+    emitToUser(userId, 'attendance:update', payload);
   } catch { res.status(500).json({ error: 'Server xatoligi' }); }
 });
 

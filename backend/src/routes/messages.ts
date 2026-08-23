@@ -15,6 +15,7 @@ import { getTenant } from '../middleware/tenantContext';
 import { bot } from '../services/bot';
 import { uploadFileToCloud } from '../config/cloudinary';
 import { getBackendUrl } from '../utils/backendUrl';
+import { createNotification } from '../services/notifications';
 
 if (ffmpegPath) ffmpeg.setFfmpegPath(ffmpegPath);
 
@@ -253,6 +254,9 @@ router.post('/', async (req, res) => {
     }
     const msg = await Message.create(msgData);
     const payload = shape(msg);
+    // Xabar matni push/bildirishnoma tanasi uchun qisqartirilgan ko'rinishi
+    // — fayl/joylashuv bo'lsa matn bo'sh bo'ladi, o'rniga tur nomi ko'rsatiladi.
+    const notifBody = (text || '').trim() || (mediaUrl ? '📎 Fayl' : location ? '📍 Joylashuv' : 'Yangi xabar');
     if (groupId) {
       emitToGroup(String(groupId), 'message:new', payload);
       // Telegram relay — guruhning HAR BIR a'zosiga (yuboruvchidan tashqari)
@@ -265,6 +269,22 @@ router.post('/', async (req, res) => {
         for (const m of members) {
           if (m.telegramChatId) await relayMessageToTelegram(m.telegramChatId, `${senderName} (${group.name})`, { text, type, mediaUrl, location });
         }
+        // Har bir a'zoga (rasm/qurilma darajasidagi haqiqiy OS bildirishnomasi
+        // — aniq xabar qilingan xato: "ilova/web'ning o'zidagi bildirishnoma
+        // kelmayapti" — root sabab: createNotification() ilgari HECH QAYERDAN
+        // chaqirilmagan edi, butun push/bildirishnoma zanjiri o'lik kod edi).
+        for (const uid of memberIds) {
+          createNotification({
+            recipientId: String(uid),
+            companyId: msgData.companyId,
+            type: 'message',
+            title: `${senderName} (${group.name})`,
+            body: notifBody,
+            entity: 'group',
+            entityId: String(groupId),
+            url: '/chat',
+          }).catch(() => {});
+        }
       }).catch(console.error);
     } else {
       emitToUser(String(toUserId), 'message:new', payload);
@@ -275,6 +295,21 @@ router.post('/', async (req, res) => {
         const sender = await User.findById(String(fromUserId)).catch(() => null);
         const senderName = sender ? `${sender.firstName} ${sender.lastName || ''}`.trim() : 'Foydalanuvchi';
         await relayMessageToTelegram(recipient.telegramChatId, senderName, { text, type, mediaUrl, location });
+      }).catch(() => {});
+      // Qurilmaning o'z (OS) bildirishnomasi + ilova ichidagi qo'ng'iroq
+      // belgisi — pastdagi izohga qarang.
+      User.findById(String(fromUserId)).select('firstName lastName').lean().then(sender => {
+        const senderName = sender ? `${sender.firstName} ${sender.lastName || ''}`.trim() : 'Foydalanuvchi';
+        createNotification({
+          recipientId: String(toUserId),
+          companyId: msgData.companyId,
+          type: 'message',
+          title: senderName,
+          body: notifBody,
+          entity: 'message',
+          entityId: String(msg._id),
+          url: '/chat',
+        }).catch(() => {});
       }).catch(() => {});
     }
     res.status(201).json(payload);

@@ -82,6 +82,16 @@ if ('serviceWorker' in navigator) {
         else setTimeout(fn, 2000);
       };
       runWhenIdle(setupPush);
+      // XATO TUZATILDI: 'storage' hodisasi FAQAT BOSHQA tab/oynada localStorage
+      // o'zgarsa ishga tushadi — o'sha o'zgarishni QILGAN tabning O'ZIDA
+      // HECH QACHON ishlamaydi (brauzer standarti). Demak login shu sahifada
+      // (odatiy holat) sodir bo'lganda setupPush() umuman QAYTA
+      // chaqirilmasdi — ilk sahifa yuklanishida hali token yo'q edi, keyin
+      // esa hech narsa uni push-ro'yxatga yozdirmasdi. Shu sabab push
+      // bildirishnomalar deyarli hech qachon kelmasdi (aniq xabar qilingan
+      // xato). Endi App.tsx login/ro'yxatdan o'tish muvaffaqiyatli bo'lgan
+      // ZAHOTI shu funksiyani to'g'ridan-to'g'ri chaqiradi.
+      (window as any).__setupPush = () => runWhenIdle(setupPush);
       window.addEventListener('storage', (e) => { if (e.key === 'token' && e.newValue) runWhenIdle(setupPush); });
     } catch {
       // SW registration optional

@@ -4512,6 +4512,32 @@ export default function App() {
   // talabi: "sayt ochirilgan bolsa ham joylashuv uzatip turishi ochmasin".
   const { gpsTracking } = useGeoTracker(liveUser?.id, liveUser?.role, isWorking, siteEnabled);
 
+  // Push bildirishnoma ro'yxatdan o'tkazish — XATO TUZATILDI: avval bu
+  // faqat main.tsx'dagi 'storage' hodisasiga bog'liq edi, u esa FAQAT
+  // BOSHQA tab/oynada token o'zgarsa ishga tushadi (brauzer standarti) —
+  // shu (odatiy) tabning o'zida login qilinganda HECH QACHON qayta
+  // chaqirilmasdi, shu sabab push bildirishnomalar deyarli hech qachon
+  // kelmasdi. Endi liveUser paydo bo'lgan (login/ro'yxatdan o'tish/sahifa
+  // eski token bilan ochilgan) HAR bir holatda to'g'ridan-to'g'ri
+  // chaqiriladi — qaysi login yo'li (oddiy, dev-login, ro'yxatdan o'tish)
+  // ishlatilishidan qat'i nazar.
+  useEffect(() => {
+    if (!liveUser) return;
+    // Service worker ro'yxatdan o'tishi (main.tsx, window 'load' hodisasida)
+    // bilan bu effekt orasida poyga (race) bo'lishi mumkin — __setupPush
+    // hali tayin qilinmagan bo'lsa, tayyor bo'lguncha (eng ko'pi 5s) qisqa
+    // fosila bilan qayta urinamiz, aks holda push umuman yozilmay qolardi.
+    let cancelled = false;
+    const tryCall = (attempt = 0) => {
+      if (cancelled) return;
+      const fn = (window as any).__setupPush;
+      if (fn) { fn(); return; }
+      if (attempt < 10) setTimeout(() => tryCall(attempt + 1), 500);
+    };
+    tryCall();
+    return () => { cancelled = true; };
+  }, [liveUser?.id]);
+
   // Bugungi davomat holatini alohida yuklaymiz. attendanceChecked — ishchi
   // rol uchun "Ishga keldim" darvozasini (gate) ko'rsatishdan oldin, haqiqiy
   // holat serverdan kelguncha bir zumlik noto'g'ri (bo'sh) holatni ko'rsatib
@@ -4613,6 +4639,7 @@ export default function App() {
   const aiOpenRef = useRef(aiOpen); aiOpenRef.current = aiOpen;
   const globalSearchRef = useRef(globalSearch); globalSearchRef.current = globalSearch;
   const selProjectRef = useRef(selProject); selProjectRef.current = selProject;
+  const anyBigModalOpenRef = useRef(anyBigModalOpen); anyBigModalOpenRef.current = anyBigModalOpen;
 
   useEffect(() => {
     localStorage.setItem("page", page);
@@ -4833,6 +4860,13 @@ export default function App() {
       // odamning O'Z brauzeridagi localStorage'da qolib ketardi).
       const onCompanyUpdate = (company: any) => applyCompany(company);
 
+      // Ishga kelish/ketish BOSHQA joydan (masalan botdan, yoki boshqa
+      // ochiq tab/qurilmadan) qilingan bo'lsa ham — DARHOL shu yerda ham
+      // ko'rinadi. Avval faqat mount payti bir marta o'qilardi, shu sabab
+      // "botdan ishga keldim bosdim, saytda hali eski tugma turibdi"
+      // muammosi bo'lardi.
+      const onAttendanceUpdate = (rec: any) => setTodayAttendance(rec);
+
       socket.on("message:new", onNew);
       socket.on("message:edit", onEdit);
       socket.on("message:delete", onDelete);
@@ -4847,6 +4881,7 @@ export default function App() {
       socket.on("user:language", onLanguage);
       socket.on("gps:update", onGpsUpdate);
       socket.on("company:update", onCompanyUpdate);
+      socket.on("attendance:update", onAttendanceUpdate);
 
       // App background'dan qaytganda socket ulanishini tiklash (Android/Tauri)
       const onVisibility = () => {
@@ -4889,6 +4924,7 @@ export default function App() {
         socket.off("transaction:new", onTxNew);
         socket.off("gps:update", onGpsUpdate);
         socket.off("company:update", onCompanyUpdate);
+        socket.off("attendance:update", onAttendanceUpdate);
       };
     }
   }, [liveUser?.id]);
@@ -4910,6 +4946,19 @@ export default function App() {
       if (chatOpenRef.current) { setChatIsOpen(false); return true; }
       if (selProjectRef.current) { setSelProject(null); return true; }
       if (pageRef.current !== 'dashboard') { setPage('dashboard'); return true; }
+      // XATO TUZATILDI: yuqoridagi ro'yxat FAQAT bir nechta bilingan
+      // ("katta") holatlarni bilardi — o'nlab boshqa modal/dialog
+      // (tahrirlash oynalari, rasm ko'ruvchi, tasdiqlash oynalari va h.k.,
+      // hammasi useModalPresence() bilan ro'yxatdan o'tadi) ro'yxatda YO'Q
+      // edi, shu sabab ular ochiq turganda orqaga bosilsa "hech narsa
+      // ushlamadi" deb hisoblanib, ilovadan chiqish so'rovi chiqardi —
+      // aniq xabar qilingan xato ("orqaga qaytish... ilovadan chiqip
+      // ketvotti"). Endi HAR QANDAY ro'yxatdan o'tgan modal ochiq bo'lsa,
+      // "ushladik" deb hisoblaymiz (chiqish so'ralmaydi) — modalning o'zi
+      // hali yopilmasa ham, ilova hech qachon kutilmaganda yopilib
+      // qolmaydi; foydalanuvchi modalni o'zining X/bekor qilish tugmasi
+      // bilan yopadi.
+      if (anyBigModalOpenRef.current) return true;
       return false;
     });
   }, [liveUser?.id]);

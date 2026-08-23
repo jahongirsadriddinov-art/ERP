@@ -5,9 +5,23 @@
 export const isTauri = (): boolean =>
   typeof window !== 'undefined' && '__TAURI__' in window;
 
-// Capacitor — Capacitor global ob'ekti yoki user-agent tekshiruvi
+// Capacitor — HAQIQIY native qobiq (Android/iOS) ichida ekanini tekshiradi.
+// XATO TUZATILDI: avval faqat `'Capacitor' in window` tekshirilardi — lekin
+// @capacitor/core, ANY @capacitor/* plugin dinamik import qilinganda (masalan
+// boshqa funksiya birinchi marta ishga tushganda), o'zining WEB FALLBACK
+// implementatsiyasi uchun ham `window.Capacitor` ob'ektini yaratib qo'yadi
+// (getPlatform()==='web' bilan) — bu HAQIQIY native emas. Natijada, Windows
+// exe'da (Tauri) ham, oddiy brauzerda ham, biror joyda bitta Capacitor plugin
+// bir marta import qilinishi bilan `isCapacitor()` NOTO'G'RI "true" qaytara
+// boshlardi, shundan keyingi BARCHA chaqiruvlar (masalan saveOrShareBlob)
+// Android-ga mo'ljallangan yo'lni Windows'da ham ishga tushirardi — aniq
+// misol: Excel/CSV yuklab olishda `Share.share()`ning web-fallback'i
+// `navigator.share()`ni chaqirib, Windows'ning tizim "Share" oynasini
+// (ishlamaydigan havola bilan) ochib yuborardi. `isNativePlatform()` esa
+// Capacitor'ning O'ZI native ko'prik (bridge) bor-yo'qligini tekshiradigan
+// rasmiy usuli — web-fallback stub uchun har doim `false` qaytaradi.
 export const isCapacitor = (): boolean =>
-  typeof window !== 'undefined' && 'Capacitor' in window;
+  typeof window !== 'undefined' && 'Capacitor' in window && (window as any).Capacitor?.isNativePlatform?.() === true;
 
 export const isAndroid = (): boolean =>
   isCapacitor() && (window as any).Capacitor?.getPlatform?.() === 'android';
@@ -108,7 +122,10 @@ function blobToBase64(blob: Blob): Promise<string> {
 // "Fayllar"/istalgan ilovaga saqlashni tanlaydi. Bu saqlash RUXSATISIZ
 // (Cache papkasi ilova ichida) ishlaydigan eng ishonchli yo'l.
 export async function saveOrShareBlob(filename: string, blob: Blob): Promise<{ ok: boolean; shared?: boolean }> {
-  if (!isCapacitor()) {
+  // isCapacitor() emas, aynan isAndroid() — bu yo'l FAQAT Android uchun
+  // (yuqoridagi izohga qarang), Windows/iOS/web'ning barchasi pastdagi
+  // oddiy <a download> yo'lidan o'tishi kerak.
+  if (!isAndroid()) {
     // XATO TUZATILDI: bu blok avval try/catch'siz edi — "{ok:true}" har
     // doim SO'ZSIZ qaytardi, hatto a.click() biror sababdan (masalan
     // iOS Safari'ning tracking-prevention/pop-up cheklovlari) chindan

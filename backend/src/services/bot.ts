@@ -1417,7 +1417,14 @@ bot.on('message', async (msg: any) => {
           const body = m.type && m.type !== 'text' ? (typeLabel[m.type] || `[${m.type}]`) : (m.text || '—');
           return `*${name}:* ${body}`;
         }).join('\n');
-        bot.sendMessage(chatId, `${tb(user.language, 'devChatHistoryHeader')}\n\n${lines}`, { parse_mode: 'Markdown', reply_markup: await keyboardForUser(user, user.language) });
+        await bot.sendMessage(chatId, `${tb(user.language, 'devChatHistoryHeader')}\n\n${lines}`, { parse_mode: 'Markdown', reply_markup: await keyboardForUser(user, user.language) });
+        // Telegram bitta xabarda ham reply (pastki) klaviatura, ham inline
+        // tugma bo'la olmaydi — shu sabab o'chirish tugmasi ALOHIDA, qisqa
+        // xabarda yuboriladi (aniq talab: ko'rgach, xohlasa shu yerdan
+        // o'chira olishi kerak).
+        await bot.sendMessage(chatId, tb(user.language, 'devChatHistoryDeleteHint'), {
+          reply_markup: { inline_keyboard: [[{ text: tb(user.language, 'devChatHistoryDeleteBtn'), callback_data: 'chathistdeleteask' }]] },
+        });
       } catch (err) {
         console.error('[bot kb_chatHistory]', err);
         bot.sendMessage(chatId, tb(user.language, 'genericError'), { reply_markup: await keyboardForUser(user, user.language) });
@@ -1993,6 +2000,47 @@ bot.on('callback_query', async (query: any) => {
     }
     return;
   }
+
+  // ── Chat tarixini O'CHIRISH — faqat dasturchi. XAVFLI/qaytarib bo'lmaydigan
+  // amal bo'lgani uchun devresetask/yes/no bilan bir xil ikki bosqichli
+  // tasdiqlash (Ha/Yo'q) ishlatiladi. "Hammasi birdan" — PLATFORMADAGI
+  // BARCHA (barcha firma) DM+guruh xabarlari birdan tozalanadi (aniq
+  // talab). Hujjatlarning o'zi butunlay o'chirilmaydi — matn/media
+  // maydonlari tozalanadi va deleted=true belgilanadi (ilova ichidagi
+  // bitta-xabar o'chirish bilan bir xil konvensiya — messages.ts), bu
+  // hisob/audit izini butunlay yo'qotib yubormaydi, lekin ilovaning
+  // hech bir joyida (jumladan shu "Chat tarixi" ko'rinishida) yozilgan
+  // matn/media boshqa hech qachon ko'rinmaydi.
+  if (user && isDev(user.role) && (data === 'chathistdeleteask' || data === 'chathistdeleteyes' || data === 'chathistdeleteno')) {
+    await bot.answerCallbackQuery(query.id).catch(() => {});
+    if (data === 'chathistdeleteask') {
+      await bot.editMessageText(tb(lang, 'devChatHistoryDeleteConfirm'), {
+        chat_id: chatId, message_id: messageId,
+        reply_markup: { inline_keyboard: [[
+          { text: tb(lang, 'confirmYes'), callback_data: 'chathistdeleteyes' },
+          { text: tb(lang, 'confirmNo'), callback_data: 'chathistdeleteno' },
+        ]] },
+      }).catch(() => {});
+      return;
+    }
+    if (data === 'chathistdeleteno') {
+      await bot.editMessageText(tb(lang, 'actionCancelled'), { chat_id: chatId, message_id: messageId }).catch(() => {});
+      return;
+    }
+    // chathistdeleteyes
+    try {
+      const r = await Message.updateMany(
+        { deleted: { $ne: true } },
+        { $set: { deleted: true, text: '', mediaUrl: '', fileName: '' }, $unset: { location: '' } }
+      );
+      await bot.editMessageText(tb(lang, 'devChatHistoryDeleted', { count: r.modifiedCount ?? 0 }), { chat_id: chatId, message_id: messageId }).catch(() => {});
+    } catch (err) {
+      console.error('[bot chathistdeleteyes]', err);
+      await bot.sendMessage(chatId, tb(lang, 'genericError'));
+    }
+    return;
+  }
+
   if (data === 'noop') { await bot.answerCallbackQuery(query.id).catch(() => {}); return; }
 
   // ── Yo'qlama tasdiqlash (Ishga keldim / Ish tugatdim) ─────────────────────

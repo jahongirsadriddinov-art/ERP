@@ -152,6 +152,10 @@ interface BotDict {
   devUsersHeader: string;
   devNoMessages: string;
   devChatHistoryHeader: string;
+  devChatHistoryDeleteHint: string;
+  devChatHistoryDeleteBtn: string;
+  devChatHistoryDeleteConfirm: string;
+  devChatHistoryDeleted: (p: { count: number }) => string;
   devNoSubs: string;
   devSubsHeader: string;
   devStatsBody: (p: { firmCount: number; userCount: number; activeSubs: number; pendingSubs: number }) => string;
@@ -343,6 +347,10 @@ const uz: BotDict = {
   devUsersHeader: '👥 *Foydalanuvchilar:*',
   devNoMessages: "Xabarlar yo'q.",
   devChatHistoryHeader: "💬 *Chat tarixi (oxirgi 50 ta):*",
+  devChatHistoryDeleteHint: "Yuqoridagilarni (va PLATFORMADAGI BARCHA yozishmalarni) butunlay o'chirib tashlash uchun:",
+  devChatHistoryDeleteBtn: "🗑 Hammasini o'chirish",
+  devChatHistoryDeleteConfirm: "⚠️ DIQQAT: bu PLATFORMADAGI BARCHA firmalarning barcha DM va guruh yozishmalari matni/mediasini butunlay o'chiradi. Bu amalni ORQAGA QAYTARIB BO'LMAYDI. Rostdan davom etasizmi?",
+  devChatHistoryDeleted: (p) => `✅ O'chirildi: ${p.count} ta xabar.`,
   devNoSubs: "Obuna yo'q.",
   devSubsHeader: '💳 *Obunalar:*',
   devStatsBody: (p: { firmCount: number; userCount: number; activeSubs: number; pendingSubs: number }) =>
@@ -542,6 +550,10 @@ const ru: BotDict = {
   devUsersHeader: '👥 *Пользователи:*',
   devNoMessages: 'Сообщений нет.',
   devChatHistoryHeader: '💬 *История чата (последние 50):*',
+  devChatHistoryDeleteHint: 'Чтобы полностью удалить показанное выше (и ВСЮ переписку на платформе):',
+  devChatHistoryDeleteBtn: '🗑 Удалить всё',
+  devChatHistoryDeleteConfirm: '⚠️ ВНИМАНИЕ: это полностью удалит текст/медиа ВСЕЙ переписки (ЛС и групп) ВСЕХ компаний на платформе. Это действие НЕЛЬЗЯ ОТМЕНИТЬ. Точно продолжить?',
+  devChatHistoryDeleted: (p) => `✅ Удалено: ${p.count} сообщений.`,
   devNoSubs: 'Подписок нет.',
   devSubsHeader: '💳 *Подписки:*',
   devStatsBody: (p) =>

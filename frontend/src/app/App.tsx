@@ -151,10 +151,18 @@ function fmtNum(n: number|null|undefined): string {
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
+// Standart (o'zbekcha) rol nomlari — fallback sifatida va `t` mavjud
+// bo'lmagan joylarda ishlatiladi. Haqiqiy ko'rsatiladigan matn uchun
+// `roleLabel(t, role)` chaqirilishi kerak (quyida) — shu orqali rol
+// nomi Rossiyacha interfeys tilida ham to'g'ri tarjima qilinadi.
 export const ROLE_LABELS: Record<Role, string> = {
   direktor: "Direktor", orinbosar: "O'rinbosar",
   prorab: "Prorab", brigadir: "Brigadir", ishchi: "Ishchi", dasturchi: "Dasturchi"
 };
+// i18n — rol nomini joriy tilga mos tarjima qilib qaytaradi.
+export function roleLabel(t: (key: string) => string, role: Role): string {
+  return t(`common.roles.${role}`) || ROLE_LABELS[role];
+}
 const ROLE_COLORS: Record<Role, string> = {
   direktor: "bg-red-500/15 text-red-700 dark:text-red-300",
   orinbosar: "bg-purple-500/15 text-purple-700 dark:text-purple-300",
@@ -325,7 +333,8 @@ export function Avatar({ user, size = "md" }: { user: AppUser; size?: "sm"|"md"|
 }
 
 function RoleBadge({ role }: { role: Role }) {
-  return <span className={`text-[9px] px-1.5 py-0.5 rounded font-semibold whitespace-nowrap ${ROLE_COLORS[role]}`}>{ROLE_LABELS[role]}</span>;
+  const { t } = useTranslation();
+  return <span className={`text-[9px] px-1.5 py-0.5 rounded font-semibold whitespace-nowrap ${ROLE_COLORS[role]}`}>{roleLabel(t, role)}</span>;
 }
 
 // ─── Notification Bell (liquid-glass dropdown, real data) ─────────────────────
@@ -505,7 +514,7 @@ function AddUserModal({ currentUser, users, projects, onClose, onAdd }:
             <label className="text-sm md:text-xs font-medium block mb-1">{t('addUser.positionLabel')}</label>
             <select className="w-full text-sm md:text-xs border border-border rounded px-3 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary"
               value={form.role} onChange={e => setForm({...form, role: e.target.value as Role})}>
-              {allowedRoles.map(r => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
+              {allowedRoles.map(r => <option key={r} value={r}>{roleLabel(t, r)}</option>)}
             </select>
           </div>
           {(form.role === "brigadir" || form.role === "ishchi") && (
@@ -901,7 +910,7 @@ function SendTransferModal({ currentUser, projects, allUsers, onClose, onSend, i
             <select className="w-full text-sm border border-border rounded-lg px-3 py-2.5 bg-input-background focus:outline-none"
               value={toUserId} onChange={e => setToUserId(e.target.value)} required>
               <option value="">{t('sendTransfer.selectPlaceholder')}</option>
-              {targets.map(u => <option key={u.id} value={u.id}>{u.name} — {ROLE_LABELS[u.role]}</option>)}
+              {targets.map(u => <option key={u.id} value={u.id}>{u.name} — {roleLabel(t, u.role)}</option>)}
             </select>
           </div>
 
@@ -1082,7 +1091,7 @@ function AddExpenseModal({ currentUser, projects, allUsers, onClose, onAdd }:
             <select className="w-full text-sm border border-border rounded-lg px-2.5 py-2.5 bg-input-background focus:outline-none"
               value={form.toUserId} onChange={e => { setErr(""); setForm({...form, toUserId: e.target.value}); }}>
               <option value="">{t('addExpense.toSelectPlaceholder')}</option>
-              {allUsers.filter(u => u.id !== currentUser.id).map(u => <option key={u.id} value={u.id}>{u.name} ({ROLE_LABELS[u.role]})</option>)}
+              {allUsers.filter(u => u.id !== currentUser.id).map(u => <option key={u.id} value={u.id}>{u.name} ({roleLabel(t, u.role)})</option>)}
             </select>
           </div>
 
@@ -1094,7 +1103,7 @@ function AddExpenseModal({ currentUser, projects, allUsers, onClose, onAdd }:
               <select className="w-full text-sm border border-border rounded-lg px-2.5 py-2.5 bg-input-background focus:outline-none"
                 value={form.approverId} onChange={e => { setErr(""); setForm({...form, approverId: e.target.value}); }} required>
                 <option value="">{t('addExpense.approverPlaceholder')}</option>
-                {approverOptions.map(u => <option key={u.id} value={u.id}>{u.name} ({ROLE_LABELS[u.role]})</option>)}
+                {approverOptions.map(u => <option key={u.id} value={u.id}>{u.name} ({roleLabel(t, u.role)})</option>)}
               </select>
               {approverOptions.length === 0 && (
                 <p className="text-[10px] text-amber-700 dark:text-amber-400 mt-1">{t('addExpense.noApprovers')}</p>
@@ -1119,6 +1128,10 @@ function AddExpenseModal({ currentUser, projects, allUsers, onClose, onAdd }:
 function TransferRow({ t, currentUser, allUsers, projects, onConfirm, onReject }:
   { t: Transfer; currentUser: AppUser; allUsers: AppUser[]; projects: Project[];
     onConfirm: (id: string, defect?: string) => void; onReject: (id: string) => void }) {
+  // MUHIM: shu komponentdagi `t` allaqachon Transfer obyekti (parametr nomi
+  // o'zgartirilmadi — hamma joyda `t.xxx` sifatida ishlatiladi), shu sabab
+  // tarjima funksiyasi shu bilan TO'QNASHMASLIGI uchun `tt` deb nomlandi.
+  const { t: tt } = useTranslation();
   const [defect, setDefect] = useState("");
   const from = allUsers.find(u => u.id === t.fromUserId);
   const to = allUsers.find(u => u.id === t.toUserId);
@@ -1128,9 +1141,9 @@ function TransferRow({ t, currentUser, allUsers, projects, onConfirm, onReject }
   const canConfirm = isReceiver && t.status === "pending";
 
   const statusBadge = {
-    pending: <span className="text-[9px] bg-amber-500/15 text-amber-800 dark:text-amber-300 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 whitespace-nowrap"><Clock className="w-2.5 h-2.5"/>Kutilmoqda</span>,
-    confirmed: <span className="text-[9px] bg-green-500/15 text-green-800 dark:text-green-300 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 whitespace-nowrap"><CheckCircle className="w-2.5 h-2.5"/>Tasdiqlandi</span>,
-    rejected: <span className="text-[9px] bg-red-500/15 text-red-700 dark:text-red-300 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 whitespace-nowrap"><X className="w-2.5 h-2.5"/>Rad etildi</span>,
+    pending: <span className="text-[9px] bg-amber-500/15 text-amber-800 dark:text-amber-300 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 whitespace-nowrap"><Clock className="w-2.5 h-2.5"/>{tt('dashboard.transferPending')}</span>,
+    confirmed: <span className="text-[9px] bg-green-500/15 text-green-800 dark:text-green-300 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 whitespace-nowrap"><CheckCircle className="w-2.5 h-2.5"/>{tt('dashboard.transferConfirmed')}</span>,
+    rejected: <span className="text-[9px] bg-red-500/15 text-red-700 dark:text-red-300 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 whitespace-nowrap"><X className="w-2.5 h-2.5"/>{tt('dashboard.transferRejected')}</span>,
   }[t.status];
 
   return (
@@ -1140,32 +1153,32 @@ function TransferRow({ t, currentUser, allUsers, projects, onConfirm, onReject }
           <p className="font-semibold text-foreground">{t.materialName}</p>
           <p className="text-muted-foreground font-mono text-sm md:text-xs">
             {t.quantity.toLocaleString()} {t.unit}
-            {!!t.price && <span className="ml-1.5 text-primary font-semibold">· {(t.price * t.quantity).toLocaleString()} so'm</span>}
+            {!!t.price && <span className="ml-1.5 text-primary font-semibold">· {(t.price * t.quantity).toLocaleString()} {tt('common.som')}</span>}
           </p>
           <p className="text-sm md:text-xs text-muted-foreground mt-0.5">
-            {isSender ? <><span className="text-foreground font-medium">Siz</span> → {to?.name}</> : <>{from?.name} → <span className="text-foreground font-medium">Siz</span></>}
+            {isSender ? <><span className="text-foreground font-medium">{tt('dashboard.youLabel')}</span> → {to?.name}</> : <>{from?.name} → <span className="text-foreground font-medium">{tt('dashboard.youLabel')}</span></>}
           </p>
           <p className="text-sm md:text-xs text-muted-foreground">{proj?.name} • {t.date || t.sentDate}</p>
           {t.note && <p className="text-sm md:text-xs text-muted-foreground italic">{t.note}</p>}
           {t.defect && <p className="text-sm md:text-xs text-amber-700 flex items-center gap-1 mt-0.5"><AlertTriangle className="w-2.5 h-2.5"/>{t.defect}</p>}
           {t.status === "confirmed" && isSender && t.confirmedDate && (
-            <p className="text-sm md:text-xs text-green-800 dark:text-green-400 font-medium mt-0.5">✓ {to?.name} tasdiqladi ({t.confirmedDate})</p>
+            <p className="text-sm md:text-xs text-green-800 dark:text-green-400 font-medium mt-0.5">✓ {tt('dashboard.confirmedByLabel', { name: to?.name, date: t.confirmedDate })}</p>
           )}
         </div>
         <div className="flex-shrink-0">{statusBadge}</div>
       </div>
       {canConfirm && (
         <div className="space-y-1.5">
-          <textarea rows={1} placeholder="Kamchilik yoki eslatma (ixtiyoriy)..." value={defect} onChange={e => setDefect(e.target.value)}
+          <textarea rows={1} placeholder={tt('dashboard.defectPlaceholder')} value={defect} onChange={e => setDefect(e.target.value)}
             className="w-full text-sm md:text-xs border border-border rounded px-2 py-1.5 bg-input-background resize-none focus:outline-none focus:ring-1 focus:ring-primary"/>
           <div className="flex gap-1.5">
             <button onClick={() => onConfirm(t.id, defect || undefined)}
               className="flex-1 flex items-center justify-center gap-1 text-sm md:text-xs bg-green-600 text-white rounded py-1.5 hover:bg-green-700 font-semibold">
-              <Check className="w-3 h-3"/>Qabul qilish
+              <Check className="w-3 h-3"/>{tt('dashboard.acceptBtn')}
             </button>
             <button onClick={() => onReject(t.id)}
               className="flex items-center justify-center gap-1 text-sm md:text-xs bg-red-500/15 text-red-700 dark:text-red-300 rounded px-2.5 py-1.5 hover:bg-red-500/100/25 font-semibold">
-              <X className="w-3 h-3"/>Rad
+              <X className="w-3 h-3"/>{tt('dashboard.rejectBtn')}
             </button>
           </div>
         </div>
@@ -1178,6 +1191,7 @@ function TransferRow({ t, currentUser, allUsers, projects, onConfirm, onReject }
 function MyTransfersPanel({ currentUser, transfers, allUsers, projects, onConfirm, onReject, onSend }:
   { currentUser: AppUser; transfers: Transfer[]; allUsers: AppUser[]; projects: Project[];
     onConfirm: (id: string, d?: string) => void; onReject: (id: string) => void; onSend: () => void }) {
+  const { t } = useTranslation();
   const [tab, setTab] = useState<"inbox"|"sent">("inbox");
   const inbox = transfers.filter(t => t.toUserId === currentUser.id);
   const sent = transfers.filter(t => t.fromUserId === currentUser.id);
@@ -1188,27 +1202,27 @@ function MyTransfersPanel({ currentUser, transfers, allUsers, projects, onConfir
     <div className="flex flex-col h-full p-3 gap-3 overflow-hidden">
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28 }}
         className="surface flex items-center justify-between px-4 py-3 flex-shrink-0">
-        <h2 className="text-sm font-bold uppercase tracking-wider font-['Roboto_Slab',serif]">Materiallar</h2>
+        <h2 className="text-sm font-bold uppercase tracking-wider font-['Roboto_Slab',serif]">{t('dashboard.materials')}</h2>
         <button onClick={onSend} className="btn btn-primary flex items-center gap-1.5 text-xs px-3.5 py-2 rounded-full">
-          <Send className="w-3.5 h-3.5"/>Yuborish
+          <Send className="w-3.5 h-3.5"/>{t('dashboard.send')}
         </button>
       </motion.div>
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28, delay: 0.05 }}
         className="nav-pill-desktop flex p-1 rounded-full flex-shrink-0 w-fit">
         <button onClick={() => setTab("inbox")} className={`relative flex items-center gap-1.5 text-xs px-4 py-2 rounded-full font-semibold liquid-transition ${tab==="inbox"?"bg-primary/15 text-primary":"text-muted-foreground hover:text-foreground"}`}>
-          Kirgan
+          {t('dashboard.inboxTab')}
           {pendingCount > 0 && <span className="text-[9px] bg-accent text-white px-1.5 py-0.5 rounded-full font-bold badge-pulse">{pendingCount}</span>}
         </button>
         <button onClick={() => setTab("sent")} className={`relative flex items-center gap-1.5 text-xs px-4 py-2 rounded-full font-semibold liquid-transition ${tab==="sent"?"bg-primary/15 text-primary":"text-muted-foreground hover:text-foreground"}`}>
-          Yuborilgan
+          {t('dashboard.sentTab')}
           <span className="text-[9px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full font-semibold">{sent.length}</span>
         </button>
       </motion.div>
       <div className="flex-1 overflow-y-auto space-y-2 scrollbar-hide">
         {shown.length === 0 ? (
-          <div className="text-center py-10 text-muted-foreground"><Package className="w-8 h-8 mx-auto mb-2 opacity-30"/><p className="text-sm md:text-xs">Hech narsa yo'q</p></div>
-        ) : shown.map(t => (
-          <TransferRow key={t.id} t={t} currentUser={currentUser} allUsers={allUsers} projects={projects} onConfirm={onConfirm} onReject={onReject}/>
+          <div className="text-center py-10 text-muted-foreground"><Package className="w-8 h-8 mx-auto mb-2 opacity-30"/><p className="text-sm md:text-xs">{t('dashboard.emptyList')}</p></div>
+        ) : shown.map(tr => (
+          <TransferRow key={tr.id} t={tr} currentUser={currentUser} allUsers={allUsers} projects={projects} onConfirm={onConfirm} onReject={onReject}/>
         ))}
       </div>
     </div>
@@ -1249,8 +1263,8 @@ function EditUserModal({ user, currentUser, onClose, onUpdate }: { user: AppUser
             <label className="text-sm md:text-xs font-medium block mb-1">{t('editUser.positionLabel')}</label>
             <select className="w-full text-sm md:text-xs border border-border rounded px-2.5 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary"
               value={form.role} onChange={e => setForm({...form, role: e.target.value as Role})}>
-              {editableRoles.map(r => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
-              {!editableRoles.includes(form.role) && <option value={form.role}>{ROLE_LABELS[form.role]}</option>}
+              {editableRoles.map(r => <option key={r} value={r}>{roleLabel(t, r)}</option>)}
+              {!editableRoles.includes(form.role) && <option value={form.role}>{roleLabel(t, form.role)}</option>}
             </select>
           </div>
           {["ishchi", "brigadir"].includes(form.role) && (
@@ -1376,12 +1390,12 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
           {users.filter(u => u.role === "direktor").map(u => (
             <div key={u.id} className="mb-2">
               <div className="bg-primary text-white rounded-md p-3 flex items-center gap-2">
-                <Avatar user={u} size="sm"/><div><p className="text-sm md:text-xs font-semibold">{u.name}</p><p className="text-sm md:text-xs text-white/90">{ROLE_LABELS[u.role]}</p></div>
+                <Avatar user={u} size="sm"/><div><p className="text-sm md:text-xs font-semibold">{u.name}</p><p className="text-sm md:text-xs text-white/90">{roleLabel(t, u.role)}</p></div>
               </div>
               {users.filter(u2 => u2.role === "orinbosar").map(u2 => (
                 <div key={u2.id} className="ml-4 mt-2 border-l-2 border-dashed border-primary/30 pl-3">
                   <div className="bg-secondary rounded-md p-3 flex items-center gap-2">
-                    <Avatar user={u2} size="sm"/><div><p className="text-sm md:text-xs font-semibold">{u2.name}</p><p className="text-sm md:text-xs text-muted-foreground">{ROLE_LABELS[u2.role]}</p><p className="text-sm md:text-xs text-muted-foreground font-mono">{u2.phone}</p></div>
+                    <Avatar user={u2} size="sm"/><div><p className="text-sm md:text-xs font-semibold">{u2.name}</p><p className="text-sm md:text-xs text-muted-foreground">{roleLabel(t, u2.role)}</p><p className="text-sm md:text-xs text-muted-foreground font-mono">{u2.phone}</p></div>
                   </div>
                 </div>
               ))}
@@ -1394,7 +1408,7 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
             </div>
             {(["direktor","orinbosar","prorab","brigadir","ishchi"] as Role[]).map(r => (
               <div key={r} className="flex items-center justify-between py-1">
-                <span className="text-sm md:text-xs text-muted-foreground">{ROLE_LABELS[r]}</span>
+                <span className="text-sm md:text-xs text-muted-foreground">{roleLabel(t, r)}</span>
                 <span className="text-sm md:text-xs font-mono font-semibold">{users.filter(u=>u.role===r).length}</span>
               </div>
             ))}
@@ -1544,13 +1558,13 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
                       <div key={u.id}>
                         <div className="bg-primary text-white rounded-xl p-3 flex items-center gap-3">
                           <Avatar user={u} size="sm"/>
-                          <div><p className="text-sm font-semibold">{u.name}</p><p className="text-[11px] text-white/90">{ROLE_LABELS[u.role]}</p></div>
+                          <div><p className="text-sm font-semibold">{u.name}</p><p className="text-[11px] text-white/90">{roleLabel(t, u.role)}</p></div>
                         </div>
                         {users.filter(u2 => u2.role === "orinbosar").map(u2 => (
                           <div key={u2.id} className="ml-6 mt-2 border-l-2 border-dashed border-primary/30 pl-3">
                             <div className="bg-secondary rounded-xl p-3 flex items-center gap-2">
                               <Avatar user={u2} size="sm"/>
-                              <div><p className="text-sm font-semibold">{u2.name}</p><p className="text-sm md:text-xs text-muted-foreground">{ROLE_LABELS[u2.role]}</p><p className="text-sm md:text-xs text-muted-foreground font-mono">{u2.phone}</p></div>
+                              <div><p className="text-sm font-semibold">{u2.name}</p><p className="text-sm md:text-xs text-muted-foreground">{roleLabel(t, u2.role)}</p><p className="text-sm md:text-xs text-muted-foreground font-mono">{u2.phone}</p></div>
                             </div>
                           </div>
                         ))}
@@ -1563,7 +1577,7 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
                       </div>
                       {(["direktor","orinbosar","prorab","brigadir","ishchi"] as Role[]).map(r => (
                         <div key={r} className="flex items-center justify-between py-1.5 border-b border-border/30 last:border-0">
-                          <span className="text-sm text-muted-foreground">{ROLE_LABELS[r]}</span>
+                          <span className="text-sm text-muted-foreground">{roleLabel(t, r)}</span>
                           <span className="text-sm font-mono font-bold">{users.filter(u=>u.role===r).length}</span>
                         </div>
                       ))}
@@ -2742,7 +2756,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
                 <p className="text-sm font-semibold truncate">{selGroup ? (selGroup.devSupport ? 'Dasturchi' : selGroup.name) : selUser!.name}</p>
                 {selGroup
                   ? <p className="text-[11px] text-muted-foreground truncate">{selGroup.devSupport ? 'Texnik yordam' : `${selGroup.memberIds?.length || 0} a'zo`}</p>
-                  : <p className="text-[11px] text-muted-foreground">{isOnline(selUser!.id) ? <span className="text-green-800 dark:text-green-400">onlayn</span> : ROLE_LABELS[selUser!.role]}</p>}
+                  : <p className="text-[11px] text-muted-foreground">{isOnline(selUser!.id) ? <span className="text-green-800 dark:text-green-400">onlayn</span> : roleLabel(tChat, selUser!.role)}</p>}
               </div>
               {!selectMode && !selGroup?.devSupport && (
                 <div className="flex items-center gap-1 flex-shrink-0">
@@ -5202,7 +5216,7 @@ export default function App() {
           <Avatar user={liveUser} size="sm"/>
           <div className="hidden sm:block text-left">
             <p className="text-[11px] font-semibold leading-none">{liveUser.name.split(" ")[0]}</p>
-            <p className="text-[9px] text-muted-foreground mt-0.5">{ROLE_LABELS[liveUser.role]}</p>
+            <p className="text-[9px] text-muted-foreground mt-0.5">{roleLabel(tApp, liveUser.role)}</p>
           </div>
         </button>
       </div>
@@ -5720,7 +5734,7 @@ export default function App() {
                         <button key={u.id} onClick={()=>{setGlobalSearch(false);setSearchQuery("");setSearchResults(null);setPage("dashboard");}}
                           className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-muted liquid-transition text-left">
                           <User className="w-5 h-5 text-primary flex-shrink-0"/>
-                          <div><p className="text-sm font-medium text-foreground">{u.name}</p><p className="text-[10px] text-muted-foreground">{ROLE_LABELS[u.role as Role] || u.role}</p></div>
+                          <div><p className="text-sm font-medium text-foreground">{u.name}</p><p className="text-[10px] text-muted-foreground">{ROLE_LABELS[u.role as Role] ? roleLabel(tApp, u.role as Role) : u.role}</p></div>
                         </button>))}
                     </div>
                   )}

@@ -17,9 +17,11 @@ interface AuditParams {
 
 export async function logAudit(params: AuditParams): Promise<void> {
   try {
-    const ip = params.req
-      ? (params.req.headers['x-forwarded-for'] as string || params.req.socket.remoteAddress || '').split(',')[0].trim()
-      : undefined;
+    // XAVFSIZLIK: avval mijoz o'zi qalbakilashtira oladigan X-Forwarded-For
+    // sarlavhasini to'g'ridan-to'g'ri yozardi — audit jurnali "kim, qayerdan"
+    // ma'lumoti soxtalashtirilishi mumkin edi (index.ts'dagi "trust proxy"
+    // izohiga qarang). Endi Express'ning ishonchli req.ip'i.
+    const ip = params.req ? (params.req.ip || '').trim() : undefined;
     const userAgent = params.req?.headers['user-agent'];
 
     // Strip sensitive fields before saving

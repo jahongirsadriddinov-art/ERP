@@ -13,7 +13,14 @@ import { checkRate } from '../utils/rateLimit';
 
 const router = Router();
 
-const clientIp = (req: any) => (req.headers['x-forwarded-for']?.toString().split(',')[0] || req.ip || '').trim();
+// XAVFSIZLIK: avval bu funksiya X-Forwarded-For sarlavhasini TO'G'RIDAN-TO'G'RI
+// o'qirdi — bu mijozning O'ZI qalbakilashtira oladigan oddiy so'rov sarlavhasi,
+// istalgan qiymatga o'rnatilishi mumkin edi (index.ts'dagi "trust proxy"
+// izohiga qarang) — natijada BARCHA IP-asoslangan tezlik chegaralari har bir
+// so'rovda tasodifiy qiymat qo'yish orqali osongina chetlab o'tilishi mumkin
+// edi. Endi Express'ning o'zi (`app.set('trust proxy', 1)` bilan) hisoblagan,
+// ISHONCHLI `req.ip`dan foydalanamiz.
+const clientIp = (req: any) => (req.ip || '').trim();
 
 // /login (eski, Telegram-kod) bilan /verify-otp (yangi, SMS-kod) IKKALASI ham
 // muvaffaqiyatli tasdiqlangandan keyin bir xil ishni qiladi: obuna holatini
@@ -331,6 +338,26 @@ router.post('/login', async (req, res) => {
   let formattedPhone = phone.replace(/\s+/g, '');
   if (!formattedPhone.startsWith('+')) {
     formattedPhone = '+' + formattedPhone;
+  }
+
+  // XAVFSIZLIK — JIDDIY TOPILMA (audit): bu yo'l HECH QANDAY tezlik
+  // chegarasisiz edi, kod esa atigi 4 xonali (1000-9999, bor-yo'g'i 9000
+  // variant) va 2 daqiqa amal qiladi. Telefon raqami ma'lum bo'lgan
+  // (masalan firma xodimlari ro'yxatidan) HAR QANDAY kishi oddiy skript
+  // bilan 2 daqiqa ichida BARCHA 9000 variantni sinab, o'sha
+  // foydalanuvchining hisobini TO'LIQ egallab olishi mumkin edi — /verify-otp
+  // va /send-code'dagi kabi himoya bu yerda YO'Q edi. Endi bir xil ikki
+  // bosqichli chegara: telefon bo'yicha (kodning 2 daqiqalik umriga mos —
+  // 8 urinishdan keyin amalda qolgan 9000ning imkoniyati e'tiborsiz) va IP
+  // bo'yicha (bir manzildan ko'plab raqamlarni urinib ko'rishning oldini olish).
+  const ip = clientIp(req);
+  const phoneAttemptCheck = checkRate(`login:phone:${formattedPhone}`, 8, 2 * 60 * 1000);
+  if (!phoneAttemptCheck.allowed) {
+    return res.status(429).json({ error: "Juda ko'p urinish. Yangi kod so'rang." });
+  }
+  const ipAttemptCheck = checkRate(`login:ip:${ip}`, 20, 10 * 60 * 1000);
+  if (!ipAttemptCheck.allowed) {
+    return res.status(429).json({ error: "Juda ko'p urinish. Keyinroq qayta urining." });
   }
 
   try {

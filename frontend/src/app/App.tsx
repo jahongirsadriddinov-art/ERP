@@ -2722,7 +2722,17 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
                   <span className="text-xs text-muted-foreground mr-1">{selected.size} ta</span>
                   {selected.size>0 && <>
                     <button aria-label="Uzatish" onClick={() => { const msg=messages.find(m=>m.id===[...selected][0]); if(msg) setShowForward(msg); }} className="p-2 hover:bg-muted rounded-full text-muted-foreground"><Share2 className="w-4 h-4"/></button>
-                    <button aria-label="Tanlanganlarni o'chirish" onClick={() => { selected.forEach(id=>onDelete(id)); setSelectMode(false); setSelected(new Set()); }} className="p-2 hover:bg-red-500/100/10 rounded-full text-red-500"><Trash2 className="w-4 h-4"/></button>
+                    {/* XATO TUZATILDI: o'chirish tugmasi shu yerda (tepadagi
+                        tanlash paneli) rolga qaramasdan HAMMAGA ko'rinardi —
+                        kontekst-menyudagi yagona-xabar o'chirish allaqachon
+                        canModifyMessages bilan to'g'ri cheklangan edi (faqat
+                        direktor/orinbosar), lekin shu ko'p-tanlash tugmasi
+                        o'sha tekshiruvsiz qolib ketgan edi (aniq xabar
+                        qilingan xato). Backend baribir rad etardi, lekin
+                        tugmaning o'zi hammaga ko'rinishi noto'g'ri edi. */}
+                    {canModifyMessages && (
+                      <button aria-label="Tanlanganlarni o'chirish" onClick={() => { selected.forEach(id=>onDelete(id)); setSelectMode(false); setSelected(new Set()); }} className="p-2 hover:bg-red-500/100/10 rounded-full text-red-500"><Trash2 className="w-4 h-4"/></button>
+                    )}
                   </>}
                   <button aria-label="Tanlashni bekor qilish" onClick={() => { setSelectMode(false); setSelected(new Set()); }} className="p-2 hover:bg-muted rounded-full text-muted-foreground"><X className="w-4 h-4"/></button>
                 </div>
@@ -2809,6 +2819,16 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
                   const top = Math.min(Math.max(8, ctxMenu.y), vh - menuH - 8);
                   const itemCls = "flex items-center gap-2.5 px-3 py-2 hover:bg-primary/10 hover:text-primary rounded-lg cursor-pointer text-xs text-foreground/85 transition-colors";
                   return (
+                    <>
+                    {/* XATO TUZATILDI: avval faqat xabarlar ro'yxati konteyneri
+                        o'zining onClick'ida menyuni yopardi — sarlavha, pastki
+                        navigatsiya, xabar yozish maydoni kabi BOSHQA joylarga
+                        tegilsa menyu OCHIQ qolib ketardi (aniq xabar qilingan
+                        xato). Endi butun ekranni qoplaydigan, menyudan pastroq
+                        z-index'dagi "orqa fon" — QAYERGA tegilsa ham (menyuning
+                        o'zidan tashqari — u o'z ichida stopPropagation qiladi)
+                        menyu yopiladi. */}
+                    <div className="fixed inset-0 z-[69]" onClick={()=>setCtxMenu(null)}/>
                     <div className="fixed z-[70] w-44 glass p-1.5 rounded-2xl border border-white/20 shadow-2xl flex flex-col gap-0.5 animate-pop-in"
                       style={{ top, left }}
                       onClick={e=>e.stopPropagation()}>
@@ -2828,6 +2848,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
                         </>
                       )}
                     </div>
+                    </>
                   );
                 })(),
                 document.body
@@ -2862,12 +2883,18 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
             {!selectMode && (
               <div className="px-3 flex-shrink-0 relative" style={{ paddingTop: '0.5rem', paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }} onClick={e=>e.stopPropagation()}>
                 {showAttach && (
+                  <>
+                  {/* Xuddi kontekst-menyudagi kabi — ekranning istalgan boshqa
+                      joyiga (shu jumladan shu input maydonining o'zi, oldin
+                      stopPropagation qilib chetlab o'tardi) tegilsa yopilsin. */}
+                  <div className="fixed inset-0 z-40" onClick={()=>setShowAttach(false)}/>
                   <div className="absolute bottom-[4.5rem] left-3 glass p-2 rounded-2xl border border-white/20 shadow-2xl flex flex-col gap-0.5 animate-slide-up-fade z-50 min-w-[190px]" onClick={e=>e.stopPropagation()}>
                     <button onClick={()=>fileImgRef.current?.click()} className="flex items-center gap-3 px-3 py-2 hover:bg-muted/40 rounded-xl transition-colors text-sm"><ImageIcon className="w-4 h-4 text-blue-500"/>{tChat('chat.attachImage')}</button>
                     <button onClick={()=>camRef.current?.click()} className="flex items-center gap-3 px-3 py-2 hover:bg-muted/40 rounded-xl transition-colors text-sm"><Camera className="w-4 h-4 text-rose-500"/>{tChat('chat.attachCamera')}</button>
                     <button onClick={()=>fileAllRef.current?.click()} className="flex items-center gap-3 px-3 py-2 hover:bg-muted/40 rounded-xl transition-colors text-sm"><FileText className="w-4 h-4 text-orange-500"/>{tChat('chat.attachFile')}</button>
                     <button onClick={sendLocation} className="flex items-center gap-3 px-3 py-2 hover:bg-muted/40 rounded-xl transition-colors text-sm"><MapPin className="w-4 h-4 text-green-500"/>{tChat('chat.attachLocation')}</button>
                   </div>
+                  </>
                 )}
                 <div className="nav-pill-desktop flex gap-1.5 items-end rounded-2xl px-2 py-1.5 max-w-3xl mx-auto">
                   {isRecording ? (

@@ -21,8 +21,11 @@ const router = Router();
 const BOT_USERNAME = process.env.BOT_USERNAME || 'qurilish_erp_bot';
 const CONSENT_VERSION = { terms: 'terms_v1', privacy: 'privacy_v1' };
 
+// XAVFSIZLIK: auth.ts'dagi bir xil tuzatish — X-Forwarded-For'ni to'g'ridan-
+// to'g'ri o'qish mijoz tomonidan qalbakilashtirilishi mumkin edi (index.ts'dagi
+// "trust proxy" izohiga qarang). Endi Express'ning ishonchli `req.ip`'i.
 function clientIp(req: any): string {
-  return (req.headers['x-forwarded-for']?.toString().split(',')[0] || req.ip || '').trim();
+  return (req.ip || '').trim();
 }
 
 // MUHIM: frontend'da bug bo'lib, o'zgaruvchi hali tayinlanmagan holatda so'rov

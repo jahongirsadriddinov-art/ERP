@@ -46,6 +46,22 @@ process.on('unhandledRejection', (reason: any) => {
 
 const app = express();
 
+// XAVFSIZLIK — JIDDIY TOPILMA (audit): Render backendni o'z proksisi
+// ORQASIDA ishga tushiradi, lekin bu sozlash HECH QACHON o'rnatilmagan
+// edi — natijada auth.ts/register.ts'dagi barcha IP-asoslangan tezlik
+// chegaralari (login, OTP, dev-login brute-force himoyasi) X-Forwarded-For
+// sarlavhasini TO'G'RIDAN-TO'G'RI, HECH QANDAY TEKSHIRUVSIZ o'qirdi — bu
+// sarlavhani ISTALGAN mijoz o'zi (soxta qiymat bilan) yuborishi mumkin!
+// Har bir so'rovda tasodifiy IP qo'yish orqali BARCHA IP-chegaralarni
+// (shu jumladan yuqorida tuzatilgan /login brute-force himoyasini ham)
+// osongina chetlab o'tish mumkin edi. `trust proxy: 1` — Express'ga aynan
+// BITTA ishonchli proksi (Render'ning o'zi) borligini aytadi: shundan
+// keyin `req.ip` X-Forwarded-For zanjirining ENG O'NGDAGI (Render
+// qo'shgan, mijoz o'zgartira olmaydigan) qiymatini ishonchli tarzda
+// qaytaradi — mijoz zanjirning old qismiga nima qo'shsa ham e'tiborga
+// olinmaydi.
+app.set('trust proxy', 1);
+
 app.use(helmet({
   crossOriginEmbedderPolicy: false,  // WebRTC + socket.io uchun kerak
   contentSecurityPolicy: false,       // Frontend Vercel'da serve bo'lgani uchun backend CSP kerak emas

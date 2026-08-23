@@ -1,5 +1,8 @@
 import { Server, Socket } from 'socket.io';
 import type { Server as HttpServer } from 'http';
+import jwt from 'jsonwebtoken';
+import { JWT_SECRET, JwtPayload, loadFreshUser } from '../middleware/auth';
+import Group from '../models/Group';
 
 let io: Server | null = null;
 
@@ -26,27 +29,63 @@ export function initSocket(httpServer: HttpServer): Server {
     maxHttpBufferSize: 1e8, // 100MB (media)
   });
 
-  io.on('connection', (socket: Socket) => {
-    const userId = String(socket.handshake.query.userId || '');
-    if (userId) {
-      socket.data.userId = userId;
-      socket.join(`user:${userId}`);
-      addUserSocket(userId, socket.id);
-      broadcastPresence();
+  // XAVFSIZLIK — JIDDIY TOPILMA (audit): avval ulanish uchun userId/companyId
+  // mijozning O'ZI yuborgan oddiy so'rov parametrlaridan (handshake query)
+  // olinardi — HECH QANDAY token tekshiruvisiz! Istalgan kishi
+  // `?userId=<boshqa-odam-ID>&companyId=<boshqa-firma-ID>` bilan ulanib,
+  // o'sha odamning HAMMA real-vaqt hodisalarini (yangi chat xabarlari,
+  // bildirishnomalar, moliyaviy tranzaksiyalar, hatto WebRTC qo'ng'iroq
+  // signalizatsiyasi) yoki BUTUN FIRMANING jonli GPS joylashuvini —
+  // avtorizatsiyasiz, sezilmasdan "tinglashi" mumkin edi. MongoDB ID'lari
+  // maxfiy emas (vaqt+hisoblagichga asoslangan, taxmin qilish oson).
+  // Endi HAR bir ulanish HTTP so'rovlar bilan bir xil JWT'ni talab qiladi —
+  // userId/companyId endi token'dan (bazadan qayta tekshirilgan holda)
+  // olinadi, mijoz aytgan qiymatlarga umuman ishonilmaydi.
+  io.use(async (socket: Socket, next) => {
+    try {
+      const token = (socket.handshake.auth?.token || socket.handshake.query?.token || '') as string;
+      if (!token) return next(new Error('unauthorized'));
+      const payload = jwt.verify(token, JWT_SECRET) as JwtPayload;
+      const fresh = await loadFreshUser(payload);
+      if (!fresh) return next(new Error('unauthorized'));
+      socket.data.userId = fresh.userId;
+      socket.data.companyId = fresh.companyId;
+      socket.data.role = fresh.role;
+      next();
+    } catch {
+      next(new Error('unauthorized'));
     }
+  });
+
+  io.on('connection', (socket: Socket) => {
+    const userId: string = socket.data.userId;
+    const companyId: string | undefined = socket.data.companyId;
+    socket.join(`user:${userId}`);
+    addUserSocket(userId, socket.id);
+    broadcastPresence();
     // Firma xonasi — GPS kabi haqiqiy-vaqt hodisalarni FAQAT shu firma
-    // foydalanuvchilariga yetkazish uchun (emitToCompany quyida).
-    const companyId = String(socket.handshake.query.companyId || '');
+    // foydalanuvchilariga yetkazish uchun (emitToCompany quyida). Endi
+    // tekshirilgan (token'dan olingan) companyId — mijoz o'zi tanlagan
+    // ixtiyoriy qiymat emas.
     if (companyId) socket.join(`company:${companyId}`);
 
-    // Guruh room'lariga qo'shilish
-    socket.on('join:group', (groupId: string) => { if (groupId) socket.join(`group:${groupId}`); });
+    // Guruh room'lariga qo'shilish — FAQAT haqiqatan ham o'sha guruh
+    // a'zosi bo'lsa (aks holda istalgan kishi istalgan guruh ID'sini
+    // taxmin qilib, o'sha guruh xabarlarini real-vaqtda tinglashi mumkin
+    // edi).
+    socket.on('join:group', async (groupId: string) => {
+      if (!groupId) return;
+      const group = await Group.findById(groupId).select('memberIds').lean().catch(() => null);
+      if (group && (group.memberIds || []).includes(userId)) socket.join(`group:${groupId}`);
+    });
     socket.on('leave:group', (groupId: string) => { if (groupId) socket.leave(`group:${groupId}`); });
 
-    // Yozmoqda...
-    socket.on('typing', (data: { toUserId?: string; groupId?: string; fromUserId: string; fromName?: string }) => {
-      if (data.groupId) socket.to(`group:${data.groupId}`).emit('typing', data);
-      else if (data.toUserId) socket.to(`user:${data.toUserId}`).emit('typing', data);
+    // Yozmoqda... — fromUserId endi tekshirilgan identifikatordan (mijoz
+    // o'zi "men boshqa odamman" deb da'vo qila olmaydi).
+    socket.on('typing', (data: { toUserId?: string; groupId?: string; fromName?: string }) => {
+      const payload = { ...data, fromUserId: userId };
+      if (data.groupId) socket.to(`group:${data.groupId}`).emit('typing', payload);
+      else if (data.toUserId) socket.to(`user:${data.toUserId}`).emit('typing', payload);
     });
 
     // ── WebRTC signaling (1:1 va guruh qo'ng'iroqlari) ──────────────────────

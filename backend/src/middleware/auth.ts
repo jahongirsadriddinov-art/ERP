@@ -85,7 +85,7 @@ function readToken(req: Request): string | null {
 // ENG YANGI (token'dagi emas) role/companyId/isOwner qiymatlari bilan
 // tenant konteksti tuziladi — bitta yengil, indekslangan (_id bo'yicha)
 // so'rov, sezilarli sekinlashuvsiz.
-async function loadFreshUser(payload: JwtPayload) {
+export async function loadFreshUser(payload: JwtPayload) {
   const fresh = await User.findById(payload.userId).select('role companyId isOwner').lean();
   if (!fresh) return null;
   return {

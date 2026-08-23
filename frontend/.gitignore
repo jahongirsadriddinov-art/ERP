@@ -1,0 +1,16 @@
+node_modules/
+dist/
+build/
+.env
+.env.*
+!.env.example
+
+.DS_Store
+
+ios/App/Pods/
+ios/App/DerivedData/
+ios/App/build/
+ios/App/*.xcuserstate
+
+src-tauri/target/
+src-tauri/gen/android/

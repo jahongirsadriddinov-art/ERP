@@ -264,7 +264,7 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
             <img src="/favicon-96.png" alt="QurilishERP" className="w-9 h-9 rounded-xl shadow-lg shadow-primary/20" />
             <div>
               <p className="text-[13px] font-black tracking-tight" style={{ background: "linear-gradient(135deg, var(--primary), var(--accent))", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>QurilishERP</p>
-              <p className="text-[9px] text-muted-foreground font-medium -mt-0.5">Firma ochish</p>
+              <p className="text-[9px] text-muted-foreground font-medium -mt-0.5">{t('register.headerSubtitle')}</p>
             </div>
           </div>
           <button onClick={goBack} aria-label={t('common.back')}

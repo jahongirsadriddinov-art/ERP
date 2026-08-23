@@ -298,13 +298,20 @@ async function getMissingSubscriptions(userId: number, force = false): Promise<{
       const status = member?.status;
       const isMember = status === 'creator' || status === 'administrator' || status === 'member' ||
         (status === 'restricted' && member?.is_member !== false);
+      // Diagnostika: haqiqiy status Render loglarida ko'rinadi — "Programs"
+      // kabi biror kanal kutilganidek ishlamasa, shu yozuv aynan Telegram
+      // NIMA qaytarganini (status qiymati) ko'rsatadi, taxmin qilish shart
+      // emas.
+      console.log(`[subgate] chatId=${ch.chatId} (${ch.title}) userId=${userId} status=${status} isMember=${isMember}`);
       if (!isMember) missing.push(ch);
-    } catch {
+    } catch (err) {
       // Bot getChatMember so'rovini bajara olmadi (masalan bot admin emas,
       // yoki foydalanuvchi hech qachon botga /start bosmagan) — bu holatni
       // "obuna emas" deb hisoblash noto'g'ri xulosaga olib kelishi mumkin,
       // shu sabab jim o'tkazib yuboriladi (xavfsiz-standart, yuqoridagi
-      // izohdagi bilan bir xil mantiq).
+      // izohdagi bilan bir xil mantiq). Lekin SABABI Render loglariga
+      // yoziladi — aks holda bu holat butunlay "ko'rinmas" bo'lib qolardi.
+      console.error(`[subgate] getChatMember xatosi chatId=${ch.chatId} (${ch.title}) userId=${userId}:`, (err as Error).message || err);
     }
   }
   subscriptionCache.set(userId, { missing, checkedAt: now });
@@ -341,20 +348,33 @@ async function enforceSubscriptionGate(chatId: number, telegramUserId: number, l
 // "discoveredChats" ro'yxatiga qo'shiladi (dasturchi keyin bot menyusidan
 // qo'lda moslashtirishi mumkin).
 async function recordDiscoveredChat(chatId: string, title: string, type: string) {
+  console.log(`[subgate] chat aniqlandi: chatId=${chatId} title="${title}" type=${type}`);
   const settings: any = await AppSettings.findOne({ key: 'global' }).lean();
   const discovered: any[] = Array.isArray(settings?.discoveredChats) ? settings.discoveredChats.filter((c: any) => c.chatId !== chatId) : [];
   discovered.push({ chatId, title, type });
 
   // Nom bo'yicha avtomatik moslashtirish (aniq mos kelmasa — qo'lda
   // moslashtirish uchun discoveredChats'da qoladi, hech narsa yo'qolmaydi).
+  // XATO TUZATILDI: avval FAQAT to'liq (normallashtirilgandan keyin ham
+  // ANIQ bir xil) taqqoslash ishlatilardi — haqiqiy Telegram sarlavhasi
+  // config'dagi nomdan biroz farq qilsa (masalan so'z tartibi yoki qo'shimcha
+  // belgi) hech qachon moslashmasdi. Endi ANIQ moslik bo'lmasa, bittasi
+  // ikkinchisini QISMAN o'z ichiga olsa ham (substring) mos deb hisoblanadi
+  // — ancha bag'rikengroq, lekin baribir 3 nomdan faqat bittasiga to'g'ri
+  // keladi (chalkashib ketish xavfi past).
   const required = getRequiredChannels(settings).map((ch: any) => ({ ...ch }));
   const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9а-яёʻʼ]+/gi, '');
   const nTitle = norm(title);
   let changed = false;
   for (const ch of required) {
     if (ch.chatId) continue;
-    if (nTitle && norm(ch.title) === nTitle) { ch.chatId = chatId; changed = true; }
+    const nCh = norm(ch.title);
+    if (nTitle && nCh && (nCh === nTitle || nCh.includes(nTitle) || nTitle.includes(nCh))) {
+      ch.chatId = chatId; changed = true;
+      console.log(`[subgate] "${title}" → "${ch.title}" slotiga moslashtirildi`);
+    }
   }
+  if (!changed) console.log(`[subgate] "${title}" hech qaysi standart nomga mos kelmadi — discoveredChats'da kutmoqda (qo'lda moslashtirish kerak)`);
 
   await AppSettings.findOneAndUpdate(
     { key: 'global' },

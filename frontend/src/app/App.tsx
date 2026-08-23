@@ -3330,26 +3330,26 @@ function CurrencyPanel({ canEdit }: { canEdit: boolean }) {
         <SkeletonList items={2} withAvatar={false} />
       ) : rates && editing ? (
         <div className="surface p-4 space-y-3 rounded-2xl">
-          <h3 className="text-sm font-bold">Firmangizning o'z kursini belgilang</h3>
-          <p className="text-xs text-muted-foreground -mt-2">Bo'sh qoldirsangiz — O'zbekiston Markaziy Banki kursi ishlatiladi.</p>
+          <h3 className="text-sm font-bold">{t('currency.setCustomTitle')}</h3>
+          <p className="text-xs text-muted-foreground -mt-2">{t('currency.setCustomHint')}</p>
           <div>
-            <label className="text-xs font-medium text-muted-foreground mb-1 block">1 USD = ? so'm</label>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">{t('currency.usdLabel')}</label>
             <input type="number" value={form.usd} onChange={e => setForm(p => ({...p, usd: e.target.value}))}
               placeholder={String(Math.round(rates.cbuUsd || rates.USD))}
               className="w-full bg-muted/60 border border-border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-primary"/>
           </div>
           <div>
-            <label className="text-xs font-medium text-muted-foreground mb-1 block">1 EUR = ? so'm</label>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">{t('currency.eurLabel')}</label>
             <input type="number" value={form.eur} onChange={e => setForm(p => ({...p, eur: e.target.value}))}
               placeholder={String(Math.round(rates.cbuEur || rates.EUR))}
               className="w-full bg-muted/60 border border-border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-primary"/>
           </div>
           <div className="flex gap-2 pt-1">
-            <button onClick={saveCustom} disabled={saving} className="flex-1 btn btn-primary text-sm py-2.5 rounded-xl disabled:opacity-60">Saqlash</button>
-            <button onClick={() => setEditing(false)} disabled={saving} className="flex-1 btn btn-outline text-sm py-2.5 rounded-xl">Bekor qilish</button>
+            <button onClick={saveCustom} disabled={saving} className="flex-1 btn btn-primary text-sm py-2.5 rounded-xl disabled:opacity-60">{t('currency.save')}</button>
+            <button onClick={() => setEditing(false)} disabled={saving} className="flex-1 btn btn-outline text-sm py-2.5 rounded-xl">{t('currency.cancel')}</button>
           </div>
           {rates.source === 'company' && (
-            <button onClick={resetToCbu} disabled={saving} className="w-full text-xs text-muted-foreground underline pt-1">CBU kursiga qaytarish</button>
+            <button onClick={resetToCbu} disabled={saving} className="w-full text-xs text-muted-foreground underline pt-1">{t('currency.resetToCbuBtn')}</button>
           )}
         </div>
       ) : rates ? (
@@ -3363,19 +3363,19 @@ function CurrencyPanel({ canEdit }: { canEdit: boolean }) {
                   <p className="text-xs text-muted-foreground">{r.label}</p>
                 </div>
               </div>
-              <p className="text-base font-bold">{Math.round(r.value).toLocaleString('uz-UZ')} so'm</p>
+              <p className="text-base font-bold">{Math.round(r.value).toLocaleString('uz-UZ')} {t('common.som')}</p>
             </div>
           ))}
           <p className="text-xs text-muted-foreground text-center pt-1">
-            Manba: {rates.source === 'company' ? "Firmangizning o'z kursi" : rates.source === 'CBU Uzbekistan' ? "O'zbekiston Markaziy Banki" : 'standart qiymat'} • {rates.date}
+            {t('currency.sourceLabel')} {rates.source === 'company' ? t('currency.sourceCompany') : rates.source === 'CBU Uzbekistan' ? t('currency.sourceCbu') : t('currency.sourceDefault')} • {rates.date}
           </p>
           <div className="flex gap-2">
             <button onClick={load} className="flex-1 btn btn-outline text-sm py-2.5 rounded-xl flex items-center justify-center gap-2">
-              <RefreshCw className="w-4 h-4"/>Yangilash
+              <RefreshCw className="w-4 h-4"/>{t('currency.refresh')}
             </button>
             {canEdit && (
               <button onClick={openEdit} className="flex-1 btn btn-primary text-sm py-2.5 rounded-xl flex items-center justify-center gap-2">
-                <Edit className="w-4 h-4"/>O'zgartirish
+                <Edit className="w-4 h-4"/>{t('currency.edit')}
               </button>
             )}
           </div>
@@ -3383,8 +3383,8 @@ function CurrencyPanel({ canEdit }: { canEdit: boolean }) {
       ) : (
         <div className="surface p-8 text-center rounded-2xl">
           <AlertCircle className="w-10 h-10 text-muted-foreground/30 mx-auto mb-2"/>
-          <p className="text-sm font-medium">Kursni olib bo'lmadi</p>
-          <button onClick={load} className="btn btn-outline text-xs px-4 py-2 rounded-xl mt-3">Qayta urinish</button>
+          <p className="text-sm font-medium">{t('currency.fetchError')}</p>
+          <button onClick={load} className="btn btn-outline text-xs px-4 py-2 rounded-xl mt-3">{t('currency.retry')}</button>
         </div>
       )}
     </div>

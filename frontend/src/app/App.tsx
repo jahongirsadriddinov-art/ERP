@@ -171,10 +171,16 @@ const ROLE_COLORS: Record<Role, string> = {
   ishchi: "bg-green-500/15 text-green-800 dark:text-green-300",
   dasturchi: "bg-slate-800/15 text-slate-700 dark:text-slate-200"
 };
+// Standart (o'zbekcha) chiqim turi nomlari — fallback sifatida. Haqiqiy
+// ko'rsatiladigan matn uchun `expLabel(t, type)` chaqiriladi (roleLabel
+// bilan bir xil pattern).
 export const EXP_LABELS: Record<ExpType, string> = {
   oylik: "Oylik", material: "Material",
   jihozlar: "Jihozlar", transport: "Transport", boshqa: "Boshqa"
 };
+export function expLabel(t: (key: string) => string, type: ExpType): string {
+  return t(`finance.types.${type}`) || EXP_LABELS[type];
+}
 export const CHART_COLORS = ["#1B3A6B", "#D2440F", "#1B7A4B", "#F0A500", "#7B2D8B"];
 export const fmt = (n?: number) => (n || 0).toLocaleString("uz-UZ") + " so'm";
 
@@ -1016,7 +1022,7 @@ function AddExpenseModal({ currentUser, projects, allUsers, onClose, onAdd }:
               <label className="text-[10px] font-bold block mb-1.5 text-muted-foreground uppercase tracking-wider">{t('addExpense.typeLabel')}</label>
               <select className="w-full text-sm border border-border rounded-lg px-2.5 py-2.5 bg-input-background focus:outline-none"
                 value={form.type} onChange={e => { setErr(""); setForm({...form, type: e.target.value as ExpType, toUserId: "", description: ""}); }}>
-                {(Object.keys(EXP_LABELS) as ExpType[]).map(k => <option key={k} value={k}>{EXP_LABELS[k]}</option>)}
+                {(Object.keys(EXP_LABELS) as ExpType[]).map(k => <option key={k} value={k}>{expLabel(t, k)}</option>)}
               </select>
             </div>
             <div>
@@ -2201,7 +2207,7 @@ function FinancePage({ currentUser, users, projects, expenses, onAddExpense, onC
         </select>
         <div className="flex gap-1.5 flex-wrap">
           <button onClick={()=>setFilter("all")} className={`text-sm md:text-xs px-3 py-1.5 rounded-full font-medium liquid-transition ${filter==="all"?"bg-primary text-white":"bg-muted text-muted-foreground hover:bg-secondary"}`}>{t('finance.all')}</button>
-          {(Object.keys(EXP_LABELS) as ExpType[]).map(k=><button key={k} onClick={()=>setFilter(k)} className={`text-sm md:text-xs px-3 py-1.5 rounded-full font-medium liquid-transition ${filter===k?"bg-primary text-white":"bg-muted text-muted-foreground hover:bg-secondary"}`}>{EXP_LABELS[k]}</button>)}
+          {(Object.keys(EXP_LABELS) as ExpType[]).map(k=><button key={k} onClick={()=>setFilter(k)} className={`text-sm md:text-xs px-3 py-1.5 rounded-full font-medium liquid-transition ${filter===k?"bg-primary text-white":"bg-muted text-muted-foreground hover:bg-secondary"}`}>{expLabel(t, k)}</button>)}
         </div>
       </div>
 
@@ -2225,10 +2231,10 @@ function FinancePage({ currentUser, users, projects, expenses, onAddExpense, onC
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-                        <span className={`text-[9px] px-1.5 py-0.5 rounded font-semibold ${typeClr[e.type] || "bg-muted text-muted-foreground"}`}>{EXP_LABELS[e.type as ExpType] || e.type}</span>
+                        <span className={`text-[9px] px-1.5 py-0.5 rounded font-semibold ${typeClr[e.type] || "bg-muted text-muted-foreground"}`}>{expLabel(t, e.type as ExpType) || e.type}</span>
                         {e.requiresAdminApproval&&e.status==="pending"&&<span className="text-[9px] px-1.5 py-0.5 rounded font-semibold bg-accent/15 text-accent">{t('approvalChain.needsApproval')}</span>}
                       </div>
-                      <p className="font-semibold text-foreground">{e.description || EXP_LABELS[e.type as ExpType]}</p>
+                      <p className="font-semibold text-foreground">{e.description || expLabel(t, e.type as ExpType)}</p>
                       <p className="text-sm md:text-xs text-muted-foreground mt-0.5">{proj?.name || "—"} • {e.date}</p>
                       {to&&<p className="text-sm md:text-xs text-muted-foreground">{t('finance.to')} <span className="font-medium">{to.name}</span></p>}
                       {creator&&<p className="text-sm md:text-xs text-muted-foreground">{t('finance.createdBy')} {creator.name}</p>}
@@ -2270,7 +2276,7 @@ function ExpenseDetailModal({ expense, users, projects, onClose }: { expense: Ex
   const approver = expense.approverId ? users.find(u => u.id === expense.approverId) : undefined;
   const rows: [string, string][] = [
     [t('reports.table.date'), expense.date],
-    [t('reports.table.type'), EXP_LABELS[expense.type]],
+    [t('reports.table.type'), expLabel(t, expense.type)],
     [t('finance.to'), to?.name || "—"],
     [t('reports.table.project'), proj?.name || "—"],
     [t('finance.createdBy'), creator?.name || "—"],
@@ -2286,7 +2292,7 @@ function ExpenseDetailModal({ expense, users, projects, onClose }: { expense: Ex
         </div>
         <div className="p-4 space-y-3">
           <div>
-            <p className="text-base font-bold text-foreground">{expense.description || EXP_LABELS[expense.type]}</p>
+            <p className="text-base font-bold text-foreground">{expense.description || expLabel(t, expense.type)}</p>
             <p className="text-lg font-bold text-accent font-mono mt-1">{fmt(expense.amount)} <span className="text-sm font-normal text-muted-foreground">≈ {fmtUsd(expense.amount)}</span></p>
           </div>
           <div className="surface divide-y divide-border/50 overflow-hidden">
@@ -3987,25 +3993,26 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
 
 // ─── Bottom Finance Bar ──────────────────────────────────────────────────────────────
 function BottomFinanceBar({ expenses, projects }: { expenses: Expense[]; projects: Project[] }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const confirmed = expenses.filter(e=>e.status==="confirmed");
   const total = confirmed.reduce((a,e)=>a+e.amount,0);
   const byProj = projects.map(p=>({name:p.name,amount:confirmed.filter(e=>e.projectId===p.id).reduce((a,e)=>a+e.amount,0)})).filter(d=>d.amount>0);
-  const byType = (Object.keys(EXP_LABELS) as ExpType[]).map(k=>({name:EXP_LABELS[k],amount:confirmed.filter(e=>e.type===k).reduce((a,e)=>a+e.amount,0)})).filter(d=>d.amount>0);
+  const byType = (Object.keys(EXP_LABELS) as ExpType[]).map(k=>({name:expLabel(t, k),amount:confirmed.filter(e=>e.type===k).reduce((a,e)=>a+e.amount,0)})).filter(d=>d.amount>0);
   return (
     <div className="flex-shrink-0 border-b border-white/10 bg-gradient-to-r from-primary to-primary/95 text-white z-20 shadow-md">
       {open&&(
         <div className="border-b border-white/10 px-4 py-3 grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div><p className="text-sm md:text-xs font-semibold text-white/50 uppercase tracking-wider mb-2">Obyektlar bo'yicha</p>
+          <div><p className="text-sm md:text-xs font-semibold text-white/50 uppercase tracking-wider mb-2">{t('finance.byProject')}</p>
             {byProj.map(d=><div key={d.name} className="flex items-center justify-between py-0.5"><span className="text-sm md:text-xs text-white/80 truncate mr-4">{d.name}</span><span className="text-sm md:text-xs font-mono font-semibold text-white flex-shrink-0">{fmt(d.amount)}</span></div>)}
           </div>
-          <div><p className="text-sm md:text-xs font-semibold text-white/50 uppercase tracking-wider mb-2">Tur bo'yicha</p>
+          <div><p className="text-sm md:text-xs font-semibold text-white/50 uppercase tracking-wider mb-2">{t('finance.byType')}</p>
             {byType.map(d=><div key={d.name} className="flex items-center justify-between py-0.5"><span className="text-sm md:text-xs text-white/80">{d.name}</span><span className="text-sm md:text-xs font-mono font-semibold text-white">{fmt(d.amount)}</span></div>)}
           </div>
         </div>
       )}
       <button onClick={()=>setOpen(!open)} className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-white/5 transition-colors">
-        <div className="flex items-center gap-2"><TrendingDown className="w-4 h-4 text-white/90"/><span className="text-sm md:text-xs text-white/90">Jami chiqimlar</span></div>
+        <div className="flex items-center gap-2"><TrendingDown className="w-4 h-4 text-white/90"/><span className="text-sm md:text-xs text-white/90">{t('finance.totalExpenses')}</span></div>
         <div className="flex items-center gap-2"><span className="text-sm font-bold font-mono">{fmt(total)}</span>{open?<ChevronUp className="w-4 h-4 text-white/60"/>:<ChevronDown className="w-4 h-4 text-white/60"/>}</div>
       </button>
     </div>

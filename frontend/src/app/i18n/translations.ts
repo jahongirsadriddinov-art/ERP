@@ -327,6 +327,13 @@ const uz = {
     confirmAction: "Qabul qilganman — Tasdiqlash",
     detailTitle: "Chiqim tafsilotlari",
     confirmedBy: "Kim tasdiqladi:",
+    types: {
+      oylik: "Oylik", material: "Material",
+      jihozlar: "Jihozlar", transport: "Transport", boshqa: "Boshqa",
+    },
+    byProject: "Obyektlar bo'yicha",
+    byType: "Tur bo'yicha",
+    totalExpenses: "Jami chiqimlar",
   },
   chat: {
     play: "Ijro etish",
@@ -897,6 +904,13 @@ const ru: TranslationShape = {
     confirmAction: "Я принял — Подтвердить",
     detailTitle: "Детали расхода",
     confirmedBy: "Кто подтвердил:",
+    types: {
+      oylik: "Зарплата", material: "Материал",
+      jihozlar: "Оборудование", transport: "Транспорт", boshqa: "Другое",
+    },
+    byProject: "По объектам",
+    byType: "По типу",
+    totalExpenses: "Всего расходов",
   },
   chat: {
     play: "Воспроизвести",

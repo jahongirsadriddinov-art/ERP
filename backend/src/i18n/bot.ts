@@ -50,6 +50,7 @@ interface BotDict {
   actionCancelled: string;
   checkInNeedsLiveLocation: string;
   checkInStillNeedsLive: string;
+  liveLocationExpiredReminder: string;
   morningCheckInReminder: string;
   eveningCheckOutReminder: string;
   versionBroadcastStarted: string;
@@ -186,6 +187,7 @@ interface BotDict {
   subGateEditUrlBtn: (p: { n: number }) => string;
   subGateEditTitleBtn: (p: { n: number }) => string;
   subGateEditMsgBtn: string;
+  subGateTestBtn: string;
   subGateEditUrlPrompt: (p: { title: string }) => string;
   subGateEditTitlePrompt: (p: { title: string }) => string;
   subGateEditMsgPrompt: string;
@@ -234,8 +236,9 @@ const uz: BotDict = {
   confirmYes: '✅ Ha',
   confirmNo: "❌ Yo'q",
   actionCancelled: 'Bekor qilindi.',
-  checkInNeedsLiveLocation: "📍 Ishga kelganingizni tasdiqlash uchun jonli joylashuvingizni ulashing:\n\n📎 (skrepka) → Location → Share Live Location\n\nOddiy (bir martalik) joylashuv YETARLI EMAS — aynan \"Jonli joylashuv\"ni tanlang. Ulashgandan so'ng ishga kelishingiz avtomatik tasdiqlanadi.",
+  checkInNeedsLiveLocation: "📍 Ishga kelganingizni tasdiqlash uchun jonli joylashuvingizni ulashing:\n\n📎 (skrepka) → Location → Share Live Location\n\nOddiy (bir martalik) joylashuv YETARLI EMAS — aynan \"Jonli joylashuv\"ni tanlang. Muddat so'ralganda \"Until I turn it off\" (\"O'zim to'xtatmagunimcha\") variantini tanlang — aks holda muddat tugagach, keyingi safar qayta so'raladi. Ulashgandan so'ng ishga kelishingiz avtomatik tasdiqlanadi.",
   checkInStillNeedsLive: "Bu bir martalik joylashuv ekan. Ishga kelishni tasdiqlash uchun aynan \"Jonli joylashuv\" (Live Location) kerak: 📎 → Location → Share Live Location.",
+  liveLocationExpiredReminder: "📍 Jonli joylashuvingizning muddati tugagan ko'rinadi (kuzatuv to'xtadi). Ishlashda davom etayotgan bo'lsangiz, iltimos qayta ulashing:\n\n📎 (skrepka) → Location → Share Live Location\n\nBu safar muddat sifatida \"Until I turn it off\" (\"O'zim to'xtatmagunimcha\") variantini tanlang — shunda smena davomida qayta so'ralmaydi.",
   morningCheckInReminder: "🌅 Xayrli tong! Ishga keldingizmi?\n\nAgar kelgan bo'lsangiz, quyidagi tugmani bosing va so'ralganda jonli joylashuvingizni ulashing.",
   eveningCheckOutReminder: "🌆 Ishni tugatdingizmi?\n\nAgar tugatgan bo'lsangiz, quyidagi tugmani bosing.",
   versionBroadcastStarted: "⏳ Yuborilmoqda... Bu bir necha daqiqa davom etishi mumkin.",
@@ -380,6 +383,7 @@ const uz: BotDict = {
   subGateEditUrlBtn: (p: { n: number }) => `🔗 ${p.n}-havolani tahrirlash`,
   subGateEditTitleBtn: (p: { n: number }) => `✏️ ${p.n}-nomini tahrirlash`,
   subGateEditMsgBtn: '💬 Xabar matnini tahrirlash',
+  subGateTestBtn: '🔬 Live tekshirish (men)',
   subGateEditUrlPrompt: (p: { title: string }) => `"${p.title}" uchun yangi havolani yuboring (masalan: https://t.me/+abc123):`,
   subGateEditTitlePrompt: (p: { title: string }) => `"${p.title}" uchun yangi nomni yuboring:`,
   subGateEditMsgPrompt: 'Obuna so\'ralganda ko\'rsatiladigan yangi xabar matnini yuboring:',
@@ -428,8 +432,9 @@ const ru: BotDict = {
   confirmYes: '✅ Да',
   confirmNo: '❌ Нет',
   actionCancelled: 'Отменено.',
-  checkInNeedsLiveLocation: '📍 Чтобы подтвердить приход на работу, отправьте трансляцию геопозиции:\n\n📎 (скрепка) → Геопозиция → Транслировать геопозицию\n\nОбычной (разовой) геопозиции НЕДОСТАТОЧНО — выберите именно "Транслировать геопозицию". После отправки приход подтвердится автоматически.',
+  checkInNeedsLiveLocation: '📍 Чтобы подтвердить приход на работу, отправьте трансляцию геопозиции:\n\n📎 (скрепка) → Геопозиция → Транслировать геопозицию\n\nОбычной (разовой) геопозиции НЕДОСТАТОЧНО — выберите именно "Транслировать геопозицию". При выборе длительности укажите "Until I turn it off" ("Пока я не остановлю") — иначе после истечения срока запрос придёт снова. После отправки приход подтвердится автоматически.',
   checkInStillNeedsLive: 'Это разовая геопозиция. Для подтверждения прихода нужна именно трансляция геопозиции: 📎 → Геопозиция → Транслировать геопозицию.',
+  liveLocationExpiredReminder: '📍 Похоже, срок трансляции геопозиции истёк (отслеживание остановилось). Если вы всё ещё работаете, пожалуйста, включите её снова:\n\n📎 (скрепка) → Геопозиция → Транслировать геопозицию\n\nНа этот раз выберите длительность "Until I turn it off" ("Пока я не остановлю") — тогда до конца смены запрос больше не повторится.',
   morningCheckInReminder: '🌅 Доброе утро! Вы пришли на работу?\n\nЕсли да — нажмите кнопку ниже и отправьте трансляцию геопозиции, когда будет запрошено.',
   eveningCheckOutReminder: '🌆 Вы закончили работу?\n\nЕсли да — нажмите кнопку ниже.',
   versionBroadcastStarted: '⏳ Отправка... Это может занять несколько минут.',
@@ -574,6 +579,7 @@ const ru: BotDict = {
   subGateEditUrlBtn: (p) => `🔗 Изменить ссылку ${p.n}`,
   subGateEditTitleBtn: (p) => `✏️ Изменить название ${p.n}`,
   subGateEditMsgBtn: '💬 Изменить текст сообщения',
+  subGateTestBtn: '🔬 Живая проверка (я)',
   subGateEditUrlPrompt: (p) => `Отправьте новую ссылку для "${p.title}" (например: https://t.me/+abc123):`,
   subGateEditTitlePrompt: (p) => `Отправьте новое название для "${p.title}":`,
   subGateEditMsgPrompt: 'Отправьте новый текст сообщения, показываемого при запросе подписки:',

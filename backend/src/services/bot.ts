@@ -171,6 +171,16 @@ const chatExitKeyboard = (lang?: BotLang) => ({ keyboard: [[{ text: tb(lang, 'ex
 // keldim bosganda real vaqt joylashuvini yuborish majburiy bo'lsin").
 const pendingCheckinLocation = new Map<number, { userId: string; lang?: BotLang }>();
 
+// Ishchi jonli joylashuvni "Until I turn it off" (muddatsiz) tanlab, avvalgi
+// smenadan beri hali ham UZLUKSIZ yuborib turgan bo'lishi mumkin — bunday
+// holatda check-in bosganda QAYTA "jonli joylashuv yuboring" deb so'ramaymiz
+// (GpsLocation'dagi eng oxirgi 'bot_live' yozuv shu FRESH oraliqda bo'lsa,
+// hali ham faol deb hisoblanadi). Agar u vaqtli (masalan 1 soatlik) bo'lib
+// muddati o'tib ketgan bo'lsa — yozuv eskiradi, keyingi check-in'da yana
+// so'raladi (aniq talab: "agar noto'g'ri, ya'ni vaqtli tashlab qo'ysa, vaqti
+// tugagach yana so'rov yuborilsin").
+const LIVE_LOCATION_FRESH_MS = 5 * 60 * 1000; // 5 daqiqa
+
 // "📢 Xabar yuborish" bosilgandan "⏹ Yakunlash" bosilguncha — dasturchi
 // ARMED (qurollangan) holatda: shu payt yuborgan HAR BIR matn/apk/exe fayl
 // TASDIQSIZ, darhol hammaga yuboriladi. Dasturchi botga to'g'ridan-to'g'ri
@@ -316,6 +326,33 @@ async function getMissingSubscriptions(userId: number, force = false): Promise<{
   }
   subscriptionCache.set(userId, { missing, checkedAt: now });
   return missing;
+}
+
+// Dasturchi uchun — Render loglariga kirmasdan, TO'G'RIDAN-TO'G'RI botning
+// o'zida har bir kanal uchun getChatMember NIMA qaytarganini (status YOKI
+// aniq xatolik matni) ko'rish. "📋 Majburiy obuna" ekranidagi "✅
+// Aniqlangan"/"⏳ hali aniqlanmagan" faqat chatId saqlanganini bildiradi —
+// bu funksiya esa Telegram bilan HAQIQIY (live) so'rov qiladi, shuning uchun
+// masalan "Programs" kanali nega tasdiqlanmayotganini (bot admin emasmi,
+// "member list is inaccessible"mi, foydalanuvchi topilmadimi va h.k.) aniq
+// ko'rsatadi.
+async function diagnoseSubscriptions(userId: number): Promise<string> {
+  const settings = await getAppSettingsCached();
+  const required = getRequiredChannels(settings);
+  const lines: string[] = [];
+  for (const ch of required) {
+    if (!ch.chatId) { lines.push(`⏳ ${ch.title} — chatId hali aniqlanmagan (bot hali admin sifatida qo'shilmagan)`); continue; }
+    try {
+      const member = await bot.getChatMember(ch.chatId, userId);
+      const status = member?.status;
+      const isMember = status === 'creator' || status === 'administrator' || status === 'member' ||
+        (status === 'restricted' && member?.is_member !== false);
+      lines.push(`${isMember ? '✅' : '❌'} ${ch.title} — status="${status}" (chatId=${ch.chatId})`);
+    } catch (err) {
+      lines.push(`⚠️ ${ch.title} — XATOLIK: ${(err as Error).message || err} (chatId=${ch.chatId})`);
+    }
+  }
+  return lines.join('\n');
 }
 
 function subscribeGateKeyboard(missing: { url: string; title: string }[], lang?: BotLang) {
@@ -763,6 +800,7 @@ function subGateAdminMenu(settings: any, lang?: BotLang) {
     rows.push([{ text: tb(lang, 'subGateEditTitleBtn', { n: i + 1 }), callback_data: `subgatetitle_${i}` }]);
   });
   rows.push([{ text: tb(lang, 'subGateEditMsgBtn'), callback_data: 'subgatemsg' }]);
+  rows.push([{ text: tb(lang, 'subGateTestBtn'), callback_data: 'subgatetest' }]);
   // Har bir bog'lanmagan aniqlangan kanal uchun — qaysi slotga bog'lash
   // kerakligini tanlash (masalan "📎 <nom> → 1-slot", "→ 2-slot", ...).
   const unassigned = unassignedDiscoveredChats(settings);
@@ -1708,6 +1746,26 @@ bot.on('callback_query', async (query: any) => {
     }
   }
 
+  // ── Majburiy obuna — INLINE TUGMALAR uchun ham. XATO TUZATILDI: avval gate
+  // FAQAT /start va oddiy MATNLI xabarlarda tekshirilardi (bot.ts'dagi
+  // 'message' handlerida) — callback_query (inline tugma bosish) HECH QACHON
+  // tekshirilmasdi. Amalda ko'pchilik allaqachon FAOL foydalanuvchi
+  // (attendance tasdiqlash, tasdiqlash/rad etish, chat tanlash va h.k.)
+  // asosan TUGMA bosadi, matn yozmaydi — shu sabab ular uchun gate deyarli
+  // HECH QACHON ishga tushmasdi (aynan "yangi foydalanuvchilardan boshqa
+  // hammada ishlamayapti" degan xabar shu bilan izohlanadi). Eski (gate'dan
+  // OLDIN yuborilgan) inline klaviaturalarni Telegram avtomatik yashirmaydi
+  // (Bot API cheklovi, o'zgartirib bo'lmaydi) — lekin endi bosilganda amal
+  // BAJARILISHDAN OLDIN shu yerda qayta tekshiriladi, obuna yo'q bo'lsa amal
+  // ishlamaydi. 'subcheck'ning O'ZI bundan mustasno (aks holda foydalanuvchi
+  // hech qachon "✅ Tekshirish" tugmasini bosib chiqolmasdi).
+  if (data !== 'subcheck' && (!user || !isDev(user.role)) && chatId && query.from?.id) {
+    if (await enforceSubscriptionGate(chatId, query.from.id, lang)) {
+      await bot.answerCallbackQuery(query.id, { text: tb(lang, 'subGateStillMissing'), show_alert: true }).catch(() => {});
+      return;
+    }
+  }
+
   // ── Majburiy obuna — "✅ Tekshirish" tugmasi. FORCE (keshsiz) qayta
   // tekshiradi — foydalanuvchi aynan shu tugmani "hozir obuna bo'ldim,
   // tekshir" degani uchun bosadi, eski keshdan javob berish noto'g'ri.
@@ -1836,7 +1894,7 @@ bot.on('callback_query', async (query: any) => {
   // tahrirlash). Alohida blok — devsettings blokidan tashqarida, chunki
   // saqlanadigan maydon (requiredChannels/subscribeGateMsg) butunlay
   // boshqa struktura (label/msg emas, indeks bo'yicha massiv elementi).
-  if (user && isDev(user.role) && (data === 'subgatemenu' || data.startsWith('subgateurl_') || data.startsWith('subgatetitle_') || data === 'subgatemsg' || data.startsWith('subgateassign_'))) {
+  if (user && isDev(user.role) && (data === 'subgatemenu' || data.startsWith('subgateurl_') || data.startsWith('subgatetitle_') || data === 'subgatemsg' || data.startsWith('subgateassign_') || data === 'subgatetest')) {
     await bot.answerCallbackQuery(query.id).catch(() => {});
     const settings: any = await AppSettings.findOne({ key: 'global' }).lean();
     const editScreen = async (msgText: string, markup: any) => {
@@ -1845,6 +1903,18 @@ bot.on('callback_query', async (query: any) => {
         .catch(() => bot.sendMessage(chatId, msgText, { reply_markup: markup }));
     };
     if (data === 'subgatemenu') { await editScreen(subGateAdminIntroText(settings, lang), subGateAdminMenu(settings, lang)); return; }
+    // Live tekshirish — Render loglariga kirmasdan, DASTURCHINING O'ZINI test
+    // qilib, har bir kanal uchun Telegram nima qaytarayotganini shu yerda
+    // ko'rsatadi (dasturchi gate'dan istisno bo'lgani uchun, bu tugma
+    // gate'ning o'zini chetlab, faqat DIAGNOSTIKA uchun to'g'ridan-to'g'ri
+    // tekshiradi). Eslatma: dasturchi o'zi ham kanallarga obuna bo'lmagan
+    // bo'lsa, natija shuni ko'rsatadi — bu normal, faqat status/xatolikni
+    // ko'rish uchun.
+    if (data === 'subgatetest') {
+      const report = await diagnoseSubscriptions(query.from.id);
+      await bot.sendMessage(chatId, `🔬 Live tekshirish natijasi (sizning hisobingiz bo'yicha):\n\n${report}`);
+      return;
+    }
     const required = getRequiredChannels(settings);
     // Auto-title-matching moslay olmagan (my_chat_member) kanalni dasturchi
     // qo'lda bir slotga bog'laydi — "subgateassign_<slotIndex>_<discoveredIndex>".
@@ -1909,6 +1979,21 @@ bot.on('callback_query', async (query: any) => {
       // handlerida). Telegram bot API cheklovi: bot buni tugma orqali
       // to'g'ridan-to'g'ri "so'ray" olmaydi (faqat bir martalik joylashuv
       // so'rovi mumkin) — shu sabab aniq matnli yo'riqnoma beramiz.
+      // XATO TUZATILDI: avval BU YERDA SO'ZSIZ so'ralardi — ishchi oldingi
+      // smenada "Until I turn it off" (muddatsiz) tanlagan bo'lsa va u hali
+      // ham FAOL (uzluksiz 'edited_message' yangilanishlari kelib turibdi)
+      // bo'lsa ham, xuddi hech narsa yo'qdek qayta so'rardi. Endi avval eng
+      // oxirgi 'bot_live' GPS yozuvi FRESH (5 daqiqadan yangi) ekanini
+      // tekshiramiz — shunday bo'lsa jonli joylashuv hali ham ishlayapti
+      // degani, qayta so'ramasdan to'g'ridan-to'g'ri check-in qilamiz.
+      const recentLive = await GpsLocation.findOne({ userId: String(user._id), source: 'bot_live' })
+        .sort({ timestamp: -1 }).select('timestamp').lean();
+      const stillLive = !!recentLive && (Date.now() - new Date(recentLive.timestamp).getTime()) < LIVE_LOCATION_FRESH_MS;
+      if (stillLive) {
+        const resultText = await doCheckIn(user, lang);
+        await bot.sendMessage(chatId, resultText, { reply_markup: await keyboardForUser(user, lang) });
+        return;
+      }
       pendingCheckinLocation.set(chatId, { userId: String(user._id), lang });
       await bot.sendMessage(chatId, tb(lang, 'checkInNeedsLiveLocation'));
     } catch (err) {
@@ -2454,7 +2539,45 @@ async function broadcastTextMessage(text: string, entities: any[] | undefined, f
   await bot.sendMessage(fromChatId, tb(fromLang, 'versionBroadcastDone', { sent: String(sent), failed: String(failed) }));
 }
 
+// Ishchi jonli joylashuvni VAQTLI (masalan 1 soatlik) tanlagan bo'lsa —
+// muddat tugagach Telegram AVTOMATIK to'xtaydi, botga hech qanday maxsus
+// "tugadi" hodisasi kelmaydi (faqat yangilanishlar shunchaki KELMAY qoladi).
+// Shu sabab "tugadimi" degan xulosani BILVOSITA chiqaramiz: hozir ishlab
+// turgan (check-in bor, check-out yo'q) xodimning eng oxirgi 'bot_live'
+// GPS yozuvi STALE (bir necha daqiqadan beri yangilanmagan) bo'lsa — demak
+// yo muddat tugagan, yo qo'lda to'xtatilgan. Har foydalanuvchi uchun
+// qayta-qayta emas, COOLDOWN bilan (bir marta smenaga taxminan bitta
+// eslatma) so'raladi — checkout'da yoki qayta ulashganda tozalanadi.
+const STALE_LIVE_LOCATION_MS = 3 * 60 * 1000; // 3 daqiqa yangilanish kelmasa — "to'xtagan"
+const LIVE_NUDGE_COOLDOWN_MS = 20 * 60 * 1000; // bitta ishchiga 20 daqiqada bir martadan ko'p emas
+const lastLiveNudge = new Map<string, number>();
+async function checkExpiredLiveLocations() {
+  const today = todayInTashkent();
+  const working = await Attendance.find({ date: today, checkIn: { $exists: true, $ne: null }, checkOut: { $exists: false } })
+    .select('userId').lean();
+  if (working.length === 0) return;
+  const userIds = working.map((a: any) => a.userId);
+  const users = await User.find({ _id: { $in: userIds }, telegramChatId: { $exists: true, $ne: '' } })
+    .select('telegramChatId language').lean();
+  const now = Date.now();
+  for (const u of users) {
+    const uid = String((u as any)._id);
+    const lastNudge = lastLiveNudge.get(uid) || 0;
+    if (now - lastNudge < LIVE_NUDGE_COOLDOWN_MS) continue;
+    const lastLoc = await GpsLocation.findOne({ userId: uid, source: 'bot_live' }).sort({ timestamp: -1 }).select('timestamp').lean();
+    // Umuman jonli yozuv bo'lmagan (masalan faqat bot_once bilan check-in
+    // qilingan) holatni ham STALE deb hisoblaymiz — ikkalasida ham natija
+    // bir xil: hozir faol jonli kuzatuv YO'Q.
+    const stale = !lastLoc || (now - new Date((lastLoc as any).timestamp).getTime()) > STALE_LIVE_LOCATION_MS;
+    if (!stale) continue;
+    lastLiveNudge.set(uid, now);
+    const lang = (u as any).language as BotLang | undefined;
+    bot.sendMessage((u as any).telegramChatId, tb(lang, 'liveLocationExpiredReminder')).catch(() => {});
+  }
+}
+
 setInterval(() => {
+  checkExpiredLiveLocations().catch(err => console.error('[live location expiry check]', err));
   const hour = tashkentHour();
   const today = todayInTashkent();
   if (REMINDER_HOURS_IN.has(hour)) {

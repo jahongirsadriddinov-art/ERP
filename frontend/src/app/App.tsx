@@ -3468,7 +3468,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
     try {
       const url = await resizeImageFile(file, 500, 0.85);
       onUpdateAvatar(url);
-    } catch { toast.error("Rasmni yuklab bo'lmadi"); }
+    } catch { toast.error(t('profile.imageUploadError')); }
     finally { e.target.value = ""; }
   };
   const handleLogoFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -3487,17 +3487,17 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
       const token = localStorage.getItem('token') || '';
       const upRes = await fetch(`${API_BASE}/api/messages/upload`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form });
       const upData = await upRes.json().catch(() => ({}));
-      if (!upRes.ok || !upData.url) throw new Error(upData.error || 'Yuklash muvaffaqiyatsiz');
+      if (!upRes.ok || !upData.url) throw new Error(upData.error || t('profile.uploadFailed'));
 
       const res = await fetch(`${API_BASE}/api/company/me`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ logoUrl: upData.url }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || 'Server xatoligi');
+      if (!res.ok) throw new Error(data.error || t('profile.serverError'));
       setCompanyLogo(upData.url); onCompanyLogoChange(upData.url);
-      toast.success("Logotip yangilandi — firmadagi hammaga ko'rinadi");
-    } catch (err) { toast.error(err instanceof Error ? err.message : "Logotipni yuklab bo'lmadi"); }
+      toast.success(t('profile.logoUpdated'));
+    } catch (err) { toast.error(err instanceof Error ? err.message : t('profile.logoUploadError')); }
     finally { e.target.value = ""; }
   };
   const handleBgFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -3505,7 +3505,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
     try {
       const url = await resizeImageFile(file, 1600, 0.82);
       setProfileBg(url); localStorage.setItem("erp_profileBg", url); onBgChange(url);
-    } catch { toast.error("Fon rasmini yuklab bo'lmadi — fayl juda katta yoki buzilgan bo'lishi mumkin"); }
+    } catch { toast.error(t('profile.bgUploadError')); }
     finally { e.target.value = ""; }
   };
   const handleSave = () => {
@@ -3516,7 +3516,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
   const [savingBrand, setSavingBrand] = useState(false);
   const saveBrand = async () => {
     const trimmed = brandInput.trim();
-    if (trimmed.length < 2) { toast.error("Firma nomi kamida 2 belgi bo'lishi kerak"); return; }
+    if (trimmed.length < 2) { toast.error(t('profile.nameMinLength')); return; }
     setSavingBrand(true);
     try {
       const token = localStorage.getItem('token') || '';
@@ -3525,7 +3525,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
         body: JSON.stringify({ name: trimmed }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || 'Server xatoligi');
+      if (!res.ok) throw new Error(data.error || t('profile.serverError'));
       // MUHIM: avval FAQAT localStorage'ga yozilardi — o'zgartirgan odamning
       // o'z brauzeridan boshqa hech kimga (hatto shu odamning boshqa
       // qurilmasiga ham) ko'rinmasdi. Endi bazaga yozildi va boshqa ochiq
@@ -3533,9 +3533,9 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
       setCompanyName(trimmed);
       onCompanyNameChange(trimmed);
       setEditingBrand(false);
-      toast.success("Firma nomi yangilandi — hammaga ko'rinadi");
+      toast.success(t('profile.nameUpdated'));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Saqlab bo\'lmadi');
+      toast.error(err instanceof Error ? err.message : t('profile.saveFailed'));
     } finally { setSavingBrand(false); }
   };
 
@@ -3553,17 +3553,17 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
     : { background: "linear-gradient(135deg, #1B3A6B 0%, #D2440F 100%)" };
 
   const perms: [string, boolean][] = [
-    ["Barcha moliya va hisobotlarni ko'rish", isAdmin(currentUser.role)],
-    ["Chiqim qo'shish", isAdmin(currentUser.role)],
-    ["Yangi foydalanuvchi qo'shish", isAdmin(currentUser.role)||currentUser.role==="brigadir"],
-    ["Material yuborish", true],
-    ["Material tasdiqlash", true],
-    ["Oylik to'lovini tasdiqlash", !isAdmin(currentUser.role)],
+    [t('profile.permViewFinance'), isAdmin(currentUser.role)],
+    [t('profile.permAddExpense'), isAdmin(currentUser.role)],
+    [t('profile.permAddUser'), isAdmin(currentUser.role)||currentUser.role==="brigadir"],
+    [t('profile.permSendMaterial'), true],
+    [t('profile.permConfirmMaterial'), true],
+    [t('profile.permApproveSalary'), !isAdmin(currentUser.role)],
   ];
 
   const activeTheme = COLOR_THEMES.find(t => t.id === colorTheme) || COLOR_THEMES[0];
   const [activePanel, setActivePanel] = useState<null | "bg" | "appearance" | "color" | "perms" | "projects" | "language" | "subscription" | "currency">(null);
-  const APPEARANCE_LABELS: Record<string, string> = { light: "Yorug'", dark: "Qorong'i", system: "Tizim" };
+  const APPEARANCE_LABELS: Record<string, string> = { light: t('profile.themeLight'), dark: t('profile.themeDark'), system: t('profile.themeSystem') };
 
   const [subData, setSubData] = useState<any>(null);
   const [subLoading, setSubLoading] = useState(false);
@@ -3583,36 +3583,36 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
   // ── Har bo'lim uchun alohida ekran (rasmdagi "Personal/General/..." kabi) ──
   if (activePanel) {
     const panelTitle = {
-      bg: "Fon mavzular", appearance: "Ko'rinish rejimi", color: "Rang mavzusi",
-      perms: "Ruxsatlar", projects: "Obyektlarim", language: t('profile.language'),
-      subscription: "Obuna holati", currency: "Valyuta kursi",
+      bg: t('profile.bgThemes'), appearance: t('profile.appearanceMode'), color: t('profile.colorTheme'),
+      perms: t('profile.permissions'), projects: t('profile.myObjects'), language: t('profile.language'),
+      subscription: t('profile.subscriptionStatus'), currency: t('profile.currencyRate'),
     }[activePanel];
     return (
       <motion.div key={activePanel} initial={{ opacity: 0, x: 28 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 28 }}
         transition={{ type: "spring", stiffness: 380, damping: 34 }}
         className="overflow-y-auto scrollbar-hide max-w-lg md:max-w-2xl xl:max-w-3xl mx-auto w-full pb-10">
         <div className="flex items-center gap-2 px-4 py-4 sticky top-0 bg-background/80 backdrop-blur-xl z-10">
-          <button onClick={() => setActivePanel(null)} aria-label="Orqaga" className="btn btn-ghost w-9 h-9 p-0 rounded-full flex-shrink-0"><ChevronLeft className="w-5 h-5"/></button>
+          <button onClick={() => setActivePanel(null)} aria-label={t('common.back')} className="btn btn-ghost w-9 h-9 p-0 rounded-full flex-shrink-0"><ChevronLeft className="w-5 h-5"/></button>
           <h2 className="text-base font-bold">{panelTitle}</h2>
         </div>
         <div className="px-4 space-y-4">
           {activePanel === "bg" && (
             <div className="surface overflow-hidden">
               <div className="px-4 py-3 border-b border-border flex items-center gap-2">
-                <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex-1">Fon rasmini tanlang</p>
-                <span className="text-[10px] text-muted-foreground hidden sm:block">Butun site ga qo'llaniladi</span>
+                <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex-1">{t('profile.chooseBgImage')}</p>
+                <span className="text-[10px] text-muted-foreground hidden sm:block">{t('profile.appliesSiteWide')}</span>
               </div>
               <div className="p-3">
                 <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 xl:grid-cols-7 gap-2">
-                  {BG_TEMPLATES.map(t => {
-                    const isCurrent = t.id === "default" ? (!profileBg || profileBg === "") : profileBg === t.value;
+                  {BG_TEMPLATES.map(bgT => {
+                    const isCurrent = bgT.id === "default" ? (!profileBg || profileBg === "") : profileBg === bgT.value;
                     return (
-                      <button key={t.id} onClick={() => applyBgTemplate(t.value)}
+                      <button key={bgT.id} onClick={() => applyBgTemplate(bgT.value)}
                         className={`relative rounded-lg sm:rounded-xl overflow-hidden border-2 liquid-transition ${isCurrent ? "border-primary shadow-md scale-[1.05]" : "border-transparent hover:border-primary/40"}`}
-                        style={{ aspectRatio: "4/3", background: t.value || "var(--background)" }}>
-                        {t.id === "default" && <div className="absolute inset-0 flex items-center justify-center bg-muted/60"><span className="text-[8px] text-muted-foreground font-semibold">Yo'q</span></div>}
+                        style={{ aspectRatio: "4/3", background: bgT.value || "var(--background)" }}>
+                        {bgT.id === "default" && <div className="absolute inset-0 flex items-center justify-center bg-muted/60"><span className="text-[8px] text-muted-foreground font-semibold">{t('profile.none')}</span></div>}
                         {isCurrent && <div className="absolute top-0.5 right-0.5 w-3.5 h-3.5 bg-white/95 rounded-full flex items-center justify-center shadow"><Check className="w-2 h-2 text-primary"/></div>}
-                        {t.id !== "default" && <div className="absolute inset-x-0 bottom-0 py-0.5" style={{ background: "rgba(0,0,0,0.38)" }}><p className="text-center text-[7px] sm:text-[8px] text-white font-semibold">{t.name}</p></div>}
+                        {bgT.id !== "default" && <div className="absolute inset-x-0 bottom-0 py-0.5" style={{ background: "rgba(0,0,0,0.38)" }}><p className="text-center text-[7px] sm:text-[8px] text-white font-semibold">{t(`profile.bgTemplateNames.${bgT.id}`, { defaultValue: bgT.name })}</p></div>}
                       </button>
                     );
                   })}
@@ -3620,7 +3620,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
                     className="relative rounded-lg sm:rounded-xl overflow-hidden border-2 border-dashed border-border bg-muted/40 hover:bg-muted/70 hover:border-primary/40 flex flex-col items-center justify-center gap-0.5 liquid-transition"
                     style={{ aspectRatio: "4/3" }}>
                     <Upload className="w-3.5 h-3.5 text-muted-foreground"/>
-                    <p className="text-[7px] sm:text-[8px] text-muted-foreground font-semibold">Rasm</p>
+                    <p className="text-[7px] sm:text-[8px] text-muted-foreground font-semibold">{t('profile.uploadPhotoShort')}</p>
                   </button>
                 </div>
               </div>
@@ -3630,7 +3630,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
             <div className="surface overflow-hidden">
               <div className="p-3">
                 <div className="grid grid-cols-3 gap-2">
-                  {([["light","Yorug'",Sun],["dark","Qorong'i",Moon],["system","Tizim",Monitor]] as [ "light"|"dark"|"system", string, React.ElementType ][]).map(([m,label,Icon]) => (
+                  {([["light",t('profile.themeLight'),Sun],["dark",t('profile.themeDark'),Moon],["system",t('profile.themeSystem'),Monitor]] as [ "light"|"dark"|"system", string, React.ElementType ][]).map(([m,label,Icon]) => (
                     <button key={m} onClick={() => onThemeModeChange(m)}
                       className={`btn flex flex-col items-center gap-1.5 py-3 rounded-xl border ${themeMode===m ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-muted"}`}>
                       <Icon className="w-5 h-5"/>
@@ -3645,23 +3645,26 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
             <div className="surface overflow-hidden">
               <div className="px-3 py-3">
                 <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-6 gap-3">
-                  {COLOR_THEMES.map(t => (
-                    <button key={t.id} onClick={() => onColorThemeChange(t.id)} title={t.name}
+                  {COLOR_THEMES.map(ct => {
+                    const ctName = t(`profile.colorThemeNames.${ct.id}`, { defaultValue: ct.name });
+                    return (
+                    <button key={ct.id} onClick={() => onColorThemeChange(ct.id)} title={ctName}
                       className="flex flex-col items-center gap-1.5 group">
                       <div
                         className="w-14 h-14 sm:w-12 sm:h-12 rounded-2xl liquid-transition group-hover:scale-105 active:scale-95 relative"
                         style={{
-                          background: `linear-gradient(135deg, ${t.primary} 0%, ${t.accent} 100%)`,
-                          boxShadow: colorTheme === t.id
-                            ? `0 0 0 2px var(--card), 0 0 0 4px ${t.primary}, 0 3px 10px ${t.primary}50`
+                          background: `linear-gradient(135deg, ${ct.primary} 0%, ${ct.accent} 100%)`,
+                          boxShadow: colorTheme === ct.id
+                            ? `0 0 0 2px var(--card), 0 0 0 4px ${ct.primary}, 0 3px 10px ${ct.primary}50`
                             : "0 2px 5px rgba(0,0,0,0.18)",
-                          transform: colorTheme === t.id ? "scale(1.08)" : undefined,
+                          transform: colorTheme === ct.id ? "scale(1.08)" : undefined,
                         }}>
-                        {colorTheme === t.id && <Check className="w-5 h-5 text-white absolute inset-0 m-auto drop-shadow"/>}
+                        {colorTheme === ct.id && <Check className="w-5 h-5 text-white absolute inset-0 m-auto drop-shadow"/>}
                       </div>
-                      <span className="text-[11px] text-muted-foreground font-medium leading-none text-center">{t.name}</span>
+                      <span className="text-[11px] text-muted-foreground font-medium leading-none text-center">{ctName}</span>
                     </button>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -3679,7 +3682,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
           {activePanel === "projects" && (
             <div className="surface overflow-hidden">
               {(!currentUser.projectIds || currentUser.projectIds.length === 0)
-                ? <p className="px-4 py-4 text-sm text-muted-foreground text-center">Tayinlangan yo'q</p>
+                ? <p className="px-4 py-4 text-sm text-muted-foreground text-center">{t('profile.noneAssigned')}</p>
                 : projects.filter(p => currentUser.projectIds.includes(p.id)).map(p => (
                   <div key={p.id} className="flex items-center gap-3 px-4 py-3 border-b border-border/50 last:border-0">
                     <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
@@ -3707,8 +3710,8 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
               ) : !subData || subData.status === 'none' ? (
                 <div className="px-5 py-8 text-center space-y-2">
                   <CreditCard className="w-10 h-10 text-muted-foreground/40 mx-auto"/>
-                  <p className="text-sm font-medium">Obuna topilmadi</p>
-                  <p className="text-xs text-muted-foreground">Obuna bo'lish uchun dasturchi bilan bog'laning</p>
+                  <p className="text-sm font-medium">{t('profile.subscriptionNotFound')}</p>
+                  <p className="text-xs text-muted-foreground">{t('profile.subscriptionContactDev')}</p>
                 </div>
               ) : (() => {
                 const statusColor: Record<string, string> = {
@@ -3718,47 +3721,48 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
                   rejected: "text-red-600 bg-red-500/10 border-red-500/20",
                 };
                 const statusLabel: Record<string, string> = {
-                  active: "Faol", pending: "Kutilmoqda", expired: "Muddati o'tgan", rejected: "Rad etildi",
+                  active: t('profile.subStatusActive'), pending: t('profile.subStatusPending'),
+                  expired: t('profile.subStatusExpired'), rejected: t('profile.subStatusRejected'),
                 };
                 const cls = statusColor[subData.status] || "text-muted-foreground bg-muted/50 border-border";
                 return (
                   <div className="divide-y divide-border/50">
                     <div className="flex items-center justify-between px-5 py-4">
-                      <span className="text-sm font-semibold">Status</span>
+                      <span className="text-sm font-semibold">{t('profile.statusLabel')}</span>
                       <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${cls}`}>{statusLabel[subData.status] || subData.status}</span>
                     </div>
                     {subData.selectedPlan && (
                       <div className="flex items-center justify-between px-5 py-4">
-                        <span className="text-sm font-medium text-muted-foreground">Tarif</span>
+                        <span className="text-sm font-medium text-muted-foreground">{t('profile.tarifLabel')}</span>
                         <span className="text-sm font-semibold capitalize">{subData.selectedPlan}</span>
                       </div>
                     )}
                     {subData.daysLeft !== null && subData.status === 'active' && (
                       <div className="flex items-center justify-between px-5 py-4">
-                        <span className="text-sm font-medium text-muted-foreground">Qolgan kunlar</span>
-                        <span className={`text-sm font-bold ${subData.daysLeft <= 7 ? 'text-red-500' : subData.daysLeft <= 30 ? 'text-amber-500' : 'text-green-600'}`}>{subData.daysLeft} kun</span>
+                        <span className="text-sm font-medium text-muted-foreground">{t('profile.daysLeftLabel')}</span>
+                        <span className={`text-sm font-bold ${subData.daysLeft <= 7 ? 'text-red-500' : subData.daysLeft <= 30 ? 'text-amber-500' : 'text-green-600'}`}>{t('profile.daysLeftValue', { count: subData.daysLeft })}</span>
                       </div>
                     )}
                     {subData.currentPeriodEnd && (
                       <div className="flex items-center justify-between px-5 py-4">
-                        <div className="flex items-center gap-2 text-muted-foreground"><Calendar className="w-3.5 h-3.5"/><span className="text-sm font-medium">Tugash sanasi</span></div>
+                        <div className="flex items-center gap-2 text-muted-foreground"><Calendar className="w-3.5 h-3.5"/><span className="text-sm font-medium">{t('profile.endDateLabel')}</span></div>
                         <span className="text-sm font-semibold">{new Date(subData.currentPeriodEnd).toLocaleDateString('uz-UZ', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Asia/Tashkent' })}</span>
                       </div>
                     )}
                     {subData.amount > 0 && (
                       <div className="flex items-center justify-between px-5 py-4">
-                        <span className="text-sm font-medium text-muted-foreground">Narx</span>
-                        <span className="text-sm font-semibold">{subData.amount.toLocaleString()} so'm</span>
+                        <span className="text-sm font-medium text-muted-foreground">{t('profile.priceLabel')}</span>
+                        <span className="text-sm font-semibold">{subData.amount.toLocaleString()} {t('common.som')}</span>
                       </div>
                     )}
                     {subData.status === 'active' && subData.daysLeft !== null && subData.daysLeft <= 30 && (
                       <div className="px-5 py-4 bg-amber-500/5">
-                        <p className="text-xs text-amber-700 dark:text-amber-300 flex items-start gap-1.5"><AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5"/>Obuna muddati tez orada tugaydi. Uzaytirish uchun dasturchi bilan bog'laning.</p>
+                        <p className="text-xs text-amber-700 dark:text-amber-300 flex items-start gap-1.5"><AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5"/>{t('profile.subExpiringWarning')}</p>
                       </div>
                     )}
                     {(subData.status === 'expired' || subData.status === 'rejected') && (
                       <div className="px-5 py-4 bg-red-500/5">
-                        <p className="text-xs text-red-600 dark:text-red-400 flex items-start gap-1.5"><AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5"/>Obunani yangilash uchun dasturchi bilan bog'laning: <a href="https://t.me/Sadriddinov_Jahongir" className="underline font-semibold">@Sadriddinov_Jahongir</a></p>
+                        <p className="text-xs text-red-600 dark:text-red-400 flex items-start gap-1.5"><AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5"/>{t('profile.subExpiredContact')} <a href="https://t.me/Sadriddinov_Jahongir" className="underline font-semibold">@Sadriddinov_Jahongir</a></p>
                       </div>
                     )}
                   </div>
@@ -3782,7 +3786,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
           <button onClick={() => bgRef.current?.click()}
             className="absolute top-4 right-4 flex items-center gap-1.5 text-white text-xs px-3 py-2 rounded-full border border-white/25 liquid-transition hover:bg-white/20 active:scale-95"
             style={{ background: "rgba(0,0,0,0.30)", backdropFilter: "blur(12px)" }}>
-            <Upload className="w-3.5 h-3.5"/>Rasm yuklash
+            <Upload className="w-3.5 h-3.5"/>{t('profile.uploadPhotoBtn')}
           </button>
         )}
         <input ref={bgRef} type="file" accept="image/*" className="hidden" onChange={handleBgFile}/>
@@ -3792,7 +3796,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
               {companyLogo ? <img src={companyLogo} alt="Logo" className="w-full h-full object-contain p-1"/> : <Building2 className="w-8 h-8 text-primary"/>}
             </div>
             {canEditCompany && (
-              <button onClick={() => logoRef.current?.click()} aria-label="Logotipni almashtirish"
+              <button onClick={() => logoRef.current?.click()} aria-label={t('profile.changeLogoAria')}
                 className="absolute -bottom-1.5 -right-1.5 w-6 h-6 bg-white text-primary rounded-full flex items-center justify-center border border-border shadow-lg hover:bg-primary hover:text-white liquid-transition">
                 <Camera className="w-3 h-3"/>
               </button>
@@ -3804,14 +3808,14 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
               <div className="flex items-center gap-2">
                 <input className="flex-1 text-white font-bold text-lg bg-transparent border-b-2 border-white/60 focus:border-white focus:outline-none pb-0.5"
                   value={brandInput} onChange={e => setBrandInput(e.target.value)} autoFocus disabled={savingBrand} onKeyDown={e => e.key === 'Enter' && saveBrand()}/>
-                <button aria-label="Saqlash" onClick={saveBrand} disabled={savingBrand} className="w-7 h-7 bg-white/20 text-white rounded-full flex items-center justify-center border border-white/30 hover:bg-white/30 liquid-transition disabled:opacity-50">{savingBrand ? <Loader2 className="w-3.5 h-3.5 animate-spin"/> : <Check className="w-3.5 h-3.5"/>}</button>
-                <button aria-label="Bekor qilish" onClick={() => setEditingBrand(false)} disabled={savingBrand} className="w-7 h-7 bg-black/20 text-white rounded-full flex items-center justify-center hover:bg-black/30 liquid-transition disabled:opacity-50"><X className="w-3.5 h-3.5"/></button>
+                <button aria-label={t('common.save')} onClick={saveBrand} disabled={savingBrand} className="w-7 h-7 bg-white/20 text-white rounded-full flex items-center justify-center border border-white/30 hover:bg-white/30 liquid-transition disabled:opacity-50">{savingBrand ? <Loader2 className="w-3.5 h-3.5 animate-spin"/> : <Check className="w-3.5 h-3.5"/>}</button>
+                <button aria-label={t('common.cancel')} onClick={() => setEditingBrand(false)} disabled={savingBrand} className="w-7 h-7 bg-black/20 text-white rounded-full flex items-center justify-center hover:bg-black/30 liquid-transition disabled:opacity-50"><X className="w-3.5 h-3.5"/></button>
               </div>
             ) : (
               <div className="flex items-center gap-2">
                 <p className="text-white font-bold text-xl drop-shadow-lg">{companyName}</p>
                 {canEditCompany && (
-                  <button onClick={() => { setBrandInput(companyName); setEditingBrand(true); }} aria-label="Nomni tahrirlash"
+                  <button onClick={() => { setBrandInput(companyName); setEditingBrand(true); }} aria-label={t('profile.editNameAria')}
                     className="p-1 text-white/60 hover:text-white rounded-lg hover:bg-white/10 liquid-transition">
                     <Edit className="w-3.5 h-3.5"/>
                   </button>
@@ -3833,7 +3837,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
           )}
           <div className="relative inline-block mb-3">
             <Avatar user={currentUser} size="lg"/>
-            <button onClick={() => fileRef.current?.click()} aria-label="Rasmni almashtirish" className="absolute bottom-0 right-0 w-7 h-7 bg-primary text-white rounded-full flex items-center justify-center hover:bg-primary/90 border-2 border-white shadow-lg liquid-transition">
+            <button onClick={() => fileRef.current?.click()} aria-label={t('profile.changePhotoAria')} className="absolute bottom-0 right-0 w-7 h-7 bg-primary text-white rounded-full flex items-center justify-center hover:bg-primary/90 border-2 border-white shadow-lg liquid-transition">
               <Camera className="w-3.5 h-3.5"/>
             </button>
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile}/>
@@ -3857,7 +3861,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
                 </div>
               </div>
               {form.phone !== currentUser.phone && (
-                <div className="bg-amber-500/10 border border-amber-500/25 text-amber-700 dark:text-amber-300 text-xs p-3 rounded-2xl flex items-start gap-2 text-left"><AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5"/><p>Raqamni o'zgartirsangiz, Telegram bot orqali qayta tasdiqlashingiz shart!</p></div>
+                <div className="bg-amber-500/10 border border-amber-500/25 text-amber-700 dark:text-amber-300 text-xs p-3 rounded-2xl flex items-start gap-2 text-left"><AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5"/><p>{t('profile.phoneChangeWarning')}</p></div>
               )}
               <div className="flex gap-2 pt-1">
                 <button onClick={() => setIsEditing(false)} className="flex-1 text-sm font-semibold py-3 rounded-full border border-border/60 text-muted-foreground hover:bg-muted liquid-transition">{t('common.cancel')}</button>
@@ -3881,13 +3885,13 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
             { key: "bg" as const, icon: Palette, label: t('profile.bgThemes'), hint: null as string|null,
               swatch: (bannerStyle as any).background ? { background: (bannerStyle as any).background } : { backgroundImage: (bannerStyle as any).backgroundImage, backgroundSize: 'cover' } },
             { key: "appearance" as const, icon: themeMode === "light" ? Sun : themeMode === "dark" ? Moon : Monitor, label: t('profile.appearanceMode'), hint: APPEARANCE_LABELS[themeMode], swatch: null },
-            { key: "color" as const, icon: Palette, label: t('profile.colorTheme'), hint: activeTheme.name, swatch: { background: `linear-gradient(135deg, ${activeTheme.primary}, ${activeTheme.accent})` } },
+            { key: "color" as const, icon: Palette, label: t('profile.colorTheme'), hint: t(`profile.colorThemeNames.${activeTheme.id}`, { defaultValue: activeTheme.name }), swatch: { background: `linear-gradient(135deg, ${activeTheme.primary}, ${activeTheme.accent})` } },
             { key: "language" as const, icon: Languages, label: t('profile.language'), hint: langLabel(i18n.language as SiteLang), swatch: null },
             { key: "perms" as const, icon: CheckCircle, label: t('profile.permissions'), hint: `${perms.filter(([,has])=>has).length}/${perms.length}`, swatch: null },
             { key: "projects" as const, icon: Building2, label: t('profile.myObjects'), hint: String(myProjectCount), swatch: null },
-            { key: "currency" as const, icon: DollarSign, label: "Valyuta kursi", hint: null as string|null, swatch: null },
-            ...(isAdmin(currentUser.role) ? [{ key: "subscription" as const, icon: CreditCard, label: "Obuna holati",
-              hint: subData?.status === 'active' ? (subData.daysLeft !== null ? `${subData.daysLeft} kun` : "Faol") : subData?.status === 'pending' ? "Kutilmoqda" : subData?.status === 'expired' ? "Muddati o'tgan" : subData?.status === 'rejected' ? "Rad etildi" : subLoading ? "..." : "Topilmadi",
+            { key: "currency" as const, icon: DollarSign, label: t('profile.currencyRate'), hint: null as string|null, swatch: null },
+            ...(isAdmin(currentUser.role) ? [{ key: "subscription" as const, icon: CreditCard, label: t('profile.subscriptionStatus'),
+              hint: subData?.status === 'active' ? (subData.daysLeft !== null ? t('profile.daysLeftValue', { count: subData.daysLeft }) : t('profile.subStatusActive')) : subData?.status === 'pending' ? t('profile.subStatusPending') : subData?.status === 'expired' ? t('profile.subStatusExpired') : subData?.status === 'rejected' ? t('profile.subStatusRejected') : subLoading ? "..." : t('common.notFound'),
               swatch: null }] : []),
           ].map((row, i) => (
             <button key={row.key} onClick={() => setActivePanel(row.key)}
@@ -3924,25 +3928,25 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
                 )}
               </div>
               <div className="text-xs text-muted-foreground space-y-1 mb-3">
-                <p>Keldi: <span className="text-foreground font-medium">{new Date(todayAttendance.checkIn).toLocaleTimeString('uz-UZ',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Tashkent'})}</span></p>
-                {todayAttendance.checkOut && <p>Ish tugadi: <span className="text-foreground font-medium">{new Date(todayAttendance.checkOut).toLocaleTimeString('uz-UZ',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Tashkent'})}</span></p>}
-                {todayAttendance.checkOut && <p>Ishlagan vaqt: <span className="text-foreground font-medium">{fmtWorkDuration(todayAttendance.checkIn, todayAttendance.checkOut)}</span></p>}
+                <p>{t('profile.todayLabel')} <span className="text-foreground font-medium">{new Date(todayAttendance.checkIn).toLocaleTimeString('uz-UZ',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Tashkent'})}</span></p>
+                {todayAttendance.checkOut && <p>{t('profile.workEndedLabel')} <span className="text-foreground font-medium">{new Date(todayAttendance.checkOut).toLocaleTimeString('uz-UZ',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Tashkent'})}</span></p>}
+                {todayAttendance.checkOut && <p>{t('profile.workedTimeLabel')} <span className="text-foreground font-medium">{fmtWorkDuration(todayAttendance.checkIn, todayAttendance.checkOut, t)}</span></p>}
               </div>
               {/* GPS holati — check-in'ga bog'liq boshlanadi, lekin check-out
                   bosilgach ham TO'XTAMAYDI (aniqlashtirilgan talab: "GPS har
                   doim olinsin"), shu sabab bu yerda checkOut tekshirilmaydi. */}
               <div className="flex items-center gap-2 mb-3 text-xs text-muted-foreground">
                 <div className={`w-2 h-2 rounded-full flex-shrink-0 ${gpsTracking ? 'bg-green-500 animate-pulse' : 'bg-muted-foreground/40'}`}/>
-                <span>{gpsTracking ? 'GPS faol — har daqiqada joylashuv yuboriladi' : 'GPS kutilmoqda...'}</span>
+                <span>{gpsTracking ? t('profile.gpsActive') : t('profile.gpsWaiting')}</span>
               </div>
               <div className="flex gap-2">
                 {!todayAttendance?.checkOut ? (
-                  <button onClick={() => { if (confirm("Ishni tugatmoqchimisiz?")) onCheckOut(); }} className="flex-1 btn btn-outline text-xs py-2.5 rounded-xl flex items-center justify-center gap-1.5 border-red-400/40 text-red-600 dark:text-red-400 hover:bg-red-500/10">
-                    <X className="w-3.5 h-3.5"/>Ishni tugatdim
+                  <button onClick={() => { if (confirm(t('profile.confirmFinishWork'))) onCheckOut(); }} className="flex-1 btn btn-outline text-xs py-2.5 rounded-xl flex items-center justify-center gap-1.5 border-red-400/40 text-red-600 dark:text-red-400 hover:bg-red-500/10">
+                    <X className="w-3.5 h-3.5"/>{t('profile.finishWorkBtn')}
                   </button>
                 ) : (
                   <div className="flex-1 text-center py-2.5 text-xs text-green-600 dark:text-green-400 font-medium">
-                    ✓ Bugungi ish yakunlandi ({fmtWorkDuration(todayAttendance.checkIn, todayAttendance.checkOut) || "0 daqiqa"})
+                    ✓ {t('profile.todayWorkDone', { duration: fmtWorkDuration(todayAttendance.checkIn, todayAttendance.checkOut, t) || t('gps.minutesShort', { min: 0 }) })}
                   </div>
                 )}
               </div>
@@ -3961,14 +3965,14 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
         {/* Ilovani yuklab olish — hali CI birorta ham APK/exe chiqarmagan
             bo'lsa (yoki hali yuklanmoqda) komponent o'zi HECH NARSA
             render qilmaydi (loadingFallback=false) — bo'sh joy qolmasin. */}
-        <AppDownloadCards compact title="Ilovani yuklab olish" loadingFallback={false} />
+        <AppDownloadCards compact title={t('profile.appDownloadTitle')} loadingFallback={false} />
 
         {/* Qo'lda bloklash — 1 daqiqa kutmasdan, darhol PIN ekraniga o'tadi.
             Barcha qurilmalarda (veb/APK/exe) ko'rinadi — biometrikdan farqli,
             bunga maxsus native imkoniyat kerak emas. */}
         <button onClick={onLockNow}
           className="w-full flex items-center justify-center gap-2.5 text-sm border-2 border-border rounded-2xl px-4 py-3.5 text-foreground hover:bg-primary/5 hover:border-primary/30 liquid-transition font-semibold">
-          <Lock className="w-4 h-4"/>Ilovani hozir bloklash
+          <Lock className="w-4 h-4"/>{t('profile.lockNowBtn')}
         </button>
 
         <motion.button initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28, delay: 0.26 }}

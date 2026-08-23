@@ -22,10 +22,10 @@ function workerDivIcon(name: string, live: boolean, stale: boolean) {
   const pulse = live && !stale ? `<span class="wm-pulse" style="background:${ring}"></span>` : '';
   return L.divIcon({
     className: 'wm-marker',
-    html: `<div class="wm-marker-inner" style="border-color:${ring}">${pulse}<span>${initial}</span></div>`,
-    iconSize: [34, 34],
-    iconAnchor: [17, 17],
-    popupAnchor: [0, -17],
+    html: `<div class="wm-marker-wrap"><div class="wm-marker-inner" style="border-color:${ring}">${pulse}<span>${initial}</span></div><span class="wm-marker-tail" style="border-top-color:${ring}"></span></div>`,
+    iconSize: [34, 42],
+    iconAnchor: [17, 40],
+    popupAnchor: [0, -38],
   });
 }
 
@@ -116,9 +116,35 @@ export default function WorkerMap({ users, gpsLocations }: { users: AppUser[]; g
     }
   }, [gpsLocations, users]);
 
+  // Jonli (live) deb hisoblanadigan xodimlar soni — xarita ustidagi
+  // yorliqda ko'rsatish uchun (foydali ma'lumot + "premium" texnik detal,
+  // LandingPage'dagi bilan bir xil monospace/burchak-belgi uslubida).
+  const nowTs = Date.now();
+  const liveCount = gpsLocations.filter(l => isLiveSource(l.source) && (nowTs - new Date(l.timestamp).getTime()) <= 15 * 60 * 1000).length;
+
   return (
-    <div className="relative w-full h-[340px] rounded-2xl overflow-hidden surface">
+    <div className="wm-map relative w-full h-[340px] rounded-2xl overflow-hidden surface">
       <div ref={containerRef} className="w-full h-full" />
+
+      {/* Chizma-uslubidagi burchak-belgilar — LandingPage bilan bir xil
+          vizual til, xaritani "texnik asbob" sifatida ramkaga oladi. */}
+      <div className="pointer-events-none absolute inset-2 z-[401]" aria-hidden="true">
+        <span className="absolute top-0 left-0 w-3 h-3 border-t-2 border-l-2 border-white/70 dark:border-white/40 rounded-tl-[3px]" />
+        <span className="absolute top-0 right-0 w-3 h-3 border-t-2 border-r-2 border-white/70 dark:border-white/40 rounded-tr-[3px]" />
+        <span className="absolute bottom-0 left-0 w-3 h-3 border-b-2 border-l-2 border-white/70 dark:border-white/40 rounded-bl-[3px]" />
+        <span className="absolute bottom-0 right-0 w-3 h-3 border-b-2 border-r-2 border-white/70 dark:border-white/40 rounded-br-[3px]" />
+      </div>
+
+      {/* Jonli xodimlar yorlig'i — chap yuqori burchak */}
+      {gpsLocations.length > 0 && (
+        <div className="absolute top-3 left-3 z-[401] flex items-center gap-1.5 bg-background/85 backdrop-blur-md border border-border/60 rounded-full pl-2 pr-3 py-1 shadow-sm">
+          <span className={`w-1.5 h-1.5 rounded-full ${liveCount > 0 ? "bg-green-500 animate-pulse" : "bg-muted-foreground/50"}`} />
+          <span className="text-[10px] font-semibold tracking-wide" style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace" }}>
+            {liveCount} jonli · {gpsLocations.length} jami
+          </span>
+        </div>
+      )}
+
       {gpsLocations.length === 0 && (
         <div className="absolute inset-0 flex items-center justify-center bg-background/70 pointer-events-none">
           <p className="text-xs text-muted-foreground">Xaritada ko'rsatish uchun GPS ma'lumoti yo'q</p>
@@ -130,16 +156,26 @@ export default function WorkerMap({ users, gpsLocations }: { users: AppUser[]; g
           bo'lmasligi uchun aniq "wm-" prefiksi bilan). */}
       <style>{`
         .wm-marker { background: transparent; border: none; }
+        .wm-marker-wrap { position: relative; width: 34px; height: 42px; }
         .wm-marker-inner {
           position: relative;
           width: 30px; height: 30px;
+          margin: 0 auto;
           border-radius: 9999px;
           border: 2.5px solid;
-          background: #1B3A6B;
+          background: linear-gradient(135deg, #1B3A6B, #14294d);
           color: #fff;
           display: flex; align-items: center; justify-content: center;
           font-size: 12px; font-weight: 700;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+          box-shadow: 0 3px 10px rgba(0,0,0,0.4);
+        }
+        .wm-marker-tail {
+          position: absolute; left: 50%; bottom: 2px;
+          width: 0; height: 0; margin-left: -5px;
+          border-left: 5px solid transparent;
+          border-right: 5px solid transparent;
+          border-top: 8px solid;
+          filter: drop-shadow(0 2px 2px rgba(0,0,0,0.25));
         }
         .wm-pulse {
           position: absolute; inset: -6px;
@@ -152,7 +188,19 @@ export default function WorkerMap({ users, gpsLocations }: { users: AppUser[]; g
           100% { transform: scale(1.6); opacity: 0; }
         }
         @media (prefers-reduced-motion: reduce) { .wm-pulse { animation: none; opacity: 0.2; } }
-        .leaflet-container { background: #eef2f8; font-family: inherit; }
+        /* Tema-mos xarita foni — avval doim och kulrang edi, qorong'i
+           rejimda tayanch (surface) bilan mos kelmasdi. Endi CSS
+           o'zgaruvchisidan olinadi. */
+        .wm-map .leaflet-container { background: var(--muted); font-family: inherit; }
+        /* Qorong'i rejimda OSM plitalarini (tile) invert qilib, xaritani
+           ilovaning qolgan qismi bilan uyg'un qorong'i ko'rinishga
+           keltiradi — markerlar/yorliqlar ta'sirlanmasligi uchun faqat
+           tile-pane'ga qo'llaniladi. */
+        .dark .wm-map .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.92) saturate(0.9); }
+        .wm-map .leaflet-control-zoom a { color: var(--foreground); background: var(--card); border-color: var(--border) !important; }
+        .wm-map .leaflet-control-zoom a:hover { background: var(--muted); }
+        .wm-map .leaflet-control-attribution { background: color-mix(in srgb, var(--background) 75%, transparent) !important; color: var(--muted-foreground) !important; font-size: 9px !important; }
+        .wm-map .leaflet-control-attribution a { color: var(--muted-foreground) !important; }
       `}</style>
     </div>
   );

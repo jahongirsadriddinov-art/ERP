@@ -15,6 +15,16 @@ import { AppDownloadCards } from "./AppDownload";
 // register'ga olib boradigan kirish nuqtasi. GoogleBot uchun ham, haqiqiy
 // tashrif buyuruvchi uchun ham asosiy mazmun shu yerda (login formasi endi
 // bunga aralashmaydi — LoginScreen o'zi alohida, toza qoladi). ────────────
+//
+// DIZAYN TILI (2026 yangilanish) — "muhandislik chizmasi" ("blueprint")
+// mavzusi: qurilish sohasiga xos, umumiy SaaS shablonidan farq qiladigan
+// ko'rinish. Uch unsur: (1) burchak-belgilar (CornerMarks) — arxitektura
+// chizmalaridagi "crop mark"lar kabi, (2) xavfsizlik-chizig'i naqshi
+// (HazardStripe) — qurilish maydonidagi ogohlantiruvchi lentaga ishora,
+// firmaning o'z accent-rangida (D2440F), (3) monospace texnik yorliqlar —
+// JetBrains Mono, chizma izohlari kabi. Ranglar mavjud tema tokenlaridan
+// (--primary, --accent) olinadi — alohida rang qo'shilmadi, shu bilan
+// ilovaning qolgan qismi (dashboard, tugmalar) bilan bir xil bo'lib qoladi.
 
 const FEATURES = [
   { icon: FileSpreadsheet, title: "Loyihalar va smeta", desc: "Har bir obyekt, byudjet va bajarilish foizini bir joydan kuzating — Excel va qog'oz jadvallarsiz." },
@@ -81,6 +91,52 @@ function SectionBadge({ children }: { children: React.ReactNode }) {
   );
 }
 
+// Arxitektura chizmalaridagi "crop mark" (burchak-belgi) — texnik chizma
+// hissi beruvchi, faqat shu loyihaga xos bezak unsuri (umumiy SaaS
+// shablonlarida uchramaydigan detal). Har doim ota elementga nisbatan
+// mutlaq joylashadi — ota element `relative` bo'lishi shart.
+function CornerMarks({ visible = true }: { visible?: boolean }) {
+  const base = "absolute w-3.5 h-3.5 border-primary/50 dark:border-primary/60 liquid-transition";
+  const cls = visible ? "opacity-100" : "opacity-0 group-hover:opacity-100";
+  return (
+    <div className="pointer-events-none absolute inset-2.5" aria-hidden="true">
+      <span className={`${base} ${cls} -top-0 -left-0 border-t-2 border-l-2 rounded-tl-[3px]`} />
+      <span className={`${base} ${cls} -top-0 -right-0 border-t-2 border-r-2 rounded-tr-[3px]`} />
+      <span className={`${base} ${cls} -bottom-0 -left-0 border-b-2 border-l-2 rounded-bl-[3px]`} />
+      <span className={`${base} ${cls} -bottom-0 -right-0 border-b-2 border-r-2 rounded-br-[3px]`} />
+    </div>
+  );
+}
+
+// Qurilish maydonidagi ogohlantiruvchi (xavfsizlik) lentasiga ishora —
+// firmaning o'z accent-rangida diagonal chiziqlar. Sahifaning "imzosi":
+// tepada va pastda ingichka chegara sifatida, bo'limlar orasida esa
+// tikuv (seam) sifatida ishlatiladi — brendni tanish qiluvchi doimiy detal.
+function HazardStripe({ className = "" }: { className?: string }) {
+  return (
+    <div
+      className={`w-full pointer-events-none ${className}`}
+      style={{
+        height: 5,
+        backgroundImage: "repeating-linear-gradient(135deg, var(--accent) 0px, var(--accent) 9px, color-mix(in srgb, var(--accent) 18%, transparent) 9px, color-mix(in srgb, var(--accent) 18%, transparent) 18px)",
+      }}
+      aria-hidden="true"
+    />
+  );
+}
+
+// Texnik izoh uslubidagi monospace yorliq — chizma annotatsiyasiga o'xshash.
+function TechTag({ children }: { children: React.ReactNode }) {
+  return (
+    <span
+      className="text-[10px] font-semibold tracking-[0.18em] uppercase text-accent"
+      style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace" }}
+    >
+      {children}
+    </span>
+  );
+}
+
 export default function LandingPage({ onLogin, onRegister }: { onLogin: () => void; onRegister: () => void }) {
   const { t, i18n } = useTranslation();
   const [openFaq, setOpenFaq] = useState<number | null>(0);
@@ -120,6 +176,10 @@ export default function LandingPage({ onLogin, onRegister }: { onLogin: () => vo
           acceptedAnswer: { "@type": "Answer", text: f.a },
         })),
       }) }} />
+
+      {/* Sahifaning "imzosi" — xavfsizlik-lentasi chizig'i, eng tepada */}
+      <HazardStripe className="sticky top-0 z-50" />
+
       {/* ── Sticky top nav ─────────────────────────────────────────────── */}
       <header className="sticky top-0 z-40 backdrop-blur-xl bg-background/70 border-b border-border/50"
         style={{ paddingTop: "env(safe-area-inset-top)" }}>
@@ -138,20 +198,29 @@ export default function LandingPage({ onLogin, onRegister }: { onLogin: () => vo
 
       {/* ── Hero ────────────────────────────────────────────────────────── */}
       <section className="relative overflow-hidden">
-        {/* Nuqtali mesh fon — chuqurlik uchun */}
-        <div className="absolute inset-0 opacity-[0.35] dark:opacity-[0.25] pointer-events-none"
-          style={{ backgroundImage: "radial-gradient(color-mix(in srgb, var(--foreground) 22%, transparent) 1px, transparent 1px)", backgroundSize: "26px 26px", maskImage: "radial-gradient(ellipse 70% 55% at 50% 0%, black 40%, transparent 100%)" }} />
-        <div className="absolute top-[-15%] left-[-12%] w-[55%] h-[55%] bg-primary/20 rounded-full blur-[140px] blob-anim pointer-events-none" />
-        <div className="absolute top-[5%] right-[-15%] w-[50%] h-[55%] bg-accent/20 rounded-full blur-[140px] blob-anim-slow pointer-events-none" />
+        {/* Blueprint chizma to'ri — kvadrat panjara, muhandislik chizmasi
+            hissini beradi (avvalgi generik nuqtali "mesh" fon o'rniga). */}
+        <div className="absolute inset-0 opacity-[0.5] dark:opacity-[0.3] pointer-events-none"
+          style={{
+            backgroundImage:
+              "linear-gradient(color-mix(in srgb, var(--primary) 14%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, var(--primary) 14%, transparent) 1px, transparent 1px)",
+            backgroundSize: "40px 40px",
+            maskImage: "radial-gradient(ellipse 75% 60% at 50% 0%, black 35%, transparent 100%)",
+          }} />
+        <div className="absolute top-[-18%] right-[-14%] w-[52%] h-[58%] bg-accent/[0.14] rounded-full blur-[150px] blob-anim pointer-events-none" />
 
         <div className="relative max-w-6xl mx-auto px-5 pt-16 pb-8 md:pt-24 text-center">
           <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 260, damping: 26 }} className="relative z-10">
-            <SectionBadge><Sparkles className="w-3.5 h-3.5" /> Qurilish firmalari uchun boshqaruv tizimi</SectionBadge>
+            <div className="mb-5">
+              <TechTag>[ Qurilish firmalari uchun boshqaruv tizimi ]</TechTag>
+            </div>
             <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold font-['Roboto_Slab',serif] leading-[1.08] max-w-4xl mx-auto tracking-tight">
-              <span className="bg-clip-text text-transparent bg-gradient-to-r from-foreground via-foreground to-foreground/60">Qurilish firmangizni</span>
+              <span className="text-foreground">Qurilish firmangizni</span>
               <br/>
               <span className="bg-clip-text text-transparent bg-gradient-to-r from-primary via-primary to-accent">bitta joydan boshqaring</span>
             </h1>
+            {/* Aksent chiziqcha — sarlavha ostida, brend rangida, "muhr" kabi */}
+            <div className="mx-auto mt-5 w-14 h-[3px] rounded-full bg-gradient-to-r from-primary to-accent" />
             <p className="text-base md:text-lg text-muted-foreground mt-6 max-w-xl mx-auto leading-relaxed">
               Loyihalar, smeta, moliya, xodimlar va GPS nazorati, real-time chat, AI yordamchi va Telegram bot —
               firmangizni raqamlashtirish uchun kerakli hammasi bitta tizimda.
@@ -171,23 +240,27 @@ export default function LandingPage({ onLogin, onRegister }: { onLogin: () => vo
             </p>
           </motion.div>
 
-          {/* Stilizatsiyalangan dashboard ko'rinishi (real skrinshot emas — namunaviy illyustratsiya) */}
+          {/* Stilizatsiyalangan dashboard ko'rinishi (real skrinshot emas — namunaviy illyustratsiya).
+              Burchak-belgilar chizma varag'i ko'rinishini beradi. */}
           <motion.div initial={{ opacity: 0, y: 32 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 220, damping: 28, delay: 0.15 }}
             className="relative z-10 mt-14 max-w-3xl mx-auto">
-            <div className="absolute -inset-1 bg-gradient-to-br from-primary/30 via-accent/20 to-transparent rounded-[2.2rem] blur-2xl opacity-60 pointer-events-none" />
+            <div className="absolute -inset-1 bg-gradient-to-br from-primary/25 via-accent/15 to-transparent rounded-[2.2rem] blur-2xl opacity-60 pointer-events-none" />
             <div className="relative surface rounded-[2rem] p-5 md:p-7 text-left shadow-2xl shadow-primary/10 border border-white/20">
+              <CornerMarks />
               <div className="flex items-center justify-between mb-5">
                 <div>
-                  <p className="text-xs text-muted-foreground">Obyekt (namuna)</p>
-                  <p className="font-bold text-sm">"Bog'bo'ston" turar-joy majmuasi</p>
+                  <TechTag>Obyekt · namuna</TechTag>
+                  <p className="font-bold text-sm mt-1">"Bog'bo'ston" turar-joy majmuasi</p>
                 </div>
-                <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-green-500/15 text-green-700 dark:text-green-400">Bajarilmoqda</span>
+                <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-green-500/15 text-green-700 dark:text-green-400 flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" /> Bajarilmoqda
+                </span>
               </div>
               <div className="grid grid-cols-3 gap-3 mb-5">
                 {[["Byudjet", "18.0 mlrd"], ["Ishlatilgan", "9.4 mlrd"], ["Bajarildi", "52%"]].map(([label, val]) => (
                   <div key={label} className="bg-muted/40 rounded-2xl p-3 text-center">
                     <p className="text-[10px] text-muted-foreground mb-1">{label}</p>
-                    <p className="font-bold text-sm md:text-base font-mono">{val}</p>
+                    <p className="font-bold text-sm md:text-base" style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace" }}>{val}</p>
                   </div>
                 ))}
               </div>
@@ -211,23 +284,31 @@ export default function LandingPage({ onLogin, onRegister }: { onLogin: () => vo
             {CAPABILITIES.map((c, i) => (
               <motion.div key={c.label} initial={{ opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
                 transition={{ delay: i * 0.06 }}
-                className="surface rounded-2xl px-4 py-4 text-center">
+                className="group relative surface rounded-2xl px-4 py-4 text-center overflow-hidden">
+                <div className="absolute top-0 left-0 right-0 h-[3px] opacity-0 group-hover:opacity-100 liquid-transition"
+                  style={{ backgroundImage: "repeating-linear-gradient(135deg, var(--accent) 0px, var(--accent) 6px, transparent 6px, transparent 12px)" }} />
                 <c.icon className="w-4 h-4 text-primary mx-auto mb-2 opacity-70" />
-                <p className="text-xl md:text-2xl font-bold font-mono">{c.value}</p>
+                <p className="text-xl md:text-2xl font-bold" style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace" }}>{c.value}</p>
                 <p className="text-[10px] md:text-[11px] text-muted-foreground mt-1 leading-snug">{c.label}</p>
               </motion.div>
             ))}
           </div>
         </div>
 
-        {/* Bizga ishonch bildirgan firmalar — faqat nom, soxta logotip/sharh yo'q */}
+        {/* Bizga ishonch bildirgan firmalar — "plastinka" (plate) uslubi:
+            po'lat lavhaga o'xshash, texnik ID bilan — soddagina icon+nom
+            kartochkasidan farqli, brendga xos ko'rinish. Faqat nom, soxta
+            logotip/sharh yo'q. */}
         <div className="relative max-w-5xl mx-auto px-5 pb-16 md:pb-20">
           <p className="text-center text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-6">Bizga ishonch bildirgan firmalar</p>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {PARTNERS.map((name, i) => (
               <motion.div key={name} initial={{ opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
                 transition={{ delay: i * 0.06 }}
-                className="surface rounded-2xl p-5 flex flex-col items-center text-center gap-3 hover:-translate-y-1 liquid-transition">
+                className="relative surface rounded-2xl p-5 flex flex-col items-center text-center gap-3 hover:-translate-y-1 liquid-transition overflow-hidden">
+                <span className="absolute top-2.5 right-3 text-[9px] text-muted-foreground/60" style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace" }}>
+                  #{String(i + 1).padStart(2, "0")}
+                </span>
                 <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-primary/15 to-accent/15 flex items-center justify-center flex-shrink-0">
                   <Building2 className="w-5 h-5 text-primary" />
                 </div>
@@ -237,6 +318,8 @@ export default function LandingPage({ onLogin, onRegister }: { onLogin: () => vo
           </div>
         </div>
       </section>
+
+      <HazardStripe />
 
       {/* ── Features ────────────────────────────────────────────────────── */}
       <section className="max-w-6xl mx-auto px-5 py-16 md:py-24">
@@ -250,6 +333,7 @@ export default function LandingPage({ onLogin, onRegister }: { onLogin: () => vo
             <motion.div key={f.title} initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-40px" }}
               transition={{ delay: i * 0.05, type: "spring", stiffness: 260, damping: 26 }}
               className="group relative surface rounded-3xl p-6 overflow-hidden hover:-translate-y-1 hover:shadow-xl hover:shadow-primary/10 liquid-transition">
+              <CornerMarks visible={false} />
               <div className="absolute -right-6 -top-6 w-24 h-24 rounded-full bg-primary/5 group-hover:bg-primary/10 liquid-transition pointer-events-none" />
               <div className="relative w-12 h-12 rounded-2xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center mb-4 shadow-md shadow-primary/25">
                 <f.icon className="w-5.5 h-5.5 text-white" />
@@ -262,8 +346,15 @@ export default function LandingPage({ onLogin, onRegister }: { onLogin: () => vo
       </section>
 
       {/* ── Qanday ishlaydi ─────────────────────────────────────────────── */}
-      <section className="bg-muted/30 py-16 md:py-24">
-        <div className="max-w-5xl mx-auto px-5">
+      <section className="relative bg-muted/30 py-16 md:py-24 overflow-hidden">
+        <div className="absolute inset-0 opacity-[0.4] dark:opacity-[0.2] pointer-events-none"
+          style={{
+            backgroundImage:
+              "linear-gradient(color-mix(in srgb, var(--primary) 10%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, var(--primary) 10%, transparent) 1px, transparent 1px)",
+            backgroundSize: "40px 40px",
+            maskImage: "radial-gradient(ellipse 80% 100% at 50% 50%, black 30%, transparent 100%)",
+          }} />
+        <div className="relative max-w-5xl mx-auto px-5">
           <div className="text-center max-w-xl mx-auto mb-14">
             <SectionBadge>Boshlash oson</SectionBadge>
             <h2 className="text-2xl md:text-4xl font-bold font-['Roboto_Slab',serif] tracking-tight">3 qadamda ishga tushiring</h2>
@@ -276,7 +367,7 @@ export default function LandingPage({ onLogin, onRegister }: { onLogin: () => vo
                 <div className="relative z-10 w-14 h-14 rounded-2xl bg-gradient-to-br from-primary to-accent flex items-center justify-center mx-auto mb-5 shadow-lg shadow-primary/25">
                   <s.icon className="w-6 h-6 text-white" />
                 </div>
-                <p className="text-[11px] font-bold text-primary mb-1.5">QADAM {i + 1}</p>
+                <p className="text-[11px] font-bold text-accent mb-1.5" style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace" }}>QADAM {i + 1} / {STEPS.length}</p>
                 <h3 className="font-bold text-sm mb-2">{s.title}</h3>
                 <p className="text-xs text-muted-foreground leading-relaxed max-w-[240px] mx-auto">{s.desc}</p>
               </motion.div>
@@ -295,7 +386,8 @@ export default function LandingPage({ onLogin, onRegister }: { onLogin: () => vo
           {AUDIENCE.map((a, i) => (
             <motion.div key={a.title} initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-40px" }}
               transition={{ delay: i * 0.05, type: "spring", stiffness: 260, damping: 26 }}
-              className="surface rounded-3xl p-6 text-center hover:-translate-y-1 hover:shadow-xl hover:shadow-accent/10 liquid-transition">
+              className="group relative surface rounded-3xl p-6 text-center hover:-translate-y-1 hover:shadow-xl hover:shadow-accent/10 liquid-transition overflow-hidden">
+              <CornerMarks visible={false} />
               <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-accent to-accent/70 flex items-center justify-center mx-auto mb-4 shadow-md shadow-accent/25">
                 <a.icon className="w-6 h-6 text-white" />
               </div>
@@ -383,6 +475,7 @@ export default function LandingPage({ onLogin, onRegister }: { onLogin: () => vo
       </section>
 
       {/* ── Footer ──────────────────────────────────────────────────────── */}
+      <HazardStripe />
       <footer className="border-t border-border/50 py-10" style={{ paddingBottom: "max(2.5rem, env(safe-area-inset-bottom))" }}>
         <div className="max-w-6xl mx-auto px-5 flex flex-col md:flex-row items-center justify-between gap-5">
           <div className="flex items-center gap-2.5">

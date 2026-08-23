@@ -102,10 +102,15 @@ router.post('/upload-artifact', upload.single('file'), async (req, res) => {
 // muhitidan (foydalanuvchi seansisiz) chaqiriladi, shuning uchun umumiy
 // maxfiy kalit (DEPLOY_BROADCAST_SECRET env) bilan himoyalangan.
 //
-// Barcha rollarga (direktor/orinbosar/prorab/brigadir/ishchi) — FAQAT
-// "dasturchi" (platforma egasi/super-admin) ga YUBORILMAYDI, aniq talab
-// bo'yicha. Kompaniyalar bo'yicha cheklanmagan — bu ilova darajasidagi
-// yangilanish, bitta firmaga tegishli emas.
+// XATTI-HARAKAT O'ZGARDI (aniq, qat'iy talab): avval BARCHA rollarga
+// (direktor/orinbosar/prorab/brigadir/ishchi) — dasturchidan TASHQARI —
+// avtomatik yuborilardi. Endi CI HECH KIMGA avtomatik yubormaydi — FAQAT
+// dasturchiga ("bu tayyor, ko'rib chiqing" xabari sifatida). Hammaga
+// tarqatish qarori endi TO'LIQ dasturchining o'zi qo'lida: botdagi
+// "📢 Xabar yuborish" tugmasi yoki APK/EXE'ni to'g'ridan-to'g'ri botga
+// tashlash orqali, o'zi xohlagan payt. ("keyn yangi versiya chiqasa
+// yuborma botga ozim yuboraman automatik yuborma faqat admin yani
+// dasturchiga yubor boshqa hichkimga yuborma".)
 router.post('/broadcast-update', async (req, res) => {
   try {
     const secret = req.headers['x-deploy-secret'];
@@ -120,7 +125,7 @@ router.post('/broadcast-update', async (req, res) => {
     }
 
     const users = await User.find({
-      role: { $ne: 'dasturchi' },
+      role: 'dasturchi',
       telegramChatId: { $exists: true, $ne: '' },
     }).select('telegramChatId').lean();
 
@@ -135,7 +140,7 @@ router.post('/broadcast-update', async (req, res) => {
     ).then(() => console.log(`[broadcast-update] AppRelease saqlandi: v${version}`))
       .catch(err => console.error('[broadcast-update] AppRelease saqlash xatosi:', err));
 
-    const introLines = [`🆕 *QurilishERP — yangi versiya (${version})*`];
+    const introLines = [`🆕 *Yangi versiya tayyor (${version})*`, `CI qurdi — hammaga hali YUBORILMADI. Ko'rib chiqing, xohlasangiz "📢 Xabar yuborish" orqali (yoki fayllarni to'g'ridan-to'g'ri shu botga tashlab) o'zingiz tarqating.`];
     if (notes) introLines.push(String(notes));
     const introText = introLines.join('\n\n');
 

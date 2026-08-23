@@ -1920,35 +1920,48 @@ function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSe
                 jadval pastga cheksiz o'sib, ko'rinmas qismi hech qanday
                 scrollsiz shunchaki kesilib qolardi ("davomini ko'rish uchun
                 scroll bo'lmayapti"). */}
-            <div className="flex-1 min-h-0 overflow-auto scrollbar-hide pb-20 sm:pb-2">
-              <table className="w-full min-w-max text-left border-collapse text-[11px] leading-tight">
-                <thead className="sticky top-0 z-10 bg-card">
-                  <tr className="border-b border-border">
-                    <th className="px-2 py-1 font-semibold">{t('objectDetail.colName')}</th>
-                    <th className="px-2 py-1 font-semibold whitespace-nowrap">{t('objectDetail.colUnit')}</th>
-                    <th className="px-2 py-1 font-semibold text-right whitespace-nowrap">{t('objectDetail.colQty')}</th>
-                    <th className="px-2 py-1 font-semibold text-right whitespace-nowrap">{t('objectDetail.colPrice')}</th>
-                    <th className="px-2 py-1 font-semibold text-right whitespace-nowrap">{t('objectDetail.colAmount')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredMats.map(m => {
-                    const total = m.price != null ? m.price * m.quantity : null;
-                    return (
-                      <tr key={m.id} onClick={() => setSelectedMat(m)} className="cursor-pointer hover:bg-muted/30 border-b border-border/25">
-                        <td className="px-2 py-0.5 font-medium text-primary whitespace-normal leading-tight" title={m.name}>{m.name}</td>
-                        <td className="px-2 py-0.5 text-muted-foreground whitespace-nowrap">{m.unit}</td>
-                        <td className="px-2 py-0.5 font-mono text-right whitespace-nowrap">{fmtNum(m.quantity)}</td>
-                        <td className="px-2 py-0.5 font-mono text-right whitespace-nowrap">{m.price != null ? fmtNum(m.price) : "-"}</td>
-                        <td className="px-2 py-0.5 font-mono text-right font-semibold whitespace-nowrap">{total != null ? fmtNum(total) : "-"}</td>
-                      </tr>
-                    );
-                  })}
-                  {filteredMats.length === 0 && (
-                    <tr><td colSpan={5} className="px-2 py-6 text-center text-muted-foreground">{project.requiredMaterials.length === 0 ? t('objectDetail.noSmeta') : t('common.notFound')}</td></tr>
-                  )}
-                </tbody>
-              </table>
+            {/* XATO TUZATILDI: avval shu BITTA <div> ham vertikal (qatorlar
+                ro'yxati), ham gorizontal (keng jadval) scrollni birga
+                bajarishga urinardi (overflow-auto = ikkalasi). Mobil
+                teginish-imo-ishoralarida bu noaniq: chapga suring desa ham
+                brauzer ko'pincha vertikal scroll deb "qulflab" qo'yadi —
+                natijada gorizontal suzish DEYARLI ishlamaydi (aniq xabar
+                qilingan xato: "chapga qilirlamayadpi"). Endi ikkita ALOHIDA
+                konteyner: TASHQI faqat vertikal (butun jadval + sticky sarlavha
+                yuqoriga-pastga suriladi), ICHKI faqat gorizontal (qator
+                matni chapga-o'ngga suriladi) — ikki yo'nalish endi bir-biriga
+                xalaqit bermaydi. */}
+            <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden scrollbar-hide pb-20 sm:pb-2">
+              <div className="overflow-x-auto scrollbar-hide">
+                <table className="w-full min-w-max text-left border-collapse text-[11px] leading-tight">
+                  <thead className="sticky top-0 z-10 bg-card">
+                    <tr className="border-b border-border">
+                      <th className="px-2 py-1 font-semibold">{t('objectDetail.colName')}</th>
+                      <th className="px-2 py-1 font-semibold whitespace-nowrap">{t('objectDetail.colUnit')}</th>
+                      <th className="px-2 py-1 font-semibold text-right whitespace-nowrap">{t('objectDetail.colQty')}</th>
+                      <th className="px-2 py-1 font-semibold text-right whitespace-nowrap">{t('objectDetail.colPrice')}</th>
+                      <th className="px-2 py-1 font-semibold text-right whitespace-nowrap">{t('objectDetail.colAmount')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredMats.map(m => {
+                      const total = m.price != null ? m.price * m.quantity : null;
+                      return (
+                        <tr key={m.id} onClick={() => setSelectedMat(m)} className="cursor-pointer hover:bg-muted/30 border-b border-border/25">
+                          <td className="px-2 py-0.5 font-medium text-primary whitespace-nowrap leading-tight" title={m.name}>{m.name}</td>
+                          <td className="px-2 py-0.5 text-muted-foreground whitespace-nowrap">{m.unit}</td>
+                          <td className="px-2 py-0.5 font-mono text-right whitespace-nowrap">{fmtNum(m.quantity)}</td>
+                          <td className="px-2 py-0.5 font-mono text-right whitespace-nowrap">{m.price != null ? fmtNum(m.price) : "-"}</td>
+                          <td className="px-2 py-0.5 font-mono text-right font-semibold whitespace-nowrap">{total != null ? fmtNum(total) : "-"}</td>
+                        </tr>
+                      );
+                    })}
+                    {filteredMats.length === 0 && (
+                      <tr><td colSpan={5} className="px-2 py-6 text-center text-muted-foreground">{project.requiredMaterials.length === 0 ? t('objectDetail.noSmeta') : t('common.notFound')}</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}

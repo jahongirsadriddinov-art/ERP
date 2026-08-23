@@ -109,12 +109,23 @@ function blobToBase64(blob: Blob): Promise<string> {
 // (Cache papkasi ilova ichida) ishlaydigan eng ishonchli yo'l.
 export async function saveOrShareBlob(filename: string, blob: Blob): Promise<{ ok: boolean; shared?: boolean }> {
   if (!isCapacitor()) {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = filename;
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    return { ok: true };
+    // XATO TUZATILDI: bu blok avval try/catch'siz edi — "{ok:true}" har
+    // doim SO'ZSIZ qaytardi, hatto a.click() biror sababdan (masalan
+    // iOS Safari'ning tracking-prevention/pop-up cheklovlari) chindan
+    // ishlamay qolsa ham. Natijada muvaffaqiyatsizlik HECH QACHON
+    // ko'rinmasdi (na "Fayl saqlanmadi" xabari, na konsolda iz) — endi
+    // haqiqiy xato bo'lsa {ok:false} qaytadi VA sababi konsolga yoziladi.
+    try {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = filename;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      return { ok: true };
+    } catch (err) {
+      console.error('saveOrShareBlob (web) xatosi:', err);
+      return { ok: false };
+    }
   }
   try {
     const [{ Filesystem, Directory }, { Share }] = await Promise.all([

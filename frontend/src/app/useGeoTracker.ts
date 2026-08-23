@@ -50,10 +50,16 @@ export function useGeoTracker(userId: string | undefined, role: string | undefin
         console.warn('[GPS] joylashuvni olib bo\'lmadi (ruxsat rad etilgan yoki signal yo\'q):', err?.message);
       }
     };
+    // XATO TUZATILDI ("aniqlikni yahshiroq olsin"): maximumAge=60000 interval
+    // (odatda ham 60s) bilan bir xil edi — eng yomon holatda brauzer/OS
+    // hozirgi vaqtdan 2 intervalgacha (120s) ESKI keshlangan koordinatani
+    // qaytarishi mumkin edi, "jonli" kuzatuvni sezilarli kechiktirib. Endi
+    // 20s — batareya uchun baribir keshlashga ruxsat beradi, lekin xaritadagi
+    // nuqta haqiqiy joylashuvdan sezilarli orqada qolmasligini kafolatlaydi.
     navigator.geolocation.getCurrentPosition(
       post,
       () => navigator.geolocation.getCurrentPosition(post, giveUp, { enableHighAccuracy: false, timeout: 15000, maximumAge: 300000 }),
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 20000 }
     );
   };
 

@@ -106,6 +106,16 @@ export default function GpsTrackingPage({ users, gpsLocations, refreshing, onRef
                     <div className="flex items-center gap-1.5 mt-1">
                       <MapPin className="w-3 h-3 text-muted-foreground/60 flex-shrink-0"/>
                       <span className="text-[10px] text-muted-foreground">{loc.lat.toFixed(5)}, {loc.lng.toFixed(5)}</span>
+                      {/* Aniqlik (±metr) — avval bazada saqlanardi, lekin bu ro'yxatda
+                          hech qachon KO'RSATILMASDI (faqat xaritadagi doira/tooltipda
+                          bor edi) — foydalanuvchi koordinata qanchalik ishonchli
+                          ekanini bilmasdi. >300m — odatda GPS chip emas, tarmoq/IP-
+                          asosli taxminiy joylashuv, shu sabab alohida rangda ajratiladi. */}
+                      {loc.accuracy != null && (
+                        <span className={`text-[9px] font-mono flex-shrink-0 ${loc.accuracy > 300 ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground/70'}`}>
+                          ±{Math.round(loc.accuracy)}m
+                        </span>
+                      )}
                     </div>
                   ) : (
                     <p className="text-[10px] text-muted-foreground mt-1">{t('gps.noGpsData')}</p>

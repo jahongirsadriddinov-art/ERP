@@ -32,7 +32,7 @@ const webhookUrl = process.env.TELEGRAM_WEBHOOK_URL;
 const useWebhook = !!webhookUrl;
 
 export const bot = new TelegramBot(token, useWebhook ? { polling: false } : {
-  polling: { params: { allowed_updates: ['message', 'edited_message', 'callback_query'] } },
+  polling: { params: { allowed_updates: ['message', 'edited_message', 'callback_query', 'my_chat_member'] } },
 });
 
 // Polling'dagi xatolarni birxil joyda ushlaymiz — webhook ishlab
@@ -64,7 +64,7 @@ if (useWebhook) {
     // MUHIM: allowed_updates ANIQ ko'rsatilmasa, Telegram shu webhook uchun
     // OLDINGI sozlamani ishlatadi — 'edited_message' aynan Telegram'ning
     // "Jonli joylashuv" (Live Location) davomiy yangilanishlari uchun zarur.
-    allowed_updates: ['message', 'edited_message', 'callback_query'],
+    allowed_updates: ['message', 'edited_message', 'callback_query', 'my_chat_member'],
   });
 
   registerWebhook()
@@ -81,7 +81,7 @@ if (useWebhook) {
       // allowed_updates'ni ANIQ shu yerga, ishga tushirishdan OLDIN yozib
       // qo'yamiz, aks holda 'edited_message' (jonli joylashuv) yana
       // yo'qolib qolardi.
-      bot.options.polling = { params: { allowed_updates: ['message', 'edited_message', 'callback_query'] } };
+      bot.options.polling = { params: { allowed_updates: ['message', 'edited_message', 'callback_query', 'my_chat_member'] } };
       bot.startPolling()
         .catch((pollErr: Error) => console.error('⚠️ Polling fallback ham muvaffaqiyatsiz:', pollErr.message));
     });
@@ -237,6 +237,141 @@ async function getAppSettingsCached(): Promise<any> {
   }
   return cachedAppSettings;
 }
+
+// ─── Majburiy obuna (kanal/guruh) ────────────────────────────────────────────
+// Aniq talab: bot foydalanuvchi shu 3 kanal/guruhga obuna bo'lmaguncha
+// ishlamasin (/start bosganda ham, keyin har qanday xabarda ham), keyinroq
+// bittasidan chiqib ketsa — qayta "obuna bo'ling" ko'rsatilsin. Dasturchi
+// havolalarni va xabar matnini keyinchalik bot ichidan o'zgartira oladi.
+const DEFAULT_REQUIRED_CHANNELS: { url: string; title: string }[] = [
+  { url: 'https://t.me/+DD-6z31fYXNlMWM6', title: 'Qurilish-ERP OFFICIAL GROUP' },
+  { url: 'https://t.me/+fZZJDhTSEF5iMzNi', title: 'Qurilish-ERP OFFICIAL CHANNEL' },
+  { url: 'https://t.me/+p-eTtYPPYDo3MTIy', title: 'Qurilish-ERP Programs' },
+];
+
+// Joriy (dasturchi tomonidan o'zgartirilgan bo'lsa — o'shani, aks holda
+// standart) 3 ta kanal ro'yxati. `chatId` faqat bot o'sha kanal/guruhga
+// administrator sifatida qo'shilgach, `my_chat_member` orqali avtomatik
+// to'ldiriladi (pastda) — private invite-link kanallar uchun Bot API'ga
+// boshqa hech qanday yo'l bilan (havolaning o'zi bilan) so'rov yuborib
+// bo'lmaydi.
+function getRequiredChannels(settings: any): { chatId?: string; url: string; title: string }[] {
+  const custom = settings?.requiredChannels;
+  return Array.isArray(custom) && custom.length ? custom : DEFAULT_REQUIRED_CHANNELS;
+}
+
+function subscribeGateEffectiveMsg(settings: any, lang?: BotLang): { text: string; entities?: any[] } {
+  const custom = settings?.subscribeGateMsg;
+  if (custom && typeof custom === 'object' && typeof custom.text === 'string' && custom.text.trim()) {
+    return { text: custom.text, entities: custom.entities };
+  }
+  if (typeof custom === 'string' && custom.trim()) return { text: custom };
+  return { text: tb(lang, 'subGateDefaultBody') };
+}
+
+// Foydalanuvchi (Telegram user ID bo'yicha) hali obuna bo'lmagan kanallar
+// ro'yxatini qaytaradi. Har bir tekshiruv Telegram API'ga so'rov (getChatMember)
+// bo'lgani uchun HAR xabarda emas, qisqa muddatli keshdan o'qiladi — "🔄
+// Tekshirish" tugmasi bosilganda force=true bilan darhol qayta tekshiriladi
+// (aynan shu maqsad uchun bosilgani uchun eski keshdan javob berish noto'g'ri,
+// xuddi isBotEnabled(force)dagi kabi).
+const subscriptionCache = new Map<number, { missing: { chatId?: string; url: string; title: string }[]; checkedAt: number }>();
+const SUBSCRIPTION_CACHE_MS = 10 * 60 * 1000; // 10 daqiqa
+async function getMissingSubscriptions(userId: number, force = false): Promise<{ chatId?: string; url: string; title: string }[]> {
+  const now = Date.now();
+  if (!force) {
+    const cached = subscriptionCache.get(userId);
+    if (cached && now - cached.checkedAt < SUBSCRIPTION_CACHE_MS) return cached.missing;
+  }
+  const settings = await getAppSettingsCached();
+  const required = getRequiredChannels(settings);
+  const missing: { chatId?: string; url: string; title: string }[] = [];
+  for (const ch of required) {
+    // chatId hali aniqlanmagan bo'lsa (bot o'sha kanalga hali admin sifatida
+    // qo'shilmagan) — shu kanal uchun tekshiruv o'tkazib yuboriladi. Bu
+    // ATAYLAB xavfsiz-standart: sozlanmagan/yarim sozlangan holatda hech
+    // kimni bloklab qo'ymaslik, bloklab qo'yish (hamma botdan foydalana
+        // olmay qolishi) tekshirmaslikdan ko'ra ancha yomonroq oqibat.
+    if (!ch.chatId) continue;
+    try {
+      const member = await bot.getChatMember(ch.chatId, userId);
+      const status = member?.status;
+      const isMember = status === 'creator' || status === 'administrator' || status === 'member' ||
+        (status === 'restricted' && member?.is_member !== false);
+      if (!isMember) missing.push(ch);
+    } catch {
+      // Bot getChatMember so'rovini bajara olmadi (masalan bot admin emas,
+      // yoki foydalanuvchi hech qachon botga /start bosmagan) — bu holatni
+      // "obuna emas" deb hisoblash noto'g'ri xulosaga olib kelishi mumkin,
+      // shu sabab jim o'tkazib yuboriladi (xavfsiz-standart, yuqoridagi
+      // izohdagi bilan bir xil mantiq).
+    }
+  }
+  subscriptionCache.set(userId, { missing, checkedAt: now });
+  return missing;
+}
+
+function subscribeGateKeyboard(missing: { url: string; title: string }[], lang?: BotLang) {
+  return {
+    inline_keyboard: [
+      ...missing.map(ch => [{ text: `➕ ${ch.title}`, url: ch.url }]),
+      [{ text: tb(lang, 'subGateCheckBtn'), callback_data: 'subcheck' }],
+    ],
+  };
+}
+
+// /start'da ham, oddiy xabarlarda ham bir xil chaqiriladi — obuna to'liq
+// bo'lmasa, gate xabarini yuboradi va `true` qaytaradi (chaqiruvchi shu
+// holatda qolgan qayta ishlashni to'xtatishi kerak).
+async function enforceSubscriptionGate(chatId: number, telegramUserId: number, lang: BotLang | undefined, force = false): Promise<boolean> {
+  const missing = await getMissingSubscriptions(telegramUserId, force);
+  if (missing.length === 0) return false;
+  const settings = await getAppSettingsCached();
+  const m = subscribeGateEffectiveMsg(settings, lang);
+  await bot.sendMessage(chatId, m.text, { entities: m.entities, reply_markup: subscribeGateKeyboard(missing, lang) }).catch(() => {});
+  return true;
+}
+
+// Bot biror kanal/guruhga a'zo/administrator sifatida QO'SHILGANDA Telegram
+// shu update'ni yuboradi (allowed_updates'ga 'my_chat_member' qo'shilgan —
+// yuqorida, polling/webhook sozlamalarida). Private invite-link kanallar
+// uchun BU YAGONA yo'l — chat'ning raqamli ID'sini avtomatik bilib olish
+// (havolaning o'zidan chat_id chiqarib bo'lmaydi). Nomi bo'yicha standart
+// 3 sarlavhaga mos kelsa — avtomatik moslashtiriladi, aks holda faqat
+// "discoveredChats" ro'yxatiga qo'shiladi (dasturchi keyin bot menyusidan
+// qo'lda moslashtirishi mumkin).
+bot.on('my_chat_member', async (update: any) => {
+  try {
+    const chat = update.chat;
+    const newStatus = update.new_chat_member?.status;
+    if (!chat?.id || !['member', 'administrator', 'creator'].includes(newStatus)) return;
+    const chatId = String(chat.id);
+    const title = chat.title || chat.username || chatId;
+    const settings: any = await AppSettings.findOne({ key: 'global' }).lean();
+    const discovered: any[] = Array.isArray(settings?.discoveredChats) ? settings.discoveredChats.filter((c: any) => c.chatId !== chatId) : [];
+    discovered.push({ chatId, title, type: chat.type });
+
+    // Nom bo'yicha avtomatik moslashtirish (aniq mos kelmasa — qo'lda
+    // moslashtirish uchun discoveredChats'da qoladi, hech narsa yo'qolmaydi).
+    const required = getRequiredChannels(settings).map(ch => ({ ...ch }));
+    const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9а-яёʻʼ]+/gi, '');
+    const nTitle = norm(title);
+    for (const ch of required) {
+      if (ch.chatId) continue;
+      if (nTitle && norm(ch.title) === nTitle) ch.chatId = chatId;
+    }
+
+    await AppSettings.findOneAndUpdate(
+      { key: 'global' },
+      { $set: { key: 'global', discoveredChats: discovered, requiredChannels: required, updatedAt: new Date() } },
+      { upsert: true }
+    );
+    cachedAppSettings = null;
+    subscriptionCache.clear(); // yangi kanal aniqlandi — barcha eski "obuna yo'q" natijalar eskirgan bo'lishi mumkin
+  } catch (err) {
+    console.error('[bot my_chat_member]', err);
+  }
+});
 
 // Bot o'chirilganda oddiy foydalanuvchi ko'radigan YAGONA tugma — hech qanday
 // funksiya ishlamaydi, faqat holatni qayta tekshirish mumkin.
@@ -577,9 +712,31 @@ function devSettingsMenu(lang?: BotLang) {
       [{ text: `👔 ${tb(lang, 'scopeAdmin')} — ${tb(lang, 'kb_devLabels')}`, callback_data: 'devlabels_admin' }, { text: '🔀', callback_data: 'devreorder_admin' }],
       [{ text: `👷 ${tb(lang, 'scopeUser')} — ${tb(lang, 'kb_devLabels')}`, callback_data: 'devlabels_user' }, { text: '🔀', callback_data: 'devreorder_user' }],
       [{ text: tb(lang, 'kb_devMsgs'), callback_data: 'devmsgs' }],
+      [{ text: tb(lang, 'kb_subscribeGate'), callback_data: 'subgatemenu' }],
       [{ text: tb(lang, 'kb_devReset'), callback_data: 'devresetask' }],
     ],
   };
+}
+
+// "📋 Majburiy obuna" ekrani — 3 kanal holati + tahrirlash tugmalari.
+function subGateAdminMenu(settings: any, lang?: BotLang) {
+  const required = getRequiredChannels(settings);
+  const rows: { text: string; callback_data: string }[][] = [];
+  required.forEach((ch, i) => {
+    rows.push([{ text: tb(lang, 'subGateEditUrlBtn', { n: i + 1 }), callback_data: `subgateurl_${i}` }]);
+    rows.push([{ text: tb(lang, 'subGateEditTitleBtn', { n: i + 1 }), callback_data: `subgatetitle_${i}` }]);
+  });
+  rows.push([{ text: tb(lang, 'subGateEditMsgBtn'), callback_data: 'subgatemsg' }]);
+  rows.push([{ text: tb(lang, 'kb_devBack'), callback_data: 'devsettingsback' }]);
+  return { inline_keyboard: rows };
+}
+function subGateAdminIntroText(settings: any, lang?: BotLang): string {
+  const required = getRequiredChannels(settings);
+  const lines = required.map((ch, i) => tb(lang, 'subGateAdminChannelLine', {
+    n: i + 1, title: ch.title, url: ch.url,
+    status: ch.chatId ? tb(lang, 'subGateDiscovered') : tb(lang, 'subGateNotDiscovered'),
+  }));
+  return `${tb(lang, 'subGateAdminIntro')}\n\n${lines.join('\n\n')}`;
 }
 
 // Har bir o'zgartirilishi mumkin TUGMA matni uchun bitta qator (scope —
@@ -649,6 +806,14 @@ bot.onText(/\/start/, async (msg: any) => {
   if ((msg.text || '').trim().split(/\s+/).length > 1) return;
   // Check if this chatId already belongs to a user
   const existing = await User.findOne({ telegramChatId: chatId.toString() }).catch(() => null);
+  // ── Majburiy obuna — dasturchidan boshqa HAMMA uchun (yangi ham, eski
+  // ham) /start'ning O'ZIDA tekshiriladi. Bot bu yerda return qilib
+  // to'xtaydi — quyidagi "xush kelibsiz"/"telefon raqamingizni ulashing"
+  // javoblari faqat obuna to'liq bo'lgach ko'rinadi.
+  if ((!existing || !isDev(existing.role)) && msg.from?.id) {
+    const gLang = existing?.language as BotLang | undefined;
+    if (await enforceSubscriptionGate(chatId, msg.from.id, gLang)) return;
+  }
   if (existing) {
     const lang = existing.language as BotLang | undefined;
     const keyboard = await keyboardForUser(existing, lang);
@@ -756,6 +921,21 @@ bot.on('message', async (msg: any) => {
     }
   }
 
+  // ── Majburiy obuna — /start bu yerda EMAS, alohida onText handlerida
+  // tekshiriladi (pastroqda "if (text.startsWith('/start')) return;" bilan
+  // shu handlerdan chiqib ketadi, keyin alohida ro'yxatdan o'tgan onText
+  // handleri ishga tushadi — ikkalasi mustaqil listener, biri return qilsa
+  // ikkinchisi baribir ishlaydi, shu sabab u yerda ALOHIDA tekshiruv bor).
+  // Shu yerdagi tekshiruv — /start'dan TASHQARI HAR QANDAY boshqa xabar
+  // (menyu tugmasi, oddiy matn, fayl, GPS va h.k.) uchun.
+  if (!(msg.text || '').startsWith('/start') && msg.from?.id) {
+    const gUser = await User.findOne({ telegramChatId: chatId.toString() }).select('role language').catch(() => null);
+    if (!gUser || !isDev(gUser.role)) {
+      const gLang = gUser?.language as BotLang | undefined;
+      if (await enforceSubscriptionGate(chatId, msg.from.id, gLang)) return;
+    }
+  }
+
   // ── Bot ichidan chat rejimi — matn, rasm/video/ovoz/fayl/lokatsiya bo'lishi mumkin ──
   const activeChat = chatSessions.get(chatId);
   if (activeChat) {
@@ -848,6 +1028,39 @@ bot.on('message', async (msg: any) => {
       const elLang = elUser.language as BotLang | undefined;
       // 'label:admin:kb_chat' → kind='label', scope='admin', key='kb_chat'
       // 'msg:siteEnabledMsg' → kind='msg', key='siteEnabledMsg' (xabarlar scope'ga bo'linmagan)
+      // 'subch:url:0' / 'subch:title:0' / 'subch:msg' → majburiy obuna
+      // kanal havolasi/nomi/xabar matni — massiv elementi, boshqa maydonlar
+      // bilan bir xil Mixed-map mantiqqa to'g'ri kelmagani uchun ALOHIDA
+      // ishlov beriladi (pastda, keyin shu blokdan chiqib ketiladi).
+      if (tag.startsWith('subch:')) {
+        const [, subKind, idxStr] = tag.split(':');
+        const settings: any = await AppSettings.findOne({ key: 'global' }).lean();
+        if (subKind === 'msg') {
+          await AppSettings.findOneAndUpdate(
+            { key: 'global' },
+            { $set: { key: 'global', subscribeGateMsg: { text: msg.text, entities: msg.entities || [] }, updatedAt: new Date() } },
+            { upsert: true }
+          );
+          cachedAppSettings = null;
+          await bot.sendMessage(chatId, tb(elLang, 'editMsgSaved'), { reply_markup: await keyboardForUser(elUser, elLang) });
+        } else {
+          const idx = Number(idxStr);
+          const required = getRequiredChannels(settings).map((ch: any) => ({ ...ch }));
+          if (required[idx]) {
+            if (subKind === 'url') required[idx].url = msg.text.trim();
+            else if (subKind === 'title') required[idx].title = msg.text.trim();
+            await AppSettings.findOneAndUpdate(
+              { key: 'global' },
+              { $set: { key: 'global', requiredChannels: required, updatedAt: new Date() } },
+              { upsert: true }
+            );
+            cachedAppSettings = null;
+            subscriptionCache.clear(); // havola/nom o'zgardi — eski natijalar endi ishonchsiz
+            await bot.sendMessage(chatId, tb(elLang, subKind === 'url' ? 'subGateUrlSaved' : 'subGateTitleSaved'), { reply_markup: await keyboardForUser(elUser, elLang) });
+          }
+        }
+        return;
+      }
       const [kind, ...restParts] = tag.split(':');
       const field = kind === 'label' ? labelsField(restParts[0] as KbScope) : 'devMessageTexts';
       const key = kind === 'label' ? restParts[1] : restParts[0];
@@ -1435,6 +1648,42 @@ bot.on('callback_query', async (query: any) => {
     }
   }
 
+  // ── Majburiy obuna — "✅ Tekshirish" tugmasi. FORCE (keshsiz) qayta
+  // tekshiradi — foydalanuvchi aynan shu tugmani "hozir obuna bo'ldim,
+  // tekshir" degani uchun bosadi, eski keshdan javob berish noto'g'ri.
+  if (data === 'subcheck') {
+    await bot.answerCallbackQuery(query.id).catch(() => {});
+    if (!chatId || !query.from?.id) return;
+    const missing = await getMissingSubscriptions(query.from.id, true);
+    if (missing.length > 0) {
+      await bot.answerCallbackQuery(query.id, { text: tb(lang, 'subGateStillMissing'), show_alert: true }).catch(() => {});
+      const settings: any = await getAppSettingsCached();
+      const m = subscribeGateEffectiveMsg(settings, lang);
+      const markup = subscribeGateKeyboard(missing, lang);
+      if (messageId) {
+        await bot.editMessageText(m.text, { chat_id: chatId, message_id: messageId, entities: m.entities, reply_markup: markup })
+          .catch(() => bot.sendMessage(chatId, m.text, { entities: m.entities, reply_markup: markup }));
+      } else {
+        await bot.sendMessage(chatId, m.text, { entities: m.entities, reply_markup: markup });
+      }
+      return;
+    }
+    // Hammasiga obuna bo'lindi — tasdiq va normal klaviatura.
+    if (messageId) await bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: messageId }).catch(() => {});
+    if (user) {
+      await bot.sendMessage(chatId, tb(lang, 'subGateAllDone'), { reply_markup: await keyboardForUser(user, lang) });
+    } else {
+      // Hali ro'yxatdan o'tmagan (telefon ulashmagan) foydalanuvchi —
+      // /start'ning "yangi foydalanuvchi" oqimini shu yerda takrorlaymiz.
+      await bot.sendMessage(chatId, tb(undefined, 'subGateAllDone'));
+      await bot.sendMessage(chatId, tb(undefined, 'startWelcomeNew'), {
+        parse_mode: 'Markdown',
+        reply_markup: { keyboard: [[{ text: tb(undefined, 'sharePhoneBtn'), request_contact: true }]], resize_keyboard: true, one_time_keyboard: true },
+      });
+    }
+    return;
+  }
+
   // ── Dasturchi — "⚙️ Tugmalarni sozlash" bo'limi (tugma/xabar matnlari,
   // tartib, standartga qaytarish). Barchasi faqat dasturchi uchun. ────────
   if (user && isDev(user.role) && (
@@ -1518,6 +1767,44 @@ bot.on('callback_query', async (query: any) => {
       } }, { upsert: true });
       cachedAppSettings = null;
       await bot.sendMessage(chatId, tb(lang, 'devResetDone'), { reply_markup: await keyboardForUser(user, lang) });
+      return;
+    }
+    return;
+  }
+
+  // ── Dasturchi — "📋 Majburiy obuna" (kanal havolalari/nomlari/xabar matni
+  // tahrirlash). Alohida blok — devsettings blokidan tashqarida, chunki
+  // saqlanadigan maydon (requiredChannels/subscribeGateMsg) butunlay
+  // boshqa struktura (label/msg emas, indeks bo'yicha massiv elementi).
+  if (user && isDev(user.role) && (data === 'subgatemenu' || data.startsWith('subgateurl_') || data.startsWith('subgatetitle_') || data === 'subgatemsg')) {
+    await bot.answerCallbackQuery(query.id).catch(() => {});
+    const settings: any = await AppSettings.findOne({ key: 'global' }).lean();
+    const editScreen = async (msgText: string, markup: any) => {
+      if (!messageId) { await bot.sendMessage(chatId, msgText, { reply_markup: markup }); return; }
+      await bot.editMessageText(msgText, { chat_id: chatId, message_id: messageId, reply_markup: markup })
+        .catch(() => bot.sendMessage(chatId, msgText, { reply_markup: markup }));
+    };
+    if (data === 'subgatemenu') { await editScreen(subGateAdminIntroText(settings, lang), subGateAdminMenu(settings, lang)); return; }
+    const required = getRequiredChannels(settings);
+    if (data.startsWith('subgateurl_')) {
+      const i = Number(data.slice('subgateurl_'.length));
+      const ch = required[i];
+      if (!ch) return;
+      pendingLabelEdit.set(chatId, `subch:url:${i}`);
+      await bot.sendMessage(chatId, tb(lang, 'subGateEditUrlPrompt', { title: ch.title }));
+      return;
+    }
+    if (data.startsWith('subgatetitle_')) {
+      const i = Number(data.slice('subgatetitle_'.length));
+      const ch = required[i];
+      if (!ch) return;
+      pendingLabelEdit.set(chatId, `subch:title:${i}`);
+      await bot.sendMessage(chatId, tb(lang, 'subGateEditTitlePrompt', { title: ch.title }));
+      return;
+    }
+    if (data === 'subgatemsg') {
+      pendingLabelEdit.set(chatId, 'subch:msg');
+      await bot.sendMessage(chatId, tb(lang, 'subGateEditMsgPrompt'));
       return;
     }
     return;

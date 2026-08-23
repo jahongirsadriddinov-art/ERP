@@ -172,6 +172,25 @@ interface BotDict {
   usrSentTransferRow: (p: { icon: string; name: string; qty: number | string; unit: string; date: string }) => string;
   usrNoIncomingPayments: string;
   usrIncomingPaymentMsg: (p: { amount: string; reason: string; status: string; date: string }) => string;
+
+  // Majburiy obuna (kanal/guruhga obuna bo'lmaguncha bot ishlamaydi)
+  subGateDefaultBody: string;
+  subGateCheckBtn: string;
+  subGateStillMissing: string;
+  subGateAllDone: string;
+  kb_subscribeGate: string;
+  subGateAdminIntro: string;
+  subGateAdminChannelLine: (p: { n: number; title: string; url: string; status: string }) => string;
+  subGateDiscovered: string;
+  subGateNotDiscovered: string;
+  subGateEditUrlBtn: (p: { n: number }) => string;
+  subGateEditTitleBtn: (p: { n: number }) => string;
+  subGateEditMsgBtn: string;
+  subGateEditUrlPrompt: (p: { title: string }) => string;
+  subGateEditTitlePrompt: (p: { title: string }) => string;
+  subGateEditMsgPrompt: string;
+  subGateUrlSaved: string;
+  subGateTitleSaved: string;
 }
 
 const uz: BotDict = {
@@ -347,6 +366,25 @@ const uz: BotDict = {
   usrNoIncomingPayments: "Sizga hali to'lov yuborilmagan.",
   usrIncomingPaymentMsg: (p: { amount: string; reason: string; status: string; date: string }) =>
     `💰 *To'lov: ${p.amount}*\nSabab: ${p.reason}\nHolat: ${p.status}\nSana: ${p.date}`,
+
+  subGateDefaultBody: "📢 Botdan foydalanish uchun quyidagi kanal va guruhlarga obuna bo'ling, so'ng \"✅ Tekshirish\" tugmasini bosing.",
+  subGateCheckBtn: '✅ Tekshirish',
+  subGateStillMissing: "Hali hammasiga obuna bo'lmadingiz — qolganlariga qo'shiling va qayta tekshiring.",
+  subGateAllDone: "✅ Rahmat! Endi botdan to'liq foydalanishingiz mumkin.",
+  kb_subscribeGate: '📋 Majburiy obuna',
+  subGateAdminIntro: "📋 *Majburiy obuna sozlamalari*\n\nQuyidagi kanal/guruhlarga foydalanuvchi obuna bo'lmaguncha bot ishlamaydi. Tahrirlash uchun tugmani bosing.",
+  subGateAdminChannelLine: (p: { n: number; title: string; url: string; status: string }) =>
+    `${p.n}. *${p.title}*\n${p.url}\n${p.status}`,
+  subGateDiscovered: "✅ Aniqlangan (bot admin)",
+  subGateNotDiscovered: "⏳ Bot hali bu kanal/guruhga administrator sifatida qo'shilmagan — obuna tekshiruvi ishlamaydi",
+  subGateEditUrlBtn: (p: { n: number }) => `🔗 ${p.n}-havolani tahrirlash`,
+  subGateEditTitleBtn: (p: { n: number }) => `✏️ ${p.n}-nomini tahrirlash`,
+  subGateEditMsgBtn: '💬 Xabar matnini tahrirlash',
+  subGateEditUrlPrompt: (p: { title: string }) => `"${p.title}" uchun yangi havolani yuboring (masalan: https://t.me/+abc123):`,
+  subGateEditTitlePrompt: (p: { title: string }) => `"${p.title}" uchun yangi nomni yuboring:`,
+  subGateEditMsgPrompt: 'Obuna so\'ralganda ko\'rsatiladigan yangi xabar matnini yuboring:',
+  subGateUrlSaved: '✅ Havola yangilandi.',
+  subGateTitleSaved: '✅ Nomi yangilandi.',
 };
 
 const ru: BotDict = {
@@ -522,6 +560,25 @@ const ru: BotDict = {
   usrNoIncomingPayments: 'Вам пока не отправлены платежи.',
   usrIncomingPaymentMsg: (p) =>
     `💰 *Платёж: ${p.amount}*\nПричина: ${p.reason}\nСтатус: ${p.status}\nДата: ${p.date}`,
+
+  subGateDefaultBody: '📢 Для использования бота подпишитесь на следующие каналы и группы, затем нажмите "✅ Проверить".',
+  subGateCheckBtn: '✅ Проверить',
+  subGateStillMissing: 'Вы ещё не подписаны на все — присоединитесь к оставшимся и проверьте снова.',
+  subGateAllDone: '✅ Спасибо! Теперь вы можете полноценно пользоваться ботом.',
+  kb_subscribeGate: '📋 Обязательная подписка',
+  subGateAdminIntro: '📋 *Настройки обязательной подписки*\n\nБот не работает, пока пользователь не подпишется на следующие каналы/группы. Нажмите кнопку для редактирования.',
+  subGateAdminChannelLine: (p) =>
+    `${p.n}. *${p.title}*\n${p.url}\n${p.status}`,
+  subGateDiscovered: '✅ Обнаружен (бот админ)',
+  subGateNotDiscovered: '⏳ Бот ещё не добавлен администратором в этот канал/группу — проверка подписки не работает',
+  subGateEditUrlBtn: (p) => `🔗 Изменить ссылку ${p.n}`,
+  subGateEditTitleBtn: (p) => `✏️ Изменить название ${p.n}`,
+  subGateEditMsgBtn: '💬 Изменить текст сообщения',
+  subGateEditUrlPrompt: (p) => `Отправьте новую ссылку для "${p.title}" (например: https://t.me/+abc123):`,
+  subGateEditTitlePrompt: (p) => `Отправьте новое название для "${p.title}":`,
+  subGateEditMsgPrompt: 'Отправьте новый текст сообщения, показываемого при запросе подписки:',
+  subGateUrlSaved: '✅ Ссылка обновлена.',
+  subGateTitleSaved: '✅ Название обновлено.',
 };
 
 // uz-cyrl — funksiyalarni chaqirib string natijasini kirillga o'giradigan wrapper.

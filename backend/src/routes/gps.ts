@@ -6,6 +6,27 @@ import { emitToCompany } from '../services/socket';
 
 const router = Router();
 
+// Har bir GPS nuqta alohida hujjat sifatida saqlanadi (kuniga ~1440 gacha
+// har bir faol xodim uchun) — cheklovsiz saqlansa baza jadal o'sib,
+// so'rovlar sekinlashib boradi. Aniq talab: "gps saqlagan malumotlar
+// faqat 1 oyga saqlaydi, qolgan narsalar turadi" — FAQAT GpsLocation
+// tozalanadi (Attendance/Transaction kabi boshqa modellar butunlay
+// tegilmaydi, ular abadiy saqlanadi). transactions.ts'dagi idempotency
+// tozalash bilan bir xil oddiy setInterval pattern'i (alohida cron
+// kutubxonasi ataylab qo'shilmagan).
+const GPS_RETENTION_MS = 30 * 24 * 60 * 60 * 1000; // 30 kun
+async function cleanupOldGps() {
+  try {
+    const cutoff = new Date(Date.now() - GPS_RETENTION_MS);
+    const r = await GpsLocation.deleteMany({ timestamp: { $lt: cutoff } });
+    if (r.deletedCount) console.log(`[gps cleanup] ${r.deletedCount} ta 30 kundan eski GPS yozuvi o'chirildi`);
+  } catch (err) {
+    console.error('[gps cleanup]', err);
+  }
+}
+setInterval(() => cleanupOldGps(), 24 * 60 * 60 * 1000); // har kuni bir marta
+cleanupOldGps().catch(() => {}); // server ishga tushganda ham darhol (avvalgi to'xtash davridagilarni ham tozalash uchun)
+
 // GET /api/gps/config — frontend'ning GPS interval'ini serverdan boshqarish
 // imkonini beradi (GPS_INTERVAL_MS env orqali) — kod o'zgartirmasdan, deploy
 // qilmasdan sozlash mumkin bo'lsin uchun. /api/push/vapidPublicKey bilan bir
@@ -62,15 +83,28 @@ router.get('/latest', async (req, res) => {
 // oldini olardi, lekin firma ICHIDA istalgan oddiy xodim boshqa bir
 // xodimning to'liq joylashuv TARIXINI so'rashi mumkin edi — shaxsiy
 // joylashuv ma'lumoti, faqat rahbariyat (yoki o'zi) ko'rishi kerak.
+// `from`/`to` (ISO sana-vaqt) — "Kuzatuv" sahifasidagi xodim profilida
+// tanlangan KUN uchun to'liq GPS izini (trail) olish uchun qo'shildi.
+// Berilmasa — eski xatti-harakat (oxirgi N nuqta) saqlanadi.
 router.get('/user/:id', async (req, res) => {
   try {
     const tenant = getTenant();
     const isSelf = String(req.params.id) === String(tenant?.userId);
     const isBoss = tenant?.isDeveloper || tenant?.role === 'direktor' || tenant?.role === 'orinbosar';
     if (!isSelf && !isBoss) return res.status(403).json({ error: 'Ruxsat yo\'q' });
-    const { limit = '20' } = req.query as Record<string, string>;
-    const locations = await GpsLocation.find({ userId: req.params.id, ...scoped() })
-      .sort({ timestamp: -1 }).limit(parseInt(limit));
+    const { limit = '20', from, to } = req.query as Record<string, string>;
+    const filter: any = { userId: req.params.id, ...scoped() };
+    if (from || to) {
+      filter.timestamp = {};
+      if (from) filter.timestamp.$gte = new Date(from);
+      if (to) filter.timestamp.$lte = new Date(to);
+    }
+    // Sana oralig'i so'ralganda — butun kunni ko'rish uchun standart 20
+    // yetarli emas (60s intervalda kuniga ~1440 nuqtagacha bo'lishi mumkin),
+    // shu sabab shunday holatda balandroq shift (2000) qo'llaniladi.
+    const effectiveLimit = from || to ? Math.min(parseInt(limit) || 2000, 2000) : parseInt(limit) || 20;
+    const locations = await GpsLocation.find(filter)
+      .sort({ timestamp: (from || to) ? 1 : -1 }).limit(effectiveLimit);
     res.json(locations);
   } catch { res.status(500).json({ error: 'Server xatoligi' }); }
 });

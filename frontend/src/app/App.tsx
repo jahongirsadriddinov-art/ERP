@@ -79,7 +79,7 @@ interface ReqMat { id: string; name: string; quantity: number;  unit: string;
   category: string;
   price?: number;
 }
-interface Transfer {
+export interface Transfer {
   id: string; materialName: string; quantity: number; unit: string;
   fromUserId: string; toUserId: string; projectId: string;
   sentDate: string; status: TStatus; confirmedDate?: string;
@@ -1767,7 +1767,7 @@ function SmetaResultView({ smeta }: { smeta: SmetaResult }) {
   }
 
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide space-y-3 p-4 pb-24 animate-slide-up-fade">
+    <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide space-y-3 p-4 pb-24 animate-slide-up-fade touch-pan-y">
       {/* Meta + byudjet (parser natijasidan) */}
       <div className="glass-card rounded-xl p-4 border border-border">
         {smeta.meta?.objectName && <p className="text-sm font-bold leading-snug">{smeta.meta.objectName}</p>}
@@ -1791,8 +1791,14 @@ function SmetaResultView({ smeta }: { smeta: SmetaResult }) {
               <span className="text-sm font-semibold text-left">{SMETA_GROUP_LABEL[g]} <span className="text-muted-foreground font-normal">({rows.length})</span></span>
               <span className="flex items-center gap-2"><span className="font-mono text-sm font-bold">{fmtNum(sum)}</span>{open ? <ChevronUp className="w-4 h-4 shrink-0" /> : <ChevronDown className="w-4 h-4 shrink-0" />}</span>
             </button>
+            {/* XATO TUZATILDI: sahifaning o'zi (yuqorida) vertikal scroll
+                qiladi, bu jadval esa gorizontal — ikkalasi izolyatsiya
+                qilinmagan bo'lsa, mobil/APK'da touch imo-ishorasi ko'pincha
+                vertikalga "qulflanib", gorizontal svayp deyarli ishlamaydi
+                ("smeta bo'limida chapga qimirlatib bo'lmayapti"). Talab
+                jadvalidagi bilan bir xil touch-action izolyatsiyasi. */}
             {open && (
-              <div className="overflow-x-auto scrollbar-hide border-t border-border">
+              <div className="overflow-x-auto scrollbar-hide border-t border-border touch-pan-x">
                 <table className="w-full text-left text-xs">
                   <thead className="bg-muted/40 text-muted-foreground"><tr>
                     <th className="px-2 py-1.5">№</th><th className="px-2 py-1.5">Шифр</th><th className="px-2 py-1.5">Наименование</th>
@@ -1842,7 +1848,7 @@ function SmetaResultView({ smeta }: { smeta: SmetaResult }) {
                     <span className="flex items-center gap-1 shrink-0"><span className="text-[10px] text-muted-foreground whitespace-nowrap">{w.norms.length} n.</span>{wo ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}</span>
                   </button>
                   {wo && w.norms.length > 0 && (
-                    <div className="overflow-x-auto scrollbar-hide px-4 pb-2">
+                    <div className="overflow-x-auto scrollbar-hide px-4 pb-2 touch-pan-x">
                       <table className="w-full text-left text-[11px]">
                         <thead className="text-muted-foreground"><tr><th className="py-1 pr-2">№</th><th className="pr-2">Шифр</th><th className="pr-2">Наименование</th><th className="pr-2">Ед.</th><th className="text-right pr-2">На ед.</th><th className="text-right">По проекту</th></tr></thead>
                         <tbody>
@@ -2025,8 +2031,17 @@ function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSe
                 yuqoriga-pastga suriladi), ICHKI faqat gorizontal (qator
                 matni chapga-o'ngga suriladi) — ikki yo'nalish endi bir-biriga
                 xalaqit bermaydi. */}
-            <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden scrollbar-hide pb-20 sm:pb-2">
-              <div className="overflow-x-auto scrollbar-hide">
+            {/* XATO TUZATILDI ("chapga-o'ngga qimirlatib bo'lmayapti — faqat
+                tepaga-pastga"): ikkita ALOHIDA overflow konteyner (yuqoridagi
+                izohda tushuntirilgan) o'zi YETARLI emas edi — ayniqsa Android
+                APK'ning WebView'ida brauzer TOUCH IMO-ISHORASINI qaysi
+                konteynerga yo'naltirishni hal qilishda ko'proq "ehtiyotkor"
+                (aniq touch-action ko'rsatilmasa, ko'pincha vertikalni afzal
+                ko'radi). touch-pan-y/touch-pan-x har bir konteynerga aynan
+                QAYSI o'qda imo-ishora qabul qilishini ANIQ aytadi — endi
+                gorizontal svayp har doim ICHKI konteynerga boradi. */}
+            <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden scrollbar-hide pb-20 sm:pb-2 touch-pan-y">
+              <div className="overflow-x-auto scrollbar-hide touch-pan-x">
                 <table className="w-full min-w-max text-left border-collapse text-[11px] leading-tight">
                   <thead className="sticky top-0 z-10 bg-card">
                     <tr className="border-b border-border">
@@ -5693,7 +5708,7 @@ export default function App() {
         )}
         {page==="gps" && isGpsAdmin && (
           <Suspense fallback={<SkeletonPage variant="list" />}>
-            <GpsTrackingPage users={users} gpsLocations={gpsLocations} refreshing={gpsRefreshing} onRefresh={fetchGpsLocations}/>
+            <GpsTrackingPage users={users} gpsLocations={gpsLocations} refreshing={gpsRefreshing} onRefresh={fetchGpsLocations} transfers={transfers} expenses={expenses}/>
           </Suspense>
         )}
       </main>

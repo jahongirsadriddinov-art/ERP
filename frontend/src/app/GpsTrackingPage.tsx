@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { MapPin, Users2, Clock } from "lucide-react";
+import { MapPin, Users2, Clock, ChevronRight } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { AppUser, Avatar, fmtWorkDuration, roleLabel } from "./App";
+import { AppUser, Avatar, Transfer, Expense, fmtWorkDuration, roleLabel } from "./App";
 import { API_BASE } from "./api";
 import WorkerMap, { NavigateChoiceModal } from "./WorkerMap";
+import WorkerProfileModal from "./WorkerProfileModal";
 
 interface AttendanceEntry {
   userId: string;
@@ -23,16 +24,22 @@ interface AttendanceEntry {
 // Yo'qlama (attendance) ham shu sahifaga qo'shildi — alohida nav band
 // ochish o'rniga, "xodim qayerda + bugun ishga keldimi" bir joyda ko'rinadi
 // (GET /api/attendance/list, faqat direktor/orinbosar/dasturchi).
-export default function GpsTrackingPage({ users, gpsLocations, refreshing, onRefresh }: {
+export default function GpsTrackingPage({ users, gpsLocations, refreshing, onRefresh, transfers, expenses }: {
   users: AppUser[];
   gpsLocations: Array<{userId: string; lat: number; lng: number; accuracy?: number; timestamp: string; source?: 'site'|'bot_live'|'bot_once'}>;
   refreshing: boolean;
   onRefresh: () => void;
+  transfers: Transfer[];
+  expenses: Expense[];
 }) {
   const { t } = useTranslation();
   const [attendance, setAttendance] = useState<AttendanceEntry[]>([]);
   const [attLoading, setAttLoading] = useState(true);
   const [navTarget, setNavTarget] = useState<{ lat: number; lng: number; name: string } | null>(null);
+  // "Kuzatuv"ga qo'shilgan yangi bo'lim: xodim kartasini bosganda uning
+  // TO'LIQ profili (davomat tarixi, yuborgan/qabul qilgan materiallar,
+  // olgan ish haqi, chiqimlari, tanlangan kun bo'yicha GPS izi) ochiladi.
+  const [profileWorker, setProfileWorker] = useState<AppUser | null>(null);
 
   const loadAttendance = () => {
     setAttLoading(true);
@@ -93,7 +100,15 @@ export default function GpsTrackingPage({ users, gpsLocations, refreshing, onRef
           const min = loc ? minutesAgo(loc.timestamp) : null;
           const att = attendanceById.get(u.id);
           return (
-            <div key={u.id} className="surface rounded-2xl p-4 space-y-3">
+            // XATO TUZATILDI: bu ichida allaqachon o'zining <button>i ("Xarita"
+            // havolasi) bor edi — <button> ichida <button> HTML'da yaroqsiz
+            // (va bosilganda ikkalasi ham ishga tushib, ikkita modal birdan
+            // ochilardi). Shu sabab tashqi element div + role="button" (klaviatura
+            // uchun tabIndex/onKeyDown bilan), ichkarisi esa stopPropagation bilan.
+            <div key={u.id} role="button" tabIndex={0}
+              onClick={() => setProfileWorker(u)}
+              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setProfileWorker(u); } }}
+              className="surface rounded-2xl p-4 space-y-3 w-full text-left hover:bg-muted/20 liquid-transition cursor-pointer">
               <div className="flex items-center gap-3">
                 <div className="relative flex-shrink-0">
                   <Avatar user={u} size="md"/>
@@ -121,13 +136,14 @@ export default function GpsTrackingPage({ users, gpsLocations, refreshing, onRef
                     <p className="text-[10px] text-muted-foreground mt-1">{t('gps.noGpsData')}</p>
                   )}
                 </div>
+                <ChevronRight className="w-4 h-4 text-muted-foreground/40 flex-shrink-0" aria-hidden="true"/>
                 <div className="flex-shrink-0 text-right">
                   {loc ? (
                     <div className="space-y-1">
                       <div className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${min! < 10 ? 'bg-green-500/15 text-green-700 dark:text-green-400' : min! < 30 ? 'bg-amber-500/15 text-amber-700 dark:text-amber-400' : 'bg-red-500/15 text-red-700 dark:text-red-400'}`}>
                         {statusLabel(min!)}
                       </div>
-                      <button onClick={() => setNavTarget({ lat: loc.lat, lng: loc.lng, name: u.name })}
+                      <button onClick={e => { e.stopPropagation(); setNavTarget({ lat: loc.lat, lng: loc.lng, name: u.name }); }}
                         className="text-[10px] text-primary underline block ml-auto">{t('gps.mapLink')}</button>
                     </div>
                   ) : (
@@ -166,6 +182,9 @@ export default function GpsTrackingPage({ users, gpsLocations, refreshing, onRef
         )}
       </div>
       {navTarget && <NavigateChoiceModal target={navTarget} onClose={() => setNavTarget(null)} />}
+      {profileWorker && (
+        <WorkerProfileModal worker={profileWorker} transfers={transfers} expenses={expenses} onClose={() => setProfileWorker(null)} />
+      )}
     </div>
   );
 }

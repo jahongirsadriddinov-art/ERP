@@ -33,6 +33,14 @@ export default function WorkerMap({ users, gpsLocations }: { users: AppUser[]; g
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markersRef = useRef<Record<string, L.Marker>>({});
+  // XATO TUZATILDI ("aniqroq" — accuracy): `accuracy` maydoni bazadan
+  // kelayotgan edi, lekin xaritada UMUMAN ishlatilmasdi — GPS-asosli aniq
+  // joylashuv bilan qo'pol (masalan IP/tarmoq-asosli, yuzlab metr xato)
+  // joylashuv BIR XIL nuqta sifatida ko'rsatilardi, foydalanuvchi qay
+  // birига ishonish kerakligini bilmasdi. Endi har bir markerni o'rab
+  // turgan doira — radiusi haqiqiy aniqlik (metr), qanchalik katta doira
+  // — shunchalik noaniq joylashuv.
+  const circlesRef = useRef<Record<string, L.Circle>>({});
   const [navTarget, setNavTarget] = useState<{ lat: number; lng: number; name: string } | null>(null);
 
   // Xarita — bir marta yaratiladi
@@ -44,7 +52,7 @@ export default function WorkerMap({ users, gpsLocations }: { users: AppUser[]; g
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
     }).addTo(map);
     mapRef.current = map;
-    return () => { map.remove(); mapRef.current = null; markersRef.current = {}; };
+    return () => { map.remove(); mapRef.current = null; markersRef.current = {}; circlesRef.current = {}; };
   }, []);
 
   // Markerlar — gpsLocations o'zgarganda yangilanadi (yangi socket yangilanishi kelganda ham)
@@ -70,15 +78,34 @@ export default function WorkerMap({ users, gpsLocations }: { users: AppUser[]; g
         marker.on('click', () => setNavTarget({ lat: loc.lat, lng: loc.lng, name: user.name }));
         markersRef.current[loc.userId] = marker;
       }
+      const veryRough = (loc.accuracy || 0) > 300; // ~300m'dan katta — odatda tarmoq/IP-asosli, GPS chip emas
       markersRef.current[loc.userId].bindTooltip(
-        `${user.name}${live ? (stale ? ' · eskirgan' : ' · jonli') : ' · oxirgi ma\'lum joy'}`,
+        `${user.name}${live ? (stale ? ' · eskirgan' : ' · jonli') : ' · oxirgi ma\'lum joy'}${loc.accuracy ? ` · ±${Math.round(loc.accuracy)}m` : ''}`,
         { direction: 'top', offset: [0, -18] }
       );
+
+      // Aniqlik doirasi — real GPS radiusi bo'lsa yashil/ko'k, juda qo'pol
+      // (tarmoq-asosli) bo'lsa sarg'ish-shtrixli, joylashuvga umuman
+      // ishonmaslik kerakligini ko'rsatadi.
+      if (loc.accuracy && loc.accuracy > 5) {
+        const circleStyle = { radius: loc.accuracy, color: veryRough ? '#f59e0b' : '#3b82f6', weight: 1, fillOpacity: 0.08, dashArray: veryRough ? '4 4' : undefined };
+        if (circlesRef.current[loc.userId]) {
+          circlesRef.current[loc.userId].setLatLng([loc.lat, loc.lng]).setStyle(circleStyle).setRadius(loc.accuracy);
+        } else {
+          circlesRef.current[loc.userId] = L.circle([loc.lat, loc.lng], circleStyle).addTo(map);
+        }
+      } else if (circlesRef.current[loc.userId]) {
+        circlesRef.current[loc.userId].remove();
+        delete circlesRef.current[loc.userId];
+      }
     });
 
     // Endi GPS'i yo'q xodimlarning eski markerini olib tashlaymiz
     Object.keys(markersRef.current).forEach(uid => {
-      if (!seen.has(uid)) { markersRef.current[uid].remove(); delete markersRef.current[uid]; }
+      if (!seen.has(uid)) {
+        markersRef.current[uid].remove(); delete markersRef.current[uid];
+        if (circlesRef.current[uid]) { circlesRef.current[uid].remove(); delete circlesRef.current[uid]; }
+      }
     });
 
     // Birinchi marta ma'lumot kelganda — barcha markerlarni ko'rsatadigan qilib markazlashtirish

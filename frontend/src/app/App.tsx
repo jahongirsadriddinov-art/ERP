@@ -218,6 +218,39 @@ export function exportExpensesToCsv(expenses: Expense[], users: AppUser[], proje
 }
 export const isAdmin = (r: Role) => r === "direktor" || r === "orinbosar";
 export const isPlatformAdmin = (r: Role) => r === "dasturchi";
+
+// "Ishga keldim" uchun joylashuv — aniq talab: oddiy bir martalik snapshot
+// EMAS, botdagi "jonli joylashuv" talabiga yaqinroq bo'lsin. Brauzerda
+// haqiqiy kriptografik tasdiqlash imkoni yo'q (dev-tools joylashuvni har
+// doim qalbakilashtira oladi) — lekin watchPosition orqali BIR NECHA
+// ketma-ket o'qishni talab qilish (bitta statik getCurrentPosition() chaqirig'i
+// o'rniga) hech bo'lmasa eng oddiy soxtalashtirishning (bir marta qo'lda
+// kiritilgan koordinata) oldini oladi va haqiqiy GPS qulfini (fix) tasdiqlaydi.
+// Qattiq bloklamaslik uchun: agar timeoutgacha faqat 1 ta o'qish kelsa ham,
+// o'shani ishlatamiz (signal zaif joylarda ishlashni to'xtatmasin).
+function getLivePosition(timeoutMs = 8000, minSamples = 2): Promise<{ pos: GeolocationPosition | null; denied: boolean }> {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) { resolve({ pos: null, denied: false }); return; }
+    const samples: GeolocationPosition[] = [];
+    let watchId: number | null = null;
+    let done = false;
+    const finish = (pos: GeolocationPosition | null, denied = false) => {
+      if (done) return;
+      done = true;
+      if (watchId != null) navigator.geolocation.clearWatch(watchId);
+      resolve({ pos, denied });
+    };
+    const timer = setTimeout(() => finish(samples[samples.length - 1] || null), timeoutMs);
+    watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        samples.push(pos);
+        if (samples.length >= minSamples) { clearTimeout(timer); finish(pos); }
+      },
+      (err) => { clearTimeout(timer); finish(samples[samples.length - 1] || null, err.code === 1 && samples.length === 0); },
+      { enableHighAccuracy: true, maximumAge: 0, timeout: timeoutMs }
+    );
+  });
+}
 const DEV_PHONE = "+998900960890"; // dasturchi raqami — parol bilan kiradi (Telegram kod emas)
 
 // ─── Seed Data ────────────────────────────────────────────────────────────────
@@ -4605,15 +4638,12 @@ export default function App() {
       const token = localStorage.getItem('token') || '';
       const headers: Record<string,string> = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
       // MAJBURIY: joylashuv olinmasa "Ishga keldim" tasdiqlanmaydi — botdagi
-      // jonli joylashuv talabi bilan bir xil qoida (aniq foydalanuvchi talabi).
-      // Avval xatoni aniq ajratamiz (ruxsat rad etilganmi yoki vaqt tugadimi)
-      // — bir xil "Xatolik" bilan cheklanib qolmaslik uchun.
-      let geoErr: GeolocationPositionError | null = null;
-      const pos = await new Promise<GeolocationPosition>((res, rej) =>
-        navigator.geolocation.getCurrentPosition(res, rej, { timeout: 10000, enableHighAccuracy: true })
-      ).catch((err: GeolocationPositionError) => { geoErr = err; return null; });
+      // jonli joylashuv talabi bilan bir xil qoida (aniq foydalanuvchi talabi:
+      // "tekshir oddiy joylashuv emasligini live joylashuv ekanligini").
+      // getLivePosition() bir martalik statik o'qish o'rniga bir necha
+      // ketma-ket o'qishni (watchPosition) talab qiladi.
+      const { pos, denied } = await getLivePosition();
       if (!pos) {
-        const denied = geoErr?.code === 1; // GeolocationPositionError.PERMISSION_DENIED
         toast.error(denied
           ? "Ishga kelish uchun joylashuv ruxsati kerak. Brauzer/ilova sozlamalaridan joylashuvga ruxsat bering va qayta urinib ko'ring."
           : "Joylashuvni aniqlab bo'lmadi. GPS yoqilganini tekshirib, qayta urinib ko'ring.");

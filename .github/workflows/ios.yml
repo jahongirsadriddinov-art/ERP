@@ -35,16 +35,25 @@ jobs:
         run: pod install
         working-directory: frontend/ios/App
 
+      - name: Check iOS workspace
+        run: |
+          echo "Checking iOS files..."
+          ls -la ios
+          ls -la ios/App
+          test -f ios/App/App.xcworkspace/contents.xcworkspacedata
+          echo "Workspace found successfully."
+
       - name: Build iOS archive
         run: |
           xcodebuild \
-            -workspace ios/App.xcworkspace \
+            -workspace ios/App/App.xcworkspace \
             -scheme App \
             -configuration Release \
             -sdk iphoneos \
             -destination 'generic/platform=iOS' \
             -archivePath "$GITHUB_WORKSPACE/frontend/build/App.xcarchive" \
             CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
             archive
 
       - name: Upload Xcode archive

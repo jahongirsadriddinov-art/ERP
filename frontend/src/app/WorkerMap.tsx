@@ -30,7 +30,7 @@ function workerDivIcon(name: string, live: boolean, stale: boolean) {
   });
 }
 
-export default function WorkerMap({ users, gpsLocations }: { users: AppUser[]; gpsLocations: GpsPoint[] }) {
+export default function WorkerMap({ users, gpsLocations, focusUserId }: { users: AppUser[]; gpsLocations: GpsPoint[]; focusUserId?: string | null }) {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -124,6 +124,20 @@ export default function WorkerMap({ users, gpsLocations }: { users: AppUser[]; g
       (map as any).__wmFitted = true;
     }
   }, [gpsLocations, users, t]);
+
+  // "Ishchilar ro'yxati"dan farqli — bu yerda (Jonli xarita) ismi bosilgan
+  // xodim FULL profil OCHMAYDI, faqat xaritani o'sha xodimning markeriga
+  // suzib olib boradi ("qayerda bo'lsa mapla orqali uni oldiga olib
+  // boradigan qil" — aniq talab). Marker allaqachon chizilgan bo'lishi
+  // kerak, shu sabab bu ALOHIDA effekt (marker-chizish effektidan keyin).
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !focusUserId) return;
+    const marker = markersRef.current[focusUserId];
+    if (!marker) return;
+    map.flyTo(marker.getLatLng(), Math.max(map.getZoom(), 16), { duration: 0.6 });
+    marker.openTooltip();
+  }, [focusUserId, gpsLocations]);
 
   // Jonli (live) deb hisoblanadigan xodimlar soni — xarita ustidagi
   // yorliqda ko'rsatish uchun (foydali ma'lumot + "premium" texnik detal,

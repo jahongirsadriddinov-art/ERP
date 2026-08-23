@@ -46,6 +46,10 @@ export default function GpsTrackingPage({ users, gpsLocations, refreshing, onRef
   // bir xil): "map" = faqat jonli xarita, "list" = ishchilar ro'yxati
   // (bosilganda batafsil profil ochiladi).
   const [tab, setTab] = useState<'map' | 'list'>('map');
+  // "Jonli xarita" yorlig'ining o'zida ham qisqa xodim tanlash ro'yxati —
+  // bosilganda FULL profil OCHMAYDI (bu "Ishchilar ro'yxati"ga xos), faqat
+  // xaritani o'sha xodimga suzib olib boradi.
+  const [focusUserId, setFocusUserId] = useState<string | null>(null);
 
   const loadAttendance = () => {
     setAttLoading(true);
@@ -105,7 +109,23 @@ export default function GpsTrackingPage({ users, gpsLocations, refreshing, onRef
           </button>
         </div>
 
-        {tab === 'map' && workers.length > 0 && <WorkerMap users={workers} gpsLocations={gpsLocations} />}
+        {tab === 'map' && workers.length > 0 && (
+          <>
+            <WorkerMap users={workers} gpsLocations={gpsLocations} focusUserId={focusUserId} />
+            {/* Qisqa tanlash ro'yxati — bosilganda xarita o'sha xodimga
+                suzib boradi, PROFIL OCHMAYDI (bu "Ishchilar ro'yxati"
+                yorlig'iga xos, ikkalasi ATAYLAB aralashtirilmagan). */}
+            <div className="flex gap-2 overflow-x-auto scrollbar-hide touch-pan-x pb-1">
+              {workers.filter(u => gpsLocations.some(g => g.userId === u.id)).map(u => (
+                <button key={u.id} onClick={() => setFocusUserId(u.id)}
+                  className={`flex items-center gap-1.5 pl-1.5 pr-3 py-1.5 rounded-full flex-shrink-0 liquid-transition ${focusUserId === u.id ? 'bg-primary text-white' : 'surface hover:bg-muted/50'}`}>
+                  <Avatar user={u} size="sm"/>
+                  <span className="text-xs font-medium whitespace-nowrap">{u.name}</span>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
 
         {workers.length === 0 && (
           <div className="surface rounded-2xl p-8 text-center">

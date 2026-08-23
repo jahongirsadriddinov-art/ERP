@@ -18,11 +18,15 @@ const router = Router();
 const shape = (g: any) => ({ ...g.toObject(), id: g._id, memberIds: g.memberIds || [], adminIds: g.adminIds || [] });
 
 // Foydalanuvchi a'zo bo'lgan guruhlar
+// XAVFSIZLIK — TOPILMA (audit): `userId` avval to'g'ridan-to'g'ri
+// query'dan olinardi — istalgan xodim boshqa birovning ID'sini berib,
+// o'sha kishi a'zo bo'lgan BARCHA guruhlarni (nomi, a'zolari) ko'ra
+// olardi. Endi doim joriy sessiya egasi.
 router.get('/', async (req, res) => {
   try {
-    const { userId } = req.query;
-    if (!userId) return res.status(400).json({ error: 'userId kerak' });
-    const groups = await Group.find(scoped({ memberIds: String(userId) })).sort({ updatedAt: -1 });
+    const uid = getTenant()?.userId;
+    if (!uid) return res.status(401).json({ error: 'Autentifikatsiya talab etiladi' });
+    const groups = await Group.find(scoped({ memberIds: uid })).sort({ updatedAt: -1 });
     res.json(groups.map(shape));
   } catch (err) {
     console.error(err);
@@ -83,17 +87,25 @@ router.post('/dev-support', async (req, res) => {
 });
 
 // Guruh yaratish
+// XAVFSIZLIK — TOPILMA (audit): `createdBy` avval to'g'ridan-to'g'ri
+// so'rov tanasidan olinardi — messages.ts'dagi fromUserId/materials.ts'dagi
+// senderId bilan bir xil taqlid (impersonatsiya) sinfidagi zaiflik: istalgan
+// xodim boshqa birortasini guruh yaratuvchisi/yagona admini qilib
+// "ko'rsatishi" mumkin edi. Endi doim joriy sessiya egasi.
 router.post('/', async (req, res) => {
   try {
-    const { name, memberIds, createdBy, avatar } = req.body;
-    if (!name?.trim() || !createdBy) return res.status(400).json({ error: 'name va createdBy kerak' });
-    const members = Array.from(new Set([String(createdBy), ...(memberIds || []).map(String)]));
+    const tenant = getTenant();
+    const creatorId = tenant?.userId;
+    if (!creatorId) return res.status(401).json({ error: 'Autentifikatsiya talab etiladi' });
+    const { name, memberIds, avatar } = req.body;
+    if (!name?.trim()) return res.status(400).json({ error: 'name kerak' });
+    const members = Array.from(new Set([String(creatorId), ...(memberIds || []).map(String)]));
     const group = await Group.create(stamped({
       name: name.trim(),
       avatar,
       memberIds: members,
-      adminIds: [String(createdBy)],
-      createdBy: String(createdBy),
+      adminIds: [String(creatorId)],
+      createdBy: String(creatorId),
     }));
     // Barcha a'zolarga xabar berish
     members.forEach(uid => emitToUser(uid, 'group:new', shape(group)));
@@ -105,12 +117,20 @@ router.post('/', async (req, res) => {
 });
 
 // A'zo qo'shish
+// XAVFSIZLIK — TOPILMA (audit): scoped() firmalararo sizishni to'sardi,
+// lekin firma ICHIDA guruhga a'ZO bo'lmagan istalgan xodim ham o'zi
+// tanlagan odamlarni o'sha guruhga qo'sha olardi. Endi faqat guruh
+// a'zosi (yoki admini) shu amalni bajara oladi.
 router.post('/:id/members', async (req, res) => {
   try {
+    const tenant = getTenant();
+    const actorId = tenant?.userId;
+    if (!actorId) return res.status(401).json({ error: 'Autentifikatsiya talab etiladi' });
     const { memberIds } = req.body;
     const group = await Group.findOne(scoped({ _id: req.params.id }));
     if (!group) return res.status(404).json({ error: 'Guruh topilmadi' });
     if (!group.memberIds) group.memberIds = [];
+    if (!group.memberIds.includes(String(actorId))) return res.status(403).json({ error: 'Faqat guruh a\'zosi qo\'sha oladi' });
     const toAdd = (memberIds || []).map(String).filter((id: string) => !group.memberIds.includes(id));
     group.memberIds.push(...toAdd);
     await group.save();
@@ -123,12 +143,24 @@ router.post('/:id/members', async (req, res) => {
 });
 
 // Guruhdan chiqish / a'zoni o'chirish
+// XAVFSIZLIK — TOPILMA (audit): `userId` (kim chiqarilishi) avval
+// to'g'ridan-to'g'ri so'rov tanasidan olinardi, hech qanday tekshiruvsiz
+// — istalgan xodim istalgan boshqa a'zoni (guruh a'zosi bo'lmasa ham)
+// istalgan guruhdan chiqarib yubora olardi. Endi: o'zini chiqarish har
+// doim ruxsat etiladi (haqiqiy "guruhdan chiqish"); boshqa birovni
+// chiqarish faqat guruh admini uchun.
 router.post('/:id/leave', async (req, res) => {
   try {
+    const tenant = getTenant();
+    const actorId = tenant?.userId;
+    if (!actorId) return res.status(401).json({ error: 'Autentifikatsiya talab etiladi' });
     const { userId } = req.body;
     const group = await Group.findOne(scoped({ _id: req.params.id }));
     if (!group) return res.status(404).json({ error: 'Guruh topilmadi' });
-    const leaving = String(userId);
+    const leaving = String(userId || actorId);
+    const isSelf = leaving === String(actorId);
+    const isGroupAdmin = (group.adminIds || []).includes(String(actorId));
+    if (!isSelf && !isGroupAdmin) return res.status(403).json({ error: 'Faqat guruh admini boshqa a\'zoni chiqara oladi' });
     group.memberIds = (group.memberIds || []).filter(id => id !== leaving);
     group.adminIds = (group.adminIds || []).filter(id => id !== leaving);
     await group.save();
@@ -142,11 +174,19 @@ router.post('/:id/leave', async (req, res) => {
 });
 
 // Guruh nomi/avatarini yangilash
+// XAVFSIZLIK — TOPILMA (audit): guruh a'zosi bo'lmagan xodim ham
+// istalgan guruh nomini/rasmini o'zgartira olardi (scoped() faqat
+// firmalararo sizishni to'sadi, guruh a'zoligini emas). Endi faqat
+// guruh a'zosi.
 router.patch('/:id', async (req, res) => {
   try {
+    const tenant = getTenant();
+    const actorId = tenant?.userId;
+    if (!actorId) return res.status(401).json({ error: 'Autentifikatsiya talab etiladi' });
     const { name, avatar } = req.body;
     const group = await Group.findOne(scoped({ _id: req.params.id }));
     if (!group) return res.status(404).json({ error: 'Guruh topilmadi' });
+    if (!(group.memberIds || []).includes(String(actorId))) return res.status(403).json({ error: 'Faqat guruh a\'zosi o\'zgartira oladi' });
     if (name?.trim()) group.name = name.trim();
     if (avatar !== undefined) group.avatar = avatar;
     await group.save();

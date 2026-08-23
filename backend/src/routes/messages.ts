@@ -195,11 +195,17 @@ router.post('/upload', requireAuth, upload.single('file'), async (req, res) => {
 });
 
 // Foydalanuvchi xabarlari: DM + a'zo bo'lgan guruhlar
+// XAVFSIZLIK — TOPILMA (audit): avval `userId` to'g'ridan-to'g'ri
+// so'rov query'sidan olinardi, hech qanday tekshiruvsiz — istalgan
+// autentifikatsiyalangan xodim boshqa birortasining ID'sini yozib,
+// o'sha kishining BARCHA shaxsiy yozishmalari (DM) va guruh xabarlarini
+// o'qiy olardi (IDOR). Endi doim FAQAT joriy sessiya egasining o'zi
+// (getTenant()?.userId) ishlatiladi — bu marshrut hech qachon "boshqa
+// birovning xabarlarini ko'rish" uchun mo'ljallanmagan edi.
 router.get('/', async (req, res) => {
   try {
-    const { userId } = req.query;
-    if (!userId) return res.status(400).json({ error: 'userId kerak' });
-    const uid = String(userId);
+    const uid = getTenant()?.userId;
+    if (!uid) return res.status(401).json({ error: 'Autentifikatsiya talab etiladi' });
     const groups = await Group.find(scoped({ memberIds: uid })).select('_id');
     const groupIds = groups.map(g => String(g._id));
     const messages = await Message.find(scoped({

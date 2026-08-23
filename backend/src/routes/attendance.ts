@@ -86,11 +86,22 @@ router.get('/list', async (req, res) => {
 });
 
 // GET /api/attendance — o'z yoki kompaniya yozuvlari
+// XAVFSIZLIK — TOPILMA (audit): `userId` firmalararo sizishdan scoped()
+// bilan himoyalangan edi, lekin firma ICHIDA hech qanday rol tekshiruvi
+// yo'q edi — istalgan oddiy ishchi boshqa xodimning to'liq yo'qlama
+// tarixini (kelish/ketish vaqtlari) ko'ra olardi. Endi /list bilan bir
+// xil qoida: faqat o'zi, yoki direktor/orinbosar/dasturchi boshqasini ham.
 router.get('/', async (req, res) => {
   try {
+    const tenant = getTenant();
+    if (!tenant?.userId) return res.status(401).json({ error: 'Autentifikatsiya talab etiladi' });
     const { userId, from, to, date } = req.query as Record<string, string>;
+    const isBoss = tenant.role === 'direktor' || tenant.role === 'orinbosar' || tenant.role === 'dasturchi' || tenant.isDeveloper;
+    if (userId && String(userId) !== String(tenant.userId) && !isBoss) {
+      return res.status(403).json({ error: 'Ruxsat yo\'q' });
+    }
     const filter: any = scoped();
-    if (userId) filter.userId = userId;
+    filter.userId = userId || tenant.userId;
     if (date) { filter.date = date; }
     else if (from || to) {
       filter.date = {};
@@ -193,12 +204,22 @@ router.get('/today', async (req, res) => {
 });
 
 // GET /api/attendance/stats — oylik statistika
+// XAVFSIZLIK — TOPILMA (audit): bu marshrutda scoped() UMUMAN yo'q edi —
+// firmalararo to'liq sizish (boshqa firmaning istalgan xodimi ID'sini
+// bersa, uning butun oylik yo'qlama tarixi va statistikasi ko'rinardi),
+// ustiga hech qanday rol tekshiruvi ham yo'q edi (firma ichida ham
+// istalgan xodim boshqasinikini ko'ra olardi). Endi /list va yuqoridagi
+// GET / bilan bir xil qoida.
 router.get('/stats', async (req, res) => {
   try {
     const { userId, month } = req.query as Record<string, string>;
     const tenant = getTenant();
-    const targetUserId = userId || tenant?.userId;
-    if (!targetUserId) return res.status(401).json({ error: 'Autentifikatsiya talab etiladi' });
+    if (!tenant?.userId) return res.status(401).json({ error: 'Autentifikatsiya talab etiladi' });
+    const isBoss = tenant.role === 'direktor' || tenant.role === 'orinbosar' || tenant.role === 'dasturchi' || tenant.isDeveloper;
+    if (userId && String(userId) !== String(tenant.userId) && !isBoss) {
+      return res.status(403).json({ error: 'Ruxsat yo\'q' });
+    }
+    const targetUserId = userId || tenant.userId;
 
     const yearMonth = month || new Date().toISOString().slice(0, 7);
     const from = `${yearMonth}-01`;
@@ -206,7 +227,7 @@ router.get('/stats', async (req, res) => {
     toDate.setMonth(toDate.getMonth() + 1);
     const to = toDate.toISOString().split('T')[0];
 
-    const records = await Attendance.find({ userId: targetUserId, date: { $gte: from, $lt: to } }).sort({ date: 1 });
+    const records = await Attendance.find(scoped({ userId: targetUserId, date: { $gte: from, $lt: to } })).sort({ date: 1 });
     const present = records.filter(r => r.status === 'present').length;
     const late = records.filter(r => r.status === 'late').length;
     const absent = records.filter(r => r.status === 'absent').length;

@@ -481,10 +481,25 @@ router.patch('/:id/reject', async (req, res) => {
 });
 
 // Delete transaction
+// XAVFSIZLIK — TOPILMA (audit): scoped() firmalararo o'chirishni to'sardi,
+// lekin firma ICHIDA hech qanday rol tekshiruvi yo'q edi — /approve,
+// /confirm, /reject barchasida rol/egalik tekshiruvi bor edi, faqat
+// o'chirishda yo'q qolib ketgan (aniq xatolik) — istalgan oddiy ishchi
+// firmaning istalgan moliyaviy yozuvini (o'zi yaratmagan bo'lsa ham)
+// butunlay o'chira olardi.
 router.delete('/:id', async (req, res) => {
   try {
-    const tx = await Transaction.findOneAndDelete(scoped({ _id: req.params.id }));
+    const actingUserId = getTenant()?.userId;
+    if (!actingUserId) return res.status(401).json({ error: 'Autentifikatsiya talab etiladi' });
+    const tx = await Transaction.findOne(scoped({ _id: req.params.id }));
     if (!tx) return res.status(404).json({ error: 'Topilmadi' });
+    const actor = await User.findById(actingUserId).catch(() => null);
+    const isBoss = actor && ['direktor', 'orinbosar'].includes(actor.role);
+    const isCreator = String(tx.createdById) === String(actingUserId);
+    if (!isBoss && !isCreator) {
+      return res.status(403).json({ error: 'Faqat direktor, orinbosar yoki yozuvni yaratgan xodim o\'chira oladi' });
+    }
+    await tx.deleteOne();
     res.json({ message: "O'chirildi" });
   } catch (err) {
     res.status(500).json({ error: 'Server xatoligi' });

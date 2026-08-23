@@ -340,34 +340,37 @@ async function enforceSubscriptionGate(chatId: number, telegramUserId: number, l
 // 3 sarlavhaga mos kelsa — avtomatik moslashtiriladi, aks holda faqat
 // "discoveredChats" ro'yxatiga qo'shiladi (dasturchi keyin bot menyusidan
 // qo'lda moslashtirishi mumkin).
+async function recordDiscoveredChat(chatId: string, title: string, type: string) {
+  const settings: any = await AppSettings.findOne({ key: 'global' }).lean();
+  const discovered: any[] = Array.isArray(settings?.discoveredChats) ? settings.discoveredChats.filter((c: any) => c.chatId !== chatId) : [];
+  discovered.push({ chatId, title, type });
+
+  // Nom bo'yicha avtomatik moslashtirish (aniq mos kelmasa — qo'lda
+  // moslashtirish uchun discoveredChats'da qoladi, hech narsa yo'qolmaydi).
+  const required = getRequiredChannels(settings).map((ch: any) => ({ ...ch }));
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9а-яёʻʼ]+/gi, '');
+  const nTitle = norm(title);
+  let changed = false;
+  for (const ch of required) {
+    if (ch.chatId) continue;
+    if (nTitle && norm(ch.title) === nTitle) { ch.chatId = chatId; changed = true; }
+  }
+
+  await AppSettings.findOneAndUpdate(
+    { key: 'global' },
+    { $set: { key: 'global', discoveredChats: discovered, requiredChannels: required, updatedAt: new Date() } },
+    { upsert: true }
+  );
+  cachedAppSettings = null;
+  if (changed) subscriptionCache.clear(); // yangi kanal aniqlandi — barcha eski "obuna yo'q" natijalar eskirgan bo'lishi mumkin
+}
+
 bot.on('my_chat_member', async (update: any) => {
   try {
     const chat = update.chat;
     const newStatus = update.new_chat_member?.status;
     if (!chat?.id || !['member', 'administrator', 'creator'].includes(newStatus)) return;
-    const chatId = String(chat.id);
-    const title = chat.title || chat.username || chatId;
-    const settings: any = await AppSettings.findOne({ key: 'global' }).lean();
-    const discovered: any[] = Array.isArray(settings?.discoveredChats) ? settings.discoveredChats.filter((c: any) => c.chatId !== chatId) : [];
-    discovered.push({ chatId, title, type: chat.type });
-
-    // Nom bo'yicha avtomatik moslashtirish (aniq mos kelmasa — qo'lda
-    // moslashtirish uchun discoveredChats'da qoladi, hech narsa yo'qolmaydi).
-    const required = getRequiredChannels(settings).map(ch => ({ ...ch }));
-    const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9а-яёʻʼ]+/gi, '');
-    const nTitle = norm(title);
-    for (const ch of required) {
-      if (ch.chatId) continue;
-      if (nTitle && norm(ch.title) === nTitle) ch.chatId = chatId;
-    }
-
-    await AppSettings.findOneAndUpdate(
-      { key: 'global' },
-      { $set: { key: 'global', discoveredChats: discovered, requiredChannels: required, updatedAt: new Date() } },
-      { upsert: true }
-    );
-    cachedAppSettings = null;
-    subscriptionCache.clear(); // yangi kanal aniqlandi — barcha eski "obuna yo'q" natijalar eskirgan bo'lishi mumkin
+    await recordDiscoveredChat(String(chat.id), chat.title || chat.username || String(chat.id), chat.type);
   } catch (err) {
     console.error('[bot my_chat_member]', err);
   }
@@ -910,6 +913,22 @@ bot.on('edited_message', async (msg: any) => {
 // ─── Text message handler — main menu ─────────────────────────────────────────
 bot.on('message', async (msg: any) => {
   const chatId = msg.chat.id;
+
+  // ── Guruh/kanal xabari — majburiy-obuna kanal ID'sini ANIQLASHNING
+  // ZAXIRA yo'li. Asosiy yo'l — 'my_chat_member' (bot administrator
+  // sifatida QO'SHILGAN paytdagi update). Lekin agar bot allaqachon
+  // qo'shilgandan KEYIN backend qayta deploy qilinsa (yoki update
+  // qandaydir sababdan yetib kelmasa) — bot shu guruhda YURGAN paytda
+  // kimdir yozgan HAR QANDAY oddiy xabar ham chat.id/title'ni oshkor
+  // qiladi, shu bilan aynan shu holatni tuzatadi. Boshqa hech qanday
+  // logikaga aralashmaydi — faqat aniqlab, DARHOL chiqib ketadi (xodim/
+  // foydalanuvchi bilan bog'liq qolgan barcha pastdagi mantiq FAQAT
+  // shaxsiy (private) chatlar uchun mo'ljallangan).
+  if (msg.chat.type !== 'private') {
+    recordDiscoveredChat(String(msg.chat.id), msg.chat.title || msg.chat.username || String(msg.chat.id), msg.chat.type).catch(() => {});
+    return;
+  }
+
   if (isInRegistration(chatId)) return; // self-signup scene o'zi ushlaydi
 
   // ── Texnik ishlar rejimi (botEnabled=false) — dasturchidan boshqa hech kim

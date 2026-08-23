@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import fs from 'fs';
 import path from 'path';
+import { requireDeveloper } from '../middleware/auth';
 
 const router = Router();
 
@@ -40,8 +41,17 @@ router.post('/log', (req, res) => {
   }
 });
 
-// GET /api/errors/log — read last N client errors (admin only)
-router.get('/log', (req, res) => {
+// GET /api/errors/log — read last N client errors (dasturchi only).
+// XAVFSIZLIK — TOPILMA (audit): izoh "admin only" deb yozilgan bo'lsa
+// ham, marshrutning o'zida HECH QANDAY tekshiruv yo'q edi — router
+// `optionalAuth` bilan ulangan (POST /log login ekranidan oldin ham
+// ishlashi kerakligi uchun), shu sabab HAR QANDAY, hatto kirmagan
+// tashrifchi ham oxirgi 100 ta frontend xatolik yozuvini (stack trace,
+// URL, user-agent) o'qiy olardi. Bu jurnal companyId bilan belgilanmagan
+// — BARCHA firmalarning xatoliklari birga saqlanadi — shu sabab faqat
+// dasturchi (platforma darajasidagi admin) ko'rishi kerak, direktor ham
+// emas (aks holda boshqa firmalarning ma'lumoti sizib chiqardi).
+router.get('/log', requireDeveloper, (req, res) => {
   try {
     ensureLogDir();
     if (!fs.existsSync(LOG_FILE)) return res.json({ lines: [] });

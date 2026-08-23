@@ -4,6 +4,7 @@ import ObjectModel from '../models/Object';
 import Material from '../models/Material';
 import Transaction from '../models/Transaction';
 import Message from '../models/Message';
+import Group from '../models/Group';
 import { getTenant } from '../middleware/tenantContext';
 import { scoped } from '../middleware/scope';
 
@@ -80,17 +81,25 @@ router.get('/', async (req, res) => {
     if (types.includes('messages')) {
       searches.push((async () => {
         const userId = String(actor._id);
-        // Users can only search their own messages
+        // XAVFSIZLIK — TOPILMA (audit): avval "guruh xabarlari" sharti
+        // shunchaki { groupId: { $exists: true } } edi — bu HAR QANDAY
+        // guruhning xabarini (foydalanuvchi a'zo bo'lmagan guruhlar,
+        // hatto boshqa FIRMAlarning guruhlari ham, chunki bu yerda
+        // companyId/scoped() UMUMAN yo'q edi) qidiruv natijasida
+        // ko'rsatardi. Endi faqat haqiqatan ham o'zi a'zo bo'lgan (va
+        // o'z firmasidagi) guruhlar — messages.ts'dagi bir xil pattern.
+        const myGroups = await Group.find(scoped({ memberIds: userId })).select('_id').lean();
+        const myGroupIds = myGroups.map(g => String(g._id));
+        // Users can only search their own DMs + their own groups
         const filter: any = {
           text: regex,
           deleted: { $ne: true },
-          $or: [{ fromUserId: userId }, { toUserId: userId }],
+          $or: [
+            { fromUserId: userId }, { toUserId: userId },
+            ...(myGroupIds.length ? [{ groupId: { $in: myGroupIds } }] : []),
+          ],
         };
-        if (actor.role !== 'dasturchi') {
-          // also include group messages for user's groups
-          filter.$or.push({ groupId: { $exists: true } });
-        }
-        const msgs = await Message.find(filter).select('text fromUserId toUserId groupId timestamp type').limit(10).lean();
+        const msgs = await Message.find(scoped(filter)).select('text fromUserId toUserId groupId timestamp type').limit(10).lean();
         results.messages = msgs.map(m => ({ id: m._id, text: m.text, fromUserId: m.fromUserId, toUserId: m.toUserId, groupId: m.groupId, timestamp: m.timestamp, _type: 'message' }));
       })());
     }

@@ -2725,8 +2725,17 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
                   {g.avatar ? <img src={g.avatar} className="w-full h-full object-cover"/> : <Users2 className="w-[18px] h-[18px]"/>}
                 </div>
                 <div className="flex-1 min-w-0">
+                  {/* XATO TUZATILDI ("bir tomoni ichiga kirip kesilib qolgan"):
+                      `truncate` o'zi YETARLI EMAS — flex qatordagi elementning
+                      standart min-width'i "auto" (matn uzunligiga teng), shu
+                      sabab uzun nom vaqt bilan bir qatorda TORAYIB (shrink)
+                      bo'lishdan bosh tortib, butun qatorni sidebar chegarasidan
+                      TASHQARIGA chiqarib yuborardi — natijasi esa ota elementning
+                      overflow-hidden'i tomonidan "kesilib qolgan" ko'rinish edi.
+                      min-w-0 aynan shu qatordagi elementga (nafaqat ota divga)
+                      qo'yilishi kerak edi. */}
                   <div className="flex items-center justify-between">
-                    <p className="text-sm font-semibold truncate">{g.name}</p>
+                    <p className="text-sm font-semibold truncate min-w-0">{g.name}</p>
                     {last && <p className="text-[10px] text-muted-foreground ml-1 flex-shrink-0">{new Date(last.timestamp).toLocaleTimeString("uz-UZ",{hour:"2-digit",minute:"2-digit",timeZone:"Asia/Tashkent"})}</p>}
                   </div>
                   <p className="text-xs text-muted-foreground truncate">{lastText}</p>
@@ -2744,7 +2753,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
                 <div className="w-10 h-10 rounded-full bg-orange-500/15 flex items-center justify-center flex-shrink-0 text-xl">🛠</div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
-                    <p className="text-sm font-semibold truncate">{tChat('common.roles.dasturchi')}</p>
+                    <p className="text-sm font-semibold truncate min-w-0">{tChat('common.roles.dasturchi')}</p>
                     {last && <p className="text-[10px] text-muted-foreground ml-1 flex-shrink-0">{new Date(last.timestamp).toLocaleTimeString("uz-UZ",{hour:"2-digit",minute:"2-digit",timeZone:"Asia/Tashkent"})}</p>}
                   </div>
                   <p className="text-xs text-muted-foreground truncate">{lastText}</p>
@@ -2785,7 +2794,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
-                    <p className="text-sm font-semibold truncate">{u.name}</p>
+                    <p className="text-sm font-semibold truncate min-w-0">{u.name}</p>
                     {last && <p className="text-[10px] text-muted-foreground ml-1 flex-shrink-0">{new Date(last.timestamp).toLocaleTimeString("uz-UZ",{hour:"2-digit",minute:"2-digit",timeZone:"Asia/Tashkent"})}</p>}
                   </div>
                   <p className="text-xs text-muted-foreground truncate">{isOnline(u.id) && !last ? "onlayn" : lastText}</p>

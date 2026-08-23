@@ -276,19 +276,27 @@ function getLivePosition(timeoutMs = 8000, minSamples = 2): Promise<{ pos: Geolo
     const samples: GeolocationPosition[] = [];
     let watchId: number | null = null;
     let done = false;
+    // XATO TUZATILDI ("aniqlikni yahshiroq olsin"): avval to'plangan
+    // namunalardan shunchaki OXIRGISI ishlatilardi — lekin GPS o'qishlari
+    // ketma-ket kelaverishi shart emas ANIQROQ bo'lib boraveradi; ba'zan
+    // 1-o'qish 2-dan aniqroq chiqadi. Endi ENG AMIQ (coords.accuracy eng
+    // kichik) namuna tanlanadi, "oxirgi kelgani" emas.
+    const best = () => samples.length
+      ? samples.reduce((a, b) => (b.coords.accuracy ?? Infinity) < (a.coords.accuracy ?? Infinity) ? b : a)
+      : null;
     const finish = (pos: GeolocationPosition | null, denied = false) => {
       if (done) return;
       done = true;
       if (watchId != null) navigator.geolocation.clearWatch(watchId);
       resolve({ pos, denied });
     };
-    const timer = setTimeout(() => finish(samples[samples.length - 1] || null), timeoutMs);
+    const timer = setTimeout(() => finish(best()), timeoutMs);
     watchId = navigator.geolocation.watchPosition(
       (pos) => {
         samples.push(pos);
-        if (samples.length >= minSamples) { clearTimeout(timer); finish(pos); }
+        if (samples.length >= minSamples) { clearTimeout(timer); finish(best()); }
       },
-      (err) => { clearTimeout(timer); finish(samples[samples.length - 1] || null, err.code === 1 && samples.length === 0); },
+      (err) => { clearTimeout(timer); finish(best(), err.code === 1 && samples.length === 0); },
       { enableHighAccuracy: true, maximumAge: 0, timeout: timeoutMs }
     );
   });
@@ -2712,8 +2720,8 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
             const lastText = last ? `${userById(last.fromUserId)?.name?.split(' ')[0] || ''}: ${msgTypePreview(tChat, last)}` : tChat('chat.memberCount', { count: g.memberIds?.length || 0 });
             return (
               <button key={g.id} onClick={() => { setSelGroup(g); setSelUser(null); setSelectMode(false); setSelected(new Set()); }}
-                className={`w-full flex items-center gap-2.5 mx-2 my-0.5 px-3 py-2.5 rounded-2xl hover:bg-muted/50 transition-colors text-left ${selGroup?.id===g.id?'bg-secondary/60':''}`}>
-                <div className="w-9 h-9 rounded-full bg-primary/15 text-primary flex items-center justify-center flex-shrink-0 overflow-hidden">
+                className={`w-full flex items-center gap-3 mx-2 my-0.5 px-3 py-2.5 rounded-2xl hover:bg-muted/50 liquid-transition text-left border-l-2 ${selGroup?.id===g.id?'bg-secondary/60 border-primary':'border-transparent'}`}>
+                <div className="w-10 h-10 rounded-full bg-primary/15 text-primary flex items-center justify-center flex-shrink-0 overflow-hidden">
                   {g.avatar ? <img src={g.avatar} className="w-full h-full object-cover"/> : <Users2 className="w-[18px] h-[18px]"/>}
                 </div>
                 <div className="flex-1 min-w-0">
@@ -2732,8 +2740,8 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
             const lastText = last ? msgTypePreview(tChat, last) : tChat('chat.devSupportSubtitle');
             return (
               <button key={g.id} onClick={() => { setSelGroup(g); setSelUser(null); setSelectMode(false); setSelected(new Set()); }}
-                className={`w-full flex items-center gap-2.5 mx-2 my-0.5 px-3 py-2.5 rounded-2xl hover:bg-muted/50 transition-colors text-left ${selGroup?.id===g.id?'bg-secondary/60':''}`}>
-                <div className="w-9 h-9 rounded-full bg-orange-500/15 flex items-center justify-center flex-shrink-0 text-xl">🛠</div>
+                className={`w-full flex items-center gap-3 mx-2 my-0.5 px-3 py-2.5 rounded-2xl hover:bg-muted/50 liquid-transition text-left border-l-2 ${selGroup?.id===g.id?'bg-secondary/60 border-primary':'border-transparent'}`}>
+                <div className="w-10 h-10 rounded-full bg-orange-500/15 flex items-center justify-center flex-shrink-0 text-xl">🛠</div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-semibold truncate">{tChat('common.roles.dasturchi')}</p>
@@ -2747,8 +2755,8 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
           {/* Dasturchi virtual entry — only for company members who don't yet have devSupport group */}
           {currentUser.role !== 'dasturchi' && currentUser.companyId && onGetDevSupport && !groups.some(g => g.devSupport) && (
             <button onClick={async () => { const g = await onGetDevSupport(); if (g) { setSelGroup(g); setSelUser(null); } }}
-              className="w-full flex items-center gap-2.5 mx-2 my-0.5 px-3 py-2.5 rounded-2xl hover:bg-muted/50 transition-colors text-left">
-              <div className="w-9 h-9 rounded-full bg-orange-500/15 text-orange-500 flex items-center justify-center flex-shrink-0 text-lg">🛠</div>
+              className="w-full flex items-center gap-3 mx-2 my-0.5 px-3 py-2.5 rounded-2xl hover:bg-muted/50 liquid-transition text-left border-l-2 border-transparent">
+              <div className="w-10 h-10 rounded-full bg-orange-500/15 text-orange-500 flex items-center justify-center flex-shrink-0 text-lg">🛠</div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold truncate">{tChat('common.roles.dasturchi')}</p>
                 <p className="text-xs text-muted-foreground truncate">{tChat('chat.devSupportSubtitle')}</p>
@@ -2763,11 +2771,17 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
             const lastText = last ? msgTypePreview(tChat, last) : '...';
             return (
               <button key={u.id} onClick={() => { setSelUser(u); setSelGroup(null); setSelectMode(false); setSelected(new Set()); }}
-                className={`w-full flex items-center gap-2.5 mx-2 my-0.5 px-3 py-2.5 rounded-2xl hover:bg-muted/50 transition-colors text-left ${selUser?.id===u.id?'bg-secondary/60':''}`}>
+                className={`w-full flex items-center gap-3 mx-2 my-0.5 px-3 py-2.5 rounded-2xl hover:bg-muted/50 liquid-transition text-left border-l-2 ${selUser?.id===u.id?'bg-secondary/60 border-primary':'border-transparent'}`}>
                 <div className="relative flex-shrink-0">
-                  <Avatar user={u} size="sm"/>
+                  <Avatar user={u} size="md"/>
                   {isOnline(u.id) && <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-card"/>}
-                  {ur>0 && <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-accent rounded-full text-[9px] text-white flex items-center justify-center font-bold">{ur}</span>}
+                  {/* XATO TUZATILDI: qattiq kodlangan w-4 h-4 (16px) doira 2+ xonali
+                      sonlarni ("12", "99" va h.k.) sig'dira olmay, matn KESILIB
+                      qolardi — endi min-w-4 (o'sishga ruxsat) + px-1, va 9dan
+                      ko'p bo'lsa "9+" ko'rsatiladi (chat ro'yxatlarida keng
+                      qo'llaniladigan konvensiya, doira hech qachon cho'zilib
+                      ketmaydi). */}
+                  {ur>0 && <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 bg-accent rounded-full text-[9px] text-white flex items-center justify-center font-bold leading-none">{ur > 9 ? '9+' : ur}</span>}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">

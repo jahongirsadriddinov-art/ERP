@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { X, Download, QrCode } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 interface Props {
   type: "material" | "object" | "transaction";
@@ -9,6 +10,7 @@ interface Props {
 }
 
 export default function QRGenerator({ type, id, name, onClose }: Props) {
+  const { t } = useTranslation();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [ready, setReady] = useState(false);
 
@@ -39,7 +41,7 @@ export default function QRGenerator({ type, id, name, onClose }: Props) {
     a.click();
   };
 
-  const label = type === "material" ? "Material" : type === "object" ? "Obyekt" : "Tranzaksiya";
+  const label = type === "material" ? t('qrGenerator.typeMaterial') : type === "object" ? t('qrGenerator.typeObject') : t('qrGenerator.typeTransaction');
 
   return (
     <div className="fixed inset-0 z-[80] bg-black/60 flex items-center justify-center p-4">
@@ -48,7 +50,7 @@ export default function QRGenerator({ type, id, name, onClose }: Props) {
         <div className="flex items-center justify-between px-4 py-3 border-b border-border">
           <div className="flex items-center gap-2">
             <QrCode className="w-4 h-4 text-primary" />
-            <span className="font-semibold text-sm text-foreground">{label} QR kodi</span>
+            <span className="font-semibold text-sm text-foreground">{label} {t('qrGenerator.codeSuffix')}</span>
           </div>
           <button onClick={onClose} className="p-1 rounded hover:bg-muted">
             <X className="w-4 h-4 text-muted-foreground" />
@@ -72,7 +74,7 @@ export default function QRGenerator({ type, id, name, onClose }: Props) {
           <button onClick={download}
             className="btn btn-primary w-full flex items-center justify-center gap-2">
             <Download className="w-4 h-4" />
-            PNG yuklab olish
+            {t('qrGenerator.downloadBtn')}
           </button>
         </div>
       </div>

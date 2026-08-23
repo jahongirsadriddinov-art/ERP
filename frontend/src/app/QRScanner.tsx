@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { X, QrCode, Camera, AlertCircle, CheckCircle } from "lucide-react";
 import { API_BASE } from "./api";
 import { motion, AnimatePresence } from "motion/react";
+import { useTranslation } from "react-i18next";
 
 interface QRScanResult {
   type: "material" | "object" | "transaction";
@@ -21,6 +22,7 @@ interface Props {
 type CameraIssue = "denied" | "unavailable" | "busy" | "insecure" | "unknown";
 
 export default function QRScanner({ onClose, onResult, token }: Props) {
+  const { t } = useTranslation();
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -49,7 +51,7 @@ export default function QRScanner({ onClose, onResult, token }: Props) {
     // edi, holbuki bu holatda ruxsatning hech qanday aloqasi yo'q.
     if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
       setCameraIssue("insecure");
-      setErrorMsg("Kamera faqat xavfsiz (HTTPS) ulanishda ishlaydi");
+      setErrorMsg(t('qrScanner.insecureError'));
       setStatus("error");
       return;
     }
@@ -70,13 +72,13 @@ export default function QRScanner({ onClose, onResult, token }: Props) {
       }
     } catch (err: any) {
       let issue: CameraIssue = "unknown";
-      let msg = "Kamera ochib bo'lmadi";
+      let msg = t('qrScanner.genericError');
       if (err?.name === "NotAllowedError" || err?.name === "PermissionDeniedError") {
-        issue = "denied"; msg = "Kamera ruxsati berilmagan";
+        issue = "denied"; msg = t('qrScanner.deniedError');
       } else if (err?.name === "NotFoundError" || err?.name === "OverconstrainedError") {
-        issue = "unavailable"; msg = "Qurilmada kamera topilmadi";
+        issue = "unavailable"; msg = t('qrScanner.unavailableError');
       } else if (err?.name === "NotReadableError" || err?.name === "TrackStartError") {
-        issue = "busy"; msg = "Kamera boshqa ilova tomonidan band";
+        issue = "busy"; msg = t('qrScanner.busyError');
       }
       setCameraIssue(issue);
       setErrorMsg(msg);
@@ -125,7 +127,7 @@ export default function QRScanner({ onClose, onResult, token }: Props) {
       });
       const json = await response.json();
       if (!response.ok) {
-        setErrorMsg(json.error || "QR xatoligi");
+        setErrorMsg(json.error || t('qrScanner.qrError'));
         setStatus("error");
         return;
       }
@@ -133,7 +135,7 @@ export default function QRScanner({ onClose, onResult, token }: Props) {
       setStatus("success");
       onResult?.(json);
     } catch {
-      setErrorMsg("Server bilan ulanishda xatolik");
+      setErrorMsg(t('qrScanner.serverError'));
       setStatus("error");
     }
   }, [token, onResult, stopCamera]);
@@ -164,7 +166,7 @@ export default function QRScanner({ onClose, onResult, token }: Props) {
         style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))', paddingBottom: '0.75rem' }}>
         <div className="flex items-center gap-2 text-white">
           <QrCode className="w-5 h-5" />
-          <span className="font-semibold">QR Skan</span>
+          <span className="font-semibold">{t('qrScanner.title')}</span>
         </div>
         <button onClick={() => { stopCamera(); onClose(); }}
           className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-white/20">
@@ -194,7 +196,7 @@ export default function QRScanner({ onClose, onResult, token }: Props) {
               />
             </div>
             <p className="absolute bottom-24 text-white/70 text-sm">
-              {stalled ? "Kod topilmadi — kamerani yaqinlashtiring yoki yorug'likni yaxshilang" : "QR kodni kamera oldiga tuting"}
+              {stalled ? t('qrScanner.stalledHint') : t('qrScanner.scanHint')}
             </p>
           </div>
         )}
@@ -204,7 +206,7 @@ export default function QRScanner({ onClose, onResult, token }: Props) {
           <div className="absolute inset-0 bg-black/70 flex items-center justify-center">
             <div className="text-white text-center">
               <div className="w-12 h-12 border-4 border-white/30 border-t-white rounded-full animate-spin mx-auto mb-3" />
-              <p className="text-sm">Tekshirilmoqda...</p>
+              <p className="text-sm">{t('qrScanner.checking')}</p>
             </div>
           </div>
         )}
@@ -218,31 +220,31 @@ export default function QRScanner({ onClose, onResult, token }: Props) {
               </div>
               {cameraIssue === "denied" ? (
                 <>
-                  <p className="font-semibold text-foreground">Kamera ruxsati kerak</p>
-                  <p className="text-sm text-muted-foreground">Brauzer sozlamalaridan kamera ruxsatini bering va sahifani yangilang.</p>
+                  <p className="font-semibold text-foreground">{t('qrScanner.permissionTitle')}</p>
+                  <p className="text-sm text-muted-foreground">{t('qrScanner.permissionDesc')}</p>
                   <Camera className="w-8 h-8 text-muted-foreground mx-auto" />
                 </>
               ) : cameraIssue === "unavailable" ? (
                 <>
-                  <p className="font-semibold text-foreground">Kamera topilmadi</p>
-                  <p className="text-sm text-muted-foreground">Bu qurilmada foydalanish mumkin bo'lgan kamera aniqlanmadi.</p>
+                  <p className="font-semibold text-foreground">{t('qrScanner.unavailableTitle')}</p>
+                  <p className="text-sm text-muted-foreground">{t('qrScanner.unavailableDesc')}</p>
                 </>
               ) : cameraIssue === "busy" ? (
                 <>
-                  <p className="font-semibold text-foreground">Kamera band</p>
-                  <p className="text-sm text-muted-foreground">Kamerani boshqa ochiq ilova/oyna ishlatayotgan bo'lishi mumkin — uni yopib qayta urining.</p>
-                  <button onClick={reset} className="btn btn-primary w-full">Qayta urinish</button>
+                  <p className="font-semibold text-foreground">{t('qrScanner.busyTitle')}</p>
+                  <p className="text-sm text-muted-foreground">{t('qrScanner.busyDesc')}</p>
+                  <button onClick={reset} className="btn btn-primary w-full">{t('qrScanner.retryBtn')}</button>
                 </>
               ) : cameraIssue === "insecure" ? (
                 <>
-                  <p className="font-semibold text-foreground">HTTPS talab qilinadi</p>
-                  <p className="text-sm text-muted-foreground">Kamera faqat xavfsiz (https://) ulanishda ishlaydi — saytga https:// orqali kiring.</p>
+                  <p className="font-semibold text-foreground">{t('qrScanner.insecureTitle')}</p>
+                  <p className="text-sm text-muted-foreground">{t('qrScanner.insecureDesc')}</p>
                 </>
               ) : (
                 <>
-                  <p className="font-semibold text-foreground">Xatolik</p>
+                  <p className="font-semibold text-foreground">{t('qrScanner.errorTitle')}</p>
                   <p className="text-sm text-muted-foreground">{errorMsg}</p>
-                  <button onClick={reset} className="btn btn-primary w-full">Qayta urinish</button>
+                  <button onClick={reset} className="btn btn-primary w-full">{t('qrScanner.retryBtn')}</button>
                 </>
               )}
             </div>
@@ -258,34 +260,34 @@ export default function QRScanner({ onClose, onResult, token }: Props) {
                 <CheckCircle className="w-7 h-7 text-green-500" />
               </div>
               <p className="font-semibold text-center text-foreground">
-                {result.type === "material" ? "Material topildi" :
-                 result.type === "object" ? "Obyekt topildi" : "Tranzaksiya topildi"}
+                {result.type === "material" ? t('qrScanner.materialFound') :
+                 result.type === "object" ? t('qrScanner.objectFound') : t('qrScanner.transactionFound')}
               </p>
               <div className="bg-muted rounded-xl p-4 space-y-2 text-sm">
                 {result.type === "material" && (
                   <>
-                    <div className="flex justify-between"><span className="text-muted-foreground">Nomi:</span><span className="font-medium">{result.data.name}</span></div>
-                    <div className="flex justify-between"><span className="text-muted-foreground">Miqdori:</span><span className="font-medium">{result.data.remaining} {result.data.unit}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">{t('qrScanner.nameLabel')}</span><span className="font-medium">{result.data.name}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">{t('qrScanner.quantityLabel')}</span><span className="font-medium">{result.data.remaining} {result.data.unit}</span></div>
                   </>
                 )}
                 {result.type === "object" && (
                   <>
-                    <div className="flex justify-between"><span className="text-muted-foreground">Nomi:</span><span className="font-medium">{result.data.name}</span></div>
-                    <div className="flex justify-between"><span className="text-muted-foreground">Joylashuv:</span><span className="font-medium">{result.data.location}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">{t('qrScanner.nameLabel')}</span><span className="font-medium">{result.data.name}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">{t('qrScanner.locationLabel')}</span><span className="font-medium">{result.data.location}</span></div>
                   </>
                 )}
                 {result.type === "transaction" && (
                   <>
-                    {result.data.amount != null && <div className="flex justify-between"><span className="text-muted-foreground">Summa:</span><span className="font-medium">{Number(result.data.amount).toLocaleString('uz-UZ')} so'm</span></div>}
-                    {result.data.description && <div className="flex justify-between"><span className="text-muted-foreground">Tavsif:</span><span className="font-medium">{result.data.description}</span></div>}
-                    {result.data.status && <div className="flex justify-between"><span className="text-muted-foreground">Holati:</span><span className="font-medium">{result.data.status === 'confirmed' ? 'Tasdiqlangan' : result.data.status === 'rejected' ? 'Rad etilgan' : 'Kutilmoqda'}</span></div>}
-                    {result.data.date && <div className="flex justify-between"><span className="text-muted-foreground">Sana:</span><span className="font-medium">{result.data.date}</span></div>}
+                    {result.data.amount != null && <div className="flex justify-between"><span className="text-muted-foreground">{t('qrScanner.amountLabel')}</span><span className="font-medium">{Number(result.data.amount).toLocaleString('uz-UZ')} {t('common.som')}</span></div>}
+                    {result.data.description && <div className="flex justify-between"><span className="text-muted-foreground">{t('qrScanner.descriptionLabel')}</span><span className="font-medium">{result.data.description}</span></div>}
+                    {result.data.status && <div className="flex justify-between"><span className="text-muted-foreground">{t('qrScanner.statusLabel')}</span><span className="font-medium">{result.data.status === 'confirmed' ? t('qrScanner.statusConfirmed') : result.data.status === 'rejected' ? t('qrScanner.statusRejected') : t('qrScanner.statusPending')}</span></div>}
+                    {result.data.date && <div className="flex justify-between"><span className="text-muted-foreground">{t('qrScanner.dateLabel')}</span><span className="font-medium">{result.data.date}</span></div>}
                   </>
                 )}
               </div>
               <div className="flex gap-2">
-                <button onClick={reset} className="btn btn-outline flex-1">Yana skan</button>
-                <button onClick={() => { stopCamera(); onClose(); }} className="btn btn-primary flex-1">Yopish</button>
+                <button onClick={reset} className="btn btn-outline flex-1">{t('qrScanner.scanAgainBtn')}</button>
+                <button onClick={() => { stopCamera(); onClose(); }} className="btn btn-primary flex-1">{t('qrScanner.closeBtn')}</button>
               </div>
             </motion.div>
           </div>

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Delete, Fingerprint, LogOut, Building2, Lock, X } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { useTranslation } from "react-i18next";
 import { isAndroid, isDesktopPointer } from "./platform";
 
 // ─── Ilova qulfi (PIN kod + ixtiyoriy biometrik) ──────────────────────────
@@ -299,6 +300,7 @@ function PinDots({ length, filled }: { length: number; filled: number }) {
 // chiqib, maxsus katta tugmalar bilan ikki karra bo'lib qolardi (aniq
 // talab: "numpad faqat laptop/desktopda ishlasin, qolganda faqat ekrandagi").
 function PinPad({ value, onDigit, onDelete }: { value: string; onDigit: (d: string) => void; onDelete: () => void }) {
+  const { t } = useTranslation();
   const hiddenRef = useRef<HTMLInputElement | null>(null);
   const useHiddenInput = isDesktopPointer();
   useEffect(() => { if (useHiddenInput) hiddenRef.current?.focus(); }, [useHiddenInput]);
@@ -323,7 +325,7 @@ function PinPad({ value, onDigit, onDelete }: { value: string; onDigit: (d: stri
           autoComplete="off"
           value={value}
           onChange={e => handleRealChange(e.target.value)}
-          aria-label="PIN kod"
+          aria-label={t('pinLock.pinInputAria')}
           className="absolute inset-0 opacity-0"
           style={{ pointerEvents: "none" }}
         />
@@ -345,6 +347,7 @@ const PIN_LEN = 4;
 
 // ─── Birinchi login'dan keyin — PIN o'rnatish (majburiy, bir marta) ──────
 export function PinSetupScreen({ onDone }: { onDone: () => void }) {
+  const { t } = useTranslation();
   const [stage, setStage] = useState<"enter" | "confirm">("enter");
   // MUHIM: bu yerdagi lokal state'lar modul darajasidagi `setPin` (import
   // qilingan, localStorage'ga yozadigan) funksiyasi bilan NOM TO'QNASHUVIGA
@@ -372,7 +375,7 @@ export function PinSetupScreen({ onDone }: { onDone: () => void }) {
         setSaving(true);
         setPin(next).then(onDone);
       } else {
-        setError("PIN kodlar mos kelmadi, qaytadan urinib ko'ring");
+        setError(t('pinLock.mismatchError'));
         setTimeout(() => { setFirstPin(""); setConfirmPin(""); setStage("enter"); }, 700);
       }
     }
@@ -384,11 +387,9 @@ export function PinSetupScreen({ onDone }: { onDone: () => void }) {
       <div className="w-16 h-16 rounded-3xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center mb-6 shadow-xl shadow-primary/20">
         <Building2 className="w-8 h-8 text-white" />
       </div>
-      <h1 className="text-xl font-bold mb-1.5">{stage === "enter" ? "PIN kod o'rnating" : "PIN kodni tasdiqlang"}</h1>
+      <h1 className="text-xl font-bold mb-1.5">{stage === "enter" ? t('pinLock.setupTitleEnter') : t('pinLock.setupTitleConfirm')}</h1>
       <p className="text-sm text-muted-foreground mb-8 text-center max-w-xs">
-        {stage === "enter"
-          ? "Ilovani tezroq va xavfsiz ochish uchun 4 xonali PIN kod o'rnating."
-          : "Xotirangizda qolishi uchun PIN kodni qayta kiriting."}
+        {stage === "enter" ? t('pinLock.setupSubtitleEnter') : t('pinLock.setupSubtitleConfirm')}
       </p>
       <AnimatePresence mode="wait">
         <motion.div key={stage} initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -16 }}>
@@ -403,6 +404,7 @@ export function PinSetupScreen({ onDone }: { onDone: () => void }) {
 
 // ─── PIN kodni almashtirish (Profil'dan) — avval eskisi tekshiriladi ─────
 export function ChangePinModal({ onClose, onChanged }: { onClose: () => void; onChanged: () => void }) {
+  const { t } = useTranslation();
   const [stage, setStage] = useState<"old" | "new" | "confirm">("old");
   const [oldPin, setOldPin] = useState("");
   const [newPin, setNewPin] = useState("");
@@ -427,7 +429,7 @@ export function ChangePinModal({ onClose, onChanged }: { onClose: () => void; on
       } else if (result.lockedOut) {
         onClose(); // App.tsx darajasida lockedOut allaqachon to'liq logout qiladi (App qayta render bo'ladi)
       } else {
-        setError("Joriy PIN noto'g'ri");
+        setError(t('pinLock.oldPinWrong'));
         setTimeout(() => setOldPin(""), 700);
       }
     } else if (stage === "new") {
@@ -438,22 +440,22 @@ export function ChangePinModal({ onClose, onChanged }: { onClose: () => void; on
         await setPin(next);
         onChanged();
       } else {
-        setError("Yangi PIN kodlar mos kelmadi");
+        setError(t('pinLock.newMismatch'));
         setTimeout(() => { setNewPin(""); setConfirmPin(""); setStage("new"); }, 700);
       }
     }
   };
 
   const titles: Record<typeof stage, string> = {
-    old: "Joriy PIN kodni kiriting",
-    new: "Yangi PIN kod o'rnating",
-    confirm: "Yangi PIN kodni tasdiqlang",
+    old: t('pinLock.changeTitleOld'),
+    new: t('pinLock.changeTitleNew'),
+    confirm: t('pinLock.changeTitleConfirm'),
   };
 
   return createPortal(
     <div className="fixed inset-0 z-[999] bg-background flex flex-col items-center justify-center p-6"
       style={{ paddingTop: "max(2rem, env(safe-area-inset-top))", paddingBottom: "max(2rem, env(safe-area-inset-bottom))" }}>
-      <button onClick={onClose} aria-label="Yopish" className="absolute top-4 right-4 p-2 rounded-full hover:bg-muted"
+      <button onClick={onClose} aria-label={t('common.close')} className="absolute top-4 right-4 p-2 rounded-full hover:bg-muted"
         style={{ top: "max(1rem, env(safe-area-inset-top))" }}>
         <X className="w-5 h-5" />
       </button>
@@ -475,6 +477,7 @@ export function ChangePinModal({ onClose, onChanged }: { onClose: () => void; on
 
 // ─── Qulf ekrani — fondan uzoq vaqtdan keyin qaytganda ────────────────────
 export function PinLockScreen({ onUnlock, onForgot, onLockedOut }: { onUnlock: () => void; onForgot: () => void; onLockedOut: () => void }) {
+  const { t } = useTranslation();
   const [pin, setPinInput] = useState("");
   const [error, setError] = useState(false);
   const [attemptsLeft, setAttemptsLeft] = useState<number | null>(null);
@@ -522,14 +525,14 @@ export function PinLockScreen({ onUnlock, onForgot, onLockedOut }: { onUnlock: (
       <div className="w-16 h-16 rounded-3xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center mb-6 shadow-xl shadow-primary/20">
         <Building2 className="w-8 h-8 text-white" />
       </div>
-      <h1 className="text-xl font-bold mb-1.5">Ilova qulflangan</h1>
-      <p className="text-sm text-muted-foreground mb-8">PIN kodni kiriting</p>
+      <h1 className="text-xl font-bold mb-1.5">{t('pinLock.lockedTitle')}</h1>
+      <p className="text-sm text-muted-foreground mb-8">{t('pinLock.lockedSubtitle')}</p>
       <motion.div animate={error ? { x: [0, -10, 10, -10, 10, 0] } : {}} transition={{ duration: 0.4 }}>
         <PinDots length={PIN_LEN} filled={pin.length} />
       </motion.div>
       {error && (
         <p className="text-xs text-red-500 mb-4">
-          Noto'g'ri PIN kod{attemptsLeft != null && attemptsLeft <= 3 ? ` — yana ${attemptsLeft} ta urinish qoldi` : ''}
+          {t('pinLock.wrongPin')}{attemptsLeft != null && attemptsLeft <= 3 ? t('pinLock.attemptsLeft', { count: attemptsLeft }) : ''}
         </p>
       )}
       <PinPad value={pin} onDigit={onDigit} onDelete={() => setPinInput(pin.slice(0, -1))} />
@@ -537,11 +540,11 @@ export function PinLockScreen({ onUnlock, onForgot, onLockedOut }: { onUnlock: (
       {isBiometricEnabled() && biometricSupported() && (
         <button onClick={attemptBiometric} disabled={biometricBusy}
           className="mt-6 flex items-center gap-2 text-sm text-primary font-semibold py-2 px-4 rounded-full hover:bg-primary/10 disabled:opacity-50">
-          <Fingerprint className="w-4 h-4" /> {biometricBusy ? "Tekshirilmoqda..." : "Barmoq izi / Face ID"}
+          <Fingerprint className="w-4 h-4" /> {biometricBusy ? t('pinLock.checking') : t('pinLock.biometricBtn')}
         </button>
       )}
       <button onClick={onForgot} className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground">
-        <LogOut className="w-3.5 h-3.5" /> PIN kodni unutdingizmi? Qayta kiring
+        <LogOut className="w-3.5 h-3.5" /> {t('pinLock.forgotPin')}
       </button>
     </main>
   );

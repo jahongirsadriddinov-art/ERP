@@ -3199,6 +3199,7 @@ function resizeImageFile(file: File, maxDim: number, quality = 0.85): Promise<st
 
 // ─── Audit Log mini viewer (Admin only) ──────────────────────────────────────
 function AuditLogSection({ token }: { token: string }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [logs, setLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -3216,10 +3217,10 @@ function AuditLogSection({ token }: { token: string }) {
   };
 
   const ACTION_LABELS: Record<string,string> = {
-    create: "Yaratdi", update: "Yangiladi", delete: "O'chirdi",
-    approve: "Tasdiqladi", reject: "Rad etdi", confirm: "Tasdiqladi",
-    login: "Kirdi", logout: "Chiqdi", upload: "Yukladi",
-    checkin: "Check-in", checkout: "Check-out", scan_qr: "QR skan",
+    create: t('profile.auditCreate'), update: t('profile.auditUpdate'), delete: t('profile.auditDelete'),
+    approve: t('profile.auditApprove'), reject: t('profile.auditReject'), confirm: t('profile.auditConfirm'),
+    login: t('profile.auditLogin'), logout: t('profile.auditLogout'), upload: t('profile.auditUpload'),
+    checkin: t('profile.auditCheckin'), checkout: t('profile.auditCheckout'), scan_qr: t('profile.auditScanQr'),
   };
 
   return (
@@ -3229,14 +3230,14 @@ function AuditLogSection({ token }: { token: string }) {
       } className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-muted/50 transition-colors">
         <div className="flex items-center gap-3">
           <div className="icon-chip"><BarChart2 className="w-4 h-4"/></div>
-          <span className="text-sm font-medium">Audit log</span>
+          <span className="text-sm font-medium">{t('profile.auditLogTitle')}</span>
         </div>
         {open ? <ChevronUp className="w-4 h-4 text-muted-foreground"/> : <ChevronDown className="w-4 h-4 text-muted-foreground"/>}
       </button>
       {open && (
         <div className="border-t border-border px-4 pb-4 pt-2">
           {loading && <SkeletonList items={4} withAvatar={false} />}
-          {!loading && logs.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">Hech narsa yo'q</p>}
+          {!loading && logs.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">{t('profile.auditEmpty')}</p>}
           <div className="space-y-2 max-h-80 overflow-y-auto scrollbar-hide">
             {logs.map(log => (
               <div key={log._id} className="text-xs bg-muted/50 rounded-xl px-3 py-2">
@@ -3398,6 +3399,7 @@ function CurrencyPanel({ canEdit }: { canEdit: boolean }) {
 // Qurilma umuman qo'llab-quvvatlamasa — karta o'zi ko'rsatilmaydi
 // (ishlamaydigan tugma o'rniga).
 function BiometricToggleCard({ currentUserId }: { currentUserId: string }) {
+  const { t } = useTranslation();
   const [available, setAvailable] = useState<boolean | null>(null);
   const [enabled, setEnabled] = useState(() => isBiometricEnabled());
   const [busy, setBusy] = useState(false);
@@ -3421,19 +3423,19 @@ function BiometricToggleCard({ currentUserId }: { currentUserId: string }) {
       setBusy(true);
       const ok = await registerWebAuthnBiometric(currentUserId);
       setBusy(false);
-      if (!ok) { toast.error("Face ID/Touch ID sozlanmadi"); return; }
+      if (!ok) { toast.error(t('profile.biometricSetupFailed')); return; }
     }
     setBiometricEnabled(next);
     setEnabled(next);
   };
 
-  const label = isNative ? "Barmoq izi / Face ID" : "Face ID / Touch ID / Windows Hello";
+  const label = isNative ? t('profile.biometricLabelNative') : t('profile.biometricLabelWeb');
 
   return (
     <div className="surface rounded-2xl p-4 flex items-center justify-between gap-3">
       <div className="min-w-0">
         <p className="text-sm font-semibold">{label}</p>
-        <p className="text-xs text-muted-foreground mt-0.5">Ilova qulfini PIN o'rniga biometrik bilan oching</p>
+        <p className="text-xs text-muted-foreground mt-0.5">{t('profile.biometricSubtitle')}</p>
       </div>
       <button onClick={toggle} disabled={busy}
         aria-label={label}
@@ -3447,29 +3449,30 @@ function BiometricToggleCard({ currentUserId }: { currentUserId: string }) {
 // PIN xavfsizlik sozlamalari — avtomatik bloklash vaqti (moslashuvchan) va
 // PIN kodni almashtirish (avval eskisi tekshiriladi).
 function SecuritySettingsCard() {
+  const { t } = useTranslation();
   const [timeoutMin, setTimeoutMinState] = useState(() => getLockTimeoutMin());
   const [changingPin, setChangingPin] = useState(false);
   return (
     <div className="surface rounded-2xl p-4 space-y-4">
       <div>
-        <p className="text-sm font-semibold mb-0.5">Avtomatik bloklash vaqti</p>
-        <p className="text-xs text-muted-foreground mb-3">Ilova fondan shuncha vaqtdan keyin qulflanadi</p>
+        <p className="text-sm font-semibold mb-0.5">{t('profile.autoLockTitle')}</p>
+        <p className="text-xs text-muted-foreground mb-3">{t('profile.autoLockSubtitle')}</p>
         <div className="flex flex-wrap gap-1.5">
           {LOCK_TIMEOUT_OPTIONS.map(min => (
             <button key={min} onClick={() => { setLockTimeoutMin(min); setTimeoutMinState(min); }}
               className={`text-xs px-3 py-1.5 rounded-full font-medium liquid-transition ${timeoutMin === min ? "bg-primary text-white" : "bg-muted text-muted-foreground hover:bg-secondary"}`}>
-              {min < 60 ? `${min} daq` : `${min / 60} soat`}
+              {min < 60 ? t('profile.minutesShort', { min }) : t('profile.hoursShort', { h: min / 60 })}
             </button>
           ))}
         </div>
       </div>
       <button onClick={() => setChangingPin(true)}
         className="w-full flex items-center justify-center gap-2 text-sm font-semibold py-2.5 rounded-xl border border-border/60 hover:bg-muted liquid-transition">
-        <Lock className="w-4 h-4" /> PIN kodni almashtirish
+        <Lock className="w-4 h-4" /> {t('profile.changePinBtn')}
       </button>
       {changingPin && (
         <ChangePinModal onClose={() => setChangingPin(false)}
-          onChanged={() => { setChangingPin(false); toast.success("PIN kod almashtirildi"); }} />
+          onChanged={() => { setChangingPin(false); toast.success(t('profile.pinChanged')); }} />
       )}
     </div>
   );

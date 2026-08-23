@@ -25,58 +25,20 @@ import { AppDownloadCards } from "./AppDownload";
 // JetBrains Mono, chizma izohlari kabi. Ranglar mavjud tema tokenlaridan
 // (--primary, --accent) olinadi — alohida rang qo'shilmadi, shu bilan
 // ilovaning qolgan qismi (dashboard, tugmalar) bilan bir xil bo'lib qoladi.
-
-const FEATURES = [
-  { icon: FileSpreadsheet, title: "Loyihalar va smeta", desc: "Har bir obyekt, byudjet va bajarilish foizini bir joydan kuzating — Excel va qog'oz jadvallarsiz." },
-  { icon: DollarSign, title: "Moliya nazorati", desc: "Chiqim, kirim va o'tkazmalarni real vaqtda ko'ring, tasdiqlash zanjiri bilan nazorat qiling." },
-  { icon: Users, title: "Xodimlar va davomat", desc: "Ishga kelish/ketish, ishlagan soatlar va GPS orqali joylashuvni avtomatik hisoblang." },
-  { icon: MessageCircle, title: "Real-time chat", desc: "Jamoa bilan tizim ichida to'g'ridan-to'g'ri yozishing — alohida messenjer shart emas." },
-  { icon: Sparkles, title: "AI yordamchi", desc: "Loyiha va moliya bo'yicha savollaringizga sun'iy intellektdan tezkor javob oling." },
-  { icon: Send, title: "Telegram integratsiyasi", desc: "Xodimlar ishga kelish, joylashuv va bildirishnomalarni Telegram bot orqali ham boshqarishadi." },
-];
-
-const AUDIENCE = [
-  { icon: Building2, title: "Qurilish firmalari", desc: "Bir nechta obyektni bir vaqtda boshqaruvchi tashkilotlar" },
-  { icon: ShieldCheck, title: "Pudratchi tashkilotlar", desc: "Subpudrat ishlarini va hisob-kitobni tartibga solish" },
-  { icon: Users, title: "Remont-ta'mirlash jamoalari", desc: "Kichik jamoalar uchun sodda, tezkor boshqaruv" },
-  { icon: MapPin, title: "Loyiha menejerlari", desc: "Bir nechta obyektni masofadan nazorat qilish" },
-];
+//
+// TARJIMA: barcha matn `landing.*` kalitlaridan olinadi (i18n/translations.ts)
+// — faqat ikonkalar shu yerda statik ro'yxatlangan, matn emas.
 
 // Haqiqatan ham QurilishERP'dan foydalanadigan firmalar — faqat nom, soxta
 // logotip yoki iqtibos (sharh) YO'Q. Ro'yxat mijoz/hamkor sonini ko'paytirish
 // uchun sun'iy nom bilan to'ldirilmaydi — bu haqiqiy bo'lmagan mijozni
-// ko'rsatish bo'lardi.
+// ko'rsatish bo'lardi. Firma nomlarining o'zi — mustaqil atoqli otlar,
+// tarjima qilinmaydi.
 const PARTNERS = [
   "Jondor Iris Story MCHJ",
   "Alpha Plus Spektr MCHJ",
   "The Progressive Build Your Dreams24 MCHJ",
   "Buhoro Invest MCHJ",
-];
-
-const CAPABILITIES = [
-  { value: "6+", label: "Asosiy modul", icon: Layers },
-  { value: "3", label: "Platforma — veb, Android, Windows", icon: Smartphone },
-  { value: "24/7", label: "Telegram bot orqali kirish", icon: Send },
-  { value: "1-oy", label: "Bepul sinov muddati", icon: Rocket },
-];
-
-const STEPS = [
-  { icon: UserPlus, title: "Ro'yxatdan o'ting", desc: "Firma ma'lumotlarini kiriting — kredit karta shart emas, bir necha daqiqa vaqt oladi." },
-  { icon: Settings2, title: "Jamoangizni qo'shing", desc: "Xodimlaringizni taklif qiling, har biriga o'z roliga mos huquq beriladi." },
-  { icon: Rocket, title: "Boshqarishni boshlang", desc: "Loyiha, moliya va xodimlarni bir joydan — veb, Android yoki Telegram orqali nazorat qiling." },
-];
-
-const BENEFITS = [
-  { icon: CheckCircle, text: "Qog'oz va tarqoq Excel jadvallaridan bitta tizimga o'ting" },
-  { icon: Smartphone, text: "Veb, Android ilova va Windows dasturi — istalgan qurilmadan kiring" },
-  { icon: ShieldCheck, text: "Har bir firmaning ma'lumoti butunlay izolyatsiyalangan va xavfsiz" },
-];
-
-const FAQS = [
-  { q: "Ma'lumotlarim xavfsizmi?", a: "Ha. Har bir firmaning ma'lumotlari bir-biridan to'liq izolyatsiyalangan — boshqa firma xodimlari sizning loyiha, moliya yoki xodimlaringizni hech qachon ko'ra olmaydi." },
-  { q: "Necha kishi ishlata oladi?", a: "Direktor, o'rinbosar, prorab, brigadir va oddiy ishchilar — barcha xodimlaringizni tizimga qo'shishingiz mumkin, har biri o'z roliga mos huquqlarga ega bo'ladi." },
-  { q: "Telegram bot orqali ham ishlaydimi?", a: "Ha — xodimlar ishga kelish/ketishni, joylashuvni va bildirishnomalarni Telegram bot orqali ham boshqarishlari mumkin, sayt yoki ilovaga kirmasdan ham." },
-  { q: "Qanday boshlashim mumkin?", a: "\"Bepul boshlash\" tugmasini bosib, firmangizni bir necha daqiqada ro'yxatdan o'tkazasiz — birinchi oy bepul." },
 ];
 
 function useYear() {
@@ -142,6 +104,50 @@ export default function LandingPage({ onLogin, onRegister }: { onLogin: () => vo
   const [openFaq, setOpenFaq] = useState<number | null>(0);
   const year = useYear();
 
+  // Icon'lar tarjima qilinmaydi — matn t() orqali, shu yerda faqat
+  // struktura (qaysi ikon qaysi matn bilan) belgilanadi.
+  const FEATURES = [
+    { icon: FileSpreadsheet, title: t('landing.feature1Title'), desc: t('landing.feature1Desc') },
+    { icon: DollarSign, title: t('landing.feature2Title'), desc: t('landing.feature2Desc') },
+    { icon: Users, title: t('landing.feature3Title'), desc: t('landing.feature3Desc') },
+    { icon: MessageCircle, title: t('landing.feature4Title'), desc: t('landing.feature4Desc') },
+    { icon: Sparkles, title: t('landing.feature5Title'), desc: t('landing.feature5Desc') },
+    { icon: Send, title: t('landing.feature6Title'), desc: t('landing.feature6Desc') },
+  ];
+
+  const AUDIENCE = [
+    { icon: Building2, title: t('landing.audience1Title'), desc: t('landing.audience1Desc') },
+    { icon: ShieldCheck, title: t('landing.audience2Title'), desc: t('landing.audience2Desc') },
+    { icon: Users, title: t('landing.audience3Title'), desc: t('landing.audience3Desc') },
+    { icon: MapPin, title: t('landing.audience4Title'), desc: t('landing.audience4Desc') },
+  ];
+
+  const CAPABILITIES = [
+    { value: "6+", label: t('landing.capModules'), icon: Layers },
+    { value: "3", label: t('landing.capPlatforms'), icon: Smartphone },
+    { value: "24/7", label: t('landing.capBot'), icon: Send },
+    { value: t('landing.capTrialValue'), label: t('landing.capTrial'), icon: Rocket },
+  ];
+
+  const STEPS = [
+    { icon: UserPlus, title: t('landing.step1Title'), desc: t('landing.step1Desc') },
+    { icon: Settings2, title: t('landing.step2Title'), desc: t('landing.step2Desc') },
+    { icon: Rocket, title: t('landing.step3Title'), desc: t('landing.step3Desc') },
+  ];
+
+  const BENEFITS = [
+    { icon: CheckCircle, text: t('landing.benefit1') },
+    { icon: Smartphone, text: t('landing.benefit2') },
+    { icon: ShieldCheck, text: t('landing.benefit3') },
+  ];
+
+  const FAQS = [
+    { q: t('landing.faq1Q'), a: t('landing.faq1A') },
+    { q: t('landing.faq2Q'), a: t('landing.faq2A') },
+    { q: t('landing.faq3Q'), a: t('landing.faq3A') },
+    { q: t('landing.faq4Q'), a: t('landing.faq4A') },
+  ];
+
   // Landing sahifa doim OCHIQ (light) rejimda ko'rinsin — foydalanuvchining
   // dark tema tanlovi (yoki tizim tanlovi) bo'lsa ham. index.html'dagi FOUC
   // oldini olish skripti sahifa yuklanishida <html> ga "dark" klassini
@@ -190,8 +196,8 @@ export default function LandingPage({ onLogin, onRegister }: { onLogin: () => vo
           </div>
           <div className="flex items-center gap-2">
             <div className="hidden sm:block"><LanguageSwitcher size="sm" value={i18n.language as SiteLang} onChange={l => setSiteLanguage(l)} /></div>
-            <button onClick={onLogin} className="btn btn-outline text-sm px-4 py-2 rounded-full font-semibold">Kirish</button>
-            <button onClick={onRegister} className="btn btn-accent text-sm px-4 py-2 rounded-full font-semibold hidden sm:inline-flex">Bepul boshlash</button>
+            <button onClick={onLogin} className="btn btn-outline text-sm px-4 py-2 rounded-full font-semibold">{t('landing.navLogin')}</button>
+            <button onClick={onRegister} className="btn btn-accent text-sm px-4 py-2 rounded-full font-semibold hidden sm:inline-flex">{t('landing.navRegister')}</button>
           </div>
         </div>
       </header>
@@ -212,31 +218,30 @@ export default function LandingPage({ onLogin, onRegister }: { onLogin: () => vo
         <div className="relative max-w-6xl mx-auto px-5 pt-16 pb-8 md:pt-24 text-center">
           <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 260, damping: 26 }} className="relative z-10">
             <div className="mb-5">
-              <TechTag>[ Qurilish firmalari uchun boshqaruv tizimi ]</TechTag>
+              <TechTag>[ {t('landing.heroEyebrow')} ]</TechTag>
             </div>
             <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold font-['Roboto_Slab',serif] leading-[1.08] max-w-4xl mx-auto tracking-tight">
-              <span className="text-foreground">Qurilish firmangizni</span>
+              <span className="text-foreground">{t('landing.heroTitleLine1')}</span>
               <br/>
-              <span className="bg-clip-text text-transparent bg-gradient-to-r from-primary via-primary to-accent">bitta joydan boshqaring</span>
+              <span className="bg-clip-text text-transparent bg-gradient-to-r from-primary via-primary to-accent">{t('landing.heroTitleLine2')}</span>
             </h1>
             {/* Aksent chiziqcha — sarlavha ostida, brend rangida, "muhr" kabi */}
             <div className="mx-auto mt-5 w-14 h-[3px] rounded-full bg-gradient-to-r from-primary to-accent" />
             <p className="text-base md:text-lg text-muted-foreground mt-6 max-w-xl mx-auto leading-relaxed">
-              Loyihalar, smeta, moliya, xodimlar va GPS nazorati, real-time chat, AI yordamchi va Telegram bot —
-              firmangizni raqamlashtirish uchun kerakli hammasi bitta tizimda.
+              {t('landing.heroSubtitle')}
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mt-9">
               <button onClick={onRegister}
                 className="group w-full sm:w-auto bg-gradient-to-r from-primary via-primary to-blue-700 text-white text-sm font-bold px-8 py-4 rounded-full shadow-xl shadow-primary/30 hover:shadow-2xl hover:shadow-primary/40 hover:-translate-y-0.5 active:scale-[0.98] liquid-transition flex items-center justify-center gap-2">
-                Bepul boshlash <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 liquid-transition" />
+                {t('landing.ctaRegister')} <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 liquid-transition" />
               </button>
               <button onClick={onLogin}
                 className="w-full sm:w-auto btn btn-outline text-sm font-semibold px-8 py-4 rounded-full">
-                Hisobga kirish
+                {t('landing.ctaLogin')}
               </button>
             </div>
             <p className="text-xs text-muted-foreground mt-4">
-              Kredit karta talab qilinmaydi · Birinchi oy bepul · Bir necha daqiqada sozlanadi
+              {t('landing.heroDisclaimer')}
             </p>
           </motion.div>
 
@@ -249,15 +254,15 @@ export default function LandingPage({ onLogin, onRegister }: { onLogin: () => vo
               <CornerMarks />
               <div className="flex items-center justify-between mb-5">
                 <div>
-                  <TechTag>Obyekt · namuna</TechTag>
-                  <p className="font-bold text-sm mt-1">"Bog'bo'ston" turar-joy majmuasi</p>
+                  <TechTag>{t('landing.mockObjectLabel')}</TechTag>
+                  <p className="font-bold text-sm mt-1">{t('landing.mockObjectName')}</p>
                 </div>
                 <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-green-500/15 text-green-700 dark:text-green-400 flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" /> Bajarilmoqda
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" /> {t('landing.mockStatusBadge')}
                 </span>
               </div>
               <div className="grid grid-cols-3 gap-3 mb-5">
-                {[["Byudjet", "18.0 mlrd"], ["Ishlatilgan", "9.4 mlrd"], ["Bajarildi", "52%"]].map(([label, val]) => (
+                {[[t('landing.mockBudget'), "18.0 mlrd"], [t('landing.mockUsed'), "9.4 mlrd"], [t('landing.mockDone'), "52%"]].map(([label, val]) => (
                   <div key={label} className="bg-muted/40 rounded-2xl p-3 text-center">
                     <p className="text-[10px] text-muted-foreground mb-1">{label}</p>
                     <p className="font-bold text-sm md:text-base" style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace" }}>{val}</p>
@@ -272,7 +277,7 @@ export default function LandingPage({ onLogin, onRegister }: { onLogin: () => vo
                 <div className="flex -space-x-2">
                   {[0,1,2].map(i => <div key={i} className="w-7 h-7 rounded-full bg-gradient-to-br from-primary to-accent border-2 border-background" />)}
                 </div>
-                <p className="text-xs text-muted-foreground">Jamoa loyihada birga ishlamoqda</p>
+                <p className="text-xs text-muted-foreground">{t('landing.mockTeamCaption')}</p>
               </div>
             </div>
           </motion.div>
@@ -300,7 +305,7 @@ export default function LandingPage({ onLogin, onRegister }: { onLogin: () => vo
             kartochkasidan farqli, brendga xos ko'rinish. Faqat nom, soxta
             logotip/sharh yo'q. */}
         <div className="relative max-w-5xl mx-auto px-5 pb-16 md:pb-20">
-          <p className="text-center text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-6">Bizga ishonch bildirgan firmalar</p>
+          <p className="text-center text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-6">{t('landing.partnersTitle')}</p>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {PARTNERS.map((name, i) => (
               <motion.div key={name} initial={{ opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
@@ -324,9 +329,9 @@ export default function LandingPage({ onLogin, onRegister }: { onLogin: () => vo
       {/* ── Features ────────────────────────────────────────────────────── */}
       <section className="max-w-6xl mx-auto px-5 py-16 md:py-24">
         <div className="text-center max-w-xl mx-auto mb-12">
-          <SectionBadge>Imkoniyatlar</SectionBadge>
-          <h2 className="text-2xl md:text-4xl font-bold font-['Roboto_Slab',serif] tracking-tight">Bitta tizim, hamma narsa nazoratda</h2>
-          <p className="text-sm text-muted-foreground mt-3">Qurilish firmasini boshqarish uchun kerakli barcha vositalar</p>
+          <SectionBadge>{t('landing.featuresBadge')}</SectionBadge>
+          <h2 className="text-2xl md:text-4xl font-bold font-['Roboto_Slab',serif] tracking-tight">{t('landing.featuresTitle')}</h2>
+          <p className="text-sm text-muted-foreground mt-3">{t('landing.featuresSubtitle')}</p>
         </div>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {FEATURES.map((f, i) => (
@@ -356,8 +361,8 @@ export default function LandingPage({ onLogin, onRegister }: { onLogin: () => vo
           }} />
         <div className="relative max-w-5xl mx-auto px-5">
           <div className="text-center max-w-xl mx-auto mb-14">
-            <SectionBadge>Boshlash oson</SectionBadge>
-            <h2 className="text-2xl md:text-4xl font-bold font-['Roboto_Slab',serif] tracking-tight">3 qadamda ishga tushiring</h2>
+            <SectionBadge>{t('landing.stepsBadge')}</SectionBadge>
+            <h2 className="text-2xl md:text-4xl font-bold font-['Roboto_Slab',serif] tracking-tight">{t('landing.stepsTitle')}</h2>
           </div>
           <div className="grid md:grid-cols-3 gap-8 relative">
             <div className="hidden md:block absolute top-7 left-[16.5%] right-[16.5%] h-px bg-gradient-to-r from-primary/40 via-accent/40 to-primary/40" />
@@ -367,7 +372,7 @@ export default function LandingPage({ onLogin, onRegister }: { onLogin: () => vo
                 <div className="relative z-10 w-14 h-14 rounded-2xl bg-gradient-to-br from-primary to-accent flex items-center justify-center mx-auto mb-5 shadow-lg shadow-primary/25">
                   <s.icon className="w-6 h-6 text-white" />
                 </div>
-                <p className="text-[11px] font-bold text-accent mb-1.5" style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace" }}>QADAM {i + 1} / {STEPS.length}</p>
+                <p className="text-[11px] font-bold text-accent mb-1.5" style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace" }}>{t('landing.stepLabel', { n: i + 1, total: STEPS.length })}</p>
                 <h3 className="font-bold text-sm mb-2">{s.title}</h3>
                 <p className="text-xs text-muted-foreground leading-relaxed max-w-[240px] mx-auto">{s.desc}</p>
               </motion.div>
@@ -379,8 +384,8 @@ export default function LandingPage({ onLogin, onRegister }: { onLogin: () => vo
       {/* ── Kimlar uchun ────────────────────────────────────────────────── */}
       <section className="max-w-6xl mx-auto px-5 py-16 md:py-24">
         <div className="text-center max-w-xl mx-auto mb-12">
-          <SectionBadge>Kimlar uchun</SectionBadge>
-          <h2 className="text-2xl md:text-4xl font-bold font-['Roboto_Slab',serif] tracking-tight">Har qanday hajmdagi tashkilot uchun</h2>
+          <SectionBadge>{t('landing.audienceBadge')}</SectionBadge>
+          <h2 className="text-2xl md:text-4xl font-bold font-['Roboto_Slab',serif] tracking-tight">{t('landing.audienceTitle')}</h2>
         </div>
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {AUDIENCE.map((a, i) => (
@@ -417,8 +422,8 @@ export default function LandingPage({ onLogin, onRegister }: { onLogin: () => vo
       {/* ── FAQ ─────────────────────────────────────────────────────────── */}
       <section className="max-w-3xl mx-auto px-5 py-16 md:py-24">
         <div className="text-center mb-10">
-          <SectionBadge>Savol-javob</SectionBadge>
-          <h2 className="text-2xl md:text-4xl font-bold font-['Roboto_Slab',serif] tracking-tight">Ko'p beriladigan savollar</h2>
+          <SectionBadge>{t('landing.faqBadge')}</SectionBadge>
+          <h2 className="text-2xl md:text-4xl font-bold font-['Roboto_Slab',serif] tracking-tight">{t('landing.faqTitle')}</h2>
         </div>
         <div className="space-y-3">
           {FAQS.map((f, i) => (
@@ -445,8 +450,8 @@ export default function LandingPage({ onLogin, onRegister }: { onLogin: () => vo
           render qilmaydi — bo'sh bo'lim ko'rsatilmaydi). ───────────────── */}
       <section className="max-w-3xl mx-auto px-5 pb-16">
         <div className="text-center mb-8">
-          <h2 className="text-2xl md:text-4xl font-bold font-['Roboto_Slab',serif] tracking-tight">Ilovani yuklab oling</h2>
-          <p className="text-muted-foreground text-sm md:text-base mt-3 max-w-xl mx-auto">Telefon yoki kompyuteringizga o'rnating — brauzerda ham to'liq ishlaydi, ilova ixtiyoriy qulaylik uchun.</p>
+          <h2 className="text-2xl md:text-4xl font-bold font-['Roboto_Slab',serif] tracking-tight">{t('landing.downloadTitle')}</h2>
+          <p className="text-muted-foreground text-sm md:text-base mt-3 max-w-xl mx-auto">{t('landing.downloadSubtitle')}</p>
         </div>
         <AppDownloadCards />
       </section>
@@ -462,14 +467,14 @@ export default function LandingPage({ onLogin, onRegister }: { onLogin: () => vo
             <Globe2 className="w-7 h-7 text-white" />
           </div>
           <h2 className="relative z-10 text-3xl md:text-4xl font-bold font-['Roboto_Slab',serif] text-white max-w-lg mx-auto tracking-tight">
-            Firmangizni bugun raqamlashtiring
+            {t('landing.finalCtaTitle')}
           </h2>
           <p className="relative z-10 text-sm md:text-base text-white/80 mt-4 max-w-md mx-auto">
-            Ro'yxatdan o'ting, birinchi oy bepul — kredit karta shart emas.
+            {t('landing.finalCtaSubtitle')}
           </p>
           <button onClick={onRegister}
             className="relative z-10 mt-8 bg-white text-primary text-sm font-bold px-8 py-4 rounded-full shadow-2xl hover:-translate-y-0.5 hover:shadow-white/20 active:scale-[0.98] liquid-transition inline-flex items-center gap-2">
-            Bepul boshlash <ArrowRight className="w-4 h-4" />
+            {t('landing.ctaRegister')} <ArrowRight className="w-4 h-4" />
           </button>
         </div>
       </section>
@@ -488,7 +493,7 @@ export default function LandingPage({ onLogin, onRegister }: { onLogin: () => vo
               <Send className="w-3.5 h-3.5" /> @qurilish_erp_bot
             </a>
             <a href="https://t.me/Sadriddinov_Jahongir" target="_blank" rel="noopener noreferrer" className="hover:text-foreground liquid-transition">
-              Aloqa
+              {t('landing.contactLink')}
             </a>
           </div>
         </div>

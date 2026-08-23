@@ -181,6 +181,31 @@ export const EXP_LABELS: Record<ExpType, string> = {
 export function expLabel(t: (key: string) => string, type: ExpType): string {
   return t(`finance.types.${type}`) || EXP_LABELS[type];
 }
+
+// Chat — sidebar/last-message preview label uchun (audio/rasm/video/joylashuv/
+// fayl turlarini qisqa matnga aylantiradi; oddiy matn xabarlar uchun shunchaki
+// o'z matnini qaytaradi). Bir xil mantiq avval 3 joyda (kontaktlar, guruhlar,
+// dev-support ro'yxati) alohida-alohida takrorlangan edi.
+function msgTypePreview(t: (key: string, opts?: any) => string, m: { type?: string; text?: string; fileName?: string } | null | undefined): string {
+  if (!m) return '';
+  if (!m.type || m.type === 'text') return m.text || '';
+  if (m.type === 'audio') return t('chat.voicePreview');
+  if (m.type === 'image') return t('chat.photo');
+  if (m.type === 'video') return t('chat.video');
+  if (m.type === 'location') return t('chat.locationPreview');
+  return `📎 ${m.fileName || t('chat.fileLabel')}`;
+}
+
+// Chat — javob-berish (reply) va pin'langan xabar oldindan ko'rish uchun.
+// Video/fayl turlari uchun maxsus yorliq YO'Q (asl ternar shunday edi) —
+// ular o'z saqlangan matnini (allaqachon o'zi label bo'lgan) ko'rsatadi.
+function msgReplyPreview(t: (key: string, opts?: any) => string, m: { type?: string; text?: string } | null | undefined): string {
+  if (!m) return '';
+  if (m.type === 'audio') return t('chat.voicePreview');
+  if (m.type === 'image') return t('chat.photo');
+  if (m.type === 'location') return t('chat.locationPreview');
+  return m.text || '';
+}
 export const CHART_COLORS = ["#1B3A6B", "#D2440F", "#1B7A4B", "#F0A500", "#7B2D8B"];
 export const fmt = (n?: number) => (n || 0).toLocaleString("uz-UZ") + " so'm";
 
@@ -2537,7 +2562,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
       mr.ondataavailable = e => audioChunksRef.current.push(e.data);
       mr.onstop = () => {
         const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        sendMedia(blob, 'audio', '🎤 Ovozli xabar', 'voice.webm');
+        sendMedia(blob, 'audio', tChat('chat.voiceMessage'), 'voice.webm');
         stream.getTracks().forEach(t => t.stop());
       };
       mr.start();
@@ -2567,7 +2592,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
     const isImg = file.type.startsWith('image/');
     const isVid = file.type.startsWith('video/');
     sendMedia(file, isImg ? 'image' : isVid ? 'video' : 'file',
-      isImg ? '🖼️ Rasm' : isVid ? '🎥 Video' : `📎 ${file.name}`, file.name);
+      isImg ? tChat('chat.photo') : isVid ? tChat('chat.video') : `📎 ${file.name}`, file.name);
     e.target.value = '';
     setShowAttach(false);
   };
@@ -2575,7 +2600,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
   const sendLocation = () => {
     if (!navigator.geolocation) { toast.error(tChat('chat.geoNotSupported')); return; }
     navigator.geolocation.getCurrentPosition(
-      pos => doSend({ type: 'location', text: '📍 Lokatsiya', location: { lat: pos.coords.latitude, lng: pos.coords.longitude } }),
+      pos => doSend({ type: 'location', text: tChat('chat.locationMessage'), location: { lat: pos.coords.latitude, lng: pos.coords.longitude } }),
       () => toast.error(tChat('chat.geoPermission'))
     );
     setShowAttach(false);
@@ -2610,16 +2635,16 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
       <>
         {/* Guruhda — yuboruvchi nomi (o'zganiki) */}
         {selGroup && !mine && (
-          <p className="text-[11px] font-bold mb-0.5" style={{ color: 'var(--primary)' }}>{userById(m.fromUserId)?.name || 'Nomaʼlum'}</p>
+          <p className="text-[11px] font-bold mb-0.5" style={{ color: 'var(--primary)' }}>{userById(m.fromUserId)?.name || tChat('chat.unknownSender')}</p>
         )}
         {replyMsg && (
           <div className={`border-l-2 ${mine?'border-white/50':'border-primary/50'} pl-2 mb-1.5 opacity-75 max-w-full`}>
-            <p className="text-[10px] font-semibold">{replyMsg.fromUserId===currentUser.id?'Siz':userById(replyMsg.fromUserId)?.name}</p>
-            <p className="text-[10px] truncate">{replyMsg.type==='audio'?'🎤 Ovoz':replyMsg.type==='image'?'🖼️ Rasm':replyMsg.type==='location'?'📍 Joylashuv':replyMsg.text}</p>
+            <p className="text-[10px] font-semibold">{replyMsg.fromUserId===currentUser.id?tChat('chat.you'):userById(replyMsg.fromUserId)?.name}</p>
+            <p className="text-[10px] truncate">{msgReplyPreview(tChat, replyMsg)}</p>
           </div>
         )}
         {m.type==='image' && m.mediaUrl && (
-          <img src={m.mediaUrl} alt="Rasm" loading="lazy" decoding="async" className="rounded-xl max-w-full max-h-52 object-cover mb-1 cursor-pointer" onClick={()=>window.open(m.mediaUrl,'_blank')}/>
+          <img src={m.mediaUrl} alt={tChat('chat.imageAlt')} loading="lazy" decoding="async" className="rounded-xl max-w-full max-h-52 object-cover mb-1 cursor-pointer" onClick={()=>window.open(m.mediaUrl,'_blank')}/>
         )}
         {m.type==='video' && m.mediaUrl && (
           <video src={m.mediaUrl} controls preload="metadata" className="rounded-xl max-w-full max-h-52 mb-1"/>
@@ -2642,10 +2667,17 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
         {m.type==='location' && m.location && (
           <a href={`https://maps.google.com/?q=${m.location.lat},${m.location.lng}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 bg-black/10 rounded-xl px-3 py-2 mb-1 hover:bg-black/20 transition-colors">
             <MapPin className="w-4 h-4 text-green-400 flex-shrink-0"/>
-            <div><p className="text-xs font-medium">Lokatsiya</p><p className="text-[10px] opacity-70">{m.location.lat.toFixed(4)}, {m.location.lng.toFixed(4)}</p></div>
+            <div><p className="text-xs font-medium">{tChat('chat.locationLabel')}</p><p className="text-[10px] opacity-70">{m.location.lat.toFixed(4)}, {m.location.lng.toFixed(4)}</p></div>
           </a>
         )}
-        {m.text && !['🖼️ Rasm','🎥 Video','🎤 Ovozli xabar','📍 Lokatsiya'].includes(m.text) && (
+        {/* XATO TUZATILDI: avval bu tekshiruv m.text'ni QATTIQ KODLANGAN
+            o'zbekcha yorliqlar bilan solishtirardi ("🖼️ Rasm" va h.k.) —
+            xabar matni endi jo'natuvchining o'sha paytdagi tiliga qarab
+            saqlanadi (masalan ruscha "🖼️ Фото"), shu sabab boshqa tilda
+            ko'rayotgan qabul qiluvchi uchun solishtiruv mos kelmay, avtomatik
+            yorliq rasm/video ostida QAYTA matn sifatida ham chiqib qolardi.
+            m.type — til-mustaqil, doim to'g'ri ishlaydi. */}
+        {m.text && !(m.type && (['image','video','audio','location'] as (string|undefined)[]).includes(m.type)) && (
           <p className="leading-relaxed whitespace-pre-wrap break-words text-sm md:text-xs">{m.text}</p>
         )}
       </>
@@ -2662,13 +2694,13 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
       <div className={`${(selUser||selGroup)?'hidden md:flex':'flex'} w-full md:w-64 flex-shrink-0 border-r border-border flex-col bg-card/60 backdrop-blur-xl`}>
         <div className="px-4 py-3 border-b border-border/50 flex items-center justify-between">
           <p className="text-base font-bold">{tChat("chat.messages")}</p>
-          <button onClick={() => setShowNewGroup(true)} title="Yangi guruh" aria-label="Yangi guruh" className="btn btn-primary w-8 h-8 p-0 rounded-full"><Users2 className="w-4 h-4"/></button>
+          <button onClick={() => setShowNewGroup(true)} title={tChat('chat.newGroup')} aria-label={tChat('chat.newGroup')} className="btn btn-primary w-8 h-8 p-0 rounded-full"><Users2 className="w-4 h-4"/></button>
         </div>
         <div className="flex-1 overflow-y-auto scrollbar-hide">
           {/* Guruhlar */}
           {groups.filter(g => !g.devSupport).map(g => {
             const last = lastByGroup.get(g.id);
-            const lastText = last ? `${userById(last.fromUserId)?.name?.split(' ')[0] || ''}: ${last.type&&last.type!=='text'?(last.type==='audio'?'🎤 Ovoz':last.type==='image'?'🖼️ Rasm':last.type==='video'?'🎥 Video':last.type==='location'?'📍 Joylashuv':`📎 ${last.fileName??'Fayl'}`):last.text}` : `${g.memberIds?.length || 0} a'zo`;
+            const lastText = last ? `${userById(last.fromUserId)?.name?.split(' ')[0] || ''}: ${msgTypePreview(tChat, last)}` : tChat('chat.memberCount', { count: g.memberIds?.length || 0 });
             return (
               <button key={g.id} onClick={() => { setSelGroup(g); setSelUser(null); setSelectMode(false); setSelected(new Set()); }}
                 className={`w-full flex items-center gap-2.5 mx-2 my-0.5 px-3 py-2.5 rounded-2xl hover:bg-muted/50 transition-colors text-left ${selGroup?.id===g.id?'bg-secondary/60':''}`}>
@@ -2688,14 +2720,14 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
           {/* devSupport — ko'rinishi: to'g'ridan-to'g'ri chat (guruh emas) */}
           {groups.filter(g => g.devSupport).map(g => {
             const last = lastByGroup.get(g.id);
-            const lastText = last ? `${last.type&&last.type!=='text'?(last.type==='audio'?'🎤 Ovoz':last.type==='image'?'🖼️ Rasm':last.type==='video'?'🎥 Video':last.type==='location'?'📍 Joylashuv':`📎 ${last.fileName??'Fayl'}`):last.text}` : 'Texnik yordam';
+            const lastText = last ? msgTypePreview(tChat, last) : tChat('chat.devSupportSubtitle');
             return (
               <button key={g.id} onClick={() => { setSelGroup(g); setSelUser(null); setSelectMode(false); setSelected(new Set()); }}
                 className={`w-full flex items-center gap-2.5 mx-2 my-0.5 px-3 py-2.5 rounded-2xl hover:bg-muted/50 transition-colors text-left ${selGroup?.id===g.id?'bg-secondary/60':''}`}>
                 <div className="w-9 h-9 rounded-full bg-orange-500/15 flex items-center justify-center flex-shrink-0 text-xl">🛠</div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
-                    <p className="text-sm font-semibold truncate">Dasturchi</p>
+                    <p className="text-sm font-semibold truncate">{tChat('common.roles.dasturchi')}</p>
                     {last && <p className="text-[10px] text-muted-foreground ml-1 flex-shrink-0">{new Date(last.timestamp).toLocaleTimeString("uz-UZ",{hour:"2-digit",minute:"2-digit",timeZone:"Asia/Tashkent"})}</p>}
                   </div>
                   <p className="text-xs text-muted-foreground truncate">{lastText}</p>
@@ -2709,8 +2741,8 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
               className="w-full flex items-center gap-2.5 mx-2 my-0.5 px-3 py-2.5 rounded-2xl hover:bg-muted/50 transition-colors text-left">
               <div className="w-9 h-9 rounded-full bg-orange-500/15 text-orange-500 flex items-center justify-center flex-shrink-0 text-lg">🛠</div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold truncate">Dasturchi</p>
-                <p className="text-xs text-muted-foreground truncate">Texnik yordam</p>
+                <p className="text-sm font-semibold truncate">{tChat('common.roles.dasturchi')}</p>
+                <p className="text-xs text-muted-foreground truncate">{tChat('chat.devSupportSubtitle')}</p>
               </div>
             </button>
           )}
@@ -2719,7 +2751,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
           {contacts.map(u => {
             const last = lastByUser.get(u.id);
             const ur = unread(u.id);
-            const lastText = last ? (last.type==='audio'?'🎤 Ovoz':last.type==='image'?'🖼️ Rasm':last.type==='video'?'🎥 Video':last.type==='location'?'📍 Joylashuv':last.type==='file'?`📎 ${last.fileName??'Fayl'}`:last.text) : '...';
+            const lastText = last ? msgTypePreview(tChat, last) : '...';
             return (
               <button key={u.id} onClick={() => { setSelUser(u); setSelGroup(null); setSelectMode(false); setSelected(new Set()); }}
                 className={`w-full flex items-center gap-2.5 mx-2 my-0.5 px-3 py-2.5 rounded-2xl hover:bg-muted/50 transition-colors text-left ${selUser?.id===u.id?'bg-secondary/60':''}`}>
@@ -2762,9 +2794,9 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
                     </div>
               ) : <div className="relative"><Avatar user={selUser!} size="sm"/>{isOnline(selUser!.id) && <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-card"/>}</div>}
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold truncate">{selGroup ? (selGroup.devSupport ? 'Dasturchi' : selGroup.name) : selUser!.name}</p>
+                <p className="text-sm font-semibold truncate">{selGroup ? (selGroup.devSupport ? tChat('common.roles.dasturchi') : selGroup.name) : selUser!.name}</p>
                 {selGroup
-                  ? <p className="text-[11px] text-muted-foreground truncate">{selGroup.devSupport ? 'Texnik yordam' : `${selGroup.memberIds?.length || 0} a'zo`}</p>
+                  ? <p className="text-[11px] text-muted-foreground truncate">{selGroup.devSupport ? tChat('chat.devSupportSubtitle') : tChat('chat.memberCount', { count: selGroup.memberIds?.length || 0 })}</p>
                   : <p className="text-[11px] text-muted-foreground">{isOnline(selUser!.id) ? <span className="text-green-800 dark:text-green-400">onlayn</span> : roleLabel(tChat, selUser!.role)}</p>}
               </div>
               {!selectMode && !selGroup?.devSupport && (
@@ -2775,9 +2807,9 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
               )}
               {selectMode && (
                 <div className="flex items-center gap-1">
-                  <span className="text-xs text-muted-foreground mr-1">{selected.size} ta</span>
+                  <span className="text-xs text-muted-foreground mr-1">{tChat('chat.selectedCount', { count: selected.size })}</span>
                   {selected.size>0 && <>
-                    <button aria-label="Uzatish" onClick={() => { const msg=messages.find(m=>m.id===[...selected][0]); if(msg) setShowForward(msg); }} className="p-2 hover:bg-muted rounded-full text-muted-foreground"><Share2 className="w-4 h-4"/></button>
+                    <button aria-label={tChat('chat.forward')} onClick={() => { const msg=messages.find(m=>m.id===[...selected][0]); if(msg) setShowForward(msg); }} className="p-2 hover:bg-muted rounded-full text-muted-foreground"><Share2 className="w-4 h-4"/></button>
                     {/* XATO TUZATILDI: o'chirish tugmasi shu yerda (tepadagi
                         tanlash paneli) rolga qaramasdan HAMMAGA ko'rinardi —
                         kontekst-menyudagi yagona-xabar o'chirish allaqachon
@@ -2787,10 +2819,10 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
                         qilingan xato). Backend baribir rad etardi, lekin
                         tugmaning o'zi hammaga ko'rinishi noto'g'ri edi. */}
                     {canModifyMessages && (
-                      <button aria-label="Tanlanganlarni o'chirish" onClick={() => { selected.forEach(id=>onDelete(id)); setSelectMode(false); setSelected(new Set()); }} className="p-2 hover:bg-red-500/100/10 rounded-full text-red-500"><Trash2 className="w-4 h-4"/></button>
+                      <button aria-label={tChat('chat.deleteSelectedAria')} onClick={() => { selected.forEach(id=>onDelete(id)); setSelectMode(false); setSelected(new Set()); }} className="p-2 hover:bg-red-500/100/10 rounded-full text-red-500"><Trash2 className="w-4 h-4"/></button>
                     )}
                   </>}
-                  <button aria-label="Tanlashni bekor qilish" onClick={() => { setSelectMode(false); setSelected(new Set()); }} className="p-2 hover:bg-muted rounded-full text-muted-foreground"><X className="w-4 h-4"/></button>
+                  <button aria-label={tChat('chat.cancelSelectAria')} onClick={() => { setSelectMode(false); setSelected(new Set()); }} className="p-2 hover:bg-muted rounded-full text-muted-foreground"><X className="w-4 h-4"/></button>
                 </div>
               )}
             </div>
@@ -2801,7 +2833,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
                 <div className="w-0.5 h-7 bg-primary rounded-full flex-shrink-0"/>
                 <div className="flex-1 min-w-0">
                   <p className="text-[10px] font-semibold text-primary">📌 {tChat("chat.pinnedMessage")}</p>
-                  <p className="text-xs text-muted-foreground truncate">{pinned.type==='audio'?'🎤 Ovoz':pinned.type==='image'?'🖼️ Rasm':pinned.type==='location'?'📍 Joylashuv':pinned.text}</p>
+                  <p className="text-xs text-muted-foreground truncate">{msgReplyPreview(tChat, pinned)}</p>
                 </div>
                 <button aria-label="Qadalgan xabarni yopish" onClick={()=>onPin(pinned.id)} className="p-1 text-muted-foreground hover:text-foreground flex-shrink-0"><X className="w-3.5 h-3.5"/></button>
               </div>
@@ -2917,7 +2949,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
                 <div className="w-0.5 h-7 bg-primary rounded-full flex-shrink-0"/>
                 <div className="flex-1 min-w-0">
                   <p className="text-[10px] font-semibold text-primary">{replyTo.fromUserId===currentUser.id?tChat('chat.you'):userById(replyTo.fromUserId)?.name}</p>
-                  <p className="text-xs text-muted-foreground truncate">{replyTo.type==='audio'?'🎤 Ovoz':replyTo.type==='image'?'🖼️ Rasm':replyTo.text}</p>
+                  <p className="text-xs text-muted-foreground truncate">{msgReplyPreview(tChat, replyTo)}</p>
                 </div>
                 <button aria-label="Javobni bekor qilish" onClick={()=>setReplyTo(null)} className="p-1 text-muted-foreground hover:text-foreground flex-shrink-0"><X className="w-4 h-4"/></button>
               </div>
@@ -2977,13 +3009,13 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
                   <div className="flex items-center gap-1 flex-shrink-0 pb-1">
                     {isRecording ? (
                       <>
-                        <button aria-label="Yozishni bekor qilish" onClick={cancelRec} className="w-9 h-9 flex items-center justify-center text-muted-foreground hover:bg-white/10 rounded-full transition-colors"><X className="w-4 h-4"/></button>
-                        <button aria-label="Ovozli xabarni yuborish" onClick={stopRec} className="w-9 h-9 bg-gradient-to-br from-red-500 to-red-600 text-white rounded-full flex items-center justify-center active:scale-95 liquid-transition shadow-md shadow-red-500/30"><Send className="w-4 h-4 ml-0.5"/></button>
+                        <button aria-label={tChat('chat.cancelRecordingAria')} onClick={cancelRec} className="w-9 h-9 flex items-center justify-center text-muted-foreground hover:bg-white/10 rounded-full transition-colors"><X className="w-4 h-4"/></button>
+                        <button aria-label={tChat('chat.sendVoiceAria')} onClick={stopRec} className="w-9 h-9 bg-gradient-to-br from-red-500 to-red-600 text-white rounded-full flex items-center justify-center active:scale-95 liquid-transition shadow-md shadow-red-500/30"><Send className="w-4 h-4 ml-0.5"/></button>
                       </>
                     ) : (editingId ? editText : text).trim() ? (
-                      <button aria-label="Xabar yuborish" onClick={()=>{if(editingId)saveEdit();else doSend();}} className="w-9 h-9 bg-gradient-to-br from-primary to-primary/80 text-white rounded-full flex items-center justify-center active:scale-95 liquid-transition shadow-md shadow-primary/30"><Send className="w-4 h-4 ml-0.5"/></button>
+                      <button aria-label={tChat('chat.sendMessageAria')} onClick={()=>{if(editingId)saveEdit();else doSend();}} className="w-9 h-9 bg-gradient-to-br from-primary to-primary/80 text-white rounded-full flex items-center justify-center active:scale-95 liquid-transition shadow-md shadow-primary/30"><Send className="w-4 h-4 ml-0.5"/></button>
                     ) : (
-                      <button aria-label="Ovozli xabar yozish" onClick={startRec} className="w-9 h-9 flex items-center justify-center text-muted-foreground hover:bg-white/10 rounded-full transition-colors"><Mic className="w-5 h-5"/></button>
+                      <button aria-label={tChat('chat.recordVoiceAria')} onClick={startRec} className="w-9 h-9 flex items-center justify-center text-muted-foreground hover:bg-white/10 rounded-full transition-colors"><Mic className="w-5 h-5"/></button>
                     )}
                   </div>
                 </div>
@@ -2999,7 +3031,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
           <div className="glass-modal rounded-t-3xl sm:rounded-2xl w-full max-w-sm p-5 animate-slide-up-fade" onClick={e=>e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-bold text-sm">{tChat('chat.forwardTo')}</h3>
-              <button aria-label="Yopish" onClick={()=>setShowForward(null)} className="p-1.5 hover:bg-muted rounded-full"><X className="w-4 h-4"/></button>
+              <button aria-label={tChat('common.close')} onClick={()=>setShowForward(null)} className="p-1.5 hover:bg-muted rounded-full"><X className="w-4 h-4"/></button>
             </div>
             <div className="space-y-1 max-h-64 overflow-y-auto scrollbar-hide">
               {contacts.map(u => (
@@ -4904,7 +4936,7 @@ export default function App() {
       const onDelete = (payload: any) => setMessages(prev => prev.map(x => x.id===payload.id ? {...x, deleted: true} : x));
       const onRead = ({ fromUserId, toUserId }: any) => setMessages(prev => prev.map(x => x.fromUserId===fromUserId && x.toUserId===toUserId ? {...x, read: true} : x));
       const onPresence = ({ online }: any) => setOnlineUsers(online || []);
-      const onGroupNew = (g: any) => { const gg = {...g, id: g.id||g._id}; setGroups(prev => prev.some(x=>x.id===gg.id)?prev:[...prev, gg]); socket.emit("join:group", gg.id); toast("Yangi guruh: " + gg.name); };
+      const onGroupNew = (g: any) => { const gg = {...g, id: g.id||g._id}; setGroups(prev => prev.some(x=>x.id===gg.id)?prev:[...prev, gg]); socket.emit("join:group", gg.id); toast(tApp('chat.newGroupToast', { name: gg.name })); };
       const onGroupUpdate = (g: any) => setGroups(prev => prev.map(x => x.id===(g.id||g._id) ? {...g, id: g.id||g._id} : x));
       const onGroupRemoved = ({ id }: any) => setGroups(prev => prev.filter(x => x.id !== id));
 

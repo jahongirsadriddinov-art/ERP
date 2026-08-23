@@ -28,8 +28,17 @@ export const uz = {
   uploadFailed: "Media yuklanmadi",
   // Labels
   voiceMessage: "🎤 Ovozli xabar",
+  voicePreview: "🎤 Ovoz",
   photo: "🖼️ Rasm",
   video: "🎥 Video",
+  locationMessage: "📍 Lokatsiya",
+  locationPreview: "📍 Joylashuv",
+  locationLabel: "Lokatsiya",
+  fileLabel: "Fayl",
+  imageAlt: "Rasm",
+  unknownSender: "Noma'lum",
+  memberCount: "{{count}} a'zo",
+  devSupportSubtitle: "Texnik yordam",
   // Notification bell
   notifTitle: "Bildirishnomalar",
   notifEmpty: "Bildirishnoma yo'q",
@@ -61,6 +70,14 @@ export const uz = {
   editedLabel: "tahrirlangan",
   pinnedMessage: "Qo'yilgan xabar",
   retrySend: "Qayta yuborish",
+  newGroupToast: "Yangi guruh: {{name}}",
+  selectedCount: "{{count}} ta",
+  cancelSelectAria: "Tanlashni bekor qilish",
+  deleteSelectedAria: "Tanlanganlarni o'chirish",
+  cancelRecordingAria: "Yozishni bekor qilish",
+  sendVoiceAria: "Ovozli xabarni yuborish",
+  sendMessageAria: "Xabar yuborish",
+  recordVoiceAria: "Ovozli xabar yozish",
 };
 
 export const ru = {
@@ -93,8 +110,17 @@ export const ru = {
   uploadFailed: "Не удалось загрузить медиа",
   // Labels
   voiceMessage: "🎤 Голосовое сообщение",
+  voicePreview: "🎤 Голос",
   photo: "🖼️ Фото",
   video: "🎥 Видео",
+  locationMessage: "📍 Местоположение",
+  locationPreview: "📍 Геолокация",
+  locationLabel: "Местоположение",
+  fileLabel: "Файл",
+  imageAlt: "Фото",
+  unknownSender: "Неизвестно",
+  memberCount: "{{count}} участ.",
+  devSupportSubtitle: "Техподдержка",
   // Notification bell
   notifTitle: "Уведомления",
   notifEmpty: "Уведомлений нет",
@@ -126,4 +152,12 @@ export const ru = {
   editedLabel: "изменено",
   pinnedMessage: "Закреплённое сообщение",
   retrySend: "Отправить снова",
+  newGroupToast: "Новая группа: {{name}}",
+  selectedCount: "{{count}}",
+  cancelSelectAria: "Отменить выбор",
+  deleteSelectedAria: "Удалить выбранные",
+  cancelRecordingAria: "Отменить запись",
+  sendVoiceAria: "Отправить голосовое сообщение",
+  sendMessageAria: "Отправить сообщение",
+  recordVoiceAria: "Записать голосовое сообщение",
 };

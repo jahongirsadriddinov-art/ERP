@@ -10,7 +10,10 @@ const router = Router();
 // Get all users
 router.get('/', async (req, res) => {
   try {
-    const users = await User.find(scoped()).select('-telegramVerificationCode -telegramVerificationCodeExpires');
+    // (natijaviy `formatted` ro'yxatga faqat aniq xavfsiz maydonlar
+    // qo'shiladi pastda — passwordHash baribir javobga chiqmaydi, lekin
+    // kerak bo'lmagan maydonni bazadan umuman o'qimaslik yaxshiroq odat.)
+    const users = await User.find(scoped()).select('-telegramVerificationCode -telegramVerificationCodeExpires -passwordHash');
     // map _id to id
     const formatted = users.map(u => ({
       id: u._id,
@@ -84,10 +87,8 @@ router.patch('/:id/courses', async (req, res) => {
     const tenant = getTenant();
     const { courses } = req.body;
     if (!Array.isArray(courses)) return res.status(400).json({ error: 'courses massiv bo\'lishi kerak' });
-    // O'z profilini yoki admin boshqasini yangilay oladi
-    const filter = (tenant?.role === 'direktor' || tenant?.role === 'orinbosar')
-      ? scoped({ _id: req.params.id })
-      : scoped({ _id: req.params.id, _id2: tenant?.userId });
+    // O'z profilini yoki admin boshqasini yangilay oladi — haqiqiy tekshiruv
+    // pastda (user topilgach, egalik/rol bo'yicha) qilinadi.
     const user = await User.findOne({ _id: req.params.id, ...(tenant?.companyId ? { companyId: tenant.companyId } : {}) });
     if (!user) return res.status(404).json({ error: 'Foydalanuvchi topilmadi' });
     if (String(user._id) !== tenant?.userId && tenant?.role !== 'direktor' && tenant?.role !== 'orinbosar') {

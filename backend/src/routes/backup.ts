@@ -25,8 +25,15 @@ router.get('/backup', async (req, res) => {
 
     const filter = { companyId: cid };
 
+    // XAVFSIZLIK — TOPILMA (audit): bu yerda .select() yo'q edi — export
+    // qilingan JSON'da HAR BIR xodimning parol xesh'i (passwordHash) va
+    // Telegram tasdiqlash kodi ham chiqib ketardi. Backup fayli o'zi
+    // to'g'ri (faqat direktor/orinbosar, faqat o'z firmasi) cheklangan
+    // bo'lsa ham, keyin ulashilsa/yo'qolsa/hisob buzilsa — bu maxfiy
+    // maydonlar butun jamoa uchun parol-buzish (crackable hash) manbaiga
+    // aylanardi. Endi users.ts'dagi bir xil chiqarib tashlash ro'yxati.
     const [users, objects, transactions, materials, attendance, auditLogs] = await Promise.all([
-      User.find(filter).lean(),
+      User.find(filter).select('-passwordHash -telegramVerificationCode -telegramVerificationCodeExpires').lean(),
       ObjectModel.find(filter).lean(),
       Transaction.find(filter).lean(),
       Material.find(filter).lean(),

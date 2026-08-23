@@ -35,8 +35,16 @@ router.post('/', async (req, res) => {
 });
 
 // GET /api/gps/latest — kompaniya xodimlarining so'nggi joylashuvi
+// XAVFSIZLIK — QATTIQLASHTIRISH (audit): faqat rahbariyat (direktor/
+// orinbosar/dasturchi) ko'rishi kerak degan aniq talab — scoped() firma
+// chegarasini to'g'ri saqlaydi, lekin rol tekshiruvi yo'q edi, ya'ni oddiy
+// ishchi ham to'g'ridan-to'g'ri so'rov bilan BARCHA hamkasblarining
+// joriy joylashuvini ko'rishi mumkin edi.
 router.get('/latest', async (req, res) => {
   try {
+    const tenant = getTenant();
+    const isBoss = tenant?.isDeveloper || tenant?.role === 'direktor' || tenant?.role === 'orinbosar';
+    if (!isBoss) return res.status(403).json({ error: 'Ruxsat yo\'q' });
     const filter = scoped();
     // Har bir foydalanuvchi uchun oxirgi yozuv (aggregate)
     const latest = await GpsLocation.aggregate([
@@ -50,8 +58,16 @@ router.get('/latest', async (req, res) => {
 });
 
 // GET /api/gps/user/:id — ma'lum foydalanuvchi tarixi
+// XAVFSIZLIK — QATTIQLASHTIRISH (audit): scoped() firmalararo sizishning
+// oldini olardi, lekin firma ICHIDA istalgan oddiy xodim boshqa bir
+// xodimning to'liq joylashuv TARIXINI so'rashi mumkin edi — shaxsiy
+// joylashuv ma'lumoti, faqat rahbariyat (yoki o'zi) ko'rishi kerak.
 router.get('/user/:id', async (req, res) => {
   try {
+    const tenant = getTenant();
+    const isSelf = String(req.params.id) === String(tenant?.userId);
+    const isBoss = tenant?.isDeveloper || tenant?.role === 'direktor' || tenant?.role === 'orinbosar';
+    if (!isSelf && !isBoss) return res.status(403).json({ error: 'Ruxsat yo\'q' });
     const { limit = '20' } = req.query as Record<string, string>;
     const locations = await GpsLocation.find({ userId: req.params.id, ...scoped() })
       .sort({ timestamp: -1 }).limit(parseInt(limit));

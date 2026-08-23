@@ -127,18 +127,36 @@ export async function saveOrShareBlob(filename: string, blob: Blob): Promise<{ o
       return { ok: false };
     }
   }
+  const [{ Filesystem, Directory }, { Share }] = await Promise.all([
+    import('@capacitor/filesystem'),
+    import('@capacitor/share'),
+  ]);
+  let writtenUri: string;
   try {
-    const [{ Filesystem, Directory }, { Share }] = await Promise.all([
-      import('@capacitor/filesystem'),
-      import('@capacitor/share'),
-    ]);
     const base64 = await blobToBase64(blob);
     const written = await Filesystem.writeFile({ path: filename, data: base64, directory: Directory.Cache });
-    await Share.share({ url: written.uri, title: filename, dialogTitle: filename });
+    writtenUri = written.uri;
+  } catch (err) {
+    // Fayl HAQIQATAN ham yozilmadi — bu haqiqiy "saqlanmadi" xatosi.
+    console.error('saveOrShareBlob (writeFile) xatosi:', err);
+    return { ok: false };
+  }
+  // XATO TUZATILDI: fayl yozish (yuqorida) va ulashish (pastda) bitta
+  // try/catch'da edi — foydalanuvchi ulashish oynasini shunchaki BEKOR
+  // qilsa (masalan orqaga qaytsa yoki tashqariga bossa), Share.share()
+  // ko'pincha rad etilgan promise bilan tugaydi va bu "Fayl saqlanmadi"
+  // xatosi sifatida ko'rsatilardi — holbuki fayl YUQORIDA muvaffaqiyatli
+  // yozilgan edi, foydalanuvchi faqat keyingi ixtiyoriy "ulashish"
+  // qadamidan voz kechgan edi (aniq xabar qilingan holat: ulashish oynasi
+  // ochilgan BILAN BIRGA "Fayl saqlanmadi" xabari ham chiqqan). Endi bu
+  // ikkinchi bosqich muvaffaqiyatsiz bo'lsa ham, fayl saqlangani uchun
+  // xato emas, {ok:true, shared:false} qaytariladi.
+  try {
+    await Share.share({ url: writtenUri, title: filename, dialogTitle: filename });
     return { ok: true, shared: true };
   } catch (err) {
-    console.error('saveOrShareBlob xatosi:', err);
-    return { ok: false };
+    console.error('saveOrShareBlob (share, e\'tiborsiz — fayl saqlangan) xatosi:', err);
+    return { ok: true, shared: false };
   }
 }
 

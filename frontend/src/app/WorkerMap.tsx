@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { X, Navigation } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { AppUser } from "./App";
 
 interface GpsPoint { userId: string; lat: number; lng: number; accuracy?: number; timestamp: string; source?: 'site'|'bot_live'|'bot_once' }
@@ -30,6 +31,7 @@ function workerDivIcon(name: string, live: boolean, stale: boolean) {
 }
 
 export default function WorkerMap({ users, gpsLocations }: { users: AppUser[]; gpsLocations: GpsPoint[] }) {
+  const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markersRef = useRef<Record<string, L.Marker>>({});
@@ -79,8 +81,9 @@ export default function WorkerMap({ users, gpsLocations }: { users: AppUser[]; g
         markersRef.current[loc.userId] = marker;
       }
       const veryRough = (loc.accuracy || 0) > 300; // ~300m'dan katta — odatda tarmoq/IP-asosli, GPS chip emas
+      const statusWord = live ? (stale ? t('map.stale') : t('map.live')) : t('map.lastKnown');
       markersRef.current[loc.userId].bindTooltip(
-        `${user.name}${live ? (stale ? ' · eskirgan' : ' · jonli') : ' · oxirgi ma\'lum joy'}${loc.accuracy ? ` · ±${Math.round(loc.accuracy)}m` : ''}`,
+        `${user.name} · ${statusWord}${loc.accuracy ? ` · ±${Math.round(loc.accuracy)}m` : ''}`,
         { direction: 'top', offset: [0, -18] }
       );
 
@@ -114,7 +117,7 @@ export default function WorkerMap({ users, gpsLocations }: { users: AppUser[]; g
       map.fitBounds(pts, { padding: [40, 40], maxZoom: 15 });
       (map as any).__wmFitted = true;
     }
-  }, [gpsLocations, users]);
+  }, [gpsLocations, users, t]);
 
   // Jonli (live) deb hisoblanadigan xodimlar soni — xarita ustidagi
   // yorliqda ko'rsatish uchun (foydali ma'lumot + "premium" texnik detal,
@@ -140,14 +143,14 @@ export default function WorkerMap({ users, gpsLocations }: { users: AppUser[]; g
         <div className="absolute top-3 left-3 z-[401] flex items-center gap-1.5 bg-background/85 backdrop-blur-md border border-border/60 rounded-full pl-2 pr-3 py-1 shadow-sm">
           <span className={`w-1.5 h-1.5 rounded-full ${liveCount > 0 ? "bg-green-500 animate-pulse" : "bg-muted-foreground/50"}`} />
           <span className="text-[10px] font-semibold tracking-wide" style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace" }}>
-            {liveCount} jonli · {gpsLocations.length} jami
+            {t('map.liveTotal', { live: liveCount, total: gpsLocations.length })}
           </span>
         </div>
       )}
 
       {gpsLocations.length === 0 && (
         <div className="absolute inset-0 flex items-center justify-center bg-background/70 pointer-events-none">
-          <p className="text-xs text-muted-foreground">Xaritada ko'rsatish uchun GPS ma'lumoti yo'q</p>
+          <p className="text-xs text-muted-foreground">{t('map.noData')}</p>
         </div>
       )}
       {navTarget && <NavigateChoiceModal target={navTarget} onClose={() => setNavTarget(null)} />}
@@ -209,12 +212,13 @@ export default function WorkerMap({ users, gpsLocations }: { users: AppUser[]; g
 // Xodim joylashuviga yo'naltirish — qaysi xarita ilovasi orqali ochish
 // tanlovi (aniq foydalanuvchi talabi: "Google Maps, Yandex Maps yoki boshqa").
 export function NavigateChoiceModal({ target, onClose }: { target: { lat: number; lng: number; name: string }; onClose: () => void }) {
+  const { t } = useTranslation();
   const { lat, lng, name } = target;
   const options = [
     { label: 'Google Maps', url: `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving` },
     { label: 'Yandex Maps', url: `https://yandex.com/maps/?rtext=~${lat},${lng}&rtt=auto` },
     // geo: URI — Android'da o'rnatilgan standart xarita ilovasini tanlash oynasini ochadi.
-    { label: "Standart ilova (qurilma)", url: `geo:${lat},${lng}?q=${lat},${lng}(${encodeURIComponent(name)})` },
+    { label: t('map.defaultApp'), url: `geo:${lat},${lng}?q=${lat},${lng}(${encodeURIComponent(name)})` },
   ];
   // document.body'ga portal orqali chiqariladi — aks holda xarita konteyneri
   // (yoki uni o'rab turgan animatsiyalangan sahifa) haqiqiy "fixed"ni buzib,
@@ -225,10 +229,10 @@ export function NavigateChoiceModal({ target, onClose }: { target: { lat: number
       <div className="w-full max-w-sm surface rounded-3xl p-5" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <div>
-            <p className="text-sm font-bold flex items-center gap-1.5"><Navigation className="w-4 h-4 text-primary" /> Yo'naltirish</p>
-            <p className="text-xs text-muted-foreground mt-0.5">{name} — qaysi ilova orqali ochilsin?</p>
+            <p className="text-sm font-bold flex items-center gap-1.5"><Navigation className="w-4 h-4 text-primary" /> {t('map.navigateTitle')}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{t('map.navigateSubtitle', { name })}</p>
           </div>
-          <button onClick={onClose} aria-label="Yopish" className="p-1.5 rounded-lg hover:bg-muted"><X className="w-4 h-4" /></button>
+          <button onClick={onClose} aria-label={t('map.close')} className="p-1.5 rounded-lg hover:bg-muted"><X className="w-4 h-4" /></button>
         </div>
         <div className="space-y-2">
           {options.map(o => (

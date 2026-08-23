@@ -182,11 +182,14 @@ export const fmt = (n?: number) => (n || 0).toLocaleString("uz-UZ") + " so'm";
 // workHours (0.1 soatgacha yaxlitlangan, masalan 5 daqiqa "0.1 soat" bo'lib
 // chiqadi — noaniq/chalkash) o'rniga to'g'ridan-to'g'ri checkIn/checkOut
 // vaqt tamg'alaridan hisoblanadi, hech narsa yo'qolmaydi.
-export const fmtWorkDuration = (checkIn?: string | null, checkOut?: string | null): string => {
+// `tt` ixtiyoriy — berilmasa (eski chaqiruvlar bilan moslik uchun)
+// standart o'zbekcha matn qaytariladi, berilsa joriy tilga tarjima qilinadi.
+export const fmtWorkDuration = (checkIn?: string | null, checkOut?: string | null, tt?: (key: string, opts?: any) => string): string => {
   if (!checkIn || !checkOut) return "";
   const minutes = Math.max(0, Math.round((new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 60000));
-  if (minutes < 60) return `${minutes} daqiqa`;
+  if (minutes < 60) return tt ? tt('gps.minutesShort', { min: minutes }) : `${minutes} daqiqa`;
   const h = Math.floor(minutes / 60), m = minutes % 60;
+  if (tt) return m === 0 ? tt('gps.hoursShort', { h }) : tt('gps.hoursMinutesShort', { h, m });
   return m === 0 ? `${h} soat` : `${h} soat ${m} daqiqa`;
 };
 
@@ -1327,7 +1330,7 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
       const r = await fetch(`${API_BASE}/api/admin/backup`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!r.ok) { toast.error("Yuklab olishda xatolik"); return; }
+      if (!r.ok) { toast.error(t('dashboard.backupError')); return; }
       const blob = await r.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -1335,8 +1338,8 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
       a.download = `qurilish-erp-backup-${new Date().toISOString().split('T')[0]}.json`;
       document.body.appendChild(a); a.click(); document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      toast.success("Ma'lumotlar yuklab olindi");
-    } catch { toast.error("Yuklab olishda xatolik"); }
+      toast.success(t('dashboard.backupSuccess'));
+    } catch { toast.error(t('dashboard.backupError')); }
     finally { setBackupLoading(false); }
   };
 

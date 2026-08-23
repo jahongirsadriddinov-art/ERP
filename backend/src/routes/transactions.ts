@@ -9,6 +9,16 @@ import { emitToUser } from '../services/socket';
 import { tb, BotLang } from '../i18n/bot';
 import { sendEmail } from '../services/email';
 import { logAudit } from '../services/audit';
+// XATO TUZATILDI: bu faylda avval FAQAT Telegram bot xabari (bot.sendMessage)
+// va real-vaqt socket (emitToUser) yuborilardi — foydalanuvchi bot orqali
+// EMAS, faqat sayt/APK/Windows dasturi orqali ishlasa (Telegram ochmasa) va
+// ilova ochiq bo'lmasa, yangi yukxat/to'lov/tasdiqlash haqida HECH QANDAY
+// xabar olmasdi (aniq foydalanuvchi shikoyati: "sayt/ilova/exe'ning o'zining
+// bildirishnomasi kelmayapti"). messages.ts'da ALLAQACHON mavjud bo'lgan Web
+// Push (sendPushToUser — chinakam qurilma bildirishnomasi, ilova yopiq
+// bo'lsa ham keladi) endi shu faylning barcha bildirishnoma nuqtalariga ham
+// qo'shildi.
+import { sendPushToUser } from '../services/push';
 
 const router = Router();
 
@@ -163,6 +173,13 @@ router.post('/', async (req, res) => {
               ]] }
             }).catch(console.error);
           }
+          if (toUser) {
+            sendPushToUser(String(toUser._id), {
+              title: '📦 Yangi yukxat',
+              body: `${tx.materialName || '—'} — ${tx.quantity} ${tx.unit || ''}`,
+              tag: 'transfer',
+            }).catch(() => {});
+          }
         } else if (tx.type !== 'transfer' && tx.toUserId) {
           // Payment to specific user — bitta xabarda matn + tugmalar
           const toUser = await User.findById(tx.toUserId).catch(() => null);
@@ -175,6 +192,13 @@ router.post('/', async (req, res) => {
                 { text: tb(toLang, 'rejectBtn'), callback_data: `reject_${tx._id}` },
               ]] }
             }).catch(console.error);
+          }
+          if (toUser) {
+            sendPushToUser(String(toUser._id), {
+              title: '💰 Yangi to\'lov',
+              body: `${tx.description || '—'} — ${(tx.amount || 0).toLocaleString()} so'm`,
+              tag: 'payment',
+            }).catch(() => {});
           }
         }
 
@@ -195,6 +219,13 @@ router.post('/', async (req, res) => {
                 { text: tb(aLang, 'rejectBtn'), callback_data: `reject_${tx._id}` },
               ]] }
             }).catch(console.error);
+          }
+          if (approverUser) {
+            sendPushToUser(String(approverUser._id), {
+              title: '💰 Tasdiqlash kerak',
+              body: `${tx.description || '—'} — ${(tx.amount || 0).toLocaleString()} so'm`,
+              tag: 'approval',
+            }).catch(() => {});
           }
         }
 
@@ -299,6 +330,11 @@ router.patch('/:id/confirm', async (req, res) => {
           if (fromUser.telegramChatId) {
             await bot.sendMessage(fromUser.telegramChatId, tb(fromUser.language as BotLang | undefined, 'simpleConfirmedNotify', { label })).catch(console.error);
           }
+          sendPushToUser(String(fromUser._id), {
+            title: '✅ Tasdiqlandi',
+            body: label,
+            tag: 'confirmed',
+          }).catch(() => {});
           if (fromUser.email && tx.type !== 'transfer') {
             await sendEmail(fromUser.email, "Tranzaksiya tasdiqlandi — QurilishERP", `
               <h2>Tranzaksiya tasdiqlandi ✅</h2>
@@ -399,9 +435,16 @@ router.patch('/:id/approve', async (req, res) => {
       const creatorId = tx.createdById || tx.toUserId;
       if (creatorId) {
         const creator = await User.findById(creatorId).catch(() => null);
-        if (creator?.telegramChatId) {
+        if (creator) {
           const label = tx.description || '—';
-          await bot.sendMessage(creator.telegramChatId, `✅ Chiqimingiz tasdiqlandi: *${label}* — ${(tx.amount || 0).toLocaleString()} so'm`, { parse_mode: 'Markdown' }).catch(console.error);
+          if (creator.telegramChatId) {
+            await bot.sendMessage(creator.telegramChatId, `✅ Chiqimingiz tasdiqlandi: *${label}* — ${(tx.amount || 0).toLocaleString()} so'm`, { parse_mode: 'Markdown' }).catch(console.error);
+          }
+          sendPushToUser(String(creator._id), {
+            title: '✅ Chiqim tasdiqlandi',
+            body: `${label} — ${(tx.amount || 0).toLocaleString()} so'm`,
+            tag: 'confirmed',
+          }).catch(() => {});
         }
       }
     } catch {}
@@ -463,9 +506,16 @@ router.patch('/:id/reject', async (req, res) => {
       if (fromUserId) {
         const fromUser = await User.findById(fromUserId).catch(() => null) ||
                          await User.findOne({ _id: fromUserId }).catch(() => null);
-        if (fromUser && fromUser.telegramChatId) {
+        if (fromUser) {
           const label = (tx.type === 'transfer' ? tx.materialName : tx.description) || '—';
-          await bot.sendMessage(fromUser.telegramChatId, tb(fromUser.language as BotLang | undefined, 'simpleRejectedNotify', { label })).catch(console.error);
+          if (fromUser.telegramChatId) {
+            await bot.sendMessage(fromUser.telegramChatId, tb(fromUser.language as BotLang | undefined, 'simpleRejectedNotify', { label })).catch(console.error);
+          }
+          sendPushToUser(String(fromUser._id), {
+            title: '❌ Rad etildi',
+            body: label,
+            tag: 'rejected',
+          }).catch(() => {});
         }
       }
     } catch(notifErr) {

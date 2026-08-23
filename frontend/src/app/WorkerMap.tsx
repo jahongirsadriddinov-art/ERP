@@ -129,13 +129,20 @@ export default function WorkerMap({ users, gpsLocations }: { users: AppUser[]; g
     <div className="wm-map relative w-full h-[340px] rounded-2xl overflow-hidden surface">
       <div ref={containerRef} className="w-full h-full" />
 
-      {/* Chizma-uslubidagi burchak-belgilar — LandingPage bilan bir xil
-          vizual til, xaritani "texnik asbob" sifatida ramkaga oladi. */}
-      <div className="pointer-events-none absolute inset-2 z-[401]" aria-hidden="true">
-        <span className="absolute top-0 left-0 w-3 h-3 border-t-2 border-l-2 border-white/70 dark:border-white/40 rounded-tl-[3px]" />
-        <span className="absolute top-0 right-0 w-3 h-3 border-t-2 border-r-2 border-white/70 dark:border-white/40 rounded-tr-[3px]" />
-        <span className="absolute bottom-0 left-0 w-3 h-3 border-b-2 border-l-2 border-white/70 dark:border-white/40 rounded-bl-[3px]" />
-        <span className="absolute bottom-0 right-0 w-3 h-3 border-b-2 border-r-2 border-white/70 dark:border-white/40 rounded-br-[3px]" />
+      {/* Chizma-uslubidagi burchak-belgilar — LandingPage'dagi CornerMarks bilan
+          bir xil chizgi uslubi, lekin RANGI ATAYLAB oq qoldirilgan: bu yerda
+          (LandingPage'dan farqli) belgilar bir xil sirt emas, xilma-xil
+          rangdagi xarita RASTRINING (suv/o'rmon/yo'l) USTIDA turadi — agar
+          firmaning primary rangi (masalan ko'k) tasodifan suv yuzasi bilan
+          bir xil ohangda bo'lsa, belgi butunlay yo'qolib qolishi mumkin edi.
+          Shu sabab kontrast uchun oq saqlanadi, lekin firmaning rangi bilan
+          BOG'LASH uchun yumshoq primary drop-shadow qo'shildi — brend bilan
+          "begona" emas, aloqador ko'rinadi, kontrast esa har doim kafolatli. */}
+      <div className="pointer-events-none absolute inset-2 z-[401]" aria-hidden="true" style={{ filter: 'drop-shadow(0 0 2px var(--primary))' }}>
+        <span className="absolute top-0 left-0 w-3 h-3 border-t-2 border-l-2 border-white/85 dark:border-white/60 rounded-tl-[3px]" />
+        <span className="absolute top-0 right-0 w-3 h-3 border-t-2 border-r-2 border-white/85 dark:border-white/60 rounded-tr-[3px]" />
+        <span className="absolute bottom-0 left-0 w-3 h-3 border-b-2 border-l-2 border-white/85 dark:border-white/60 rounded-bl-[3px]" />
+        <span className="absolute bottom-0 right-0 w-3 h-3 border-b-2 border-r-2 border-white/85 dark:border-white/60 rounded-br-[3px]" />
       </div>
 
       {/* Jonli xodimlar yorlig'i — chap yuqori burchak */}
@@ -166,7 +173,12 @@ export default function WorkerMap({ users, gpsLocations }: { users: AppUser[]; g
           margin: 0 auto;
           border-radius: 9999px;
           border: 2.5px solid;
-          background: linear-gradient(135deg, #1B3A6B, #14294d);
+          /* XATO TUZATILDI: avval qattiq kodlangan #1B3A6B (standart tema
+             navy) edi — firma COLOR_THEMES'dan boshqa rang (forest/rose/
+             amber va h.k.) tanlagan bo'lsa ham marker doim standart ko'k
+             bo'lib qolardi, ilovaning qolgan qismi bilan mos kelmasdi. Endi
+             joriy temaning --primary o'zgaruvchisidan olinadi. */
+          background: linear-gradient(135deg, var(--primary), color-mix(in srgb, var(--primary) 70%, black));
           color: #fff;
           display: flex; align-items: center; justify-content: center;
           font-size: 12px; font-weight: 700;

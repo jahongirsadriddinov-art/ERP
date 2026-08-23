@@ -372,9 +372,9 @@ const uz: BotDict = {
   subGateStillMissing: "Hali hammasiga obuna bo'lmadingiz — qolganlariga qo'shiling va qayta tekshiring.",
   subGateAllDone: "✅ Rahmat! Endi botdan to'liq foydalanishingiz mumkin.",
   kb_subscribeGate: '📋 Majburiy obuna',
-  subGateAdminIntro: "📋 *Majburiy obuna sozlamalari*\n\nQuyidagi kanal/guruhlarga foydalanuvchi obuna bo'lmaguncha bot ishlamaydi. Tahrirlash uchun tugmani bosing.",
+  subGateAdminIntro: "📋 Majburiy obuna sozlamalari\n\nQuyidagi kanal/guruhlarga foydalanuvchi obuna bo'lmaguncha bot ishlamaydi. Tahrirlash uchun tugmani bosing.",
   subGateAdminChannelLine: (p: { n: number; title: string; url: string; status: string }) =>
-    `${p.n}. *${p.title}*\n${p.url}\n${p.status}`,
+    `${p.n}. ${p.title}\n${p.url}\n${p.status}`,
   subGateDiscovered: "✅ Aniqlangan (bot admin)",
   subGateNotDiscovered: "⏳ Bot hali bu kanal/guruhga administrator sifatida qo'shilmagan — obuna tekshiruvi ishlamaydi",
   subGateEditUrlBtn: (p: { n: number }) => `🔗 ${p.n}-havolani tahrirlash`,
@@ -566,9 +566,9 @@ const ru: BotDict = {
   subGateStillMissing: 'Вы ещё не подписаны на все — присоединитесь к оставшимся и проверьте снова.',
   subGateAllDone: '✅ Спасибо! Теперь вы можете полноценно пользоваться ботом.',
   kb_subscribeGate: '📋 Обязательная подписка',
-  subGateAdminIntro: '📋 *Настройки обязательной подписки*\n\nБот не работает, пока пользователь не подпишется на следующие каналы/группы. Нажмите кнопку для редактирования.',
+  subGateAdminIntro: '📋 Настройки обязательной подписки\n\nБот не работает, пока пользователь не подпишется на следующие каналы/группы. Нажмите кнопку для редактирования.',
   subGateAdminChannelLine: (p) =>
-    `${p.n}. *${p.title}*\n${p.url}\n${p.status}`,
+    `${p.n}. ${p.title}\n${p.url}\n${p.status}`,
   subGateDiscovered: '✅ Обнаружен (бот админ)',
   subGateNotDiscovered: '⏳ Бот ещё не добавлен администратором в этот канал/группу — проверка подписки не работает',
   subGateEditUrlBtn: (p) => `🔗 Изменить ссылку ${p.n}`,

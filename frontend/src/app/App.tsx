@@ -4057,6 +4057,7 @@ function BottomFinanceBar({ expenses, projects }: { expenses: Expense[]; project
 
 // ─── OTP kod qutilar (4 xonali kod uchun) — auto-advance, backspace, paste ──────
 function OtpBoxes({ value, onChange, length = 4, autoFocus, error }: { value: string; onChange: (v: string) => void; length?: number; autoFocus?: boolean; error?: boolean }) {
+  const { t } = useTranslation();
   const realRef = useRef<HTMLInputElement | null>(null);
   const digits = Array.from({ length }, (_, i) => value[i] || "");
 
@@ -4085,7 +4086,7 @@ function OtpBoxes({ value, onChange, length = 4, autoFocus, error }: { value: st
         value={value}
         onChange={e => handleRealChange(e.target.value)}
         autoFocus={autoFocus}
-        aria-label="Tasdiqlash kodi"
+        aria-label={t('login.codeLabel')}
         className="absolute inset-0 z-10 w-full h-full opacity-0 cursor-text"
       />
       {digits.map((d, i) => (
@@ -4261,7 +4262,7 @@ function LoginScreen({ onLogin, onRegister, onBack }: { onLogin: (u: any, compan
         <button type="button" onClick={onBack}
           className="absolute left-4 z-10 flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground liquid-transition"
           style={{ top: "max(1.25rem, env(safe-area-inset-top))" }}>
-          <ArrowLeft className="w-4 h-4"/> Bosh sahifa
+          <ArrowLeft className="w-4 h-4"/> {t('login.homeLink')}
         </button>
       )}
 
@@ -4911,7 +4912,7 @@ export default function App() {
         setMessages(prev => prev.some(x => x.id === m.id) ? prev.map(x => x.id===m.id?{...x,...m}:x) : [...prev, m]);
         if (m.fromUserId === liveUser.id) return;
         const sender = usersRef.current.find(u => u.id === m.fromUserId);
-        const name = sender?.name || "Yangi xabar";
+        const name = sender?.name || tApp('chat.notifNewMessage');
         const preview = m.type && m.type !== 'text' ? m.text : (m.text || "");
         const viewingChat = pageRef.current === 'chat' && chatOpenRef.current;
         if (!viewingChat) toast(name, { description: preview });
@@ -5102,21 +5103,21 @@ export default function App() {
   if (!siteEnabled && liveUser?.role !== 'dasturchi') {
     // Native ilova (APK/exe) foydalanuvchisiga "sayt" emas — "ilova" deyish
     // kerak, chunki u brauzerda emas, ilovaning o'zida turibdi (aniq talab).
-    const surface = isNative() ? "Ilova" : "Sayt";
+    const surface = isNative() ? tApp('maintenance.appLabel') : tApp('maintenance.siteLabel');
     return (
       <>
         <div className="min-h-screen bg-background flex items-center justify-center p-6 text-center">
           <div className="max-w-sm space-y-4">
             <div className="text-5xl">🛠️</div>
-            <h1 className="text-xl font-semibold text-foreground">{surface} texnik ishlar tufayli vaqtincha ishlamayapti</h1>
-            <p className="text-sm text-muted-foreground">Birozdan so'ng qayta urinib ko'ring. Uzr so'raymiz.</p>
+            <h1 className="text-xl font-semibold text-foreground">{tApp('maintenance.title', { surface })}</h1>
+            <p className="text-sm text-muted-foreground">{tApp('maintenance.subtitle')}</p>
             <button
               onClick={checkSiteStatus}
               disabled={statusChecking}
               className="mx-auto flex items-center gap-2 rounded-full bg-primary text-primary-foreground px-5 py-2.5 text-sm font-medium liquid-transition disabled:opacity-60"
             >
               <RefreshCw className={`w-4 h-4 ${statusChecking ? 'animate-spin' : ''}`}/>
-              {statusChecking ? "Tekshirilmoqda..." : "Qayta tekshirish"}
+              {statusChecking ? tApp('maintenance.checking') : tApp('maintenance.retryBtn')}
             </button>
           </div>
         </div>
@@ -5205,7 +5206,7 @@ export default function App() {
     ...(admin ? [
       { key: "reports" as NavPage, label: tApp('nav.reports'), icon: BarChart2 },
     ] : []),
-    ...(isGpsAdmin ? [{ key: "gps" as NavPage, label: "Kuzatuv", icon: MapPin }] : []),
+    ...(isGpsAdmin ? [{ key: "gps" as NavPage, label: tApp('nav.gps'), icon: MapPin }] : []),
     { key: "chat", label: tApp('nav.chat'), icon: MessageCircle, badge: unreadMsgs },
     { key: "profile", label: tApp('nav.profile'), icon: User },
   ];
@@ -5247,11 +5248,11 @@ export default function App() {
           className="btn btn-ghost w-9 h-9 p-0 rounded-full">
           <Search className="w-[18px] h-[18px]"/>
         </button>
-        <button onClick={()=>setQrScanOpen(true)} title="QR Skan" aria-label="QR Skan"
+        <button onClick={()=>setQrScanOpen(true)} title={tApp('qrScanner.title')} aria-label={tApp('qrScanner.title')}
           className="btn btn-ghost w-9 h-9 p-0 rounded-full">
           <QrCode className="w-[18px] h-[18px]"/>
         </button>
-        <button onClick={lockAppNow} title="Ilovani bloklash" aria-label="Ilovani bloklash"
+        <button onClick={lockAppNow} title={tApp('profile.lockNowBtn')} aria-label={tApp('profile.lockNowBtn')}
           className="btn btn-ghost w-9 h-9 p-0 rounded-full">
           <Lock className="w-[18px] h-[18px]"/>
         </button>
@@ -5301,16 +5302,16 @@ export default function App() {
             {companyLogo ? <img src={companyLogo} alt="Logo" className="w-full h-full object-contain"/> : <Building2 className="w-8 h-8 text-white"/>}
           </div>
           <div>
-            <p className="text-lg font-bold">Xush kelibsiz, {liveUser.name.split(' ')[0]}!</p>
-            <p className="text-sm text-muted-foreground mt-1">Ishni boshlash uchun "Ishga keldim" tugmasini bosing. GPS kuzatuv va ilovaning boshqa bo'limlari shundan keyin ochiladi.</p>
+            <p className="text-lg font-bold">{tApp('checkinGate.welcome', { name: liveUser.name.split(' ')[0] })}</p>
+            <p className="text-sm text-muted-foreground mt-1">{tApp('checkinGate.instruction')}</p>
           </div>
-          <button onClick={() => { if (confirm("Ishga kelganingizni tasdiqlaysizmi?")) handleCheckIn(); }} disabled={attendancePending}
+          <button onClick={() => { if (confirm(tApp('checkinGate.confirmPrompt'))) handleCheckIn(); }} disabled={attendancePending}
             className="w-full btn btn-primary text-base py-4 rounded-2xl flex items-center justify-center gap-2 disabled:opacity-60">
             {attendancePending ? <Loader2 className="w-5 h-5 animate-spin"/> : <MapPin className="w-5 h-5"/>}
-            Ishga keldim
+            {tApp('checkinGate.checkInBtn')}
           </button>
           <button onClick={()=>{localStorage.removeItem("currentUser"); localStorage.removeItem("token"); setCurrentUser(null); setAuthView("login");}}
-            className="text-xs text-muted-foreground hover:text-foreground underline">Chiqish</button>
+            className="text-xs text-muted-foreground hover:text-foreground underline">{tApp('checkinGate.logout')}</button>
         </motion.div>
       </main>
       <Toaster position="top-center" richColors closeButton/>
@@ -5371,10 +5372,10 @@ export default function App() {
         setUsers(p=>[...p, {...data, id: data.id || data._id, name: data.name || u.name, projectIds: u.projectIds || []}]);
         return { ok: true };
       }
-      return { ok: false, error: data.error || "Foydalanuvchi qo'shilmadi" };
+      return { ok: false, error: data.error || tApp('common.userAddFailed') };
     } catch(err) {
       console.error('Foydalanuvchi qo\'shish xatosi:', err);
-      return { ok: false, error: "Server bilan bog'lanib bo'lmadi" };
+      return { ok: false, error: tApp('common.connectionFailed') };
     }
   };
   const handleUpdateUser = async (u: AppUser) => {
@@ -5401,8 +5402,8 @@ export default function App() {
     try {
       const res = await fetch(`${API_BASE}/api/auth/users/${id}`, { method: "DELETE" });
       if (res.ok) setUsers(p=>p.filter(u=>u.id!==id));
-      else toast.error("O'chirib bo'lmadi — dasturchi panelidan tekshiring (@Sadriddinov_Jahongir)");
-    } catch(err) { console.error(err); toast.error("Server bilan bog'lanib bo'lmadi"); }
+      else toast.error(tApp('common.userDeleteFailed'));
+    } catch(err) { console.error(err); toast.error(tApp('common.connectionFailed')); }
   };
 
   const handleConfirmExpense = async (id: string) => {
@@ -5426,12 +5427,12 @@ export default function App() {
       if (res.ok) {
         const data = await res.json();
         setExpenses(p=>p.map(ex=>ex.id===id?{...ex,...data,status:"confirmed"}:ex));
-        toast.success("Chiqim tasdiqlandi");
+        toast.success(tApp('common.expenseConfirmed'));
       } else {
-        const err = await res.json().catch(()=>({error:"Xatolik"}));
-        toast.error(err.error || "Tasdiqlashda xatolik");
+        const err = await res.json().catch(()=>({error: tApp('common.error')}));
+        toast.error(err.error || tApp('common.confirmFailed'));
       }
-    } catch(err) { console.error(err); toast.error("Server xatoligi"); }
+    } catch(err) { console.error(err); toast.error(tApp('login.serverError')); }
   };
   const handleRejectExpense = async (id: string) => {
     try {

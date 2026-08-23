@@ -10,6 +10,7 @@
 // shu yerga kalitlar qo'shish orqali kengaytiriladi.
 const uz = {
   login: {
+    homeLink: "Bosh sahifa",
     subtitle: "Tizimga kirish",
     botHintBefore: "Oldin Telegram botimizga kiring,",
     botHintAfter: "tugmasini bosib raqamingizni ulashing. Keyin shu yerga raqamingizni yozib kodni oling.",
@@ -42,6 +43,7 @@ const uz = {
     dashboard: "Bosh sahifa",
     finance: "Moliya",
     reports: "Hisobotlar",
+    gps: "Kuzatuv",
     chat: "Xabarlar",
     profile: "Profil",
   },
@@ -224,6 +226,21 @@ const uz = {
     finalCtaSubtitle: "Ro'yxatdan o'ting, birinchi oy bepul — kredit karta shart emas.",
     contactLink: "Aloqa",
   },
+  checkinGate: {
+    welcome: "Xush kelibsiz, {{name}}!",
+    instruction: "Ishni boshlash uchun \"Ishga keldim\" tugmasini bosing. GPS kuzatuv va ilovaning boshqa bo'limlari shundan keyin ochiladi.",
+    confirmPrompt: "Ishga kelganingizni tasdiqlaysizmi?",
+    checkInBtn: "Ishga keldim",
+    logout: "Chiqish",
+  },
+  maintenance: {
+    appLabel: "Ilova",
+    siteLabel: "Sayt",
+    title: "{{surface}} texnik ishlar tufayli vaqtincha ishlamayapti",
+    subtitle: "Birozdan so'ng qayta urinib ko'ring. Uzr so'raymiz.",
+    checking: "Tekshirilmoqda...",
+    retryBtn: "Qayta tekshirish",
+  },
   pinLock: {
     setupTitleEnter: "PIN kod o'rnating",
     setupTitleConfirm: "PIN kodni tasdiqlang",
@@ -387,6 +404,11 @@ const uz = {
     send: "Yuborish",
     notFound: "Topilmadi",
     som: "so'm",
+    connectionFailed: "Server bilan bog'lanib bo'lmadi",
+    userAddFailed: "Foydalanuvchi qo'shilmadi",
+    userDeleteFailed: "O'chirib bo'lmadi — dasturchi panelidan tekshiring (@Sadriddinov_Jahongir)",
+    expenseConfirmed: "Chiqim tasdiqlandi",
+    confirmFailed: "Tasdiqlashda xatolik",
     roles: {
       direktor: "Direktor",
       orinbosar: "O'rinbosar",
@@ -774,6 +796,7 @@ export type TranslationShape = typeof uz;
 
 const ru: TranslationShape = {
   login: {
+    homeLink: "Главная",
     subtitle: "Вход в систему",
     botHintBefore: "Сначала зайдите в наш Telegram-бот, нажмите",
     botHintAfter: "и поделитесь своим номером. Затем введите номер здесь и получите код.",
@@ -806,6 +829,7 @@ const ru: TranslationShape = {
     dashboard: "Главная",
     finance: "Финансы",
     reports: "Отчёты",
+    gps: "Отслеживание",
     chat: "Сообщения",
     profile: "Профиль",
   },
@@ -988,6 +1012,21 @@ const ru: TranslationShape = {
     finalCtaSubtitle: "Зарегистрируйтесь, первый месяц бесплатно — кредитная карта не нужна.",
     contactLink: "Контакты",
   },
+  checkinGate: {
+    welcome: "Добро пожаловать, {{name}}!",
+    instruction: "Нажмите «Я пришёл на работу», чтобы начать. После этого откроются GPS-отслеживание и остальные разделы приложения.",
+    confirmPrompt: "Подтверждаете, что пришли на работу?",
+    checkInBtn: "Я пришёл на работу",
+    logout: "Выйти",
+  },
+  maintenance: {
+    appLabel: "Приложение",
+    siteLabel: "Сайт",
+    title: "{{surface}} временно не работает из-за технических работ",
+    subtitle: "Повторите попытку немного позже. Приносим извинения.",
+    checking: "Проверка...",
+    retryBtn: "Проверить снова",
+  },
   pinLock: {
     setupTitleEnter: "Установите PIN-код",
     setupTitleConfirm: "Подтвердите PIN-код",
@@ -1151,6 +1190,11 @@ const ru: TranslationShape = {
     send: "Отправить",
     notFound: "Не найдено",
     som: "сум",
+    connectionFailed: "Не удалось связаться с сервером",
+    userAddFailed: "Пользователь не добавлен",
+    userDeleteFailed: "Не удалось удалить — проверьте в панели разработчика (@Sadriddinov_Jahongir)",
+    expenseConfirmed: "Расход подтверждён",
+    confirmFailed: "Ошибка подтверждения",
     roles: {
       direktor: "Директор",
       orinbosar: "Заместитель",

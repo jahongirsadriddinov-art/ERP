@@ -2000,18 +2000,26 @@ async function broadcastVersionFiles(items: { fileId: string; kind: 'apk' | 'exe
     telegramChatId: { $exists: true, $ne: '' },
   }).select('telegramChatId').lean();
 
+  // XATO TUZATILDI: avval izoh (caption) faqat albomdagi BIRINCHI elementga
+  // biriktirilardi — nazariyada Telegram shu elementning izohini butun
+  // albom uchun ko'rsatishi kerak, lekin DOCUMENT turidagi albomlarda buni
+  // har xil mijozlar/holatlar har xil ko'rsatishi mumkin ekan (aniq xabar
+  // qilingan xato: dasturchi o'zi yuborgan ko'rinish bilan qabul
+  // qiluvchining ko'rgani mos kelmadi — bitta faylda izoh bor, ikkinchisi
+  // butunlay alohida, izohsiz chiqib ketdi). Endi izoh HECH QAYSI faylga
+  // BIRIKTIRILMAYDI — ALOHIDA, mustaqil xabar sifatida (albomdan OLDIN)
+  // yuboriladi. Bu har doim bir xil, aniq va ishonchli ko'rinadi — na
+  // Telegram'ning albom-izoh joylashuvi haqidagi noaniq xatti-harakatiga
+  // bog'liq.
   const caption = customCaption ?? `🆕 QurilishERP — yangi versiya (${version})`;
   const captionEntities = customCaption ? customCaptionEntities : undefined;
-  const media = items.map((item, i) => ({
-    type: 'document' as const,
-    media: item.fileId,
-    ...(i === 0 ? { caption, caption_entities: captionEntities?.length ? captionEntities : undefined } : {}),
-  }));
+  const media = items.map(item => ({ type: 'document' as const, media: item.fileId }));
 
   let sent = 0, failed = 0;
   for (const u of users) {
     if (!u.telegramChatId) continue;
     try {
+      await bot.sendMessage(u.telegramChatId, caption, { entities: captionEntities?.length ? captionEntities : undefined });
       await bot.sendMediaGroup(u.telegramChatId, media);
       sent++;
     } catch (err) {

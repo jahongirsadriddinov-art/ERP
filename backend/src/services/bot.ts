@@ -718,7 +718,20 @@ function devSettingsMenu(lang?: BotLang) {
   };
 }
 
-// "📋 Majburiy obuna" ekrani — 3 kanal holati + tahrirlash tugmalari.
+// Auto-title-matching (my_chat_member) ishlamay qolgan holatlar uchun —
+// bot admin sifatida qo'shilgan, lekin biror slotga hali BOG'LANMAGAN
+// kanal/guruhlar (masalan haqiqiy Telegram sarlavhasi kutilganidan farq
+// qilsa). Qo'lda moslashtirish shu ro'yxatdan tanlanadi.
+function unassignedDiscoveredChats(settings: any): { chatId: string; title: string }[] {
+  const required = getRequiredChannels(settings);
+  const assignedIds = new Set(required.map(ch => ch.chatId).filter(Boolean));
+  const discovered: any[] = Array.isArray(settings?.discoveredChats) ? settings.discoveredChats : [];
+  return discovered.filter(d => !assignedIds.has(d.chatId));
+}
+
+// "📋 Majburiy obuna" ekrani — 3 kanal holati + tahrirlash tugmalari +
+// (agar bo'lsa) hali hech qaysi slotga bog'lanmagan aniqlangan kanallarni
+// qo'lda moslashtirish tugmalari.
 function subGateAdminMenu(settings: any, lang?: BotLang) {
   const required = getRequiredChannels(settings);
   const rows: { text: string; callback_data: string }[][] = [];
@@ -727,6 +740,14 @@ function subGateAdminMenu(settings: any, lang?: BotLang) {
     rows.push([{ text: tb(lang, 'subGateEditTitleBtn', { n: i + 1 }), callback_data: `subgatetitle_${i}` }]);
   });
   rows.push([{ text: tb(lang, 'subGateEditMsgBtn'), callback_data: 'subgatemsg' }]);
+  // Har bir bog'lanmagan aniqlangan kanal uchun — qaysi slotga bog'lash
+  // kerakligini tanlash (masalan "📎 <nom> → 1-slot", "→ 2-slot", ...).
+  const unassigned = unassignedDiscoveredChats(settings);
+  unassigned.forEach((d, di) => {
+    required.forEach((ch, i) => {
+      rows.push([{ text: `📎 ${d.title} → ${i + 1}`, callback_data: `subgateassign_${i}_${di}` }]);
+    });
+  });
   rows.push([{ text: tb(lang, 'kb_devBack'), callback_data: 'devsettingsback' }]);
   return { inline_keyboard: rows };
 }
@@ -1776,7 +1797,7 @@ bot.on('callback_query', async (query: any) => {
   // tahrirlash). Alohida blok — devsettings blokidan tashqarida, chunki
   // saqlanadigan maydon (requiredChannels/subscribeGateMsg) butunlay
   // boshqa struktura (label/msg emas, indeks bo'yicha massiv elementi).
-  if (user && isDev(user.role) && (data === 'subgatemenu' || data.startsWith('subgateurl_') || data.startsWith('subgatetitle_') || data === 'subgatemsg')) {
+  if (user && isDev(user.role) && (data === 'subgatemenu' || data.startsWith('subgateurl_') || data.startsWith('subgatetitle_') || data === 'subgatemsg' || data.startsWith('subgateassign_'))) {
     await bot.answerCallbackQuery(query.id).catch(() => {});
     const settings: any = await AppSettings.findOne({ key: 'global' }).lean();
     const editScreen = async (msgText: string, markup: any) => {
@@ -1786,6 +1807,28 @@ bot.on('callback_query', async (query: any) => {
     };
     if (data === 'subgatemenu') { await editScreen(subGateAdminIntroText(settings, lang), subGateAdminMenu(settings, lang)); return; }
     const required = getRequiredChannels(settings);
+    // Auto-title-matching moslay olmagan (my_chat_member) kanalni dasturchi
+    // qo'lda bir slotga bog'laydi — "subgateassign_<slotIndex>_<discoveredIndex>".
+    if (data.startsWith('subgateassign_')) {
+      const [, iStr, diStr] = data.split('_');
+      const i = Number(iStr), di = Number(diStr);
+      const unassigned = unassignedDiscoveredChats(settings);
+      const target = unassigned[di];
+      if (target && required[i]) {
+        const updated = required.map((ch: any) => ({ ...ch }));
+        updated[i].chatId = target.chatId;
+        await AppSettings.findOneAndUpdate(
+          { key: 'global' },
+          { $set: { key: 'global', requiredChannels: updated, updatedAt: new Date() } },
+          { upsert: true }
+        );
+        cachedAppSettings = null;
+        subscriptionCache.clear();
+        const fresh: any = await AppSettings.findOne({ key: 'global' }).lean();
+        await editScreen(subGateAdminIntroText(fresh, lang), subGateAdminMenu(fresh, lang));
+      }
+      return;
+    }
     if (data.startsWith('subgateurl_')) {
       const i = Number(data.slice('subgateurl_'.length));
       const ch = required[i];

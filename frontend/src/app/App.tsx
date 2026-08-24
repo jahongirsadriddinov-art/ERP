@@ -4511,6 +4511,16 @@ export default function App() {
       const sp = new URLSearchParams(window.location.search);
       if (sp.get("rid") || sp.has("register")) return "register";
       if (localStorage.getItem("erp_reg")) return "register";
+      // "/landing" — SEO uchun ATAYLAB qo'shilgan alohida (indekslanadigan)
+      // manzil (aniq talab: "erp-firma.uz/landing... shunaqa qilib chiq").
+      // vercel.json'dagi umumiy SPA rewrite tufayli bu yo'l allaqachon
+      // index.html'ni beradi — yetishmayotgan yagona narsa shu edi: ilova
+      // O'ZI shu yo'lni tanib, "erp_visited" belgisidan qat'i nazar (hatto
+      // qaytib kelgan brauzerda ham) doim landing sahifasini ko'rsatishi.
+      // index.html'dagi statik <link rel="canonical"> "/" ga ishora qilgani
+      // uchun Google buni "/" bilan bir xil sahifa deb to'g'ri birlashtiradi
+      // (duplicate content emas) — https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls
+      if (window.location.pathname === "/landing") return "landing";
     }
     if (typeof window !== "undefined") {
       if (localStorage.getItem("erp_visited")) return "login";

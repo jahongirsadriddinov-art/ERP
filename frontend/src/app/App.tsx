@@ -4588,7 +4588,12 @@ export default function App() {
       localStorage.removeItem("erp_branchId");
     }
   };
-  const [colorTheme, setColorTheme] = useState(() => localStorage.getItem("erp_colorTheme") || "navy");
+  // XATO TUZATILDI: standart rang "navy" (ko'k) edi — aniq talab bo'yicha
+  // yangi (hali hech qanday tanlov qilmagan) foydalanuvchilar uchun standart
+  // endi "amber" ("Oltin rang"). Kim ALLAQACHON o'zi tanlab qo'ygan bo'lsa
+  // (localStorage'da "erp_colorTheme" bor) — bunga tegilmaydi, faqat
+  // localStorage BO'SH bo'lganda (chinakam yangi tashrif) ishlaydi.
+  const [colorTheme, setColorTheme] = useState(() => localStorage.getItem("erp_colorTheme") || "amber");
   const [themeMode, setThemeMode] = useState<"light"|"dark"|"system">(
     () => (localStorage.getItem("erp_themeMode") as "light"|"dark"|"system") || "system"
   );

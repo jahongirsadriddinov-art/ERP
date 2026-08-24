@@ -19,16 +19,22 @@
           } catch (e) {}
         })();
       </script>
+      <!-- XATO TUZATILDI: bular avval "navy" (standart) temaning fon
+           ranglariga qattiq kodlangan edi — standart rang endi "amber"
+           ("Oltin rang") ga o'zgartirilgani uchun (App.tsx'dagi colorTheme),
+           bu yerdagi qiymatlar ham React yuklanmasdan OLDINGI (ilk bo'yash)
+           lahzada rang "chaqnab" (flash) ko'rinmasligi uchun mos ravishda
+           yangilandi. -->
       <style>
-        html { background: #F4F6FA; }
-        html.dark { background: #0B1220; }
+        html { background: #FFFBEB; }
+        html.dark { background: #15100A; }
         body { background: inherit; }
       </style>
 
       <!-- PWA -->
       <link rel="manifest" href="/manifest.json" />
-      <meta name="theme-color" content="#1B3A6B" media="(prefers-color-scheme: light)" />
-      <meta name="theme-color" content="#0B1220" media="(prefers-color-scheme: dark)" />
+      <meta name="theme-color" content="#B45309" media="(prefers-color-scheme: light)" />
+      <meta name="theme-color" content="#15100A" media="(prefers-color-scheme: dark)" />
 
       <!-- Apple PWA -->
       <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -132,9 +138,9 @@
         }
         #initial-loader .logo-wrap {
           width: 56px; height: 56px; border-radius: 18px;
-          background: linear-gradient(135deg, #1B3A6B, #2d5499);
+          background: linear-gradient(135deg, #B45309, #B16105);
           display: flex; align-items: center; justify-content: center;
-          box-shadow: 0 8px 32px rgba(27,58,107,0.35);
+          box-shadow: 0 8px 32px rgba(180,83,9,0.35);
           animation: loader-pop 0.5s cubic-bezier(0.34,1.56,0.64,1) both;
         }
         #initial-loader .spinner {
@@ -144,8 +150,8 @@
           animation: initial-spin 0.65s linear infinite;
         }
         html.dark #initial-loader .logo-wrap {
-          background: linear-gradient(135deg, #3E6DB5, #1B3A6B);
-          box-shadow: 0 8px 32px rgba(62,109,181,0.35);
+          background: linear-gradient(135deg, #B87A1C, #B45309);
+          box-shadow: 0 8px 32px rgba(184,122,28,0.35);
         }
         @keyframes initial-spin { to { transform: rotate(360deg); } }
         @keyframes loader-pop {

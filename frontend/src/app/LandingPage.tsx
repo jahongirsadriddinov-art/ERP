@@ -99,7 +99,21 @@ function TechTag({ children }: { children: React.ReactNode }) {
   );
 }
 
-export default function LandingPage({ onLogin, onRegister }: { onLogin: () => void; onRegister: () => void }) {
+// SEO: har bir bo'lim endi o'zining MUSTAQIL (indekslanadigan) manzilida
+// ham ochilishi mumkin — aniq talab: "harbitta yolga alohida /... hamma
+// bo'limga shunaqa qilib chiq". `focus` berilmasa — to'liq sahifa (hozirgi
+// xatti-harakat, "/" va "/landing"). Berilsa — o'sha BITTA bo'lim asosiy
+// mazmun bo'ladi (qisqa sarlavha + o'sha bo'lim + boshqa bo'limlarga
+// ichki havolalar + CTA + footer), sarlavha/tavsif/canonical shu bo'limga
+// xos qilib yangilanadi (App.tsx yo'l(path)ni tanib, shu prop'ni beradi).
+export type LandingFocus = 'features' | 'steps' | 'audience' | 'faq';
+const FOCUS_PATH: Record<LandingFocus, string> = {
+  features: '/xususiyatlar', steps: '/qanday-ishlaydi', audience: '/kimlar-uchun', faq: '/savollar',
+};
+const DEFAULT_TITLE = 'QurilishERP — Qurilish firmalari uchun boshqaruv tizimi';
+const DEFAULT_DESC = "Qurilish firmasini raqamlashtirish (elektronlashtirish) uchun zamonaviy ERP tizimi. Loyihalar, smeta, materiallar hisobi, moliya, xodimlar davomati va GPS nazorati, real-time chat, AI yordamchi va Telegram bot integratsiyasi — bittа tizimda.";
+
+export default function LandingPage({ onLogin, onRegister, focus }: { onLogin: () => void; onRegister: () => void; focus?: LandingFocus }) {
   const { t, i18n } = useTranslation();
   const [openFaq, setOpenFaq] = useState<number | null>(0);
   const year = useYear();
@@ -148,6 +162,36 @@ export default function LandingPage({ onLogin, onRegister }: { onLogin: () => vo
     { q: t('landing.faq4Q'), a: t('landing.faq4A') },
   ];
 
+  // SEO: focus'ga xos <title>/meta description/canonical. index.html'dagi
+  // qiymatlar STATIK (bitta index.html barcha yo'llarga xizmat qiladi —
+  // vercel.json'dagi umumiy SPA rewrite), shu sabab har bir "sahifa" o'zini
+  // shu effekt orqali TANIShTIRISHI kerak — GoogleBot JS'ni bajarib buni
+  // to'g'ri o'qiydi (rasmiy hujjatlashtirilgan). focus yo'q bo'lsa ("/" yoki
+  // "/landing") — standart qiymatlarga qaytariladi.
+  useEffect(() => {
+    const FOCUS_META: Record<LandingFocus, { title: string; desc: string }> = {
+      features: { title: `${t('landing.featuresTitle')} — QurilishERP`, desc: t('landing.featuresSubtitle') },
+      steps: { title: `${t('landing.stepsTitle')} — QurilishERP`, desc: `${t('landing.stepsBadge')}: ${t('landing.stepsTitle')}` },
+      audience: { title: `${t('landing.audienceTitle')} — QurilishERP`, desc: t('landing.audienceTitle') },
+      faq: { title: `${t('landing.faqTitle')} — QurilishERP`, desc: t('landing.faqTitle') },
+    };
+    const meta = focus ? FOCUS_META[focus] : null;
+    document.title = meta?.title || DEFAULT_TITLE;
+    const descTag = document.querySelector('meta[name="description"]');
+    if (descTag) descTag.setAttribute('content', meta?.desc || DEFAULT_DESC);
+    const canonicalTag = document.querySelector('link[rel="canonical"]');
+    const path = focus ? FOCUS_PATH[focus] : '/';
+    if (canonicalTag) canonicalTag.setAttribute('href', `https://www.erp-firma.uz${path}`);
+    // Sahifadan chiqilganda standart qiymatlarga qaytarish — masalan
+    // login/ilova ekraniga o'tilganda eski (boshqa bo'lim) title qolib
+    // ketmasin.
+    return () => {
+      document.title = DEFAULT_TITLE;
+      if (descTag) descTag.setAttribute('content', DEFAULT_DESC);
+      if (canonicalTag) canonicalTag.setAttribute('href', 'https://www.erp-firma.uz/');
+    };
+  }, [focus, t]);
+
   // Landing sahifa doim OCHIQ (light) rejimda ko'rinsin — foydalanuvchining
   // dark tema tanlovi (yoki tizim tanlovi) bo'lsa ham. index.html'dagi FOUC
   // oldini olish skripti sahifa yuklanishida <html> ga "dark" klassini
@@ -173,7 +217,7 @@ export default function LandingPage({ onLogin, onRegister }: { onLogin: () => vo
           avtomatik hosil qilinadi — matn bilan sinxronlikdan chiqib
           qolmaydi. GoogleBot JS'ni bajarib bunday dinamik <script> teglarni
           ham o'qiydi (rasmiy hujjatlashtirilgan, statik bo'lishi shart emas). */}
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify({
+      {(!focus || focus === 'faq') && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify({
         "@context": "https://schema.org",
         "@type": "FAQPage",
         mainEntity: FAQS.map(f => ({
@@ -181,7 +225,7 @@ export default function LandingPage({ onLogin, onRegister }: { onLogin: () => vo
           name: f.q,
           acceptedAnswer: { "@type": "Answer", text: f.a },
         })),
-      }) }} />
+      }) }} />}
 
       {/* Sahifaning "imzosi" — xavfsizlik-lentasi chizig'i, eng tepada */}
       <HazardStripe className="sticky top-0 z-50" />
@@ -202,8 +246,47 @@ export default function LandingPage({ onLogin, onRegister }: { onLogin: () => vo
         </div>
       </header>
 
-      {/* ── Hero ────────────────────────────────────────────────────────── */}
-      <section className="relative overflow-hidden">
+      {/* ── Bo'lim sahifasi uchun ixcham sarlavha (to'liq hero o'rniga) ────
+          SEO: bu sahifaning H1'i shu BO'LIMning nomi bo'lishi kerak — "bosh
+          sahifa" hero matni emas, aks holda mazmun mos kelmagan bo'lardi. */}
+      {focus && (
+        <section className="relative overflow-hidden border-b border-border/50">
+          <div className="absolute inset-0 opacity-[0.4] dark:opacity-[0.2] pointer-events-none"
+            style={{
+              backgroundImage:
+                "linear-gradient(color-mix(in srgb, var(--primary) 12%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, var(--primary) 12%, transparent) 1px, transparent 1px)",
+              backgroundSize: "40px 40px",
+              maskImage: "radial-gradient(ellipse 75% 60% at 50% 0%, black 35%, transparent 100%)",
+            }} />
+          <div className="relative max-w-3xl mx-auto px-5 pt-14 pb-12 md:pt-20 text-center">
+            <TechTag>[ QurilishERP ]</TechTag>
+            <h1 className="mt-4 text-3xl md:text-5xl font-bold font-['Roboto_Slab',serif] leading-[1.12] tracking-tight">
+              {focus === 'features' && t('landing.featuresTitle')}
+              {focus === 'steps' && t('landing.stepsTitle')}
+              {focus === 'audience' && t('landing.audienceTitle')}
+              {focus === 'faq' && t('landing.faqTitle')}
+            </h1>
+            <p className="text-sm md:text-base text-muted-foreground mt-4 max-w-xl mx-auto leading-relaxed">
+              {focus === 'features' && t('landing.featuresSubtitle')}
+              {focus === 'steps' && t('landing.heroSubtitle')}
+              {focus === 'audience' && t('landing.heroSubtitle')}
+              {focus === 'faq' && t('landing.heroSubtitle')}
+            </p>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mt-8">
+              <button onClick={onRegister}
+                className="group w-full sm:w-auto bg-gradient-to-r from-primary via-primary to-blue-700 text-white text-sm font-bold px-7 py-3.5 rounded-full shadow-xl shadow-primary/30 hover:shadow-2xl hover:shadow-primary/40 hover:-translate-y-0.5 active:scale-[0.98] liquid-transition flex items-center justify-center gap-2">
+                {t('landing.ctaRegister')} <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 liquid-transition" />
+              </button>
+              <button onClick={onLogin} className="w-full sm:w-auto btn btn-outline text-sm font-semibold px-7 py-3.5 rounded-full">
+                {t('landing.ctaLogin')}
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* ── Hero (to'liq — faqat asosiy sahifada) ──────────────────────────── */}
+      {!focus && <section className="relative overflow-hidden">
         {/* Blueprint chizma to'ri — kvadrat panjara, muhandislik chizmasi
             hissini beradi (avvalgi generik nuqtali "mesh" fon o'rniga). */}
         <div className="absolute inset-0 opacity-[0.5] dark:opacity-[0.3] pointer-events-none"
@@ -322,17 +405,17 @@ export default function LandingPage({ onLogin, onRegister }: { onLogin: () => vo
             ))}
           </div>
         </div>
-      </section>
+      </section>}
 
-      <HazardStripe />
+      {!focus && <HazardStripe />}
 
       {/* ── Features ────────────────────────────────────────────────────── */}
-      <section className="max-w-6xl mx-auto px-5 py-16 md:py-24">
-        <div className="text-center max-w-xl mx-auto mb-12">
+      {(!focus || focus === 'features') && <section className="max-w-6xl mx-auto px-5 py-16 md:py-24">
+        {!focus && <div className="text-center max-w-xl mx-auto mb-12">
           <SectionBadge>{t('landing.featuresBadge')}</SectionBadge>
           <h2 className="text-2xl md:text-4xl font-bold font-['Roboto_Slab',serif] tracking-tight">{t('landing.featuresTitle')}</h2>
           <p className="text-sm text-muted-foreground mt-3">{t('landing.featuresSubtitle')}</p>
-        </div>
+        </div>}
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {FEATURES.map((f, i) => (
             <motion.div key={f.title} initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-40px" }}
@@ -348,10 +431,10 @@ export default function LandingPage({ onLogin, onRegister }: { onLogin: () => vo
             </motion.div>
           ))}
         </div>
-      </section>
+      </section>}
 
       {/* ── Qanday ishlaydi ─────────────────────────────────────────────── */}
-      <section className="relative bg-muted/30 py-16 md:py-24 overflow-hidden">
+      {(!focus || focus === 'steps') && <section className="relative bg-muted/30 py-16 md:py-24 overflow-hidden">
         <div className="absolute inset-0 opacity-[0.4] dark:opacity-[0.2] pointer-events-none"
           style={{
             backgroundImage:
@@ -360,10 +443,10 @@ export default function LandingPage({ onLogin, onRegister }: { onLogin: () => vo
             maskImage: "radial-gradient(ellipse 80% 100% at 50% 50%, black 30%, transparent 100%)",
           }} />
         <div className="relative max-w-5xl mx-auto px-5">
-          <div className="text-center max-w-xl mx-auto mb-14">
+          {!focus && <div className="text-center max-w-xl mx-auto mb-14">
             <SectionBadge>{t('landing.stepsBadge')}</SectionBadge>
             <h2 className="text-2xl md:text-4xl font-bold font-['Roboto_Slab',serif] tracking-tight">{t('landing.stepsTitle')}</h2>
-          </div>
+          </div>}
           <div className="grid md:grid-cols-3 gap-8 relative">
             <div className="hidden md:block absolute top-7 left-[16.5%] right-[16.5%] h-px bg-gradient-to-r from-primary/40 via-accent/40 to-primary/40" />
             {STEPS.map((s, i) => (
@@ -379,14 +462,14 @@ export default function LandingPage({ onLogin, onRegister }: { onLogin: () => vo
             ))}
           </div>
         </div>
-      </section>
+      </section>}
 
       {/* ── Kimlar uchun ────────────────────────────────────────────────── */}
-      <section className="max-w-6xl mx-auto px-5 py-16 md:py-24">
-        <div className="text-center max-w-xl mx-auto mb-12">
+      {(!focus || focus === 'audience') && <section className="max-w-6xl mx-auto px-5 py-16 md:py-24">
+        {!focus && <div className="text-center max-w-xl mx-auto mb-12">
           <SectionBadge>{t('landing.audienceBadge')}</SectionBadge>
           <h2 className="text-2xl md:text-4xl font-bold font-['Roboto_Slab',serif] tracking-tight">{t('landing.audienceTitle')}</h2>
-        </div>
+        </div>}
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {AUDIENCE.map((a, i) => (
             <motion.div key={a.title} initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-40px" }}
@@ -401,10 +484,10 @@ export default function LandingPage({ onLogin, onRegister }: { onLogin: () => vo
             </motion.div>
           ))}
         </div>
-      </section>
+      </section>}
 
-      {/* ── Benefits strip ──────────────────────────────────────────────── */}
-      <section className="bg-muted/30 py-16 md:py-20">
+      {/* ── Benefits strip (faqat asosiy sahifada) ─────────────────────── */}
+      {!focus && <section className="bg-muted/30 py-16 md:py-20">
         <div className="max-w-6xl mx-auto px-5">
           <div className="grid md:grid-cols-3 gap-6">
             {BENEFITS.map(b => (
@@ -417,14 +500,14 @@ export default function LandingPage({ onLogin, onRegister }: { onLogin: () => vo
             ))}
           </div>
         </div>
-      </section>
+      </section>}
 
       {/* ── FAQ ─────────────────────────────────────────────────────────── */}
-      <section className="max-w-3xl mx-auto px-5 py-16 md:py-24">
-        <div className="text-center mb-10">
+      {(!focus || focus === 'faq') && <section className="max-w-3xl mx-auto px-5 py-16 md:py-24">
+        {!focus && <div className="text-center mb-10">
           <SectionBadge>{t('landing.faqBadge')}</SectionBadge>
           <h2 className="text-2xl md:text-4xl font-bold font-['Roboto_Slab',serif] tracking-tight">{t('landing.faqTitle')}</h2>
-        </div>
+        </div>}
         <div className="space-y-3">
           {FAQS.map((f, i) => (
             <div key={f.q} className={`surface rounded-2xl overflow-hidden liquid-transition ${openFaq === i ? "ring-1 ring-primary/30" : ""}`}>
@@ -443,18 +526,35 @@ export default function LandingPage({ onLogin, onRegister }: { onLogin: () => vo
             </div>
           ))}
         </div>
-      </section>
+      </section>}
 
       {/* ── Ilovani yuklab olish — mavjud bo'lsagina ko'rinadi (CI hali birorta
           ham APK/exe chiqarmagan bo'lsa, AppDownloadCards hech narsa
-          render qilmaydi — bo'sh bo'lim ko'rsatilmaydi). ───────────────── */}
-      <section className="max-w-3xl mx-auto px-5 pb-16">
+          render qilmaydi — bo'sh bo'lim ko'rsatilmaydi). Faqat asosiy
+          sahifada — bo'lim-sahifalarida chalg'itmasin. ─────────────────── */}
+      {!focus && <section className="max-w-3xl mx-auto px-5 pb-16">
         <div className="text-center mb-8">
           <h2 className="text-2xl md:text-4xl font-bold font-['Roboto_Slab',serif] tracking-tight">{t('landing.downloadTitle')}</h2>
           <p className="text-muted-foreground text-sm md:text-base mt-3 max-w-xl mx-auto">{t('landing.downloadSubtitle')}</p>
         </div>
         <AppDownloadCards />
-      </section>
+      </section>}
+
+      {/* ── Boshqa bo'limlarga ichki havolalar — FAQAT bo'lim-sahifalarida
+          (SEO: ichki havolalar sahifalar orasidagi bog'liqlikni Google'ga
+          ko'rsatadi, aniq talab: "har bitta bo'lim... alohida"). ────────── */}
+      {focus && (
+        <section className="max-w-3xl mx-auto px-5 pb-4">
+          <p className="text-center text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-4">{t('landing.exploreMore')}</p>
+          <div className="flex flex-wrap items-center justify-center gap-2.5">
+            {focus !== 'features' && <a href="/xususiyatlar" className="btn btn-outline text-xs px-4 py-2 rounded-full">{t('landing.featuresTitle')}</a>}
+            {focus !== 'steps' && <a href="/qanday-ishlaydi" className="btn btn-outline text-xs px-4 py-2 rounded-full">{t('landing.stepsTitle')}</a>}
+            {focus !== 'audience' && <a href="/kimlar-uchun" className="btn btn-outline text-xs px-4 py-2 rounded-full">{t('landing.audienceTitle')}</a>}
+            {focus !== 'faq' && <a href="/savollar" className="btn btn-outline text-xs px-4 py-2 rounded-full">{t('landing.faqTitle')}</a>}
+            <a href="/" className="btn btn-outline text-xs px-4 py-2 rounded-full">{t('landing.backHome')}</a>
+          </div>
+        </section>
+      )}
 
       {/* ── Final CTA ───────────────────────────────────────────────────── */}
       <section className="max-w-5xl mx-auto px-5 pb-20">

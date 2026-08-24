@@ -34,6 +34,18 @@ const QRScanner = lazy(() => import("./QRScanner"));
 const LandingPage = lazy(() => import("./LandingPage"));
 const QRGenerator = lazy(() => import("./QRGenerator"));
 const GpsTrackingPage = lazy(() => import("./GpsTrackingPage"));
+import type { LandingFocus } from "./LandingPage";
+
+// SEO: har bir marketing bo'limining O'Z (indekslanadigan) manzili —
+// LandingPage.tsx'dagi FOCUS_PATH bilan BIR XIL bo'lishi SHART (u yerdagi
+// canonical shu yo'llarga ishora qiladi). Aniq talab: "harbitta yolga
+// alohida /... hamma bo'limga shunaqa qilib chiq".
+const SECTION_PATH_TO_FOCUS: Record<string, LandingFocus> = {
+  "/xususiyatlar": "features",
+  "/qanday-ishlaydi": "steps",
+  "/kimlar-uchun": "audience",
+  "/savollar": "faq",
+};
 
 // ─── Mobil pastki navbar ko'rinishini boshqarish ────────────────────────────────
 // Katta (ekranning pastigacha yetadigan) modallar ochilganda floating pastki
@@ -4511,16 +4523,17 @@ export default function App() {
       const sp = new URLSearchParams(window.location.search);
       if (sp.get("rid") || sp.has("register")) return "register";
       if (localStorage.getItem("erp_reg")) return "register";
-      // "/landing" — SEO uchun ATAYLAB qo'shilgan alohida (indekslanadigan)
-      // manzil (aniq talab: "erp-firma.uz/landing... shunaqa qilib chiq").
-      // vercel.json'dagi umumiy SPA rewrite tufayli bu yo'l allaqachon
-      // index.html'ni beradi — yetishmayotgan yagona narsa shu edi: ilova
-      // O'ZI shu yo'lni tanib, "erp_visited" belgisidan qat'i nazar (hatto
-      // qaytib kelgan brauzerda ham) doim landing sahifasini ko'rsatishi.
-      // index.html'dagi statik <link rel="canonical"> "/" ga ishora qilgani
-      // uchun Google buni "/" bilan bir xil sahifa deb to'g'ri birlashtiradi
-      // (duplicate content emas) — https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls
-      if (window.location.pathname === "/landing") return "landing";
+      // "/landing" va har bir marketing bo'limi uchun ALOHIDA (indekslanadigan)
+      // manzil — aniq talab: "harbitta yolga alohida /... hamma bo'limga
+      // shunaqa qilib chiq". vercel.json'dagi umumiy SPA rewrite tufayli bu
+      // yo'llar allaqachon index.html'ni beradi — yetishmayotgan yagona
+      // narsa shu edi: ilova O'ZI shu yo'lni tanib, "erp_visited" belgisidan
+      // qat'i nazar (hatto qaytib kelgan brauzerda ham) doim landing
+      // sahifasini (kerakli bo'lim bilan) ko'rsatishi. "/landing"da
+      // LandingPage'ning O'Z canonical'i "/" ga ishora qiladi (duplicate
+      // content emas), bo'lim manzillari esa O'ZLARINING canonical'iga ega
+      // (LandingPage.tsx'dagi FOCUS_PATH) — https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls
+      if (window.location.pathname === "/landing" || SECTION_PATH_TO_FOCUS[window.location.pathname]) return "landing";
     }
     if (typeof window !== "undefined") {
       if (localStorage.getItem("erp_visited")) return "login";
@@ -5221,7 +5234,8 @@ export default function App() {
       <>
         {authView === "landing"
           ? <Suspense fallback={<div className="min-h-screen bg-background"/>}>
-              <LandingPage onLogin={()=>setAuthView("login")} onRegister={()=>setAuthView("register")}/>
+              <LandingPage onLogin={()=>setAuthView("login")} onRegister={()=>setAuthView("register")}
+                focus={typeof window !== "undefined" ? SECTION_PATH_TO_FOCUS[window.location.pathname] : undefined}/>
             </Suspense>
           : authView === "register"
           ? <Suspense fallback={<div className="min-h-screen bg-background"><SkeletonPage variant="form" /></div>}>

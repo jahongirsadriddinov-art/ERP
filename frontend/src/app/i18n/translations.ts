@@ -233,6 +233,8 @@ const uz = {
     finalCtaTitle: "Firmangizni bugun raqamlashtiring",
     finalCtaSubtitle: "Ro'yxatdan o'ting, birinchi oy bepul — kredit karta shart emas.",
     contactLink: "Aloqa",
+    exploreMore: "Boshqa bo'limlar",
+    backHome: "Bosh sahifa",
   },
   checkinGate: {
     welcome: "Xush kelibsiz, {{name}}!",
@@ -1045,6 +1047,8 @@ const ru: TranslationShape = {
     finalCtaTitle: "Оцифруйте свою компанию уже сегодня",
     finalCtaSubtitle: "Зарегистрируйтесь, первый месяц бесплатно — кредитная карта не нужна.",
     contactLink: "Контакты",
+    exploreMore: "Другие разделы",
+    backHome: "Главная страница",
   },
   checkinGate: {
     welcome: "Добро пожаловать, {{name}}!",

@@ -4,10 +4,42 @@
   xmlns:xhtml="http://www.w3.org/1999/xhtml">
   <url>
     <loc>https://www.erp-firma.uz/</loc>
-    <lastmod>2026-08-21</lastmod>
+    <lastmod>2026-08-24</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
     <xhtml:link rel="alternate" hreflang="uz" href="https://www.erp-firma.uz/"/>
     <xhtml:link rel="alternate" hreflang="ru" href="https://www.erp-firma.uz/"/>
+  </url>
+  <url>
+    <loc>https://www.erp-firma.uz/xususiyatlar</loc>
+    <lastmod>2026-08-24</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <xhtml:link rel="alternate" hreflang="uz" href="https://www.erp-firma.uz/xususiyatlar"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://www.erp-firma.uz/xususiyatlar"/>
+  </url>
+  <url>
+    <loc>https://www.erp-firma.uz/qanday-ishlaydi</loc>
+    <lastmod>2026-08-24</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+    <xhtml:link rel="alternate" hreflang="uz" href="https://www.erp-firma.uz/qanday-ishlaydi"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://www.erp-firma.uz/qanday-ishlaydi"/>
+  </url>
+  <url>
+    <loc>https://www.erp-firma.uz/kimlar-uchun</loc>
+    <lastmod>2026-08-24</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+    <xhtml:link rel="alternate" hreflang="uz" href="https://www.erp-firma.uz/kimlar-uchun"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://www.erp-firma.uz/kimlar-uchun"/>
+  </url>
+  <url>
+    <loc>https://www.erp-firma.uz/savollar</loc>
+    <lastmod>2026-08-24</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+    <xhtml:link rel="alternate" hreflang="uz" href="https://www.erp-firma.uz/savollar"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://www.erp-firma.uz/savollar"/>
   </url>
 </urlset>

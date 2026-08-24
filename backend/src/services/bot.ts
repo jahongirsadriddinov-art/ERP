@@ -655,11 +655,24 @@ async function getAttendanceStatus(userId: string): Promise<{ status: 'NOT_START
 async function doCheckIn(user: any, lang?: BotLang): Promise<string> {
   const today = todayDateStr();
   let record = await Attendance.findOne({ userId: String(user._id), date: today });
-  if (record?.checkIn) return tb(lang, 'alreadyCheckedIn');
+  // XATO TUZATILDI ("ishni tugatgandan keyin ishga keldim tugmasi
+  // ko'rinmayapti/ishlamayapti"): avval `record?.checkIn` bo'lsa SO'ZSIZ rad
+  // etilardi — hatto smena ALLAQACHON tugatilgan (checkOut bor) bo'lsa ham,
+  // qayta ishga kirish (masalan tanaffusdan keyin, yoki xato bosib
+  // "tugatdim" degan bo'lsa) IMKONSIZ edi. Endi faqat HOZIR OCHIQ smena
+  // (checkIn bor-u checkOut yo'q) bo'lsa rad etiladi; tugagan smenadan keyin
+  // YANGI smena boshlanadi, o'sha kunning oldingi ishlangan vaqti
+  // (workHours) YO'QOLMAYDI — yig'ilib boradi.
+  if (record?.checkIn && !record.checkOut) return tb(lang, 'alreadyCheckedIn');
   const now = new Date();
+  const resuming = !!record; // kun uchun yozuv allaqachon bor (avvalgi smena tugagan)
   if (!record) record = new Attendance({ userId: String(user._id), companyId: user.companyId, date: today });
   record.checkIn = now.toISOString();
-  record.status = tashkentHour(now) >= 9 ? 'late' : 'present';
+  record.checkOut = undefined;
+  // status (present/late) FAQAT kunning BIRINCHI kelishida belgilanadi —
+  // qayta kirishda o'zgarmaydi (kech kelgan-kelmaganligi birinchi marta
+  // kelgan vaqtga qarab hal qilingan, keyingi qayta kirishlarga aloqasi yo'q).
+  if (!resuming) record.status = tashkentHour(now) >= 9 ? 'late' : 'present';
   await record.save();
   // MUHIM: bot server (Render) UTC'da ishlaydi — timeZone aniq ko'rsatilmasa
   // foydalanuvchiga UTC vaqti ko'rsatiladi, Toshkent vaqti emas.
@@ -692,12 +705,18 @@ async function doCheckOut(user: any, lang?: BotLang): Promise<string> {
   const now = new Date();
   record.checkOut = now.toISOString();
   const ms = now.getTime() - new Date(record.checkIn).getTime();
-  const minutes = Math.max(0, Math.round(ms / 60000));
-  record.workHours = Math.round((ms / 3600000) * 10) / 10; // eski maydon — hisobotlarda (masalan stats) ishlatiladi, saqlanadi
+  const shiftMinutes = Math.max(0, Math.round(ms / 60000));
+  // XATO TUZATILDI: doCheckIn endi kun ichida bir necha marta ishga
+  // kirish/chiqishga ruxsat beradi (tanaffusdan keyin qaytish va h.k.) —
+  // shu sabab workHours'ni SO'ZSIZ yangi qiymat bilan almashtirish oldingi
+  // smena(lar)da ishlangan vaqtni yo'qotib yuborardi. Endi QO'SHIB boriladi.
+  const priorHours = record.workHours || 0;
+  record.workHours = Math.round((priorHours * 3600000 + ms) / 3600000 * 10) / 10;
   await record.save();
   const time = now.toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Tashkent' });
   emitToUser(String(user._id), 'attendance:update', { ...record.toObject(), id: record._id });
-  return tb(lang, 'checkOutConfirmed', { time, hours: fmtWorkDuration(minutes, lang) });
+  const totalMinutes = Math.round(record.workHours * 60);
+  return tb(lang, 'checkOutConfirmed', { time, hours: fmtWorkDuration(totalMinutes, lang) });
 }
 
 // Telegramdan kelgan joylashuvni GpsLocation'ga saqlaydi — saytdagi
@@ -859,6 +878,16 @@ const USER_KEYBOARD_WITH_CHECKOUT = async (lang?: BotLang) => {
   const base = await USER_KEYBOARD(lang);
   return { ...base, keyboard: [[{ text: tb(lang, 'kb_checkOut') }], ...base.keyboard] };
 };
+// XATO TUZATILDI ("ishni tugatgandan keyin ishga keldim tugmasi
+// ko'rinmayapti"): FINISHED holatida avval oddiy USER_KEYBOARD (check-in
+// tugmasisiz) ko'rsatilardi — kun ichida qayta ishga kirish (masalan
+// tanaffusdan keyin) mutlaqo imkonsiz ko'rinardi. doCheckIn endi buni
+// qo'llab-quvvatlaydi (yuqoriga qarang), shu sabab tugma ham qayta
+// ko'rinishi kerak.
+const USER_KEYBOARD_FINISHED = async (lang?: BotLang) => {
+  const base = await USER_KEYBOARD(lang);
+  return { ...base, keyboard: [[{ text: tb(lang, 'kb_checkIn') }], ...base.keyboard] };
+};
 
 // Markaziy klaviatura tanlovchi — HAR BIR joyda (start, kontakt tasdiqlash,
 // til almashtirish, va h.k.) shu orqali chaqiriladi, shunda ishchi/prorab/
@@ -876,7 +905,7 @@ export async function keyboardForUser(user: any, lang?: BotLang) {
     const { status } = await getAttendanceStatus(String(user._id));
     if (status === 'NOT_STARTED') return CHECKIN_ONLY_KEYBOARD(lang);
     if (status === 'WORKING') return USER_KEYBOARD_WITH_CHECKOUT(lang);
-    return USER_KEYBOARD(lang);
+    return USER_KEYBOARD_FINISHED(lang);
   }
   return USER_KEYBOARD(lang);
 }
@@ -2355,17 +2384,31 @@ async function sendEveningReminders() {
   if (workers.length === 0) return;
 
   const workerIds = workers.map((w: any) => String(w._id));
-  // MUHIM: sana bo'yicha EMAS, "checkIn bor-u checkOut yo'q" bo'yicha
-  // qidiramiz — soat 0 (yarim tun) eslatmasida "bugun" allaqachon
-  // KEYINGI kalendar kuniga o'tib ketgan bo'ladi, lekin ochiq smena hali
-  // "kechagi" sana bilan yozilgan — sana bo'yicha filtrlasak shu smenani
+  // MUHIM: FAQAT bugungi sana bilan EMAS, "bugun YOKI kecha" oralig'ida
+  // qidiramiz — soat 0 (yarim tun) eslatmasida "bugun" allaqachon KEYINGI
+  // kalendar kuniga o'tib ketgan bo'ladi, lekin ochiq smena hali "kechagi"
+  // sana bilan yozilgan — faqat "bugun" bilan filtrlasak shu smenani
   // o'tkazib yuborardik.
+  // XATO TUZATILDI ("ishni tugatdim deyapman, baribir yana so'rayapti"):
+  // avval sana UMUMAN cheklanmagan edi — agar xodim istalgan O'TGAN kunda
+  // (hatto haftalar oldin) chiqishni belgilashni unutgan bo'lsa, o'sha
+  // ESKI ochiq yozuv ABADIY (har kuni, har soat) eslatma yuborishga sabab
+  // bo'lardi — garchi BUGUNGI smenasi allaqachon to'g'ri yopilgan bo'lsa
+  // ham. "Bugun yoki kecha" bilan cheklash yarim tun holatini hamon to'g'ri
+  // qamrab oladi, lekin haqiqatan eski/tashlab ketilgan yozuvlar uchun
+  // cheksiz eslatmani to'xtatadi.
+  const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const openShifts = await Attendance.find({
     userId: { $in: workerIds },
+    date: { $gte: yesterday },
     checkIn: { $exists: true, $ne: null },
     $or: [{ checkOut: { $exists: false } }, { checkOut: null }],
-  }).select('userId').lean();
+  }).select('userId date').lean();
   const stillWorking = new Set(openShifts.map((a: any) => a.userId));
+  // Diagnostika — agar bu eslatma "men allaqachon tugatgandim" deb qayta
+  // shikoyat qilinsa, Render loglarida aynan QAYSI sana/foydalanuvchi
+  // "hali ochiq" deb topilganini ko'rish uchun (taxmin qilish shart emas).
+  if (openShifts.length > 0) console.log('[evening reminder] ochiq smenalar:', (openShifts as any[]).map(o => `${o.userId}@${o.date}`).join(', '));
 
   for (const w of workers) {
     if (!stillWorking.has(String((w as any)._id))) continue;

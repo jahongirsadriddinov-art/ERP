@@ -126,13 +126,21 @@ router.post('/checkin', async (req, res) => {
     const status = tashkentHour(now) >= 9 ? 'late' : 'present'; // 9:00 dan keyin kech keldi
 
     let record = await Attendance.findOne({ userId, date: today });
-    if (record?.checkIn) return res.status(400).json({ error: 'Bugun allaqachon kirishni qayd etgansiz' });
+    // XATO TUZATILDI (bot.ts'dagi doCheckIn bilan bir xil, ikkalasi ham
+    // saytda ham botda BIR XIL xatti-harakatni bersin uchun): avval
+    // `record?.checkIn` bo'lsa SO'ZSIZ rad etilardi — smena ALLAQACHON
+    // tugatilgan (checkOut bor) bo'lsa ham kun ichida qayta kirish
+    // (masalan tanaffusdan keyin) imkonsiz edi. Endi faqat HOZIR OCHIQ
+    // smena rad etiladi.
+    if (record?.checkIn && !record.checkOut) return res.status(400).json({ error: 'Bugun allaqachon kirishni qayd etgansiz' });
 
+    const resuming = !!record;
     if (!record) {
       record = new Attendance(stamped({ userId, date: today }));
     }
     record.checkIn = now.toISOString();
-    record.status = status;
+    record.checkOut = undefined;
+    if (!resuming) record.status = status; // qayta kirishda kechikish holati o'zgarmaydi
     if (lat != null) record.lat = lat;
     if (lng != null) record.lng = lng;
     if (note) record.note = note;
@@ -174,12 +182,16 @@ router.post('/checkout', async (req, res) => {
     if (lng != null) record.checkOutLng = lng;
     if (note) record.note = (record.note ? record.note + ' | ' : '') + note;
 
-    // Ishlangan soatlar hisoblash
+    // Ishlangan soatlar hisoblash — XATO TUZATILDI: endi kun ichida bir
+    // necha marta kirish/chiqish mumkin (yuqoriga, /checkin'ga qarang),
+    // shu sabab workHours SO'ZSIZ almashtirilmaydi, oldingi smena(lar)
+    // ustiga QO'SHILADI.
     let workedMinutes = 0;
     if (record.checkIn) {
       const ms = now.getTime() - new Date(record.checkIn).getTime();
-      workedMinutes = Math.max(0, Math.round(ms / 60000));
-      record.workHours = Math.round((ms / 3600000) * 10) / 10;
+      const priorHours = record.workHours || 0;
+      record.workHours = Math.round((priorHours * 3600000 + ms) / 3600000 * 10) / 10;
+      workedMinutes = Math.round(record.workHours * 60);
     }
     await record.save();
     const payload = { ...record.toObject(), id: record._id };

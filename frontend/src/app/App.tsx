@@ -4052,8 +4052,18 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
                     <X className="w-3.5 h-3.5"/>{t('profile.finishWorkBtn')}
                   </button>
                 ) : (
-                  <div className="flex-1 text-center py-2.5 text-xs text-green-600 dark:text-green-400 font-medium">
-                    ✓ {t('profile.todayWorkDone', { duration: fmtWorkDuration(todayAttendance.checkIn, todayAttendance.checkOut, t) || t('gps.minutesShort', { min: 0 }) })}
+                  // XATO TUZATILDI ("ishni tugatgandan keyin ishga keldim tugmasi
+                  // ko'rinmayapti"): avval bu yerda faqat statik "tugatildi" matni
+                  // bo'lardi, kun ichida qayta ishga kirish (masalan tanaffusdan
+                  // keyin) imkoni UMUMAN ko'rinmasdi — backend (bot.ts/attendance.ts)
+                  // buni allaqachon qo'llab-quvvatlaydi, shu sabab tugma ham qaytdi.
+                  <div className="flex-1 flex flex-col gap-2">
+                    <div className="text-center text-xs text-green-600 dark:text-green-400 font-medium">
+                      ✓ {t('profile.todayWorkDone', { duration: fmtWorkDuration(todayAttendance.checkIn, todayAttendance.checkOut, t) || t('gps.minutesShort', { min: 0 }) })}
+                    </div>
+                    <button onClick={() => { if (confirm(t('checkinGate.confirmPrompt'))) onCheckIn(); }} className="btn btn-primary text-xs py-2.5 rounded-xl flex items-center justify-center gap-1.5">
+                      <Check className="w-3.5 h-3.5"/>{t('profile.resumeWorkBtn')}
+                    </button>
                   </div>
                 )}
               </div>

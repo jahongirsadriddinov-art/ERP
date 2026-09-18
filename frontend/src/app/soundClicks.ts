@@ -6,11 +6,21 @@
 // Nega document darajasida bitta listener: sahifada minglab tugma/havola
 // bor va ularning aksariyati App.tsx kabi doim o'zgarib turadigan katta
 // fayllarda joylashgan — har birini qo'lda o'zgartirish ham amaliy emas,
-// ham xatoga moyil. Bubble fazasida (capture emas) ro'yxatdan o'tkazilgani
-// uchun bu listener elementning o'z onClick ishlovchisidan KEYIN ishga
-// tushadi — demak checkbox/switch/aria-pressed kabi holatlar allaqachon
-// yangilangan (React commit sinxron client hodisalar uchun tugagan)
-// bo'ladi.
+// ham xatoga moyil.
+//
+// XATO TUZATILDI ("modallarda ovoz ba'zi joylarda ishlamaydi"): avval bu
+// listener BUBBLE fazasida edi — lekin ko'pgina modallar "tashqariga
+// bosilsa yopish" naqshini backdrop'da onClick, ichki kontent qatlamida
+// esa `e.stopPropagation()` bilan amalga oshiradi (App.tsx'da 20+ joyda).
+// stopPropagation() hodisani document'ga YETIB BORISHDAN oldin to'xtatib
+// qo'yar edi — natijada AYNAN o'sha modallar ichidagi tugmalar ovozsiz
+// qolardi. Endi CAPTURE fazasida ro'yxatdan o'tkazilgan (document — zanjir
+// boshi, hech kim undan oldin stopPropagation qila olmaydi), shu sabab
+// hech qanday ichki stopPropagation ovozni bloklay olmaydi. Checkbox/
+// switch/aria-pressed kabi holat o'qishlari esa endi `queueMicrotask`
+// bilan kechiktiriladi — hodisa TO'LIQ tugab (React o'z onClick'ini
+// bajarib, DOM holatini yangilab) bo'lgandan keyin o'qiladi, shu sabab
+// capture fazasida ham HAR DOIM YANGILANGAN holat ko'rinadi.
 import { playSound } from "./sound";
 
 const CLICKABLE_SELECTOR = [
@@ -59,23 +69,22 @@ function handleClick(event: MouseEvent): void {
     role === "checkbox" ||
     role === "switch" ||
     role === "menuitemcheckbox";
-
-  if (isCheckboxLike) {
-    playSound(isChecked(el) ? "check" : "uncheck", { cooldownMs: 0 });
-    return;
-  }
-
   const isRadioLike =
     (el instanceof HTMLInputElement && el.type === "radio") ||
     role === "radio" ||
     role === "menuitemradio";
-  if (isRadioLike) {
-    playSound("select", { cooldownMs: 30 });
-    return;
-  }
+  const isPressToggle = el.hasAttribute("aria-pressed");
 
-  if (el.hasAttribute("aria-pressed")) {
-    playSound(el.getAttribute("aria-pressed") === "true" ? "toggle-on" : "toggle-off", { cooldownMs: 0 });
+  if (isCheckboxLike || isRadioLike || isPressToggle) {
+    // Capture fazasida hali React o'z onClick'ini bajarmagan — holat
+    // (checked/aria-pressed) hali ESKI qiymatni ko'rsatishi mumkin. Butun
+    // hodisa zanjiri (capture+target+bubble) sinxron tugagach ishga
+    // tushadigan microtask'da o'qisak — har doim YANGI holat kafolatlanadi.
+    queueMicrotask(() => {
+      if (isCheckboxLike) { playSound(isChecked(el) ? "check" : "uncheck", { cooldownMs: 0 }); return; }
+      if (isRadioLike) { playSound("select", { cooldownMs: 30 }); return; }
+      playSound(el.getAttribute("aria-pressed") === "true" ? "toggle-on" : "toggle-off", { cooldownMs: 0 });
+    });
     return;
   }
 
@@ -98,5 +107,7 @@ let attached = false;
 export function attachGlobalClickSounds(): void {
   if (attached || typeof document === "undefined") return;
   attached = true;
-  document.addEventListener("click", handleClick, { passive: true });
+  // capture:true — modal/dialog ichidagi `stopPropagation()` (tashqariga
+  // bosilsa yopish naqshi) ovozni bloklamasin uchun SHART.
+  document.addEventListener("click", handleClick, { capture: true });
 }

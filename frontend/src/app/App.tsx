@@ -1418,9 +1418,18 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
 
   return (
     <>
-    {/* Stats strip — real data from API */}
+    {/* Stats strip — real data from API.
+        XATO TUZATILDI ("responsive ahvoli juda yomon, kesilib qolyapti"):
+        avval bu qat'iy `flex` (o'ralmaydigan, yig'ilmaydigan) qator edi —
+        5 ta chip + Backup tugmasi umumiy kengligi keng desktop'dan
+        boshqa deyarli har qanday enda (ayniqsa iPad kabi ~768px'da,
+        aynan `md:` chegarasida) sig'may qolib, `truncate` matnni
+        "Bugun keldl..." kabi chala kesib ko'rsatardi. Endi qat'iy sig'ish
+        o'rniga GORIZONTAL SKROLL (mobil ilovalardagi filter-chip qatori
+        naqshi) ishlatiladi — hech qaysi chip HECH QACHON kesilmaydi yoki
+        siqilmaydi, shunchaki kerak bo'lsa yon tomonga suriladi. */}
     {stats && (
-      <div className="flex-shrink-0 hidden md:flex items-center gap-3 px-3 pt-3 pb-0">
+      <div className="flex-shrink-0 hidden md:flex items-center gap-2 px-3 pt-3 pb-1 overflow-x-auto scrollbar-hide scroll-smooth">
         {[
           { label: t('dashboard.activeObjects'), value: stats.activeProjects, color: "text-green-600 dark:text-green-400" },
           { label: t('dashboard.totalStaff'), value: stats.totalEmployees, color: "text-blue-600 dark:text-blue-300" },
@@ -1428,18 +1437,16 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
           { label: t('dashboard.todayAttendance'), value: stats.todayAttendance, color: "text-primary" },
           { label: t('dashboard.totalExpenses'), value: fmt(stats.totalExpenses), color: "text-foreground" },
         ].map(s => (
-          <div key={s.label} className="surface rounded-lg px-3 py-1.5 flex items-center gap-2 min-w-0">
+          <div key={s.label} className="surface rounded-lg px-3 py-1.5 flex items-center gap-2 flex-shrink-0 whitespace-nowrap liquid-transition hover:shadow-sm">
             <span className={`text-sm font-bold font-mono ${s.color}`}>{s.value}</span>
-            <span className="text-[10px] text-muted-foreground truncate">{s.label}</span>
+            <span className="text-[10px] text-muted-foreground">{s.label}</span>
           </div>
         ))}
-        <div className="ml-auto">
-          <button onClick={handleBackup} disabled={backupLoading}
-            className="flex items-center gap-1.5 text-xs border border-border rounded-lg px-3 py-1.5 hover:bg-muted transition-colors disabled:opacity-60 text-muted-foreground hover:text-foreground">
-            {backupLoading ? <MorphIcon icon={Loader2} className="w-3.5 h-3.5 animate-spin" /> : <MorphIcon icon={Download} className="w-3.5 h-3.5" />}
-            {t('dashboard.backup')}
-          </button>
-        </div>
+        <button onClick={handleBackup} disabled={backupLoading}
+          className="flex items-center gap-1.5 text-xs border border-border rounded-lg px-3 py-1.5 hover:bg-muted active:scale-95 liquid-transition disabled:opacity-60 text-muted-foreground hover:text-foreground flex-shrink-0 whitespace-nowrap ml-auto">
+          {backupLoading ? <MorphIcon icon={Loader2} className="w-3.5 h-3.5 animate-spin" /> : <MorphIcon icon={Download} className="w-3.5 h-3.5" />}
+          {t('dashboard.backup')}
+        </button>
       </div>
     )}
     {/* Desktop: 4-column grid */}
@@ -4562,6 +4569,12 @@ export default function App() {
   // to'g'ri login ochiladi. Ro'yxatdan o'tish niyati aniq bo'lsa
   // (link/localStorage) landing'ni baribir chetlab o'tamiz.
   const [authView, setAuthView] = useState<"landing"|"login"|"register">(()=>{
+    // Windows .exe (Tauri) / Android APK / iOS — bular marketing sayti
+    // EMAS, o'rnatilgan ilova: har qanday boshqa ilova kabi ochilganda
+    // to'g'ridan-to'g'ri kirish ekraniga tushadi, landing sahifasi UMUMAN
+    // ko'rsatilmaydi (birinchi o'rnatishda ham). Faqat brauzerda (veb
+    // sayt sifatida) birinchi tashrifda landing ko'rsatiladi.
+    if (isNative()) return "login";
     if (typeof window !== "undefined") {
       const sp = new URLSearchParams(window.location.search);
       if (sp.get("rid") || sp.has("register")) return "register";

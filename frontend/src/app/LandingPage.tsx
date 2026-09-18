@@ -1,25 +1,23 @@
 import { useEffect, useState } from "react";
-import {
-  Building02Icon as Building2,
-  DollarSignIcon as DollarSign,
-  UserMultipleIcon as Users,
-  Message01Icon as MessageCircle,
-  PinLocation01Icon as MapPin,
-  SendIcon as Send,
-  ArrowDown01Icon as ChevronDown,
-  CheckmarkCircle01Icon as CheckCircle,
-  SmartPhone01Icon as Smartphone,
-  LaptopIcon as Laptop,
-  FileSpreadsheetIcon as FileSpreadsheet,
-  ShieldCheckIcon as ShieldCheck,
-  SparklesIcon as Sparkles,
-  ArrowRight01Icon as ArrowRight,
-  Layers01Icon as Layers,
-  UserAdd01Icon as UserPlus,
-  Settings02Icon as Settings2,
-  RocketIcon as Rocket,
-  Globe02Icon as Globe2
-} from "@hugeicons/core-free-icons";
+import Building2 from "@hugeicons/core-free-icons/Building02Icon";
+import DollarSign from "@hugeicons/core-free-icons/DollarSignIcon";
+import Users from "@hugeicons/core-free-icons/UserMultipleIcon";
+import MessageCircle from "@hugeicons/core-free-icons/Message01Icon";
+import MapPin from "@hugeicons/core-free-icons/PinLocation01Icon";
+import Send from "@hugeicons/core-free-icons/SendIcon";
+import ChevronDown from "@hugeicons/core-free-icons/ArrowDown01Icon";
+import CheckCircle from "@hugeicons/core-free-icons/CheckmarkCircle01Icon";
+import Smartphone from "@hugeicons/core-free-icons/SmartPhone01Icon";
+import Laptop from "@hugeicons/core-free-icons/LaptopIcon";
+import FileSpreadsheet from "@hugeicons/core-free-icons/FileSpreadsheetIcon";
+import ShieldCheck from "@hugeicons/core-free-icons/ShieldCheckIcon";
+import Sparkles from "@hugeicons/core-free-icons/SparklesIcon";
+import ArrowRight from "@hugeicons/core-free-icons/ArrowRight01Icon";
+import Layers from "@hugeicons/core-free-icons/Layers01Icon";
+import UserPlus from "@hugeicons/core-free-icons/UserAdd01Icon";
+import Settings2 from "@hugeicons/core-free-icons/Settings02Icon";
+import Rocket from "@hugeicons/core-free-icons/RocketIcon";
+import Globe2 from "@hugeicons/core-free-icons/Globe02Icon";
 import { MorphIcon } from "morphicons/react";
 import { motion } from "motion/react";
 import { useTranslation } from "react-i18next";

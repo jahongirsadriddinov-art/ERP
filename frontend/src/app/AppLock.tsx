@@ -1,13 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import {
-  Eraser01Icon as Delete,
-  FingerPrintIcon as Fingerprint,
-  Logout01Icon as LogOut,
-  Building02Icon as Building2,
-  LockIcon as Lock,
-  Cancel01Icon as X
-} from "@hugeicons/core-free-icons";
+import Delete from "@hugeicons/core-free-icons/Eraser01Icon";
+import Fingerprint from "@hugeicons/core-free-icons/FingerPrintIcon";
+import LogOut from "@hugeicons/core-free-icons/Logout01Icon";
+import Building2 from "@hugeicons/core-free-icons/Building02Icon";
+import Lock from "@hugeicons/core-free-icons/LockIcon";
+import X from "@hugeicons/core-free-icons/Cancel01Icon";
 import { MorphIcon } from "morphicons/react";
 import { motion, AnimatePresence } from "motion/react";
 import { useTranslation } from "react-i18next";

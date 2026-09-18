@@ -1,15 +1,13 @@
 import { useState, useRef, useEffect } from "react";
-import {
-  ArrowLeft01Icon as ArrowLeft,
-  Alert02Icon as AlertTriangle,
-  CheckmarkCircle01Icon as CheckCircle,
-  SendIcon as Send,
-  Loading03Icon as Loader2,
-  Tick01Icon as Check,
-  Camera01Icon as Camera,
-  Copy01Icon as Copy,
-  Message01Icon as MessageCircle
-} from "@hugeicons/core-free-icons";
+import ArrowLeft from "@hugeicons/core-free-icons/ArrowLeft01Icon";
+import AlertTriangle from "@hugeicons/core-free-icons/Alert02Icon";
+import CheckCircle from "@hugeicons/core-free-icons/CheckmarkCircle01Icon";
+import Send from "@hugeicons/core-free-icons/SendIcon";
+import Loader2 from "@hugeicons/core-free-icons/Loading03Icon";
+import Check from "@hugeicons/core-free-icons/Tick01Icon";
+import Camera from "@hugeicons/core-free-icons/Camera01Icon";
+import Copy from "@hugeicons/core-free-icons/Copy01Icon";
+import MessageCircle from "@hugeicons/core-free-icons/Message01Icon";
 import { MorphIcon } from "morphicons/react";
 import { toast } from "sonner";
 import { motion } from "motion/react";

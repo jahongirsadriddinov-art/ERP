@@ -2,9 +2,7 @@
 
 import * as React from "react";
 import { OTPInput, OTPInputContext } from "input-otp";
-import {
-  MinusSignIcon as Minus
-} from "@hugeicons/core-free-icons";
+import Minus from "@hugeicons/core-free-icons/MinusSignIcon";
 import { MorphIcon } from "morphicons/react";
 
 import { cn } from "./utils";

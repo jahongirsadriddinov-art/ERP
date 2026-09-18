@@ -1,7 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import {
-  Refresh01Icon as RefreshCw
-} from "@hugeicons/core-free-icons";
+import RefreshCw from "@hugeicons/core-free-icons/Refresh01Icon";
 import { MorphIcon } from "morphicons/react";
 import { haptic, isAndroid } from "./platform";
 

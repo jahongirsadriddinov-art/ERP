@@ -1,11 +1,9 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import {
-  Cancel01Icon as X,
-  QrCodeIcon as QrCode,
-  Camera01Icon as Camera,
-  AlertCircleIcon as AlertCircle,
-  CheckmarkCircle01Icon as CheckCircle
-} from "@hugeicons/core-free-icons";
+import X from "@hugeicons/core-free-icons/Cancel01Icon";
+import QrCode from "@hugeicons/core-free-icons/QrCodeIcon";
+import Camera from "@hugeicons/core-free-icons/Camera01Icon";
+import AlertCircle from "@hugeicons/core-free-icons/AlertCircleIcon";
+import CheckCircle from "@hugeicons/core-free-icons/CheckmarkCircle01Icon";
 import { MorphIcon } from "morphicons/react";
 import { API_BASE } from "./api";
 import { motion, AnimatePresence } from "motion/react";

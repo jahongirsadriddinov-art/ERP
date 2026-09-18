@@ -1,10 +1,8 @@
 import { useEffect, useState } from "react";
-import {
-  PinLocation01Icon as MapPin,
-  UserGroup02Icon as Users2,
-  Clock01Icon as Clock,
-  ArrowRight01Icon as ChevronRight
-} from "@hugeicons/core-free-icons";
+import MapPin from "@hugeicons/core-free-icons/PinLocation01Icon";
+import Users2 from "@hugeicons/core-free-icons/UserGroup02Icon";
+import Clock from "@hugeicons/core-free-icons/Clock01Icon";
+import ChevronRight from "@hugeicons/core-free-icons/ArrowRight01Icon";
 import { MorphIcon } from "morphicons/react";
 import { useTranslation } from "react-i18next";
 import { AppUser, Avatar, Transfer, Expense, fmtWorkDuration, roleLabel } from "./App";

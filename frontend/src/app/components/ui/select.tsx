@@ -2,11 +2,9 @@
 
 import * as React from "react";
 import * as SelectPrimitive from "@radix-ui/react-select";
-import {
-  Tick01Icon as Check,
-  ArrowDown01Icon as ChevronDown,
-  ArrowUp01Icon as ChevronUp
-} from "@hugeicons/core-free-icons";
+import Check from "@hugeicons/core-free-icons/Tick01Icon";
+import ChevronDown from "@hugeicons/core-free-icons/ArrowDown01Icon";
+import ChevronUp from "@hugeicons/core-free-icons/ArrowUp01Icon";
 import { MorphIcon } from "morphicons/react";
 
 import { cn } from "./utils";

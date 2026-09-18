@@ -1,10 +1,8 @@
 "use client";
 
 import * as React from "react";
-import {
-  ArrowLeft01Icon as ChevronLeft,
-  ArrowRight01Icon as ChevronRight
-} from "@hugeicons/core-free-icons";
+import ChevronLeft from "@hugeicons/core-free-icons/ArrowLeft01Icon";
+import ChevronRight from "@hugeicons/core-free-icons/ArrowRight01Icon";
 import { MorphIcon } from "morphicons/react";
 import { DayPicker } from "react-day-picker";
 

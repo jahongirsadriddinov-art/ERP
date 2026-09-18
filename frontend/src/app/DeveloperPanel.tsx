@@ -1,15 +1,13 @@
 import { useState, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  Logout01Icon as LogOut,
-  Loading03Icon as Loader2,
-  Building02Icon as Building2,
-  Delete02Icon as Trash2,
-  ArrowLeft01Icon as ChevronLeft,
-  SendIcon as Send,
-  FileTextIcon as FileText,
-  PinLocation01Icon as MapPin
-} from "@hugeicons/core-free-icons";
+import LogOut from "@hugeicons/core-free-icons/Logout01Icon";
+import Loader2 from "@hugeicons/core-free-icons/Loading03Icon";
+import Building2 from "@hugeicons/core-free-icons/Building02Icon";
+import Trash2 from "@hugeicons/core-free-icons/Delete02Icon";
+import ChevronLeft from "@hugeicons/core-free-icons/ArrowLeft01Icon";
+import Send from "@hugeicons/core-free-icons/SendIcon";
+import FileText from "@hugeicons/core-free-icons/FileTextIcon";
+import MapPin from "@hugeicons/core-free-icons/PinLocation01Icon";
 import { MorphIcon } from "morphicons/react";
 import { toast } from "sonner";
 import { API_BASE } from "./api";

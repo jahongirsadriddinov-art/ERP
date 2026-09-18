@@ -1,15 +1,13 @@
 import { useState, useRef, useEffect } from "react";
-import {
-  PhoneIcon as Phone,
-  PhoneOff01Icon as PhoneOff,
-  Mic01Icon as Mic,
-  MicOff01Icon as MicOff,
-  Video01Icon as VideoIcon,
-  VideoOffIcon as VideoOff,
-  UserGroup02Icon as Users2,
-  CameraRotated01Icon as SwitchCamera,
-  ZoomInIcon as ZoomIn
-} from "@hugeicons/core-free-icons";
+import Phone from "@hugeicons/core-free-icons/PhoneIcon";
+import PhoneOff from "@hugeicons/core-free-icons/PhoneOff01Icon";
+import Mic from "@hugeicons/core-free-icons/Mic01Icon";
+import MicOff from "@hugeicons/core-free-icons/MicOff01Icon";
+import VideoIcon from "@hugeicons/core-free-icons/Video01Icon";
+import VideoOff from "@hugeicons/core-free-icons/VideoOffIcon";
+import Users2 from "@hugeicons/core-free-icons/UserGroup02Icon";
+import SwitchCamera from "@hugeicons/core-free-icons/CameraRotated01Icon";
+import ZoomIn from "@hugeicons/core-free-icons/ZoomInIcon";
 import { MorphIcon } from "morphicons/react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";

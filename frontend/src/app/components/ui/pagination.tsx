@@ -1,9 +1,7 @@
 import * as React from "react";
-import {
-  ArrowLeft01Icon as ChevronLeft,
-  ArrowRight01Icon as ChevronRight,
-  MoreHorizontalIcon as MoreHorizontal
-} from "@hugeicons/core-free-icons";
+import ChevronLeft from "@hugeicons/core-free-icons/ArrowLeft01Icon";
+import ChevronRight from "@hugeicons/core-free-icons/ArrowRight01Icon";
+import MoreHorizontal from "@hugeicons/core-free-icons/MoreHorizontalIcon";
 import { MorphIcon } from "morphicons/react";
 
 import { cn } from "./utils";

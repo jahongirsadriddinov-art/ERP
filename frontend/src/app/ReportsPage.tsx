@@ -5,9 +5,7 @@ import {
 } from "recharts";
 import { motion } from "motion/react";
 import { useTranslation } from "react-i18next";
-import {
-  Download01Icon as Download
-} from "@hugeicons/core-free-icons";
+import Download from "@hugeicons/core-free-icons/Download01Icon";
 import { MorphIcon } from "morphicons/react";
 import { toast } from "sonner";
 import { Project, Expense, AppUser, ExpType, EXP_LABELS, CHART_COLORS, fmt, isAdmin, exportExpensesToCsv } from "./App";

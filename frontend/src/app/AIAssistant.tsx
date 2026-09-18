@@ -1,14 +1,12 @@
 import { useState, useRef, useEffect } from "react";
-import {
-  Cancel01Icon as X,
-  Tick01Icon as Check,
-  SendIcon as Send,
-  Loading03Icon as Loader2,
-  UserAdd01Icon as UserPlus,
-  Delete02Icon as Trash2,
-  Edit02Icon as Edit,
-  FlashIcon as Zap
-} from "@hugeicons/core-free-icons";
+import X from "@hugeicons/core-free-icons/Cancel01Icon";
+import Check from "@hugeicons/core-free-icons/Tick01Icon";
+import Send from "@hugeicons/core-free-icons/SendIcon";
+import Loader2 from "@hugeicons/core-free-icons/Loading03Icon";
+import UserPlus from "@hugeicons/core-free-icons/UserAdd01Icon";
+import Trash2 from "@hugeicons/core-free-icons/Delete02Icon";
+import Edit from "@hugeicons/core-free-icons/Edit02Icon";
+import Zap from "@hugeicons/core-free-icons/FlashIcon";
 import { MorphIcon } from "morphicons/react";
 import { useTranslation } from "react-i18next";
 import { API_BASE } from "./api";

@@ -1,9 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import {
-  Cancel01Icon as X,
-  Download01Icon as Download,
-  QrCodeIcon as QrCode
-} from "@hugeicons/core-free-icons";
+import X from "@hugeicons/core-free-icons/Cancel01Icon";
+import Download from "@hugeicons/core-free-icons/Download01Icon";
+import QrCode from "@hugeicons/core-free-icons/QrCodeIcon";
 import { MorphIcon } from "morphicons/react";
 import { useTranslation } from "react-i18next";
 

@@ -2,9 +2,7 @@
 
 import * as React from "react";
 import * as RadioGroupPrimitive from "@radix-ui/react-radio-group";
-import {
-  CircleIcon as Circle
-} from "@hugeicons/core-free-icons";
+import Circle from "@hugeicons/core-free-icons/CircleIcon";
 import { MorphIcon } from "morphicons/react";
 
 import { cn } from "./utils";

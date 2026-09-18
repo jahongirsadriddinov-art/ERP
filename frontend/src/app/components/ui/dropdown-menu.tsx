@@ -2,11 +2,9 @@
 
 import * as React from "react";
 import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu";
-import {
-  Tick01Icon as Check,
-  ArrowRight01Icon as ChevronRight,
-  CircleIcon as Circle
-} from "@hugeicons/core-free-icons";
+import Check from "@hugeicons/core-free-icons/Tick01Icon";
+import ChevronRight from "@hugeicons/core-free-icons/ArrowRight01Icon";
+import Circle from "@hugeicons/core-free-icons/CircleIcon";
 import { MorphIcon } from "morphicons/react";
 
 import { cn } from "./utils";

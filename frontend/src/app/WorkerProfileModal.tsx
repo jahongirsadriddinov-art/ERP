@@ -1,17 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import L from "leaflet";
-import {
-  Cancel01Icon as X,
-  Calendar01Icon as Calendar,
-  Clock01Icon as Clock,
-  ArrowUpRight01Icon as ArrowUpRight,
-  ArrowDownLeft01Icon as ArrowDownLeft,
-  Wallet01Icon as Wallet,
-  ReceiptIcon as Receipt,
-  PinLocation01Icon as MapPin,
-  Loading03Icon as Loader2
-} from "@hugeicons/core-free-icons";
+import X from "@hugeicons/core-free-icons/Cancel01Icon";
+import Calendar from "@hugeicons/core-free-icons/Calendar01Icon";
+import Clock from "@hugeicons/core-free-icons/Clock01Icon";
+import ArrowUpRight from "@hugeicons/core-free-icons/ArrowUpRight01Icon";
+import ArrowDownLeft from "@hugeicons/core-free-icons/ArrowDownLeft01Icon";
+import Wallet from "@hugeicons/core-free-icons/Wallet01Icon";
+import Receipt from "@hugeicons/core-free-icons/ReceiptIcon";
+import MapPin from "@hugeicons/core-free-icons/PinLocation01Icon";
+import Loader2 from "@hugeicons/core-free-icons/Loading03Icon";
 import { MorphIcon } from "morphicons/react";
 import { useTranslation } from "react-i18next";
 import { AppUser, Avatar, Transfer, Expense, fmt, fmtWorkDuration, roleLabel, expLabel } from "./App";

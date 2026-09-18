@@ -2,9 +2,7 @@
 
 import * as React from "react";
 import { Command as CommandPrimitive } from "cmdk";
-import {
-  Search01Icon as Search
-} from "@hugeicons/core-free-icons";
+import Search from "@hugeicons/core-free-icons/Search01Icon";
 import { MorphIcon } from "morphicons/react";
 
 import { cn } from "./utils";

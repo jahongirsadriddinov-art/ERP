@@ -2,9 +2,7 @@
 
 import * as React from "react";
 import * as AccordionPrimitive from "@radix-ui/react-accordion";
-import {
-  ArrowDown01Icon as ChevronDown
-} from "@hugeicons/core-free-icons";
+import ChevronDown from "@hugeicons/core-free-icons/ArrowDown01Icon";
 import { MorphIcon } from "morphicons/react";
 
 import { cn } from "./utils";

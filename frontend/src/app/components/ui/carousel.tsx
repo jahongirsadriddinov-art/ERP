@@ -4,10 +4,8 @@ import * as React from "react";
 import useEmblaCarousel, {
   type UseEmblaCarouselType,
 } from "embla-carousel-react";
-import {
-  ArrowLeft01Icon as ArrowLeft,
-  ArrowRight01Icon as ArrowRight
-} from "@hugeicons/core-free-icons";
+import ArrowLeft from "@hugeicons/core-free-icons/ArrowLeft01Icon";
+import ArrowRight from "@hugeicons/core-free-icons/ArrowRight01Icon";
 import { MorphIcon } from "morphicons/react";
 
 import { cn } from "./utils";

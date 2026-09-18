@@ -1,9 +1,7 @@
 import * as React from "react";
 import { Slot } from "@radix-ui/react-slot";
-import {
-  ArrowRight01Icon as ChevronRight,
-  MoreHorizontalIcon as MoreHorizontal
-} from "@hugeicons/core-free-icons";
+import ChevronRight from "@hugeicons/core-free-icons/ArrowRight01Icon";
+import MoreHorizontal from "@hugeicons/core-free-icons/MoreHorizontalIcon";
 import { MorphIcon } from "morphicons/react";
 
 import { cn } from "./utils";

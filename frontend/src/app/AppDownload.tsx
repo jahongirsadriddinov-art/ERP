@@ -1,11 +1,9 @@
 import { useEffect, useState } from "react";
-import {
-  SmartPhone01Icon as Smartphone,
-  LaptopIcon as Laptop,
-  Download01Icon as Download,
-  Loading03Icon as Loader2,
-  ShieldCheckIcon as ShieldCheck
-} from "@hugeicons/core-free-icons";
+import Smartphone from "@hugeicons/core-free-icons/SmartPhone01Icon";
+import Laptop from "@hugeicons/core-free-icons/LaptopIcon";
+import Download from "@hugeicons/core-free-icons/Download01Icon";
+import Loader2 from "@hugeicons/core-free-icons/Loading03Icon";
+import ShieldCheck from "@hugeicons/core-free-icons/ShieldCheckIcon";
 import { MorphIcon, type IconNode } from "morphicons/react";
 import { useTranslation } from "react-i18next";
 import { API_BASE } from "./api";

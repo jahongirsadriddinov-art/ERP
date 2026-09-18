@@ -3,9 +3,7 @@
 import * as React from "react";
 import { Slot } from "@radix-ui/react-slot";
 import { VariantProps, cva } from "class-variance-authority";
-import {
-  SidebarLeftIcon as PanelLeft
-} from "@hugeicons/core-free-icons";
+import PanelLeft from "@hugeicons/core-free-icons/SidebarLeftIcon";
 import { MorphIcon } from "morphicons/react";
 
 import { useIsMobile } from "./use-mobile";

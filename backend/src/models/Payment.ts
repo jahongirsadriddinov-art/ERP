@@ -1,14 +1,26 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
-// To'lov moduli SKELETONI — hozircha bo'sh turadi. Kelajak uchun tayyor.
+// Roxiy (Click/Payme/Paynet) va kelajakdagi boshqa provayderlar uchun to'lov
+// yozuvlari — routes/subscriptions.ts (/pay) yaratadi, routes/payments.ts
+// (webhook) 'paid'ga o'tkazadi va shu yozuvdan Subscription'ni yangilaydi.
 export interface IPayment extends Document {
   companyId: string;
   subscriptionId?: string;
   amount: number;
   currency: 'UZS' | 'USD';
   status: 'pending' | 'paid' | 'failed' | 'refunded';
-  provider?: string;    // masalan: 'payme', 'click', 'stripe'
-  externalId?: string;  // provayderdagi to'lov ID
+  provider?: string;    // masalan: 'payme', 'click', 'stripe', 'roxiy'
+  externalId?: string;  // provayderdagi to'lov ID (Roxiy uchun — order_hash)
+  plan?: string;        // shu TO'LOVGA tegishli tarif kaliti (PLAN_CONFIG)
+  days?: number;        // shu TO'LOVGA tegishli kunlar soni — to'lov yaratilgan
+                         // paytdagi PLAN_CONFIG'dan OLIB QO'YILGAN nusxa. Buni
+                         // (sub.selectedPlan yoki webhook payti PLAN_CONFIG'dan
+                         // qayta qidirish o'rniga) saqlashning sababi ikkita:
+                         // (1) to'lov 'pending' turgan payt boshqa /pay so'rovi
+                         // sub.selectedPlan'ni almashtirib yuborishi mumkin,
+                         // (2) PLAN_CONFIG'dagi tariflar keyinchalik o'zgarishi/
+                         // o'chirilishi mumkin — ikkalasida ham to'langan summaga
+                         // mos KUNLAR notekshirilgan holda o'zgarib qolmasligi kerak.
   createdAt: Date;
   updatedAt: Date;
 }
@@ -20,7 +32,9 @@ const PaymentSchema: Schema = new Schema({
   currency: { type: String, enum: ['UZS', 'USD'], default: 'UZS' },
   status: { type: String, enum: ['pending', 'paid', 'failed', 'refunded'], default: 'pending' },
   provider: { type: String },
-  externalId: { type: String }
+  externalId: { type: String },
+  plan: { type: String },
+  days: { type: Number }
 }, { timestamps: true });
 
 export default mongoose.model<IPayment>('Payment', PaymentSchema);

@@ -29,6 +29,7 @@ import dashboardRoutes from './routes/dashboard';
 import clientErrorRoutes from './routes/clientErrors';
 import backupRoutes from './routes/backup';
 import deployRoutes from './routes/deploy';
+import paymentsRoutes from './routes/payments';
 import filesRoutes from './routes/files';
 import statusRoutes from './routes/status';
 import { initSocket } from './services/socket';
@@ -200,6 +201,7 @@ app.use('/api/admin',           requireAuth, backupRoutes);
 // deployRoutes o'zining maxfiy kalit (X-Deploy-Secret) tekshiruvini o'zi
 // qiladi — optionalAuth/JWT shart emas (CI muhitidan chaqiriladi).
 app.use('/api/deploy',          deployRoutes);
+app.use('/api/payments',        paymentsRoutes); // Roxiy webhook — Roxiy'ning o'zi so'raydi, auth shart emas (o'z ichida order_hash+amount bilan tekshiradi)
 
 // Telegram bot webhook — faqat TELEGRAM_WEBHOOK_URL o'rnatilgan bo'lsa faol bo'ladi.
 // Polling rejimida bu route hech qachon chaqirilmaydi.

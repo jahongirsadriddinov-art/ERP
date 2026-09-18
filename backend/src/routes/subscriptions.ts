@@ -2,9 +2,12 @@ import { Router } from 'express';
 import Subscription from '../models/Subscription';
 import User from '../models/User';
 import Company from '../models/Company';
-import { requireDeveloper, requireAuth } from '../middleware/auth';
+import Payment from '../models/Payment';
+import { requireDeveloper, requireAuth, requireOwnerOrAdmin } from '../middleware/auth';
 import { getTenant } from '../middleware/tenantContext';
 import { bot } from '../services/bot';
+import { createRoxiyOrder } from '../services/roxiy';
+import { extendPeriodEnd } from '../utils/subscriptionPeriod';
 
 const router = Router();
 
@@ -52,6 +55,71 @@ router.get('/my', requireAuth, async (req, res) => {
     });
   } catch (err) {
     console.error('subscriptions/my error:', err);
+    res.status(500).json({ error: 'Server xatoligi' });
+  }
+});
+
+// POST /api/admin/subscriptions/pay — firma admin/orinbosari o'zi Click/Payme/
+// Paynet orqali to'lab, obunani DASTURCHI TASDIG'ISIZ avtomatik faollashtiradi
+// (webhook: routes/payments.ts). Bepul tarif uchun ishlamaydi (amount<=0).
+router.post('/pay', requireAuth, requireOwnerOrAdmin, async (req, res) => {
+  try {
+    const t = getTenant();
+    if (!t?.companyId) return res.status(400).json({ error: 'Firma topilmadi' });
+
+    const planKey = (req.body?.selectedPlan || '') as SelectedPlan;
+    // Object.hasOwn — PLAN_CONFIG oddiy obyekt bo'lgani uchun `PLAN_CONFIG['__proto__']`
+    // kabi prototip zanjiridagi nom yuborilsa, oddiy `PLAN_CONFIG[planKey]` yolg'on-
+    // ijobiy (Object.prototype) qaytarib, quyidagi tekshiruvni chetlab o'tishi mumkin edi.
+    const planInfo = Object.hasOwn(PLAN_CONFIG, planKey) ? PLAN_CONFIG[planKey] : undefined;
+    if (!planInfo || planInfo.amount <= 0) {
+      return res.status(400).json({ error: "Noto'g'ri yoki bepul tarif — to'lov shart emas" });
+    }
+
+    // Atomik topish-yoki-yaratish — ikkita bir vaqtdagi so'rov bitta firma
+    // uchun ikkita alohida (pending) Subscription yozuvini yaratib
+    // qo'ymasligi uchun (avval alohida findOne+save bo'lgan, poyga holati
+    // bo'lgan). TO'LIQ kafolat EMAS (companyId'da unique index yo'q —
+    // amaliyotda juda kam ehtimoldagi bir vaqtdagi ikkita birinchi to'lov
+    // holatida baribir ikkita yozuv paydo bo'lishi mumkin), lekin oldingi
+    // (umuman himoyasiz) holatdan ancha yaxshi.
+    const sub = await Subscription.findOneAndUpdate(
+      { companyId: String(t.companyId) },
+      { $setOnInsert: { companyId: String(t.companyId), userId: (req as any).user?.userId, status: 'pending' } },
+      { upsert: true, new: true, sort: { createdAt: -1 } }
+    );
+
+    // Dasturchi rad etgan obunani foydalanuvchi o'zi to'lab, tekshiruvsiz
+    // qayta faollashtira olmasin — rad etish qarori shu yerda chetlab
+    // o'tilmasligi kerak.
+    if (sub.status === 'rejected') {
+      return res.status(403).json({ error: "Obunangiz rad etilgan — dasturchi bilan bog'laning" });
+    }
+
+    // MUHIM: sub.selectedPlan bu yerda YOZILMAYDI — to'lov hali 'pending'
+    // turgan paytda boshqa /pay so'rovi (tarif almashtirish) uni
+    // almashtirib yuborishi mumkin edi. Qancha kun/qaysi tarif berilishi
+    // FAQAT quyidagi Payment yozuvidan (plan/days) olinadi — webhook
+    // to'lovni tasdiqlagach, aynan SHU yozuvdagi qiymatlar bilan
+    // sub.selectedPlan ham sinxronlanadi (routes/payments.ts).
+    const note = `QurilishERP ${planInfo.label} — ${t.companyId}`;
+    const order = await createRoxiyOrder(planInfo.amount, note);
+
+    await Payment.create({
+      companyId: String(t.companyId),
+      subscriptionId: String(sub._id),
+      amount: planInfo.amount,
+      currency: 'UZS',
+      status: 'pending',
+      provider: 'roxiy',
+      externalId: order.order_hash,
+      plan: planKey,
+      days: planInfo.days,
+    });
+
+    res.json({ ok: true, payUrl: order.pay_url, providers: order.providers });
+  } catch (err: any) {
+    console.error('subscriptions/pay error:', err);
     res.status(500).json({ error: 'Server xatoligi' });
   }
 });
@@ -192,8 +260,7 @@ router.post('/:id/renew', requireDeveloper, async (req, res) => {
     const planKey = ((selectedPlan || sub.selectedPlan || 'bepul') as SelectedPlan);
     const planInfo = PLAN_CONFIG[planKey] || PLAN_CONFIG['bepul'];
 
-    const base = (sub.currentPeriodEnd && sub.currentPeriodEnd > new Date()) ? sub.currentPeriodEnd : new Date();
-    const expiresAt = new Date(base.getTime() + planInfo.days * 86400000);
+    const expiresAt = extendPeriodEnd(sub.currentPeriodEnd, planInfo.days);
 
     sub.status = 'active';
     sub.selectedPlan = planKey;

@@ -1,9 +1,9 @@
 import * as React from "react";
 import {
-  ChevronLeft,
-  ChevronRight,
-  MoreHorizontal,
-} from "lucide";
+  ArrowLeft01Icon as ChevronLeft,
+  ArrowRight01Icon as ChevronRight,
+  MoreHorizontalIcon as MoreHorizontal
+} from "@hugeicons/core-free-icons";
 import { MorphIcon } from "morphicons/react";
 
 import { cn } from "./utils";

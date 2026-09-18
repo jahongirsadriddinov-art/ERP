@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Delete, Fingerprint, LogOut, Building2, Lock, X } from "lucide";
+import {
+  Eraser01Icon as Delete,
+  FingerPrintIcon as Fingerprint,
+  Logout01Icon as LogOut,
+  Building02Icon as Building2,
+  LockIcon as Lock,
+  Cancel01Icon as X
+} from "@hugeicons/core-free-icons";
 import { MorphIcon } from "morphicons/react";
 import { motion, AnimatePresence } from "motion/react";
 import { useTranslation } from "react-i18next";

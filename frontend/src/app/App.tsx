@@ -1,11 +1,74 @@
 import { useState, useRef, useEffect, useMemo, lazy, Suspense } from "react";
 import {
-  Building2, Users, HardHat, Package, Plus, ArrowLeft,
-  CheckCircle, Clock, AlertTriangle, ChevronRight, MapPin,
-  Phone, User, X, Check, Download, BarChart2,
-  DollarSign, MessageCircle, ChevronDown, ChevronUp, Send,
-  TrendingDown, Wallet, LogOut, Camera, Home, UserPlus, Edit, Trash, Search, AlertCircle, ChevronLeft, Loader2, Paperclip, Mic, Video as VideoIcon, Image as ImageIcon, FileText, CornerDownLeft, Share2, SquareCheck, Trash2, MoreHorizontal, Upload, Palette, Sun, Moon, Monitor, PhoneOff, MicOff, VideoOff, Users2, Copy, Bell, Pin, PinOff, CheckCheck, Languages, CreditCard, Calendar, QrCode, WifiOff, Euro, RefreshCw, Lock, Volume2, VolumeX
-} from "lucide";
+  Building02Icon as Building2,
+  UserMultipleIcon as Users,
+  HardHatIcon as HardHat,
+  Package01Icon as Package,
+  PlusSignIcon as Plus,
+  ArrowLeft01Icon as ArrowLeft,
+  CheckmarkCircle01Icon as CheckCircle,
+  Clock01Icon as Clock,
+  Alert02Icon as AlertTriangle,
+  ArrowRight01Icon as ChevronRight,
+  PinLocation01Icon as MapPin,
+  PhoneIcon as Phone,
+  UserIcon as User,
+  Cancel01Icon as X,
+  Tick01Icon as Check,
+  Download01Icon as Download,
+  BarChartIcon as BarChart2,
+  DollarSignIcon as DollarSign,
+  Message01Icon as MessageCircle,
+  ArrowDown01Icon as ChevronDown,
+  ArrowUp01Icon as ChevronUp,
+  SendIcon as Send,
+  TradeDownIcon as TrendingDown,
+  Wallet01Icon as Wallet,
+  Logout01Icon as LogOut,
+  Camera01Icon as Camera,
+  Home01Icon as Home,
+  UserAdd01Icon as UserPlus,
+  Edit02Icon as Edit,
+  Delete02Icon as Trash,
+  Search01Icon as Search,
+  AlertCircleIcon as AlertCircle,
+  ArrowLeft01Icon as ChevronLeft,
+  Loading03Icon as Loader2,
+  Attachment01Icon as Paperclip,
+  Mic01Icon as Mic,
+  Video01Icon as VideoIcon,
+  Image01Icon as ImageIcon,
+  FileTextIcon as FileText,
+  CornerDownLeftIcon as CornerDownLeft,
+  Share01Icon as Share2,
+  CheckmarkSquare01Icon as SquareCheck,
+  Delete02Icon as Trash2,
+  MoreHorizontalIcon as MoreHorizontal,
+  Upload01Icon as Upload,
+  PaletteIcon as Palette,
+  Sun01Icon as Sun,
+  Moon02Icon as Moon,
+  ComputerIcon as Monitor,
+  PhoneOff01Icon as PhoneOff,
+  MicOff01Icon as MicOff,
+  VideoOffIcon as VideoOff,
+  UserGroup02Icon as Users2,
+  Copy01Icon as Copy,
+  BellIcon as Bell,
+  PinIcon as Pin,
+  PinOffIcon as PinOff,
+  Tick02Icon as CheckCheck,
+  TranslateIcon as Languages,
+  CreditCardIcon as CreditCard,
+  Calendar01Icon as Calendar,
+  QrCodeIcon as QrCode,
+  WifiOff01Icon as WifiOff,
+  EuroIcon as Euro,
+  Refresh01Icon as RefreshCw,
+  LockIcon as Lock,
+  VolumeHighIcon as Volume2,
+  VolumeOffIcon as VolumeX
+} from "@hugeicons/core-free-icons";
 import { MorphIcon, type IconNode } from "morphicons/react";
 import { toast, Toaster } from "sonner";
 import { isSoundEnabled, setSoundEnabled, getSoundVolume, setSoundVolume, playSound } from "./sound";
@@ -1824,7 +1887,7 @@ function SmetaResultView({ smeta }: { smeta: SmetaResult }) {
           <div key={g} className="glass-card rounded-xl border border-border overflow-hidden">
             <button onClick={() => setOpenGroup(open ? null : g)} className="w-full flex items-center justify-between gap-2 px-4 py-3 hover:bg-muted/30">
               <span className="text-sm font-semibold text-left">{SMETA_GROUP_LABEL[g]} <span className="text-muted-foreground font-normal">({rows.length})</span></span>
-              <span className="flex items-center gap-2"><span className="font-mono text-sm font-bold">{fmtNum(sum)}</span>{open ? <MorphIcon icon={ChevronUp} className="w-4 h-4 shrink-0"  /> : <MorphIcon icon={ChevronDown} className="w-4 h-4 shrink-0"  />}</span>
+              <span className="flex items-center gap-2"><span className="font-mono text-sm font-bold">{fmtNum(sum)}</span><MorphIcon icon={open ? ChevronUp : ChevronDown} className="w-4 h-4 shrink-0" /></span>
             </button>
             {/* XATO TUZATILDI: sahifaning o'zi (yuqorida) vertikal scroll
                 qiladi, bu jadval esa gorizontal — ikkalasi izolyatsiya
@@ -1872,7 +1935,7 @@ function SmetaResultView({ smeta }: { smeta: SmetaResult }) {
           <div key={sec.name} className="glass-card rounded-xl border border-border overflow-hidden">
             <button onClick={() => setOpenSection(p => ({ ...p, [sec.name]: !so }))} className="w-full flex items-center justify-between gap-2 px-4 py-2.5 bg-muted/20 hover:bg-muted/40">
               <span className="text-sm font-semibold text-left">{sec.name} <span className="text-muted-foreground font-normal">({sec.works.length})</span></span>
-              {so ? <MorphIcon icon={ChevronUp} className="w-4 h-4 shrink-0"  /> : <MorphIcon icon={ChevronDown} className="w-4 h-4 shrink-0"  />}
+              <MorphIcon icon={so ? ChevronUp : ChevronDown} className="w-4 h-4 shrink-0" />
             </button>
             {so && sec.works.map(w => {
               const wo = openWork === w.index;
@@ -1880,7 +1943,7 @@ function SmetaResultView({ smeta }: { smeta: SmetaResult }) {
                 <div key={w.index} className="border-t border-border/50">
                   <button onClick={() => setOpenWork(wo ? null : w.index)} className="w-full flex items-start justify-between gap-2 px-4 py-2 hover:bg-muted/20 text-left">
                     <span className="text-xs leading-snug"><span className="text-muted-foreground">{w.index}.</span> {w.shifr && <span className="font-mono text-primary">{w.shifr} </span>}{w.name} <span className="text-muted-foreground">[{w.unit}]</span></span>
-                    <span className="flex items-center gap-1 shrink-0"><span className="text-[10px] text-muted-foreground whitespace-nowrap">{w.norms.length} n.</span>{wo ? <MorphIcon icon={ChevronUp} className="w-3.5 h-3.5"  /> : <MorphIcon icon={ChevronDown} className="w-3.5 h-3.5"  />}</span>
+                    <span className="flex items-center gap-1 shrink-0"><span className="text-[10px] text-muted-foreground whitespace-nowrap">{w.norms.length} n.</span><MorphIcon icon={wo ? ChevronUp : ChevronDown} className="w-3.5 h-3.5" /></span>
                   </button>
                   {wo && w.norms.length > 0 && (
                     <div className="overflow-x-auto scrollbar-hide px-4 pb-2 touch-pan-x">
@@ -2967,7 +3030,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
                         {mine && (
                           m.status === 'sending' ? <MorphIcon icon={Loader2} className="w-3 h-3 animate-spin" /> :
                           m.status === 'failed' ? null :
-                          m.read ? <MorphIcon icon={CheckCheck} className="w-3.5 h-3.5" /> : <MorphIcon icon={Check} className="w-3 h-3" />
+                          <MorphIcon icon={m.read ? CheckCheck : Check} className={m.read ? "w-3.5 h-3.5" : "w-3 h-3"} />
                         )}
                       </div>
                     </div>
@@ -3012,7 +3075,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
                         <div onClick={()=>{setEditingId(ctxMsg.id);setEditText(ctxMsg.text);setCtxMenu(null);}} className={itemCls}><MorphIcon icon={Edit} className="w-3.5 h-3.5" />{tChat('chat.edit')}</div>
                       )}
                       <div onClick={()=>{onPin(ctxMsg.id);setCtxMenu(null);}} className={itemCls}>
-                        {ctxMsg.pinned ? <MorphIcon icon={PinOff} className="w-3.5 h-3.5" /> : <MorphIcon icon={Pin} className="w-3.5 h-3.5" />}{ctxMsg.pinned?tChat('chat.unpin'):tChat('chat.pin')}
+                        <MorphIcon icon={ctxMsg.pinned ? PinOff : Pin} className="w-3.5 h-3.5" />{ctxMsg.pinned?tChat('chat.unpin'):tChat('chat.pin')}
                       </div>
                       <div onClick={()=>{setShowForward(ctxMsg);setCtxMenu(null);}} className={itemCls}><MorphIcon icon={Share2} className="w-3.5 h-3.5" />{tChat('chat.forward')}</div>
                       <div onClick={()=>{setSelectMode(true);setSelected(new Set([ctxMsg.id]));setCtxMenu(null);}} className={itemCls}><MorphIcon icon={SquareCheck} className="w-3.5 h-3.5" />{tChat('chat.select')}</div>
@@ -3319,7 +3382,7 @@ function AuditLogSection({ token }: { token: string }) {
           <div className="icon-chip"><MorphIcon icon={BarChart2} className="w-4 h-4" /></div>
           <span className="text-sm font-medium">{t('profile.auditLogTitle')}</span>
         </div>
-        {open ? <MorphIcon icon={ChevronUp} className="w-4 h-4 text-muted-foreground" /> : <MorphIcon icon={ChevronDown} className="w-4 h-4 text-muted-foreground" />}
+        <MorphIcon icon={open ? ChevronUp : ChevronDown} className="w-4 h-4 text-muted-foreground" />
       </button>
       {open && (
         <div className="border-t border-border px-4 pb-4 pt-2">
@@ -4186,7 +4249,7 @@ function BottomFinanceBar({ expenses, projects }: { expenses: Expense[]; project
       )}
       <button onClick={()=>setOpen(!open)} className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-white/5 transition-colors">
         <div className="flex items-center gap-2"><MorphIcon icon={TrendingDown} className="w-4 h-4 text-white/90" /><span className="text-sm md:text-xs text-white/90">{t('finance.totalExpenses')}</span></div>
-        <div className="flex items-center gap-2"><span className="text-sm font-bold font-mono">{fmt(total)}</span>{open?<MorphIcon icon={ChevronUp} className="w-4 h-4 text-white/60" />:<MorphIcon icon={ChevronDown} className="w-4 h-4 text-white/60" />}</div>
+        <div className="flex items-center gap-2"><span className="text-sm font-bold font-mono">{fmt(total)}</span><MorphIcon icon={open ? ChevronUp : ChevronDown} className="w-4 h-4 text-white/60" /></div>
       </button>
     </div>
   );
@@ -5421,7 +5484,7 @@ export default function App() {
         <button onClick={cycleThemeMode} title={themeMode==="light"?"Yorug'":themeMode==="dark"?"Qorong'i":"Tizim bo'yicha"}
           aria-label={themeMode==="light"?"Yorug'":themeMode==="dark"?"Qorong'i":"Tizim bo'yicha"}
           className="btn btn-ghost w-9 h-9 p-0 rounded-full">
-          {themeMode==="light"?<MorphIcon icon={Sun} className="w-[18px] h-[18px]" />:themeMode==="dark"?<MorphIcon icon={Moon} className="w-[18px] h-[18px]" />:<MorphIcon icon={Monitor} className="w-[18px] h-[18px]" />}
+          <MorphIcon icon={themeMode==="light"?Sun:themeMode==="dark"?Moon:Monitor} className="w-[18px] h-[18px]" />
         </button>
         <button onClick={()=>{setPage("profile");setSelProject(null);}} className="flex items-center gap-2 hover:bg-white/5 pl-1 pr-1 sm:pr-3 py-1 rounded-full liquid-transition">
           <Avatar user={liveUser} size="sm"/>

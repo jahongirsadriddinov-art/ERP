@@ -1,5 +1,11 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { X, QrCode, Camera, AlertCircle, CheckCircle } from "lucide";
+import {
+  Cancel01Icon as X,
+  QrCodeIcon as QrCode,
+  Camera01Icon as Camera,
+  AlertCircleIcon as AlertCircle,
+  CheckmarkCircle01Icon as CheckCircle
+} from "@hugeicons/core-free-icons";
 import { MorphIcon } from "morphicons/react";
 import { API_BASE } from "./api";
 import { motion, AnimatePresence } from "motion/react";

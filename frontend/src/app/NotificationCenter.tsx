@@ -1,6 +1,19 @@
 import { useState, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { Bell, X, Check, CheckCheck, MessageCircle, Package, Wallet, Clock, Info, QrCode, MapPin, Trash2 } from "lucide";
+import {
+  BellIcon as Bell,
+  Cancel01Icon as X,
+  Tick01Icon as Check,
+  Tick02Icon as CheckCheck,
+  Message01Icon as MessageCircle,
+  Package01Icon as Package,
+  Wallet01Icon as Wallet,
+  Clock01Icon as Clock,
+  InformationCircleIcon as Info,
+  QrCodeIcon as QrCode,
+  PinLocation01Icon as MapPin,
+  Delete02Icon as Trash2
+} from "@hugeicons/core-free-icons";
 import { MorphIcon } from "morphicons/react";
 import { API_BASE } from "./api";
 import { motion, AnimatePresence } from "motion/react";

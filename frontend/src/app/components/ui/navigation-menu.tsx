@@ -1,7 +1,9 @@
 import * as React from "react";
 import * as NavigationMenuPrimitive from "@radix-ui/react-navigation-menu";
 import { cva } from "class-variance-authority";
-import { ChevronDown } from "lucide";
+import {
+  ArrowDown01Icon as ChevronDown
+} from "@hugeicons/core-free-icons";
 import { MorphIcon } from "morphicons/react";
 
 import { cn } from "./utils";

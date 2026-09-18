@@ -1,7 +1,9 @@
 "use client";
 
 import * as React from "react";
-import { GripVertical } from "lucide";
+import {
+  GripVerticalIcon as GripVertical
+} from "@hugeicons/core-free-icons";
 import { MorphIcon } from "morphicons/react";
 import * as ResizablePrimitive from "react-resizable-panels";
 

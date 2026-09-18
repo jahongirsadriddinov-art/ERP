@@ -2,7 +2,9 @@
 
 import * as React from "react";
 import * as SheetPrimitive from "@radix-ui/react-dialog";
-import { X } from "lucide";
+import {
+  Cancel01Icon as X
+} from "@hugeicons/core-free-icons";
 import { MorphIcon } from "morphicons/react";
 
 import { cn } from "./utils";

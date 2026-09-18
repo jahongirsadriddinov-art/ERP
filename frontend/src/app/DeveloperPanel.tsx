@@ -1,6 +1,15 @@
 import { useState, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { LogOut, Loader2, Building2, Trash2, ChevronLeft, Send, FileText, MapPin } from "lucide";
+import {
+  Logout01Icon as LogOut,
+  Loading03Icon as Loader2,
+  Building02Icon as Building2,
+  Delete02Icon as Trash2,
+  ArrowLeft01Icon as ChevronLeft,
+  SendIcon as Send,
+  FileTextIcon as FileText,
+  PinLocation01Icon as MapPin
+} from "@hugeicons/core-free-icons";
 import { MorphIcon } from "morphicons/react";
 import { toast } from "sonner";
 import { API_BASE } from "./api";

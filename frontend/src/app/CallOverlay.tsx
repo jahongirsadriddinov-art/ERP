@@ -1,5 +1,15 @@
 import { useState, useRef, useEffect } from "react";
-import { Phone, PhoneOff, Mic, MicOff, Video as VideoIcon, VideoOff, Users2, SwitchCamera, ZoomIn } from "lucide";
+import {
+  PhoneIcon as Phone,
+  PhoneOff01Icon as PhoneOff,
+  Mic01Icon as Mic,
+  MicOff01Icon as MicOff,
+  Video01Icon as VideoIcon,
+  VideoOffIcon as VideoOff,
+  UserGroup02Icon as Users2,
+  CameraRotated01Icon as SwitchCamera,
+  ZoomInIcon as ZoomIn
+} from "@hugeicons/core-free-icons";
 import { MorphIcon } from "morphicons/react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
@@ -342,8 +352,8 @@ export default function CallOverlay({ currentUser, users, call, onClose }:
           </>
         ) : (
           <>
-            <button onClick={toggleMute} aria-label={muted ? t('call.unmute') : t('call.mute')} className={`w-14 h-14 rounded-full flex items-center justify-center text-white active:scale-95 ${muted?'bg-white/30':'bg-white/10'}`}>{muted?<MorphIcon icon={MicOff} className="w-5 h-5" />:<MorphIcon icon={Mic} className="w-5 h-5" />}</button>
-            {call.mode === 'video' && <button onClick={toggleCam} aria-label={camOff ? t('call.cameraOn') : t('call.cameraOff')} className={`w-14 h-14 rounded-full flex items-center justify-center text-white active:scale-95 ${camOff?'bg-white/30':'bg-white/10'}`}>{camOff?<MorphIcon icon={VideoOff} className="w-5 h-5" />:<MorphIcon icon={VideoIcon} className="w-5 h-5" />}</button>}
+            <button onClick={toggleMute} aria-label={muted ? t('call.unmute') : t('call.mute')} className={`w-14 h-14 rounded-full flex items-center justify-center text-white active:scale-95 ${muted?'bg-white/30':'bg-white/10'}`}><MorphIcon icon={muted ? MicOff : Mic} className="w-5 h-5" /></button>
+            {call.mode === 'video' && <button onClick={toggleCam} aria-label={camOff ? t('call.cameraOn') : t('call.cameraOff')} className={`w-14 h-14 rounded-full flex items-center justify-center text-white active:scale-95 ${camOff?'bg-white/30':'bg-white/10'}`}><MorphIcon icon={camOff ? VideoOff : VideoIcon} className="w-5 h-5" /></button>}
             {call.mode === 'video' && !camOff && (
               <button onClick={flipCamera} disabled={flipping} aria-label={t('call.flipCamera')}
                 className="w-14 h-14 rounded-full flex items-center justify-center text-white bg-white/10 active:scale-95 disabled:opacity-50">

@@ -1,7 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import L from "leaflet";
-import { X, Calendar, Clock, ArrowUpRight, ArrowDownLeft, Wallet, Receipt, MapPin, Loader2 } from "lucide";
+import {
+  Cancel01Icon as X,
+  Calendar01Icon as Calendar,
+  Clock01Icon as Clock,
+  ArrowUpRight01Icon as ArrowUpRight,
+  ArrowDownLeft01Icon as ArrowDownLeft,
+  Wallet01Icon as Wallet,
+  ReceiptIcon as Receipt,
+  PinLocation01Icon as MapPin,
+  Loading03Icon as Loader2
+} from "@hugeicons/core-free-icons";
 import { MorphIcon } from "morphicons/react";
 import { useTranslation } from "react-i18next";
 import { AppUser, Avatar, Transfer, Expense, fmt, fmtWorkDuration, roleLabel, expLabel } from "./App";

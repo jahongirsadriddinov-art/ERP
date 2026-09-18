@@ -2,7 +2,11 @@
 
 import * as React from "react";
 import * as MenubarPrimitive from "@radix-ui/react-menubar";
-import { Check, ChevronRight, Circle } from "lucide";
+import {
+  Tick01Icon as Check,
+  ArrowRight01Icon as ChevronRight,
+  CircleIcon as Circle
+} from "@hugeicons/core-free-icons";
 import { MorphIcon } from "morphicons/react";
 
 import { cn } from "./utils";

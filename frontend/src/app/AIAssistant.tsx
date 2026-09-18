@@ -1,5 +1,14 @@
 import { useState, useRef, useEffect } from "react";
-import { X, Check, Send, Loader2, UserPlus, Trash2, Edit, Zap } from "lucide";
+import {
+  Cancel01Icon as X,
+  Tick01Icon as Check,
+  SendIcon as Send,
+  Loading03Icon as Loader2,
+  UserAdd01Icon as UserPlus,
+  Delete02Icon as Trash2,
+  Edit02Icon as Edit,
+  FlashIcon as Zap
+} from "@hugeicons/core-free-icons";
 import { MorphIcon } from "morphicons/react";
 import { useTranslation } from "react-i18next";
 import { API_BASE } from "./api";

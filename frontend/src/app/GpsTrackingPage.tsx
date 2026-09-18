@@ -1,5 +1,10 @@
 import { useEffect, useState } from "react";
-import { MapPin, Users2, Clock, ChevronRight } from "lucide";
+import {
+  PinLocation01Icon as MapPin,
+  UserGroup02Icon as Users2,
+  Clock01Icon as Clock,
+  ArrowRight01Icon as ChevronRight
+} from "@hugeicons/core-free-icons";
 import { MorphIcon } from "morphicons/react";
 import { useTranslation } from "react-i18next";
 import { AppUser, Avatar, Transfer, Expense, fmtWorkDuration, roleLabel } from "./App";

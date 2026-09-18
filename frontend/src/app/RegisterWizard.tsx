@@ -1,5 +1,15 @@
 import { useState, useRef, useEffect } from "react";
-import { ArrowLeft, AlertTriangle, CheckCircle, Send, Loader2, Check, Camera, Copy, MessageCircle } from "lucide";
+import {
+  ArrowLeft01Icon as ArrowLeft,
+  Alert02Icon as AlertTriangle,
+  CheckmarkCircle01Icon as CheckCircle,
+  SendIcon as Send,
+  Loading03Icon as Loader2,
+  Tick01Icon as Check,
+  Camera01Icon as Camera,
+  Copy01Icon as Copy,
+  Message01Icon as MessageCircle
+} from "@hugeicons/core-free-icons";
 import { MorphIcon } from "morphicons/react";
 import { toast } from "sonner";
 import { motion } from "motion/react";

@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { X, Download, QrCode } from "lucide";
+import {
+  Cancel01Icon as X,
+  Download01Icon as Download,
+  QrCodeIcon as QrCode
+} from "@hugeicons/core-free-icons";
 import { MorphIcon } from "morphicons/react";
 import { useTranslation } from "react-i18next";
 

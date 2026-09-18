@@ -2,7 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { X, Navigation } from "lucide";
+import {
+  Cancel01Icon as X,
+  Navigation01Icon as Navigation
+} from "@hugeicons/core-free-icons";
 import { MorphIcon } from "morphicons/react";
 import { useTranslation } from "react-i18next";
 import { AppUser } from "./App";

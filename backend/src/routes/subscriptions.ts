@@ -130,9 +130,13 @@ router.get('/', requireDeveloper, async (req, res) => {
     const subs = await Subscription.find().sort({ requestedAt: -1, createdAt: -1 });
 
     const enriched = await Promise.all(subs.map(async (s) => {
-      const [company, user] = await Promise.all([
+      const [company, user, payments] = await Promise.all([
         Company.findById(s.companyId).lean().catch(() => null),
         s.userId ? User.findById(s.userId).lean().catch(() => null) : Promise.resolve(null),
+        // Dasturchi har bir obunaning HAQIQIY to'lov tarixini (avtomatik
+        // Roxiy orqalimi, qachon, qancha, qaysi holatda) ko'ra olishi
+        // uchun — oxirgi 10 tasi kifoya (juda uzun ro'yxat kerak emas).
+        Payment.find({ subscriptionId: String(s._id) }).sort({ createdAt: -1 }).limit(10).lean().catch(() => []),
       ]);
       const now = new Date();
       let computedStatus = s.status;
@@ -159,7 +163,20 @@ router.get('/', requireDeveloper, async (req, res) => {
         daysLeft,
         requestedAt: s.requestedAt || s.createdAt,
         approvedAt: s.approvedAt,
+        approvedBy: s.approvedBy,
+        // 'roxiy-auto' — foydalanuvchi o'zi Click/Payme/Paynet orqali to'lab,
+        // dasturchi tasdig'isiz avtomatik faollashgan (routes/payments.ts).
+        autoActivated: s.approvedBy === 'roxiy-auto',
         rejectedAt: s.rejectedAt,
+        payments: payments.map((p: any) => ({
+          id: p._id,
+          amount: p.amount,
+          currency: p.currency,
+          status: p.status,
+          provider: p.provider,
+          plan: p.plan,
+          createdAt: p.createdAt,
+        })),
       };
     }));
 

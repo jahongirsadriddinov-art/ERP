@@ -49,6 +49,14 @@ export const uz = {
       renew: "Yangilash",
       freeLabel: "BEPUL",
       somSuffix: "so'm",
+      autoActivated: "🤖 Avtomatik (Roxiy)",
+      paymentsTitle: "To'lovlar tarixi",
+      paymentStatus: {
+        pending: "Kutilmoqda",
+        paid: "To'landi",
+        failed: "Muvaffaqiyatsiz",
+        refunded: "Qaytarildi",
+      },
     },
     firms: {
       empty: "Firma yo'q",
@@ -141,6 +149,14 @@ export const ru = {
       renew: "Обновить",
       freeLabel: "БЕСПЛАТНО",
       somSuffix: "сум",
+      autoActivated: "🤖 Автоматически (Roxiy)",
+      paymentsTitle: "История платежей",
+      paymentStatus: {
+        pending: "Ожидается",
+        paid: "Оплачено",
+        failed: "Неудача",
+        refunded: "Возвращено",
+      },
     },
     firms: {
       empty: "Компаний нет",

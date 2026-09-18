@@ -263,13 +263,34 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
                     <p className="text-[11px] font-mono text-muted-foreground">{s.branchId} · {s.userPhone}</p>
                     <p className="text-[11px] text-muted-foreground">{s.userName}</p>
                   </div>
-                  <span className={`text-[11px] font-semibold px-2 py-1 rounded-lg shrink-0 ${statusColor}`}>{statusLabel}</span>
+                  <div className="flex flex-col items-end gap-1 shrink-0">
+                    <span className={`text-[11px] font-semibold px-2 py-1 rounded-lg ${statusColor}`}>{statusLabel}</span>
+                    {s.autoActivated && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-primary/10 text-primary">{t('devPanel.subscriptions.autoActivated')}</span>}
+                  </div>
                 </div>
                 <div className="flex items-center justify-between text-[12px] text-muted-foreground mb-3">
                   <span>📦 {s.selectedPlan ? planLabel(s.selectedPlan) : "—"}</span>
                   <span className="font-semibold text-foreground">{s.amount ? t('devPanel.subscriptions.amount', { amount: s.amount.toLocaleString() }) : "—"}</span>
                 </div>
                 {s.requestedAt && <p className="text-[11px] text-muted-foreground mb-3">{t('devPanel.subscriptions.requestedAt')} {new Date(s.requestedAt).toLocaleString("uz-UZ", { timeZone: "Asia/Tashkent" })}</p>}
+                {Array.isArray(s.payments) && s.payments.length > 0 && (
+                  <details className="mb-3 group">
+                    <summary className="text-[11px] font-semibold text-muted-foreground cursor-pointer select-none list-none flex items-center gap-1">
+                      <span className="group-open:rotate-90 liquid-transition inline-block">▸</span> {t('devPanel.subscriptions.paymentsTitle')} ({s.payments.length})
+                    </summary>
+                    <div className="mt-2 space-y-1.5 border-l-2 border-border/60 pl-3">
+                      {s.payments.map((p: any) => {
+                        const pColor = p.status === 'paid' ? 'text-green-700 dark:text-green-400' : p.status === 'failed' ? 'text-red-600 dark:text-red-400' : 'text-yellow-700 dark:text-yellow-400';
+                        return (
+                          <div key={p.id} className="flex items-center justify-between text-[11px]">
+                            <span className="text-muted-foreground">{new Date(p.createdAt).toLocaleDateString("uz-UZ", { timeZone: "Asia/Tashkent" })} · {p.provider}</span>
+                            <span className={`font-semibold ${pColor}`}>{p.amount.toLocaleString()} {t('devPanel.subscriptions.somSuffix')} — {t(`devPanel.subscriptions.paymentStatus.${p.status}`)}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </details>
+                )}
                 {expiryWarning && (
                   <div className="mb-3">
                     <p className="text-[11px] text-orange-700 dark:text-orange-400 font-semibold mb-2">{t('devPanel.subscriptions.expiryWarning', { days: s.daysLeft })}</p>

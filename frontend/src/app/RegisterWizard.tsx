@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
-import { ArrowLeft, AlertTriangle, CheckCircle, Send, Loader2, Check, Camera, Copy, MessageCircle } from "lucide-react";
+import { ArrowLeft, AlertTriangle, CheckCircle, Send, Loader2, Check, Camera, Copy, MessageCircle } from "lucide";
+import { MorphIcon } from "morphicons/react";
 import { toast } from "sonner";
 import { motion } from "motion/react";
 import { useTranslation } from "react-i18next";
@@ -269,7 +270,7 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
           </div>
           <button onClick={goBack} aria-label={t('common.back')}
             className="w-9 h-9 rounded-full bg-white/40 dark:bg-black/25 border border-border/50 flex items-center justify-center backdrop-blur-sm hover:bg-white/60 dark:hover:bg-black/40 transition-colors shadow-sm">
-            <ArrowLeft className="w-4 h-4" />
+            <MorphIcon icon={ArrowLeft} className="w-4 h-4"  />
           </button>
         </div>
         {/* Progress bar */}
@@ -297,7 +298,7 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
               </div>
               <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4">
                 <div className="flex items-center gap-2 mb-2 text-amber-800 dark:text-amber-300 font-bold">
-                  <AlertTriangle className="w-5 h-5" /> {t('register.warnTitle')}
+                  <MorphIcon icon={AlertTriangle} className="w-5 h-5"  /> {t('register.warnTitle')}
                 </div>
                 <p className="text-sm leading-relaxed text-foreground">{t('register.warnBody')}</p>
               </div>
@@ -321,7 +322,7 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
                 <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2">{t('register.includedTitle')}</p>
                 <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
                   {[t('register.featureUnlimitedStaff'), t('register.featureUnlimitedObjects'), t('register.featureAI'), t('register.featureRealtime'), t('register.featureSmeta'), t('register.featureBot')].map(f => (
-                    <div key={f} className="flex items-center gap-1.5 text-xs text-foreground/80"><CheckCircle className="w-3.5 h-3.5 flex-shrink-0 text-green-500"/>{f}</div>
+                    <div key={f} className="flex items-center gap-1.5 text-xs text-foreground/80"><MorphIcon icon={CheckCircle} className="w-3.5 h-3.5 flex-shrink-0 text-green-500" />{f}</div>
                   ))}
                 </div>
               </div>
@@ -350,7 +351,7 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
                       )}
                       {selected && (
                         <span className={`absolute -top-2.5 -right-2.5 w-7 h-7 rounded-full flex items-center justify-center shadow-md ${plan.featured ? "bg-white text-primary" : "bg-primary text-white"}`}>
-                          <Check className="w-4 h-4"/>
+                          <MorphIcon icon={Check} className="w-4 h-4" />
                         </span>
                       )}
                       <div className="flex items-center justify-between gap-3">
@@ -447,7 +448,7 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
               </div>
               <a href={reg.deepLink} target="_blank" rel="noopener noreferrer"
                 className="w-full inline-flex items-center justify-center gap-2 bg-gradient-to-r from-primary to-primary/90 text-white text-base font-semibold py-4 rounded-xl shadow-lg shadow-primary/25 min-h-[54px] active:scale-[0.98] transition-transform">
-                <Send className="w-5 h-5" /> {t('register.goToBot')}
+                <MorphIcon icon={Send} className="w-5 h-5"  /> {t('register.goToBot')}
               </a>
               {/* Bosib to'liq /start <token> nusxalanadi (kesilmaydi) */}
               <button type="button" onClick={() => {
@@ -463,7 +464,7 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
                 <code className="text-xs break-all font-mono text-primary block leading-relaxed">/start {reg.token}</code>
               </button>
               <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="w-4 h-4 animate-spin" />
+                <MorphIcon icon={Loader2} className="w-4 h-4 animate-spin"  />
                 {botStatus === "PHONE_CONFIRMED" ? t('register.waitingConfirmed') : t('register.waitingBot')}
               </div>
               {/* Timer 2:00 → 0:00; "Qayta yuborish" FAQAT muddat tugagach chiqadi */}
@@ -527,13 +528,13 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
               <div><h2 className="text-xl font-bold mb-1">{t('register.brandTitle')}</h2></div>
               <div className="flex flex-col items-center gap-3">
                 <div className="w-28 h-28 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center overflow-hidden">
-                  {logoUploading ? <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                  {logoUploading ? <MorphIcon icon={Loader2} className="w-6 h-6 animate-spin text-primary"  />
                     : logoUrl ? <img src={logoUrl} alt="logo" className="w-full h-full object-cover" />
                     : <span className="text-3xl font-bold text-primary">{(companyName || "F").slice(0, 1).toUpperCase()}</span>}
                 </div>
                 <input ref={logoRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={pickLogo} />
                 <button onClick={() => logoRef.current?.click()} className="text-sm font-semibold text-primary flex items-center gap-1.5">
-                  <Camera className="w-4 h-4" /> {logoUrl ? t('register.changeLogo') : t('register.uploadLogo')}
+                  <MorphIcon icon={Camera} className="w-4 h-4"  /> {logoUrl ? t('register.changeLogo') : t('register.uploadLogo')}
                 </button>
                 <p className="text-[11px] text-muted-foreground">{t('register.logoHint')}</p>
               </div>
@@ -573,7 +574,7 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
             <div className="space-y-5 animate-slide-in-right flex-1 flex flex-col justify-center">
               <div className="flex flex-col items-center gap-3 text-center">
                 <div className="w-16 h-16 rounded-full bg-green-500/15 flex items-center justify-center">
-                  <CheckCircle className="w-8 h-8 text-green-500"/>
+                  <MorphIcon icon={CheckCircle} className="w-8 h-8 text-green-500" />
                 </div>
                 <div>
                   <h2 className="text-xl font-bold mb-1">{t('register.doneTitle')}</h2>
@@ -617,7 +618,7 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
                     });
                   }}
                   className={`absolute top-3 right-3 flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-xl transition-all ${doneCopied ? 'bg-green-500 text-white' : 'bg-white/10 text-white hover:bg-white/20'}`}>
-                  {doneCopied ? <><Check className="w-3 h-3"/>{t('register.copied')}</> : <><Copy className="w-3 h-3"/>{t('register.copyAction2')}</>}
+                  {doneCopied ? <><MorphIcon icon={Check} className="w-3 h-3" />{t('register.copied')}</> : <><MorphIcon icon={Copy} className="w-3 h-3" />{t('register.copyAction2')}</>}
                 </button>
               </div>
 
@@ -627,7 +628,7 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
                 <a href="https://t.me/Sadriddinov_Jahongir" target="_blank" rel="noopener noreferrer"
                   className="flex items-center gap-2.5 bg-primary/10 border border-primary/25 rounded-xl px-4 py-3">
                   <div className="w-9 h-9 rounded-full bg-primary/15 flex items-center justify-center flex-shrink-0">
-                    <MessageCircle className="w-4 h-4 text-primary"/>
+                    <MorphIcon icon={MessageCircle} className="w-4 h-4 text-primary" />
                   </div>
                   <div>
                     <p className="text-sm font-bold text-primary">@Sadriddinov_Jahongir</p>
@@ -667,7 +668,7 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
           {step === "phone" && (
             <button disabled={loading} onClick={submitPhone}
               className="w-full bg-primary text-white text-sm font-semibold py-3.5 rounded-xl min-h-[48px] disabled:opacity-60 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform">
-              {loading && <Loader2 className="w-4 h-4 animate-spin" />} {t('register.continue')}
+              {loading && <MorphIcon icon={Loader2} className="w-4 h-4 animate-spin"  />} {t('register.continue')}
             </button>
           )}
           {step === "owner" && (
@@ -691,7 +692,7 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
           {step === "summary" && (
             <button disabled={loading} onClick={complete}
               className="w-full bg-accent text-white text-sm font-semibold py-3.5 rounded-xl min-h-[48px] disabled:opacity-60 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform">
-              {loading && <Loader2 className="w-4 h-4 animate-spin" />} {t('register.openCompanyBtn')}
+              {loading && <MorphIcon icon={Loader2} className="w-4 h-4 animate-spin"  />} {t('register.openCompanyBtn')}
             </button>
           )}
           {step === "done" && (

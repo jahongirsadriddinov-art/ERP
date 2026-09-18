@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import L from "leaflet";
-import { X, Calendar, Clock, ArrowUpRight, ArrowDownLeft, Wallet, Receipt, MapPin, Loader2 } from "lucide-react";
+import { X, Calendar, Clock, ArrowUpRight, ArrowDownLeft, Wallet, Receipt, MapPin, Loader2 } from "lucide";
+import { MorphIcon } from "morphicons/react";
 import { useTranslation } from "react-i18next";
 import { AppUser, Avatar, Transfer, Expense, fmt, fmtWorkDuration, roleLabel, expLabel } from "./App";
 import { API_BASE } from "./api";
@@ -100,7 +101,7 @@ export default function WorkerProfileModal({ worker, transfers, expenses, onClos
             <p className="text-sm font-bold truncate min-w-0">{worker.name}</p>
             <p className="text-[11px] text-muted-foreground">{roleLabel(t, worker.role)}</p>
           </div>
-          <button onClick={onClose} aria-label={t('map.close')} className="p-2 rounded-full hover:bg-muted flex-shrink-0"><X className="w-4 h-4" /></button>
+          <button onClick={onClose} aria-label={t('map.close')} className="p-2 rounded-full hover:bg-muted flex-shrink-0"><MorphIcon icon={X} className="w-4 h-4"  /></button>
         </div>
 
         <div className="flex-1 overflow-y-auto scrollbar-hide touch-pan-y p-4 space-y-4">
@@ -115,18 +116,18 @@ export default function WorkerProfileModal({ worker, transfers, expenses, onClos
               <p className="text-lg font-bold font-mono mt-0.5">{Math.round(totalHours * 10) / 10}</p>
             </div>
             <div className="surface rounded-2xl p-3">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wide flex items-center gap-1"><Wallet className="w-3 h-3" />{t('workerProfile.salaryReceived')}</p>
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wide flex items-center gap-1"><MorphIcon icon={Wallet} className="w-3 h-3"  />{t('workerProfile.salaryReceived')}</p>
               <p className="text-sm font-bold font-mono mt-0.5 text-green-700 dark:text-green-400">{fmt(salaryTotal)}</p>
             </div>
             <div className="surface rounded-2xl p-3">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wide flex items-center gap-1"><Receipt className="w-3 h-3" />{t('workerProfile.expensesCreated')}</p>
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wide flex items-center gap-1"><MorphIcon icon={Receipt} className="w-3 h-3"  />{t('workerProfile.expensesCreated')}</p>
               <p className="text-sm font-bold font-mono mt-0.5">{fmt(ownExpensesTotal)}</p>
             </div>
           </div>
 
           {/* Materiallar */}
           <div className="surface rounded-2xl p-3 space-y-2">
-            <p className="text-xs font-bold flex items-center gap-1.5"><ArrowUpRight className="w-3.5 h-3.5 text-primary" />{t('workerProfile.materialsSent', { count: sent.length })}</p>
+            <p className="text-xs font-bold flex items-center gap-1.5"><MorphIcon icon={ArrowUpRight} className="w-3.5 h-3.5 text-primary"  />{t('workerProfile.materialsSent', { count: sent.length })}</p>
             {sent.length === 0 ? <p className="text-[11px] text-muted-foreground">{t('workerProfile.none')}</p> : (
               <div className="space-y-1 max-h-24 overflow-y-auto scrollbar-hide touch-pan-y">
                 {sent.slice(0, 20).map(tr => (
@@ -137,7 +138,7 @@ export default function WorkerProfileModal({ worker, transfers, expenses, onClos
                 ))}
               </div>
             )}
-            <p className="text-xs font-bold flex items-center gap-1.5 pt-1 border-t border-border/50"><ArrowDownLeft className="w-3.5 h-3.5 text-accent" />{t('workerProfile.materialsReceived', { count: received.length })}</p>
+            <p className="text-xs font-bold flex items-center gap-1.5 pt-1 border-t border-border/50"><MorphIcon icon={ArrowDownLeft} className="w-3.5 h-3.5 text-accent"  />{t('workerProfile.materialsReceived', { count: received.length })}</p>
             {received.length === 0 ? <p className="text-[11px] text-muted-foreground">{t('workerProfile.none')}</p> : (
               <div className="space-y-1 max-h-24 overflow-y-auto scrollbar-hide touch-pan-y">
                 {received.slice(0, 20).map(tr => (
@@ -167,9 +168,9 @@ export default function WorkerProfileModal({ worker, transfers, expenses, onClos
 
           {/* Davomat tarixi */}
           <div className="surface rounded-2xl p-3 space-y-1.5">
-            <p className="text-xs font-bold flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" />{t('workerProfile.attendanceHistory')}</p>
+            <p className="text-xs font-bold flex items-center gap-1.5"><MorphIcon icon={Clock} className="w-3.5 h-3.5"  />{t('workerProfile.attendanceHistory')}</p>
             {attLoading ? (
-              <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground py-2"><Loader2 className="w-3 h-3 animate-spin" />{t('gps.loadingAttendance')}</div>
+              <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground py-2"><MorphIcon icon={Loader2} className="w-3 h-3 animate-spin"  />{t('gps.loadingAttendance')}</div>
             ) : attendance.length === 0 ? (
               <p className="text-[11px] text-muted-foreground">{t('workerProfile.none')}</p>
             ) : (
@@ -188,9 +189,9 @@ export default function WorkerProfileModal({ worker, transfers, expenses, onClos
           {/* Kun bo'yicha GPS izi */}
           <div className="surface rounded-2xl p-3 space-y-2">
             <div className="flex items-center justify-between gap-2">
-              <p className="text-xs font-bold flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" />{t('workerProfile.dailyTrail')}</p>
+              <p className="text-xs font-bold flex items-center gap-1.5"><MorphIcon icon={MapPin} className="w-3.5 h-3.5"  />{t('workerProfile.dailyTrail')}</p>
               <div className="relative flex items-center gap-1.5">
-                <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
+                <MorphIcon icon={Calendar} className="w-3.5 h-3.5 text-muted-foreground"  />
                 <input type="date" value={selectedDate} max={new Date().toISOString().slice(0, 10)}
                   onChange={e => setSelectedDate(e.target.value)}
                   className="text-[11px] bg-input-background border border-border rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary" />
@@ -200,7 +201,7 @@ export default function WorkerProfileModal({ worker, transfers, expenses, onClos
               <div ref={mapContainerRef} className="w-full h-full" />
               {trailLoading && (
                 <div className="absolute inset-0 flex items-center justify-center bg-background/70">
-                  <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+                  <MorphIcon icon={Loader2} className="w-5 h-5 animate-spin text-muted-foreground"  />
                 </div>
               )}
               {!trailLoading && trail.length === 0 && (

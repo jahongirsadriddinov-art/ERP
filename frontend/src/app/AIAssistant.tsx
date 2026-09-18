@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
-import { X, Check, Send, Loader2, UserPlus, Trash2, Edit, Zap } from "lucide-react";
+import { X, Check, Send, Loader2, UserPlus, Trash2, Edit, Zap } from "lucide";
+import { MorphIcon } from "morphicons/react";
 import { useTranslation } from "react-i18next";
 import { API_BASE } from "./api";
 import type { AppUser } from "./App";
@@ -19,10 +20,10 @@ interface AiAction {
 const DIRECT_ACTIONS = ['add_user', 'delete_user', 'update_user'];
 
 function actionIcon(type: string) {
-  if (type === 'add_user') return <UserPlus className="w-4 h-4 text-green-500"/>;
-  if (type === 'delete_user') return <Trash2 className="w-4 h-4 text-red-500"/>;
-  if (type === 'update_user') return <Edit className="w-4 h-4 text-blue-500"/>;
-  return <Zap className="w-4 h-4 text-amber-500"/>;
+  if (type === 'add_user') return <MorphIcon icon={UserPlus} className="w-4 h-4 text-green-500" />;
+  if (type === 'delete_user') return <MorphIcon icon={Trash2} className="w-4 h-4 text-red-500" />;
+  if (type === 'update_user') return <MorphIcon icon={Edit} className="w-4 h-4 text-blue-500" />;
+  return <MorphIcon icon={Zap} className="w-4 h-4 text-amber-500" />;
 }
 
 export default function AIAssistant({ currentUser, users, token, open, onClose, onUserAdded, onUserDeleted, onUserUpdated }:
@@ -145,7 +146,7 @@ export default function AIAssistant({ currentUser, users, token, open, onClose, 
           </div>
           <button onClick={onClose} aria-label={t('ai.close')}
             className="w-8 h-8 rounded-xl flex items-center justify-center hover:bg-muted/60 text-muted-foreground transition-colors">
-            <X className="w-4 h-4"/>
+            <MorphIcon icon={X} className="w-4 h-4" />
           </button>
         </div>
 
@@ -216,11 +217,11 @@ export default function AIAssistant({ currentUser, users, token, open, onClose, 
               <div className="flex gap-2 pt-1">
                 <button onClick={confirm}
                   className="flex-1 bg-green-600 text-white text-[13px] font-bold py-2.5 rounded-2xl flex items-center justify-center gap-1.5 active:scale-95 transition-transform shadow-sm">
-                  <Check className="w-3.5 h-3.5"/> {t('ai.confirm')}
+                  <MorphIcon icon={Check} className="w-3.5 h-3.5" /> {t('ai.confirm')}
                 </button>
                 <button onClick={cancel}
                   className="flex-1 border-2 border-red-400/50 text-red-500 text-[13px] font-bold py-2.5 rounded-2xl flex items-center justify-center gap-1.5 active:scale-95 transition-transform">
-                  <X className="w-3.5 h-3.5"/> {t('ai.cancel')}
+                  <MorphIcon icon={X} className="w-3.5 h-3.5" /> {t('ai.cancel')}
                 </button>
               </div>
             </div>
@@ -242,7 +243,7 @@ export default function AIAssistant({ currentUser, users, token, open, onClose, 
           <button onClick={send} disabled={loading || !input.trim() || !!pending} aria-label={t('ai.sendAriaLabel')}
             className="w-10 h-10 rounded-2xl flex items-center justify-center disabled:opacity-35 transition-all active:scale-92 flex-shrink-0 shadow-md"
             style={{ background: input.trim() ? 'linear-gradient(135deg, var(--primary), color-mix(in srgb, var(--primary) 80%, var(--accent)))' : 'var(--muted)' }}>
-            {loading ? <Loader2 className="w-4 h-4 text-white animate-spin"/> : <Send className="w-4 h-4 text-white"/>}
+            {loading ? <MorphIcon icon={Loader2} className="w-4 h-4 text-white animate-spin" /> : <MorphIcon icon={Send} className="w-4 h-4 text-white" />}
           </button>
         </div>
       </div>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { MapPin, Users2, Clock, ChevronRight } from "lucide-react";
+import { MapPin, Users2, Clock, ChevronRight } from "lucide";
+import { MorphIcon } from "morphicons/react";
 import { useTranslation } from "react-i18next";
 import { AppUser, Avatar, Transfer, Expense, fmtWorkDuration, roleLabel } from "./App";
 import { API_BASE } from "./api";
@@ -91,7 +92,7 @@ export default function GpsTrackingPage({ users, gpsLocations, refreshing, onRef
           </div>
           <button onClick={refreshAll} disabled={refreshing || attLoading}
             className="btn btn-outline text-xs px-3 py-2 rounded-xl flex items-center gap-1.5 flex-shrink-0">
-            <MapPin className={`w-3.5 h-3.5 ${refreshing || attLoading ? 'animate-pulse' : ''}`}/>
+            <MorphIcon icon={MapPin} className={`w-3.5 h-3.5 ${refreshing || attLoading ? 'animate-pulse' : ''}`} />
             {refreshing || attLoading ? t('gps.refreshing') : t('gps.refreshBtn')}
           </button>
         </div>
@@ -101,11 +102,11 @@ export default function GpsTrackingPage({ users, gpsLocations, refreshing, onRef
         <div className="flex gap-1.5 surface rounded-full p-1">
           <button onClick={() => setTab('map')}
             className={`flex-1 flex items-center justify-center gap-1.5 text-xs font-semibold py-2 rounded-full liquid-transition ${tab === 'map' ? 'bg-primary text-white' : 'text-muted-foreground hover:bg-muted/50'}`}>
-            <MapPin className="w-3.5 h-3.5"/>{t('gps.tabMap')}
+            <MorphIcon icon={MapPin} className="w-3.5 h-3.5" />{t('gps.tabMap')}
           </button>
           <button onClick={() => setTab('list')}
             className={`flex-1 flex items-center justify-center gap-1.5 text-xs font-semibold py-2 rounded-full liquid-transition ${tab === 'list' ? 'bg-primary text-white' : 'text-muted-foreground hover:bg-muted/50'}`}>
-            <Users2 className="w-3.5 h-3.5"/>{t('gps.tabList')}
+            <MorphIcon icon={Users2} className="w-3.5 h-3.5" />{t('gps.tabList')}
           </button>
         </div>
 
@@ -129,7 +130,7 @@ export default function GpsTrackingPage({ users, gpsLocations, refreshing, onRef
 
         {workers.length === 0 && (
           <div className="surface rounded-2xl p-8 text-center">
-            <Users2 className="w-10 h-10 text-muted-foreground/30 mx-auto mb-2"/>
+            <MorphIcon icon={Users2} className="w-10 h-10 text-muted-foreground/30 mx-auto mb-2" />
             <p className="text-sm text-muted-foreground">{t('gps.noWorkers')}</p>
           </div>
         )}
@@ -158,7 +159,7 @@ export default function GpsTrackingPage({ users, gpsLocations, refreshing, onRef
                   <p className="text-[11px] text-muted-foreground">{roleLabel(t, u.role)}</p>
                   {loc ? (
                     <div className="flex items-center gap-1.5 mt-1">
-                      <MapPin className="w-3 h-3 text-muted-foreground/60 flex-shrink-0"/>
+                      <MorphIcon icon={MapPin} className="w-3 h-3 text-muted-foreground/60 flex-shrink-0" />
                       <span className="text-[10px] text-muted-foreground">{loc.lat.toFixed(5)}, {loc.lng.toFixed(5)}</span>
                       {/* Aniqlik (±metr) — avval bazada saqlanardi, lekin bu ro'yxatda
                           hech qachon KO'RSATILMASDI (faqat xaritadagi doira/tooltipda
@@ -175,7 +176,7 @@ export default function GpsTrackingPage({ users, gpsLocations, refreshing, onRef
                     <p className="text-[10px] text-muted-foreground mt-1">{t('gps.noGpsData')}</p>
                   )}
                 </div>
-                <ChevronRight className="w-4 h-4 text-muted-foreground/40 flex-shrink-0" aria-hidden="true"/>
+                <MorphIcon icon={ChevronRight} className="w-4 h-4 text-muted-foreground/40 flex-shrink-0" aria-hidden="true" />
                 <div className="flex-shrink-0 text-right">
                   {loc ? (
                     <div className="space-y-1">
@@ -192,7 +193,7 @@ export default function GpsTrackingPage({ users, gpsLocations, refreshing, onRef
               </div>
               {/* Yo'qlama — bugungi kirish/chiqish/ishlagan vaqt */}
               <div className="flex items-center gap-2 pt-2 border-t border-border/60">
-                <Clock className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0"/>
+                <MorphIcon icon={Clock} className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
                 {attLoading ? (
                   <span className="text-[11px] text-muted-foreground">{t('gps.loadingAttendance')}</span>
                 ) : !att || att.status === 'NOT_STARTED' ? (

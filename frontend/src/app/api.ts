@@ -46,6 +46,17 @@ function installAuthFetch() {
 }
 installAuthFetch();
 
+// ─── Backend keep-alive ping (Render.com free tier 15-min spindown'ga qarshi) ─
+// Har 14 daqiqada /health ga so'rov yuboriladi — server uyquga ketmaydi.
+// Faqat production'da ishlaydi (localhost'da shart emas).
+(function startKeepAlivePing() {
+  if (typeof window === 'undefined') return;
+  if (API_BASE.includes('localhost') || API_BASE.includes('127.0.0.1')) return;
+  const ping = () => fetch(`${API_BASE}/health`, { method: 'GET' }).catch(() => {});
+  ping(); // birinchi marta darhol
+  setInterval(ping, 14 * 60 * 1000); // keyin har 14 daqiqada
+})();
+
 // ─── Chat media yuklash (blob emas — serverga, hamma ko'radi) ────────────────
 export async function uploadChatMedia(
   file: File | Blob,

@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { X, Navigation } from "lucide-react";
+import { X, Navigation } from "lucide";
+import { MorphIcon } from "morphicons/react";
 import { useTranslation } from "react-i18next";
 import { AppUser } from "./App";
 
@@ -261,10 +262,10 @@ export function NavigateChoiceModal({ target, onClose }: { target: { lat: number
       <div className="w-full max-w-sm surface rounded-3xl p-5" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <div>
-            <p className="text-sm font-bold flex items-center gap-1.5"><Navigation className="w-4 h-4 text-primary" /> {t('map.navigateTitle')}</p>
+            <p className="text-sm font-bold flex items-center gap-1.5"><MorphIcon icon={Navigation} className="w-4 h-4 text-primary"  /> {t('map.navigateTitle')}</p>
             <p className="text-xs text-muted-foreground mt-0.5">{t('map.navigateSubtitle', { name })}</p>
           </div>
-          <button onClick={onClose} aria-label={t('map.close')} className="p-1.5 rounded-lg hover:bg-muted"><X className="w-4 h-4" /></button>
+          <button onClick={onClose} aria-label={t('map.close')} className="p-1.5 rounded-lg hover:bg-muted"><MorphIcon icon={X} className="w-4 h-4"  /></button>
         </div>
         <div className="space-y-2">
           {options.map(o => (

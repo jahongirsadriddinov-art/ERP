@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { Bell, X, Check, CheckCheck, MessageCircle, Package, Wallet, Clock, Info, QrCode, MapPin, Trash2 } from "lucide-react";
+import { Bell, X, Check, CheckCheck, MessageCircle, Package, Wallet, Clock, Info, QrCode, MapPin, Trash2 } from "lucide";
+import { MorphIcon } from "morphicons/react";
 import { API_BASE } from "./api";
 import { motion, AnimatePresence } from "motion/react";
+import { playSound } from "./sound";
 
 interface Notif {
   _id: string;
@@ -66,6 +68,10 @@ export default function NotificationCenter({ token, onOpenPage }: Props) {
     finally { setLoading(false); }
   };
 
+  // Birinchi yuklanishda (login/refresh) mavjud eski bildirishnomalar sonini
+  // ovoz bilan "e'lon qilmaslik" uchun — faqat KEYINGI so'rovlarda son
+  // OSHGANDA (haqiqatan yangi bildirishnoma kelganda) tovush chalinadi.
+  const prevUnreadRef = useRef<number | null>(null);
   useEffect(() => {
     if (!token) return;
     const fetchCount = async () => {
@@ -75,7 +81,10 @@ export default function NotificationCenter({ token, onOpenPage }: Props) {
         });
         if (res.ok) {
           const data = await res.json();
-          setUnreadCount(data.count || 0);
+          const count = data.count || 0;
+          if (prevUnreadRef.current !== null && count > prevUnreadRef.current) playSound("notification");
+          prevUnreadRef.current = count;
+          setUnreadCount(count);
         }
       } catch {}
     };
@@ -134,7 +143,7 @@ export default function NotificationCenter({ token, onOpenPage }: Props) {
     <div className="relative" ref={ref}>
       <button onClick={() => setOpen(o => !o)} title={t("notifications.title")}
         className="btn btn-ghost w-9 h-9 p-0 rounded-full relative">
-        <Bell className="w-[18px] h-[18px]" />
+        <MorphIcon icon={Bell} className="w-[18px] h-[18px]"  />
         {unreadCount > 0 && (
           <span className="badge-pulse absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 bg-accent text-accent-foreground rounded-full text-[9px] flex items-center justify-center font-bold shadow-sm">
             {unreadCount > 99 ? "99+" : unreadCount}
@@ -166,11 +175,11 @@ export default function NotificationCenter({ token, onOpenPage }: Props) {
                   {unreadCount > 0 && (
                     <button onClick={markAllRead} title={t("notifications.markAllRead")}
                       className="p-1.5 rounded-lg hover:bg-white/10 text-white/60 hover:text-white transition-colors">
-                      <CheckCheck className="w-3.5 h-3.5" />
+                      <MorphIcon icon={CheckCheck} className="w-3.5 h-3.5"  />
                     </button>
                   )}
                   <button onClick={() => setOpen(false)} className="p-1.5 rounded-lg hover:bg-white/10 text-white/60 hover:text-white">
-                    <X className="w-3.5 h-3.5" />
+                    <MorphIcon icon={X} className="w-3.5 h-3.5"  />
                   </button>
                 </div>
               </div>
@@ -183,7 +192,7 @@ export default function NotificationCenter({ token, onOpenPage }: Props) {
                 )}
                 {!loading && notifications.length === 0 && (
                   <div className="text-center py-10">
-                    <Bell className="w-8 h-8 text-white/20 mx-auto mb-2" />
+                    <MorphIcon icon={Bell} className="w-8 h-8 text-white/20 mx-auto mb-2"  />
                     <p className="text-xs text-white/40">{t("notifications.empty")}</p>
                   </div>
                 )}
@@ -193,7 +202,7 @@ export default function NotificationCenter({ token, onOpenPage }: Props) {
                     <div key={n._id}
                       className={`group flex items-start gap-3 px-4 py-3 hover:bg-white/5 transition-colors border-b border-white/5 last:border-0 ${!n.read ? "bg-primary/5" : ""}`}>
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${!n.read ? "bg-primary/25 text-primary" : "bg-white/10 text-white/40"}`}>
-                        <Icon className="w-3.5 h-3.5" />
+                        <MorphIcon icon={Icon} className="w-3.5 h-3.5"  />
                       </div>
                       <div className="flex-1 min-w-0 cursor-pointer" onClick={() => {
                         if (!n.read) markRead(n._id);
@@ -208,12 +217,12 @@ export default function NotificationCenter({ token, onOpenPage }: Props) {
                         {!n.read && (
                           <button onClick={() => markRead(n._id)}
                             className="p-1.5 rounded hover:bg-white/10 text-white/50 hover:text-white">
-                            <Check className="w-3.5 h-3.5" />
+                            <MorphIcon icon={Check} className="w-3.5 h-3.5"  />
                           </button>
                         )}
                         <button onClick={() => deleteNotif(n._id, !n.read)}
                           className="p-1.5 rounded hover:bg-white/10 text-white/50 hover:text-destructive">
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <MorphIcon icon={Trash2} className="w-3.5 h-3.5"  />
                         </button>
                       </div>
                     </div>

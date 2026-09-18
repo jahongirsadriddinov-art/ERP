@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { X, Download, QrCode } from "lucide-react";
+import { X, Download, QrCode } from "lucide";
+import { MorphIcon } from "morphicons/react";
 import { useTranslation } from "react-i18next";
 
 interface Props {
@@ -49,11 +50,11 @@ export default function QRGenerator({ type, id, name, onClose }: Props) {
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-border">
           <div className="flex items-center gap-2">
-            <QrCode className="w-4 h-4 text-primary" />
+            <MorphIcon icon={QrCode} className="w-4 h-4 text-primary"  />
             <span className="font-semibold text-sm text-foreground">{label} {t('qrGenerator.codeSuffix')}</span>
           </div>
           <button onClick={onClose} className="p-1 rounded hover:bg-muted">
-            <X className="w-4 h-4 text-muted-foreground" />
+            <MorphIcon icon={X} className="w-4 h-4 text-muted-foreground"  />
           </button>
         </div>
 
@@ -73,7 +74,7 @@ export default function QRGenerator({ type, id, name, onClose }: Props) {
           </div>
           <button onClick={download}
             className="btn btn-primary w-full flex items-center justify-center gap-2">
-            <Download className="w-4 h-4" />
+            <MorphIcon icon={Download} className="w-4 h-4"  />
             {t('qrGenerator.downloadBtn')}
           </button>
         </div>

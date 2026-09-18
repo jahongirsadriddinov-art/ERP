@@ -1,9 +1,11 @@
 import { useState, useRef, useEffect } from "react";
-import { Phone, PhoneOff, Mic, MicOff, Video as VideoIcon, VideoOff, Users2, SwitchCamera, ZoomIn } from "lucide-react";
+import { Phone, PhoneOff, Mic, MicOff, Video as VideoIcon, VideoOff, Users2, SwitchCamera, ZoomIn } from "lucide";
+import { MorphIcon } from "morphicons/react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import { getSocket } from "./socket";
 import { AppUser, ActiveCall } from "./App";
+import { playSound } from "./sound";
 
 // Qo'ng'iroq oynasi (WebRTC) — kamdan-kam ishlatiladi (faqat qo'ng'iroq
 // paytida), shuning uchun alohida faylga chiqarilib React.lazy orqali
@@ -141,7 +143,7 @@ export default function CallOverlay({ currentUser, users, call, onClose }:
         });
         // accept() shu promise'ni kutib turib stream tayyor bo'lgandan keyin createAnswer qiladi
         streamReadyResolve.current?.(stream);
-      } catch (e: any) { toast(t('call.permissionRequired', { message: e?.message || '' })); onClose(); return; }
+      } catch (e: any) { toast.error(t('call.permissionRequired', { message: e?.message || '' })); onClose(); return; }
       if (call.direction === 'out') {
         const targets = call.groupId ? (call.memberIds || []) : (call.peerId ? [call.peerId] : []);
         targets.forEach(t => offerTo(t));
@@ -177,8 +179,8 @@ export default function CallOverlay({ currentUser, users, call, onClose }:
       delete lastBytes.current[peerId]; delete restarted.current[peerId];
       setRemote(prev => { const c = { ...prev }; delete c[peerId]; return c; });
     };
-    const onEnd = (d: any) => { closePeer(d.from); if (Object.keys(pcs.current).length === 0) onClose(); };
-    const onReject = (d: any) => { toast(t('call.declined')); onEnd(d); };
+    const onEnd = (d: any) => { playSound('disconnect'); closePeer(d.from); if (Object.keys(pcs.current).length === 0) onClose(); };
+    const onReject = (d: any) => { toast.message(t('call.declined')); onEnd(d); };
 
     socket?.on('call:answer', onAnswer);
     socket?.on('call:ice', onIce);
@@ -209,8 +211,8 @@ export default function CallOverlay({ currentUser, users, call, onClose }:
     socket?.emit('call:answer', { to: from, from: currentUser.id, sdp: ans });
     if (call.groupId) socket?.emit('call:join', { groupId: call.groupId, from: currentUser.id });
   };
-  const decline = () => { socket?.emit('call:reject', { to: call.peerId, from: currentUser.id }); onClose(); };
-  const hangup = () => { Object.keys(pcs.current).forEach(pid => socket?.emit('call:end', { to: pid, from: currentUser.id })); onClose(); };
+  const decline = () => { playSound('disconnect'); socket?.emit('call:reject', { to: call.peerId, from: currentUser.id }); onClose(); };
+  const hangup = () => { playSound('disconnect'); Object.keys(pcs.current).forEach(pid => socket?.emit('call:end', { to: pid, from: currentUser.id })); onClose(); };
   const toggleMute = () => { const m = !muted; localStream.current?.getAudioTracks().forEach(t => t.enabled = !m); setMuted(m); };
   const toggleCam = () => { const c = !camOff; localStream.current?.getVideoTracks().forEach(t => t.enabled = !c); setCamOff(c); };
 
@@ -269,6 +271,23 @@ export default function CallOverlay({ currentUser, users, call, onClose }:
     }
   };
 
+  // Qo'ng'iroq ovoz holati: ulanmaguncha ("incoming"/"ringing") sokin
+  // "connecting" halqasi aylanadi, ulangach bir marta "connect" chaladi va
+  // halqa to'xtaydi. Tugatish/rad etish/uzilishda "disconnect" chaladi
+  // (pastdagi decline/hangup/onEnd'da).
+  const ringRef = useRef<ReturnType<typeof playSound>>(null);
+  const connectedPlayedRef = useRef(false);
+  useEffect(() => {
+    if (status === 'connected') {
+      ringRef.current?.stop();
+      ringRef.current = null;
+      if (!connectedPlayedRef.current) { connectedPlayedRef.current = true; playSound('connect'); }
+      return;
+    }
+    if (!ringRef.current) ringRef.current = playSound('connecting', { loop: true });
+    return () => { ringRef.current?.stop(); ringRef.current = null; };
+  }, [status]);
+
   const remoteEntries = Object.entries(remote);
 
   return (
@@ -284,7 +303,7 @@ export default function CallOverlay({ currentUser, users, call, onClose }:
         ) : (
           <div className="w-full h-full flex flex-col items-center justify-center gap-4 text-white">
             <div className="w-28 h-28 rounded-full bg-white/10 flex items-center justify-center">
-              {call.groupId ? <Users2 className="w-12 h-12"/> : <span className="text-4xl font-bold">{title.charAt(0)}</span>}
+              {call.groupId ? <MorphIcon icon={Users2} className="w-12 h-12" /> : <span className="text-4xl font-bold">{title.charAt(0)}</span>}
             </div>
             <p className="text-xl font-semibold">{title}</p>
             <p className="text-white/60 text-sm">
@@ -306,7 +325,7 @@ export default function CallOverlay({ currentUser, users, call, onClose }:
         {/* Zoom slider — faqat qurilma/brauzer qo'llab-quvvatlasa ko'rinadi */}
         {call.mode === 'video' && !camOff && zoomCaps && zoom != null && (
           <div className="absolute bottom-4 left-4 right-40 flex items-center gap-2 bg-black/40 backdrop-blur-sm rounded-full px-3 py-2">
-            <ZoomIn className="w-4 h-4 text-white flex-shrink-0"/>
+            <MorphIcon icon={ZoomIn} className="w-4 h-4 text-white flex-shrink-0" />
             <input type="range" min={zoomCaps.min} max={zoomCaps.max} step={zoomCaps.step} value={zoom}
               onChange={e => applyZoom(parseFloat(e.target.value))}
               className="flex-1 accent-white h-1"/>
@@ -318,20 +337,20 @@ export default function CallOverlay({ currentUser, users, call, onClose }:
       <div className="flex-shrink-0 pt-4 flex items-center justify-center gap-4" style={{ paddingBottom: "max(2rem, calc(env(safe-area-inset-bottom) + 1rem))" }}>
         {status === 'incoming' ? (
           <>
-            <button onClick={decline} aria-label={t('call.decline')} className="w-16 h-16 rounded-full bg-red-500 text-white flex items-center justify-center active:scale-95 shadow-lg"><PhoneOff className="w-6 h-6"/></button>
-            <button onClick={accept} aria-label={t('call.accept')} className="w-16 h-16 rounded-full bg-green-500 text-white flex items-center justify-center active:scale-95 shadow-lg animate-pulse"><Phone className="w-6 h-6"/></button>
+            <button onClick={decline} aria-label={t('call.decline')} className="w-16 h-16 rounded-full bg-red-500 text-white flex items-center justify-center active:scale-95 shadow-lg"><MorphIcon icon={PhoneOff} className="w-6 h-6" /></button>
+            <button onClick={accept} aria-label={t('call.accept')} className="w-16 h-16 rounded-full bg-green-500 text-white flex items-center justify-center active:scale-95 shadow-lg animate-pulse"><MorphIcon icon={Phone} className="w-6 h-6" /></button>
           </>
         ) : (
           <>
-            <button onClick={toggleMute} aria-label={muted ? t('call.unmute') : t('call.mute')} className={`w-14 h-14 rounded-full flex items-center justify-center text-white active:scale-95 ${muted?'bg-white/30':'bg-white/10'}`}>{muted?<MicOff className="w-5 h-5"/>:<Mic className="w-5 h-5"/>}</button>
-            {call.mode === 'video' && <button onClick={toggleCam} aria-label={camOff ? t('call.cameraOn') : t('call.cameraOff')} className={`w-14 h-14 rounded-full flex items-center justify-center text-white active:scale-95 ${camOff?'bg-white/30':'bg-white/10'}`}>{camOff?<VideoOff className="w-5 h-5"/>:<VideoIcon className="w-5 h-5"/>}</button>}
+            <button onClick={toggleMute} aria-label={muted ? t('call.unmute') : t('call.mute')} className={`w-14 h-14 rounded-full flex items-center justify-center text-white active:scale-95 ${muted?'bg-white/30':'bg-white/10'}`}>{muted?<MorphIcon icon={MicOff} className="w-5 h-5" />:<MorphIcon icon={Mic} className="w-5 h-5" />}</button>
+            {call.mode === 'video' && <button onClick={toggleCam} aria-label={camOff ? t('call.cameraOn') : t('call.cameraOff')} className={`w-14 h-14 rounded-full flex items-center justify-center text-white active:scale-95 ${camOff?'bg-white/30':'bg-white/10'}`}>{camOff?<MorphIcon icon={VideoOff} className="w-5 h-5" />:<MorphIcon icon={VideoIcon} className="w-5 h-5" />}</button>}
             {call.mode === 'video' && !camOff && (
               <button onClick={flipCamera} disabled={flipping} aria-label={t('call.flipCamera')}
                 className="w-14 h-14 rounded-full flex items-center justify-center text-white bg-white/10 active:scale-95 disabled:opacity-50">
-                <SwitchCamera className={`w-5 h-5 ${flipping ? 'animate-pulse' : ''}`}/>
+                <MorphIcon icon={SwitchCamera} className={`w-5 h-5 ${flipping ? 'animate-pulse' : ''}`} />
               </button>
             )}
-            <button onClick={hangup} aria-label={t('call.hangup')} className="w-16 h-16 rounded-full bg-red-500 text-white flex items-center justify-center active:scale-95 shadow-lg"><PhoneOff className="w-6 h-6"/></button>
+            <button onClick={hangup} aria-label={t('call.hangup')} className="w-16 h-16 rounded-full bg-red-500 text-white flex items-center justify-center active:scale-95 shadow-lg"><MorphIcon icon={PhoneOff} className="w-6 h-6" /></button>
           </>
         )}
       </div>

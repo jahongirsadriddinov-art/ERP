@@ -4,9 +4,11 @@ import {
   CheckCircle, Clock, AlertTriangle, ChevronRight, MapPin,
   Phone, User, X, Check, Download, BarChart2,
   DollarSign, MessageCircle, ChevronDown, ChevronUp, Send,
-  TrendingDown, Wallet, LogOut, Camera, Home, UserPlus, Edit, Trash, Search, AlertCircle, ChevronLeft, Loader2, Paperclip, Mic, Video as VideoIcon, Image as ImageIcon, FileText, CornerDownLeft, Share2, SquareCheck, Trash2, MoreHorizontal, Upload, Palette, Sun, Moon, Monitor, PhoneOff, MicOff, VideoOff, Users2, Copy, Bell, Pin, PinOff, CheckCheck, Languages, CreditCard, Calendar, QrCode, WifiOff, Euro, RefreshCw, Lock
-} from "lucide-react";
+  TrendingDown, Wallet, LogOut, Camera, Home, UserPlus, Edit, Trash, Search, AlertCircle, ChevronLeft, Loader2, Paperclip, Mic, Video as VideoIcon, Image as ImageIcon, FileText, CornerDownLeft, Share2, SquareCheck, Trash2, MoreHorizontal, Upload, Palette, Sun, Moon, Monitor, PhoneOff, MicOff, VideoOff, Users2, Copy, Bell, Pin, PinOff, CheckCheck, Languages, CreditCard, Calendar, QrCode, WifiOff, Euro, RefreshCw, Lock, Volume2, VolumeX
+} from "lucide";
+import { MorphIcon, type IconNode } from "morphicons/react";
 import { toast, Toaster } from "sonner";
+import { isSoundEnabled, setSoundEnabled, getSoundVolume, setSoundVolume, playSound } from "./sound";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { API_BASE, parseSmetaFile, uploadChatMedia } from "./api";
@@ -442,7 +444,7 @@ function NotificationBell({ messages, transfers, expenses, users, currentUser, o
     <div className="relative" ref={ref}>
       <button onClick={() => setOpen(o => !o)} title={tN('chat.notifTitle')}
         className="btn btn-ghost w-9 h-9 p-0 rounded-full relative">
-        <Bell className="w-[18px] h-[18px]"/>
+        <MorphIcon icon={Bell} className="w-[18px] h-[18px]" />
         {badgeCount > 0 && (
           <span className="badge-pulse absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 bg-accent text-accent-foreground rounded-full text-[9px] flex items-center justify-center font-bold shadow-sm">{badgeCount}</span>
         )}
@@ -477,7 +479,7 @@ function NotificationBell({ messages, transfers, expenses, users, currentUser, o
               return (
                 <button key={u.userId} onClick={() => { onOpenChat(); setOpen(false); }}
                   className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/5 text-left transition-colors">
-                  <div className="w-9 h-9 rounded-full bg-primary/25 text-primary flex items-center justify-center flex-shrink-0"><MessageCircle className="w-4 h-4"/></div>
+                  <div className="w-9 h-9 rounded-full bg-primary/25 text-primary flex items-center justify-center flex-shrink-0"><MorphIcon icon={MessageCircle} className="w-4 h-4" /></div>
                   <div className="flex-1 min-w-0"><p className="text-xs font-semibold text-white truncate">{sender?.name || tN('chat.notifFrom')}</p><p className="text-[11px] text-white/60 truncate">{u.count > 1 ? tN('chat.notifNewMessages', { count: u.count }) : (u.last.type && u.last.type !== "text" ? tN('chat.notifMediaMessage') : (u.last.text || tN('chat.notifNewMessage')))}</p></div>
                   <span className="text-[10px] text-white/40 flex-shrink-0">{timeAgoShort(u.last.timestamp, tN)}</span>
                 </button>
@@ -486,14 +488,14 @@ function NotificationBell({ messages, transfers, expenses, users, currentUser, o
             {pendingTransfers.map(tr => (
               <button key={tr.id} onClick={() => { onOpenDashboard(); setOpen(false); }}
                 className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/5 text-left transition-colors">
-                <div className="w-9 h-9 rounded-full bg-amber-500/25 text-amber-300 flex items-center justify-center flex-shrink-0"><Package className="w-4 h-4"/></div>
+                <div className="w-9 h-9 rounded-full bg-amber-500/25 text-amber-300 flex items-center justify-center flex-shrink-0"><MorphIcon icon={Package} className="w-4 h-4" /></div>
                 <div className="flex-1 min-w-0"><p className="text-xs font-semibold text-white">{tN('chat.notifNewTransfer')}</p><p className="text-[11px] text-white/60 truncate">{tr.fromUserName || tN('chat.notifFrom')}{tN('chat.notifPendingApproval')}</p></div>
               </button>
             ))}
             {pendingExpenses.map((e: any) => (
               <button key={e.id} onClick={() => { onOpenDashboard(); setOpen(false); }}
                 className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/5 text-left transition-colors">
-                <div className="w-9 h-9 rounded-full bg-green-500/25 text-green-300 flex items-center justify-center flex-shrink-0"><Wallet className="w-4 h-4"/></div>
+                <div className="w-9 h-9 rounded-full bg-green-500/25 text-green-300 flex items-center justify-center flex-shrink-0"><MorphIcon icon={Wallet} className="w-4 h-4" /></div>
                 <div className="flex-1 min-w-0"><p className="text-xs font-semibold text-white">{tN('chat.notifExpenseApproval')}</p><p className="text-[11px] text-white/60 truncate">{tN('chat.notifNeedApproval')}</p></div>
               </button>
             ))}
@@ -552,11 +554,11 @@ function AddUserModal({ currentUser, users, projects, onClose, onAdd }:
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-sm animate-slide-up-fade" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-4 py-3.5 border-b border-border" style={{ background: "linear-gradient(to right, rgba(27,58,107,0.06), transparent)" }}>
-          <h3 className="font-bold text-sm flex items-center gap-2"><UserPlus className="w-4 h-4 text-primary"/>{t('addUser.title')}</h3>
-          <button aria-label={t('common.close')} onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted liquid-transition"><X className="w-4 h-4 text-muted-foreground"/></button>
+          <h3 className="font-bold text-sm flex items-center gap-2"><MorphIcon icon={UserPlus} className="w-4 h-4 text-primary" />{t('addUser.title')}</h3>
+          <button aria-label={t('common.close')} onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted liquid-transition"><MorphIcon icon={X} className="w-4 h-4 text-muted-foreground" /></button>
         </div>
         <form onSubmit={handleSubmit} className="p-4 space-y-3">
-          {err && <div className="bg-red-500/10 border border-red-500/25 rounded-xl px-3 py-2.5 text-xs text-red-700 dark:text-red-400 flex items-center gap-2"><AlertCircle className="w-3.5 h-3.5 flex-shrink-0"/>{err}</div>}
+          {err && <div className="bg-red-500/10 border border-red-500/25 rounded-xl px-3 py-2.5 text-xs text-red-700 dark:text-red-400 flex items-center gap-2"><MorphIcon icon={AlertCircle} className="w-3.5 h-3.5 flex-shrink-0" />{err}</div>}
           <div>
             <label className="text-sm md:text-xs font-medium block mb-1">{t('addUser.nameLabel')}</label>
             <input className="w-full text-sm md:text-xs border border-border rounded px-3 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary"
@@ -617,7 +619,7 @@ function AddUserModal({ currentUser, users, projects, onClose, onAdd }:
           <div className="flex gap-2 pt-1">
             <button type="button" onClick={onClose} disabled={submitting} className="flex-1 text-sm md:text-xs border border-border rounded px-3 py-2 hover:bg-muted transition-colors disabled:opacity-50">{t('addUser.cancel')}</button>
             <button type="submit" disabled={submitting} className="flex-1 text-sm md:text-xs bg-primary text-white rounded px-3 py-2 hover:bg-primary/90 transition-colors font-semibold disabled:opacity-60 flex items-center justify-center gap-1.5">
-              {submitting && <Loader2 className="w-3.5 h-3.5 animate-spin"/>}{t('common.add')}
+              {submitting && <MorphIcon icon={Loader2} className="w-3.5 h-3.5 animate-spin" />}{t('common.add')}
             </button>
           </div>
         </form>
@@ -686,8 +688,8 @@ function AddObjectModal({ users, onClose, onAdd }:
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-card rounded-2xl shadow-2xl w-full max-w-sm animate-slide-up-fade" onClick={e=>e.stopPropagation()}>
         <div className="flex items-center justify-between px-4 py-3.5 border-b border-border" style={{ background: "linear-gradient(to right, rgba(217,70,15,0.06), transparent)" }}>
-          <h3 className="font-bold text-sm flex items-center gap-2"><Package className="w-4 h-4 text-accent"/>{t('addObject.title')}</h3>
-          <button aria-label={t('addObject.close')} onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted liquid-transition"><X className="w-4 h-4 text-muted-foreground"/></button>
+          <h3 className="font-bold text-sm flex items-center gap-2"><MorphIcon icon={Package} className="w-4 h-4 text-accent" />{t('addObject.title')}</h3>
+          <button aria-label={t('addObject.close')} onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted liquid-transition"><MorphIcon icon={X} className="w-4 h-4 text-muted-foreground" /></button>
         </div>
         <form onSubmit={handleSubmit} className="p-4 space-y-3">
           <div><label className="text-sm md:text-xs font-medium block mb-1">{t('addObject.nameLabel')}</label><input className="w-full text-sm md:text-xs border border-border rounded px-3 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary" placeholder={t('addObject.namePlaceholder')} value={form.name} onChange={e=>setForm({...form,name:e.target.value})} required/></div>
@@ -705,7 +707,7 @@ function AddObjectModal({ users, onClose, onAdd }:
             <input type="file" accept=".pdf,.xlsx,.xls,.docx,.doc,.csv,.txt" className="w-full text-sm md:text-xs border border-border rounded px-3 py-1.5 bg-input-background file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-sm md:text-xs file:bg-primary file:text-white hover:file:bg-primary/90" onChange={e=>setSmeta(e.target.files?.[0]||null)}/>
             {loading && smeta && (
               <div className="mt-2">
-                <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground"><Loader2 className="w-3 h-3 animate-spin"/>{smetaMsg || t('addObject.smetaLoading')}</div>
+                <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground"><MorphIcon icon={Loader2} className="w-3 h-3 animate-spin" />{smetaMsg || t('addObject.smetaLoading')}</div>
                 {smetaPercent > 0 && <div className="w-full bg-muted rounded-full h-1 mt-1"><div className="bg-accent h-1 rounded-full liquid-transition" style={{width:`${smetaPercent}%`}}/></div>}
               </div>
             )}
@@ -782,8 +784,8 @@ function SendTransferModal({ currentUser, projects, allUsers, onClose, onSend, i
     <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
       <div className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-sm max-h-[88vh] overflow-hidden animate-slide-up-fade flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-4 py-3.5 border-b border-border flex-shrink-0" style={{ background: "linear-gradient(to right, rgba(27,58,107,0.06), transparent)" }}>
-          <h3 className="font-bold text-sm flex items-center gap-2"><Send className="w-4 h-4 text-primary"/>{t('sendTransfer.title')}</h3>
-          <button aria-label={t('sendTransfer.close')} onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted liquid-transition"><X className="w-4 h-4 text-muted-foreground"/></button>
+          <h3 className="font-bold text-sm flex items-center gap-2"><MorphIcon icon={Send} className="w-4 h-4 text-primary" />{t('sendTransfer.title')}</h3>
+          <button aria-label={t('sendTransfer.close')} onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted liquid-transition"><MorphIcon icon={X} className="w-4 h-4 text-muted-foreground" /></button>
         </div>
         <form onSubmit={submit} className="flex flex-col flex-1 min-h-0">
         <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-3">
@@ -808,11 +810,11 @@ function SendTransferModal({ currentUser, projects, allUsers, onClose, onSend, i
                   {selMats.map(sel => (
                     <div key={sel.name} className="surface p-2.5 border-primary/30">
                       <div className="flex items-center gap-2 mb-2">
-                        <CheckCircle className="w-4 h-4 text-primary flex-shrink-0"/>
+                        <MorphIcon icon={CheckCircle} className="w-4 h-4 text-primary flex-shrink-0" />
                         <span className="text-sm font-semibold flex-1 min-w-0 truncate">{sel.name}</span>
                         <span className="chip bg-muted text-muted-foreground">{sel.unit || "—"}</span>
                         <button type="button" onClick={() => setSelMats(prev => prev.filter(s => s.name !== sel.name))}
-                          className="btn btn-ghost w-6 h-6 p-0 rounded-lg text-muted-foreground"><X className="w-3.5 h-3.5"/></button>
+                          className="btn btn-ghost w-6 h-6 p-0 rounded-lg text-muted-foreground"><MorphIcon icon={X} className="w-3.5 h-3.5" /></button>
                       </div>
                       <div className="grid grid-cols-2 gap-2">
                         <div>
@@ -838,7 +840,7 @@ function SendTransferModal({ currentUser, projects, allUsers, onClose, onSend, i
               {canBrowseSmeta && (
                 <>
                   <div className="relative mb-2">
-                    <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"/>
+                    <MorphIcon icon={Search} className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                     <input value={matSearch} onChange={e => setMatSearch(e.target.value)}
                       placeholder={t('sendTransfer.searchPlaceholder')}
                       className="w-full text-sm border border-border rounded-lg pl-9 pr-3 py-2.5 bg-input-background focus:outline-none"/>
@@ -858,7 +860,7 @@ function SendTransferModal({ currentUser, projects, allUsers, onClose, onSend, i
                       return list.map(m => (
                         <button type="button" key={m.id} onClick={() => { toggleMat(m); setMatSearch(""); }}
                           className="w-full flex items-center gap-2.5 px-3 py-2.5 cursor-pointer bg-card hover:bg-muted/40 liquid-transition text-left">
-                          <Plus className="w-4 h-4 text-primary flex-shrink-0"/>
+                          <MorphIcon icon={Plus} className="w-4 h-4 text-primary flex-shrink-0" />
                           <span className="text-sm flex-1 min-w-0 truncate font-medium">{m.name}</span>
                           <span className="text-[10px] text-muted-foreground bg-muted/70 px-1.5 py-0.5 rounded-full flex-shrink-0">{m.unit}</span>
                         </button>
@@ -947,21 +949,21 @@ function SendTransferModal({ currentUser, projects, allUsers, onClose, onSend, i
                           {customMats.length > 1 && (
                             <button type="button" onClick={() => setCustomMats(customMats.filter((_, idx) => idx !== i))}
                               className="absolute top-1/2 right-1 -translate-y-1/2 p-1.5 text-red-500 hover:bg-red-500/100/10 rounded-lg liquid-transition">
-                              <X className="w-4 h-4"/>
+                              <MorphIcon icon={X} className="w-4 h-4" />
                             </button>
                           )}
                         </div>
                       ))}
                       <button type="button" onClick={() => setCustomMats([...customMats, { name: "", unit: "", quantity: "1", price: "" }])}
                         className="text-xs text-primary font-semibold flex items-center gap-1 mt-2 hover:underline">
-                        <Plus className="w-3 h-3"/> {t('sendTransfer.addMore')}
+                        <MorphIcon icon={Plus} className="w-3 h-3" /> {t('sendTransfer.addMore')}
                       </button>
                     </div>
                   )}
                 </div>
               {selMats.length > 0 || customMats.some(m => m.name.trim()) ? (
                 <p className="mt-1.5 text-[10px] text-primary font-semibold flex items-center gap-1">
-                  <CheckCircle className="w-3 h-3"/>{t('sendTransfer.materialsSelected', { count: selMats.length + customMats.filter(m => m.name.trim()).length })}
+                  <MorphIcon icon={CheckCircle} className="w-3 h-3" />{t('sendTransfer.materialsSelected', { count: selMats.length + customMats.filter(m => m.name.trim()).length })}
                 </p>
               ) : null}
             </div>
@@ -1061,13 +1063,13 @@ function AddExpenseModal({ currentUser, projects, allUsers, onClose, onAdd }:
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-sm max-h-[88vh] overflow-y-auto scrollbar-hide animate-slide-up-fade" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-4 py-3.5 border-b border-border" style={{ background: "linear-gradient(to right, rgba(217,70,15,0.06), transparent)" }}>
-          <h3 className="font-bold text-sm flex items-center gap-2"><TrendingDown className="w-4 h-4 text-accent"/>{t('addExpense.title')}</h3>
-          <button aria-label={t('addExpense.close')} onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted liquid-transition"><X className="w-4 h-4 text-muted-foreground"/></button>
+          <h3 className="font-bold text-sm flex items-center gap-2"><MorphIcon icon={TrendingDown} className="w-4 h-4 text-accent" />{t('addExpense.title')}</h3>
+          <button aria-label={t('addExpense.close')} onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted liquid-transition"><MorphIcon icon={X} className="w-4 h-4 text-muted-foreground" /></button>
         </div>
         <form onSubmit={submit} className="p-4 space-y-3">
           {err && (
             <div className="bg-red-500/10 border border-red-500/25 rounded-xl px-3 py-2.5 text-xs text-red-700 dark:text-red-400 flex items-center gap-2">
-              <AlertCircle className="w-3.5 h-3.5 flex-shrink-0"/>{err}
+              <MorphIcon icon={AlertCircle} className="w-3.5 h-3.5 flex-shrink-0" />{err}
             </div>
           )}
 
@@ -1102,7 +1104,7 @@ function AddExpenseModal({ currentUser, projects, allUsers, onClose, onAdd }:
                     {boshqaRows.length > 1 && (
                       <button type="button" onClick={() => setBoshqaRows(rows => rows.filter((_, j) => j !== i))}
                         className="p-1.5 text-muted-foreground hover:text-destructive rounded-lg hover:bg-red-500/10 liquid-transition">
-                        <X className="w-3.5 h-3.5"/>
+                        <MorphIcon icon={X} className="w-3.5 h-3.5" />
                       </button>
                     )}
                   </div>
@@ -1110,7 +1112,7 @@ function AddExpenseModal({ currentUser, projects, allUsers, onClose, onAdd }:
               </div>
               <button type="button" onClick={() => setBoshqaRows(r => [...r, { name: "", price: "" }])}
                 className="mt-2.5 flex items-center gap-1.5 text-sm text-primary hover:bg-primary/5 px-2.5 py-1.5 rounded-lg liquid-transition font-semibold">
-                <Plus className="w-3.5 h-3.5"/>{t('addExpense.addRow')}
+                <MorphIcon icon={Plus} className="w-3.5 h-3.5" />{t('addExpense.addRow')}
               </button>
               {boshqaTotal > 0 && (
                 <div className="mt-2.5 flex items-center justify-between p-3 rounded-xl border border-accent/20" style={{ background: "rgba(217,70,15,0.05)" }}>
@@ -1204,9 +1206,9 @@ function TransferRow({ t, currentUser, allUsers, projects, onConfirm, onReject }
   const canConfirm = isReceiver && t.status === "pending";
 
   const statusBadge = {
-    pending: <span className="text-[9px] bg-amber-500/15 text-amber-800 dark:text-amber-300 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 whitespace-nowrap"><Clock className="w-2.5 h-2.5"/>{tt('dashboard.transferPending')}</span>,
-    confirmed: <span className="text-[9px] bg-green-500/15 text-green-800 dark:text-green-300 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 whitespace-nowrap"><CheckCircle className="w-2.5 h-2.5"/>{tt('dashboard.transferConfirmed')}</span>,
-    rejected: <span className="text-[9px] bg-red-500/15 text-red-700 dark:text-red-300 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 whitespace-nowrap"><X className="w-2.5 h-2.5"/>{tt('dashboard.transferRejected')}</span>,
+    pending: <span className="text-[9px] bg-amber-500/15 text-amber-800 dark:text-amber-300 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 whitespace-nowrap"><MorphIcon icon={Clock} className="w-2.5 h-2.5" />{tt('dashboard.transferPending')}</span>,
+    confirmed: <span className="text-[9px] bg-green-500/15 text-green-800 dark:text-green-300 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 whitespace-nowrap"><MorphIcon icon={CheckCircle} className="w-2.5 h-2.5" />{tt('dashboard.transferConfirmed')}</span>,
+    rejected: <span className="text-[9px] bg-red-500/15 text-red-700 dark:text-red-300 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 whitespace-nowrap"><MorphIcon icon={X} className="w-2.5 h-2.5" />{tt('dashboard.transferRejected')}</span>,
   }[t.status];
 
   return (
@@ -1223,7 +1225,7 @@ function TransferRow({ t, currentUser, allUsers, projects, onConfirm, onReject }
           </p>
           <p className="text-sm md:text-xs text-muted-foreground">{proj?.name} • {t.date || t.sentDate}</p>
           {t.note && <p className="text-sm md:text-xs text-muted-foreground italic">{t.note}</p>}
-          {t.defect && <p className="text-sm md:text-xs text-amber-700 flex items-center gap-1 mt-0.5"><AlertTriangle className="w-2.5 h-2.5"/>{t.defect}</p>}
+          {t.defect && <p className="text-sm md:text-xs text-amber-700 flex items-center gap-1 mt-0.5"><MorphIcon icon={AlertTriangle} className="w-2.5 h-2.5" />{t.defect}</p>}
           {t.status === "confirmed" && isSender && t.confirmedDate && (
             <p className="text-sm md:text-xs text-green-800 dark:text-green-400 font-medium mt-0.5">✓ {tt('dashboard.confirmedByLabel', { name: to?.name, date: t.confirmedDate })}</p>
           )}
@@ -1237,11 +1239,11 @@ function TransferRow({ t, currentUser, allUsers, projects, onConfirm, onReject }
           <div className="flex gap-1.5">
             <button onClick={() => onConfirm(t.id, defect || undefined)}
               className="flex-1 flex items-center justify-center gap-1 text-sm md:text-xs bg-green-600 text-white rounded py-1.5 hover:bg-green-700 font-semibold">
-              <Check className="w-3 h-3"/>{tt('dashboard.acceptBtn')}
+              <MorphIcon icon={Check} className="w-3 h-3" />{tt('dashboard.acceptBtn')}
             </button>
             <button onClick={() => onReject(t.id)}
               className="flex items-center justify-center gap-1 text-sm md:text-xs bg-red-500/15 text-red-700 dark:text-red-300 rounded px-2.5 py-1.5 hover:bg-red-500/100/25 font-semibold">
-              <X className="w-3 h-3"/>{tt('dashboard.rejectBtn')}
+              <MorphIcon icon={X} className="w-3 h-3" />{tt('dashboard.rejectBtn')}
             </button>
           </div>
         </div>
@@ -1267,7 +1269,7 @@ function MyTransfersPanel({ currentUser, transfers, allUsers, projects, onConfir
         className="surface flex items-center justify-between px-4 py-3 flex-shrink-0">
         <h2 className="text-sm font-bold uppercase tracking-wider font-['Roboto_Slab',serif]">{t('dashboard.materials')}</h2>
         <button onClick={onSend} className="btn btn-primary flex items-center gap-1.5 text-xs px-3.5 py-2 rounded-full">
-          <Send className="w-3.5 h-3.5"/>{t('dashboard.send')}
+          <MorphIcon icon={Send} className="w-3.5 h-3.5" />{t('dashboard.send')}
         </button>
       </motion.div>
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28, delay: 0.05 }}
@@ -1283,7 +1285,7 @@ function MyTransfersPanel({ currentUser, transfers, allUsers, projects, onConfir
       </motion.div>
       <div className="flex-1 overflow-y-auto space-y-2 scrollbar-hide">
         {shown.length === 0 ? (
-          <div className="text-center py-10 text-muted-foreground"><Package className="w-8 h-8 mx-auto mb-2 opacity-30"/><p className="text-sm md:text-xs">{t('dashboard.emptyList')}</p></div>
+          <div className="text-center py-10 text-muted-foreground"><MorphIcon icon={Package} className="w-8 h-8 mx-auto mb-2 opacity-30" /><p className="text-sm md:text-xs">{t('dashboard.emptyList')}</p></div>
         ) : shown.map(tr => (
           <TransferRow key={tr.id} t={tr} currentUser={currentUser} allUsers={allUsers} projects={projects} onConfirm={onConfirm} onReject={onReject}/>
         ))}
@@ -1306,8 +1308,8 @@ function EditUserModal({ user, currentUser, onClose, onUpdate }: { user: AppUser
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-card rounded-lg border border-border shadow-xl w-full max-w-sm" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between p-4 border-b border-border">
-          <h3 className="font-semibold text-sm flex items-center gap-2"><Edit className="w-4 h-4 text-primary"/>{t('editUser.title')}</h3>
-          <button aria-label={t('editUser.close')} onClick={onClose} className="p-1 rounded hover:bg-muted"><X className="w-4 h-4 text-muted-foreground"/></button>
+          <h3 className="font-semibold text-sm flex items-center gap-2"><MorphIcon icon={Edit} className="w-4 h-4 text-primary" />{t('editUser.title')}</h3>
+          <button aria-label={t('editUser.close')} onClick={onClose} className="p-1 rounded hover:bg-muted"><MorphIcon icon={X} className="w-4 h-4 text-muted-foreground" /></button>
         </div>
         <form onSubmit={e => { e.preventDefault(); onUpdate({...user, ...form}); onClose(); }} className="p-4 space-y-3">
           <div>
@@ -1434,7 +1436,7 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
         <div className="ml-auto">
           <button onClick={handleBackup} disabled={backupLoading}
             className="flex items-center gap-1.5 text-xs border border-border rounded-lg px-3 py-1.5 hover:bg-muted transition-colors disabled:opacity-60 text-muted-foreground hover:text-foreground">
-            {backupLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin"/> : <Download className="w-3.5 h-3.5"/>}
+            {backupLoading ? <MorphIcon icon={Loader2} className="w-3.5 h-3.5 animate-spin" /> : <MorphIcon icon={Download} className="w-3.5 h-3.5" />}
             {t('dashboard.backup')}
           </button>
         </div>
@@ -1446,7 +1448,7 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
       <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28 }}
         className="surface flex flex-col overflow-hidden">
         <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border flex-shrink-0">
-          <div className="icon-chip w-6 h-6"><Building2 className="w-3.5 h-3.5"/></div>
+          <div className="icon-chip w-6 h-6"><MorphIcon icon={Building2} className="w-3.5 h-3.5" /></div>
           <h2 className="text-sm md:text-xs font-bold uppercase tracking-wider font-['Roboto_Slab',serif]">{t('dashboard.leadership')}</h2>
         </div>
         <div className="flex-1 overflow-y-auto p-3 scrollbar-hide">
@@ -1467,7 +1469,7 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
           <div className="mt-4 pt-3 border-t border-border">
             <div className="flex items-center justify-between mb-2">
               <p className="text-sm md:text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('dashboard.staffShort')}</p>
-              <button onClick={() => setShowAddUser(true)} className="flex items-center gap-1 text-[9px] bg-primary/10 text-primary px-2 py-1 rounded hover:bg-primary/20 font-semibold"><UserPlus className="w-2.5 h-2.5"/>{t('common.add')}</button>
+              <button onClick={() => setShowAddUser(true)} className="flex items-center gap-1 text-[9px] bg-primary/10 text-primary px-2 py-1 rounded hover:bg-primary/20 font-semibold"><MorphIcon icon={UserPlus} className="w-2.5 h-2.5" />{t('common.add')}</button>
             </div>
             {(["direktor","orinbosar","prorab","brigadir","ishchi"] as Role[]).map(r => (
               <div key={r} className="flex items-center justify-between py-1">
@@ -1483,8 +1485,8 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
       <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28, delay: 0.05 }}
         className="surface flex flex-col overflow-hidden">
         <div className="flex items-center justify-between px-4 py-2.5 border-b border-border flex-shrink-0">
-          <div className="flex items-center gap-2"><div className="icon-chip w-6 h-6"><Users className="w-3.5 h-3.5"/></div><h2 className="text-sm md:text-xs font-bold uppercase tracking-wider font-['Roboto_Slab',serif]">{t('dashboard.topStaff')}</h2></div>
-          <button onClick={() => setShowAddUser(true)} className="text-sm md:text-xs bg-primary/10 text-primary px-2 py-1 rounded hover:bg-primary/20 font-semibold flex items-center gap-1"><UserPlus className="w-2.5 h-2.5"/>{t('common.add')}</button>
+          <div className="flex items-center gap-2"><div className="icon-chip w-6 h-6"><MorphIcon icon={Users} className="w-3.5 h-3.5" /></div><h2 className="text-sm md:text-xs font-bold uppercase tracking-wider font-['Roboto_Slab',serif]">{t('dashboard.topStaff')}</h2></div>
+          <button onClick={() => setShowAddUser(true)} className="text-sm md:text-xs bg-primary/10 text-primary px-2 py-1 rounded hover:bg-primary/20 font-semibold flex items-center gap-1"><MorphIcon icon={UserPlus} className="w-2.5 h-2.5" />{t('common.add')}</button>
         </div>
         <div className="flex-1 overflow-y-auto scrollbar-hide divide-y divide-border/50">
           {users.filter(u => ["orinbosar","prorab"].includes(u.role)).map(u => (
@@ -1493,8 +1495,8 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
               <div className="flex-1 min-w-0"><p className="text-sm md:text-xs font-semibold truncate">{u.name}</p><p className="text-sm md:text-xs text-muted-foreground font-mono">{u.phone}</p>{u.brigade&&<p className="text-[9px] text-muted-foreground">{u.brigade}</p>}</div>
               <RoleBadge role={u.role}/>
               <div className="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button aria-label={t('common.edit')} onClick={() => setEditUser(u)} className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-primary"><Edit className="w-3 h-3"/></button>
-                <button aria-label={t('common.delete')} onClick={() => { if(confirm(t('common.confirmDeleteUser'))) onDeleteUser(u.id); }} className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-destructive"><Trash className="w-3 h-3"/></button>
+                <button aria-label={t('common.edit')} onClick={() => setEditUser(u)} className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-primary"><MorphIcon icon={Edit} className="w-3 h-3" /></button>
+                <button aria-label={t('common.delete')} onClick={() => { if(confirm(t('common.confirmDeleteUser'))) onDeleteUser(u.id); }} className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-destructive"><MorphIcon icon={Trash} className="w-3 h-3" /></button>
               </div>
             </div>
           ))}
@@ -1505,8 +1507,8 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
       <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28, delay: 0.10 }}
         className="surface flex flex-col overflow-hidden">
         <div className="flex items-center justify-between px-4 py-2.5 border-b border-border flex-shrink-0">
-          <div className="flex items-center gap-2"><div className="icon-chip w-6 h-6"><HardHat className="w-3.5 h-3.5"/></div><h2 className="text-sm md:text-xs font-bold uppercase tracking-wider font-['Roboto_Slab',serif]">{t('dashboard.brigades')}</h2></div>
-          <button onClick={() => setShowSend(true)} className="flex items-center gap-1 text-sm md:text-xs bg-primary text-white px-2 py-1 rounded hover:bg-primary/90 font-semibold"><Send className="w-2.5 h-2.5"/>{t('dashboard.send')}</button>
+          <div className="flex items-center gap-2"><div className="icon-chip w-6 h-6"><MorphIcon icon={HardHat} className="w-3.5 h-3.5" /></div><h2 className="text-sm md:text-xs font-bold uppercase tracking-wider font-['Roboto_Slab',serif]">{t('dashboard.brigades')}</h2></div>
+          <button onClick={() => setShowSend(true)} className="flex items-center gap-1 text-sm md:text-xs bg-primary text-white px-2 py-1 rounded hover:bg-primary/90 font-semibold"><MorphIcon icon={Send} className="w-2.5 h-2.5" />{t('dashboard.send')}</button>
         </div>
         <div className="flex-1 overflow-y-auto p-3 scrollbar-hide">
           {brigades.map(brigade => (
@@ -1521,8 +1523,8 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
                   <div className="flex-1 min-w-0"><p className="text-sm md:text-xs text-foreground truncate">{m.name}</p></div>
                   <RoleBadge role={m.role}/>
                   <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button aria-label={t('common.edit')} onClick={() => setEditUser(m)} className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-primary"><Edit className="w-3 h-3"/></button>
-                    <button aria-label={t('common.delete')} onClick={() => { if(confirm(t('common.confirmDeleteUser'))) onDeleteUser(m.id); }} className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-destructive"><Trash className="w-3 h-3"/></button>
+                    <button aria-label={t('common.edit')} onClick={() => setEditUser(m)} className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-primary"><MorphIcon icon={Edit} className="w-3 h-3" /></button>
+                    <button aria-label={t('common.delete')} onClick={() => { if(confirm(t('common.confirmDeleteUser'))) onDeleteUser(m.id); }} className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-destructive"><MorphIcon icon={Trash} className="w-3 h-3" /></button>
                   </div>
                 </div>
               ))}
@@ -1530,7 +1532,7 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
           ))}
           {transfers.filter(t=>t.toUserId===currentUser.id&&t.status==="pending").length > 0 && (
             <div className="mt-3 pt-3 border-t border-border">
-              <p className="text-sm md:text-xs font-semibold text-amber-800 dark:text-amber-400 uppercase mb-2 flex items-center gap-1"><Package className="w-2.5 h-2.5"/>{t('dashboard.incomingShort')}</p>
+              <p className="text-sm md:text-xs font-semibold text-amber-800 dark:text-amber-400 uppercase mb-2 flex items-center gap-1"><MorphIcon icon={Package} className="w-2.5 h-2.5" />{t('dashboard.incomingShort')}</p>
               {transfers.filter(t=>t.toUserId===currentUser.id&&t.status==="pending").map(t => (
                 <TransferRow key={t.id} t={t} currentUser={currentUser} allUsers={users} projects={projects} onConfirm={onConfirmTransfer} onReject={onRejectTransfer}/>
               ))}
@@ -1544,8 +1546,8 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
                 <div className="flex-1 min-w-0"><p className="text-sm md:text-xs text-foreground truncate">{m.name}</p></div>
                 <RoleBadge role={m.role}/>
                 <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button aria-label={t('common.edit')} onClick={() => setEditUser(m)} className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-primary"><Edit className="w-3 h-3"/></button>
-                  <button aria-label={t('common.delete')} onClick={() => { if(confirm(t('common.confirmDeleteUser'))) onDeleteUser(m.id); }} className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-destructive"><Trash className="w-3 h-3"/></button>
+                  <button aria-label={t('common.edit')} onClick={() => setEditUser(m)} className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-primary"><MorphIcon icon={Edit} className="w-3 h-3" /></button>
+                  <button aria-label={t('common.delete')} onClick={() => { if(confirm(t('common.confirmDeleteUser'))) onDeleteUser(m.id); }} className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-destructive"><MorphIcon icon={Trash} className="w-3 h-3" /></button>
                 </div>
               </div>
             ))}
@@ -1557,8 +1559,8 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
       <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28, delay: 0.15 }}
         className="surface flex flex-col overflow-hidden">
         <div className="flex items-center justify-between px-4 py-2.5 border-b border-border flex-shrink-0">
-          <div className="flex items-center gap-2"><div className="icon-chip icon-chip-accent w-6 h-6"><Package className="w-3.5 h-3.5"/></div><h2 className="text-sm md:text-xs font-bold uppercase tracking-wider font-['Roboto_Slab',serif]">{t('dashboard.activeObjects')}</h2></div>
-          <button onClick={()=>setShowAddObject(true)} className="text-sm md:text-xs bg-accent text-white px-2 py-1 rounded hover:bg-accent/90 font-semibold flex items-center gap-1 dark:bg-accent/10 dark:text-accent dark:hover:bg-accent/20"><Plus className="w-2.5 h-2.5"/>{t('common.add')}</button>
+          <div className="flex items-center gap-2"><div className="icon-chip icon-chip-accent w-6 h-6"><MorphIcon icon={Package} className="w-3.5 h-3.5" /></div><h2 className="text-sm md:text-xs font-bold uppercase tracking-wider font-['Roboto_Slab',serif]">{t('dashboard.activeObjects')}</h2></div>
+          <button onClick={()=>setShowAddObject(true)} className="text-sm md:text-xs bg-accent text-white px-2 py-1 rounded hover:bg-accent/90 font-semibold flex items-center gap-1 dark:bg-accent/10 dark:text-accent dark:hover:bg-accent/20"><MorphIcon icon={Plus} className="w-2.5 h-2.5" />{t('common.add')}</button>
         </div>
         <div className="flex-1 overflow-y-auto p-3 scrollbar-hide">
           <div className="grid grid-cols-3 gap-1.5 mb-3">
@@ -1577,10 +1579,10 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
                 <div className="flex items-start justify-between gap-1">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 mb-1"><span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${p.status==="active"?"bg-green-500":p.status==="paused"?"bg-amber-400":"bg-blue-400"}`}/><p className="text-sm md:text-xs font-semibold truncate">{p.name}</p></div>
-                    <p className="text-sm md:text-xs text-muted-foreground flex items-center gap-1"><MapPin className="w-2.5 h-2.5"/>{p.location}</p>
-                    {foreman&&<p className="text-sm md:text-xs text-muted-foreground flex items-center gap-1"><HardHat className="w-2.5 h-2.5"/>{foreman.name}</p>}
+                    <p className="text-sm md:text-xs text-muted-foreground flex items-center gap-1"><MorphIcon icon={MapPin} className="w-2.5 h-2.5" />{p.location}</p>
+                    {foreman&&<p className="text-sm md:text-xs text-muted-foreground flex items-center gap-1"><MorphIcon icon={HardHat} className="w-2.5 h-2.5" />{foreman.name}</p>}
                   </div>
-                  <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary mt-0.5"/>
+                  <MorphIcon icon={ChevronRight} className="w-4 h-4 text-muted-foreground group-hover:text-primary mt-0.5" />
                 </div>
                 <div className="flex items-center gap-2 mt-2 pt-2 border-t border-border">
                   <span className="text-[9px] text-muted-foreground font-mono">{fmt(p.budget)}</span>
@@ -1605,11 +1607,11 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
               className={`w-full flex items-center justify-between px-4 py-4 transition-colors ${isOpen ? "bg-primary text-white" : "bg-card hover:bg-muted/30"}`}>
               <div className="flex items-center gap-3">
                 <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${isOpen ? "bg-white/20" : "bg-primary/10"}`}>
-                  <section.icon className={`w-4 h-4 ${isOpen ? "text-white" : "text-primary"}`}/>
+                  <MorphIcon icon={section.icon} className={`w-4 h-4 ${isOpen ? "text-white" : "text-primary"}`} />
                 </div>
                 <span className={`text-sm font-bold tracking-wide font-['Roboto_Slab',serif] ${isOpen ? "text-white" : "text-foreground"}`}>{section.label}</span>
               </div>
-              <ChevronDown className={`w-5 h-5 transition-transform duration-300 ${isOpen ? "rotate-180 text-white" : "text-muted-foreground"}`}/>
+              <MorphIcon icon={ChevronDown} className={`w-5 h-5 transition-transform duration-300 ${isOpen ? "rotate-180 text-white" : "text-muted-foreground"}`} />
             </button>
 
             {/* Content — only visible when open */}
@@ -1636,7 +1638,7 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
                     <div className="pt-3 border-t border-border">
                       <div className="flex items-center justify-between mb-3">
                         <p className="text-sm md:text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('dashboard.staffCount')}</p>
-                        <button onClick={() => setShowAddUser(true)} className="flex items-center gap-1 text-sm md:text-xs bg-primary/10 text-primary px-3 py-1.5 rounded-full hover:bg-primary/20 font-semibold"><UserPlus className="w-3 h-3"/>{t('common.add')}</button>
+                        <button onClick={() => setShowAddUser(true)} className="flex items-center gap-1 text-sm md:text-xs bg-primary/10 text-primary px-3 py-1.5 rounded-full hover:bg-primary/20 font-semibold"><MorphIcon icon={UserPlus} className="w-3 h-3" />{t('common.add')}</button>
                       </div>
                       {(["direktor","orinbosar","prorab","brigadir","ishchi"] as Role[]).map(r => (
                         <div key={r} className="flex items-center justify-between py-1.5 border-b border-border/30 last:border-0">
@@ -1651,7 +1653,7 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
                 {section.key === "boshxodimlar" && (
                   <div>
                     <div className="flex justify-end px-4 py-2 border-b border-border/30">
-                      <button onClick={() => setShowAddUser(true)} className="flex items-center gap-1.5 text-sm md:text-xs bg-primary text-white px-3 py-1.5 rounded-full font-semibold"><UserPlus className="w-3 h-3"/>{t('common.add')}</button>
+                      <button onClick={() => setShowAddUser(true)} className="flex items-center gap-1.5 text-sm md:text-xs bg-primary text-white px-3 py-1.5 rounded-full font-semibold"><MorphIcon icon={UserPlus} className="w-3 h-3" />{t('common.add')}</button>
                     </div>
                     {users.filter(u => ["orinbosar","prorab"].includes(u.role)).map(u => (
                       <div key={u.id} className="flex items-center gap-3 py-3 px-4 border-b border-border/40 hover:bg-muted/30">
@@ -1659,8 +1661,8 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
                         <div className="flex-1"><p className="text-sm font-semibold">{u.name}</p><p className="text-sm md:text-xs text-muted-foreground font-mono">{u.phone}</p></div>
                         <RoleBadge role={u.role}/>
                         <div className="flex gap-1">
-                          <button aria-label={t('common.edit')} onClick={() => setEditUser(u)} className="p-2 hover:bg-muted rounded-lg text-muted-foreground hover:text-primary"><Edit className="w-4 h-4"/></button>
-                          <button aria-label={t('common.delete')} onClick={() => { if(confirm(t('common.confirmDeleteUser'))) onDeleteUser(u.id); }} className="p-2 hover:bg-muted rounded-lg text-muted-foreground hover:text-destructive"><Trash className="w-4 h-4"/></button>
+                          <button aria-label={t('common.edit')} onClick={() => setEditUser(u)} className="p-2 hover:bg-muted rounded-lg text-muted-foreground hover:text-primary"><MorphIcon icon={Edit} className="w-4 h-4" /></button>
+                          <button aria-label={t('common.delete')} onClick={() => { if(confirm(t('common.confirmDeleteUser'))) onDeleteUser(u.id); }} className="p-2 hover:bg-muted rounded-lg text-muted-foreground hover:text-destructive"><MorphIcon icon={Trash} className="w-4 h-4" /></button>
                         </div>
                       </div>
                     ))}
@@ -1670,7 +1672,7 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
                 {section.key === "brigadalar" && (
                   <div className="p-4 space-y-3">
                     <div className="flex justify-end">
-                      <button onClick={() => setShowSend(true)} className="flex items-center gap-1.5 text-sm md:text-xs bg-primary text-white px-3 py-1.5 rounded-full font-semibold"><Send className="w-3 h-3"/>{t('dashboard.send')}</button>
+                      <button onClick={() => setShowSend(true)} className="flex items-center gap-1.5 text-sm md:text-xs bg-primary text-white px-3 py-1.5 rounded-full font-semibold"><MorphIcon icon={Send} className="w-3 h-3" />{t('dashboard.send')}</button>
                     </div>
                     {brigades.map(brigade => (
                       <div key={brigade} className="bg-muted/30 rounded-xl overflow-hidden">
@@ -1684,8 +1686,8 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
                             <div className="flex-1"><p className="text-sm">{m.name}</p></div>
                             <RoleBadge role={m.role}/>
                             <div className="flex gap-1">
-                              <button aria-label={t('common.edit')} onClick={() => setEditUser(m)} className="p-1.5 hover:bg-muted rounded-lg text-muted-foreground hover:text-primary"><Edit className="w-3.5 h-3.5"/></button>
-                              <button aria-label={t('common.delete')} onClick={() => { if(confirm(t('common.confirmDeleteUser'))) onDeleteUser(m.id); }} className="p-1.5 hover:bg-muted rounded-lg text-muted-foreground hover:text-destructive"><Trash className="w-3.5 h-3.5"/></button>
+                              <button aria-label={t('common.edit')} onClick={() => setEditUser(m)} className="p-1.5 hover:bg-muted rounded-lg text-muted-foreground hover:text-primary"><MorphIcon icon={Edit} className="w-3.5 h-3.5" /></button>
+                              <button aria-label={t('common.delete')} onClick={() => { if(confirm(t('common.confirmDeleteUser'))) onDeleteUser(m.id); }} className="p-1.5 hover:bg-muted rounded-lg text-muted-foreground hover:text-destructive"><MorphIcon icon={Trash} className="w-3.5 h-3.5" /></button>
                             </div>
                           </div>
                         ))}
@@ -1699,15 +1701,15 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
                           <div className="flex-1"><p className="text-sm">{m.name}</p></div>
                           <RoleBadge role={m.role}/>
                           <div className="flex gap-1">
-                            <button aria-label={t('common.edit')} onClick={() => setEditUser(m)} className="p-1.5 hover:bg-muted rounded-lg text-muted-foreground hover:text-primary"><Edit className="w-3.5 h-3.5"/></button>
-                            <button aria-label={t('common.delete')} onClick={() => { if(confirm(t('common.confirmDeleteUser'))) onDeleteUser(m.id); }} className="p-1.5 hover:bg-muted rounded-lg text-muted-foreground hover:text-destructive"><Trash className="w-3.5 h-3.5"/></button>
+                            <button aria-label={t('common.edit')} onClick={() => setEditUser(m)} className="p-1.5 hover:bg-muted rounded-lg text-muted-foreground hover:text-primary"><MorphIcon icon={Edit} className="w-3.5 h-3.5" /></button>
+                            <button aria-label={t('common.delete')} onClick={() => { if(confirm(t('common.confirmDeleteUser'))) onDeleteUser(m.id); }} className="p-1.5 hover:bg-muted rounded-lg text-muted-foreground hover:text-destructive"><MorphIcon icon={Trash} className="w-3.5 h-3.5" /></button>
                           </div>
                         </div>
                       ))}
                     </div>
                     {transfers.filter(t=>t.toUserId===currentUser.id&&t.status==="pending").length > 0 && (
                       <div className="pt-2 border-t border-border">
-                        <p className="text-sm md:text-xs font-semibold text-amber-800 dark:text-amber-400 uppercase mb-2 flex items-center gap-1"><Package className="w-3 h-3"/>{t('dashboard.incomingMaterials')}</p>
+                        <p className="text-sm md:text-xs font-semibold text-amber-800 dark:text-amber-400 uppercase mb-2 flex items-center gap-1"><MorphIcon icon={Package} className="w-3 h-3" />{t('dashboard.incomingMaterials')}</p>
                         {transfers.filter(t=>t.toUserId===currentUser.id&&t.status==="pending").map(t => (
                           <TransferRow key={t.id} t={t} currentUser={currentUser} allUsers={users} projects={projects} onConfirm={onConfirmTransfer} onReject={onRejectTransfer}/>
                         ))}
@@ -1719,7 +1721,7 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
                 {section.key === "faolobyektlar" && (
                   <div className="p-4">
                     <div className="flex justify-end mb-3">
-                      <button onClick={()=>setShowAddObject(true)} className="flex items-center gap-1.5 text-sm md:text-xs bg-accent text-white px-3 py-1.5 rounded-full font-semibold"><Plus className="w-3 h-3"/>{t('common.add')}</button>
+                      <button onClick={()=>setShowAddObject(true)} className="flex items-center gap-1.5 text-sm md:text-xs bg-accent text-white px-3 py-1.5 rounded-full font-semibold"><MorphIcon icon={Plus} className="w-3 h-3" />{t('common.add')}</button>
                     </div>
                     <div className="grid grid-cols-3 gap-2 mb-4">
                       {[["active",t('dashboard.statusActive'),"text-green-800 dark:text-green-400","bg-green-500/10"],["paused",t('dashboard.statusPausedFull'),"text-amber-500","bg-amber-500/10"],["completed",t('dashboard.statusCompleted'),"text-blue-500 dark:text-blue-400","bg-blue-500/10"]].map(([s,l,c,bg])=>(
@@ -1737,10 +1739,10 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
                           <div className="flex items-start justify-between gap-2">
                             <div className="flex-1">
                               <div className="flex items-center gap-2 mb-1"><span className={`w-2 h-2 rounded-full flex-shrink-0 ${p.status==="active"?"bg-green-500":p.status==="paused"?"bg-amber-400":"bg-blue-400"}`}/><p className="text-sm font-semibold">{p.name}</p></div>
-                              <p className="text-sm md:text-xs text-muted-foreground flex items-center gap-1"><MapPin className="w-3 h-3"/>{p.location}</p>
-                              {foreman&&<p className="text-sm md:text-xs text-muted-foreground flex items-center gap-1 mt-0.5"><HardHat className="w-3 h-3"/>{foreman.name}</p>}
+                              <p className="text-sm md:text-xs text-muted-foreground flex items-center gap-1"><MorphIcon icon={MapPin} className="w-3 h-3" />{p.location}</p>
+                              {foreman&&<p className="text-sm md:text-xs text-muted-foreground flex items-center gap-1 mt-0.5"><MorphIcon icon={HardHat} className="w-3 h-3" />{foreman.name}</p>}
                             </div>
-                            <ChevronRight className="w-5 h-5 text-muted-foreground mt-0.5"/>
+                            <MorphIcon icon={ChevronRight} className="w-5 h-5 text-muted-foreground mt-0.5" />
                           </div>
                           <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border">
                             <span className="text-sm md:text-xs text-muted-foreground font-mono">{fmt(p.budget)}</span>
@@ -1815,7 +1817,7 @@ function SmetaResultView({ smeta }: { smeta: SmetaResult }) {
           <div key={g} className="glass-card rounded-xl border border-border overflow-hidden">
             <button onClick={() => setOpenGroup(open ? null : g)} className="w-full flex items-center justify-between gap-2 px-4 py-3 hover:bg-muted/30">
               <span className="text-sm font-semibold text-left">{SMETA_GROUP_LABEL[g]} <span className="text-muted-foreground font-normal">({rows.length})</span></span>
-              <span className="flex items-center gap-2"><span className="font-mono text-sm font-bold">{fmtNum(sum)}</span>{open ? <ChevronUp className="w-4 h-4 shrink-0" /> : <ChevronDown className="w-4 h-4 shrink-0" />}</span>
+              <span className="flex items-center gap-2"><span className="font-mono text-sm font-bold">{fmtNum(sum)}</span>{open ? <MorphIcon icon={ChevronUp} className="w-4 h-4 shrink-0"  /> : <MorphIcon icon={ChevronDown} className="w-4 h-4 shrink-0"  />}</span>
             </button>
             {/* XATO TUZATILDI: sahifaning o'zi (yuqorida) vertikal scroll
                 qiladi, bu jadval esa gorizontal — ikkalasi izolyatsiya
@@ -1863,7 +1865,7 @@ function SmetaResultView({ smeta }: { smeta: SmetaResult }) {
           <div key={sec.name} className="glass-card rounded-xl border border-border overflow-hidden">
             <button onClick={() => setOpenSection(p => ({ ...p, [sec.name]: !so }))} className="w-full flex items-center justify-between gap-2 px-4 py-2.5 bg-muted/20 hover:bg-muted/40">
               <span className="text-sm font-semibold text-left">{sec.name} <span className="text-muted-foreground font-normal">({sec.works.length})</span></span>
-              {so ? <ChevronUp className="w-4 h-4 shrink-0" /> : <ChevronDown className="w-4 h-4 shrink-0" />}
+              {so ? <MorphIcon icon={ChevronUp} className="w-4 h-4 shrink-0"  /> : <MorphIcon icon={ChevronDown} className="w-4 h-4 shrink-0"  />}
             </button>
             {so && sec.works.map(w => {
               const wo = openWork === w.index;
@@ -1871,7 +1873,7 @@ function SmetaResultView({ smeta }: { smeta: SmetaResult }) {
                 <div key={w.index} className="border-t border-border/50">
                   <button onClick={() => setOpenWork(wo ? null : w.index)} className="w-full flex items-start justify-between gap-2 px-4 py-2 hover:bg-muted/20 text-left">
                     <span className="text-xs leading-snug"><span className="text-muted-foreground">{w.index}.</span> {w.shifr && <span className="font-mono text-primary">{w.shifr} </span>}{w.name} <span className="text-muted-foreground">[{w.unit}]</span></span>
-                    <span className="flex items-center gap-1 shrink-0"><span className="text-[10px] text-muted-foreground whitespace-nowrap">{w.norms.length} n.</span>{wo ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}</span>
+                    <span className="flex items-center gap-1 shrink-0"><span className="text-[10px] text-muted-foreground whitespace-nowrap">{w.norms.length} n.</span>{wo ? <MorphIcon icon={ChevronUp} className="w-3.5 h-3.5"  /> : <MorphIcon icon={ChevronDown} className="w-3.5 h-3.5"  />}</span>
                   </button>
                   {wo && w.norms.length > 0 && (
                     <div className="overflow-x-auto scrollbar-hide px-4 pb-2 touch-pan-x">
@@ -1933,9 +1935,9 @@ function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSe
           balandligidan qat'i nazar tab-panel doim to'g'ri joyda turadi. */}
       <div className="flex-shrink-0 z-10 sticky top-0">
       <div className="glass border-b border-border px-4 py-3 flex flex-wrap items-center gap-3">
-        <button onClick={onBack} className="flex items-center gap-1.5 text-sm md:text-xs text-muted-foreground hover:text-foreground transition-colors"><ArrowLeft className="w-4 h-4"/>{t('common.back')}</button>
+        <button onClick={onBack} className="flex items-center gap-1.5 text-sm md:text-xs text-muted-foreground hover:text-foreground transition-colors"><MorphIcon icon={ArrowLeft} className="w-4 h-4" />{t('common.back')}</button>
         <div className="w-px h-4 bg-border"/>
-        <Building2 className="w-4 h-4 text-primary flex-shrink-0"/>
+        <MorphIcon icon={Building2} className="w-4 h-4 text-primary flex-shrink-0" />
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold flex items-center gap-2">
             {/* MUHIM: truncate avval butun qatorga (matn + select'ga birga)
@@ -1969,7 +1971,7 @@ function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSe
             ketardi" — endi w-full bilan navbatdagi qatorga tushadi, katta
             ekranda (sm+) xuddi eskisidek bir qatorda turaveradi. */}
         <div className="flex items-center gap-2 flex-shrink-0 w-full sm:w-auto justify-end">
-        {project.pdfFile && <button className="flex items-center gap-1 text-sm md:text-xs bg-accent text-white px-2.5 py-1.5 rounded hover:bg-accent/90 font-medium flex-shrink-0 dark:bg-accent/10 dark:text-accent dark:hover:bg-accent/20"><Download className="w-3.5 h-3.5"/>PDF</button>}
+        {project.pdfFile && <button className="flex items-center gap-1 text-sm md:text-xs bg-accent text-white px-2.5 py-1.5 rounded hover:bg-accent/90 font-medium flex-shrink-0 dark:bg-accent/10 dark:text-accent dark:hover:bg-accent/20"><MorphIcon icon={Download} className="w-3.5 h-3.5" />PDF</button>}
           <input type="file" id="smeta-upload" className="hidden" accept=".pdf,.xlsx,.xls,.docx,.doc,.csv,.txt" onChange={async e=>{
             const file = e.target.files?.[0];
             if(!file) return;
@@ -1993,14 +1995,14 @@ function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSe
             {uploadingSmeta ? (
               <>
                 <div className="flex items-center gap-1 text-center">
-                  {smetaMsg.startsWith('✓') ? <CheckCircle className="w-3.5 h-3.5 flex-shrink-0"/> : smetaMsg.startsWith('✗') ? <AlertCircle className="w-3.5 h-3.5 flex-shrink-0"/> : <Loader2 className="w-3.5 h-3.5 animate-spin flex-shrink-0"/>}
+                  {smetaMsg.startsWith('✓') ? <MorphIcon icon={CheckCircle} className="w-3.5 h-3.5 flex-shrink-0" /> : smetaMsg.startsWith('✗') ? <MorphIcon icon={AlertCircle} className="w-3.5 h-3.5 flex-shrink-0" /> : <MorphIcon icon={Loader2} className="w-3.5 h-3.5 animate-spin flex-shrink-0" />}
                   <span className="truncate max-w-[180px]">{smetaMsg.replace(/^[✓✗]\s*/, '') || t('objectDetail.uploading')}</span>
                 </div>
                 {smetaPercent > 0 && !smetaMsg.startsWith('✗') && <div className="w-full bg-accent/20 rounded-full h-1 mt-0.5"><div className={`${smetaMsg.startsWith('✓') ? 'bg-green-500' : 'bg-accent'} h-1 rounded-full liquid-transition`} style={{width:`${smetaPercent}%`}}/></div>}
               </>
-            ) : <><Download className="w-3.5 h-3.5"/>{t('objectDetail.smetaUpload')}</>}
+            ) : <><MorphIcon icon={Download} className="w-3.5 h-3.5" />{t('objectDetail.smetaUpload')}</>}
           </label>
-          <button onClick={()=>{setInitialTransferData(undefined);setShowSend(true);}} className="flex items-center gap-1 text-sm md:text-xs bg-primary text-white px-2.5 py-1.5 rounded hover:bg-primary/90 font-medium liquid-transition shadow-sm"><Send className="w-3.5 h-3.5"/>{t('common.send')}</button>
+          <button onClick={()=>{setInitialTransferData(undefined);setShowSend(true);}} className="flex items-center gap-1 text-sm md:text-xs bg-primary text-white px-2.5 py-1.5 rounded hover:bg-primary/90 font-medium liquid-transition shadow-sm"><MorphIcon icon={Send} className="w-3.5 h-3.5" />{t('common.send')}</button>
         </div>
       </div>
       <div className="glass border-b border-border px-3 py-2 flex gap-1 overflow-x-auto scrollbar-hide">
@@ -2008,7 +2010,7 @@ function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSe
           <button key={k} onClick={()=>setTab(k as any)} className={`relative flex items-center gap-1.5 text-sm md:text-xs py-2 px-3 rounded-full font-medium liquid-transition whitespace-nowrap ${tab===k?"text-primary":"text-muted-foreground hover:text-foreground"}`}>
             {tab===k && (
               <motion.div layoutId="objectDetailTabPill" className="absolute inset-0 rounded-full bg-primary/10 -z-10"
-                transition={{ type: "spring", stiffness: 480, damping: 34 }}/>
+                transition={{ type: "spring", stiffness: 480, damping: 34 }}  />
             )}
             {l}<span className={`text-[9px] px-1.5 py-0.5 rounded-full font-semibold ${tab===k?"bg-primary text-white":"bg-muted text-muted-foreground"}`}>{c}</span>
           </button>
@@ -2026,7 +2028,7 @@ function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSe
                 boshqa joylardagi (.surface, rounded-full chip) uslubga mos. */}
             <div className="flex-shrink-0 flex items-center gap-2 px-2.5 py-2 border-b border-border/50 bg-muted/10">
               <div className="relative flex-1 min-w-0">
-                <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"/>
+                <MorphIcon icon={Search} className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 <input type="text" placeholder={t('objectDetail.searchMaterial')} value={matSearch} onChange={e=>setMatSearch(e.target.value)} className="w-full pl-8 pr-3 py-1.5 text-[11px] bg-input-background border border-border rounded-full focus:outline-none focus:ring-1 focus:ring-primary liquid-transition"/>
               </div>
               <span className="text-[10px] font-semibold text-muted-foreground whitespace-nowrap shrink-0 bg-muted/60 px-2 py-1 rounded-full">{filteredMats.length} ta</span>
@@ -2098,7 +2100,7 @@ function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSe
                     })}
                     {filteredMats.length === 0 && (
                       <tr><td colSpan={5} className="px-2 py-10 text-center text-muted-foreground">
-                        <Package className="w-8 h-8 mx-auto mb-2 opacity-25"/>
+                        <MorphIcon icon={Package} className="w-8 h-8 mx-auto mb-2 opacity-25" />
                         {project.requiredMaterials.length === 0 ? t('objectDetail.noSmeta') : t('common.notFound')}
                       </td></tr>
                     )}
@@ -2110,13 +2112,13 @@ function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSe
         )}
         {tab==="pending" && (
           <div className="flex-1 overflow-y-auto p-4 scrollbar-hide pb-24 sm:pb-4 space-y-2 animate-slide-up-fade">
-            {pendT.length===0?<div className="text-center py-10 text-muted-foreground animate-pop-in"><CheckCircle className="w-10 h-10 mx-auto mb-2 text-green-400 opacity-50"/><p className="text-sm md:text-xs">{t('objectDetail.noPending')}</p></div>
+            {pendT.length===0?<div className="text-center py-10 text-muted-foreground animate-pop-in"><MorphIcon icon={CheckCircle} className="w-10 h-10 mx-auto mb-2 text-green-400 opacity-50" /><p className="text-sm md:text-xs">{t('objectDetail.noPending')}</p></div>
             :pendT.map(t=><TransferRow key={t.id} t={t} currentUser={currentUser} allUsers={users} projects={[project]} onConfirm={onConfirm} onReject={onReject}/>)}
           </div>
         )}
         {tab==="confirmed" && (
           <div className="flex-1 overflow-y-auto p-4 scrollbar-hide pb-24 sm:pb-4 space-y-2 animate-slide-up-fade">
-            {confT.length===0?<div className="text-center py-10 text-muted-foreground animate-pop-in"><Package className="w-10 h-10 mx-auto mb-2 opacity-30"/><p className="text-sm md:text-xs">{t('objectDetail.noConfirmed')}</p></div>
+            {confT.length===0?<div className="text-center py-10 text-muted-foreground animate-pop-in"><MorphIcon icon={Package} className="w-10 h-10 mx-auto mb-2 opacity-30" /><p className="text-sm md:text-xs">{t('objectDetail.noConfirmed')}</p></div>
             :confT.map(t=><TransferRow key={t.id} t={t} currentUser={currentUser} allUsers={users} projects={[project]} onConfirm={onConfirm} onReject={onReject}/>)}
           </div>
         )}
@@ -2146,8 +2148,8 @@ function MaterialDetailsModal({ mat, confT, pendT, onClose, onSend }: { mat: Req
         <div className="p-5 border-b border-border/50 flex justify-between items-center bg-card/50">
           <h3 className="font-semibold text-base truncate pr-4">{mat.name}</h3>
           <div className="flex items-center gap-2">
-            {onSend && <button onClick={()=>{onClose(); onSend();}} className="flex items-center gap-1.5 bg-primary text-white text-sm md:text-xs px-3 py-1.5 rounded-full hover:bg-primary/90 font-medium liquid-transition shadow-md shadow-primary/20"><Send className="w-3 h-3"/>{tt('common.send')}</button>}
-            <button aria-label={tt('common.close')} onClick={onClose} className="p-1.5 text-muted-foreground hover:bg-muted/50 rounded-full liquid-transition bg-muted/20"><X className="w-4 h-4"/></button>
+            {onSend && <button onClick={()=>{onClose(); onSend();}} className="flex items-center gap-1.5 bg-primary text-white text-sm md:text-xs px-3 py-1.5 rounded-full hover:bg-primary/90 font-medium liquid-transition shadow-md shadow-primary/20"><MorphIcon icon={Send} className="w-3 h-3" />{tt('common.send')}</button>}
+            <button aria-label={tt('common.close')} onClick={onClose} className="p-1.5 text-muted-foreground hover:bg-muted/50 rounded-full liquid-transition bg-muted/20"><MorphIcon icon={X} className="w-4 h-4" /></button>
           </div>
         </div>
         <div className="p-4 overflow-y-auto overflow-x-hidden">
@@ -2246,9 +2248,9 @@ function FinancePage({ currentUser, users, projects, expenses, onAddExpense, onC
           <p className="text-sm md:text-xs text-muted-foreground">{t('finance.totalConfirmed')} <span className="font-semibold text-accent">{fmt(totalExpense)}</span> <span className="text-[10px] text-muted-foreground/70">≈ {fmtUsd(totalExpense)}</span></p>
         </div>
         <div className="flex items-center gap-1.5">
-          {pendingMe>0&&<span className="text-sm md:text-xs bg-amber-500/15 text-amber-800 dark:text-amber-300 px-2 py-1 rounded-full font-semibold flex items-center gap-1 badge-pulse"><Clock className="w-3 h-3"/>{t('finance.pendingCount', { count: pendingMe })}</span>}
-          <button onClick={()=>setShowCurrency(v=>!v)} title={t('currency.title')} aria-label={t('currency.title')} className="btn btn-outline flex items-center gap-1 text-sm md:text-xs px-2.5 py-1.5 rounded-full"><DollarSign className="w-3 h-3"/></button>
-          <button onClick={()=>setShowAdd(true)} className="btn btn-accent flex items-center gap-1 text-sm md:text-xs px-3 py-1.5 rounded-full"><Plus className="w-3 h-3"/>{t('finance.addExpense')}</button>
+          {pendingMe>0&&<span className="text-sm md:text-xs bg-amber-500/15 text-amber-800 dark:text-amber-300 px-2 py-1 rounded-full font-semibold flex items-center gap-1 badge-pulse"><MorphIcon icon={Clock} className="w-3 h-3" />{t('finance.pendingCount', { count: pendingMe })}</span>}
+          <button onClick={()=>setShowCurrency(v=>!v)} title={t('currency.title')} aria-label={t('currency.title')} className="btn btn-outline flex items-center gap-1 text-sm md:text-xs px-2.5 py-1.5 rounded-full"><MorphIcon icon={DollarSign} className="w-3 h-3" /></button>
+          <button onClick={()=>setShowAdd(true)} className="btn btn-accent flex items-center gap-1 text-sm md:text-xs px-3 py-1.5 rounded-full"><MorphIcon icon={Plus} className="w-3 h-3" />{t('finance.addExpense')}</button>
         </div>
       </div>
       {/* Currency converter mini widget */}
@@ -2278,7 +2280,7 @@ function FinancePage({ currentUser, users, projects, expenses, onAddExpense, onC
                   onClick={() => { if (!result) return; navigator.clipboard?.writeText(result).then(() => toast.success(t('currency.copied'))).catch(() => {}); }}
                   className="ml-auto flex items-center gap-1.5 text-sm font-bold text-accent font-mono text-right liquid-transition rounded-lg px-1.5 py-0.5 -mr-1.5 hover:bg-accent/10 active:scale-95 disabled:cursor-default disabled:hover:bg-transparent">
                   {result || "—"}
-                  {result && <Copy className="w-3 h-3 opacity-50 flex-shrink-0"/>}
+                  {result && <MorphIcon icon={Copy} className="w-3 h-3 opacity-50 flex-shrink-0" />}
                 </button>
               );
             })()}
@@ -2301,7 +2303,7 @@ function FinancePage({ currentUser, users, projects, expenses, onAddExpense, onC
       {/* List */}
       <div className="flex-1 overflow-y-auto space-y-2.5 scrollbar-hide">
         {filteredExpenses.length===0
-          ? <div className="text-center py-10 text-muted-foreground"><Wallet className="w-10 h-10 mx-auto mb-2 opacity-30"/><p className="text-sm md:text-xs">{t('finance.notFound')}</p></div>
+          ? <div className="text-center py-10 text-muted-foreground"><MorphIcon icon={Wallet} className="w-10 h-10 mx-auto mb-2 opacity-30" /><p className="text-sm md:text-xs">{t('finance.notFound')}</p></div>
           : filteredExpenses.map(e=>{
               const to=users.find(u=>u.id===e.toUserId);
               const proj=projects.find(p=>p.id===e.projectId);
@@ -2331,15 +2333,15 @@ function FinancePage({ currentUser, users, projects, expenses, onAddExpense, onC
                       <p className="font-bold text-accent">{fmt(e.amount)}</p>
                       <p className="text-[10px] text-muted-foreground font-mono">{fmtUsd(e.amount)}</p>
                       {e.status==="confirmed"
-                        ?<p className="text-[9px] text-green-800 dark:text-green-400 font-semibold mt-1 flex items-center gap-0.5 justify-end"><CheckCircle className="w-2.5 h-2.5"/>{t('finance.confirmed')}</p>
-                        :<p className="text-[9px] text-amber-800 dark:text-amber-400 font-semibold mt-1 flex items-center gap-0.5 justify-end"><Clock className="w-2.5 h-2.5"/>{t('finance.pending')}</p>}
+                        ?<p className="text-[9px] text-green-800 dark:text-green-400 font-semibold mt-1 flex items-center gap-0.5 justify-end"><MorphIcon icon={CheckCircle} className="w-2.5 h-2.5" />{t('finance.confirmed')}</p>
+                        :<p className="text-[9px] text-amber-800 dark:text-amber-400 font-semibold mt-1 flex items-center gap-0.5 justify-end"><MorphIcon icon={Clock} className="w-2.5 h-2.5" />{t('finance.pending')}</p>}
                     </div>
                   </div>
-                  {canConfirm&&<button onClick={e2=>{e2.stopPropagation();onConfirm(e.id);}} className="mt-2 w-full text-sm md:text-xs bg-green-600 text-white rounded py-1.5 hover:bg-green-700 font-semibold flex items-center justify-center gap-1"><Check className="w-3 h-3"/>{t('finance.confirmAction')}</button>}
+                  {canConfirm&&<button onClick={e2=>{e2.stopPropagation();onConfirm(e.id);}} className="mt-2 w-full text-sm md:text-xs bg-green-600 text-white rounded py-1.5 hover:bg-green-700 font-semibold flex items-center justify-center gap-1"><MorphIcon icon={Check} className="w-3 h-3" />{t('finance.confirmAction')}</button>}
                   {canAdminApprove&&(
                     <div className="mt-2 flex gap-2" onClick={e2=>e2.stopPropagation()}>
-                      <button onClick={()=>onApprove?.(e.id)} className="flex-1 text-sm md:text-xs bg-green-600 text-white rounded py-1.5 hover:bg-green-700 font-semibold flex items-center justify-center gap-1"><Check className="w-3 h-3"/>{t('approvalChain.approve')}</button>
-                      <button onClick={()=>onReject?.(e.id)} className="flex-1 text-sm md:text-xs bg-red-600 text-white rounded py-1.5 hover:bg-red-700 font-semibold flex items-center justify-center gap-1"><X className="w-3 h-3"/>{t('approvalChain.reject')}</button>
+                      <button onClick={()=>onApprove?.(e.id)} className="flex-1 text-sm md:text-xs bg-green-600 text-white rounded py-1.5 hover:bg-green-700 font-semibold flex items-center justify-center gap-1"><MorphIcon icon={Check} className="w-3 h-3" />{t('approvalChain.approve')}</button>
+                      <button onClick={()=>onReject?.(e.id)} className="flex-1 text-sm md:text-xs bg-red-600 text-white rounded py-1.5 hover:bg-red-700 font-semibold flex items-center justify-center gap-1"><MorphIcon icon={X} className="w-3 h-3" />{t('approvalChain.reject')}</button>
                     </div>
                   )}
                 </button>
@@ -2374,8 +2376,8 @@ function ExpenseDetailModal({ expense, users, projects, onClose }: { expense: Ex
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-sm overflow-hidden animate-slide-up-fade" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-4 py-3.5 border-b border-border" style={{ background: "linear-gradient(to right, rgba(217,70,15,0.06), transparent)" }}>
-          <h3 className="font-bold text-sm flex items-center gap-2"><Wallet className="w-4 h-4 text-accent"/>{t('finance.detailTitle')}</h3>
-          <button aria-label={t('common.close')} onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted liquid-transition"><X className="w-4 h-4 text-muted-foreground"/></button>
+          <h3 className="font-bold text-sm flex items-center gap-2"><MorphIcon icon={Wallet} className="w-4 h-4 text-accent" />{t('finance.detailTitle')}</h3>
+          <button aria-label={t('common.close')} onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted liquid-transition"><MorphIcon icon={X} className="w-4 h-4 text-muted-foreground" /></button>
         </div>
         <div className="p-4 space-y-3">
           <div>
@@ -2396,7 +2398,7 @@ function ExpenseDetailModal({ expense, users, projects, onClose }: { expense: Ex
               <div className="space-y-1.5">
                 {expense.approvalHistory.map((h, i) => (
                   <div key={i} className={`flex items-start gap-2 text-[10px] rounded-lg px-2.5 py-1.5 ${h.action==='approved'?'bg-green-500/10 text-green-700 dark:text-green-400':'bg-red-500/10 text-red-700 dark:text-red-400'}`}>
-                    {h.action==='approved'?<CheckCircle className="w-3 h-3 mt-0.5 flex-shrink-0"/>:<X className="w-3 h-3 mt-0.5 flex-shrink-0"/>}
+                    {h.action==='approved'?<MorphIcon icon={CheckCircle} className="w-3 h-3 mt-0.5 flex-shrink-0" />:<MorphIcon icon={X} className="w-3 h-3 mt-0.5 flex-shrink-0" />}
                     <span>{h.action==='approved'?t('approvalChain.approvedBy',{name:h.name}):t('approvalChain.rejectedBy',{name:h.name})} — {h.date}</span>
                   </div>
                 ))}
@@ -2405,7 +2407,7 @@ function ExpenseDetailModal({ expense, users, projects, onClose }: { expense: Ex
           )}
           <button onClick={() => exportExpensesToCsv([expense], users, projects, `chiqim_${expense.date}.csv`)}
             className="btn btn-outline w-full flex items-center justify-center gap-1.5 text-sm md:text-xs py-2.5 rounded-full">
-            <Download className="w-3.5 h-3.5"/>{t('reports.exportExcel')}
+            <MorphIcon icon={Download} className="w-3.5 h-3.5" />{t('reports.exportExcel')}
           </button>
         </div>
       </div>
@@ -2603,6 +2605,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
       ...extras,
     };
     onSend(msg);
+    playSound("send");
     setText(""); setReplyTo(null); setShowAttach(false);
   };
 
@@ -2612,7 +2615,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
     try {
       const up = await uploadChatMedia(blob, filename);
       doSend({ type, text: label, mediaUrl: up.url, fileName: up.fileName, fileSize: up.fileSize });
-    } catch { toast(tChat('chat.uploadFailed')); }
+    } catch { toast.error(tChat('chat.uploadFailed')); }
   };
 
   const startRec = async () => {
@@ -2722,13 +2725,13 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
           // openExternalUrl — Android'da tizim brauzeri/yuklab olish
           // menejeriga, web'da yangi tabga to'g'ri yo'naltiradi.
           <button onClick={()=>openExternalUrl(m.mediaUrl!)} className="flex items-center gap-2 mb-1 hover:opacity-75 transition-opacity text-left">
-            <FileText className="w-5 h-5 flex-shrink-0"/>
+            <MorphIcon icon={FileText} className="w-5 h-5 flex-shrink-0" />
             <div className="min-w-0"><p className="text-xs font-medium truncate max-w-[150px]">{m.fileName}</p><p className="text-[10px] opacity-60">{fmtSize(m.fileSize)}</p></div>
           </button>
         )}
         {m.type==='location' && m.location && (
           <a href={`https://maps.google.com/?q=${m.location.lat},${m.location.lng}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 bg-black/10 rounded-xl px-3 py-2 mb-1 hover:bg-black/20 transition-colors">
-            <MapPin className="w-4 h-4 text-green-400 flex-shrink-0"/>
+            <MorphIcon icon={MapPin} className="w-4 h-4 text-green-400 flex-shrink-0" />
             <div><p className="text-xs font-medium">{tChat('chat.locationLabel')}</p><p className="text-[10px] opacity-70">{m.location.lat.toFixed(4)}, {m.location.lng.toFixed(4)}</p></div>
           </a>
         )}
@@ -2756,7 +2759,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
       <div className={`${(selUser||selGroup)?'hidden md:flex':'flex'} w-full md:w-64 flex-shrink-0 border-r border-border flex-col bg-card/60 backdrop-blur-xl`}>
         <div className="px-4 py-3 border-b border-border/50 flex items-center justify-between">
           <p className="text-base font-bold">{tChat("chat.messages")}</p>
-          <button onClick={() => setShowNewGroup(true)} title={tChat('chat.newGroup')} aria-label={tChat('chat.newGroup')} className="btn btn-primary w-8 h-8 p-0 rounded-full"><Users2 className="w-4 h-4"/></button>
+          <button onClick={() => setShowNewGroup(true)} title={tChat('chat.newGroup')} aria-label={tChat('chat.newGroup')} className="btn btn-primary w-8 h-8 p-0 rounded-full"><MorphIcon icon={Users2} className="w-4 h-4" /></button>
         </div>
         <div className="flex-1 overflow-y-auto scrollbar-hide">
           {/* Guruhlar */}
@@ -2767,7 +2770,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
               <button key={g.id} onClick={() => { setSelGroup(g); setSelUser(null); setSelectMode(false); setSelected(new Set()); }}
                 className={`w-full flex items-center gap-3 mx-2 my-0.5 px-3 py-2.5 rounded-2xl hover:bg-muted/50 liquid-transition text-left ${selGroup?.id===g.id?'bg-secondary/60 ring-1 ring-primary/40':''}`}>
                 <div className="w-10 h-10 rounded-full bg-primary/15 text-primary flex items-center justify-center flex-shrink-0 overflow-hidden">
-                  {g.avatar ? <img src={g.avatar} className="w-full h-full object-cover"/> : <Users2 className="w-[18px] h-[18px]"/>}
+                  {g.avatar ? <img src={g.avatar} className="w-full h-full object-cover"/> : <MorphIcon icon={Users2} className="w-[18px] h-[18px]" />}
                 </div>
                 <div className="flex-1 min-w-0">
                   {/* XATO TUZATILDI ("bir tomoni ichiga kirip kesilib qolgan"):
@@ -2854,20 +2857,20 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
       <div className={`${!(selUser||selGroup)?'hidden md:flex':'flex'} flex-1 flex-col overflow-hidden bg-background/50`} onClick={e=>e.stopPropagation()}>
         {!(selUser||selGroup) ? (
           <div className="flex-1 flex items-center justify-center text-muted-foreground">
-            <div className="text-center animate-pop-in"><MessageCircle className="w-12 h-12 mx-auto mb-3 opacity-20"/><p className="text-sm">{tChat("chat.selectConversation")}</p></div>
+            <div className="text-center animate-pop-in"><MorphIcon icon={MessageCircle} className="w-12 h-12 mx-auto mb-3 opacity-20" /><p className="text-sm">{tChat("chat.selectConversation")}</p></div>
           </div>
         ) : (
           <>
             {/* Header */}
             <div className="glass border-b border-border px-4 py-3 flex items-center gap-3 flex-shrink-0 z-10">
               <button onClick={closeChat} aria-label="Orqaga" className="md:hidden p-2 -ml-2 mr-1 text-muted-foreground hover:bg-muted rounded-full transition-colors">
-                <ChevronLeft className="w-5 h-5"/>
+                <MorphIcon icon={ChevronLeft} className="w-5 h-5" />
               </button>
               {selGroup ? (
                 selGroup.devSupport
                   ? <div className="w-9 h-9 rounded-full bg-orange-500/15 flex items-center justify-center flex-shrink-0 text-xl">🛠</div>
                   : <div className="w-9 h-9 rounded-full bg-primary/15 text-primary flex items-center justify-center flex-shrink-0 overflow-hidden">
-                      {selGroup.avatar ? <img src={selGroup.avatar} className="w-full h-full object-cover"/> : <Users2 className="w-[18px] h-[18px]"/>}
+                      {selGroup.avatar ? <img src={selGroup.avatar} className="w-full h-full object-cover"/> : <MorphIcon icon={Users2} className="w-[18px] h-[18px]" />}
                     </div>
               ) : <div className="relative"><Avatar user={selUser!} size="sm"/>{isOnline(selUser!.id) && <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-card"/>}</div>}
               <div className="flex-1 min-w-0">
@@ -2878,15 +2881,15 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
               </div>
               {!selectMode && !selGroup?.devSupport && (
                 <div className="flex items-center gap-1 flex-shrink-0">
-                  <button onClick={() => onStartCall('voice', { peer: selUser || undefined, group: selGroup || undefined })} title={tChat('chat.voiceCall')} aria-label={tChat('chat.voiceCall')} className="btn btn-ghost w-9 h-9 p-0 rounded-full text-primary"><Phone className="w-[18px] h-[18px]"/></button>
-                  <button onClick={() => onStartCall('video', { peer: selUser || undefined, group: selGroup || undefined })} title={tChat('chat.videoCall')} aria-label={tChat('chat.videoCall')} className="btn btn-ghost w-9 h-9 p-0 rounded-full text-primary"><VideoIcon className="w-[18px] h-[18px]"/></button>
+                  <button onClick={() => onStartCall('voice', { peer: selUser || undefined, group: selGroup || undefined })} title={tChat('chat.voiceCall')} aria-label={tChat('chat.voiceCall')} className="btn btn-ghost w-9 h-9 p-0 rounded-full text-primary"><MorphIcon icon={Phone} className="w-[18px] h-[18px]" /></button>
+                  <button onClick={() => onStartCall('video', { peer: selUser || undefined, group: selGroup || undefined })} title={tChat('chat.videoCall')} aria-label={tChat('chat.videoCall')} className="btn btn-ghost w-9 h-9 p-0 rounded-full text-primary"><MorphIcon icon={VideoIcon} className="w-[18px] h-[18px]" /></button>
                 </div>
               )}
               {selectMode && (
                 <div className="flex items-center gap-1">
                   <span className="text-xs text-muted-foreground mr-1">{tChat('chat.selectedCount', { count: selected.size })}</span>
                   {selected.size>0 && <>
-                    <button aria-label={tChat('chat.forward')} onClick={() => { const msg=messages.find(m=>m.id===[...selected][0]); if(msg) setShowForward(msg); }} className="p-2 hover:bg-muted rounded-full text-muted-foreground"><Share2 className="w-4 h-4"/></button>
+                    <button aria-label={tChat('chat.forward')} onClick={() => { const msg=messages.find(m=>m.id===[...selected][0]); if(msg) setShowForward(msg); }} className="p-2 hover:bg-muted rounded-full text-muted-foreground"><MorphIcon icon={Share2} className="w-4 h-4" /></button>
                     {/* XATO TUZATILDI: o'chirish tugmasi shu yerda (tepadagi
                         tanlash paneli) rolga qaramasdan HAMMAGA ko'rinardi —
                         kontekst-menyudagi yagona-xabar o'chirish allaqachon
@@ -2896,10 +2899,10 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
                         qilingan xato). Backend baribir rad etardi, lekin
                         tugmaning o'zi hammaga ko'rinishi noto'g'ri edi. */}
                     {canModifyMessages && (
-                      <button aria-label={tChat('chat.deleteSelectedAria')} onClick={() => { selected.forEach(id=>onDelete(id)); setSelectMode(false); setSelected(new Set()); }} className="p-2 hover:bg-red-500/100/10 rounded-full text-red-500"><Trash2 className="w-4 h-4"/></button>
+                      <button aria-label={tChat('chat.deleteSelectedAria')} onClick={() => { selected.forEach(id=>onDelete(id)); setSelectMode(false); setSelected(new Set()); }} className="p-2 hover:bg-red-500/100/10 rounded-full text-red-500"><MorphIcon icon={Trash2} className="w-4 h-4" /></button>
                     )}
                   </>}
-                  <button aria-label={tChat('chat.cancelSelectAria')} onClick={() => { setSelectMode(false); setSelected(new Set()); }} className="p-2 hover:bg-muted rounded-full text-muted-foreground"><X className="w-4 h-4"/></button>
+                  <button aria-label={tChat('chat.cancelSelectAria')} onClick={() => { setSelectMode(false); setSelected(new Set()); }} className="p-2 hover:bg-muted rounded-full text-muted-foreground"><MorphIcon icon={X} className="w-4 h-4" /></button>
                 </div>
               )}
             </div>
@@ -2912,7 +2915,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
                   <p className="text-[10px] font-semibold text-primary">📌 {tChat("chat.pinnedMessage")}</p>
                   <p className="text-xs text-muted-foreground truncate">{msgReplyPreview(tChat, pinned)}</p>
                 </div>
-                <button aria-label={tChat('chat.closePinnedAria')} onClick={()=>onPin(pinned.id)} className="p-1 text-muted-foreground hover:text-foreground flex-shrink-0"><X className="w-3.5 h-3.5"/></button>
+                <button aria-label={tChat('chat.closePinnedAria')} onClick={()=>onPin(pinned.id)} className="p-1 text-muted-foreground hover:text-foreground flex-shrink-0"><MorphIcon icon={X} className="w-3.5 h-3.5" /></button>
               </div>
             )}
 
@@ -2929,7 +2932,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
                     {selectMode && (
                       <div className={`absolute left-1 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full border-2 flex items-center justify-center cursor-pointer transition-all ${isSel?'bg-primary border-primary':'bg-card border-border'}`}
                         onClick={e=>{e.stopPropagation();toggleSelect(m.id);}}>
-                        {isSel && <Check className="w-3 h-3 text-white"/>}
+                        {isSel && <MorphIcon icon={Check} className="w-3 h-3 text-white" />}
                       </div>
                     )}
                     <div
@@ -2948,16 +2951,16 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
                             onClick={e => { e.stopPropagation(); const { status, ...retry } = m; onSend(retry as Msg); }}
                             className="flex items-center gap-1 text-[9px] text-red-300 hover:text-red-200 underline"
                             aria-label={tChat('chat.retrySend')}>
-                            <AlertCircle className="w-3 h-3"/>{tChat('chat.retrySend')}
+                            <MorphIcon icon={AlertCircle} className="w-3 h-3" />{tChat('chat.retrySend')}
                           </button>
                         )}
                         {m.edited && <span className="text-[9px] italic">{tChat("chat.editedLabel")}</span>}
                         {m.pinned && <span className="text-[9px]">📌</span>}
                         <span className="text-[9px]">{new Date(m.timestamp).toLocaleTimeString("uz-UZ",{hour:"2-digit",minute:"2-digit",timeZone:"Asia/Tashkent"})}</span>
                         {mine && (
-                          m.status === 'sending' ? <Loader2 className="w-3 h-3 animate-spin"/> :
+                          m.status === 'sending' ? <MorphIcon icon={Loader2} className="w-3 h-3 animate-spin" /> :
                           m.status === 'failed' ? null :
-                          m.read ? <CheckCheck className="w-3.5 h-3.5"/> : <Check className="w-3 h-3"/>
+                          m.read ? <MorphIcon icon={CheckCheck} className="w-3.5 h-3.5" /> : <MorphIcon icon={Check} className="w-3 h-3" />
                         )}
                       </div>
                     </div>
@@ -2997,19 +3000,19 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
                     <div className="fixed z-[70] w-44 glass p-1.5 rounded-2xl border border-white/20 shadow-2xl flex flex-col gap-0.5 animate-pop-in"
                       style={{ top, left }}
                       onClick={e=>e.stopPropagation()}>
-                      <div onClick={()=>{setReplyTo(ctxMsg);setCtxMenu(null);}} className={itemCls}><CornerDownLeft className="w-3.5 h-3.5"/>{tChat('chat.reply')}</div>
+                      <div onClick={()=>{setReplyTo(ctxMsg);setCtxMenu(null);}} className={itemCls}><MorphIcon icon={CornerDownLeft} className="w-3.5 h-3.5" />{tChat('chat.reply')}</div>
                       {canEdit && (
-                        <div onClick={()=>{setEditingId(ctxMsg.id);setEditText(ctxMsg.text);setCtxMenu(null);}} className={itemCls}><Edit className="w-3.5 h-3.5"/>{tChat('chat.edit')}</div>
+                        <div onClick={()=>{setEditingId(ctxMsg.id);setEditText(ctxMsg.text);setCtxMenu(null);}} className={itemCls}><MorphIcon icon={Edit} className="w-3.5 h-3.5" />{tChat('chat.edit')}</div>
                       )}
                       <div onClick={()=>{onPin(ctxMsg.id);setCtxMenu(null);}} className={itemCls}>
-                        {ctxMsg.pinned ? <PinOff className="w-3.5 h-3.5"/> : <Pin className="w-3.5 h-3.5"/>}{ctxMsg.pinned?tChat('chat.unpin'):tChat('chat.pin')}
+                        {ctxMsg.pinned ? <MorphIcon icon={PinOff} className="w-3.5 h-3.5" /> : <MorphIcon icon={Pin} className="w-3.5 h-3.5" />}{ctxMsg.pinned?tChat('chat.unpin'):tChat('chat.pin')}
                       </div>
-                      <div onClick={()=>{setShowForward(ctxMsg);setCtxMenu(null);}} className={itemCls}><Share2 className="w-3.5 h-3.5"/>{tChat('chat.forward')}</div>
-                      <div onClick={()=>{setSelectMode(true);setSelected(new Set([ctxMsg.id]));setCtxMenu(null);}} className={itemCls}><SquareCheck className="w-3.5 h-3.5"/>{tChat('chat.select')}</div>
+                      <div onClick={()=>{setShowForward(ctxMsg);setCtxMenu(null);}} className={itemCls}><MorphIcon icon={Share2} className="w-3.5 h-3.5" />{tChat('chat.forward')}</div>
+                      <div onClick={()=>{setSelectMode(true);setSelected(new Set([ctxMsg.id]));setCtxMenu(null);}} className={itemCls}><MorphIcon icon={SquareCheck} className="w-3.5 h-3.5" />{tChat('chat.select')}</div>
                       {canModifyMessages && (
                         <>
                           <div className="h-px bg-border/60 my-0.5"/>
-                          <div onClick={()=>{onDelete(ctxMsg.id);setCtxMenu(null);}} className="flex items-center gap-2.5 px-3 py-2 hover:bg-red-500/10 text-red-500 rounded-lg cursor-pointer text-xs transition-colors"><Trash2 className="w-3.5 h-3.5"/>{tChat('chat.delete')}</div>
+                          <div onClick={()=>{onDelete(ctxMsg.id);setCtxMenu(null);}} className="flex items-center gap-2.5 px-3 py-2 hover:bg-red-500/10 text-red-500 rounded-lg cursor-pointer text-xs transition-colors"><MorphIcon icon={Trash2} className="w-3.5 h-3.5" />{tChat('chat.delete')}</div>
                         </>
                       )}
                     </div>
@@ -3028,19 +3031,19 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
                   <p className="text-[10px] font-semibold text-primary">{replyTo.fromUserId===currentUser.id?tChat('chat.you'):userById(replyTo.fromUserId)?.name}</p>
                   <p className="text-xs text-muted-foreground truncate">{msgReplyPreview(tChat, replyTo)}</p>
                 </div>
-                <button aria-label={tChat('chat.cancelReplyAria')} onClick={()=>setReplyTo(null)} className="p-1 text-muted-foreground hover:text-foreground flex-shrink-0"><X className="w-4 h-4"/></button>
+                <button aria-label={tChat('chat.cancelReplyAria')} onClick={()=>setReplyTo(null)} className="p-1 text-muted-foreground hover:text-foreground flex-shrink-0"><MorphIcon icon={X} className="w-4 h-4" /></button>
               </div>
             )}
 
             {/* Edit preview */}
             {editingId && (
               <div className="flex items-center gap-2 bg-amber-500/10 px-4 py-2 border-t border-amber-500/25 flex-shrink-0">
-                <Edit className="w-4 h-4 text-amber-600 flex-shrink-0"/>
+                <MorphIcon icon={Edit} className="w-4 h-4 text-amber-600 flex-shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-[10px] font-semibold text-amber-800 dark:text-amber-400">Tahrirlash</p>
                   <p className="text-xs text-muted-foreground truncate">{messages.find(m=>m.id===editingId)?.text}</p>
                 </div>
-                <button aria-label={tChat('chat.cancelEditAria')} onClick={()=>{setEditingId(null);setEditText("");}} className="p-1 text-muted-foreground hover:text-foreground flex-shrink-0"><X className="w-4 h-4"/></button>
+                <button aria-label={tChat('chat.cancelEditAria')} onClick={()=>{setEditingId(null);setEditText("");}} className="p-1 text-muted-foreground hover:text-foreground flex-shrink-0"><MorphIcon icon={X} className="w-4 h-4" /></button>
               </div>
             )}
 
@@ -3054,10 +3057,10 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
                       stopPropagation qilib chetlab o'tardi) tegilsa yopilsin. */}
                   <div className="fixed inset-0 z-40" onClick={()=>setShowAttach(false)}/>
                   <div className="absolute bottom-[4.5rem] left-3 glass p-2 rounded-2xl border border-white/20 shadow-2xl flex flex-col gap-0.5 animate-slide-up-fade z-50 min-w-[190px]" onClick={e=>e.stopPropagation()}>
-                    <button onClick={()=>fileImgRef.current?.click()} className="flex items-center gap-3 px-3 py-2 hover:bg-muted/40 rounded-xl transition-colors text-sm"><ImageIcon className="w-4 h-4 text-blue-500"/>{tChat('chat.attachImage')}</button>
-                    <button onClick={()=>camRef.current?.click()} className="flex items-center gap-3 px-3 py-2 hover:bg-muted/40 rounded-xl transition-colors text-sm"><Camera className="w-4 h-4 text-rose-500"/>{tChat('chat.attachCamera')}</button>
-                    <button onClick={()=>fileAllRef.current?.click()} className="flex items-center gap-3 px-3 py-2 hover:bg-muted/40 rounded-xl transition-colors text-sm"><FileText className="w-4 h-4 text-orange-500"/>{tChat('chat.attachFile')}</button>
-                    <button onClick={sendLocation} className="flex items-center gap-3 px-3 py-2 hover:bg-muted/40 rounded-xl transition-colors text-sm"><MapPin className="w-4 h-4 text-green-500"/>{tChat('chat.attachLocation')}</button>
+                    <button onClick={()=>fileImgRef.current?.click()} className="flex items-center gap-3 px-3 py-2 hover:bg-muted/40 rounded-xl transition-colors text-sm"><MorphIcon icon={ImageIcon} className="w-4 h-4 text-blue-500" />{tChat('chat.attachImage')}</button>
+                    <button onClick={()=>camRef.current?.click()} className="flex items-center gap-3 px-3 py-2 hover:bg-muted/40 rounded-xl transition-colors text-sm"><MorphIcon icon={Camera} className="w-4 h-4 text-rose-500" />{tChat('chat.attachCamera')}</button>
+                    <button onClick={()=>fileAllRef.current?.click()} className="flex items-center gap-3 px-3 py-2 hover:bg-muted/40 rounded-xl transition-colors text-sm"><MorphIcon icon={FileText} className="w-4 h-4 text-orange-500" />{tChat('chat.attachFile')}</button>
+                    <button onClick={sendLocation} className="flex items-center gap-3 px-3 py-2 hover:bg-muted/40 rounded-xl transition-colors text-sm"><MorphIcon icon={MapPin} className="w-4 h-4 text-green-500" />{tChat('chat.attachLocation')}</button>
                   </div>
                   </>
                 )}
@@ -3072,7 +3075,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
                     <div className="flex-1 relative flex items-end">
                       <button onClick={()=>setShowAttach(!showAttach)} aria-label="Biriktirish"
                         className="absolute left-2 bottom-2 w-7 h-7 flex items-center justify-center text-muted-foreground hover:text-foreground rounded-full hover:bg-white/10 transition-colors flex-shrink-0 z-10">
-                        <Paperclip className="w-4 h-4"/>
+                        <MorphIcon icon={Paperclip} className="w-4 h-4" />
                       </button>
                       <textarea rows={1}
                         className="w-full resize-none text-sm bg-transparent focus:outline-none max-h-28 overflow-y-auto leading-relaxed pl-9 pr-3 py-2.5"
@@ -3086,13 +3089,13 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
                   <div className="flex items-center gap-1 flex-shrink-0 pb-1">
                     {isRecording ? (
                       <>
-                        <button aria-label={tChat('chat.cancelRecordingAria')} onClick={cancelRec} className="w-9 h-9 flex items-center justify-center text-muted-foreground hover:bg-white/10 rounded-full transition-colors"><X className="w-4 h-4"/></button>
-                        <button aria-label={tChat('chat.sendVoiceAria')} onClick={stopRec} className="w-9 h-9 bg-gradient-to-br from-red-500 to-red-600 text-white rounded-full flex items-center justify-center active:scale-95 liquid-transition shadow-md shadow-red-500/30"><Send className="w-4 h-4 ml-0.5"/></button>
+                        <button aria-label={tChat('chat.cancelRecordingAria')} onClick={cancelRec} className="w-9 h-9 flex items-center justify-center text-muted-foreground hover:bg-white/10 rounded-full transition-colors"><MorphIcon icon={X} className="w-4 h-4" /></button>
+                        <button aria-label={tChat('chat.sendVoiceAria')} onClick={stopRec} className="w-9 h-9 bg-gradient-to-br from-red-500 to-red-600 text-white rounded-full flex items-center justify-center active:scale-95 liquid-transition shadow-md shadow-red-500/30"><MorphIcon icon={Send} className="w-4 h-4 ml-0.5" /></button>
                       </>
                     ) : (editingId ? editText : text).trim() ? (
-                      <button aria-label={tChat('chat.sendMessageAria')} onClick={()=>{if(editingId)saveEdit();else doSend();}} className="w-9 h-9 bg-gradient-to-br from-primary to-primary/80 text-white rounded-full flex items-center justify-center active:scale-95 liquid-transition shadow-md shadow-primary/30"><Send className="w-4 h-4 ml-0.5"/></button>
+                      <button aria-label={tChat('chat.sendMessageAria')} onClick={()=>{if(editingId)saveEdit();else doSend();}} className="w-9 h-9 bg-gradient-to-br from-primary to-primary/80 text-white rounded-full flex items-center justify-center active:scale-95 liquid-transition shadow-md shadow-primary/30"><MorphIcon icon={Send} className="w-4 h-4 ml-0.5" /></button>
                     ) : (
-                      <button aria-label={tChat('chat.recordVoiceAria')} onClick={startRec} className="w-9 h-9 flex items-center justify-center text-muted-foreground hover:bg-white/10 rounded-full transition-colors"><Mic className="w-5 h-5"/></button>
+                      <button aria-label={tChat('chat.recordVoiceAria')} onClick={startRec} className="w-9 h-9 flex items-center justify-center text-muted-foreground hover:bg-white/10 rounded-full transition-colors"><MorphIcon icon={Mic} className="w-5 h-5" /></button>
                     )}
                   </div>
                 </div>
@@ -3108,7 +3111,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
           <div className="glass-modal rounded-t-3xl sm:rounded-2xl w-full max-w-sm p-5 animate-slide-up-fade" onClick={e=>e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-bold text-sm">{tChat('chat.forwardTo')}</h3>
-              <button aria-label={tChat('common.close')} onClick={()=>setShowForward(null)} className="p-1.5 hover:bg-muted rounded-full"><X className="w-4 h-4"/></button>
+              <button aria-label={tChat('common.close')} onClick={()=>setShowForward(null)} className="p-1.5 hover:bg-muted rounded-full"><MorphIcon icon={X} className="w-4 h-4" /></button>
             </div>
             <div className="space-y-1 max-h-64 overflow-y-auto scrollbar-hide">
               {contacts.map(u => (
@@ -3148,13 +3151,13 @@ function GroupCreateModal({ contacts, onClose, onCreate }:
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 modal-backdrop animate-fade-in p-4" onClick={onClose}>
       <div className="glass-modal rounded-2xl w-full max-w-sm p-5 animate-slide-up-fade" onClick={e=>e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
-          <h3 className="font-bold text-sm flex items-center gap-2"><Users2 className="w-4 h-4 text-primary"/>{t('groupCreate.title')}</h3>
-          <button aria-label={t('groupCreate.close')} onClick={onClose} className="p-1.5 hover:bg-muted rounded-full"><X className="w-4 h-4"/></button>
+          <h3 className="font-bold text-sm flex items-center gap-2"><MorphIcon icon={Users2} className="w-4 h-4 text-primary" />{t('groupCreate.title')}</h3>
+          <button aria-label={t('groupCreate.close')} onClick={onClose} className="p-1.5 hover:bg-muted rounded-full"><MorphIcon icon={X} className="w-4 h-4" /></button>
         </div>
         <input value={name} onChange={e=>setName(e.target.value)} placeholder={t('groupCreate.namePlaceholder')} autoFocus
           className="w-full text-sm border border-border rounded-lg px-3 py-2.5 bg-input-background focus:outline-none mb-2"/>
         <div className="relative mb-2">
-          <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"/>
+          <MorphIcon icon={Search} className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input value={q} onChange={e=>setQ(e.target.value)} placeholder={t('groupCreate.searchPlaceholder')} className="w-full text-sm border border-border rounded-lg pl-9 pr-3 py-2 bg-input-background focus:outline-none"/>
         </div>
         <div className="space-y-1 max-h-56 overflow-y-auto scrollbar-hide mb-3">
@@ -3163,7 +3166,7 @@ function GroupCreateModal({ contacts, onClose, onCreate }:
               className={`w-full flex items-center gap-3 px-2.5 py-2 rounded-xl transition-colors text-left ${sel.has(u.id)?'bg-primary/10':'hover:bg-muted/40'}`}>
               <Avatar user={u} size="sm"/>
               <div className="flex-1 min-w-0"><p className="text-sm font-medium truncate">{u.name}</p></div>
-              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${sel.has(u.id)?'bg-primary border-primary':'border-border'}`}>{sel.has(u.id) && <Check className="w-3 h-3 text-white"/>}</div>
+              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${sel.has(u.id)?'bg-primary border-primary':'border-border'}`}>{sel.has(u.id) && <MorphIcon icon={Check} className="w-3 h-3 text-white" />}</div>
             </button>
           ))}
         </div>
@@ -3306,10 +3309,10 @@ function AuditLogSection({ token }: { token: string }) {
       <button onClick={() => { setOpen(o => { if (!o) load(); return !o; })}
       } className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-muted/50 transition-colors">
         <div className="flex items-center gap-3">
-          <div className="icon-chip"><BarChart2 className="w-4 h-4"/></div>
+          <div className="icon-chip"><MorphIcon icon={BarChart2} className="w-4 h-4" /></div>
           <span className="text-sm font-medium">{t('profile.auditLogTitle')}</span>
         </div>
-        {open ? <ChevronUp className="w-4 h-4 text-muted-foreground"/> : <ChevronDown className="w-4 h-4 text-muted-foreground"/>}
+        {open ? <MorphIcon icon={ChevronUp} className="w-4 h-4 text-muted-foreground" /> : <MorphIcon icon={ChevronDown} className="w-4 h-4 text-muted-foreground" />}
       </button>
       {open && (
         <div className="border-t border-border px-4 pb-4 pt-2">
@@ -3435,7 +3438,7 @@ function CurrencyPanel({ canEdit }: { canEdit: boolean }) {
           {rows.map(r => (
             <div key={r.code} className="surface rounded-2xl p-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="icon-chip"><r.icon className="w-4 h-4"/></div>
+                <div className="icon-chip"><MorphIcon icon={r.icon} className="w-4 h-4" /></div>
                 <div>
                   <p className="text-sm font-semibold">1 {r.code}</p>
                   <p className="text-xs text-muted-foreground">{r.label}</p>
@@ -3449,18 +3452,18 @@ function CurrencyPanel({ canEdit }: { canEdit: boolean }) {
           </p>
           <div className="flex gap-2">
             <button onClick={load} className="flex-1 btn btn-outline text-sm py-2.5 rounded-xl flex items-center justify-center gap-2">
-              <RefreshCw className="w-4 h-4"/>{t('currency.refresh')}
+              <MorphIcon icon={RefreshCw} className="w-4 h-4" />{t('currency.refresh')}
             </button>
             {canEdit && (
               <button onClick={openEdit} className="flex-1 btn btn-primary text-sm py-2.5 rounded-xl flex items-center justify-center gap-2">
-                <Edit className="w-4 h-4"/>{t('currency.edit')}
+                <MorphIcon icon={Edit} className="w-4 h-4" />{t('currency.edit')}
               </button>
             )}
           </div>
         </>
       ) : (
         <div className="surface p-8 text-center rounded-2xl">
-          <AlertCircle className="w-10 h-10 text-muted-foreground/30 mx-auto mb-2"/>
+          <MorphIcon icon={AlertCircle} className="w-10 h-10 text-muted-foreground/30 mx-auto mb-2" />
           <p className="text-sm font-medium">{t('currency.fetchError')}</p>
           <button onClick={load} className="btn btn-outline text-xs px-4 py-2 rounded-xl mt-3">{t('currency.retry')}</button>
         </div>
@@ -3545,7 +3548,7 @@ function SecuritySettingsCard() {
       </div>
       <button onClick={() => setChangingPin(true)}
         className="w-full flex items-center justify-center gap-2 text-sm font-semibold py-2.5 rounded-xl border border-border/60 hover:bg-muted liquid-transition">
-        <Lock className="w-4 h-4" /> {t('profile.changePinBtn')}
+        <MorphIcon icon={Lock} className="w-4 h-4"  /> {t('profile.changePinBtn')}
       </button>
       {changingPin && (
         <ChangePinModal onClose={() => setChangingPin(false)}
@@ -3681,8 +3684,23 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
   ];
 
   const activeTheme = COLOR_THEMES.find(t => t.id === colorTheme) || COLOR_THEMES[0];
-  const [activePanel, setActivePanel] = useState<null | "bg" | "appearance" | "color" | "perms" | "projects" | "language" | "subscription" | "currency">(null);
+  const [activePanel, setActivePanel] = useState<null | "bg" | "appearance" | "color" | "perms" | "projects" | "language" | "subscription" | "currency" | "sound">(null);
   const APPEARANCE_LABELS: Record<string, string> = { light: t('profile.themeLight'), dark: t('profile.themeDark'), system: t('profile.themeSystem') };
+
+  // ── Ovoz effektlari (uisfx, "zen" pack) — yoqilgan/o'chirilgan va balandlik
+  // holati sfx obyektida (localStorage'da saqlanadi) yashaydi, bu yerda
+  // faqat UI uchun ko'chirib olingan. ──
+  const [soundOn, setSoundOnState] = useState(() => isSoundEnabled());
+  const [soundVol, setSoundVolState] = useState(() => Math.round(getSoundVolume() * 100));
+  const handleSoundToggle = (enabled: boolean) => {
+    setSoundEnabled(enabled);
+    setSoundOnState(enabled);
+    if (enabled) playSound("toggle-on");
+  };
+  const handleSoundVolume = (percent: number) => {
+    setSoundVolState(percent);
+    setSoundVolume(percent / 100);
+  };
 
   const [subData, setSubData] = useState<any>(null);
   const [subLoading, setSubLoading] = useState(false);
@@ -3704,14 +3722,14 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
     const panelTitle = {
       bg: t('profile.bgThemes'), appearance: t('profile.appearanceMode'), color: t('profile.colorTheme'),
       perms: t('profile.permissions'), projects: t('profile.myObjects'), language: t('profile.language'),
-      subscription: t('profile.subscriptionStatus'), currency: t('profile.currencyRate'),
+      subscription: t('profile.subscriptionStatus'), currency: t('profile.currencyRate'), sound: t('profile.sound'),
     }[activePanel];
     return (
       <motion.div key={activePanel} initial={{ opacity: 0, x: 28 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 28 }}
         transition={{ type: "spring", stiffness: 380, damping: 34 }}
         className="overflow-y-auto scrollbar-hide max-w-lg md:max-w-2xl xl:max-w-3xl mx-auto w-full pb-10">
         <div className="flex items-center gap-2 px-4 py-4 sticky top-0 bg-background/80 backdrop-blur-xl z-10">
-          <button onClick={() => setActivePanel(null)} aria-label={t('common.back')} className="btn btn-ghost w-9 h-9 p-0 rounded-full flex-shrink-0"><ChevronLeft className="w-5 h-5"/></button>
+          <button onClick={() => setActivePanel(null)} aria-label={t('common.back')} className="btn btn-ghost w-9 h-9 p-0 rounded-full flex-shrink-0"><MorphIcon icon={ChevronLeft} className="w-5 h-5" /></button>
           <h2 className="text-base font-bold">{panelTitle}</h2>
         </div>
         <div className="px-4 space-y-4">
@@ -3730,7 +3748,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
                         className={`relative rounded-lg sm:rounded-xl overflow-hidden border-2 liquid-transition ${isCurrent ? "border-primary shadow-md scale-[1.05]" : "border-transparent hover:border-primary/40"}`}
                         style={{ aspectRatio: "4/3", background: bgT.value || "var(--background)" }}>
                         {bgT.id === "default" && <div className="absolute inset-0 flex items-center justify-center bg-muted/60"><span className="text-[8px] text-muted-foreground font-semibold">{t('profile.none')}</span></div>}
-                        {isCurrent && <div className="absolute top-0.5 right-0.5 w-3.5 h-3.5 bg-white/95 rounded-full flex items-center justify-center shadow"><Check className="w-2 h-2 text-primary"/></div>}
+                        {isCurrent && <div className="absolute top-0.5 right-0.5 w-3.5 h-3.5 bg-white/95 rounded-full flex items-center justify-center shadow"><MorphIcon icon={Check} className="w-2 h-2 text-primary" /></div>}
                         {bgT.id !== "default" && <div className="absolute inset-x-0 bottom-0 py-0.5" style={{ background: "rgba(0,0,0,0.38)" }}><p className="text-center text-[7px] sm:text-[8px] text-white font-semibold">{t(`profile.bgTemplateNames.${bgT.id}`, { defaultValue: bgT.name })}</p></div>}
                       </button>
                     );
@@ -3738,7 +3756,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
                   <button onClick={() => bgRef.current?.click()}
                     className="relative rounded-lg sm:rounded-xl overflow-hidden border-2 border-dashed border-border bg-muted/40 hover:bg-muted/70 hover:border-primary/40 flex flex-col items-center justify-center gap-0.5 liquid-transition"
                     style={{ aspectRatio: "4/3" }}>
-                    <Upload className="w-3.5 h-3.5 text-muted-foreground"/>
+                    <MorphIcon icon={Upload} className="w-3.5 h-3.5 text-muted-foreground" />
                     <p className="text-[7px] sm:text-[8px] text-muted-foreground font-semibold">{t('profile.uploadPhotoShort')}</p>
                   </button>
                 </div>
@@ -3749,10 +3767,10 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
             <div className="surface overflow-hidden">
               <div className="p-3">
                 <div className="grid grid-cols-3 gap-2">
-                  {([["light",t('profile.themeLight'),Sun],["dark",t('profile.themeDark'),Moon],["system",t('profile.themeSystem'),Monitor]] as [ "light"|"dark"|"system", string, React.ElementType ][]).map(([m,label,Icon]) => (
+                  {([["light",t('profile.themeLight'),Sun],["dark",t('profile.themeDark'),Moon],["system",t('profile.themeSystem'),Monitor]] as [ "light"|"dark"|"system", string, IconNode ][]).map(([m,label,Icon]) => (
                     <button key={m} onClick={() => onThemeModeChange(m)}
                       className={`btn flex flex-col items-center gap-1.5 py-3 rounded-xl border ${themeMode===m ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-muted"}`}>
-                      <Icon className="w-5 h-5"/>
+                      <MorphIcon icon={Icon} className="w-5 h-5" />
                       <span className="text-[11px] font-semibold">{label}</span>
                     </button>
                   ))}
@@ -3778,7 +3796,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
                             : "0 2px 5px rgba(0,0,0,0.18)",
                           transform: colorTheme === ct.id ? "scale(1.08)" : undefined,
                         }}>
-                        {colorTheme === ct.id && <Check className="w-5 h-5 text-white absolute inset-0 m-auto drop-shadow"/>}
+                        {colorTheme === ct.id && <MorphIcon icon={Check} className="w-5 h-5 text-white absolute inset-0 m-auto drop-shadow" />}
                       </div>
                       <span className="text-[11px] text-muted-foreground font-medium leading-none text-center">{ctName}</span>
                     </button>
@@ -3793,7 +3811,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
               {perms.map(([label, has]) => (
                 <div key={label} className="flex items-center justify-between px-4 py-3 border-b border-border/50 last:border-0 hover:bg-muted/20 liquid-transition">
                   <span className="text-sm text-foreground">{label}</span>
-                  {has ? <CheckCircle className="w-4 h-4 text-green-500"/> : <X className="w-4 h-4 text-muted-foreground/30"/>}
+                  {has ? <MorphIcon icon={CheckCircle} className="w-4 h-4 text-green-500" /> : <MorphIcon icon={X} className="w-4 h-4 text-muted-foreground/30" />}
                 </div>
               ))}
             </div>
@@ -3805,7 +3823,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
                 : projects.filter(p => currentUser.projectIds.includes(p.id)).map(p => (
                   <div key={p.id} className="flex items-center gap-3 px-4 py-3 border-b border-border/50 last:border-0">
                     <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                      <Building2 className="w-4 h-4 text-primary"/>
+                      <MorphIcon icon={Building2} className="w-4 h-4 text-primary" />
                     </div>
                     <span className="text-sm truncate font-medium">{p.name}</span>
                   </div>
@@ -3822,13 +3840,37 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
           {activePanel === "currency" && (
             <CurrencyPanel canEdit={isAdmin(currentUser.role) || !!currentUser.isOwner}/>
           )}
+          {activePanel === "sound" && (
+            <div className="surface overflow-hidden">
+              <div className="p-3">
+                <div className="grid grid-cols-2 gap-2">
+                  {([[true, t('profile.soundOn'), Volume2], [false, t('profile.soundOff'), VolumeX]] as [boolean, string, IconNode][]).map(([val, label, Icon]) => (
+                    <button key={String(val)} onClick={() => handleSoundToggle(val)}
+                      className={`btn flex flex-col items-center gap-1.5 py-3 rounded-xl border ${soundOn===val ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-muted"}`}>
+                      <MorphIcon icon={Icon} className="w-5 h-5" />
+                      <span className="text-[11px] font-semibold">{label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {soundOn && (
+                <div className="px-4 pb-4 pt-1 border-t border-border/50">
+                  <label className="text-[10px] text-muted-foreground block mb-2 mt-3 uppercase tracking-wider font-bold">{t('profile.soundVolume')}</label>
+                  <input type="range" min={0} max={100} step={5} value={soundVol}
+                    onChange={e => handleSoundVolume(Number(e.target.value))}
+                    onMouseUp={() => playSound("select")} onTouchEnd={() => playSound("select")}
+                    className="w-full accent-primary" aria-label={t('profile.soundVolume')} />
+                </div>
+              )}
+            </div>
+          )}
           {activePanel === "subscription" && (
             <div className="surface overflow-hidden">
               {subLoading ? (
                 <SkeletonList items={1} withAvatar={false} />
               ) : !subData || subData.status === 'none' ? (
                 <div className="px-5 py-8 text-center space-y-2">
-                  <CreditCard className="w-10 h-10 text-muted-foreground/40 mx-auto"/>
+                  <MorphIcon icon={CreditCard} className="w-10 h-10 text-muted-foreground/40 mx-auto" />
                   <p className="text-sm font-medium">{t('profile.subscriptionNotFound')}</p>
                   <p className="text-xs text-muted-foreground">{t('profile.subscriptionContactDev')}</p>
                 </div>
@@ -3864,7 +3906,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
                     )}
                     {subData.currentPeriodEnd && (
                       <div className="flex items-center justify-between px-5 py-4">
-                        <div className="flex items-center gap-2 text-muted-foreground"><Calendar className="w-3.5 h-3.5"/><span className="text-sm font-medium">{t('profile.endDateLabel')}</span></div>
+                        <div className="flex items-center gap-2 text-muted-foreground"><MorphIcon icon={Calendar} className="w-3.5 h-3.5" /><span className="text-sm font-medium">{t('profile.endDateLabel')}</span></div>
                         <span className="text-sm font-semibold">{new Date(subData.currentPeriodEnd).toLocaleDateString('uz-UZ', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Asia/Tashkent' })}</span>
                       </div>
                     )}
@@ -3876,12 +3918,12 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
                     )}
                     {subData.status === 'active' && subData.daysLeft !== null && subData.daysLeft <= 30 && (
                       <div className="px-5 py-4 bg-amber-500/5">
-                        <p className="text-xs text-amber-700 dark:text-amber-300 flex items-start gap-1.5"><AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5"/>{t('profile.subExpiringWarning')}</p>
+                        <p className="text-xs text-amber-700 dark:text-amber-300 flex items-start gap-1.5"><MorphIcon icon={AlertCircle} className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />{t('profile.subExpiringWarning')}</p>
                       </div>
                     )}
                     {(subData.status === 'expired' || subData.status === 'rejected') && (
                       <div className="px-5 py-4 bg-red-500/5">
-                        <p className="text-xs text-red-600 dark:text-red-400 flex items-start gap-1.5"><AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5"/>{t('profile.subExpiredContact')} <a href="https://t.me/Sadriddinov_Jahongir" className="underline font-semibold">@Sadriddinov_Jahongir</a></p>
+                        <p className="text-xs text-red-600 dark:text-red-400 flex items-start gap-1.5"><MorphIcon icon={AlertCircle} className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />{t('profile.subExpiredContact')} <a href="https://t.me/Sadriddinov_Jahongir" className="underline font-semibold">@Sadriddinov_Jahongir</a></p>
                       </div>
                     )}
                   </div>
@@ -3905,19 +3947,19 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
           <button onClick={() => bgRef.current?.click()}
             className="absolute top-4 right-4 flex items-center gap-1.5 text-white text-xs px-3 py-2 rounded-full border border-white/25 liquid-transition hover:bg-white/20 active:scale-95"
             style={{ background: "rgba(0,0,0,0.30)", backdropFilter: "blur(12px)" }}>
-            <Upload className="w-3.5 h-3.5"/>{t('profile.uploadPhotoBtn')}
+            <MorphIcon icon={Upload} className="w-3.5 h-3.5" />{t('profile.uploadPhotoBtn')}
           </button>
         )}
         <input ref={bgRef} type="file" accept="image/*" className="hidden" onChange={handleBgFile}/>
         <div className="absolute bottom-0 left-0 right-0 px-5 pb-5 flex items-end gap-4">
           <div className="relative flex-shrink-0">
             <div className="w-16 h-16 rounded-2xl border-2 border-white/80 shadow-2xl overflow-hidden bg-white flex items-center justify-center">
-              {companyLogo ? <img src={companyLogo} alt="Logo" className="w-full h-full object-contain p-1"/> : <Building2 className="w-8 h-8 text-primary"/>}
+              {companyLogo ? <img src={companyLogo} alt="Logo" className="w-full h-full object-contain p-1"/> : <MorphIcon icon={Building2} className="w-8 h-8 text-primary" />}
             </div>
             {canEditCompany && (
               <button onClick={() => logoRef.current?.click()} aria-label={t('profile.changeLogoAria')}
                 className="absolute -bottom-1.5 -right-1.5 w-6 h-6 bg-white text-primary rounded-full flex items-center justify-center border border-border shadow-lg hover:bg-primary hover:text-white liquid-transition">
-                <Camera className="w-3 h-3"/>
+                <MorphIcon icon={Camera} className="w-3 h-3" />
               </button>
             )}
             <input ref={logoRef} type="file" accept="image/*" className="hidden" onChange={handleLogoFile}/>
@@ -3927,8 +3969,8 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
               <div className="flex items-center gap-2">
                 <input className="flex-1 text-white font-bold text-lg bg-transparent border-b-2 border-white/60 focus:border-white focus:outline-none pb-0.5"
                   value={brandInput} onChange={e => setBrandInput(e.target.value)} autoFocus disabled={savingBrand} onKeyDown={e => e.key === 'Enter' && saveBrand()}/>
-                <button aria-label={t('common.save')} onClick={saveBrand} disabled={savingBrand} className="w-7 h-7 bg-white/20 text-white rounded-full flex items-center justify-center border border-white/30 hover:bg-white/30 liquid-transition disabled:opacity-50">{savingBrand ? <Loader2 className="w-3.5 h-3.5 animate-spin"/> : <Check className="w-3.5 h-3.5"/>}</button>
-                <button aria-label={t('common.cancel')} onClick={() => setEditingBrand(false)} disabled={savingBrand} className="w-7 h-7 bg-black/20 text-white rounded-full flex items-center justify-center hover:bg-black/30 liquid-transition disabled:opacity-50"><X className="w-3.5 h-3.5"/></button>
+                <button aria-label={t('common.save')} onClick={saveBrand} disabled={savingBrand} className="w-7 h-7 bg-white/20 text-white rounded-full flex items-center justify-center border border-white/30 hover:bg-white/30 liquid-transition disabled:opacity-50">{savingBrand ? <MorphIcon icon={Loader2} className="w-3.5 h-3.5 animate-spin" /> : <MorphIcon icon={Check} className="w-3.5 h-3.5" />}</button>
+                <button aria-label={t('common.cancel')} onClick={() => setEditingBrand(false)} disabled={savingBrand} className="w-7 h-7 bg-black/20 text-white rounded-full flex items-center justify-center hover:bg-black/30 liquid-transition disabled:opacity-50"><MorphIcon icon={X} className="w-3.5 h-3.5" /></button>
               </div>
             ) : (
               <div className="flex items-center gap-2">
@@ -3936,7 +3978,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
                 {canEditCompany && (
                   <button onClick={() => { setBrandInput(companyName); setEditingBrand(true); }} aria-label={t('profile.editNameAria')}
                     className="p-1 text-white/60 hover:text-white rounded-lg hover:bg-white/10 liquid-transition">
-                    <Edit className="w-3.5 h-3.5"/>
+                    <MorphIcon icon={Edit} className="w-3.5 h-3.5" />
                   </button>
                 )}
               </div>
@@ -3952,12 +3994,12 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28, delay: 0.02 }}
           className="surface p-5 text-center relative">
           {isAdmin(currentUser.role) && !isEditing && (
-            <button aria-label={t('common.edit')} onClick={() => setIsEditing(true)} className="absolute top-4 right-4 p-1.5 text-muted-foreground hover:bg-muted/50 hover:text-foreground rounded-lg liquid-transition"><Edit className="w-4 h-4"/></button>
+            <button aria-label={t('common.edit')} onClick={() => setIsEditing(true)} className="absolute top-4 right-4 p-1.5 text-muted-foreground hover:bg-muted/50 hover:text-foreground rounded-lg liquid-transition"><MorphIcon icon={Edit} className="w-4 h-4" /></button>
           )}
           <div className="relative inline-block mb-3">
             <Avatar user={currentUser} size="lg"/>
             <button onClick={() => fileRef.current?.click()} aria-label={t('profile.changePhotoAria')} className="absolute bottom-0 right-0 w-7 h-7 bg-primary text-white rounded-full flex items-center justify-center hover:bg-primary/90 border-2 border-white shadow-lg liquid-transition">
-              <Camera className="w-3.5 h-3.5"/>
+              <MorphIcon icon={Camera} className="w-3.5 h-3.5" />
             </button>
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile}/>
           </div>
@@ -3966,7 +4008,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
               <div>
                 <label className="text-[10px] text-muted-foreground block mb-1.5 ml-1 uppercase tracking-wider font-bold">{t('profile.nameLabel')}</label>
                 <div className="relative">
-                  <User className="w-4 h-4 text-muted-foreground absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none"/>
+                  <MorphIcon icon={User} className="w-4 h-4 text-muted-foreground absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
                   <input className="w-full text-sm border border-border/50 rounded-2xl pl-11 pr-4 py-3 bg-white/50 dark:bg-black/20 focus:bg-white dark:focus:bg-black/40 focus:outline-none focus:ring-2 focus:ring-primary/50 liquid-transition shadow-inner"
                     value={form.name} onChange={e => setForm({...form, name: e.target.value})}/>
                 </div>
@@ -3974,13 +4016,13 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
               <div>
                 <label className="text-[10px] text-muted-foreground block mb-1.5 ml-1 uppercase tracking-wider font-bold">{t('profile.phoneLabel')}</label>
                 <div className="relative">
-                  <Phone className="w-4 h-4 text-muted-foreground absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none"/>
+                  <MorphIcon icon={Phone} className="w-4 h-4 text-muted-foreground absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
                   <input inputMode="tel" className="w-full text-sm border border-border/50 rounded-2xl pl-11 pr-4 py-3 bg-white/50 dark:bg-black/20 focus:bg-white dark:focus:bg-black/40 focus:outline-none focus:ring-2 focus:ring-primary/50 liquid-transition shadow-inner font-mono"
                     value={form.phone} onChange={e => setForm({...form, phone: e.target.value.replace(/[^\d+]/g, "")})}/>
                 </div>
               </div>
               {form.phone !== currentUser.phone && (
-                <div className="bg-amber-500/10 border border-amber-500/25 text-amber-700 dark:text-amber-300 text-xs p-3 rounded-2xl flex items-start gap-2 text-left"><AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5"/><p>{t('profile.phoneChangeWarning')}</p></div>
+                <div className="bg-amber-500/10 border border-amber-500/25 text-amber-700 dark:text-amber-300 text-xs p-3 rounded-2xl flex items-start gap-2 text-left"><MorphIcon icon={AlertCircle} className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" /><p>{t('profile.phoneChangeWarning')}</p></div>
               )}
               <div className="flex gap-2 pt-1">
                 <button onClick={() => setIsEditing(false)} className="flex-1 text-sm font-semibold py-3 rounded-full border border-border/60 text-muted-foreground hover:bg-muted liquid-transition">{t('common.cancel')}</button>
@@ -4009,6 +4051,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
             { key: "perms" as const, icon: CheckCircle, label: t('profile.permissions'), hint: `${perms.filter(([,has])=>has).length}/${perms.length}`, swatch: null },
             { key: "projects" as const, icon: Building2, label: t('profile.myObjects'), hint: String(myProjectCount), swatch: null },
             { key: "currency" as const, icon: DollarSign, label: t('profile.currencyRate'), hint: null as string|null, swatch: null },
+            { key: "sound" as const, icon: soundOn ? Volume2 : VolumeX, label: t('profile.sound'), hint: soundOn ? t('profile.soundOn') : t('profile.soundOff'), swatch: null },
             ...(isAdmin(currentUser.role) ? [{ key: "subscription" as const, icon: CreditCard, label: t('profile.subscriptionStatus'),
               hint: subData?.status === 'active' ? (subData.daysLeft !== null ? t('profile.daysLeftValue', { count: subData.daysLeft }) : t('profile.subStatusActive')) : subData?.status === 'pending' ? t('profile.subStatusPending') : subData?.status === 'expired' ? t('profile.subStatusExpired') : subData?.status === 'rejected' ? t('profile.subStatusRejected') : subLoading ? "..." : t('common.notFound'),
               swatch: null }] : []),
@@ -4017,10 +4060,10 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
               className={`w-full flex items-center gap-3 px-4 py-3.5 hover:bg-muted/30 liquid-transition text-left ${i > 0 ? "border-t border-border/50" : ""}`}>
               {row.swatch
                 ? <div className="w-10 h-10 rounded-xl flex-shrink-0" style={row.swatch}/>
-                : <div className="icon-chip"><row.icon className="w-4 h-4"/></div>}
+                : <div className="icon-chip"><MorphIcon icon={row.icon} className="w-4 h-4" /></div>}
               <span className="text-sm font-medium flex-1">{row.label}</span>
               {row.hint && <span className="text-xs text-muted-foreground">{row.hint}</span>}
-              <ChevronRight className="w-4 h-4 text-muted-foreground/60"/>
+              <MorphIcon icon={ChevronRight} className="w-4 h-4 text-muted-foreground/60" />
             </button>
           ))}
         </motion.div>
@@ -4037,7 +4080,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
             <div className="p-4">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
-                  <div className="icon-chip"><Calendar className="w-4 h-4"/></div>
+                  <div className="icon-chip"><MorphIcon icon={Calendar} className="w-4 h-4" /></div>
                   <span className="text-sm font-semibold">{t('attendance.today')}</span>
                 </div>
                 {todayAttendance?.status && (
@@ -4061,7 +4104,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
               <div className="flex gap-2">
                 {!todayAttendance?.checkOut ? (
                   <button onClick={() => { if (confirm(t('profile.confirmFinishWork'))) onCheckOut(); }} className="flex-1 btn btn-outline text-xs py-2.5 rounded-xl flex items-center justify-center gap-1.5 border-red-400/40 text-red-600 dark:text-red-400 hover:bg-red-500/10">
-                    <X className="w-3.5 h-3.5"/>{t('profile.finishWorkBtn')}
+                    <MorphIcon icon={X} className="w-3.5 h-3.5" />{t('profile.finishWorkBtn')}
                   </button>
                 ) : (
                   // XATO TUZATILDI ("ishni tugatgandan keyin ishga keldim tugmasi
@@ -4074,7 +4117,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
                       ✓ {t('profile.todayWorkDone', { duration: fmtWorkDuration(todayAttendance.checkIn, todayAttendance.checkOut, t) || t('gps.minutesShort', { min: 0 }) })}
                     </div>
                     <button onClick={() => { if (confirm(t('checkinGate.confirmPrompt'))) onCheckIn(); }} className="btn btn-primary text-xs py-2.5 rounded-xl flex items-center justify-center gap-1.5">
-                      <Check className="w-3.5 h-3.5"/>{t('profile.resumeWorkBtn')}
+                      <MorphIcon icon={Check} className="w-3.5 h-3.5" />{t('profile.resumeWorkBtn')}
                     </button>
                   </div>
                 )}
@@ -4101,13 +4144,13 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
             bunga maxsus native imkoniyat kerak emas. */}
         <button onClick={onLockNow}
           className="w-full flex items-center justify-center gap-2.5 text-sm border-2 border-border rounded-2xl px-4 py-3.5 text-foreground hover:bg-primary/5 hover:border-primary/30 liquid-transition font-semibold">
-          <Lock className="w-4 h-4"/>{t('profile.lockNowBtn')}
+          <MorphIcon icon={Lock} className="w-4 h-4" />{t('profile.lockNowBtn')}
         </button>
 
         <motion.button initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28, delay: 0.26 }}
           onClick={() => { localStorage.removeItem("currentUser"); localStorage.removeItem("token"); onLogout(); }}
           className="w-full flex items-center justify-center gap-2.5 text-sm border-2 border-border rounded-2xl px-4 py-3.5 text-muted-foreground hover:bg-red-500/10 hover:text-red-600 hover:border-red-500/30 liquid-transition font-semibold">
-          <LogOut className="w-4 h-4"/>{t('profile.logout')}
+          <MorphIcon icon={LogOut} className="w-4 h-4" />{t('profile.logout')}
         </motion.button>
       </div>
     </div>
@@ -4135,8 +4178,8 @@ function BottomFinanceBar({ expenses, projects }: { expenses: Expense[]; project
         </div>
       )}
       <button onClick={()=>setOpen(!open)} className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-white/5 transition-colors">
-        <div className="flex items-center gap-2"><TrendingDown className="w-4 h-4 text-white/90"/><span className="text-sm md:text-xs text-white/90">{t('finance.totalExpenses')}</span></div>
-        <div className="flex items-center gap-2"><span className="text-sm font-bold font-mono">{fmt(total)}</span>{open?<ChevronUp className="w-4 h-4 text-white/60"/>:<ChevronDown className="w-4 h-4 text-white/60"/>}</div>
+        <div className="flex items-center gap-2"><MorphIcon icon={TrendingDown} className="w-4 h-4 text-white/90" /><span className="text-sm md:text-xs text-white/90">{t('finance.totalExpenses')}</span></div>
+        <div className="flex items-center gap-2"><span className="text-sm font-bold font-mono">{fmt(total)}</span>{open?<MorphIcon icon={ChevronUp} className="w-4 h-4 text-white/60" />:<MorphIcon icon={ChevronDown} className="w-4 h-4 text-white/60" />}</div>
       </button>
     </div>
   );
@@ -4349,14 +4392,14 @@ function LoginScreen({ onLogin, onRegister, onBack }: { onLogin: (u: any, compan
         <button type="button" onClick={onBack}
           className="absolute left-4 z-10 flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground liquid-transition"
           style={{ top: "max(1.25rem, env(safe-area-inset-top))" }}>
-          <ArrowLeft className="w-4 h-4"/> {t('login.homeLink')}
+          <MorphIcon icon={ArrowLeft} className="w-4 h-4" /> {t('login.homeLink')}
         </button>
       )}
 
       <motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 26 }}
         className="mb-8 text-center relative z-10">
         <div className="w-16 h-16 bg-gradient-to-br from-primary to-primary/80 rounded-3xl flex items-center justify-center mx-auto mb-4 shadow-xl shadow-primary/20 overflow-hidden">
-          {loginCompanyLogo ? <img src={loginCompanyLogo} alt="Logo" className="w-full h-full object-contain p-1"/> : <Building2 className="w-8 h-8 text-white"/>}
+          {loginCompanyLogo ? <img src={loginCompanyLogo} alt="Logo" className="w-full h-full object-contain p-1"/> : <MorphIcon icon={Building2} className="w-8 h-8 text-white" />}
         </div>
         <h1 className="text-3xl font-bold font-['Roboto_Slab',serif] bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70">{loginCompanyName}</h1>
         <p className="text-sm text-muted-foreground mt-1">{t('login.subtitle')}</p>
@@ -4378,13 +4421,13 @@ function LoginScreen({ onLogin, onRegister, onBack }: { onLogin: (u: any, compan
                 {t('login.botHintBefore')} <span className="font-semibold text-foreground">/start</span> {t('login.botHintAfter')}
               </p>
               <a href="https://t.me/qurilish_erp_bot" target="_blank" rel="noopener noreferrer" className="mt-2 text-sm md:text-xs font-semibold text-foreground flex items-center justify-center gap-1 hover:underline hover:text-primary">
-                <Send className="w-3 h-3 text-primary"/> {t('login.goToBot', { handle: '@qurilish_erp_bot' })}
+                <MorphIcon icon={Send} className="w-3 h-3 text-primary" /> {t('login.goToBot', { handle: '@qurilish_erp_bot' })}
               </a>
             </div>
             <div>
               <label htmlFor="login-phone" className="text-sm md:text-xs font-medium block mb-1.5 ml-1 text-muted-foreground">{t('login.phoneLabel')}</label>
               <div className="relative">
-                <Phone className="w-4 h-4 text-muted-foreground absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none"/>
+                <MorphIcon icon={Phone} className="w-4 h-4 text-muted-foreground absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input id="login-phone" type="text" inputMode="tel" className="w-full text-sm border border-border/50 rounded-2xl pl-11 pr-4 py-3 bg-white/50 dark:bg-black/20 focus:bg-white dark:focus:bg-black/40 focus:outline-none focus:ring-2 focus:ring-primary/50 font-mono liquid-transition shadow-inner"
                   value={phone} onChange={e => {
                     setError("");
@@ -4403,11 +4446,11 @@ function LoginScreen({ onLogin, onRegister, onBack }: { onLogin: (u: any, compan
             <div className="flex flex-col items-center gap-3">
               {blockedReason === 'pending' ? (
                 <div className="w-14 h-14 rounded-full bg-amber-500/15 flex items-center justify-center">
-                  <Clock className="w-7 h-7 text-amber-500"/>
+                  <MorphIcon icon={Clock} className="w-7 h-7 text-amber-500" />
                 </div>
               ) : (
                 <div className="w-14 h-14 rounded-full bg-red-500/15 flex items-center justify-center">
-                  <AlertCircle className="w-7 h-7 text-red-500"/>
+                  <MorphIcon icon={AlertCircle} className="w-7 h-7 text-red-500" />
                 </div>
               )}
               {blockedReason === 'pending' && (
@@ -4425,7 +4468,7 @@ function LoginScreen({ onLogin, onRegister, onBack }: { onLogin: (u: any, compan
             </div>
             <a href="https://t.me/Sadriddinov_Jahongir" target="_blank" rel="noopener noreferrer"
               className="w-full inline-flex items-center justify-center gap-2 bg-blue-500 text-white text-sm font-semibold py-3.5 rounded-full min-h-[44px] active:scale-[0.98] transition-transform">
-              <Send className="w-4 h-4"/> {t('login.contactAdmin', { handle: '@Sadriddinov_Jahongir' })}
+              <MorphIcon icon={Send} className="w-4 h-4" /> {t('login.contactAdmin', { handle: '@Sadriddinov_Jahongir' })}
             </a>
             <button type="button" onClick={() => { setStep("phone"); setBlockedReason(null); setError(""); }}
               className="w-full text-sm text-muted-foreground hover:text-foreground py-2">
@@ -4485,7 +4528,7 @@ function LoginScreen({ onLogin, onRegister, onBack }: { onLogin: (u: any, compan
           </div>
           <button type="button" onClick={onRegister}
             className="w-full text-sm font-semibold py-3 rounded-full border border-primary/30 text-foreground bg-primary/5 hover:bg-primary/10 liquid-transition flex items-center justify-center gap-2 min-h-[48px]">
-            <Building2 className="w-4 h-4 text-primary" /> {t('login.newUser')}
+            <MorphIcon icon={Building2} className="w-4 h-4 text-primary"  /> {t('login.newUser')}
           </button>
         </div>
       )}
@@ -5018,7 +5061,7 @@ export default function App() {
         const name = sender?.name || tApp('chat.notifNewMessage');
         const preview = m.type && m.type !== 'text' ? m.text : (m.text || "");
         const viewingChat = pageRef.current === 'chat' && chatOpenRef.current;
-        if (!viewingChat) toast(name, { description: preview });
+        if (!viewingChat) toast.message(name, { description: preview });
         // MUHIM: `new Notification(...)` konstruktori to'g'ridan-to'g'ri
         // chaqirilsa — Android'da (Chrome/WebView, jumladan Capacitor)
         // ko'pincha HECH NARSA ko'rsatmaydi, jim tarzda muvaffaqiyatsiz
@@ -5044,7 +5087,7 @@ export default function App() {
       const onDelete = (payload: any) => setMessages(prev => prev.map(x => x.id===payload.id ? {...x, deleted: true} : x));
       const onRead = ({ fromUserId, toUserId }: any) => setMessages(prev => prev.map(x => x.fromUserId===fromUserId && x.toUserId===toUserId ? {...x, read: true} : x));
       const onPresence = ({ online }: any) => setOnlineUsers(online || []);
-      const onGroupNew = (g: any) => { const gg = {...g, id: g.id||g._id}; setGroups(prev => prev.some(x=>x.id===gg.id)?prev:[...prev, gg]); socket.emit("join:group", gg.id); toast(tApp('chat.newGroupToast', { name: gg.name })); };
+      const onGroupNew = (g: any) => { const gg = {...g, id: g.id||g._id}; setGroups(prev => prev.some(x=>x.id===gg.id)?prev:[...prev, gg]); socket.emit("join:group", gg.id); toast.message(tApp('chat.newGroupToast', { name: gg.name })); };
       const onGroupUpdate = (g: any) => setGroups(prev => prev.map(x => x.id===(g.id||g._id) ? {...g, id: g.id||g._id} : x));
       const onGroupRemoved = ({ id }: any) => setGroups(prev => prev.filter(x => x.id !== id));
 
@@ -5219,7 +5262,7 @@ export default function App() {
               disabled={statusChecking}
               className="mx-auto flex items-center gap-2 rounded-full bg-primary text-primary-foreground px-5 py-2.5 text-sm font-medium liquid-transition disabled:opacity-60"
             >
-              <RefreshCw className={`w-4 h-4 ${statusChecking ? 'animate-spin' : ''}`}/>
+              <MorphIcon icon={RefreshCw} className={`w-4 h-4 ${statusChecking ? 'animate-spin' : ''}`} />
               {statusChecking ? tApp('maintenance.checking') : tApp('maintenance.retryBtn')}
             </button>
           </div>
@@ -5244,9 +5287,9 @@ export default function App() {
             </Suspense>
           : authView === "register"
           ? <Suspense fallback={<div className="min-h-screen bg-background"><SkeletonPage variant="form" /></div>}>
-              <RegisterWizard onBack={()=>setAuthView("login")} onDone={(u,company)=>{setCurrentUser(u);setPage("dashboard");setAuthView("login");applyCompany(company);}}/>
+              <RegisterWizard onBack={()=>setAuthView("login")} onDone={(u,company)=>{playSound("success");setCurrentUser(u);setPage("dashboard");setAuthView("login");applyCompany(company);}}/>
             </Suspense>
-          : <LoginScreen onLogin={(u,company)=>{setCurrentUser(u);setPage("dashboard");applyCompany(company);}} onRegister={()=>setAuthView("register")} onBack={()=>setAuthView("landing")}/>}
+          : <LoginScreen onLogin={(u,company)=>{playSound("unlock");setCurrentUser(u);setPage("dashboard");applyCompany(company);}} onRegister={()=>setAuthView("register")} onBack={()=>setAuthView("landing")}/>}
         <Toaster position="top-center" richColors closeButton/>
       </>
     );
@@ -5262,7 +5305,7 @@ export default function App() {
   );
   if (appLocked) return (
     <>
-      <PinLockScreen onUnlock={unlockApp}
+      <PinLockScreen onUnlock={()=>{playSound("unlock");unlockApp();}}
         onForgot={() => {
           if (confirm("Hisobdan chiqib, qaytadan kirasizmi? PIN kod tozalanadi.")) {
             clearPin();
@@ -5282,7 +5325,7 @@ export default function App() {
   if (liveUser.role === "dasturchi") return (
     <>
       <Suspense fallback={<div className="min-h-screen bg-background"><SkeletonPage variant="dashboard" /></div>}>
-        <DeveloperPanel currentUser={liveUser} onLogout={()=>{setCurrentUser(null);setAuthView("login");}}/>
+        <DeveloperPanel currentUser={liveUser} onLogout={()=>{playSound("lock");setCurrentUser(null);setAuthView("login");}}/>
       </Suspense>
       <Toaster position="top-center" richColors closeButton/>
     </>
@@ -5299,7 +5342,7 @@ export default function App() {
   const admin = isAdmin(liveUser.role);
   const unreadMsgs = messages.filter(m=>m.toUserId===liveUser.id&&!m.read).length;
   const isGpsAdmin = liveUser?.role === 'direktor' || liveUser?.role === 'orinbosar';
-  const NAV: { key: NavPage; label: string; icon: React.ElementType; badge?: number }[] = [
+  const NAV: { key: NavPage; label: string; icon: IconNode; badge?: number }[] = [
     { key: "dashboard", label: tApp('nav.dashboard'), icon: Home },
     // Moliya endi HAMMAGA ko'rinadi — oddiy xodim o'z chiqimini kiritib,
     // faqat o'zinikini ko'radi (backend GET /api/transactions rolga qarab
@@ -5324,7 +5367,7 @@ export default function App() {
       style={{ paddingTop: 'max(0.625rem, env(safe-area-inset-top))', paddingBottom: '0.625rem' }}>
       <div className="nav-pill-desktop flex items-center gap-2.5 px-3 py-2 rounded-full flex-shrink-0">
         <div className="w-7 h-7 rounded-full flex items-center justify-center overflow-hidden bg-gradient-to-br from-accent to-accent/75 shadow-sm flex-shrink-0">
-          {companyLogo ? <img src={companyLogo} alt="Logo" className="w-full h-full object-contain"/> : <Building2 className="w-3.5 h-3.5 text-white"/>}
+          {companyLogo ? <img src={companyLogo} alt="Logo" className="w-full h-full object-contain"/> : <MorphIcon icon={Building2} className="w-3.5 h-3.5 text-white" />}
         </div>
         <span className="text-sm font-bold tracking-tight hidden lg:block whitespace-nowrap">{companyName}</span>
       </div>
@@ -5334,9 +5377,9 @@ export default function App() {
             className={`relative flex items-center gap-1.5 lg:gap-2 text-sm md:text-[13px] lg:text-sm px-2.5 md:px-2.5 lg:px-4 py-2 lg:py-2.5 rounded-full z-10 liquid-transition whitespace-nowrap ${page===n.key?"text-primary font-semibold":"text-muted-foreground hover:text-foreground"}`}>
             {page===n.key && (
               <motion.div layoutId="desktopNavPill" className="absolute inset-0 rounded-full bg-primary/10 -z-10"
-                transition={{ type: "spring", stiffness: 480, damping: 34 }}/>
+                transition={{ type: "spring", stiffness: 480, damping: 34 }}  />
             )}
-            <n.icon className="w-[18px] h-[18px] lg:w-5 lg:h-5 flex-shrink-0"/><span className="hidden md:inline">{n.label}</span>
+            <MorphIcon icon={n.icon} className="w-[18px] h-[18px] lg:w-5 lg:h-5 flex-shrink-0" /><span className="hidden md:inline">{n.label}</span>
             {!!n.badge && n.badge>0 && <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-accent text-accent-foreground rounded-full text-[10px] flex items-center justify-center font-bold shadow-sm">{n.badge}</span>}
           </button>
         ))}
@@ -5350,22 +5393,22 @@ export default function App() {
         )}
         <button onClick={()=>setGlobalSearch(true)} title={tApp('search.title')} aria-label={tApp('search.title')}
           className="btn btn-ghost w-9 h-9 p-0 rounded-full">
-          <Search className="w-[18px] h-[18px]"/>
+          <MorphIcon icon={Search} className="w-[18px] h-[18px]" />
         </button>
         <button onClick={()=>setQrScanOpen(true)} title={tApp('qrScanner.title')} aria-label={tApp('qrScanner.title')}
           className="btn btn-ghost w-9 h-9 p-0 rounded-full">
-          <QrCode className="w-[18px] h-[18px]"/>
+          <MorphIcon icon={QrCode} className="w-[18px] h-[18px]" />
         </button>
         <button onClick={lockAppNow} title={tApp('profile.lockNowBtn')} aria-label={tApp('profile.lockNowBtn')}
           className="btn btn-ghost w-9 h-9 p-0 rounded-full">
-          <Lock className="w-[18px] h-[18px]"/>
+          <MorphIcon icon={Lock} className="w-[18px] h-[18px]" />
         </button>
         <NotificationBell messages={messages} transfers={transfers} expenses={expenses} users={users} currentUser={liveUser}
           onOpenChat={()=>{setPage("chat");setSelProject(null);}} onOpenDashboard={()=>{setPage("dashboard");setSelProject(null);}}/>
         <button onClick={cycleThemeMode} title={themeMode==="light"?"Yorug'":themeMode==="dark"?"Qorong'i":"Tizim bo'yicha"}
           aria-label={themeMode==="light"?"Yorug'":themeMode==="dark"?"Qorong'i":"Tizim bo'yicha"}
           className="btn btn-ghost w-9 h-9 p-0 rounded-full">
-          {themeMode==="light"?<Sun className="w-[18px] h-[18px]"/>:themeMode==="dark"?<Moon className="w-[18px] h-[18px]"/>:<Monitor className="w-[18px] h-[18px]"/>}
+          {themeMode==="light"?<MorphIcon icon={Sun} className="w-[18px] h-[18px]" />:themeMode==="dark"?<MorphIcon icon={Moon} className="w-[18px] h-[18px]" />:<MorphIcon icon={Monitor} className="w-[18px] h-[18px]" />}
         </button>
         <button onClick={()=>{setPage("profile");setSelProject(null);}} className="flex items-center gap-2 hover:bg-white/5 pl-1 pr-1 sm:pr-3 py-1 rounded-full liquid-transition">
           <Avatar user={liveUser} size="sm"/>
@@ -5403,7 +5446,7 @@ export default function App() {
         <motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 26 }}
           className="w-full max-w-sm surface rounded-3xl p-8 text-center space-y-5 relative">
           <div className="w-16 h-16 rounded-full flex items-center justify-center overflow-hidden bg-gradient-to-br from-accent to-accent/75 shadow-sm mx-auto">
-            {companyLogo ? <img src={companyLogo} alt="Logo" className="w-full h-full object-contain"/> : <Building2 className="w-8 h-8 text-white"/>}
+            {companyLogo ? <img src={companyLogo} alt="Logo" className="w-full h-full object-contain"/> : <MorphIcon icon={Building2} className="w-8 h-8 text-white" />}
           </div>
           <div>
             <p className="text-lg font-bold">{tApp('checkinGate.welcome', { name: liveUser.name.split(' ')[0] })}</p>
@@ -5411,10 +5454,10 @@ export default function App() {
           </div>
           <button onClick={() => { if (confirm(tApp('checkinGate.confirmPrompt'))) handleCheckIn(); }} disabled={attendancePending}
             className="w-full btn btn-primary text-base py-4 rounded-2xl flex items-center justify-center gap-2 disabled:opacity-60">
-            {attendancePending ? <Loader2 className="w-5 h-5 animate-spin"/> : <MapPin className="w-5 h-5"/>}
+            {attendancePending ? <MorphIcon icon={Loader2} className="w-5 h-5 animate-spin" /> : <MorphIcon icon={MapPin} className="w-5 h-5" />}
             {tApp('checkinGate.checkInBtn')}
           </button>
-          <button onClick={()=>{localStorage.removeItem("currentUser"); localStorage.removeItem("token"); setCurrentUser(null); setAuthView("login");}}
+          <button onClick={()=>{playSound("lock");localStorage.removeItem("currentUser"); localStorage.removeItem("token"); setCurrentUser(null); setAuthView("login");}}
             className="text-xs text-muted-foreground hover:text-foreground underline">{tApp('checkinGate.logout')}</button>
         </motion.div>
       </main>
@@ -5684,13 +5727,13 @@ export default function App() {
             syncStatus === 'synced' ? 'bg-green-600/90 text-white' :
             'bg-amber-500/90 text-white'}`}>
           {isOffline ? (
-            <><WifiOff className="w-3.5 h-3.5"/><span>Internet yo'q — ma'lumotlar keshdan ko'rsatilmoqda</span></>
+            <><MorphIcon icon={WifiOff} className="w-3.5 h-3.5" /><span>Internet yo'q — ma'lumotlar keshdan ko'rsatilmoqda</span></>
           ) : syncStatus === 'syncing' ? (
-            <><Loader2 className="w-3.5 h-3.5 animate-spin"/><span>Sinxronlanmoqda...</span></>
+            <><MorphIcon icon={Loader2} className="w-3.5 h-3.5 animate-spin" /><span>Sinxronlanmoqda...</span></>
           ) : syncStatus === 'synced' ? (
-            <><CheckCheck className="w-3.5 h-3.5"/><span>Sinxronlashdi</span></>
+            <><MorphIcon icon={CheckCheck} className="w-3.5 h-3.5" /><span>Sinxronlashdi</span></>
           ) : (
-            <><AlertCircle className="w-3.5 h-3.5"/><span>{syncPending} ta o'zgartirish kutmoqda</span></>
+            <><MorphIcon icon={AlertCircle} className="w-3.5 h-3.5" /><span>{syncPending} ta o'zgartirish kutmoqda</span></>
           )}
         </div>
       )}
@@ -5747,7 +5790,7 @@ export default function App() {
         {page==="profile" && (
           <div className="flex-1 overflow-y-auto scrollbar-hide">
             <ProfilePage currentUser={liveUser} projects={projects} onUpdateAvatar={handleUpdateAvatar} onUpdateUser={handleUpdateUser}
-              onLogout={()=>{setCurrentUser(null);setSelProject(null);setPage("dashboard");}}
+              onLogout={()=>{playSound("lock");setCurrentUser(null);setSelProject(null);setPage("dashboard");}}
               onCompanyNameChange={name => setCompanyName(name)}
               onCompanyLogoChange={logo => setCompanyLogo(logo)}
               onBgChange={bg => setSiteBg(bg)}
@@ -5796,12 +5839,12 @@ export default function App() {
                 layoutId="mobileNavLiquidPill"
                 className="absolute inset-x-1 top-1 h-10 rounded-2xl liquid-pill -z-10"
                 transition={{ type: "spring", stiffness: 500, damping: 34 }}
-              />
+                />
             )}
             <div className={`flex items-center justify-center w-[26px] h-[26px] transition-all duration-200 ${page===n.key?"scale-110":""}`}>
               {n.key === "profile"
                 ? <div className={`rounded-full overflow-hidden transition-all duration-200 ${page===n.key?"ring-2 ring-white/80 shadow-md scale-110":"opacity-60"}`}><Avatar user={liveUser} size="sm"/></div>
-                : <n.icon className="w-[18px] h-[18px]"/>}
+                : <MorphIcon icon={n.icon} className="w-[18px] h-[18px]" />}
             </div>
             <span className={`text-[9px] font-semibold leading-none tracking-wide transition-all duration-200 ${page===n.key?"opacity-100":"opacity-45"}`}>
               {n.label}
@@ -5872,12 +5915,12 @@ export default function App() {
         <div className="fixed inset-0 bg-black/60 z-[70] flex items-start justify-center pt-16 px-4" onClick={()=>{setGlobalSearch(false);setSearchQuery("");setSearchResults(null);}}>
           <div className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-lg overflow-hidden animate-slide-up-fade" onClick={e=>e.stopPropagation()}>
             <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
-              <Search className="w-4 h-4 text-muted-foreground flex-shrink-0"/>
+              <MorphIcon icon={Search} className="w-4 h-4 text-muted-foreground flex-shrink-0" />
               <input autoFocus value={searchQuery} onChange={e=>{setSearchQuery(e.target.value);if(e.target.value.length<2)setSearchResults(null);}}
                 placeholder={tApp('search.placeholder')}
                 className="flex-1 bg-transparent text-sm focus:outline-none text-foreground placeholder:text-muted-foreground"/>
-              {searchLoading && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground flex-shrink-0"/>}
-              <button onClick={()=>{setGlobalSearch(false);setSearchQuery("");setSearchResults(null);}} aria-label="Yopish" className="p-1 rounded hover:bg-muted"><X className="w-4 h-4 text-muted-foreground"/></button>
+              {searchLoading && <MorphIcon icon={Loader2} className="w-4 h-4 animate-spin text-muted-foreground flex-shrink-0" />}
+              <button onClick={()=>{setGlobalSearch(false);setSearchQuery("");setSearchResults(null);}} aria-label="Yopish" className="p-1 rounded hover:bg-muted"><MorphIcon icon={X} className="w-4 h-4 text-muted-foreground" /></button>
             </div>
             {searchQuery.length > 1 ? (
               <div className="max-h-[60vh] overflow-y-auto scrollbar-hide p-3 space-y-3">
@@ -5888,7 +5931,7 @@ export default function App() {
                       {(searchResults.users||[]).slice(0,5).map((u: any) => (
                         <button key={u.id} onClick={()=>{setGlobalSearch(false);setSearchQuery("");setSearchResults(null);setPage("dashboard");}}
                           className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-muted liquid-transition text-left">
-                          <User className="w-5 h-5 text-primary flex-shrink-0"/>
+                          <MorphIcon icon={User} className="w-5 h-5 text-primary flex-shrink-0" />
                           <div><p className="text-sm font-medium text-foreground">{u.name}</p><p className="text-[10px] text-muted-foreground">{ROLE_LABELS[u.role as Role] ? roleLabel(tApp, u.role as Role) : u.role}</p></div>
                         </button>))}
                     </div>
@@ -5899,7 +5942,7 @@ export default function App() {
                       {(searchResults.objects||[]).slice(0,5).map((o: any) => (
                         <button key={o.id} onClick={()=>{setGlobalSearch(false);setSearchQuery("");setSearchResults(null);const p=projects.find(p=>p.id===o.id);if(p)setSelProject(p);setPage("dashboard");}}
                           className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-muted liquid-transition text-left">
-                          <Building2 className="w-5 h-5 text-primary flex-shrink-0"/>
+                          <MorphIcon icon={Building2} className="w-5 h-5 text-primary flex-shrink-0" />
                           <div><p className="text-sm font-medium text-foreground">{o.name}</p><p className="text-[10px] text-muted-foreground">{o.location}</p></div>
                         </button>))}
                     </div>
@@ -5909,9 +5952,9 @@ export default function App() {
                     <div><p className="text-[10px] font-semibold text-muted-foreground mb-1.5 px-1">Materiallar</p>
                       {(searchResults.materials||[]).slice(0,5).map((m: any) => (
                         <div key={m.id} className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-muted liquid-transition">
-                          <Package className="w-5 h-5 text-muted-foreground flex-shrink-0"/>
+                          <MorphIcon icon={Package} className="w-5 h-5 text-muted-foreground flex-shrink-0" />
                           <div className="flex-1 min-w-0"><p className="text-sm font-medium text-foreground truncate">{m.name}</p><p className="text-[10px] text-muted-foreground">{m.remaining} {m.unit} qolgan</p></div>
-                          <button onClick={()=>setQrGenData({type:"material",id:m.id,name:m.name})} className="p-1 rounded hover:bg-muted" title="QR kod" aria-label="QR kod"><QrCode className="w-4 h-4 text-muted-foreground"/></button>
+                          <button onClick={()=>setQrGenData({type:"material",id:m.id,name:m.name})} className="p-1 rounded hover:bg-muted" title="QR kod" aria-label="QR kod"><MorphIcon icon={QrCode} className="w-4 h-4 text-muted-foreground" /></button>
                         </div>))}
                     </div>
                   )}
@@ -5921,7 +5964,7 @@ export default function App() {
                       {(searchResults.transactions||[]).slice(0,5).map((t: any) => (
                         <button key={t.id} onClick={()=>{setGlobalSearch(false);setSearchQuery("");setSearchResults(null);setPage("finance");}}
                           className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-muted liquid-transition text-left">
-                          <Wallet className="w-5 h-5 text-muted-foreground flex-shrink-0"/>
+                          <MorphIcon icon={Wallet} className="w-5 h-5 text-muted-foreground flex-shrink-0" />
                           <div className="min-w-0"><p className="text-sm text-foreground truncate">{t.description||t.materialName}</p><p className="text-[10px] text-muted-foreground">{t.amount?.toLocaleString()} so'm</p></div>
                         </button>))}
                     </div>
@@ -5932,7 +5975,7 @@ export default function App() {
                       {(searchResults.messages||[]).slice(0,5).map((m: any) => (
                         <button key={m.id} onClick={()=>{setGlobalSearch(false);setSearchQuery("");setSearchResults(null);setPage("chat");}}
                           className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-muted liquid-transition text-left">
-                          <MessageCircle className="w-5 h-5 text-muted-foreground flex-shrink-0"/>
+                          <MorphIcon icon={MessageCircle} className="w-5 h-5 text-muted-foreground flex-shrink-0" />
                           <div className="min-w-0"><p className="text-sm text-foreground truncate">{m.text}</p></div>
                         </button>))}
                     </div>

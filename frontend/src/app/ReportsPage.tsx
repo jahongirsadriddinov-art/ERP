@@ -5,7 +5,8 @@ import {
 } from "recharts";
 import { motion } from "motion/react";
 import { useTranslation } from "react-i18next";
-import { Download } from "lucide-react";
+import { Download } from "lucide";
+import { MorphIcon } from "morphicons/react";
 import { toast } from "sonner";
 import { Project, Expense, AppUser, ExpType, EXP_LABELS, CHART_COLORS, fmt, isAdmin, exportExpensesToCsv } from "./App";
 
@@ -27,7 +28,7 @@ export default function ReportsPage({ projects, expenses, users }:
   const byProject = projects.map(p=>({name:p.name.split(" ").slice(0,2).join(" "),chiqim:expenses.filter(e=>e.projectId===p.id&&e.status==="confirmed").reduce((a,e)=>a+e.amount,0)}));
   const byPerson = users.filter(u=>!isAdmin(u.role)).map(u=>{const parts=u.name.split(" ");const shortName=parts[0]+(parts[1]?" "+parts[1][0]+".":"");return{name:shortName,total:expenses.filter(e=>e.toUserId===u.id&&e.status==="confirmed").reduce((a,e)=>a+e.amount,0)};}).filter(d=>d.total>0);
   const doExport = () => {
-    if (filtExp.length === 0) { toast(t('reports.exportEmpty')); return; }
+    if (filtExp.length === 0) { toast.warning(t('reports.exportEmpty')); return; }
     const projLabel = selProj === "all" ? "barcha" : (projects.find(p=>p.id===selProj)?.name || "obyekt");
     const rangeLabel = [dateFrom, dateTo].filter(Boolean).join("_") || new Date().toISOString().split("T")[0];
     exportExpensesToCsv(filtExp, users, projects, `hisobot_${projLabel}_${rangeLabel}.csv`.replace(/\s+/g, "-"));
@@ -50,7 +51,7 @@ export default function ReportsPage({ projects, expenses, users }:
             <input type="date" className="min-w-0 flex-1 text-sm md:text-xs border border-border rounded-full px-2.5 py-1.5 bg-input-background focus:outline-none" value={dateTo} onChange={e=>setDateTo(e.target.value)}/>
           </div>
           <button onClick={doExport} className="btn btn-accent flex items-center gap-1.5 text-sm md:text-xs px-3 py-1.5 rounded-full flex-shrink-0">
-            <Download className="w-3.5 h-3.5"/>{t('reports.exportExcel')}
+            <MorphIcon icon={Download} className="w-3.5 h-3.5" />{t('reports.exportExcel')}
           </button>
         </div>
       </div>

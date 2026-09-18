@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { LogOut, Loader2, Building2, Trash2, ChevronLeft, Send, FileText, MapPin } from "lucide-react";
+import { LogOut, Loader2, Building2, Trash2, ChevronLeft, Send, FileText, MapPin } from "lucide";
+import { MorphIcon } from "morphicons/react";
 import { toast } from "sonner";
 import { API_BASE } from "./api";
 import { connectSocket } from "./socket";
@@ -195,7 +196,7 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
         </div>
         <button onClick={() => { localStorage.removeItem("currentUser"); localStorage.removeItem("token"); onLogout(); }}
           className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-red-600 border border-border rounded-xl px-3 py-2 shrink-0">
-          <LogOut className="w-4 h-4" /> <span className="hidden sm:inline">{t('devPanel.logout')}</span>
+          <MorphIcon icon={LogOut} className="w-4 h-4"  /> <span className="hidden sm:inline">{t('devPanel.logout')}</span>
         </button>
       </header>
 
@@ -275,7 +276,7 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
                       </select>
                       <button onClick={() => renewSub(s.id)} disabled={subLoading === s.id}
                         className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-orange-500 text-white disabled:opacity-60 flex items-center gap-1 shrink-0">
-                        {subLoading === s.id ? <Loader2 className="w-3 h-3 animate-spin" /> : "+"} {t('devPanel.subscriptions.extend')}
+                        {subLoading === s.id ? <MorphIcon icon={Loader2} className="w-3 h-3 animate-spin"  /> : "+"} {t('devPanel.subscriptions.extend')}
                       </button>
                     </div>
                   </div>
@@ -294,11 +295,11 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
                     <div className="flex gap-2">
                       <button onClick={() => { setRenewPlan(prev => ({ ...prev, [s.id]: prev[s.id] || 'bepul' })); approveSub(s.id); }} disabled={subLoading === s.id}
                         className="flex-1 py-2 rounded-xl text-xs font-bold bg-green-600 text-white hover:bg-green-700 disabled:opacity-60 flex items-center justify-center gap-1">
-                        {subLoading === s.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "✅"} {t('devPanel.subscriptions.approve')}
+                        {subLoading === s.id ? <MorphIcon icon={Loader2} className="w-3.5 h-3.5 animate-spin"  /> : "✅"} {t('devPanel.subscriptions.approve')}
                       </button>
                       <button onClick={() => rejectSub(s.id)} disabled={subLoading === s.id}
                         className="flex-1 py-2 rounded-xl text-xs font-bold border border-red-500/30 text-red-600 hover:bg-red-500/10 disabled:opacity-60 flex items-center justify-center gap-1">
-                        {subLoading === s.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "❌"} {t('devPanel.subscriptions.reject')}
+                        {subLoading === s.id ? <MorphIcon icon={Loader2} className="w-3.5 h-3.5 animate-spin"  /> : "❌"} {t('devPanel.subscriptions.reject')}
                       </button>
                     </div>
                   </div>
@@ -315,7 +316,7 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
                       </select>
                       <button onClick={() => renewSub(s.id)} disabled={subLoading === s.id}
                         className="px-3 py-2 rounded-lg text-xs font-bold bg-primary text-white hover:bg-primary/90 disabled:opacity-60 flex items-center gap-1 shrink-0">
-                        {subLoading === s.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "🔄"} {t('devPanel.subscriptions.renew')}
+                        {subLoading === s.id ? <MorphIcon icon={Loader2} className="w-3.5 h-3.5 animate-spin"  /> : "🔄"} {t('devPanel.subscriptions.renew')}
                       </button>
                     </div>
                   </div>
@@ -330,7 +331,7 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center overflow-hidden shrink-0">
-                    {c.logoUrl ? <img src={c.logoUrl} alt="" className="w-full h-full object-cover" /> : <Building2 className="w-5 h-5 text-primary" />}
+                    {c.logoUrl ? <img src={c.logoUrl} alt="" className="w-full h-full object-cover" /> : <MorphIcon icon={Building2} className="w-5 h-5 text-primary"  />}
                   </div>
                   <div className="min-w-0">
                     <p className="text-sm font-bold truncate">{c.name}</p>
@@ -345,7 +346,7 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
                   {c.status === "SUSPENDED" ? t('devPanel.firms.activate') : t('devPanel.firms.suspend')}
                 </button>
                 <button onClick={() => deleteCompany(c)} className="flex-1 text-xs font-semibold py-2 rounded-lg border border-red-500/30 text-red-600 hover:bg-red-500/10 flex items-center justify-center gap-1">
-                  <Trash2 className="w-3.5 h-3.5" /> {t('devPanel.firms.delete')}
+                  <MorphIcon icon={Trash2} className="w-3.5 h-3.5"  /> {t('devPanel.firms.delete')}
                 </button>
               </div>
             </div>
@@ -357,7 +358,7 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
               <div className="md:hidden flex items-center gap-2 mb-2 pb-2 border-b border-border/40">
                 <button onClick={() => { setDevMobileStep('firms'); setSelDevFirm(null); setSelDevGroup(null); setDevMsgs([]); }}
                   className="flex items-center gap-1 text-xs text-primary font-semibold py-1.5 px-2 rounded-lg hover:bg-primary/10">
-                  <ChevronLeft className="w-4 h-4"/> {t('devPanel.messages.back')}
+                  <MorphIcon icon={ChevronLeft} className="w-4 h-4" /> {t('devPanel.messages.back')}
                 </button>
                 <span className="text-xs font-semibold text-foreground truncate">{selDevFirm?.name}</span>
               </div>
@@ -377,7 +378,7 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
                       <p className="truncate">{c.name}</p>
                       <p className={`text-[10px] font-normal truncate ${isActive?'text-white/70':'text-muted-foreground'}`}>{c.branchId || ''}</p>
                     </div>
-                    <ChevronLeft className="w-3.5 h-3.5 rotate-180 opacity-40 md:hidden flex-shrink-0 ml-1"/>
+                    <MorphIcon icon={ChevronLeft} className="w-3.5 h-3.5 rotate-180 opacity-40 md:hidden flex-shrink-0 ml-1" />
                   </button>
                 );
               })}
@@ -420,13 +421,13 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
                             )}
                             {m.type==='file' && m.mediaUrl && (
                               <button onClick={()=>openExternalUrl(m.mediaUrl!)} className="flex items-center gap-2 mb-1 hover:opacity-75 transition-opacity text-left">
-                                <FileText className="w-4 h-4 flex-shrink-0"/>
+                                <MorphIcon icon={FileText} className="w-4 h-4 flex-shrink-0" />
                                 <span className="truncate max-w-[140px] font-medium">{m.fileName || t('devPanel.messages.fileFallback')}</span>
                               </button>
                             )}
                             {m.type==='location' && m.location && (
                               <a href={`https://maps.google.com/?q=${m.location.lat},${m.location.lng}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 bg-black/10 rounded-xl px-2.5 py-1.5 mb-1 hover:bg-black/20 transition-colors">
-                                <MapPin className="w-3.5 h-3.5 text-green-400 flex-shrink-0"/>
+                                <MorphIcon icon={MapPin} className="w-3.5 h-3.5 text-green-400 flex-shrink-0" />
                                 <span className="text-[10px]">{t('devPanel.messages.location')}</span>
                               </a>
                             )}
@@ -447,7 +448,7 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
                       className="flex-1 text-sm md:text-xs bg-muted/50 rounded-xl px-3 py-2.5 md:py-2 focus:outline-none focus:ring-2 focus:ring-primary/30"/>
                     <button onClick={sendDevMsg} disabled={devMsgLoading||!devMsgText.trim()} aria-label={t('devPanel.messages.sendAria')}
                       className="w-10 h-10 md:w-8 md:h-8 rounded-xl bg-primary text-white flex items-center justify-center disabled:opacity-40 flex-shrink-0">
-                      {devMsgLoading ? <Loader2 className="w-4 h-4 animate-spin"/> : <Send className="w-4 h-4"/>}
+                      {devMsgLoading ? <MorphIcon icon={Loader2} className="w-4 h-4 animate-spin" /> : <MorphIcon icon={Send} className="w-4 h-4" />}
                     </button>
                   </div>
                 </>
@@ -479,7 +480,7 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
                 </select>
                 <button onClick={() => deleteUser(u)} disabled={u.id === currentUser.id} aria-label={t('devPanel.users.deleteAria')}
                   className="w-9 h-9 rounded-lg border border-red-500/30 text-red-600 hover:bg-red-500/10 flex items-center justify-center disabled:opacity-30 shrink-0">
-                  <Trash2 className="w-4 h-4" />
+                  <MorphIcon icon={Trash2} className="w-4 h-4"  />
                 </button>
               </div>
             </div>

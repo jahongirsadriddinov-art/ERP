@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Smartphone, Laptop, Download, Loader2, ShieldCheck } from "lucide-react";
+import { Smartphone, Laptop, Download, Loader2, ShieldCheck } from "lucide";
+import { MorphIcon, type IconNode } from "morphicons/react";
 import { useTranslation } from "react-i18next";
 import { API_BASE } from "./api";
 import { openExternalUrl } from "./platform";
@@ -39,7 +40,7 @@ export function AppDownloadCards({ compact, title, loadingFallback = true }: { c
     if (!loadingFallback) return null;
     return (
       <div className={compact ? "flex items-center justify-center py-6" : "flex items-center justify-center py-10"}>
-        <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+        <MorphIcon icon={Loader2} className="w-5 h-5 animate-spin text-muted-foreground"  />
       </div>
     );
   }
@@ -50,7 +51,7 @@ export function AppDownloadCards({ compact, title, loadingFallback = true }: { c
   const items = [
     release.apkUrl ? { icon: Smartphone, label: t('appDownload.androidLabel'), hint: t('appDownload.androidHint'), url: release.apkUrl } : null,
     release.exeUrl ? { icon: Laptop, label: t('appDownload.windowsLabel'), hint: t('appDownload.windowsHint'), url: release.exeUrl } : null,
-  ].filter(Boolean) as { icon: typeof Smartphone; label: string; hint: string; url: string }[];
+  ].filter(Boolean) as { icon: IconNode; label: string; hint: string; url: string }[];
 
   return (
     <div className={compact ? "space-y-2" : "space-y-3"}>
@@ -60,18 +61,18 @@ export function AppDownloadCards({ compact, title, loadingFallback = true }: { c
           <button key={item.label} onClick={() => openExternalUrl(item.url)}
             className={`surface rounded-2xl flex items-center gap-3 text-left hover:-translate-y-0.5 liquid-transition ${compact ? "p-3" : "p-4"}`}>
             <div className={`rounded-xl bg-primary/10 text-primary flex items-center justify-center flex-shrink-0 ${compact ? "w-10 h-10" : "w-12 h-12"}`}>
-              <item.icon className={compact ? "w-5 h-5" : "w-6 h-6"} />
+              <MorphIcon icon={item.icon} className={compact ? "w-5 h-5" : "w-6 h-6"}  />
             </div>
             <div className="flex-1 min-w-0">
               <p className={`font-bold ${compact ? "text-sm" : "text-base"}`}>{item.label}</p>
               <p className="text-xs text-muted-foreground">{item.hint}</p>
             </div>
-            <Download className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+            <MorphIcon icon={Download} className="w-4 h-4 text-muted-foreground flex-shrink-0"  />
           </button>
         ))}
       </div>
       <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground px-1">
-        <span className="flex items-center gap-1"><ShieldCheck className="w-3 h-3" />{t('appDownload.sourceNote')}</span>
+        <span className="flex items-center gap-1"><MorphIcon icon={ShieldCheck} className="w-3 h-3"  />{t('appDownload.sourceNote')}</span>
         {release.version && <span className="font-mono flex-shrink-0">v{release.version}</span>}
       </div>
     </div>

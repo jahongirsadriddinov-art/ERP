@@ -4,7 +4,8 @@ import {
   ChevronDown, CheckCircle, Smartphone, Laptop,
   FileSpreadsheet, ShieldCheck, Sparkles, ArrowRight, Layers,
   UserPlus, Settings2, Rocket, Globe2,
-} from "lucide-react";
+} from "lucide";
+import { MorphIcon } from "morphicons/react";
 import { motion } from "motion/react";
 import { useTranslation } from "react-i18next";
 import LanguageSwitcher from "./i18n/LanguageSwitcher";
@@ -275,7 +276,7 @@ export default function LandingPage({ onLogin, onRegister, focus }: { onLogin: (
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mt-8">
               <button onClick={onRegister}
                 className="group w-full sm:w-auto bg-gradient-to-r from-primary via-primary to-blue-700 text-white text-sm font-bold px-7 py-3.5 rounded-full shadow-xl shadow-primary/30 hover:shadow-2xl hover:shadow-primary/40 hover:-translate-y-0.5 active:scale-[0.98] liquid-transition flex items-center justify-center gap-2">
-                {t('landing.ctaRegister')} <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 liquid-transition" />
+                {t('landing.ctaRegister')} <MorphIcon icon={ArrowRight} className="w-4 h-4 group-hover:translate-x-0.5 liquid-transition"  />
               </button>
               <button onClick={onLogin} className="w-full sm:w-auto btn btn-outline text-sm font-semibold px-7 py-3.5 rounded-full">
                 {t('landing.ctaLogin')}
@@ -316,7 +317,7 @@ export default function LandingPage({ onLogin, onRegister, focus }: { onLogin: (
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mt-9">
               <button onClick={onRegister}
                 className="group w-full sm:w-auto bg-gradient-to-r from-primary via-primary to-blue-700 text-white text-sm font-bold px-8 py-4 rounded-full shadow-xl shadow-primary/30 hover:shadow-2xl hover:shadow-primary/40 hover:-translate-y-0.5 active:scale-[0.98] liquid-transition flex items-center justify-center gap-2">
-                {t('landing.ctaRegister')} <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 liquid-transition" />
+                {t('landing.ctaRegister')} <MorphIcon icon={ArrowRight} className="w-4 h-4 group-hover:translate-x-0.5 liquid-transition"  />
               </button>
               <button onClick={onLogin}
                 className="w-full sm:w-auto btn btn-outline text-sm font-semibold px-8 py-4 rounded-full">
@@ -354,7 +355,7 @@ export default function LandingPage({ onLogin, onRegister, focus }: { onLogin: (
               </div>
               <div className="w-full h-2.5 rounded-full bg-muted overflow-hidden">
                 <motion.div initial={{ width: 0 }} animate={{ width: "52%" }} transition={{ duration: 1.2, delay: 0.4, ease: "easeOut" }}
-                  className="h-full rounded-full bg-gradient-to-r from-accent to-accent/70" />
+                  className="h-full rounded-full bg-gradient-to-r from-accent to-accent/70"   />
               </div>
               <div className="flex items-center gap-3 mt-5 pt-4 border-t border-border/50">
                 <div className="flex -space-x-2">
@@ -375,7 +376,7 @@ export default function LandingPage({ onLogin, onRegister, focus }: { onLogin: (
                 className="group relative surface rounded-2xl px-4 py-4 text-center overflow-hidden">
                 <div className="absolute top-0 left-0 right-0 h-[3px] opacity-0 group-hover:opacity-100 liquid-transition"
                   style={{ backgroundImage: "repeating-linear-gradient(135deg, var(--accent) 0px, var(--accent) 6px, transparent 6px, transparent 12px)" }} />
-                <c.icon className="w-4 h-4 text-primary mx-auto mb-2 opacity-70" />
+                <MorphIcon icon={c.icon} className="w-4 h-4 text-primary mx-auto mb-2 opacity-70"  />
                 <p className="text-xl md:text-2xl font-bold" style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace" }}>{c.value}</p>
                 <p className="text-[10px] md:text-[11px] text-muted-foreground mt-1 leading-snug">{c.label}</p>
               </motion.div>
@@ -398,7 +399,7 @@ export default function LandingPage({ onLogin, onRegister, focus }: { onLogin: (
                   #{String(i + 1).padStart(2, "0")}
                 </span>
                 <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-primary/15 to-accent/15 flex items-center justify-center flex-shrink-0">
-                  <Building2 className="w-5 h-5 text-primary" />
+                  <MorphIcon icon={Building2} className="w-5 h-5 text-primary"  />
                 </div>
                 <p className="text-sm font-bold text-foreground leading-snug">{name}</p>
               </motion.div>
@@ -424,7 +425,7 @@ export default function LandingPage({ onLogin, onRegister, focus }: { onLogin: (
               <CornerMarks visible={false} />
               <div className="absolute -right-6 -top-6 w-24 h-24 rounded-full bg-primary/5 group-hover:bg-primary/10 liquid-transition pointer-events-none" />
               <div className="relative w-12 h-12 rounded-2xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center mb-4 shadow-md shadow-primary/25">
-                <f.icon className="w-5.5 h-5.5 text-white" />
+                <MorphIcon icon={f.icon} className="w-5.5 h-5.5 text-white"  />
               </div>
               <h3 className="relative font-bold text-sm mb-1.5">{f.title}</h3>
               <p className="relative text-sm text-muted-foreground leading-relaxed">{f.desc}</p>
@@ -453,7 +454,7 @@ export default function LandingPage({ onLogin, onRegister, focus }: { onLogin: (
               <motion.div key={s.title} initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-40px" }}
                 transition={{ delay: i * 0.1 }} className="relative text-center">
                 <div className="relative z-10 w-14 h-14 rounded-2xl bg-gradient-to-br from-primary to-accent flex items-center justify-center mx-auto mb-5 shadow-lg shadow-primary/25">
-                  <s.icon className="w-6 h-6 text-white" />
+                  <MorphIcon icon={s.icon} className="w-6 h-6 text-white"  />
                 </div>
                 <p className="text-[11px] font-bold text-accent mb-1.5" style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace" }}>{t('landing.stepLabel', { n: i + 1, total: STEPS.length })}</p>
                 <h3 className="font-bold text-sm mb-2">{s.title}</h3>
@@ -477,7 +478,7 @@ export default function LandingPage({ onLogin, onRegister, focus }: { onLogin: (
               className="group relative surface rounded-3xl p-6 text-center hover:-translate-y-1 hover:shadow-xl hover:shadow-accent/10 liquid-transition overflow-hidden">
               <CornerMarks visible={false} />
               <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-accent to-accent/70 flex items-center justify-center mx-auto mb-4 shadow-md shadow-accent/25">
-                <a.icon className="w-6 h-6 text-white" />
+                <MorphIcon icon={a.icon} className="w-6 h-6 text-white"  />
               </div>
               <h3 className="font-bold text-sm mb-1.5">{a.title}</h3>
               <p className="text-xs text-muted-foreground leading-relaxed">{a.desc}</p>
@@ -493,7 +494,7 @@ export default function LandingPage({ onLogin, onRegister, focus }: { onLogin: (
             {BENEFITS.map(b => (
               <div key={b.text} className="flex items-start gap-3.5 surface rounded-2xl p-5">
                 <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-                  <b.icon className="w-4.5 h-4.5 text-primary" />
+                  <MorphIcon icon={b.icon} className="w-4.5 h-4.5 text-primary"  />
                 </div>
                 <p className="text-sm text-foreground/90 leading-relaxed pt-1">{b.text}</p>
               </div>
@@ -515,7 +516,7 @@ export default function LandingPage({ onLogin, onRegister, focus }: { onLogin: (
                 className="w-full flex items-center justify-between gap-3 px-5 py-4 text-left">
                 <span className="font-semibold text-sm">{f.q}</span>
                 <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 liquid-transition ${openFaq === i ? "bg-primary text-white rotate-180" : "bg-muted text-muted-foreground"}`}>
-                  <ChevronDown className="w-4 h-4" />
+                  <MorphIcon icon={ChevronDown} className="w-4 h-4"  />
                 </div>
               </button>
               {openFaq === i && (
@@ -564,7 +565,7 @@ export default function LandingPage({ onLogin, onRegister, focus }: { onLogin: (
           <div className="absolute top-[-30%] right-[-10%] w-[55%] h-[90%] bg-accent/30 rounded-full blur-[110px] pointer-events-none" />
           <div className="absolute bottom-[-30%] left-[-10%] w-[45%] h-[80%] bg-white/10 rounded-full blur-[110px] pointer-events-none" />
           <div className="relative z-10 w-14 h-14 rounded-2xl bg-white/15 backdrop-blur-sm flex items-center justify-center mx-auto mb-6 border border-white/20">
-            <Globe2 className="w-7 h-7 text-white" />
+            <MorphIcon icon={Globe2} className="w-7 h-7 text-white"  />
           </div>
           <h2 className="relative z-10 text-3xl md:text-4xl font-bold font-['Roboto_Slab',serif] text-white max-w-lg mx-auto tracking-tight">
             {t('landing.finalCtaTitle')}
@@ -574,7 +575,7 @@ export default function LandingPage({ onLogin, onRegister, focus }: { onLogin: (
           </p>
           <button onClick={onRegister}
             className="relative z-10 mt-8 bg-white text-primary text-sm font-bold px-8 py-4 rounded-full shadow-2xl hover:-translate-y-0.5 hover:shadow-white/20 active:scale-[0.98] liquid-transition inline-flex items-center gap-2">
-            {t('landing.ctaRegister')} <ArrowRight className="w-4 h-4" />
+            {t('landing.ctaRegister')} <MorphIcon icon={ArrowRight} className="w-4 h-4"  />
           </button>
         </div>
       </section>
@@ -590,7 +591,7 @@ export default function LandingPage({ onLogin, onRegister, focus }: { onLogin: (
           </div>
           <div className="flex items-center gap-5 text-xs text-muted-foreground">
             <a href="https://t.me/qurilish_erp_bot" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 hover:text-foreground liquid-transition">
-              <Send className="w-3.5 h-3.5" /> @qurilish_erp_bot
+              <MorphIcon icon={Send} className="w-3.5 h-3.5"  /> @qurilish_erp_bot
             </a>
             <a href="https://t.me/Sadriddinov_Jahongir" target="_blank" rel="noopener noreferrer" className="hover:text-foreground liquid-transition">
               {t('landing.contactLink')}

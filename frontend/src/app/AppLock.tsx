@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Delete, Fingerprint, LogOut, Building2, Lock, X } from "lucide-react";
+import { Delete, Fingerprint, LogOut, Building2, Lock, X } from "lucide";
+import { MorphIcon } from "morphicons/react";
 import { motion, AnimatePresence } from "motion/react";
 import { useTranslation } from "react-i18next";
 import { isAndroid, isDesktopPointer } from "./platform";
@@ -335,7 +336,7 @@ function PinPad({ value, onDigit, onDelete }: { value: string; onDigit: (d: stri
           <button key={i} type="button"
             onClick={() => { hiddenRef.current?.focus(); k === "del" ? onDelete() : onDigit(k); }}
             className="h-16 rounded-2xl bg-muted/50 hover:bg-muted active:scale-95 flex items-center justify-center text-xl font-semibold liquid-transition">
-            {k === "del" ? <Delete className="w-5 h-5" /> : k}
+            {k === "del" ? <MorphIcon icon={Delete} className="w-5 h-5"  /> : k}
           </button>
         ))}
       </div>
@@ -385,7 +386,7 @@ export function PinSetupScreen({ onDone }: { onDone: () => void }) {
     <main className="min-h-[100dvh] bg-background flex flex-col items-center justify-center p-6"
       style={{ paddingTop: "max(2rem, env(safe-area-inset-top))", paddingBottom: "max(2rem, env(safe-area-inset-bottom))" }}>
       <div className="w-16 h-16 rounded-3xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center mb-6 shadow-xl shadow-primary/20">
-        <Building2 className="w-8 h-8 text-white" />
+        <MorphIcon icon={Building2} className="w-8 h-8 text-white"  />
       </div>
       <h1 className="text-xl font-bold mb-1.5">{stage === "enter" ? t('pinLock.setupTitleEnter') : t('pinLock.setupTitleConfirm')}</h1>
       <p className="text-sm text-muted-foreground mb-8 text-center max-w-xs">
@@ -457,10 +458,10 @@ export function ChangePinModal({ onClose, onChanged }: { onClose: () => void; on
       style={{ paddingTop: "max(2rem, env(safe-area-inset-top))", paddingBottom: "max(2rem, env(safe-area-inset-bottom))" }}>
       <button onClick={onClose} aria-label={t('common.close')} className="absolute top-4 right-4 p-2 rounded-full hover:bg-muted"
         style={{ top: "max(1rem, env(safe-area-inset-top))" }}>
-        <X className="w-5 h-5" />
+        <MorphIcon icon={X} className="w-5 h-5"  />
       </button>
       <div className="w-16 h-16 rounded-3xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center mb-6 shadow-xl shadow-primary/20">
-        <Lock className="w-8 h-8 text-white" />
+        <MorphIcon icon={Lock} className="w-8 h-8 text-white"  />
       </div>
       <h1 className="text-xl font-bold mb-8">{titles[stage]}</h1>
       <AnimatePresence mode="wait">
@@ -523,7 +524,7 @@ export function PinLockScreen({ onUnlock, onForgot, onLockedOut }: { onUnlock: (
     <main className="fixed inset-0 z-[999] bg-background flex flex-col items-center justify-center p-6"
       style={{ paddingTop: "max(2rem, env(safe-area-inset-top))", paddingBottom: "max(2rem, env(safe-area-inset-bottom))" }}>
       <div className="w-16 h-16 rounded-3xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center mb-6 shadow-xl shadow-primary/20">
-        <Building2 className="w-8 h-8 text-white" />
+        <MorphIcon icon={Building2} className="w-8 h-8 text-white"  />
       </div>
       <h1 className="text-xl font-bold mb-1.5">{t('pinLock.lockedTitle')}</h1>
       <p className="text-sm text-muted-foreground mb-8">{t('pinLock.lockedSubtitle')}</p>
@@ -540,11 +541,11 @@ export function PinLockScreen({ onUnlock, onForgot, onLockedOut }: { onUnlock: (
       {isBiometricEnabled() && biometricSupported() && (
         <button onClick={attemptBiometric} disabled={biometricBusy}
           className="mt-6 flex items-center gap-2 text-sm text-primary font-semibold py-2 px-4 rounded-full hover:bg-primary/10 disabled:opacity-50">
-          <Fingerprint className="w-4 h-4" /> {biometricBusy ? t('pinLock.checking') : t('pinLock.biometricBtn')}
+          <MorphIcon icon={Fingerprint} className="w-4 h-4"  /> {biometricBusy ? t('pinLock.checking') : t('pinLock.biometricBtn')}
         </button>
       )}
       <button onClick={onForgot} className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground">
-        <LogOut className="w-3.5 h-3.5" /> {t('pinLock.forgotPin')}
+        <MorphIcon icon={LogOut} className="w-3.5 h-3.5"  /> {t('pinLock.forgotPin')}
       </button>
     </main>
   );

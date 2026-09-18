@@ -1,8 +1,10 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { X, QrCode, Camera, AlertCircle, CheckCircle } from "lucide-react";
+import { X, QrCode, Camera, AlertCircle, CheckCircle } from "lucide";
+import { MorphIcon } from "morphicons/react";
 import { API_BASE } from "./api";
 import { motion, AnimatePresence } from "motion/react";
 import { useTranslation } from "react-i18next";
+import { playSound } from "./sound";
 
 interface QRScanResult {
   type: "material" | "object" | "transaction";
@@ -145,6 +147,20 @@ export default function QRScanner({ onClose, onResult, token }: Props) {
     return () => stopCamera();
   }, [startCamera, stopCamera]);
 
+  // Ovoz: kamera qidirayotganda sokin "scanning" halqasi, natija chiqqanda
+  // bir martalik "success"/"error".
+  const scanSfxRef = useRef<ReturnType<typeof playSound>>(null);
+  useEffect(() => {
+    if (status === "scanning") {
+      if (!scanSfxRef.current) scanSfxRef.current = playSound("scanning", { loop: true });
+      return () => { scanSfxRef.current?.stop(); scanSfxRef.current = null; };
+    }
+    scanSfxRef.current?.stop();
+    scanSfxRef.current = null;
+    if (status === "success") playSound("success");
+    else if (status === "error") playSound("error");
+  }, [status]);
+
   const reset = () => {
     setStatus("idle");
     setResult(null);
@@ -165,12 +181,12 @@ export default function QRScanner({ onClose, onResult, token }: Props) {
       <div className="flex items-center justify-between px-4 flex-shrink-0"
         style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))', paddingBottom: '0.75rem' }}>
         <div className="flex items-center gap-2 text-white">
-          <QrCode className="w-5 h-5" />
+          <MorphIcon icon={QrCode} className="w-5 h-5"  />
           <span className="font-semibold">{t('qrScanner.title')}</span>
         </div>
         <button onClick={() => { stopCamera(); onClose(); }}
           className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-white/20">
-          <X className="w-4 h-4" />
+          <MorphIcon icon={X} className="w-4 h-4"  />
         </button>
       </div>
 
@@ -216,13 +232,13 @@ export default function QRScanner({ onClose, onResult, token }: Props) {
           <div className="absolute inset-0 bg-black/80 flex items-center justify-center p-6">
             <div className="bg-card rounded-2xl p-6 w-full max-w-sm text-center space-y-4">
               <div className="w-14 h-14 rounded-full bg-destructive/15 flex items-center justify-center mx-auto">
-                <AlertCircle className="w-7 h-7 text-destructive" />
+                <MorphIcon icon={AlertCircle} className="w-7 h-7 text-destructive"  />
               </div>
               {cameraIssue === "denied" ? (
                 <>
                   <p className="font-semibold text-foreground">{t('qrScanner.permissionTitle')}</p>
                   <p className="text-sm text-muted-foreground">{t('qrScanner.permissionDesc')}</p>
-                  <Camera className="w-8 h-8 text-muted-foreground mx-auto" />
+                  <MorphIcon icon={Camera} className="w-8 h-8 text-muted-foreground mx-auto"  />
                 </>
               ) : cameraIssue === "unavailable" ? (
                 <>
@@ -257,7 +273,7 @@ export default function QRScanner({ onClose, onResult, token }: Props) {
             <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
               className="bg-card rounded-2xl p-6 w-full max-w-sm space-y-4">
               <div className="w-14 h-14 rounded-full bg-green-500/15 flex items-center justify-center mx-auto">
-                <CheckCircle className="w-7 h-7 text-green-500" />
+                <MorphIcon icon={CheckCircle} className="w-7 h-7 text-green-500"  />
               </div>
               <p className="font-semibold text-center text-foreground">
                 {result.type === "material" ? t('qrScanner.materialFound') :

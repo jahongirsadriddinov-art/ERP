@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw } from "lucide";
+import { MorphIcon } from "morphicons/react";
 import { haptic, isAndroid } from "./platform";
 
 // ─── Tepadan pastga tortib yangilash (pull-to-refresh) — faqat Android APK'da ──
@@ -93,7 +94,7 @@ export default function PullToRefresh() {
       style={{ top: "max(0.75rem, env(safe-area-inset-top))", opacity: pull > 4 || refreshing ? 1 : 0 }}>
       <div className="w-9 h-9 rounded-full surface flex items-center justify-center shadow-lg"
         style={{ transform: `rotate(${progress * 360}deg)` }}>
-        <RefreshCw className={`w-4 h-4 text-primary ${refreshing ? "animate-spin" : ""}`} />
+        <MorphIcon icon={RefreshCw} className={`w-4 h-4 text-primary ${refreshing ? "animate-spin" : ""}`}  />
       </div>
     </div>
   );

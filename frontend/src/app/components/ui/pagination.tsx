@@ -1,9 +1,10 @@
 import * as React from "react";
 import {
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  MoreHorizontalIcon,
-} from "lucide-react";
+  ChevronLeft,
+  ChevronRight,
+  MoreHorizontal,
+} from "lucide";
+import { MorphIcon } from "morphicons/react";
 
 import { cn } from "./utils";
 import { Button, buttonVariants } from "./button";
@@ -76,7 +77,7 @@ function PaginationPrevious({
       className={cn("gap-1 px-2.5 sm:pl-2.5", className)}
       {...props}
     >
-      <ChevronLeftIcon />
+      <MorphIcon icon={ChevronLeft}  />
       <span className="hidden sm:block">Previous</span>
     </PaginationLink>
   );
@@ -94,7 +95,7 @@ function PaginationNext({
       {...props}
     >
       <span className="hidden sm:block">Next</span>
-      <ChevronRightIcon />
+      <MorphIcon icon={ChevronRight}  />
     </PaginationLink>
   );
 }
@@ -110,7 +111,7 @@ function PaginationEllipsis({
       className={cn("flex size-9 items-center justify-center", className)}
       {...props}
     >
-      <MoreHorizontalIcon className="size-4" />
+      <MorphIcon icon={MoreHorizontal} className="size-4"  />
       <span className="sr-only">More pages</span>
     </span>
   );

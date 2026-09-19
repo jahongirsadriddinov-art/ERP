@@ -8,6 +8,7 @@ import Check from "@hugeicons/core-free-icons/Tick01Icon";
 import Camera from "@hugeicons/core-free-icons/Camera01Icon";
 import Copy from "@hugeicons/core-free-icons/Copy01Icon";
 import MessageCircle from "@hugeicons/core-free-icons/Message01Icon";
+import CreditCard from "@hugeicons/core-free-icons/CreditCardIcon";
 import { MorphIcon } from "morphicons/react";
 import { toast } from "sonner";
 import { motion } from "motion/react";
@@ -15,6 +16,7 @@ import { useTranslation } from "react-i18next";
 import { API_BASE, uploadChatMedia } from "./api";
 import { setSiteLanguage, SiteLang } from "./i18n";
 import LanguageSwitcher from "./i18n/LanguageSwitcher";
+import { openExternalUrl, isNative } from "./platform";
 
 // v1.2 self-signup — faqat yangi firma ochayotgan foydalanuvchi ko'radi,
 // shuning uchun alohida faylga chiqarilib React.lazy orqali faqat
@@ -44,7 +46,7 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
 
   // Qadam 2 — tarif tanlash
   const [selectedPlan, setSelectedPlan] = useState<'1month'|'3month'|'6month'|'12month'|null>(null);
-  const [regDoneInfo, setRegDoneInfo] = useState<{phone:string;planLabel:string;planAmount:number;companyName:string;branchId:string;ownerName:string}|null>(null);
+  const [regDoneInfo, setRegDoneInfo] = useState<{phone:string;planLabel:string;planAmount:number;companyName:string;branchId:string;ownerName:string;isFreePlan:boolean;payUrl?:string;payProviders?:{code:string;name:string;url:string}[]}|null>(null);
   const [doneCopied, setDoneCopied] = useState(false);
 
   // Qadam 3 — telefon
@@ -238,6 +240,9 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
         companyName: d.company?.name || companyName,
         branchId: d.company?.branchId || '',
         ownerName: `${firstName} ${lastName}`.trim(),
+        isFreePlan: !!d.isFreePlan,
+        payUrl: d.payUrl,
+        payProviders: d.payProviders,
       });
       setStep("done");
     } catch { setError(t('login.serverError')); setLoading(false); }
@@ -577,7 +582,16 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
             </div>
           )}
 
-          {/* ── Qadam 10: Ro'yxatdan o'tdingiz — ma'lumotlarni yuborish ── */}
+          {/* ── Qadam 10: Ro'yxatdan o'tdingiz ──────────────────────────────
+              XATO TUZATILDI: bu ekran ilgari HAR DOIM "ma'lumotlarni
+              nusxalab operatorga yuboring, operator javobini kuting, 1-oy
+              bepul" degan ESKI (endi noto'g'ri) matnni ko'rsatardi — hatto
+              foydalanuvchi pullik tarif tanlagan bo'lsa ham. Endi uchta
+              aniq holat bor: (1) BEPUL tarif — obuna ALLAQACHON faol,
+              operatorga yozish shart emas; (2) pullik tarif — Roxiy
+              to'lov havolasi tayyor, to'lash tugmasi bosiladi; (3) Roxiy
+              vaqtincha ishlamasa — eski qo'lda-operator yo'li zaxira
+              sifatida qoladi. */}
           {step === "done" && regDoneInfo && (
             <div className="space-y-5 animate-slide-in-right flex-1 flex flex-col justify-center">
               <div className="flex flex-col items-center gap-3 text-center">
@@ -586,67 +600,105 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
                 </div>
                 <div>
                   <h2 className="text-xl font-bold mb-1">{t('register.doneTitle')}</h2>
-                  <p className="text-sm text-muted-foreground">{t('register.doneSubtitle', { handle: '@Sadriddinov_Jahongir' })}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {regDoneInfo.isFreePlan ? t('register.doneSubtitleFree')
+                      : regDoneInfo.payUrl ? t('register.doneSubtitlePay')
+                      : t('register.doneSubtitle', { handle: '@Sadriddinov_Jahongir' })}
+                  </p>
                 </div>
               </div>
 
-              {/* Copyable info block — ataylab tarjima qilinmagan: bu matn faqat
-                  o'zbek tilida so'zlashuvchi operatorga (@Sadriddinov_Jahongir)
-                  yuboriladigan qat'iy formatdagi xabar, foydalanuvchi UI'si emas. */}
-              <div className="relative">
-                <div className="bg-slate-900 dark:bg-slate-800 text-green-400 rounded-2xl p-4 font-mono text-xs leading-relaxed whitespace-pre-wrap border border-slate-700 select-all">
-                  {[
-                    `📋 YANGI FIRMA RO'YXATI`,
-                    `─────────────────────────`,
-                    `🏢 Firma: ${regDoneInfo.companyName}`,
-                    `👤 Egasi: ${regDoneInfo.ownerName}`,
-                    `📞 Telefon: ${regDoneInfo.phone}`,
-                    `📦 Tarif: ${regDoneInfo.planLabel}`,
-                    `💰 Summa: ${regDoneInfo.planAmount.toLocaleString('uz-UZ')} so'm`,
-                    ...(regDoneInfo.branchId ? [`🔑 ID: ${regDoneInfo.branchId}`] : []),
-                    `─────────────────────────`,
-                  ].join('\n')}
+              {regDoneInfo.isFreePlan ? (
+                <div className="surface rounded-2xl p-4 space-y-3 text-center">
+                  <p className="text-sm text-muted-foreground">{t('register.freeActivatedDesc', { phone: regDoneInfo.phone })}</p>
+                  <button onClick={onBack}
+                    className="w-full bg-primary text-white text-sm font-bold py-3.5 rounded-xl min-h-[48px] active:scale-[0.98] transition-transform">
+                    {t('register.goToLoginBtn')}
+                  </button>
                 </div>
-                <button
-                  onClick={() => {
-                    const text = [
-                      `📋 YANGI FIRMA RO'YXATI`,
-                      `─────────────────────────`,
-                      `🏢 Firma: ${regDoneInfo.companyName}`,
-                      `👤 Egasi: ${regDoneInfo.ownerName}`,
-                      `📞 Telefon: ${regDoneInfo.phone}`,
-                      `📦 Tarif: ${regDoneInfo.planLabel}`,
-                      `💰 Summa: ${regDoneInfo.planAmount.toLocaleString('uz-UZ')} so'm`,
-                      ...(regDoneInfo.branchId ? [`🔑 ID: ${regDoneInfo.branchId}`] : []),
-                      `─────────────────────────`,
-                    ].join('\n');
-                    navigator.clipboard.writeText(text).then(() => {
-                      setDoneCopied(true);
-                      setTimeout(() => setDoneCopied(false), 2500);
-                    });
-                  }}
-                  className={`absolute top-3 right-3 flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-xl transition-all ${doneCopied ? 'bg-green-500 text-white' : 'bg-white/10 text-white hover:bg-white/20'}`}>
-                  {doneCopied ? <><MorphIcon icon={Check} className="w-3 h-3" />{t('register.copied')}</> : <><MorphIcon icon={Copy} className="w-3 h-3" />{t('register.copyAction2')}</>}
-                </button>
-              </div>
+              ) : regDoneInfo.payUrl ? (
+                <div className="space-y-3">
+                  <div className="surface rounded-2xl p-4 space-y-3">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">{t('register.selectedPlan')}</span>
+                      <span className="font-bold">{regDoneInfo.planLabel}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">{t('register.summaryAmount')}</span>
+                      <span className="font-bold text-primary">{regDoneInfo.planAmount.toLocaleString('uz-UZ')} {t('register.som')}</span>
+                    </div>
+                    <button
+                      onClick={() => { const url = regDoneInfo.payUrl!; isNative() ? openExternalUrl(url) : window.open(url, '_blank', 'noopener,noreferrer'); }}
+                      className="w-full flex items-center justify-center gap-2 bg-primary text-white text-sm font-bold py-3.5 rounded-xl min-h-[48px] active:scale-[0.98] transition-transform">
+                      <MorphIcon icon={CreditCard} className="w-4 h-4" />{t('register.payNowBtn')}
+                    </button>
+                    <p className="text-xs text-muted-foreground leading-relaxed text-center">{t('register.payAutoActivateHint')}</p>
+                  </div>
+                  <button onClick={onBack} className="w-full text-xs text-muted-foreground hover:text-foreground font-semibold py-2">
+                    {t('register.goToLoginBtn')}
+                  </button>
+                </div>
+              ) : (
+                <>
+                  {/* Zaxira yo'l — Roxiy buyurtmasi yaratilmagan bo'lsa (masalan
+                      vaqtincha uzilish). Copyable info block ataylab
+                      tarjima qilinmagan: bu matn faqat o'zbek tilida
+                      so'zlashuvchi operatorga yuboriladigan qat'iy
+                      formatdagi xabar, foydalanuvchi UI'si emas. */}
+                  <div className="relative">
+                    <div className="bg-slate-900 dark:bg-slate-800 text-green-400 rounded-2xl p-4 font-mono text-xs leading-relaxed whitespace-pre-wrap border border-slate-700 select-all">
+                      {[
+                        `📋 YANGI FIRMA RO'YXATI`,
+                        `─────────────────────────`,
+                        `🏢 Firma: ${regDoneInfo.companyName}`,
+                        `👤 Egasi: ${regDoneInfo.ownerName}`,
+                        `📞 Telefon: ${regDoneInfo.phone}`,
+                        `📦 Tarif: ${regDoneInfo.planLabel}`,
+                        `💰 Summa: ${regDoneInfo.planAmount.toLocaleString('uz-UZ')} so'm`,
+                        ...(regDoneInfo.branchId ? [`🔑 ID: ${regDoneInfo.branchId}`] : []),
+                        `─────────────────────────`,
+                      ].join('\n')}
+                    </div>
+                    <button
+                      onClick={() => {
+                        const text = [
+                          `📋 YANGI FIRMA RO'YXATI`,
+                          `─────────────────────────`,
+                          `🏢 Firma: ${regDoneInfo.companyName}`,
+                          `👤 Egasi: ${regDoneInfo.ownerName}`,
+                          `📞 Telefon: ${regDoneInfo.phone}`,
+                          `📦 Tarif: ${regDoneInfo.planLabel}`,
+                          `💰 Summa: ${regDoneInfo.planAmount.toLocaleString('uz-UZ')} so'm`,
+                          ...(regDoneInfo.branchId ? [`🔑 ID: ${regDoneInfo.branchId}`] : []),
+                          `─────────────────────────`,
+                        ].join('\n');
+                        navigator.clipboard.writeText(text).then(() => {
+                          setDoneCopied(true);
+                          setTimeout(() => setDoneCopied(false), 2500);
+                        });
+                      }}
+                      className={`absolute top-3 right-3 flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-xl transition-all ${doneCopied ? 'bg-green-500 text-white' : 'bg-white/10 text-white hover:bg-white/20'}`}>
+                      {doneCopied ? <><MorphIcon icon={Check} className="w-3 h-3" />{t('register.copied')}</> : <><MorphIcon icon={Copy} className="w-3 h-3" />{t('register.copyAction2')}</>}
+                    </button>
+                  </div>
 
-              <div className="surface rounded-2xl p-4 space-y-2.5">
-                <p className="text-sm font-semibold">{t('register.nextStep')}</p>
-                <p className="text-sm leading-relaxed text-muted-foreground">{t('register.nextStepDesc', { handle: '@Sadriddinov_Jahongir' })}</p>
-                <a href="https://t.me/Sadriddinov_Jahongir" target="_blank" rel="noopener noreferrer"
-                  className="flex items-center gap-2.5 bg-primary/10 border border-primary/25 rounded-xl px-4 py-3">
-                  <div className="w-9 h-9 rounded-full bg-primary/15 flex items-center justify-center flex-shrink-0">
-                    <MorphIcon icon={MessageCircle} className="w-4 h-4 text-primary" />
+                  <div className="surface rounded-2xl p-4 space-y-2.5">
+                    <p className="text-sm font-semibold">{t('register.nextStep')}</p>
+                    <p className="text-sm leading-relaxed text-muted-foreground">{t('register.nextStepDesc', { handle: '@Sadriddinov_Jahongir' })}</p>
+                    <a href="https://t.me/Sadriddinov_Jahongir" target="_blank" rel="noopener noreferrer"
+                      className="flex items-center gap-2.5 bg-primary/10 border border-primary/25 rounded-xl px-4 py-3">
+                      <div className="w-9 h-9 rounded-full bg-primary/15 flex items-center justify-center flex-shrink-0">
+                        <MorphIcon icon={MessageCircle} className="w-4 h-4 text-primary" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-primary">@Sadriddinov_Jahongir</p>
+                        <p className="text-[11px] text-muted-foreground">{t('register.telegramSendHint')}</p>
+                      </div>
+                    </a>
+                    <p className="text-xs text-muted-foreground leading-relaxed">{t('register.waitOperatorGeneric')}</p>
                   </div>
-                  <div>
-                    <p className="text-sm font-bold text-primary">@Sadriddinov_Jahongir</p>
-                    <p className="text-[11px] text-muted-foreground">{t('register.telegramSendHint')}</p>
-                  </div>
-                </a>
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  {t('register.waitOperator')} <b className="text-foreground">{t('register.firstMonthFreeBold')}</b> {t('register.thenPayment')}
-                </p>
-              </div>
+                </>
+              )}
             </div>
           )}
         </div>

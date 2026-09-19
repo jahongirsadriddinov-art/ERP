@@ -24,6 +24,10 @@ const PIN_HASH_KEY = "erp_pinHash";
 const PIN_SALT_KEY = "erp_pinSalt";
 const BIOMETRIC_KEY = "erp_biometricEnabled";
 const LAST_ACTIVE_KEY = "erp_lastActiveAt";
+// Qo'lda "Hozir bloklash" tugmasi bosilgani — vaqt oralig'iga (LAST_ACTIVE_KEY)
+// ASLO bog'liq emas, aks holda quyidagi XATO yuzaga kelardi (aynan shu sabab
+// qo'shilgan): "qo'lda bloklab, sahifani yangilasam, qulfdan ochilib ketadi".
+const FORCE_LOCKED_KEY = "erp_forceLocked";
 const LOCK_TIMEOUT_KEY = "erp_lockTimeoutMin";
 const FAILED_ATTEMPTS_KEY = "erp_pinFailedAttempts";
 // Standart — Telegram'ning o'zidagi taxminiy chegara: fondan shundan ko'proq
@@ -99,6 +103,7 @@ export function clearPin(): void {
   localStorage.removeItem(PIN_HASH_KEY);
   localStorage.removeItem(PIN_SALT_KEY);
   localStorage.removeItem(BIOMETRIC_KEY);
+  localStorage.removeItem(FORCE_LOCKED_KEY);
 }
 export function isBiometricEnabled(): boolean {
   return localStorage.getItem(BIOMETRIC_KEY) === '1';
@@ -243,6 +248,9 @@ export function useAppLock(pinIsSet: boolean) {
   // "hozir" bilan almashtirib, qulfni HECH QACHON ishga tushirmas edi.
   const [locked, setLocked] = useState(() => {
     if (!pinIsSet) return false;
+    // Qo'lda bloklangan bo'lsa — bu holat vaqt o'tishiga (LAST_ACTIVE_KEY)
+    // qarab EMAS, faqat aniq "unlock" chaqirilgandagina tugaydi.
+    if (localStorage.getItem(FORCE_LOCKED_KEY) === '1') return true;
     const last = Number(localStorage.getItem(LAST_ACTIVE_KEY) || 0);
     return !!last && Date.now() - last > getLockThresholdMs();
   });
@@ -282,7 +290,18 @@ export function useAppLock(pinIsSet: boolean) {
   // (shartsiz) chaqiriladi, shuning uchun ekran bloklangan paytda ham
   // joylashuv yuborilishda davom etadi (aniq talab: "joylashuvni hardoim
   // oladigan bo'lsin").
-  return { locked, unlock: () => { markActiveNow(); setLocked(false); }, lock: () => { markActiveNow(); setLocked(true); } };
+  //
+  // XATO TUZATILDI ("qo'lda bloklab, sahifani yangilasam, qulfdan ochilib
+  // ketadi"): `lock()` avval `markActiveNow()`ni ham chaqirardi — bu esa
+  // "hozirgina faol bo'lgan" belgisini yozib qo'yardi, sahifa yangilansa
+  // yuqoridagi useState boshlang'ich hisobi "hali eskimagan, demak
+  // qulflanmagan" deb noto'g'ri xulosa chiqarardi. Endi qo'lda bloklash
+  // FORCE_LOCKED_KEY orqali, vaqt hisobidan MUSTAQIL ravishda saqlanadi.
+  return {
+    locked,
+    unlock: () => { localStorage.removeItem(FORCE_LOCKED_KEY); markActiveNow(); setLocked(false); },
+    lock: () => { localStorage.setItem(FORCE_LOCKED_KEY, '1'); setLocked(true); },
+  };
 }
 
 // ─── PIN kiritish klaviaturasi (umumiy — o'rnatish va qulf ochishda ham) ──

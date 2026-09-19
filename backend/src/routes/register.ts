@@ -279,13 +279,20 @@ router.post('/complete', async (req, res) => {
     // saytga qayta kirib, alohida to'lov qadamini bajarishi shart emas).
     let payUrl: string | undefined;
     let payProviders: { code: string; name: string; url: string }[] | undefined;
+    let payError: string | undefined;
     if (sub && wantsOnlinePay) {
       try {
         const { createSubscriptionPaymentOrder } = await import('../services/subscriptionPayments');
         const result = await createSubscriptionPaymentOrder(String(createdCompany._id), String(ownerUser._id), planKey);
         if (result.ok) { payUrl = result.order.pay_url; payProviders = result.order.providers; }
-        else console.error('register/complete: roxiy order error:', result.error);
-      } catch (err) {
+        else { payError = result.error; console.error('register/complete: roxiy order error:', result.error); }
+      } catch (err: any) {
+        // MUHIM: bu yerda tutilgan xato ko'pincha ROXIY_API_KEY ishlab
+        // chiqarish (Render) muhitida sozlanmagani (mahalliy .env fayli
+        // Git orqali serverga yuborilmaydi, alohida Render Environment
+        // sozlamalariga qo'shilishi kerak) — frontend endi buni jimgina
+        // yashirmasdan, foydalanuvchiga ko'rsatadi.
+        payError = err?.message || "Noma'lum xatolik";
         console.error('register/complete: roxiy order threw:', err);
       }
     }
@@ -348,6 +355,7 @@ router.post('/complete', async (req, res) => {
       isFreePlan,
       payUrl,
       payProviders,
+      payError,
       phone: ownerUser.phone,
       language: ownerUser.language || 'uz',
       selectedPlan: planKey,

@@ -51,7 +51,7 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
   // tasdiqlaydi — naqd/bank o'tkazmasi kabi boshqa kelishuvlar uchun).
   // Bepul tarifda ishlatilmaydi (backend baribir e'tiborsiz qoldiradi).
   const [paymentMethod, setPaymentMethod] = useState<'online'|'admin'>('online');
-  const [regDoneInfo, setRegDoneInfo] = useState<{phone:string;planLabel:string;planAmount:number;companyName:string;branchId:string;ownerName:string;isFreePlan:boolean;payUrl?:string;payProviders?:{code:string;name:string;url:string}[]}|null>(null);
+  const [regDoneInfo, setRegDoneInfo] = useState<{phone:string;planLabel:string;planAmount:number;companyName:string;branchId:string;ownerName:string;isFreePlan:boolean;payUrl?:string;payProviders?:{code:string;name:string;url:string}[];payError?:string}|null>(null);
   const [doneCopied, setDoneCopied] = useState(false);
 
   // Qadam 3 — telefon
@@ -249,6 +249,7 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
         isFreePlan: !!d.isFreePlan,
         payUrl: d.payUrl,
         payProviders: d.payProviders,
+        payError: d.payError,
       });
       setStep("done");
     } catch { setError(t('login.serverError')); setLoading(false); }
@@ -741,6 +742,10 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
                       </div>
                     </a>
                     <p className="text-xs text-muted-foreground leading-relaxed">{t('register.waitOperatorGeneric')}</p>
+                    {/* Texnik xato matni — foydalanuvchi uchun emas, operator/
+                        dasturchi ekranni ko'rsatsa muammoni tezroq topishi
+                        uchun (masalan Render'da ROXIY_API_KEY sozlanmagani). */}
+                    {regDoneInfo.payError && <p className="text-[10px] font-mono text-muted-foreground/60 break-all">{regDoneInfo.payError}</p>}
                   </div>
                 </>
               )}

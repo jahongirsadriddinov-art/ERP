@@ -17,7 +17,7 @@ import { tb, langLabel, BotLang } from '../i18n/bot';
 import { getBackendUrl } from '../utils/backendUrl';
 import { uploadFileToCloud } from '../config/cloudinary';
 import { todayInTashkent, tashkentHour } from '../utils/tz';
-import { PLAN_CONFIG, PAYABLE_PLAN_KEYS } from '../config/plans';
+import { PLAN_CONFIG, getPayablePlanKeys } from '../config/plans';
 import { createSubscriptionPaymentOrder } from './subscriptionPayments';
 
 dotenv.config();
@@ -1692,7 +1692,7 @@ bot.on('message', async (msg: any) => {
         if ((sub.status === 'pending' || sub.status === 'expired') && user.companyId) {
           await bot.sendMessage(chatId, tb(user.language, 'subPayPrompt'), {
             reply_markup: {
-              inline_keyboard: PAYABLE_PLAN_KEYS.map(key => ([{
+              inline_keyboard: getPayablePlanKeys().map(key => ([{
                 text: tb(user.language, 'subPayBtnLabel', { label: PLAN_CONFIG[key].label, amount: PLAN_CONFIG[key].amount.toLocaleString('uz-UZ') }),
                 callback_data: `roxiypay:${key}`,
               }])),

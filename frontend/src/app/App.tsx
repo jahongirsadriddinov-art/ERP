@@ -4168,7 +4168,12 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
             { key: "language" as const, icon: Languages, label: t('profile.language'), hint: langLabel(i18n.language as SiteLang), swatch: null },
             { key: "perms" as const, icon: CheckCircle, label: t('profile.permissions'), hint: `${perms.filter(([,has])=>has).length}/${perms.length}`, swatch: null },
             { key: "projects" as const, icon: Building2, label: t('profile.myObjects'), hint: String(myProjectCount), swatch: null },
-            { key: "currency" as const, icon: DollarSign, label: t('profile.currencyRate'), hint: null as string|null, swatch: null },
+            // Tarifda "multi_currency" o'chirilgan bo'lsa bu qator umuman
+            // ko'rsatilmaydi (subData.features hali kelmagan bo'lsa ham
+            // ko'rsatiladi — yuklanish paytida bo'sh menyu ko'rinmasin).
+            ...((!subData?.features || subData.features.includes('multi_currency')) ? [
+              { key: "currency" as const, icon: DollarSign, label: t('profile.currencyRate'), hint: null as string|null, swatch: null },
+            ] : []),
             { key: "sound" as const, icon: soundOn ? Volume2 : VolumeX, label: t('profile.sound'), hint: soundOn ? t('profile.soundOn') : t('profile.soundOff'), swatch: null },
             ...(isAdmin(currentUser.role) ? [{ key: "subscription" as const, icon: CreditCard, label: t('profile.subscriptionStatus'),
               hint: subData?.status === 'active' ? (subData.daysLeft !== null ? t('profile.daysLeftValue', { count: subData.daysLeft }) : t('profile.subStatusActive')) : subData?.status === 'pending' ? t('profile.subStatusPending') : subData?.status === 'expired' ? t('profile.subStatusExpired') : subData?.status === 'rejected' ? t('profile.subStatusRejected') : subLoading ? "..." : t('common.notFound'),
@@ -4244,8 +4249,10 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
           </motion.div>
         )}
 
-        {/* Audit log — faqat admin */}
-        {(currentUser.role === 'direktor' || currentUser.role === 'orinbosar' || currentUser.role === 'dasturchi') && (
+        {/* Audit log — faqat admin, va tarifda yoqilgan bo'lsa (subData.features
+            hali kelmagan bo'lsa ham ko'rsatiladi — quyida yozilganidek). */}
+        {(currentUser.role === 'direktor' || currentUser.role === 'orinbosar' || currentUser.role === 'dasturchi') &&
+          (!subData?.features || subData.features.includes('audit_log')) && (
           <AuditLogSection token={localStorage.getItem("token") || ""} />
         )}
 
@@ -4906,6 +4913,22 @@ export default function App() {
   const pinIsSet = isPinSet();
   const { locked: appLocked, unlock: unlockApp, lock: lockAppNow } = useAppLock(!!liveUser && pinIsSet);
   const isWorkerRole = liveUser ? ['ishchi', 'prorab', 'brigadir'].includes(liveUser.role) : false;
+
+  // Tarifga qarab qaysi funksiyalar yoqilganini bilish uchun — admin
+  // panelida (Dasturchi paneli → Tariflar) belgilanadi. `null` = hali
+  // yuklanmagan (yoki dasturchi — unga tegishli emas) — bu holatda
+  // HAMMASI yoqilgan deb hisoblanadi, aks holda sahifa ochilgan zahoti
+  // barcha tugmalar bir lahza yo'qolib, keyin qayta paydo bo'lardi.
+  const [companyFeatures, setCompanyFeatures] = useState<string[] | null>(null);
+  useEffect(() => {
+    if (!liveUser?.companyId || liveUser.role === 'dasturchi') { setCompanyFeatures(null); return; }
+    fetch(`${API_BASE}/api/admin/subscriptions/my`, { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => setCompanyFeatures(Array.isArray(d?.features) ? d.features : null))
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveUser?.companyId, liveUser?.role]);
+  const hasFeature = (key: string) => !companyFeatures || companyFeatures.includes(key);
   // GPS shu holatga BOG'LIQ: "Ishga keldim" bosilmaguncha ishlamaydi (foydalanuvchi
   // talabi). MUHIM: lekin "Ishni tugatdim" bosilgach GPS TO'XTAMAYDI — faqat
   // check-in mavjudligiga qaraladi, check-out'ga emas ("GPS har doim olinsin,
@@ -5474,7 +5497,7 @@ export default function App() {
     // FinancePage'ning o'zi ichida approve/reject tugmalari isAdmin bilan
     // allaqachon cheklangan — bu yerda faqat sahifaga KIRISH ochilmoqda.
     { key: "finance" as NavPage, label: tApp('nav.finance'), icon: DollarSign },
-    ...(admin ? [
+    ...(admin && hasFeature('reports') ? [
       { key: "reports" as NavPage, label: tApp('nav.reports'), icon: BarChart2 },
     ] : []),
     ...(isGpsAdmin ? [{ key: "gps" as NavPage, label: tApp('nav.gps'), icon: MapPin }] : []),
@@ -5509,7 +5532,7 @@ export default function App() {
         ))}
       </nav>
       <div className="nav-pill-desktop flex items-center gap-1 px-1.5 py-1.5 rounded-full flex-shrink-0 ml-auto">
-        {(liveUser.role === 'direktor' || liveUser.role === 'orinbosar') && (
+        {(liveUser.role === 'direktor' || liveUser.role === 'orinbosar') && hasFeature('ai_assistant') && (
           <button onClick={() => setAiOpen(true)} title="AI Yordamchi" aria-label="AI Yordamchi"
             className="btn btn-ghost w-9 h-9 p-0 rounded-full">
             <span className="text-base leading-none">✨</span>
@@ -5519,10 +5542,12 @@ export default function App() {
           className="btn btn-ghost w-9 h-9 p-0 rounded-full">
           <MorphIcon icon={Search} className="w-[18px] h-[18px]" />
         </button>
-        <button onClick={()=>setQrScanOpen(true)} title={tApp('qrScanner.title')} aria-label={tApp('qrScanner.title')}
-          className="btn btn-ghost w-9 h-9 p-0 rounded-full">
-          <MorphIcon icon={QrCode} className="w-[18px] h-[18px]" />
-        </button>
+        {hasFeature('qr_tools') && (
+          <button onClick={()=>setQrScanOpen(true)} title={tApp('qrScanner.title')} aria-label={tApp('qrScanner.title')}
+            className="btn btn-ghost w-9 h-9 p-0 rounded-full">
+            <MorphIcon icon={QrCode} className="w-[18px] h-[18px]" />
+          </button>
+        )}
         <button onClick={lockAppNow} title={tApp('profile.lockNowBtn')} aria-label={tApp('profile.lockNowBtn')}
           className="btn btn-ghost w-9 h-9 p-0 rounded-full">
           <MorphIcon icon={Lock} className="w-[18px] h-[18px]" />

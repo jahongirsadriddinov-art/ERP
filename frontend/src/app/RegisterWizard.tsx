@@ -51,6 +51,16 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
   // tasdiqlaydi — naqd/bank o'tkazmasi kabi boshqa kelishuvlar uchun).
   // Bepul tarifda ishlatilmaydi (backend baribir e'tiborsiz qoldiradi).
   const [paymentMethod, setPaymentMethod] = useState<'online'|'admin'>('online');
+  // Narxlar endi admin panelidan (Dasturchi paneli → Tariflar) tahrirlanadi
+  // — quyidagi kartalardagi narx shu yerdan (haqiqiy, jonli qiymat) olinadi,
+  // faqat tarmoq ishlamasa/hali kelmagan bo'lsa pastdagi qattiq yozilgan
+  // standart qiymatlar zaxira sifatida ko'rsatiladi.
+  const [livePlans, setLivePlans] = useState<Record<string, { amount: number; days: number; label: string }>>({});
+  useEffect(() => {
+    fetch(`${API_BASE}/api/plans`).then(r => r.ok ? r.json() : []).then((list: any[]) => {
+      setLivePlans(Object.fromEntries(list.map(p => [p.key, { amount: p.amount, days: p.days, label: p.label }])));
+    }).catch(() => {});
+  }, []);
   const [regDoneInfo, setRegDoneInfo] = useState<{phone:string;planLabel:string;planAmount:number;companyName:string;branchId:string;ownerName:string;isFreePlan:boolean;payUrl?:string;payProviders?:{code:string;name:string;url:string}[];payError?:string}|null>(null);
   const [doneCopied, setDoneCopied] = useState(false);
 
@@ -353,7 +363,11 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
                   { key: '3month',  label: t('register.plan3Month'),  fullPrice: 2_100_000, price: 1_400_000, days: 90,  ribbon: t('register.ribbonSavings'),   featured: false },
                   { key: '6month',  label: t('register.plan6Month'),  fullPrice: 4_200_000, price: 3_500_000, days: 180, ribbon: undefined,        featured: false },
                   { key: '12month', label: t('register.plan12Month'), fullPrice: 8_400_000, price: 7_700_000, days: 365, ribbon: t('register.ribbonLongest'),featured: true },
-                ] as const).map((plan, i) => {
+                ] as const).map((basePlan, i) => {
+                  // Jonli narx (agar admin panelida o'zgartirilgan bo'lsa) —
+                  // fullPrice/ribbon/featured kabi faqat ko'rinishga oid
+                  // qiymatlar hozircha qattiq yozilgan holicha qoladi.
+                  const plan = { ...basePlan, price: livePlans[basePlan.key]?.amount ?? basePlan.price, days: livePlans[basePlan.key]?.days ?? basePlan.days };
                   const selected = selectedPlan === plan.key;
                   return (
                     <motion.button key={plan.key} type="button" onClick={() => setSelectedPlan(plan.key)}
@@ -416,7 +430,7 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
                 ) : (
                   <div>
                     <p className="text-2xl font-bold text-primary">
-                      {selectedPlan==='3month'?'1 400 000':selectedPlan==='6month'?'3 500 000':'7 700 000'}
+                      {(livePlans[selectedPlan]?.amount ?? (selectedPlan==='3month'?1_400_000:selectedPlan==='6month'?3_500_000:7_700_000)).toLocaleString('uz-UZ')}
                       <span className="text-base font-normal text-muted-foreground ml-1">{t('register.som')}</span>
                     </p>
                     <p className="text-sm line-through text-muted-foreground">

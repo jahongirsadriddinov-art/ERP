@@ -8,7 +8,7 @@ import { getTenant } from '../middleware/tenantContext';
 import { bot } from '../services/bot';
 import { createSubscriptionPaymentOrder } from '../services/subscriptionPayments';
 import { extendPeriodEnd } from '../utils/subscriptionPeriod';
-import { PLAN_CONFIG, SelectedPlan } from '../config/plans';
+import { PLAN_CONFIG, SelectedPlan, getPlanInfo, ALL_FEATURE_KEYS } from '../config/plans';
 
 const router = Router();
 
@@ -38,6 +38,12 @@ router.get('/my', requireAuth, async (req, res) => {
       ? Math.max(0, Math.ceil(((sub as any).currentPeriodEnd.getTime() - now.getTime()) / 86400000))
       : null;
 
+    // Tarif topilmasa (eski/o'chirilgan kalit) — HAMMA funksiyani yoqilgan
+    // deb hisoblaymiz (mavjud, to'lagan mijozni to'satdan cheklab
+    // qo'ymaslik uchun), aks holda o'sha tarifda admin belgilagan ro'yxat.
+    const planInfo = getPlanInfo((sub as any).selectedPlan);
+    const features = planInfo ? planInfo.features : ALL_FEATURE_KEYS;
+
     return res.json({
       id: (sub as any)._id,
       status,
@@ -48,6 +54,7 @@ router.get('/my', requireAuth, async (req, res) => {
       daysLeft,
       requestedAt: (sub as any).requestedAt || (sub as any).createdAt,
       approvedAt: (sub as any).approvedAt,
+      features,
     });
   } catch (err) {
     console.error('subscriptions/my error:', err);

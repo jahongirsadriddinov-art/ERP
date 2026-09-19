@@ -20,22 +20,19 @@ import { ROLE_LABELS, VoicePlayer } from "./App";
 import { SkeletonList, SkeletonMessage } from "./Skeleton";
 import { openExternalUrl } from "./platform";
 
-// Har bir tarifda BIRINCHI OY BEPUL — backend/src/routes/subscriptions.ts PLAN_CONFIG bilan bir xil.
-const DEV_PLAN_CONFIG: Record<string, { label: string; days: number; amount: number }> = {
-  'bepul':   { label: '1 oy bepul', days: 30,  amount: 0 },
-  '1month':  { label: '1 oylik',   days: 30,  amount: 0 },
-  '3month':  { label: '3 oylik',   days: 90,  amount: 1_400_000 },
-  '6month':  { label: '6 oylik',   days: 180, amount: 3_500_000 },
-  '12month': { label: '12 oylik',  days: 365, amount: 7_700_000 },
-};
-
 // ─── Developer Panel ────────────────────────────────────────────────────────────
 export default function DeveloperPanel({ currentUser, onLogout }: { currentUser: AppUser; onLogout: () => void }) {
   const { t } = useTranslation();
-  const [tab, setTab] = useState<"firms" | "users" | "subscriptions" | "messages">("subscriptions");
+  const [tab, setTab] = useState<"firms" | "users" | "subscriptions" | "messages" | "plans">("subscriptions");
   const [companies, setCompanies] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [subs, setSubs] = useState<any[]>([]);
+  // Tariflar — ENDI kodda qattiq yozilmagan, backenddagi Plan kolleksiyasidan
+  // (routes/plans.ts) o'qiladi va shu yerning o'zidan tahrirlanadi.
+  const [plans, setPlans] = useState<any[]>([]);
+  const [features, setFeatures] = useState<{ key: string; label: string }[]>([]);
+  const [planSaving, setPlanSaving] = useState<string|null>(null);
+  const [newPlan, setNewPlan] = useState<{ key: string; label: string; days: string; amount: string; features: string[] } | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const [subLoading, setSubLoading] = useState<string|null>(null);
@@ -58,15 +55,19 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
   const load = async () => {
     setErr(""); setLoading(true);
     try {
-      const [cr, ur, sr] = await Promise.all([
+      const [cr, ur, sr, pr, fr] = await Promise.all([
         fetch(`${API_BASE}/api/companies`, { headers: authHdr }),
         fetch(`${API_BASE}/api/users`, { headers: authHdr }),
         fetch(`${API_BASE}/api/admin/subscriptions`, { headers: authHdr }),
+        fetch(`${API_BASE}/api/plans/admin`, { headers: authHdr }),
+        fetch(`${API_BASE}/api/plans/features`, { headers: authHdr }),
       ]);
       if (!cr.ok) { setErr(t('devPanel.errors.loadCompanies')); setLoading(false); return; }
       setCompanies(await cr.json());
       setUsers(ur.ok ? await ur.json() : []);
       setSubs(sr.ok ? await sr.json() : []);
+      setPlans(pr.ok ? await pr.json() : []);
+      setFeatures(fr.ok ? await fr.json() : []);
     } catch { setErr(t('devPanel.errors.connection')); }
     setLoading(false);
   };
@@ -131,7 +132,7 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
 
   const approveSub = async (id: string) => {
     const plan = renewPlan[id] || 'bepul';
-    const cfg = DEV_PLAN_CONFIG[plan] || DEV_PLAN_CONFIG['bepul'];
+    const cfg = plans.find(p => p.key === plan) || plans.find(p => p.key === 'bepul') || { days: 30, amount: 0 };
     setSubLoading(id);
     const res = await fetch(`${API_BASE}/api/admin/subscriptions/${id}/approve`, {
       method: "POST", headers: authHdr,
@@ -158,8 +159,40 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
     setSubLoading(null);
   };
 
+  // ── Tariflar (Plan) — admin panelidan narx/kun/funksiya boshqaruvi ──
+  const savePlan = async (plan: any) => {
+    setPlanSaving(plan.key);
+    try {
+      const res = await fetch(`${API_BASE}/api/plans/admin/${plan.key}`, {
+        method: "PUT", headers: authHdr,
+        body: JSON.stringify({ label: plan.label, days: plan.days, amount: plan.amount, features: plan.features, active: plan.active }),
+      });
+      if (res.ok) { toast.success(t('devPanel.plans.savedToast')); await load(); }
+      else { const d = await res.json().catch(() => ({})); toast.error(d.error || t('devPanel.plans.saveError')); }
+    } catch { toast.error(t('devPanel.plans.saveError')); }
+    setPlanSaving(null);
+  };
+  const deletePlan = async (key: string) => {
+    if (!window.confirm(t('devPanel.plans.confirmDelete'))) return;
+    const res = await fetch(`${API_BASE}/api/plans/admin/${key}`, { method: "DELETE", headers: authHdr });
+    if (res.ok) load(); else { const d = await res.json().catch(() => ({})); toast.error(d.error || t('devPanel.plans.deleteError')); }
+  };
+  const createPlan = async () => {
+    if (!newPlan || !newPlan.key.trim() || !newPlan.label.trim()) return;
+    const res = await fetch(`${API_BASE}/api/plans/admin`, {
+      method: "POST", headers: authHdr,
+      body: JSON.stringify({
+        key: newPlan.key.trim(), label: newPlan.label.trim(),
+        days: Number(newPlan.days) || 30, amount: Number(newPlan.amount) || 0,
+        features: newPlan.features,
+      }),
+    });
+    if (res.ok) { setNewPlan(null); toast.success(t('devPanel.plans.createdToast')); await load(); }
+    else { const d = await res.json().catch(() => ({})); toast.error(d.error || t('devPanel.plans.saveError')); }
+  };
+
   const companyName = (cid: string) => companies.find(c => c.id === cid)?.name || "—";
-  const planLabel = (key: string) => DEV_PLAN_CONFIG[key] ? t(`devPanel.planLabels.${key}`) : key;
+  const planLabel = (key: string) => plans.find(p => p.key === key)?.label || key;
 
   const deleteCompany = async (c: any) => {
     if (!window.confirm(t('devPanel.confirm.deleteCompany', { name: c.name, userCount: c.userCount, objectCount: c.objectCount }))) return;
@@ -249,6 +282,9 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
           <button onClick={() => setTab("messages")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition sm:flex-1 ${tab === "messages" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
             {t('devPanel.tabs.messages')}
           </button>
+          <button onClick={() => setTab("plans")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition sm:flex-1 ${tab === "plans" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
+            {t('devPanel.tabs.plans')}
+          </button>
         </div>
         {/* Ma'lumotlar FAQAT panel birinchi ochilganda yuklanardi — keyin
             (masalan panel ochiq turgan payt boshqa joyda yangi to'lov/
@@ -318,8 +354,8 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
                       <select value={renewPlan[s.id] || s.selectedPlan || '1month'}
                         onChange={e => setRenewPlan(prev => ({ ...prev, [s.id]: e.target.value }))}
                         className="flex-1 text-xs border border-orange-400/40 rounded-lg px-2 py-1.5 bg-transparent">
-                        {Object.entries(DEV_PLAN_CONFIG).map(([k, v]) => (
-                          <option key={k} value={k}>{planLabel(k)} — {v.amount.toLocaleString()} {t('devPanel.subscriptions.somSuffix')}</option>
+                        {plans.map(p => (
+                          <option key={p.key} value={p.key}>{p.label} — {p.amount.toLocaleString()} {t('devPanel.subscriptions.somSuffix')}</option>
                         ))}
                       </select>
                       <button onClick={() => renewSub(s.id)} disabled={subLoading === s.id}
@@ -335,8 +371,8 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
                       <select value={renewPlan[s.id] || 'bepul'}
                         onChange={e => setRenewPlan(prev => ({ ...prev, [s.id]: e.target.value }))}
                         className="flex-1 text-xs border border-green-500/40 rounded-lg px-2 py-1.5 bg-transparent">
-                        {Object.entries(DEV_PLAN_CONFIG).map(([k, v]) => (
-                          <option key={k} value={k}>{planLabel(k)}{v.amount ? ` — ${v.amount.toLocaleString()} ${t('devPanel.subscriptions.somSuffix')}` : ` — ${t('devPanel.subscriptions.freeLabel')}`}</option>
+                        {plans.map(p => (
+                          <option key={p.key} value={p.key}>{p.label}{p.amount ? ` — ${p.amount.toLocaleString()} ${t('devPanel.subscriptions.somSuffix')}` : ` — ${t('devPanel.subscriptions.freeLabel')}`}</option>
                         ))}
                       </select>
                     </div>
@@ -358,8 +394,8 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
                       <select value={renewPlan[s.id] || s.selectedPlan || '1month'}
                         onChange={e => setRenewPlan(prev => ({ ...prev, [s.id]: e.target.value }))}
                         className="flex-1 text-xs border border-border/60 rounded-lg px-2 py-2 bg-transparent">
-                        {Object.entries(DEV_PLAN_CONFIG).map(([k, v]) => (
-                          <option key={k} value={k}>{planLabel(k)} — {v.amount.toLocaleString()} {t('devPanel.subscriptions.somSuffix')}</option>
+                        {plans.map(p => (
+                          <option key={p.key} value={p.key}>{p.label} — {p.amount.toLocaleString()} {t('devPanel.subscriptions.somSuffix')}</option>
                         ))}
                       </select>
                       <button onClick={() => renewSub(s.id)} disabled={subLoading === s.id}
@@ -503,7 +539,7 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
               )}
             </div>
           </div>
-        ) : (
+        ) : tab === "users" ? (
           users.length === 0 ? <p className="text-center text-sm text-muted-foreground py-12">{t('devPanel.users.empty')}</p> :
           users.map(u => (
             <div key={u.id} className={`surface rounded-2xl p-3.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 ${u.isBlocked ? "ring-1 ring-red-500/40" : ""}`}>
@@ -544,6 +580,101 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
               </div>
             </div>
           ))
+        ) : (
+          // ── Tariflar — narx/kun/yorliq/funksiyalarni tahrirlash, yangi tarif qo'shish ──
+          <div className="space-y-3">
+            {plans.map(p => (
+              <div key={p.key} className={`surface rounded-2xl p-4 space-y-3 ${!p.active ? "opacity-50" : ""}`}>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-mono text-muted-foreground">{p.key}</span>
+                  <button onClick={() => savePlan({ ...p, active: !p.active })} disabled={planSaving === p.key}
+                    className={`text-[10px] font-bold px-2 py-1 rounded-full ${p.active ? "bg-green-500/15 text-green-700 dark:text-green-400" : "bg-muted text-muted-foreground"}`}>
+                    {p.active ? t('devPanel.plans.active') : t('devPanel.plans.inactive')}
+                  </button>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <label className="text-[10px] text-muted-foreground block mb-1">{t('devPanel.plans.labelField')}</label>
+                    <input value={p.label} onChange={e => setPlans(prev => prev.map(x => x.key === p.key ? { ...x, label: e.target.value } : x))}
+                      className="w-full text-xs border border-border/60 rounded-lg px-2 py-1.5 bg-transparent" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-muted-foreground block mb-1">{t('devPanel.plans.daysField')}</label>
+                    <input type="number" value={p.days} onChange={e => setPlans(prev => prev.map(x => x.key === p.key ? { ...x, days: Number(e.target.value) } : x))}
+                      className="w-full text-xs border border-border/60 rounded-lg px-2 py-1.5 bg-transparent font-mono" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-muted-foreground block mb-1">{t('devPanel.plans.amountField')}</label>
+                    <input type="number" value={p.amount} onChange={e => setPlans(prev => prev.map(x => x.key === p.key ? { ...x, amount: Number(e.target.value) } : x))}
+                      className="w-full text-xs border border-border/60 rounded-lg px-2 py-1.5 bg-transparent font-mono" />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[10px] text-muted-foreground block mb-1.5">{t('devPanel.plans.featuresField')}</label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {features.map(f => {
+                      const enabled = (p.features || []).includes(f.key);
+                      return (
+                        <button key={f.key}
+                          onClick={() => setPlans(prev => prev.map(x => x.key === p.key ? { ...x, features: enabled ? x.features.filter((k: string) => k !== f.key) : [...x.features, f.key] } : x))}
+                          className={`text-[10px] font-semibold px-2.5 py-1.5 rounded-full border liquid-transition ${enabled ? "bg-primary/10 border-primary/40 text-primary" : "border-border/60 text-muted-foreground"}`}>
+                          {enabled ? "✓ " : ""}{f.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div className="flex gap-2 pt-1">
+                  <button onClick={() => savePlan(p)} disabled={planSaving === p.key}
+                    className="flex-1 py-2 rounded-xl text-xs font-bold bg-primary text-white disabled:opacity-60 flex items-center justify-center gap-1">
+                    {planSaving === p.key ? <MorphIcon icon={Loader2} className="w-3.5 h-3.5 animate-spin" /> : t('devPanel.plans.save')}
+                  </button>
+                  <button onClick={() => deletePlan(p.key)}
+                    className="px-3 py-2 rounded-xl text-xs font-bold border border-red-500/30 text-red-600 hover:bg-red-500/10">
+                    <MorphIcon icon={Trash2} className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            ))}
+
+            {/* Yangi tarif qo'shish */}
+            {newPlan ? (
+              <div className="surface rounded-2xl p-4 space-y-3 ring-1 ring-primary/40">
+                <p className="text-xs font-bold text-primary">{t('devPanel.plans.newTitle')}</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <input placeholder={t('devPanel.plans.keyField')} value={newPlan.key} onChange={e => setNewPlan({ ...newPlan, key: e.target.value.replace(/[^a-z0-9_-]/gi, '') })}
+                    className="text-xs border border-border/60 rounded-lg px-2 py-1.5 bg-transparent font-mono" />
+                  <input placeholder={t('devPanel.plans.labelField')} value={newPlan.label} onChange={e => setNewPlan({ ...newPlan, label: e.target.value })}
+                    className="text-xs border border-border/60 rounded-lg px-2 py-1.5 bg-transparent" />
+                  <input type="number" placeholder={t('devPanel.plans.daysField')} value={newPlan.days} onChange={e => setNewPlan({ ...newPlan, days: e.target.value })}
+                    className="text-xs border border-border/60 rounded-lg px-2 py-1.5 bg-transparent font-mono" />
+                  <input type="number" placeholder={t('devPanel.plans.amountField')} value={newPlan.amount} onChange={e => setNewPlan({ ...newPlan, amount: e.target.value })}
+                    className="text-xs border border-border/60 rounded-lg px-2 py-1.5 bg-transparent font-mono" />
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {features.map(f => {
+                    const enabled = newPlan.features.includes(f.key);
+                    return (
+                      <button key={f.key}
+                        onClick={() => setNewPlan({ ...newPlan, features: enabled ? newPlan.features.filter(k => k !== f.key) : [...newPlan.features, f.key] })}
+                        className={`text-[10px] font-semibold px-2.5 py-1.5 rounded-full border liquid-transition ${enabled ? "bg-primary/10 border-primary/40 text-primary" : "border-border/60 text-muted-foreground"}`}>
+                        {enabled ? "✓ " : ""}{f.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={createPlan} className="flex-1 py-2 rounded-xl text-xs font-bold bg-primary text-white">{t('devPanel.plans.create')}</button>
+                  <button onClick={() => setNewPlan(null)} className="px-3 py-2 rounded-xl text-xs font-bold border border-border/60">{t('common.cancel')}</button>
+                </div>
+              </div>
+            ) : (
+              <button onClick={() => setNewPlan({ key: '', label: '', days: '30', amount: '0', features: [] })}
+                className="w-full py-3 rounded-2xl text-xs font-bold border-2 border-dashed border-border/60 text-muted-foreground hover:border-primary/40 hover:text-primary liquid-transition">
+                + {t('devPanel.plans.newTitle')}
+              </button>
+            )}
+          </div>
         )}
       </div>
     </div>

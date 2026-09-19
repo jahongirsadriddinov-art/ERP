@@ -1414,13 +1414,17 @@ function EditUserModal({ user, currentUser, onClose, onUpdate }: { user: AppUser
 }
 
 // ─── Dashboard (Admin) ────────────────────────────────────────────────────────
-function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onSendTransfer, onConfirmTransfer, onRejectTransfer, onSelectProject, onAddUser, onUpdateUser, onDeleteUser, onAddProject }:
+function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onSendTransfer, onConfirmTransfer, onRejectTransfer, onSelectProject, onAddUser, onUpdateUser, onDeleteUser, onAddProject, hasFeature }:
   { currentUser: AppUser; users: AppUser[]; projects: Project[]; transfers: Transfer[];
     setUsers: React.Dispatch<React.SetStateAction<AppUser[]>>;
     onSendTransfer: (t: Transfer) => void; onConfirmTransfer: (id: string, d?: string) => void;
     onRejectTransfer: (id: string) => void; onSelectProject: (p: Project) => void; onAddUser: (u: AppUser) => Promise<{ ok: boolean; error?: string }>;
     onUpdateUser: (u: AppUser) => void; onDeleteUser: (id: string) => void;
     onAddProject: (p: Project) => void;
+    // Obuna tarifida "backup" funksiyasi yoqilganmi — App() komponentidan
+    // (companyFeatures/hasFeature) uzatiladi, chunki AdminDashboard alohida
+    // komponent bo'lib, o'zining obuna ma'lumotlarini so'ramaydi.
+    hasFeature: (key: string) => boolean;
   }) {
   const { t } = useTranslation();
   const [showAddUser, setShowAddUser] = useState(false);
@@ -1506,11 +1510,13 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
             <span className="text-[10px] text-muted-foreground">{s.label}</span>
           </div>
         ))}
-        <button onClick={handleBackup} disabled={backupLoading}
-          className="flex items-center gap-1.5 text-xs border border-border rounded-lg px-3 py-1.5 hover:bg-muted active:scale-95 liquid-transition disabled:opacity-60 text-muted-foreground hover:text-foreground flex-shrink-0 whitespace-nowrap ml-auto">
-          {backupLoading ? <MorphIcon icon={Loader2} className="w-3.5 h-3.5 animate-spin" /> : <MorphIcon icon={Download} className="w-3.5 h-3.5" />}
-          {t('dashboard.backup')}
-        </button>
+        {hasFeature('backup') && (
+          <button onClick={handleBackup} disabled={backupLoading}
+            className="flex items-center gap-1.5 text-xs border border-border rounded-lg px-3 py-1.5 hover:bg-muted active:scale-95 liquid-transition disabled:opacity-60 text-muted-foreground hover:text-foreground flex-shrink-0 whitespace-nowrap ml-auto">
+            {backupLoading ? <MorphIcon icon={Loader2} className="w-3.5 h-3.5 animate-spin" /> : <MorphIcon icon={Download} className="w-3.5 h-3.5" />}
+            {t('dashboard.backup')}
+          </button>
+        )}
       </div>
     )}
     {/* Desktop: 4-column grid */}
@@ -5578,7 +5584,7 @@ export default function App() {
     ...(admin && hasFeature('reports') ? [
       { key: "reports" as NavPage, label: tApp('nav.reports'), icon: BarChart2 },
     ] : []),
-    ...(isGpsAdmin ? [{ key: "gps" as NavPage, label: tApp('nav.gps'), icon: MapPin }] : []),
+    ...(isGpsAdmin && hasFeature('gps_tracking') ? [{ key: "gps" as NavPage, label: tApp('nav.gps'), icon: MapPin }] : []),
     { key: "chat", label: tApp('nav.chat'), icon: MessageCircle, badge: unreadMsgs },
     { key: "profile", label: tApp('nav.profile'), icon: User },
   ];
@@ -5980,7 +5986,7 @@ export default function App() {
             onUpdateUser={handleUpdateUser} onDeleteUser={handleDeleteUser}
             onAddProject={(project)=>{
               setProjects(p=>[...p, project]);
-            }}/>
+            }} hasFeature={hasFeature}/>
         )}
         {/* Non-admin dashboard: just their transfers */}
         {page==="dashboard" && !admin && !selProject && (
@@ -6033,7 +6039,7 @@ export default function App() {
               onLockNow={lockAppNow}/>
           </div>
         )}
-        {page==="gps" && isGpsAdmin && (
+        {page==="gps" && isGpsAdmin && hasFeature('gps_tracking') && (
           <Suspense fallback={<SkeletonPage variant="list" />}>
             <GpsTrackingPage users={users} gpsLocations={gpsLocations} refreshing={gpsRefreshing} onRefresh={fetchGpsLocations} transfers={transfers} expenses={expenses}/>
           </Suspense>

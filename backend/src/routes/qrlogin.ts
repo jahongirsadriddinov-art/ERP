@@ -91,6 +91,17 @@ router.post('/scan', requireAuth, async (req, res) => {
       return res.json({ ok: true, scannedCount: session.scannedSlots.length, verified: true });
     }
 
+    // XAVFSIZLIK — MUHIM TUZATISH: avval sessiya "kim skanerlagani" FAQAT
+    // OXIRGI (3-chi) muvaffaqiyatli skanda yozilardi — ya'ni 1- va 2-slotni
+    // BIR hisob, 3-slotni BOSHQA hisob skanerlasa, laptopga O'SHA OXIRGI
+    // (ehtimol butunlay begona) hisob kirib qolardi. Endi sessiya BIRINCHI
+    // muvaffaqiyatli skanda o'sha hisobga "biriktiriladi" — qolgan 2 ta
+    // slotni ham FAQAT O'SHA BIR XIL hisob yakunlay oladi.
+    const scannerId = (req as any).user.userId as string;
+    if (session.userId && session.userId !== scannerId) {
+      return res.status(403).json({ ok: false, error: "Bu QR boshqa hisob tomonidan skanerlanmoqda" });
+    }
+
     const slot = currentSlot(session.createdAt as any);
     if (session.codes[slot] !== code) {
       return res.status(400).json({ ok: false, error: "Kod eskirgan — yangi kod kutilmoqda" });
@@ -101,10 +112,10 @@ router.post('/scan', requireAuth, async (req, res) => {
       return res.json({ ok: true, scannedCount: session.scannedSlots.length, verified: false });
     }
 
+    session.userId = scannerId;
     session.scannedSlots.push(slot);
     if (session.scannedSlots.length >= SLOT_COUNT) {
       session.status = 'verified';
-      session.userId = (req as any).user.userId;
     }
     await session.save();
     res.json({ ok: true, scannedCount: session.scannedSlots.length, verified: session.status === 'verified' });

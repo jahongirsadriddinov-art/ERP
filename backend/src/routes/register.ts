@@ -5,6 +5,7 @@ import User from '../models/User';
 import Company from '../models/Company';
 import Subscription from '../models/Subscription';
 import ConsentLog from '../models/ConsentLog';
+import PendingRegistration from '../models/PendingRegistration';
 import { generateBranchId } from '../models/Counter';
 import { PLAN_CONFIG, SelectedPlan } from './subscriptions';
 import { bot } from '../services/bot';
@@ -168,10 +169,37 @@ router.post('/cancel', async (req, res) => {
   }
 });
 
+// ─── 4.5) Onlayn to'lov holatini tekshirish ("done" ekranidagi "tizimga
+// kirish" tugmasi uchun) — to'lov HALI qabul qilinmagan bo'lsa foydalanuvchini
+// bevosita login ekraniga (u yerda "obunangiz kutilmoqda" degan chalkash
+// xato bilan) yubormaslik uchun. Faqat 3 xil holatni ajratadi, boshqa
+// hech qanday shaxsiy ma'lumot qaytarmaydi (User.findOne bilan bir xil
+// oshkoralik darajasi — /register/phone allaqachon shu darajada oshkora).
+router.get('/pay-status', async (req, res) => {
+  try {
+    const { phone } = req.query;
+    if (!phone || typeof phone !== 'string' || !isValidUzPhone(phone)) {
+      return res.status(400).json({ status: 'unknown' });
+    }
+    const normalized = normalizePhone(phone);
+    const rl = checkRate(`reg:paystatus:${normalized}`, 20, 60 * 1000);
+    if (!rl.allowed) return res.status(429).json({ status: 'unknown' });
+
+    const user = await User.findOne({ phone: normalized }).select('_id').lean();
+    if (user) return res.json({ status: 'paid' });
+    const pending = await PendingRegistration.findOne({ phone: normalized }).select('_id').lean();
+    if (pending) return res.json({ status: 'pending' });
+    return res.json({ status: 'unknown' });
+  } catch (err) {
+    console.error('register/pay-status error:', err);
+    return res.status(500).json({ status: 'unknown' });
+  }
+});
+
 // ─── 5) Yakunlash: firma + egasi yaratiladi (JWT EMAS — obuna tasdiqini kutadi) ──
 router.post('/complete', async (req, res) => {
   try {
-    const { token, owner, company, logoUrl, selectedPlan, paymentMethod } = req.body || {};
+    const { token, owner, company, logoUrl, selectedPlan, paymentMethod, promoCode } = req.body || {};
 
     // Token orqali faol sessiyani topamiz (256-bit sir + bot tasdig'i talab qilinadi)
     const reg = await findActiveByRawToken(token);
@@ -202,7 +230,106 @@ router.post('/complete', async (req, res) => {
       return res.status(409).json({ error: 'Bu raqam bilan firma mavjud. Tizimga kiring.' });
     }
 
-    // ── Yaratish (standalone Mongo — transaction talab qilinmaydi; branchId atomik) ──
+    const planKey = (selectedPlan && PLAN_CONFIG[selectedPlan as string]) ? (selectedPlan as SelectedPlan) : '1month';
+    const planInfo = PLAN_CONFIG[planKey];
+    const isFreePlan = planInfo.amount <= 0;
+    const wantsOnlinePay = !isFreePlan && paymentMethod !== 'admin';
+
+    // ── Onlayn (avtomatik) to'lov — MUHIM XATTI-HARAKAT: firma/foydalanuvchi
+    // HALI YARATILMAYDI. Avval Roxiy buyurtmasini (va PendingRegistration
+    // yozuvini) yaratishga urinamiz; muvaffaqiyatli bo'lsa shu yerdan
+    // ERTAROQ qaytamiz — pastdagi "darhol yaratish" yo'liga umuman
+    // yetib bormaymiz.
+    //
+    // XATO TUZATILDI: avval firma/user HAR DOIM, to'lovdan OLDIN
+    // yaratilar edi ('pending' holatda) — agar foydalanuvchi to'lamasdan
+    // tashlab ketsa, bu yozuv ABADIY osilib qolardi VA uning telefon
+    // raqami (User.phone unique) boshqa hech qachon ro'yxatdan o'tish
+    // uchun ishlatib bo'lmas edi ("Bu raqam bilan firma mavjud" xatosi).
+    // Endi: to'lansa — firma o'sha zahoti (webhook: routes/payments.ts)
+    // yaratiladi; to'lanmasa — 48 soatdan keyin PendingRegistration
+    // avtomatik o'chadi va telefon raqami erkin qoladi.
+    if (wantsOnlinePay) {
+      try {
+        const { createRegistrationPaymentOrder } = await import('../services/registrationPayments');
+        const passwordHash = await hashPassword(owner.password);
+        const result = await createRegistrationPaymentOrder({
+          phone: reg.phone,
+          passwordHash,
+          owner: {
+            firstName: owner.firstName.trim(), lastName: owner.lastName.trim(),
+            middleName: owner.middleName?.trim(), email: owner.email?.trim(),
+            position: owner.position?.trim() || 'Direktor',
+          },
+          company: {
+            name: company.name.trim(), legalName: company.legalName?.trim(),
+            inn: company.inn ? String(company.inn) : undefined,
+            address: company.address?.trim(), region: company.region?.trim(),
+            activityType: company.activityType || 'qurilish',
+            employeeRange: company.employeeRange, currency: company.currency || 'UZS',
+          },
+          logoUrl: logoUrl || '',
+          language: reg.language || 'uz',
+          telegramUserId: reg.telegramUserId,
+          telegramChatId: reg.telegramChatId,
+          registrationId: String(reg._id),
+          planKey,
+          promoCode: typeof promoCode === 'string' && promoCode.trim() ? promoCode.trim() : undefined,
+        });
+
+        if (result.ok) {
+          // Sessiyani yopamiz — bir martalik token qayta ishlatilmasin
+          // (foydalanuvchi to'lamasa ham, qayta urinish YANGI Telegram
+          // tasdig'i orqali boshlanadi — bu allaqachon mavjud oddiy yo'l).
+          reg.step = 'COMPLETED';
+          reg.otpTokenHash = hashToken('used-' + String(reg._id));
+          await reg.save();
+
+          const DEVELOPER_CHAT_ID = process.env.DEVELOPER_CHAT_ID;
+          if (DEVELOPER_CHAT_ID) {
+            const msgText = `🆕 <b>Yangi ro'yxatdan o'tish (onlayn to'lov kutilmoqda)</b>\n\n` +
+              `👤 ${owner.firstName} ${owner.lastName || ''}\n` +
+              `📞 ${reg.phone}\n` +
+              `🏢 ${company.name.trim()}\n` +
+              `📦 Tarif: ${planInfo.label} — ${result.amount.toLocaleString()} so'm\n\n` +
+              `Roxiy (Click/Payme/Paynet) orqali to'lov havolasi yuborildi — to'lansa FIRMA VA OBUNA AVTOMATIK yaratiladi, hech qanday harakat kerak emas.`;
+            await bot.sendMessage(DEVELOPER_CHAT_ID, msgText, { parse_mode: 'HTML' }).catch((e: any) => console.error('bot developer notify error:', e));
+          }
+
+          return res.status(201).json({
+            ok: true,
+            deferredPayment: true,
+            subscriptionPending: true,
+            isFreePlan: false,
+            payUrl: result.order.pay_url,
+            payProviders: result.order.providers,
+            phone: reg.phone,
+            language: reg.language || 'uz',
+            selectedPlan: planKey,
+            planLabel: planInfo.label,
+            planAmount: result.amount,
+            company: { branchId: result.branchId, name: company.name.trim() },
+          });
+        }
+        console.error('register/complete: registration payment order error:', result.error);
+        var payError: string | undefined = result.error;
+      } catch (err: any) {
+        // MUHIM: bu yerda tutilgan xato ko'pincha ROXIY_API_KEY ishlab
+        // chiqarish (Render) muhitida sozlanmagani (mahalliy .env fayli
+        // Git orqali serverga yuborilmaydi, alohida Render Environment
+        // sozlamalariga qo'shilishi kerak) — frontend endi buni jimgina
+        // yashirmasdan, foydalanuvchiga ko'rsatadi.
+        console.error('register/complete: registration payment order threw:', err);
+        var payError: string | undefined = err?.message || "Noma'lum xatolik";
+      }
+      // Bu yerga faqat Roxiy buyurtmasi MUVAFFAQIYATSIZ bo'lsa yetib keladi
+      // — pastdagi "darhol yaratish" yo'liga ZAXIRA sifatida o'tamiz
+      // (admin qo'lda tasdiqlaydi), ariza yo'qolib ketmasligi uchun.
+    }
+
+    // ── Bepul tarif YOKI "admin orqali" YOKI onlayn urinish muvaffaqiyatsiz
+    // bo'lgan zaxira holat — firma/foydalanuvchi DARHOL yaratiladi, 'pending'
+    // holatda, dasturchi bot orqali qo'lda tasdiqlaydi/rad etadi (ILGARIGIDEK).
     const branchId = await generateBranchId(new Date().getFullYear());
     const createdCompany = await Company.create({
       branchId,
@@ -250,19 +377,6 @@ router.post('/complete', async (req, res) => {
     createdCompany.ownerUserId = String(ownerUser._id);
     await createdCompany.save();
 
-    // Obuna: tanlangan tarif bilan — HAMMASI 'pending' (dasturchi tasdig'ini
-    // kutadi), BEPUL tarif ham shu jumladan (aniqlashtirilgan talab: "tekin
-    // bo'lsa ham admin tasdiqlashi kerak" — nazorat/spam'dan himoya uchun).
-    // Faqat farq: PULLIK tarifda foydalanuvchi "onlayn" usulni tanlagan
-    // bo'lsa, Roxiy to'lov buyurtmasi shu yerning o'zida yaratiladi va
-    // to'lansa dasturchi tasdig'isiz AVTOMATIK faollashadi (webhook).
-    // "Admin orqali" tanlansa (yoki bepul tarif) — hech qanday avtomatik
-    // to'lov yaratilmaydi, dasturchi bot orqali qo'lda Tasdiqlash/Rad
-    // etish tugmalarini bosishi kerak — ILGARIGIDEK.
-    const planKey = (selectedPlan && PLAN_CONFIG[selectedPlan as string]) ? (selectedPlan as SelectedPlan) : '1month';
-    const planInfo = PLAN_CONFIG[planKey];
-    const isFreePlan = planInfo.amount <= 0;
-    const wantsOnlinePay = !isFreePlan && paymentMethod !== 'admin';
     const now = new Date();
     const sub = await Subscription.create({
       companyId: String(createdCompany._id),
@@ -273,29 +387,6 @@ router.post('/complete', async (req, res) => {
       status: 'pending',
       requestedAt: now,
     }).catch(() => null);
-
-    // Onlayn to'lov tanlangan pullik tarif — Roxiy buyurtmasini shu yerda,
-    // ro'yxatdan o'tish tugagan ZAHOTI yaratamiz (foydalanuvchi keyinroq
-    // saytga qayta kirib, alohida to'lov qadamini bajarishi shart emas).
-    let payUrl: string | undefined;
-    let payProviders: { code: string; name: string; url: string }[] | undefined;
-    let payError: string | undefined;
-    if (sub && wantsOnlinePay) {
-      try {
-        const { createSubscriptionPaymentOrder } = await import('../services/subscriptionPayments');
-        const result = await createSubscriptionPaymentOrder(String(createdCompany._id), String(ownerUser._id), planKey);
-        if (result.ok) { payUrl = result.order.pay_url; payProviders = result.order.providers; }
-        else { payError = result.error; console.error('register/complete: roxiy order error:', result.error); }
-      } catch (err: any) {
-        // MUHIM: bu yerda tutilgan xato ko'pincha ROXIY_API_KEY ishlab
-        // chiqarish (Render) muhitida sozlanmagani (mahalliy .env fayli
-        // Git orqali serverga yuborilmaydi, alohida Render Environment
-        // sozlamalariga qo'shilishi kerak) — frontend endi buni jimgina
-        // yashirmasdan, foydalanuvchiga ko'rsatadi.
-        payError = err?.message || "Noma'lum xatolik";
-        console.error('register/complete: roxiy order threw:', err);
-      }
-    }
 
     // Rozilik audit izlari
     const ip = clientIp(req);
@@ -311,71 +402,49 @@ router.post('/complete', async (req, res) => {
     reg.otpTokenHash = hashToken('used-' + String(reg._id));
     await reg.save();
 
-    // Dasturchiga bildirishnoma.
-    // XATO TUZATILDI ("onlayn to'lov qilsam ham admin ga tasdiqlaysizmi
-    // deb kelyapti"): "sayt/bot orqali onlayn to'lasa, admin tasdig'i
-    // SHART EMAS" — bu shunchaki "harakat qilish shart emas" degani emas,
-    // balki dasturchiga tasdiqlash/rad etish SO'ROVI umuman YUBORILMASLIGI
-    // kerak edi (avval bu yerda tugmalar HAR DOIM, hatto onlayn to'lovda
-    // ham ko'rsatilardi — chalkashtirar edi). Endi: onlayn to'lov havolasi
-    // muvaffaqiyatli yaratilgan bo'lsa — oddiy FYI xabar (tugmasiz).
-    // Tugmalar FAQAT quyidagi ikki holatda: (1) bepul sinov (aniq talab:
-    // "tekin bo'lsa ham admin tasdiqlashi kerak"), (2) "admin orqali"
-    // tanlangan yoki onlayn buyurtma yaratib bo'lmagan pullik tarif.
+    // Dasturchiga bildirishnoma — bu yo'lda payUrl HECH QACHON bo'lmaydi
+    // (aks holda yuqorida allaqachon return qilingan bo'lardi), shu sabab
+    // har doim tasdiqlash/rad etish tugmalari bilan yuboriladi: (1) bepul
+    // sinov, (2) "admin orqali" tanlangan, yoki (3) onlayn urinish
+    // muvaffaqiyatsiz bo'lgan (payError to'ldirilgan) zaxira holat.
     const DEVELOPER_CHAT_ID = process.env.DEVELOPER_CHAT_ID;
     if (DEVELOPER_CHAT_ID && sub) {
-      const planInfo2 = PLAN_CONFIG[planKey];
       const subIdStr = String(sub._id);
-      const priceLine = isFreePlan ? `📦 Tarif: ${planInfo2.label} (bepul sinov)` : `📦 Tarif: ${planInfo2.label} — ${planInfo2.amount.toLocaleString()} so'm`;
-
-      if (payUrl) {
-        // Onlayn to'lov muvaffaqiyatli yuborilgan — harakat kerak emas,
-        // shu sabab tasdiqlash/rad etish tugmalari YO'Q.
-        const msgText = `🆕 <b>Yangi firma (onlayn to'lov kutilmoqda)</b>\n\n` +
-          `👤 ${ownerUser.firstName} ${ownerUser.lastName || ''}\n` +
-          `📞 ${ownerUser.phone}\n` +
-          `🏢 ${createdCompany.name} (${createdCompany.branchId})\n` +
-          `${priceLine}\n\n` +
-          `Roxiy (Click/Payme/Paynet) orqali to'lov havolasi yuborildi — to'lansa obuna AVTOMATIK faollashadi, hech qanday harakat kerak emas.`;
-        await bot.sendMessage(DEVELOPER_CHAT_ID, msgText, { parse_mode: 'HTML' }).catch((e: any) => console.error('bot developer notify error:', e));
-      } else {
-        const methodLine = isFreePlan
-          ? `Bepul sinov — tasdiqlash/rad etish uchun pastdagi tugmalarni bosing:`
+      const priceLine = isFreePlan ? `📦 Tarif: ${planInfo.label} (bepul sinov)` : `📦 Tarif: ${planInfo.label} — ${planInfo.amount.toLocaleString()} so'm`;
+      const methodLine = isFreePlan
+        ? `Bepul sinov — tasdiqlash/rad etish uchun pastdagi tugmalarni bosing:`
+        : payError
+          ? `Onlayn to'lov yaratilmadi (${payError}) — pastdagi tugmalar orqali qo'lda tasdiqlang/rad eting:`
           : `"Admin orqali" to'lovni tanladi — tasdiqlash yoki rad etish uchun pastdagi tugmalarni bosing:`;
-        const msgText = `🆕 <b>Yangi obuna so'rovi!</b>\n\n` +
-          `👤 ${ownerUser.firstName} ${ownerUser.lastName || ''}\n` +
-          `📞 ${ownerUser.phone}\n` +
-          `🏢 ${createdCompany.name} (${createdCompany.branchId})\n` +
-          `${priceLine}\n\n${methodLine}`;
-        await bot.sendMessage(DEVELOPER_CHAT_ID, msgText, {
-          parse_mode: 'HTML',
-          reply_markup: {
-            inline_keyboard: [[
-              { text: '✅ Tasdiqlash', callback_data: `sub_approve_${subIdStr}` },
-              { text: '❌ Rad etish',  callback_data: `sub_reject_${subIdStr}` },
-            ]],
-          },
-        }).catch((e: any) => console.error('bot developer notify error:', e));
-      }
+      const msgText = `🆕 <b>Yangi obuna so'rovi!</b>\n\n` +
+        `👤 ${ownerUser.firstName} ${ownerUser.lastName || ''}\n` +
+        `📞 ${ownerUser.phone}\n` +
+        `🏢 ${createdCompany.name} (${createdCompany.branchId})\n` +
+        `${priceLine}\n\n${methodLine}`;
+      await bot.sendMessage(DEVELOPER_CHAT_ID, msgText, {
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: [[
+            { text: '✅ Tasdiqlash', callback_data: `sub_approve_${subIdStr}` },
+            { text: '❌ Rad etish',  callback_data: `sub_reject_${subIdStr}` },
+          ]],
+        },
+      }).catch((e: any) => console.error('bot developer notify error:', e));
     }
 
-    // JWT hali berilmaydi — obuna (bepul bo'lsa ham) dasturchi tasdig'ini
-    // kutadi. Onlayn to'lov yuborilgan bo'lsa, foydalanuvchi to'lov
-    // sahifasiga yo'naltiriladi va webhook to'lovni tasdiqlagach obuna
-    // avtomatik faollashadi (dasturchi tasdig'i shunda ortiqcha bo'lib
-    // qoladi, lekin zarar qilmaydi).
+    // JWT hali berilmaydi — obuna (bepul bo'lsa ham) dasturchi tasdig'ini kutadi.
     return res.status(201).json({
       ok: true,
       subscriptionPending: true,
       isFreePlan,
-      payUrl,
-      payProviders,
+      payUrl: undefined,
+      payProviders: undefined,
       payError,
       phone: ownerUser.phone,
       language: ownerUser.language || 'uz',
       selectedPlan: planKey,
-      planLabel: PLAN_CONFIG[planKey].label,
-      planAmount: PLAN_CONFIG[planKey].amount,
+      planLabel: planInfo.label,
+      planAmount: planInfo.amount,
       company: {
         id: createdCompany._id,
         branchId: createdCompany.branchId,

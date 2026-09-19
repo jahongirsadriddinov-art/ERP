@@ -3,8 +3,11 @@ import Payment from '../models/Payment';
 import Subscription from '../models/Subscription';
 import Company from '../models/Company';
 import User from '../models/User';
+import PendingRegistration from '../models/PendingRegistration';
+import ConsentLog from '../models/ConsentLog';
 import { bot } from '../services/bot';
 import { extendPeriodEnd } from '../utils/subscriptionPeriod';
+import { consumePromoCode } from '../services/promoCodes';
 
 const SITE_URL = process.env.SITE_URL || 'http://localhost:5173';
 
@@ -91,6 +94,114 @@ router.get('/roxiy/webhook', async (req, res) => {
       if (payment.status === 'paid') return res.redirect(302, SITE_URL);
       console.error('roxiy webhook amount mismatch', { orderHash, expected: payment.amount, got: amount });
       return res.status(400).send('amount mismatch');
+    }
+
+    // ── RO'YXATDAN O'TISH to'lovi: firma/foydalanuvchi HALI YO'Q, faqat
+    // HOZIR (to'lov muvaffaqiyatli tasdiqlangach) yaratiladi — services/
+    // registrationPayments.ts va models/PendingRegistration.ts'dagi
+    // izohlarga qarang (nega firma to'lovdan OLDIN emas, KEYIN yaratiladi).
+    if (claimed.pendingRegistrationId) {
+      const pending = await PendingRegistration.findById(claimed.pendingRegistrationId);
+      if (!pending) {
+        console.error('roxiy webhook: pendingRegistrationId topilmadi (allaqachon o\'chirilganmi?)', claimed.pendingRegistrationId);
+        return res.redirect(302, SITE_URL);
+      }
+      try {
+        // Juda kam uchraydigan poyga holati: shu oraliqda boshqa yo'l bilan
+        // (masalan alohida bepul ro'yxatdan o'tish) xuddi shu telefon band
+        // bo'lib qolgan bo'lishi mumkin — bunday holatda takroriy User
+        // yaratib bo'lmaydi (unique index xato beradi), oldindan tekshiramiz.
+        const phoneTaken = await User.findOne({ phone: pending.phone });
+        if (phoneTaken) throw new Error(`Telefon allaqachon band: ${pending.phone}`);
+
+        const createdCompany = await Company.create({
+          branchId: pending.branchId,
+          name: pending.company.name,
+          legalName: pending.company.legalName,
+          inn: pending.company.inn,
+          address: pending.company.address,
+          region: pending.company.region,
+          phone: pending.phone,
+          activityType: pending.company.activityType || 'qurilish',
+          employeeRange: pending.company.employeeRange,
+          currency: pending.company.currency || 'UZS',
+          logoUrl: pending.logoUrl || '',
+          status: 'ACTIVE',
+          plan: 'FREE',
+        });
+        const ownerUser = await User.create({
+          firstName: pending.owner.firstName,
+          lastName: pending.owner.lastName,
+          middleName: pending.owner.middleName,
+          email: pending.owner.email,
+          position: pending.owner.position || 'Direktor',
+          phone: pending.phone,
+          role: 'direktor',
+          isOwner: true,
+          companyId: String(createdCompany._id),
+          telegramUserId: pending.telegramUserId,
+          telegramChatId: pending.telegramChatId,
+          phoneVerifiedAt: new Date(),
+          passwordHash: pending.passwordHash,
+          language: pending.language || 'uz',
+          projectIds: [],
+        });
+        createdCompany.ownerUserId = String(ownerUser._id);
+        await createdCompany.save();
+
+        const now = new Date();
+        const days = typeof claimed.days === 'number' && claimed.days > 0 ? claimed.days : 30;
+        const sub = await Subscription.create({
+          companyId: String(createdCompany._id),
+          userId: String(ownerUser._id),
+          plan: 'PRO',
+          selectedPlan: claimed.plan || pending.planKey,
+          amount: claimed.amount,
+          status: 'active',
+          requestedAt: pending.createdAt,
+          approvedAt: now,
+          approvedBy: 'roxiy-auto',
+          currentPeriodStart: now,
+          currentPeriodEnd: extendPeriodEnd(undefined, days, now),
+        });
+
+        await ConsentLog.insertMany([
+          { userId: String(ownerUser._id), registrationId: pending.registrationId, companyId: String(createdCompany._id), consentType: 'terms', version: 'terms_v1', acceptedAt: now },
+          { userId: String(ownerUser._id), registrationId: pending.registrationId, companyId: String(createdCompany._id), consentType: 'privacy', version: 'privacy_v1', acceptedAt: now },
+          { userId: String(ownerUser._id), registrationId: pending.registrationId, companyId: String(createdCompany._id), consentType: 'owner_confirm', version: 'owner_v1', acceptedAt: now },
+        ]).catch((e) => console.error('ConsentLog error (deferred reg):', e));
+
+        if (claimed.promoCode) await consumePromoCode(claimed.promoCode);
+        await PendingRegistration.findByIdAndDelete(pending._id).catch(() => {});
+
+        if (pending.telegramChatId) {
+          const expStr = sub.currentPeriodEnd!.toLocaleDateString('uz-UZ', { day: '2-digit', month: '2-digit', year: 'numeric' });
+          await bot.sendMessage(pending.telegramChatId,
+            `✅ <b>To'lov qabul qilindi — firmangiz tayyor!</b>\n\n🏢 ${createdCompany.name} (${createdCompany.branchId})\n📅 Muddat: <b>${expStr}</b> gacha\n\nEndi tizimga kirishingiz mumkin.`,
+            { parse_mode: 'HTML' }
+          ).catch((e: any) => console.error('roxiy webhook bot notify error:', e));
+        }
+        const DEVELOPER_CHAT_ID = process.env.DEVELOPER_CHAT_ID;
+        if (DEVELOPER_CHAT_ID) {
+          await bot.sendMessage(DEVELOPER_CHAT_ID,
+            `🆕✅ <b>Yangi firma (to'lov orqali avtomatik yaratildi)</b>\n\n🏢 ${createdCompany.name} (${createdCompany.branchId})\n📞 ${pending.phone}\n💰 ${claimed.amount.toLocaleString('uz-UZ')} so'm`,
+            { parse_mode: 'HTML' }
+          ).catch((e: any) => console.error('bot developer notify error:', e));
+        }
+      } catch (err) {
+        console.error('roxiy webhook: deferred registration creation failed', err);
+        // To'lov 'paid' bo'lib qoldi, lekin firma yaratilmadi — juda kam
+        // uchraydigan holat. Dasturchini xabardor qilamiz — qo'lda hal
+        // qilishi kerak (masalan mijozga qo'lda firma ochib berish).
+        const DEVELOPER_CHAT_ID = process.env.DEVELOPER_CHAT_ID;
+        if (DEVELOPER_CHAT_ID) {
+          await bot.sendMessage(DEVELOPER_CHAT_ID,
+            `⚠️ <b>XATOLIK</b>: to'lov qabul qilindi, lekin firma avtomatik yaratilmadi (telefon: ${pending.phone}). Qo'lda tekshiring! Xato: ${(err as any)?.message || err}`,
+            { parse_mode: 'HTML' }
+          ).catch(() => {});
+        }
+      }
+      return res.redirect(302, SITE_URL);
     }
 
     if (claimed.subscriptionId) {

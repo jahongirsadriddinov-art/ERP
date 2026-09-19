@@ -44,25 +44,69 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
   // Qadam 1 — ogohlantirish
   const [ownerConfirm, setOwnerConfirm] = useState(false);
 
-  // Qadam 2 — tarif tanlash
-  const [selectedPlan, setSelectedPlan] = useState<'1month'|'3month'|'6month'|'12month'|null>(null);
+  // Qadam 2 — tarif tanlash. ChatGPT uslubidagi dizayn: yuqorida davr
+  // (1 oylik/3 oylik/12 oylik) tanlanadi, har bir davr ostida 3 xil daraja
+  // (Oddiy/Standart/Premium) — bularning barchasi ENDI admin panelidan
+  // (Dasturchi paneli → Tariflar) boshqariladi, shu sabab selectedPlan
+  // endi qattiq yozilgan 4 ta kalit EMAS, balki backenddan kelgan
+  // ISTALGAN tarif kaliti bo'lishi mumkin.
+  const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
+  const [planPeriod, setPlanPeriod] = useState<'1month' | '3month' | '12month'>('1month');
   // Qadam 3 — pullik tarifda to'lov usuli: "online" (Click/Payme/Paynet,
   // dasturchi tasdig'isiz avtomatik) yoki "admin" (dasturchi qo'lda
   // tasdiqlaydi — naqd/bank o'tkazmasi kabi boshqa kelishuvlar uchun).
   // Bepul tarifda ishlatilmaydi (backend baribir e'tiborsiz qoldiradi).
   const [paymentMethod, setPaymentMethod] = useState<'online'|'admin'>('online');
   // Narxlar endi admin panelidan (Dasturchi paneli → Tariflar) tahrirlanadi
-  // — quyidagi kartalardagi narx shu yerdan (haqiqiy, jonli qiymat) olinadi,
-  // faqat tarmoq ishlamasa/hali kelmagan bo'lsa pastdagi qattiq yozilgan
-  // standart qiymatlar zaxira sifatida ko'rsatiladi.
-  const [livePlans, setLivePlans] = useState<Record<string, { amount: number; days: number; label: string }>>({});
+  // — quyidagi kartalardagi narx shu yerdan (haqiqiy, jonli qiymat) olinadi.
+  const [allPlans, setAllPlans] = useState<{ key: string; label: string; amount: number; days: number; features: string[]; period?: string; tier?: number }[]>([]);
+  const [featureRegistry, setFeatureRegistry] = useState<{ key: string; label: string }[]>([]);
   useEffect(() => {
-    fetch(`${API_BASE}/api/plans`).then(r => r.ok ? r.json() : []).then((list: any[]) => {
-      setLivePlans(Object.fromEntries(list.map(p => [p.key, { amount: p.amount, days: p.days, label: p.label }])));
-    }).catch(() => {});
+    fetch(`${API_BASE}/api/plans`).then(r => r.ok ? r.json() : []).then((list: any[]) => setAllPlans(list)).catch(() => {});
+    fetch(`${API_BASE}/api/plans/features`).then(r => r.ok ? r.json() : []).then((list: any[]) => setFeatureRegistry(list)).catch(() => {});
   }, []);
+  const livePlans = Object.fromEntries(allPlans.map(p => [p.key, { amount: p.amount, days: p.days, label: p.label }]));
+  const freePlan = allPlans.find(p => p.amount <= 0);
+  const tieredPlans = (period: string) => allPlans.filter(p => p.period === period).sort((a, b) => (a.tier || 0) - (b.tier || 0));
+  const selectedPlanInfo = allPlans.find(p => p.key === selectedPlan);
+  const isFreeSelected = !!selectedPlanInfo && selectedPlanInfo.amount <= 0;
+
+  // Qadam 3 — promokod (faqat onlayn to'lovda ishlatiladi). Tekshirish
+  // limitni ISHLATIB QO'YMAYDI (backend/services/promoCodes.ts) — faqat
+  // ko'rsatish uchun chegirmani hisoblab beradi.
+  const [promoCode, setPromoCode] = useState("");
+  const [promoChecking, setPromoChecking] = useState(false);
+  const [promoResult, setPromoResult] = useState<{ ok: boolean; error?: string; finalAmount?: number; discount?: number } | null>(null);
+  const applyPromo = async () => {
+    if (!promoCode.trim() || !selectedPlan) return;
+    setPromoChecking(true);
+    try {
+      const r = await fetch(`${API_BASE}/api/promocodes/validate`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: promoCode.trim(), planKey: selectedPlan }),
+      });
+      const d = await r.json();
+      setPromoResult(d);
+    } catch { setPromoResult({ ok: false, error: t('common.error') }); }
+    setPromoChecking(false);
+  };
   const [regDoneInfo, setRegDoneInfo] = useState<{phone:string;planLabel:string;planAmount:number;companyName:string;branchId:string;ownerName:string;isFreePlan:boolean;payUrl?:string;payProviders?:{code:string;name:string;url:string}[];payError?:string}|null>(null);
   const [doneCopied, setDoneCopied] = useState(false);
+  // "Tizimga kirish" tugmasi (to'lov havolasi ekranida) — to'g'ridan-to'g'ri
+  // login ekraniga yubormaydi (u yerda "obunangiz kutilmoqda" degan
+  // chalkash xato chiqar edi), avval HAQIQATDA to'langanini tekshiradi.
+  const [checkingPayStatus, setCheckingPayStatus] = useState(false);
+  const handleGoToLoginAfterPay = async () => {
+    if (!regDoneInfo?.phone) { onBack(); return; }
+    setCheckingPayStatus(true);
+    try {
+      const r = await fetch(`${API_BASE}/api/register/pay-status?phone=${encodeURIComponent(regDoneInfo.phone)}`);
+      const d = await r.json().catch(() => ({ status: 'unknown' }));
+      if (d.status === 'paid') onBack();
+      else toast.error(t('register.notPaidYet'));
+    } catch { toast.error(t('register.notPaidYet')); }
+    setCheckingPayStatus(false);
+  };
 
   // Qadam 3 — telefon
   const [phone, setPhone] = useState("+998 ");
@@ -131,7 +175,7 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
     if (reg && step === "warn") {
       setOwnerConfirm(true);
       // Saqlangan tarifni tiklaymiz
-      const savedPlan = localStorage.getItem("erp_reg_plan") as '1month'|'3month'|'12month'|null;
+      const savedPlan = localStorage.getItem("erp_reg_plan");
       if (savedPlan) setSelectedPlan(savedPlan);
       setStep("bot");
     }
@@ -195,7 +239,7 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
       // Tarifni ham saqlaymiz — resume qilganda tiklanadi
       const ok = saveReg(
         { registrationId: d.registrationId, token: d.token, deepLink: d.deepLink, botUsername: d.botUsername, expiresAt: d.expiresAt },
-        selectedPlan || '1month'
+        selectedPlan || freePlan?.key || 'bepul'
       );
       if (!ok) { setError(t('common.error')); setLoading(false); return; }
       setStep("bot");
@@ -238,8 +282,9 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           token: reg.token,
-          selectedPlan: selectedPlan || '1month',
+          selectedPlan: selectedPlan || freePlan?.key || 'bepul',
           paymentMethod,
+          promoCode: (!isFreeSelected && paymentMethod === 'online' && promoResult?.ok) ? promoCode.trim() : undefined,
           owner: { firstName, lastName, middleName, email, position, password },
           company: { name: companyName, legalName, inn, activityType, region, employeeRange, currency },
           logoUrl,
@@ -357,53 +402,67 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
                 </div>
               </div>
 
-              <div className="space-y-3">
-                {([
-                  { key: '1month',  label: t('register.plan1Month'),  fullPrice: 700_000,   price: 0,         days: 30,  ribbon: undefined as string|undefined, featured: false },
-                  { key: '3month',  label: t('register.plan3Month'),  fullPrice: 2_100_000, price: 1_400_000, days: 90,  ribbon: t('register.ribbonSavings'),   featured: false },
-                  { key: '6month',  label: t('register.plan6Month'),  fullPrice: 4_200_000, price: 3_500_000, days: 180, ribbon: undefined,        featured: false },
-                  { key: '12month', label: t('register.plan12Month'), fullPrice: 8_400_000, price: 7_700_000, days: 365, ribbon: t('register.ribbonLongest'),featured: true },
-                ] as const).map((basePlan, i) => {
-                  // Jonli narx (agar admin panelida o'zgartirilgan bo'lsa) —
-                  // fullPrice/ribbon/featured kabi faqat ko'rinishga oid
-                  // qiymatlar hozircha qattiq yozilgan holicha qoladi.
-                  const plan = { ...basePlan, price: livePlans[basePlan.key]?.amount ?? basePlan.price, days: livePlans[basePlan.key]?.days ?? basePlan.days };
+              {/* Bepul sinov — alohida, sodda karta (har doim admin tasdig'ini kutadi) */}
+              {freePlan && (
+                <button type="button" onClick={() => setSelectedPlan(freePlan.key)}
+                  className={`w-full rounded-2xl border-2 p-4 text-left flex items-center justify-between liquid-transition ${selectedPlan === freePlan.key ? "border-primary bg-primary/8 shadow-md shadow-primary/20" : "border-border/50 bg-white/40 dark:bg-black/20 hover:border-primary/40"}`}>
+                  <div>
+                    <p className="text-sm font-bold">{t('register.freeTrialTitle')}</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">{t('register.daysCount', { count: freePlan.days })} · {t('register.freeTrialDesc')}</p>
+                  </div>
+                  <p className="text-lg font-bold text-green-700 dark:text-green-400 flex-shrink-0 ml-3">{t('register.free')}</p>
+                </button>
+              )}
+
+              {/* Davr tanlash — ChatGPT uslubidagi tepadagi tugmalar */}
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2">{t('register.periodTitle')}</p>
+                <div className="grid grid-cols-3 gap-1 p-1 bg-muted/40 rounded-2xl">
+                  {(['1month', '3month', '12month'] as const).map(p => (
+                    <button key={p} type="button" onClick={() => setPlanPeriod(p)}
+                      className={`py-2 rounded-xl text-xs font-bold liquid-transition ${planPeriod === p ? "bg-primary text-white shadow" : "text-muted-foreground hover:text-foreground"}`}>
+                      {t(`register.period${p === '1month' ? '1Month' : p === '3month' ? '3Month' : '12Month'}`)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Shu davr uchun 3 daraja (Oddiy/Standart/Premium) — narx va
+                  funksiyalar admin panelidan (Dasturchi paneli → Tariflar) keladi. */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {tieredPlans(planPeriod).map((plan, i) => {
                   const selected = selectedPlan === plan.key;
+                  const featured = plan.tier === 3;
                   return (
                     <motion.button key={plan.key} type="button" onClick={() => setSelectedPlan(plan.key)}
                       initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0, scale: selected ? 1.02 : 1 }}
                       transition={{ delay: i * 0.05, type: "spring", stiffness: 320, damping: 26 }}
                       whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }}
-                      className={`relative w-full rounded-3xl p-4 text-left overflow-visible ${plan.ribbon ? "pt-7" : ""} ${
-                        plan.featured
+                      className={`relative w-full rounded-3xl p-4 text-left ${
+                        featured
                           ? "shadow-xl shadow-primary/30 text-white"
                           : `border-2 ${selected ? "border-primary bg-primary/8 shadow-md shadow-primary/20" : "border-border/50 bg-white/40 dark:bg-black/20 hover:border-primary/40"}`
                       }`}
-                      style={plan.featured ? { background: "linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%)", border: selected ? "2px solid white" : "2px solid transparent" } : undefined}>
-                      {plan.ribbon && (
-                        <span className={`absolute -top-3 left-1/2 -translate-x-1/2 text-[9px] font-bold px-3 py-1 rounded-full tracking-wide shadow-md whitespace-nowrap ${plan.featured ? "bg-accent text-accent-foreground" : "bg-primary text-white"}`}>{plan.ribbon}</span>
-                      )}
+                      style={featured ? { background: "linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%)", border: selected ? "2px solid white" : "2px solid transparent" } : undefined}>
                       {selected && (
-                        <span className={`absolute -top-2.5 -right-2.5 w-7 h-7 rounded-full flex items-center justify-center shadow-md ${plan.featured ? "bg-white text-primary" : "bg-primary text-white"}`}>
+                        <span className={`absolute -top-2.5 -right-2.5 w-7 h-7 rounded-full flex items-center justify-center shadow-md ${featured ? "bg-white text-primary" : "bg-primary text-white"}`}>
                           <MorphIcon icon={Check} className="w-4 h-4" />
                         </span>
                       )}
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="flex-1 min-w-0">
-                          <p className={`text-base font-bold leading-tight ${plan.featured ? "text-white" : ""}`}>{plan.label}</p>
-                          <p className={`text-[11px] mt-0.5 ${plan.featured ? "text-white/70" : "text-muted-foreground"}`}>{t('register.daysCount', { count: plan.days })}</p>
-                          <span className={`inline-block mt-1.5 text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${
-                            plan.featured ? "bg-white/20 text-white" : "bg-green-500/15 text-green-800 dark:text-green-400"
-                          }`}>{t('register.freeMonthBadge')}</span>
-                        </div>
-                        <div className="text-right flex-shrink-0">
-                          {plan.price === 0 ? (
-                            <p className={`text-2xl font-bold ${plan.featured ? "text-white" : "text-green-800 dark:text-green-400"}`}>{t('register.free')}</p>
-                          ) : (
-                            <p className={`text-xl font-bold ${plan.featured ? "text-white" : "text-primary"}`}>{plan.price.toLocaleString('uz-UZ')}<span className="text-[11px] font-normal ml-0.5">{t('register.som')}</span></p>
-                          )}
-                          <p className={`text-[11px] line-through ${plan.featured ? "text-white/50" : "text-muted-foreground"}`}>{plan.fullPrice.toLocaleString('uz-UZ')} {t('register.som')}</p>
-                        </div>
+                      <p className={`text-sm font-bold leading-tight ${featured ? "text-white" : ""}`}>{plan.label}</p>
+                      <p className={`text-2xl font-bold mt-1.5 ${featured ? "text-white" : "text-primary"}`}>
+                        {plan.amount.toLocaleString('uz-UZ')}<span className="text-[11px] font-normal ml-0.5">{t('register.som')}</span>
+                      </p>
+                      <p className={`text-[11px] mt-0.5 ${featured ? "text-white/70" : "text-muted-foreground"}`}>{t('register.daysCount', { count: plan.days })}</p>
+                      <div className="mt-3 space-y-1.5">
+                        {featureRegistry.map(f => {
+                          const included = plan.features.includes(f.key);
+                          return (
+                            <div key={f.key} className={`flex items-center gap-1.5 text-[11px] ${included ? (featured ? "text-white/90" : "text-foreground/80") : (featured ? "text-white/40 line-through" : "text-muted-foreground/50 line-through")}`}>
+                              <MorphIcon icon={CheckCircle} className={`w-3.5 h-3.5 flex-shrink-0 ${included ? "text-green-500" : "opacity-30"}`} />{f.label}
+                            </div>
+                          );
+                        })}
                       </div>
                     </motion.button>
                   );
@@ -422,31 +481,31 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
               </div>
               <div className="bg-primary/8 border border-primary/20 rounded-2xl p-4">
                 <p className="text-[11px] font-semibold text-primary uppercase tracking-wider mb-2">{t('register.selectedPlan')}</p>
-                {selectedPlan === '1month' ? (
-                  <div>
-                    <p className="text-2xl font-bold text-green-800 dark:text-green-400">{t('register.free')}</p>
-                    <p className="text-sm line-through text-muted-foreground">700 000 {t('register.som')}</p>
-                  </div>
+                {isFreeSelected ? (
+                  <p className="text-2xl font-bold text-green-800 dark:text-green-400">{t('register.free')}</p>
                 ) : (
                   <div>
-                    <p className="text-2xl font-bold text-primary">
-                      {(livePlans[selectedPlan]?.amount ?? (selectedPlan==='3month'?1_400_000:selectedPlan==='6month'?3_500_000:7_700_000)).toLocaleString('uz-UZ')}
-                      <span className="text-base font-normal text-muted-foreground ml-1">{t('register.som')}</span>
-                    </p>
-                    <p className="text-sm line-through text-muted-foreground">
-                      {selectedPlan==='3month'?'2 100 000':selectedPlan==='6month'?'4 200 000':'8 400 000'} {t('register.som')}
-                    </p>
+                    {promoResult?.ok && typeof promoResult.finalAmount === 'number' ? (
+                      <>
+                        <p className="text-2xl font-bold text-primary">
+                          {promoResult.finalAmount.toLocaleString('uz-UZ')}<span className="text-base font-normal text-muted-foreground ml-1">{t('register.som')}</span>
+                        </p>
+                        <p className="text-sm line-through text-muted-foreground">{(selectedPlanInfo?.amount ?? 0).toLocaleString('uz-UZ')} {t('register.som')}</p>
+                      </>
+                    ) : (
+                      <p className="text-2xl font-bold text-primary">
+                        {(selectedPlanInfo?.amount ?? 0).toLocaleString('uz-UZ')}<span className="text-base font-normal text-muted-foreground ml-1">{t('register.som')}</span>
+                      </p>
+                    )}
                   </div>
                 )}
-                <p className="text-sm text-muted-foreground mt-1">
-                  {selectedPlan==='1month'?t('register.plan1MonthDays'):selectedPlan==='3month'?t('register.plan3MonthDays'):selectedPlan==='6month'?t('register.plan6MonthDays'):t('register.plan12MonthDays')}
-                </p>
+                <p className="text-sm text-muted-foreground mt-1">{t('register.daysCount', { count: selectedPlanInfo?.days ?? 30 })}</p>
               </div>
 
               {/* Pullik tarifda — to'lov usulini tanlash. Bepul tarifda
                   ko'rsatilmaydi (backend baribir e'tiborsiz qoldiradi —
                   hech narsa to'lanmaydi). */}
-              {selectedPlan !== '1month' && (
+              {!isFreeSelected && (
                 <div className="space-y-2.5">
                   <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">{t('register.paymentMethodTitle')}</p>
                   {([
@@ -470,8 +529,31 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
                 </div>
               )}
 
+              {/* Promokod — faqat onlayn (avtomatik) to'lovda: "admin orqali"
+                  usulda narx admin bilan to'g'ridan-to'g'ri kelishiladi. */}
+              {!isFreeSelected && paymentMethod === 'online' && (
+                <div className="space-y-1.5">
+                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">{t('register.promoCodeLabel')}</p>
+                  <div className="flex gap-2">
+                    <input value={promoCode} onChange={e => { setPromoCode(e.target.value.toUpperCase()); setPromoResult(null); }}
+                      placeholder={t('register.promoCodePlaceholder')}
+                      className="flex-1 text-sm border border-border/60 rounded-xl px-3 py-2.5 bg-transparent font-mono uppercase" />
+                    <button type="button" onClick={applyPromo} disabled={!promoCode.trim() || promoChecking}
+                      className="px-4 rounded-xl text-sm font-bold border border-primary/40 text-primary hover:bg-primary/10 disabled:opacity-50 flex items-center gap-1.5">
+                      {promoChecking && <MorphIcon icon={Loader2} className="w-4 h-4 animate-spin" />}
+                      {t('register.promoApply')}
+                    </button>
+                  </div>
+                  {promoResult && (
+                    <p className={`text-xs ${promoResult.ok ? "text-green-700 dark:text-green-400" : "text-red-600"}`}>
+                      {promoResult.ok ? t('register.promoApplied', { discount: (promoResult.discount ?? 0).toLocaleString('uz-UZ') }) : (promoResult.error || t('register.promoInvalid'))}
+                    </p>
+                  )}
+                </div>
+              )}
+
               <div className="surface rounded-2xl p-4 space-y-3">
-                {(selectedPlan !== '1month' && paymentMethod === 'online' ? [
+                {(!isFreeSelected && paymentMethod === 'online' ? [
                   { n: "1", t: t('register.onlineStep1Title'), d: t('register.onlineStep1Desc') },
                   { n: "2", t: t('register.onlineStep2Title'), d: t('register.onlineStep2Desc') },
                   { n: "3", t: t('register.onlineStep3Title'), d: t('register.onlineStep3Desc') },
@@ -620,7 +702,7 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
             <div className="space-y-4 animate-slide-in-right">
               <div><h2 className="text-xl font-bold mb-1">{t('register.summaryTitle')}</h2></div>
               {[
-                { t: t('register.summaryPlan'), v: selectedPlan==='1month'?t('register.plan1MonthSummary'):selectedPlan==='3month'?t('register.plan3MonthSummary'):selectedPlan==='6month'?t('register.plan6MonthSummary'):t('register.plan12MonthSummary'), go: "tarif" as RegStep },
+                { t: t('register.summaryPlan'), v: selectedPlanInfo ? (isFreeSelected ? `${selectedPlanInfo.label} — ${t('register.free')}` : `${selectedPlanInfo.label} — ${(promoResult?.ok ? promoResult.finalAmount ?? selectedPlanInfo.amount : selectedPlanInfo.amount).toLocaleString('uz-UZ')} ${t('register.som')}`) : '—', go: "tarif" as RegStep },
                 { t: t('register.summaryOwner'), v: `${firstName} ${lastName}`, go: "owner" as RegStep },
                 { t: t('register.summaryPhone'), v: phone, go: "phone" as RegStep },
                 { t: t('register.summaryCompany'), v: companyName, go: "company" as RegStep },
@@ -694,7 +776,9 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
                     </button>
                     <p className="text-xs text-muted-foreground leading-relaxed text-center">{t('register.payAutoActivateHint')}</p>
                   </div>
-                  <button onClick={onBack} className="w-full text-xs text-muted-foreground hover:text-foreground font-semibold py-2">
+                  <button onClick={handleGoToLoginAfterPay} disabled={checkingPayStatus}
+                    className="w-full text-xs text-muted-foreground hover:text-foreground font-semibold py-2 disabled:opacity-60 flex items-center justify-center gap-1.5">
+                    {checkingPayStatus && <MorphIcon icon={Loader2} className="w-3.5 h-3.5 animate-spin" />}
                     {t('register.goToLoginBtn')}
                   </button>
                 </div>

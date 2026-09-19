@@ -13,7 +13,7 @@ const router = Router();
 router.get('/', async (req, res) => {
   try {
     const plans = await Plan.find({ active: true }).sort({ order: 1 }).lean();
-    res.json(plans.map(p => ({ key: p.key, label: p.label, days: p.days, amount: p.amount, features: p.features || [] })));
+    res.json(plans.map(p => ({ key: p.key, label: p.label, days: p.days, amount: p.amount, features: p.features || [], period: p.period, tier: p.tier })));
   } catch (err) {
     res.status(500).json({ error: 'Server xatoligi' });
   }
@@ -35,6 +35,7 @@ router.get('/admin', async (req, res) => {
     res.json(plans.map(p => ({
       id: p._id, key: p.key, label: p.label, days: p.days, amount: p.amount,
       features: p.features || [], active: p.active !== false, order: p.order || 0,
+      period: p.period, tier: p.tier,
     })));
   } catch (err) {
     res.status(500).json({ error: 'Server xatoligi' });
@@ -44,7 +45,7 @@ router.get('/admin', async (req, res) => {
 // POST /api/admin/plans — yangi tarif yaratish.
 router.post('/admin', async (req, res) => {
   try {
-    const { key, label, days, amount, features, order } = req.body || {};
+    const { key, label, days, amount, features, order, period, tier } = req.body || {};
     // "__proto__"/"constructor"/"prototype" — normal /[a-z0-9_-]+/ tekshiruvidan
     // o'tadi, lekin PLAN_CONFIG[key]=... (config/plans.ts, reloadPlanCache) shu
     // nom bilan yozilganda oddiy xususiyat o'rniga OBYEKTNING PROTOTIPINI
@@ -58,9 +59,11 @@ router.post('/admin', async (req, res) => {
       return res.status(400).json({ error: "Yorliq, kunlar va narx to'g'ri kiritilishi kerak" });
     }
     const cleanFeatures = Array.isArray(features) ? features.filter((f: any) => ALL_FEATURE_KEYS.includes(f)) : [];
+    const cleanPeriod = ['1month', '3month', '12month'].includes(period) ? period : undefined;
+    const cleanTier = [1, 2, 3].includes(tier) ? tier : undefined;
     const existing = await Plan.findOne({ key });
     if (existing) return res.status(409).json({ error: "Shu kalitdagi tarif allaqachon mavjud" });
-    const plan = await Plan.create({ key, label, days, amount, features: cleanFeatures, active: true, order: order ?? 0 });
+    const plan = await Plan.create({ key, label, days, amount, features: cleanFeatures, active: true, order: order ?? 0, period: cleanPeriod, tier: cleanTier });
     await reloadPlanCache();
     res.status(201).json({ ok: true, id: plan._id });
   } catch (err) {
@@ -74,13 +77,15 @@ router.put('/admin/:key', async (req, res) => {
   try {
     const plan = await Plan.findOne({ key: req.params.key });
     if (!plan) return res.status(404).json({ error: 'Tarif topilmadi' });
-    const { label, days, amount, features, active, order } = req.body || {};
+    const { label, days, amount, features, active, order, period, tier } = req.body || {};
     if (label !== undefined) plan.label = label;
     if (days !== undefined) { if (typeof days !== 'number' || days <= 0) return res.status(400).json({ error: "Kunlar noto'g'ri" }); plan.days = days; }
     if (amount !== undefined) { if (typeof amount !== 'number' || amount < 0) return res.status(400).json({ error: "Narx noto'g'ri" }); plan.amount = amount; }
     if (features !== undefined) plan.features = Array.isArray(features) ? features.filter((f: any) => ALL_FEATURE_KEYS.includes(f)) : [];
     if (active !== undefined) plan.active = !!active;
     if (order !== undefined) plan.order = order;
+    if (period !== undefined) plan.period = ['1month', '3month', '12month'].includes(period) ? period : undefined;
+    if (tier !== undefined) plan.tier = [1, 2, 3].includes(tier) ? tier : undefined;
     await plan.save();
     await reloadPlanCache();
     res.json({ ok: true });

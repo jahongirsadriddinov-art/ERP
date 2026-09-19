@@ -29,6 +29,7 @@ import dashboardRoutes from './routes/dashboard';
 import clientErrorRoutes from './routes/clientErrors';
 import backupRoutes from './routes/backup';
 import plansRoutes from './routes/plans';
+import promocodesRoutes from './routes/promocodes';
 import deployRoutes from './routes/deploy';
 import paymentsRoutes from './routes/payments';
 import filesRoutes from './routes/files';
@@ -207,6 +208,9 @@ app.use('/api/payments',        paymentsRoutes); // Roxiy webhook — Roxiy'ning
 // shart emas (ro'yxatdan o'tish narxlarni ko'rishi kerak), /admin/* esa
 // routerning o'zi ichida requireAuth+requireDeveloper talab qiladi.
 app.use('/api/plans',           plansRoutes);
+// promocodesRoutes ICHIDA o'zi ikkiga bo'linadi: POST /validate (auth
+// shart emas — ro'yxatdan o'tishda ishlatiladi) va qolgani dasturchi uchun.
+app.use('/api/promocodes',      promocodesRoutes);
 
 // Telegram bot webhook — faqat TELEGRAM_WEBHOOK_URL o'rnatilgan bo'lsa faol bo'ladi.
 // Polling rejimida bu route hech qachon chaqirilmaydi.
@@ -255,8 +259,9 @@ mongoose.connect(MONGODB_URI)
     // Obuna tariflari (narx/muddat/funksiyalar) endi admin panelidan
     // boshqariladi (models/Plan.ts) — birinchi ishga tushishda urug'lantiriladi,
     // so'ng har safar sinxron PLAN_CONFIG keshiga yuklanadi.
-    const { ensurePlansSeeded, reloadPlanCache } = await import('./config/plans');
+    const { ensurePlansSeeded, ensureTieredPlansSeeded, reloadPlanCache } = await import('./config/plans');
     await ensurePlansSeeded();
+    await ensureTieredPlansSeeded();
     await reloadPlanCache();
     console.log('✅ Tarif keshi yuklandi');
   })

@@ -23,7 +23,7 @@ import { openExternalUrl } from "./platform";
 // ─── Developer Panel ────────────────────────────────────────────────────────────
 export default function DeveloperPanel({ currentUser, onLogout }: { currentUser: AppUser; onLogout: () => void }) {
   const { t } = useTranslation();
-  const [tab, setTab] = useState<"firms" | "users" | "subscriptions" | "messages" | "plans">("subscriptions");
+  const [tab, setTab] = useState<"firms" | "users" | "subscriptions" | "messages" | "plans" | "promocodes">("subscriptions");
   const [companies, setCompanies] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [subs, setSubs] = useState<any[]>([]);
@@ -32,11 +32,16 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
   const [plans, setPlans] = useState<any[]>([]);
   const [features, setFeatures] = useState<{ key: string; label: string }[]>([]);
   const [planSaving, setPlanSaving] = useState<string|null>(null);
-  const [newPlan, setNewPlan] = useState<{ key: string; label: string; days: string; amount: string; features: string[] } | null>(null);
+  const [newPlan, setNewPlan] = useState<{ key: string; label: string; days: string; amount: string; features: string[]; period: string; tier: string } | null>(null);
+  // Promokodlar (routes/promocodes.ts) — narxni kamaytiruvchi kodlar.
+  const [promoCodes, setPromoCodes] = useState<any[]>([]);
+  const [promoSaving, setPromoSaving] = useState<string|null>(null);
+  const [newPromo, setNewPromo] = useState<{ code: string; type: "percent"|"fixed"; value: string; maxUses: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const [subLoading, setSubLoading] = useState<string|null>(null);
   const [renewPlan, setRenewPlan] = useState<Record<string, string>>({}); // subId → selectedPlan
+  const [adjustDays, setAdjustDays] = useState<Record<string, string>>({}); // subId → kun soni (+/-)
   // Messages tab state — har firma uchun bitta umumiy "🛠 Dasturchi" guruh chati
   // (o'sha firmaning barcha xodimlari ham shu guruh orqali yozadi — ikkala
   // tomon bir xil xabarlarni ko'rishi uchun groupId asosida ishlaydi).
@@ -55,12 +60,13 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
   const load = async () => {
     setErr(""); setLoading(true);
     try {
-      const [cr, ur, sr, pr, fr] = await Promise.all([
+      const [cr, ur, sr, pr, fr, pcr] = await Promise.all([
         fetch(`${API_BASE}/api/companies`, { headers: authHdr }),
         fetch(`${API_BASE}/api/users`, { headers: authHdr }),
         fetch(`${API_BASE}/api/admin/subscriptions`, { headers: authHdr }),
         fetch(`${API_BASE}/api/plans/admin`, { headers: authHdr }),
         fetch(`${API_BASE}/api/plans/features`, { headers: authHdr }),
+        fetch(`${API_BASE}/api/promocodes`, { headers: authHdr }),
       ]);
       if (!cr.ok) { setErr(t('devPanel.errors.loadCompanies')); setLoading(false); return; }
       setCompanies(await cr.json());
@@ -68,6 +74,7 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
       setSubs(sr.ok ? await sr.json() : []);
       setPlans(pr.ok ? await pr.json() : []);
       setFeatures(fr.ok ? await fr.json() : []);
+      setPromoCodes(pcr.ok ? await pcr.json() : []);
     } catch { setErr(t('devPanel.errors.connection')); }
     setLoading(false);
   };
@@ -165,7 +172,10 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
     try {
       const res = await fetch(`${API_BASE}/api/plans/admin/${plan.key}`, {
         method: "PUT", headers: authHdr,
-        body: JSON.stringify({ label: plan.label, days: plan.days, amount: plan.amount, features: plan.features, active: plan.active }),
+        body: JSON.stringify({
+          label: plan.label, days: plan.days, amount: plan.amount, features: plan.features, active: plan.active,
+          period: plan.period || undefined, tier: plan.tier ? Number(plan.tier) : undefined,
+        }),
       });
       if (res.ok) { toast.success(t('devPanel.plans.savedToast')); await load(); }
       else { const d = await res.json().catch(() => ({})); toast.error(d.error || t('devPanel.plans.saveError')); }
@@ -185,10 +195,55 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
         key: newPlan.key.trim(), label: newPlan.label.trim(),
         days: Number(newPlan.days) || 30, amount: Number(newPlan.amount) || 0,
         features: newPlan.features,
+        period: newPlan.period || undefined, tier: newPlan.tier ? Number(newPlan.tier) : undefined,
       }),
     });
     if (res.ok) { setNewPlan(null); toast.success(t('devPanel.plans.createdToast')); await load(); }
     else { const d = await res.json().catch(() => ({})); toast.error(d.error || t('devPanel.plans.saveError')); }
+  };
+
+  // ── Promokodlar (routes/promocodes.ts) ──
+  const savePromo = async (promo: any) => {
+    setPromoSaving(promo.id || promo._id);
+    try {
+      const res = await fetch(`${API_BASE}/api/promocodes/${promo.id || promo._id}`, {
+        method: "PUT", headers: authHdr,
+        body: JSON.stringify({ active: promo.active }),
+      });
+      if (res.ok) { await load(); } else { const d = await res.json().catch(() => ({})); toast.error(d.error || t('devPanel.promocodes.saveError')); }
+    } catch { toast.error(t('devPanel.promocodes.saveError')); }
+    setPromoSaving(null);
+  };
+  const deletePromo = async (id: string) => {
+    if (!window.confirm(t('devPanel.promocodes.confirmDelete'))) return;
+    const res = await fetch(`${API_BASE}/api/promocodes/${id}`, { method: "DELETE", headers: authHdr });
+    if (res.ok) load(); else { const d = await res.json().catch(() => ({})); toast.error(d.error || t('devPanel.promocodes.deleteError')); }
+  };
+  const createPromo = async () => {
+    if (!newPromo || !newPromo.code.trim() || !newPromo.value.trim()) return;
+    const res = await fetch(`${API_BASE}/api/promocodes`, {
+      method: "POST", headers: authHdr,
+      body: JSON.stringify({
+        code: newPromo.code.trim(), type: newPromo.type, value: Number(newPromo.value) || 0,
+        maxUses: newPromo.maxUses.trim() ? Number(newPromo.maxUses) : undefined,
+      }),
+    });
+    if (res.ok) { setNewPromo(null); toast.success(t('devPanel.promocodes.createdToast')); await load(); }
+    else { const d = await res.json().catch(() => ({})); toast.error(d.error || t('devPanel.promocodes.saveError')); }
+  };
+
+  // ── Obuna muddatini istalgan firmaga, istalgan vaqtda qo'shish/ayirish ──
+  const adjustSubDays = async (id: string) => {
+    const raw = (adjustDays[id] || '').trim();
+    const days = Number(raw);
+    if (!raw || !Number.isFinite(days) || days === 0) { toast.error(t('devPanel.subscriptions.adjustDaysInvalid')); return; }
+    setSubLoading(id);
+    const res = await fetch(`${API_BASE}/api/admin/subscriptions/${id}/adjust-days`, {
+      method: "POST", headers: authHdr, body: JSON.stringify({ days }),
+    });
+    if (res.ok) { setAdjustDays(prev => ({ ...prev, [id]: '' })); toast.success(t('devPanel.subscriptions.adjustDaysToast', { days })); await load(); }
+    else { const d = await res.json().catch(() => ({})); toast.error(d.error || t('devPanel.errors.renew')); }
+    setSubLoading(null);
   };
 
   const companyName = (cid: string) => companies.find(c => c.id === cid)?.name || "—";
@@ -284,6 +339,9 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
           </button>
           <button onClick={() => setTab("plans")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition sm:flex-1 ${tab === "plans" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
             {t('devPanel.tabs.plans')}
+          </button>
+          <button onClick={() => setTab("promocodes")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition sm:flex-1 ${tab === "promocodes" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
+            {t('devPanel.tabs.promocodes')}
           </button>
         </div>
         {/* Ma'lumotlar FAQAT panel birinchi ochilganda yuklanardi — keyin
@@ -405,6 +463,20 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
                     </div>
                   </div>
                 )}
+                {/* Muddatni istalgan holatdagi (faol/kutilayotgan/tugagan/rad
+                    etilgan) firmaga istalgan vaqt qo'shish/ayirish — masalan
+                    bonus kunlar berish yoki xato bilan berilgan muddatni
+                    qisqartirish uchun. */}
+                <div className="flex items-center gap-2 pt-2 mt-2 border-t border-border/30">
+                  <input type="number" placeholder={t('devPanel.subscriptions.adjustDaysPlaceholder')}
+                    value={adjustDays[s.id] || ''}
+                    onChange={e => setAdjustDays(prev => ({ ...prev, [s.id]: e.target.value }))}
+                    className="flex-1 text-xs border border-border/60 rounded-lg px-2 py-1.5 bg-transparent font-mono" />
+                  <button onClick={() => adjustSubDays(s.id)} disabled={subLoading === s.id}
+                    className="px-3 py-1.5 rounded-lg text-[11px] font-bold border border-primary/40 text-primary hover:bg-primary/10 disabled:opacity-60 shrink-0">
+                    {t('devPanel.subscriptions.adjustDaysBtn')}
+                  </button>
+                </div>
               </div>
             );
           })
@@ -580,7 +652,7 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
               </div>
             </div>
           ))
-        ) : (
+        ) : tab === "plans" ? (
           // ── Tariflar — narx/kun/yorliq/funksiyalarni tahrirlash, yangi tarif qo'shish ──
           <div className="space-y-3">
             {plans.map(p => (
@@ -607,6 +679,28 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
                     <label className="text-[10px] text-muted-foreground block mb-1">{t('devPanel.plans.amountField')}</label>
                     <input type="number" value={p.amount} onChange={e => setPlans(prev => prev.map(x => x.key === p.key ? { ...x, amount: Number(e.target.value) } : x))}
                       className="w-full text-xs border border-border/60 rounded-lg px-2 py-1.5 bg-transparent font-mono" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[10px] text-muted-foreground block mb-1">{t('devPanel.plans.periodField')}</label>
+                    <select value={p.period || ''} onChange={e => setPlans(prev => prev.map(x => x.key === p.key ? { ...x, period: e.target.value || undefined } : x))}
+                      className="w-full text-xs border border-border/60 rounded-lg px-2 py-1.5 bg-transparent">
+                      <option value="">{t('devPanel.plans.periodNone')}</option>
+                      <option value="1month">{t('devPanel.plans.period1Month')}</option>
+                      <option value="3month">{t('devPanel.plans.period3Month')}</option>
+                      <option value="12month">{t('devPanel.plans.period12Month')}</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-muted-foreground block mb-1">{t('devPanel.plans.tierField')}</label>
+                    <select value={p.tier || ''} onChange={e => setPlans(prev => prev.map(x => x.key === p.key ? { ...x, tier: e.target.value ? Number(e.target.value) : undefined } : x))}
+                      className="w-full text-xs border border-border/60 rounded-lg px-2 py-1.5 bg-transparent">
+                      <option value="">{t('devPanel.plans.tierNone')}</option>
+                      <option value="1">{t('devPanel.plans.tier1')}</option>
+                      <option value="2">{t('devPanel.plans.tier2')}</option>
+                      <option value="3">{t('devPanel.plans.tier3')}</option>
+                    </select>
                   </div>
                 </div>
                 <div>
@@ -650,6 +744,20 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
                     className="text-xs border border-border/60 rounded-lg px-2 py-1.5 bg-transparent font-mono" />
                   <input type="number" placeholder={t('devPanel.plans.amountField')} value={newPlan.amount} onChange={e => setNewPlan({ ...newPlan, amount: e.target.value })}
                     className="text-xs border border-border/60 rounded-lg px-2 py-1.5 bg-transparent font-mono" />
+                  <select value={newPlan.period} onChange={e => setNewPlan({ ...newPlan, period: e.target.value })}
+                    className="text-xs border border-border/60 rounded-lg px-2 py-1.5 bg-transparent">
+                    <option value="">{t('devPanel.plans.periodNone')}</option>
+                    <option value="1month">{t('devPanel.plans.period1Month')}</option>
+                    <option value="3month">{t('devPanel.plans.period3Month')}</option>
+                    <option value="12month">{t('devPanel.plans.period12Month')}</option>
+                  </select>
+                  <select value={newPlan.tier} onChange={e => setNewPlan({ ...newPlan, tier: e.target.value })}
+                    className="text-xs border border-border/60 rounded-lg px-2 py-1.5 bg-transparent">
+                    <option value="">{t('devPanel.plans.tierNone')}</option>
+                    <option value="1">{t('devPanel.plans.tier1')}</option>
+                    <option value="2">{t('devPanel.plans.tier2')}</option>
+                    <option value="3">{t('devPanel.plans.tier3')}</option>
+                  </select>
                 </div>
                 <div className="flex flex-wrap gap-1.5">
                   {features.map(f => {
@@ -669,9 +777,62 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
                 </div>
               </div>
             ) : (
-              <button onClick={() => setNewPlan({ key: '', label: '', days: '30', amount: '0', features: [] })}
+              <button onClick={() => setNewPlan({ key: '', label: '', days: '30', amount: '0', features: [], period: '', tier: '' })}
                 className="w-full py-3 rounded-2xl text-xs font-bold border-2 border-dashed border-border/60 text-muted-foreground hover:border-primary/40 hover:text-primary liquid-transition">
                 + {t('devPanel.plans.newTitle')}
+              </button>
+            )}
+          </div>
+        ) : (
+          // ── Promokodlar — narxni kamaytiruvchi kodlar (routes/promocodes.ts) ──
+          <div className="space-y-3">
+            {promoCodes.length === 0 && <p className="text-center text-sm text-muted-foreground py-12">{t('devPanel.promocodes.empty')}</p>}
+            {promoCodes.map((pc: any) => (
+              <div key={pc.id || pc._id} className={`surface rounded-2xl p-4 space-y-2 ${!pc.active ? "opacity-50" : ""}`}>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-mono font-bold">{pc.code}</span>
+                  <button onClick={() => savePromo({ ...pc, active: !pc.active })} disabled={promoSaving === (pc.id || pc._id)}
+                    className={`text-[10px] font-bold px-2 py-1 rounded-full ${pc.active ? "bg-green-500/15 text-green-700 dark:text-green-400" : "bg-muted text-muted-foreground"}`}>
+                    {pc.active ? t('devPanel.plans.active') : t('devPanel.plans.inactive')}
+                  </button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {pc.type === 'percent' ? t('devPanel.promocodes.percentOff', { value: pc.value }) : t('devPanel.promocodes.fixedOff', { value: pc.value.toLocaleString('uz-UZ') })}
+                  {typeof pc.maxUses === 'number' && ` · ${t('devPanel.promocodes.usedOf', { used: pc.usedCount || 0, max: pc.maxUses })}`}
+                  {typeof pc.maxUses !== 'number' && ` · ${t('devPanel.promocodes.usedCount', { count: pc.usedCount || 0 })}`}
+                </p>
+                <button onClick={() => deletePromo(pc.id || pc._id)}
+                  className="w-full py-2 rounded-xl text-xs font-bold border border-red-500/30 text-red-600 hover:bg-red-500/10 flex items-center justify-center gap-1">
+                  <MorphIcon icon={Trash2} className="w-3.5 h-3.5" /> {t('devPanel.promocodes.delete')}
+                </button>
+              </div>
+            ))}
+
+            {newPromo ? (
+              <div className="surface rounded-2xl p-4 space-y-3 ring-1 ring-primary/40">
+                <p className="text-xs font-bold text-primary">{t('devPanel.promocodes.newTitle')}</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <input placeholder={t('devPanel.promocodes.codeField')} value={newPromo.code} onChange={e => setNewPromo({ ...newPromo, code: e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, '') })}
+                    className="text-xs border border-border/60 rounded-lg px-2 py-1.5 bg-transparent font-mono" />
+                  <select value={newPromo.type} onChange={e => setNewPromo({ ...newPromo, type: e.target.value as "percent"|"fixed" })}
+                    className="text-xs border border-border/60 rounded-lg px-2 py-1.5 bg-transparent">
+                    <option value="percent">{t('devPanel.promocodes.typePercent')}</option>
+                    <option value="fixed">{t('devPanel.promocodes.typeFixed')}</option>
+                  </select>
+                  <input type="number" placeholder={t('devPanel.promocodes.valueField')} value={newPromo.value} onChange={e => setNewPromo({ ...newPromo, value: e.target.value })}
+                    className="text-xs border border-border/60 rounded-lg px-2 py-1.5 bg-transparent font-mono" />
+                  <input type="number" placeholder={t('devPanel.promocodes.maxUsesField')} value={newPromo.maxUses} onChange={e => setNewPromo({ ...newPromo, maxUses: e.target.value })}
+                    className="text-xs border border-border/60 rounded-lg px-2 py-1.5 bg-transparent font-mono" />
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={createPromo} className="flex-1 py-2 rounded-xl text-xs font-bold bg-primary text-white">{t('devPanel.promocodes.create')}</button>
+                  <button onClick={() => setNewPromo(null)} className="px-3 py-2 rounded-xl text-xs font-bold border border-border/60">{t('common.cancel')}</button>
+                </div>
+              </div>
+            ) : (
+              <button onClick={() => setNewPromo({ code: '', type: 'percent', value: '10', maxUses: '' })}
+                className="w-full py-3 rounded-2xl text-xs font-bold border-2 border-dashed border-border/60 text-muted-foreground hover:border-primary/40 hover:text-primary liquid-transition">
+                + {t('devPanel.promocodes.newTitle')}
               </button>
             )}
           </div>

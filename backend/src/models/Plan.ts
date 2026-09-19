@@ -15,6 +15,11 @@ export interface IPlan extends Document {
   features: string[];  // FEATURE_REGISTRY'dagi kalitlar — shu tarifda yoqilgan funksiyalar
   active: boolean;      // false bo'lsa yangi ro'yxatdan o'tishda/to'lovda taklif qilinmaydi
   order: number;        // ko'rsatish tartibi
+  // ChatGPT uslubidagi narx jadvali uchun: davr (1 oylik/3 oylik/12 oylik)
+  // ustida 3 xil daraja (Oddiy/Standart/Premium). Ikkalasi ham ixtiyoriy —
+  // eski "tekis" tariflar (bepul va h.k.) bularsiz ham ishlayveradi.
+  period?: '1month' | '3month' | '12month';
+  tier?: 1 | 2 | 3;
 }
 
 const PlanSchema: Schema = new Schema({
@@ -25,6 +30,8 @@ const PlanSchema: Schema = new Schema({
   features: [{ type: String }],
   active: { type: Boolean, default: true },
   order: { type: Number, default: 0 },
+  period: { type: String, enum: ['1month', '3month', '12month'] },
+  tier: { type: Number, enum: [1, 2, 3] },
 }, { timestamps: true });
 
 export default mongoose.model<IPlan>('Plan', PlanSchema);

@@ -255,4 +255,44 @@ router.post('/:id/renew', requireDeveloper, async (req, res) => {
   }
 });
 
+// POST /api/admin/subscriptions/:id/adjust-days — istalgan firmaga,
+// istalgan vaqtda muddat qo'shish/ayirish (masalan bonus kunlar berish
+// yoki noto'g'ri berilgan muddatni qisqartirish) — holatidan (pending/
+// active/expired/rejected) qat'i nazar ishlaydi, "renew" (faqat tarif
+// bo'yicha uzaytirish) dan farqli o'laroq ixtiyoriy (musbat/manfiy) kun
+// sonini qabul qiladi.
+router.post('/:id/adjust-days', requireDeveloper, async (req, res) => {
+  try {
+    const days = Number(req.body?.days);
+    if (!Number.isFinite(days) || days === 0) return res.status(400).json({ error: "Kunlar soni noto'g'ri (0 bo'lmasligi kerak)" });
+
+    const sub = await Subscription.findById(req.params.id);
+    if (!sub) return res.status(404).json({ error: 'Obuna topilmadi' });
+
+    const now = new Date();
+    // Muddati hali tugamagan bo'lsa — shu sanadan, aks holda (muddati
+    // o'tgan/hali umuman bo'lmagan/rad etilgan) HOZIRDAN boshlab hisoblanadi.
+    const base = sub.currentPeriodEnd && sub.currentPeriodEnd > now ? sub.currentPeriodEnd : now;
+    const newEnd = new Date(base.getTime() + days * 86400000);
+
+    sub.currentPeriodEnd = newEnd;
+    if (!sub.currentPeriodStart) sub.currentPeriodStart = now;
+    sub.status = newEnd > now ? 'active' : 'expired';
+    if (sub.status === 'active') {
+      sub.approvedAt = sub.approvedAt || now;
+      sub.approvedBy = sub.approvedBy || `dasturchi-manual:${String((req as any).user?.userId || '')}`;
+    }
+    await sub.save();
+
+    if (sub.status === 'active') {
+      await Company.findByIdAndUpdate(sub.companyId, { status: 'ACTIVE' }).catch(() => {});
+    }
+
+    res.json({ ok: true, status: sub.status, currentPeriodEnd: sub.currentPeriodEnd });
+  } catch (err) {
+    console.error('subscriptions adjust-days error:', err);
+    res.status(500).json({ error: 'Server xatoligi' });
+  }
+});
+
 export default router;

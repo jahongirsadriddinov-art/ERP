@@ -51,6 +51,7 @@ export function initSocket(httpServer: HttpServer): Server {
       socket.data.userId = fresh.userId;
       socket.data.companyId = fresh.companyId;
       socket.data.role = fresh.role;
+      socket.data.jti = payload.jti;
       next();
     } catch {
       next(new Error('unauthorized'));
@@ -60,7 +61,13 @@ export function initSocket(httpServer: HttpServer): Server {
   io.on('connection', (socket: Socket) => {
     const userId: string = socket.data.userId;
     const companyId: string | undefined = socket.data.companyId;
+    const jti: string | undefined = socket.data.jti;
     socket.join(`user:${userId}`);
+    // "Ulangan qurilmalar"dan chiqarib yuborilganda (routes/sessions.ts)
+    // shu qurilmaning FAQAT o'zini darhol uzish uchun — jti'ga xos xona
+    // (eski, jti'siz tokenlarda bu xona yo'q, o'sha holatda faqat keyingi
+    // HTTP so'rov rad etiladi — middleware/auth.ts'dagi izohga qarang).
+    if (jti) socket.join(`session:${jti}`);
     addUserSocket(userId, socket.id);
     broadcastPresence();
     // Firma xonasi — GPS kabi haqiqiy-vaqt hodisalarni FAQAT shu firma
@@ -125,3 +132,14 @@ export const emitToCompany = (companyId: string | undefined, event: string, payl
 };
 export const getIO = () => io;
 export const isOnline = (userId: string) => userSockets.has(userId);
+
+// "Ulangan qurilmalar" (routes/sessions.ts) — bitta sessiyani (jti) DARHOL
+// uzish: avval xabar yuboriladi (frontend buni ko'rib o'zini toza chiqaradi
+// — localStorage tozalash, login ekraniga qaytish), so'ng ulanish o'zi
+// ham majburan yopiladi (agar foydalanuvchi biror sababdan xabarni
+// e'tiborsiz qoldirsa ham, real-vaqt kanali darhol to'xtaydi).
+export function kickSession(jti: string) {
+  if (!io) return;
+  io.to(`session:${jti}`).emit('session:revoked');
+  io.in(`session:${jti}`).disconnectSockets(true);
+}

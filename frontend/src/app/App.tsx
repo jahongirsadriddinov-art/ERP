@@ -3803,6 +3803,17 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
     } catch { toast.error(t('common.error')); }
     setRevokingDevice(null);
   };
+  const [revokingAll, setRevokingAll] = useState(false);
+  const revokeAllDevices = async () => {
+    if (!window.confirm(t('profile.confirmRevokeAll'))) return;
+    setRevokingAll(true);
+    try {
+      const r = await fetch(`${API_BASE}/api/sessions/all`, { method: "DELETE", headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } });
+      if (r.ok) { setDevicesList(prev => prev.filter(d => d.current)); toast.success(t('profile.allDevicesRevoked')); }
+      else toast.error(t('common.error'));
+    } catch { toast.error(t('common.error')); }
+    setRevokingAll(false);
+  };
 
   const [subData, setSubData] = useState<any>(null);
   const [subLoading, setSubLoading] = useState(false);
@@ -4004,35 +4015,47 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
             </div>
           )}
           {activePanel === "devices" && (
-            <div className="surface overflow-hidden">
-              {devicesLoading ? (
-                <SkeletonList items={2} withAvatar={false} />
-              ) : devicesList.length === 0 ? (
-                <p className="text-center text-sm text-muted-foreground py-10">{t('profile.noDevices')}</p>
-              ) : (
-                <div className="divide-y divide-border/50">
-                  {devicesList.map(d => (
-                    <div key={d.id} className="flex items-center gap-3 px-4 py-3.5">
-                      <div className="icon-chip flex-shrink-0"><MorphIcon icon={Smartphone} className="w-4 h-4" /></div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5">
-                          <p className="text-sm font-semibold truncate">{d.deviceLabel}</p>
-                          {d.current && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-green-500/15 text-green-700 dark:text-green-400 flex-shrink-0">{t('profile.thisDevice')}</span>}
+            <div className="space-y-3">
+              <div className="surface overflow-hidden">
+                {devicesLoading ? (
+                  <SkeletonList items={2} withAvatar={false} />
+                ) : devicesList.length === 0 ? (
+                  <p className="text-center text-sm text-muted-foreground py-10">{t('profile.noDevices')}</p>
+                ) : (
+                  <div className="divide-y divide-border/50">
+                    {devicesList.map(d => (
+                      <div key={d.id} className="flex items-center gap-3 px-4 py-3.5">
+                        <div className={`flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center ${d.loginMethod === 'qr' ? 'text-white' : 'icon-chip'}`}
+                          style={d.loginMethod === 'qr' ? { background: "linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%)" } : undefined}>
+                          <MorphIcon icon={d.loginMethod === 'qr' ? QrCode : Smartphone} className="w-4 h-4" />
                         </div>
-                        <p className="text-[11px] text-muted-foreground">
-                          {d.loginMethod === 'qr' ? t('profile.loginMethodQr') : d.loginMethod === 'dev' ? t('profile.loginMethodDev') : t('profile.loginMethodPassword')}
-                          {' · '}{t('profile.lastSeen', { date: new Date(d.lastSeenAt || d.createdAt).toLocaleString('uz-UZ', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) })}
-                        </p>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-sm font-semibold truncate">{d.deviceLabel}</p>
+                            {d.current && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-green-500/15 text-green-700 dark:text-green-400 flex-shrink-0">{t('profile.thisDevice')}</span>}
+                          </div>
+                          <p className="text-[11px] text-muted-foreground">
+                            {d.loginMethod === 'qr' ? t('profile.loginMethodQr') : d.loginMethod === 'dev' ? t('profile.loginMethodDev') : t('profile.loginMethodPassword')}
+                            {' · '}{t('profile.lastSeen', { date: new Date(d.lastSeenAt || d.createdAt).toLocaleString('uz-UZ', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) })}
+                          </p>
+                        </div>
+                        {!d.current && (
+                          <button onClick={() => revokeDevice(d.id)} disabled={revokingDevice === d.id} aria-label={t('profile.revokeDevice')}
+                            className="w-9 h-9 rounded-lg border border-red-500/30 text-red-600 hover:bg-red-500/10 flex items-center justify-center disabled:opacity-40 flex-shrink-0">
+                            {revokingDevice === d.id ? <MorphIcon icon={Loader2} className="w-4 h-4 animate-spin" /> : <MorphIcon icon={LogOutDevice} className="w-4 h-4" />}
+                          </button>
+                        )}
                       </div>
-                      {!d.current && (
-                        <button onClick={() => revokeDevice(d.id)} disabled={revokingDevice === d.id} aria-label={t('profile.revokeDevice')}
-                          className="w-9 h-9 rounded-lg border border-red-500/30 text-red-600 hover:bg-red-500/10 flex items-center justify-center disabled:opacity-40 flex-shrink-0">
-                          {revokingDevice === d.id ? <MorphIcon icon={Loader2} className="w-4 h-4 animate-spin" /> : <MorphIcon icon={LogOutDevice} className="w-4 h-4" />}
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {devicesList.filter(d => !d.current).length > 0 && (
+                <button onClick={revokeAllDevices} disabled={revokingAll}
+                  className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-bold border border-red-500/30 text-red-600 hover:bg-red-500/10 disabled:opacity-50">
+                  {revokingAll ? <MorphIcon icon={Loader2} className="w-4 h-4 animate-spin" /> : <MorphIcon icon={LogOutDevice} className="w-4 h-4" />}
+                  {t('profile.revokeAllDevices')}
+                </button>
               )}
             </div>
           )}
@@ -4643,7 +4666,9 @@ function LoginScreen({ onLogin, onRegister, onBack }: { onLogin: (u: any, compan
                 variantning ma'nosi yo'q. */}
             {isTabletOrLarger() && (
               <button type="button" onClick={() => setStep("qr")}
-                className="w-full text-xs font-semibold text-muted-foreground hover:text-primary py-1">
+                className="w-full flex items-center justify-center gap-1.5 text-xs font-bold py-2.5 rounded-full liquid-transition"
+                style={{ background: "linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%)", color: "white" }}>
+                <MorphIcon icon={QrCode} className="w-4 h-4" />
                 {t('login.qrLoginLink')}
               </button>
             )}
@@ -5379,6 +5404,17 @@ export default function App() {
       // muammosi bo'lardi.
       const onAttendanceUpdate = (rec: any) => setTodayAttendance(rec);
 
+      // "Ulangan qurilmalar"dan (ProfilePage) shu qurilma chiqarib
+      // yuborilganda — DARHOL (keyingi HTTP so'rovni kutmasdan) tizimdan
+      // chiqariladi (backend/src/services/socket.ts kickSession).
+      const onSessionRevoked = () => {
+        playSound("lock");
+        localStorage.removeItem("currentUser"); localStorage.removeItem("token");
+        setCurrentUser(null); setAuthView("login");
+        toast.message(tApp('profile.sessionRevokedNotice'));
+      };
+      socket.on("session:revoked", onSessionRevoked);
+
       socket.on("message:new", onNew);
       socket.on("message:edit", onEdit);
       socket.on("message:delete", onDelete);
@@ -5437,6 +5473,7 @@ export default function App() {
         socket.off("gps:update", onGpsUpdate);
         socket.off("company:update", onCompanyUpdate);
         socket.off("attendance:update", onAttendanceUpdate);
+        socket.off("session:revoked", onSessionRevoked);
       };
     }
   }, [liveUser?.id]);

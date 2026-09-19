@@ -2,6 +2,11 @@ import { defineConfig } from 'vite'
 import path from 'path'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
+import { readFileSync } from 'fs'
+
+// Ilova o'zining versiyasini bilishi uchun (App.tsx'dagi yangilanish
+// tekshiruvi, backend/src/routes/deploy.ts GET /latest bilan solishtiradi).
+const pkgVersion = JSON.parse(readFileSync(path.resolve(__dirname, 'package.json'), 'utf-8')).version
 
 
 function figmaAssetResolver() {
@@ -17,6 +22,9 @@ function figmaAssetResolver() {
 }
 
 export default defineConfig({
+  define: {
+    __APP_VERSION__: JSON.stringify(pkgVersion),
+  },
   plugins: [
     figmaAssetResolver(),
     react(),

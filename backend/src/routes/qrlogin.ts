@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { randomBytes } from 'crypto';
+import { randomBytes, createHash } from 'crypto';
 import QrLoginSession from '../models/QrLoginSession';
 import User from '../models/User';
 import { requireAuth } from '../middleware/auth';
@@ -8,18 +8,33 @@ import { issueSession } from './auth';
 
 const router = Router();
 
-const SLOT_MS = 3000;       // har bir kod 3 soniya amal qiladi
-const SLOT_COUNT = 3;       // jami 3 ta ketma-ket kod skanerlanishi kerak
-const SESSION_TIMEOUT_MS = 60 * 1000; // 60 soniyadan keyin "muddati tugadi"
+const SLOT_MS = 2000;       // kod har 2 soniyada almashadi
+const REQUIRED_SCANS = 3;   // jami 3 ta ALOHIDA rotatsiya skanerlanishi kerak
+// Bu ICHKI (business-logic) muddat — foydalanuvchi buni HECH QACHON
+// ko'rmaydi ("expired" degan xato chiqmaydi): shu vaqt yetganda frontend
+// (QrLoginPanel.tsx) sezmasdan yangi sessiya so'raydi. Mongo TTL
+// (models/QrLoginSession.ts) buning ustiga qo'shimcha bufer bilan
+// (10 daqiqa) — eski yozuvlarni bazadan tozalash uchun.
+const SESSION_TIMEOUT_MS = 5 * 60 * 1000;
 
-function randomCode(): string {
-  // 6 ta katta harf/raqam — taxmin qilish qiyin, lekin QR ichida qisqa
-  // matn sifatida qulay.
-  return randomBytes(4).toString('hex').toUpperCase().slice(0, 6);
+// XATO TUZATILDI: avval faqat 3 ta OLDINDAN yaratilgan kod bo'lardi
+// (windows 0,1,2) va rotatsiya index'i shu 3 taga QOTIB QOLAR edi (t=9s
+// dan keyin doim oxirgi kod ko'rsatilaverar edi). Agar foydalanuvchi
+// telefonni olib skaner ochishga 9 soniyadan ko'proq vaqt sarflasa —
+// login UMUMAN tugallanmas edi (0/1-slotlar vaqti allaqachon "o'tib
+// ketgan", indeks esa 2-slotdan boshqa hech qachon qaytmasdi). Endi kod
+// istalgan rotatsiya raqami (0,1,2,3,...) uchun DETERMINISTIK (sessionId
+// + rotatsiya raqamidan hash) hisoblanadi — QR 60 soniyalik butun sessiya
+// davomida TO'XTOVSIZ har 3 soniyada yangilanaveradi, va foydalanuvchi
+// QAYSI 3 ta (albatta ketma-ket bo'lishi shart emas) rotatsiyani
+// skanerlagani muhim emas — muhimi ULARNING 3 tasi BIR-BIRIDAN FARQLI
+// bo'lishi (shu bilan "bitta suratga olingan kadr YETARLI EMAS" talabi
+// saqlanadi, lekin qat'iy 9 soniyalik oyna yo'qoladi).
+function currentWindow(createdAt: Date): number {
+  return Math.floor((Date.now() - createdAt.getTime()) / SLOT_MS);
 }
-
-function currentSlot(createdAt: Date): number {
-  return Math.min(SLOT_COUNT - 1, Math.floor((Date.now() - createdAt.getTime()) / SLOT_MS));
+function codeForWindow(sessionId: string, windowIdx: number): string {
+  return createHash('sha256').update(`${sessionId}:${windowIdx}`).digest('hex').slice(0, 6).toUpperCase();
 }
 function isExpired(createdAt: Date): boolean {
   return Date.now() - createdAt.getTime() > SESSION_TIMEOUT_MS;
@@ -37,9 +52,8 @@ router.post('/create', async (req, res) => {
     if (!rl.allowed) return res.status(429).json({ error: "Juda ko'p urinish. Birozdan so'ng qayta urinib ko'ring." });
 
     const sessionId = randomBytes(32).toString('hex');
-    const codes = Array.from({ length: SLOT_COUNT }, randomCode);
-    await QrLoginSession.create({ sessionId, codes, status: 'pending' });
-    res.json({ sessionId, slotMs: SLOT_MS, slotCount: SLOT_COUNT });
+    await QrLoginSession.create({ sessionId, status: 'pending' });
+    res.json({ sessionId, slotMs: SLOT_MS, slotCount: REQUIRED_SCANS });
   } catch (err) {
     res.status(500).json({ error: 'Server xatoligi' });
   }
@@ -47,7 +61,7 @@ router.post('/create', async (req, res) => {
 
 // GET /api/auth/qrlogin/code/:sessionId — laptop/planshet sahifasi har
 // soniyada so'raydi: hozirgi kod (QR shunga qarab qayta chiziladi) va
-// progress (nechta slot skanerlangan).
+// progress (nechta rotatsiya skanerlangan).
 router.get('/code/:sessionId', async (req, res) => {
   try {
     if (!isValidSessionId(req.params.sessionId)) return res.status(400).json({ error: 'Yaroqsiz sessiya' });
@@ -56,10 +70,9 @@ router.get('/code/:sessionId', async (req, res) => {
     if (session.status !== 'pending' && session.status !== 'verified') return res.json({ expired: true });
     if (isExpired(session.createdAt as any)) return res.json({ expired: true });
 
-    const slot = currentSlot(session.createdAt as any);
+    const windowIdx = currentWindow(session.createdAt as any);
     res.json({
-      code: session.codes[slot],
-      slot,
+      code: codeForWindow(session.sessionId, windowIdx),
       scannedCount: session.scannedSlots.length,
       verified: session.status === 'verified',
     });
@@ -102,19 +115,19 @@ router.post('/scan', requireAuth, async (req, res) => {
       return res.status(403).json({ ok: false, error: "Bu QR boshqa hisob tomonidan skanerlanmoqda" });
     }
 
-    const slot = currentSlot(session.createdAt as any);
-    if (session.codes[slot] !== code) {
+    const windowIdx = currentWindow(session.createdAt as any);
+    if (codeForWindow(session.sessionId, windowIdx) !== code) {
       return res.status(400).json({ ok: false, error: "Kod eskirgan — yangi kod kutilmoqda" });
     }
-    if (session.scannedSlots.includes(slot)) {
+    if (session.scannedSlots.includes(windowIdx)) {
       // Xuddi shu kadr allaqachon hisoblangan — kameraning navbatdagi
       // kadrlarida bir xil QR qayta-qayta o'qilishi normal, xato emas.
       return res.json({ ok: true, scannedCount: session.scannedSlots.length, verified: false });
     }
 
     session.userId = scannerId;
-    session.scannedSlots.push(slot);
-    if (session.scannedSlots.length >= SLOT_COUNT) {
+    session.scannedSlots.push(windowIdx);
+    if (session.scannedSlots.length >= REQUIRED_SCANS) {
       session.status = 'verified';
     }
     await session.save();

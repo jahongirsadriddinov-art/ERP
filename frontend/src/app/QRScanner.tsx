@@ -240,8 +240,15 @@ export default function QRScanner({ onClose, onResult, onLoginQrVerified, token 
       <div className="flex items-center justify-between px-4 flex-shrink-0"
         style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))', paddingBottom: '0.75rem' }}>
         <div className="flex items-center gap-2 text-white">
-          <MorphIcon icon={QrCode} className="w-5 h-5"  />
-          <span className="font-semibold">{t('qrScanner.title')}</span>
+          {loginQrMode ? (
+            <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+              style={{ background: "linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%)" }}>
+              <MorphIcon icon={QrCode} className="w-4 h-4 text-white" />
+            </div>
+          ) : (
+            <MorphIcon icon={QrCode} className="w-5 h-5" />
+          )}
+          <span className="font-semibold">{loginQrMode ? t('login.qrLoginLink') : t('qrScanner.title')}</span>
         </div>
         <button onClick={() => { stopCamera(); onClose(); }}
           className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-white/20">
@@ -258,11 +265,12 @@ export default function QRScanner({ onClose, onResult, onLoginQrVerified, token 
         {status === "scanning" && (
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="relative w-64 h-64">
-              {/* Corner markers */}
-              <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-white rounded-tl-sm" />
-              <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-white rounded-tr-sm" />
-              <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-white rounded-bl-sm" />
-              <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-white rounded-br-sm" />
+              {/* Corner markers — login-QR rejimida premium (accent) rangda,
+                  oddiy skanerlashdan ko'zga ko'rinib ajralib turishi uchun. */}
+              <div className={`absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 rounded-tl-sm ${loginQrMode ? "border-accent" : "border-white"}`} />
+              <div className={`absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 rounded-tr-sm ${loginQrMode ? "border-accent" : "border-white"}`} />
+              <div className={`absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 rounded-bl-sm ${loginQrMode ? "border-accent" : "border-white"}`} />
+              <div className={`absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 rounded-br-sm ${loginQrMode ? "border-accent" : "border-white"}`} />
               {/* Scanning line */}
               <motion.div
                 className="absolute left-1 right-1 h-0.5 bg-primary/80"

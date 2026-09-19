@@ -311,37 +311,52 @@ router.post('/complete', async (req, res) => {
     reg.otpTokenHash = hashToken('used-' + String(reg._id));
     await reg.save();
 
-    // Dasturchiga bildirishnoma — Tasdiqlash/Rad etish tugmalari HAR DOIM
-    // ko'rsatiladi (bepul tarif ham shu jumladan — "tekin bo'lsa ham admin
-    // tasdiqlashi kerak" aniq talab). Onlayn to'lov yuborilgan bo'lsa,
-    // buni faqat qo'shimcha izoh sifatida aytamiz (avtomatik ham
-    // faollashishi mumkinligini bildirish uchun), tugmalarni olib
-    // tashlamaymiz — chunki to'lov kelmasa yoki naqd/boshqa yo'l
-    // kelishilsa, dasturchi baribir qo'lda tasdiqlay olishi kerak.
+    // Dasturchiga bildirishnoma.
+    // XATO TUZATILDI ("onlayn to'lov qilsam ham admin ga tasdiqlaysizmi
+    // deb kelyapti"): "sayt/bot orqali onlayn to'lasa, admin tasdig'i
+    // SHART EMAS" — bu shunchaki "harakat qilish shart emas" degani emas,
+    // balki dasturchiga tasdiqlash/rad etish SO'ROVI umuman YUBORILMASLIGI
+    // kerak edi (avval bu yerda tugmalar HAR DOIM, hatto onlayn to'lovda
+    // ham ko'rsatilardi — chalkashtirar edi). Endi: onlayn to'lov havolasi
+    // muvaffaqiyatli yaratilgan bo'lsa — oddiy FYI xabar (tugmasiz).
+    // Tugmalar FAQAT quyidagi ikki holatda: (1) bepul sinov (aniq talab:
+    // "tekin bo'lsa ham admin tasdiqlashi kerak"), (2) "admin orqali"
+    // tanlangan yoki onlayn buyurtma yaratib bo'lmagan pullik tarif.
     const DEVELOPER_CHAT_ID = process.env.DEVELOPER_CHAT_ID;
     if (DEVELOPER_CHAT_ID && sub) {
       const planInfo2 = PLAN_CONFIG[planKey];
       const subIdStr = String(sub._id);
       const priceLine = isFreePlan ? `📦 Tarif: ${planInfo2.label} (bepul sinov)` : `📦 Tarif: ${planInfo2.label} — ${planInfo2.amount.toLocaleString()} so'm`;
-      const methodLine = isFreePlan
-        ? `Bepul sinov — harakat kerak bo'lmasa ham, tasdiqlash tavsiya etiladi:`
-        : payUrl
-          ? `Roxiy orqali to'lov havolasi yuborildi — to'lansa avtomatik faollashadi. Zarur bo'lsa qo'lda ham tasdiqlashingiz/rad etishingiz mumkin:`
+
+      if (payUrl) {
+        // Onlayn to'lov muvaffaqiyatli yuborilgan — harakat kerak emas,
+        // shu sabab tasdiqlash/rad etish tugmalari YO'Q.
+        const msgText = `🆕 <b>Yangi firma (onlayn to'lov kutilmoqda)</b>\n\n` +
+          `👤 ${ownerUser.firstName} ${ownerUser.lastName || ''}\n` +
+          `📞 ${ownerUser.phone}\n` +
+          `🏢 ${createdCompany.name} (${createdCompany.branchId})\n` +
+          `${priceLine}\n\n` +
+          `Roxiy (Click/Payme/Paynet) orqali to'lov havolasi yuborildi — to'lansa obuna AVTOMATIK faollashadi, hech qanday harakat kerak emas.`;
+        await bot.sendMessage(DEVELOPER_CHAT_ID, msgText, { parse_mode: 'HTML' }).catch((e: any) => console.error('bot developer notify error:', e));
+      } else {
+        const methodLine = isFreePlan
+          ? `Bepul sinov — tasdiqlash/rad etish uchun pastdagi tugmalarni bosing:`
           : `"Admin orqali" to'lovni tanladi — tasdiqlash yoki rad etish uchun pastdagi tugmalarni bosing:`;
-      const msgText = `🆕 <b>Yangi obuna so'rovi!</b>\n\n` +
-        `👤 ${ownerUser.firstName} ${ownerUser.lastName || ''}\n` +
-        `📞 ${ownerUser.phone}\n` +
-        `🏢 ${createdCompany.name} (${createdCompany.branchId})\n` +
-        `${priceLine}\n\n${methodLine}`;
-      await bot.sendMessage(DEVELOPER_CHAT_ID, msgText, {
-        parse_mode: 'HTML',
-        reply_markup: {
-          inline_keyboard: [[
-            { text: '✅ Tasdiqlash', callback_data: `sub_approve_${subIdStr}` },
-            { text: '❌ Rad etish',  callback_data: `sub_reject_${subIdStr}` },
-          ]],
-        },
-      }).catch((e: any) => console.error('bot developer notify error:', e));
+        const msgText = `🆕 <b>Yangi obuna so'rovi!</b>\n\n` +
+          `👤 ${ownerUser.firstName} ${ownerUser.lastName || ''}\n` +
+          `📞 ${ownerUser.phone}\n` +
+          `🏢 ${createdCompany.name} (${createdCompany.branchId})\n` +
+          `${priceLine}\n\n${methodLine}`;
+        await bot.sendMessage(DEVELOPER_CHAT_ID, msgText, {
+          parse_mode: 'HTML',
+          reply_markup: {
+            inline_keyboard: [[
+              { text: '✅ Tasdiqlash', callback_data: `sub_approve_${subIdStr}` },
+              { text: '❌ Rad etish',  callback_data: `sub_reject_${subIdStr}` },
+            ]],
+          },
+        }).catch((e: any) => console.error('bot developer notify error:', e));
+      }
     }
 
     // JWT hali berilmaydi — obuna (bepul bo'lsa ham) dasturchi tasdig'ini

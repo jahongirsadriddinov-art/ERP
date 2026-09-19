@@ -8,6 +8,7 @@ import ChevronLeft from "@hugeicons/core-free-icons/ArrowLeft01Icon";
 import Send from "@hugeicons/core-free-icons/SendIcon";
 import FileText from "@hugeicons/core-free-icons/FileTextIcon";
 import MapPin from "@hugeicons/core-free-icons/PinLocation01Icon";
+import RefreshCw from "@hugeicons/core-free-icons/Refresh01Icon";
 import { MorphIcon } from "morphicons/react";
 import { toast } from "sonner";
 import { API_BASE } from "./api";
@@ -229,14 +230,24 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
         </div>
       )}
 
-      <div className="mx-4 mt-3 nav-pill-desktop grid grid-cols-2 sm:flex sm:flex-wrap gap-1 p-1 rounded-2xl sm:rounded-full">
-        <button onClick={() => setTab("subscriptions")} className={`relative py-2 rounded-full text-[13px] font-semibold liquid-transition sm:flex-1 ${tab === "subscriptions" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
-          {t('devPanel.tabs.subscriptions')} {subs.filter(s => s.status === "pending").length > 0 && <span className="ml-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full badge-pulse">{subs.filter(s => s.status === "pending").length}</span>}
-        </button>
-        <button onClick={() => setTab("firms")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition sm:flex-1 ${tab === "firms" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>{t('devPanel.tabs.firms', { count: companies.length })}</button>
-        <button onClick={() => setTab("users")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition sm:flex-1 ${tab === "users" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>{t('devPanel.tabs.users')}</button>
-        <button onClick={() => setTab("messages")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition sm:flex-1 ${tab === "messages" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
-          {t('devPanel.tabs.messages')}
+      <div className="mx-4 mt-3 flex items-center gap-2">
+        <div className="flex-1 nav-pill-desktop grid grid-cols-2 sm:flex sm:flex-wrap gap-1 p-1 rounded-2xl sm:rounded-full">
+          <button onClick={() => setTab("subscriptions")} className={`relative py-2 rounded-full text-[13px] font-semibold liquid-transition sm:flex-1 ${tab === "subscriptions" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
+            {t('devPanel.tabs.subscriptions')} {subs.filter(s => s.status === "pending").length > 0 && <span className="ml-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full badge-pulse">{subs.filter(s => s.status === "pending").length}</span>}
+          </button>
+          <button onClick={() => setTab("firms")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition sm:flex-1 ${tab === "firms" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>{t('devPanel.tabs.firms', { count: companies.length })}</button>
+          <button onClick={() => setTab("users")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition sm:flex-1 ${tab === "users" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>{t('devPanel.tabs.users')}</button>
+          <button onClick={() => setTab("messages")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition sm:flex-1 ${tab === "messages" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
+            {t('devPanel.tabs.messages')}
+          </button>
+        </div>
+        {/* Ma'lumotlar FAQAT panel birinchi ochilganda yuklanardi — keyin
+            (masalan panel ochiq turgan payt boshqa joyda yangi to'lov/
+            ro'yxatdan o'tish sodir bo'lsa) hech qachon o'zi yangilanmasdi,
+            "hech narsa o'zgarmagan" degan taassurot qoldirardi. */}
+        <button onClick={load} disabled={loading} title={t('devPanel.refresh')} aria-label={t('devPanel.refresh')}
+          className="w-9 h-9 rounded-full flex items-center justify-center bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground disabled:opacity-50 liquid-transition flex-shrink-0">
+          <MorphIcon icon={RefreshCw} className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
         </button>
       </div>
 

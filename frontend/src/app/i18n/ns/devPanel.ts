@@ -3,6 +3,7 @@ export const uz = {
     title: "Dasturchi paneli",
     headerSubtitle: "{{name}} · super-admin",
     logout: "Chiqish",
+    refresh: "Yangilash",
     tabs: {
       subscriptions: "To'lovlar",
       firms: "Firmalar ({{count}})",
@@ -103,6 +104,7 @@ export const ru = {
     title: "Панель разработчика",
     headerSubtitle: "{{name}} · супер-админ",
     logout: "Выйти",
+    refresh: "Обновить",
     tabs: {
       subscriptions: "Платежи",
       firms: "Компании ({{count}})",

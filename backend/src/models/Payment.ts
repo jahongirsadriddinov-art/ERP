@@ -11,6 +11,9 @@ export interface IPayment extends Document {
   status: 'pending' | 'paid' | 'failed' | 'refunded';
   provider?: string;    // masalan: 'payme', 'click', 'stripe', 'roxiy'
   externalId?: string;  // provayderdagi to'lov ID (Roxiy uchun — order_hash)
+  webhookToken?: string; // HAR BIR TO'LOV uchun ALOHIDA, tasodifiy token —
+                          // webhookning yagona autentifikatsiyasi (services/roxiy.ts
+                          // izohiga qarang: nega BITTA umumiy token EMAS).
   plan?: string;        // shu TO'LOVGA tegishli tarif kaliti (PLAN_CONFIG)
   days?: number;        // shu TO'LOVGA tegishli kunlar soni — to'lov yaratilgan
                          // paytdagi PLAN_CONFIG'dan OLIB QO'YILGAN nusxa. Buni
@@ -33,6 +36,7 @@ const PaymentSchema: Schema = new Schema({
   status: { type: String, enum: ['pending', 'paid', 'failed', 'refunded'], default: 'pending' },
   provider: { type: String },
   externalId: { type: String },
+  webhookToken: { type: String, index: true, unique: true, sparse: true },
   plan: { type: String },
   days: { type: Number }
 }, { timestamps: true });

@@ -3,6 +3,7 @@
 // tugmalari) IKKALASI HAM shu bitta funksiyani chaqiradi, shu sabab
 // tekshiruvlar (rad etilgan obuna, noto'g'ri tarif) va Payment yozuvi
 // mantig'i faqat BIR JOYDA yashaydi.
+import { randomBytes } from 'crypto';
 import Subscription from '../models/Subscription';
 import Payment from '../models/Payment';
 import { createRoxiyOrder, RoxiyOrder } from './roxiy';
@@ -42,8 +43,11 @@ export async function createSubscriptionPaymentOrder(
   // berilishi FAQAT Payment yozuvidan (plan/days) olinadi (webhook
   // to'lovni tasdiqlagach shu bilan sinxronlanadi) — to'lov 'pending'
   // turgan paytda boshqa so'rov tarifni almashtirib yuborishi mumkin edi.
+  // Har bir to'lov uchun ALOHIDA webhook tokeni — services/roxiy.ts'dagi
+  // izohga qarang (nega bitta umumiy maxfiy kalit emas).
+  const webhookToken = randomBytes(24).toString('hex');
   const note = `QurilishERP ${planInfo.label} — ${companyId}`;
-  const order = await createRoxiyOrder(planInfo.amount, note);
+  const order = await createRoxiyOrder(planInfo.amount, note, webhookToken);
 
   await Payment.create({
     companyId,
@@ -53,6 +57,7 @@ export async function createSubscriptionPaymentOrder(
     status: 'pending',
     provider: 'roxiy',
     externalId: order.order_hash,
+    webhookToken,
     plan: planKey,
     days: planInfo.days,
   });

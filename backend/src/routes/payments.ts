@@ -4,22 +4,16 @@ import Subscription from '../models/Subscription';
 import Company from '../models/Company';
 import User from '../models/User';
 import { bot } from '../services/bot';
-import { isValidRoxiyWebhookSecret } from '../services/roxiy';
 import { extendPeriodEnd } from '../utils/subscriptionPeriod';
 
 const SITE_URL = process.env.SITE_URL || 'http://localhost:5173';
 
 // MUHIM: bu router HECH QANDAY auth talab qilmaydi (index.ts'da requireAuth'siz
 // ulanadi) — chunki Roxiy'ning o'zi (bizning foydalanuvchimiz emas) shu yerga
-// to'lovdan keyin GET so'rov yuboradi. O'rniga — pastdagi `secret` tekshiruvi.
+// to'lovdan keyin GET so'rov yuboradi. O'rniga — pastda HAR BIR TO'LOVGA
+// ALOHIDA berilgan `wt` (webhookToken) tekshiriladi (services/roxiy.ts'dagi
+// izohga qarang).
 const router = Router();
-
-// Roxiy'ning to'liq status lug'ati hujjatlashtirilmagan (faqat "paid" misoli
-// berilgan) — shu sabab faqat ANIQ bekor qilish/muvaffaqiyatsizlik
-// ma'nosidagi so'zlarnigina 'failed' deb belgilaymiz (katta-kichik harfdan
-// qat'i nazar). Notanish/oraliq status kelsa, hech narsani o'zgartirmasdan
-// shunchaki e'tiborsiz qoldiramiz.
-const FAILURE_STATUSES = new Set(['failed', 'cancelled', 'canceled', 'expired', 'error']);
 
 // Express `req.query`da bir xil kalit ikki marta kelsa massivga aylantiradi
 // (masalan ?status=paid&status=paid) — bunday holatda ham xavfsiz, aniq bitta
@@ -30,35 +24,49 @@ function singleString(v: unknown): string | undefined {
   return undefined;
 }
 
-// GET /api/payments/roxiy/webhook?status=paid&order_id=..&order_hash=..&amount=..&note=..&secret=..
+// GET /api/payments/roxiy/webhook?status=paid&order_id=..&order_hash=..&amount=..&note=..&wt=..
 // To'lov tugagach Roxiy shu yerga qaytadi.
 router.get('/roxiy/webhook', async (req, res) => {
   try {
-    // XAVFSIZLIK: Roxiy hujjatida bu webhook uchun imzo/HMAC ko'rsatilmagan
-    // — shu sabab callback_url'ga o'zimiz qo'shgan maxfiy `secret` token
-    // BIRINCHI TEKSHIRILADI. Bu bo'lmasa, o'z pending buyurtmasining
-    // order_hash/amount'ini ko'rgan HAR QANDAY foydalanuvchi haqiqatda
-    // to'lamasdan turib shu URL'ni to'g'ridan-to'g'ri chaqirib, o'z obunasini
-    // bepul faollashtira olardi.
-    if (!isValidRoxiyWebhookSecret(req.query.secret)) {
-      console.warn('roxiy webhook: invalid/missing secret');
-      return res.status(401).send('unauthorized');
+    const webhookToken = singleString(req.query.wt);
+    if (!webhookToken) return res.status(400).send('missing token');
+
+    // `wt` — shu BITTA to'lov uchun generatsiya qilingan, boshqa hech qanday
+    // yozuvga mos kelmaydigan token (services/subscriptionPayments.ts). Bu
+    // topilmasa — so'rov soxta yoki eskirgan.
+    const payment = await Payment.findOne({ webhookToken, provider: 'roxiy' });
+    if (!payment) {
+      console.warn('roxiy webhook: unknown webhookToken');
+      return res.status(404).send('order not found');
     }
 
     const status = singleString(req.query.status)?.toLowerCase();
     const orderHash = singleString(req.query.order_hash);
-    const amountRaw = singleString(req.query.amount);
-    if (!orderHash) return res.status(400).send('missing order_hash');
+    // order_hash — qo'shimcha (himoya qatlami sifatida) tekshiruv: token
+    // to'g'ri bo'lsa-yu, lekin Roxiy boshqa buyurtma haqida xabar bersa
+    // (masalan ichki xatolik), bu moslikni ushlab qoladi.
+    if (orderHash && payment.externalId && orderHash !== payment.externalId) {
+      console.error('roxiy webhook order_hash mismatch for valid token', { expected: payment.externalId, got: orderHash });
+      return res.status(400).send('order_hash mismatch');
+    }
 
     if (status !== 'paid') {
-      if (status && FAILURE_STATUSES.has(status)) {
-        await Payment.updateOne({ externalId: orderHash, provider: 'roxiy', status: 'pending' }, { status: 'failed' });
-      } else {
-        console.warn('roxiy webhook: unrecognized/non-final status, ignoring', { orderHash, status });
-      }
+      // Roxiy'ning to'liq status lug'ati hujjatlashtirilmagan (faqat "paid"
+      // misoli berilgan). XATO TUZATILDI: avval "failed/cancelled/expired"
+      // kabi statuslarda Payment'ni darhol 'failed'ga o'tkazardik — lekin
+      // agar bunday oraliq/vaqtinchalik status HAQIQIY "paid" xabaridan
+      // OLDIN kelib qolsa (masalan foydalanuvchi avval bekor qilib, keyin
+      // qaytib to'lasa), keyinroq kelgan haqiqiy "paid" webhooki pastdagi
+      // atomik filtr `status:'pending'`ga mos kelmay, MUVAFFAQIYATLI
+      // to'lov ABADIY faollashtirilmay qolardi. Shu sabab endi bu yerda
+      // HECH NARSA yozilmaydi — faqat "paid"dan boshqa hech qanday status
+      // Payment holatini o'zgartirmaydi (yozuv 'pending'da qoladi, keyin
+      // haqiqiy "paid" kelsa muammosiz ishlaydi).
+      console.warn('roxiy webhook: non-paid status, ignoring', { orderHash, status });
       return res.status(200).send('ok');
     }
 
+    const amountRaw = singleString(req.query.amount);
     const amount = amountRaw === undefined ? NaN : Number(amountRaw);
     if (!Number.isFinite(amount)) return res.status(400).send('invalid amount');
 
@@ -69,21 +77,19 @@ router.get('/roxiy/webhook', async (req, res) => {
     // yuborilmaydi. `new: false` — eski (pending) hujjatni qaytaradi,
     // pastda subscriptionId/plan/days shundan olinadi.
     const claimed = await Payment.findOneAndUpdate(
-      { externalId: orderHash, provider: 'roxiy', status: 'pending', amount },
+      { webhookToken, provider: 'roxiy', status: 'pending', amount },
       { status: 'paid' },
       { new: false }
     );
 
     if (!claimed) {
-      const existing = await Payment.findOne({ externalId: orderHash, provider: 'roxiy' });
-      if (!existing) return res.status(404).send('order not found');
       // MUHIM: bu "server-to-server" webhook sifatida hujjatlashtirilgan,
       // lekin callback_url'ning haqiqatda foydalanuvchi brauzeri qaytadigan
       // manzil ham bo'lishi (Roxiy tomonidan aniq ko'rsatilmagan) ehtimolini
       // yopish uchun — yakuniy (muvaffaqiyatli) holatlarda saytga
       // yo'naltiramiz, aks holda brauzer bu yerda xom matn ko'rib qolardi.
-      if (existing.status === 'paid') return res.redirect(302, SITE_URL);
-      console.error('roxiy webhook amount mismatch', { orderHash, expected: existing.amount, got: amount });
+      if (payment.status === 'paid') return res.redirect(302, SITE_URL);
+      console.error('roxiy webhook amount mismatch', { orderHash, expected: payment.amount, got: amount });
       return res.status(400).send('amount mismatch');
     }
 

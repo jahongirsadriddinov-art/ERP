@@ -6,16 +6,13 @@
 //   body:    { amount, callback_url, note }
 //   javob:   { ok, status, order_id, order_hash, amount, note, pay_url,
 //              providers: [{ code, name, url }], paid_at, created_at }
-import { createHash, timingSafeEqual } from 'crypto';
 import { getBackendUrl } from '../utils/backendUrl';
 
 const ROXIY_API_URL = process.env.ROXIY_API_URL || 'https://pay.roxiy.uz/api/create';
 const ROXIY_API_KEY = process.env.ROXIY_API_KEY || '';
-const ROXIY_WEBHOOK_SECRET = process.env.ROXIY_WEBHOOK_SECRET || '';
 
-// routes/subscriptions.ts (callback_url quradi) va routes/payments.ts
-// (shu yo'lda routerni ro'yxatdan o'tkazadi) BIR XIL yo'lga tayanadi — shu
-// sabab bitta joyda.
+// routes/payments.ts shu yo'lda routerni ro'yxatdan o'tkazadi — callback_url
+// qurish bilan BIR XIL yo'lga tayanadi, shu sabab bitta joyda.
 export const ROXIY_WEBHOOK_PATH = '/api/payments/roxiy/webhook';
 
 export interface RoxiyProvider {
@@ -37,32 +34,27 @@ export interface RoxiyOrder {
   created_at: string;
 }
 
-// Roxiy webhook'i imzosiz (hujjatida HMAC/signature ko'rsatilmagan) — buni
-// o'zimiz generatsiya qilgan maxfiy token bilan qoplaymiz: callback_url'ga
-// shu tokenni qo'shib yuboramiz, webhookda esa token mos kelmasa so'rov
-// butunlay e'tiborga olinmaydi. Shu token bo'lmasa, order_hash'ni bilgan
-// (masalan o'zining pending buyurtmasi orqali) HAR QANDAY foydalanuvchi
-// haqiqatda to'lamasdan turib o'z obunasini faollashtira olardi.
-export function buildRoxiyCallbackUrl(): string {
-  if (!ROXIY_WEBHOOK_SECRET) throw new Error('ROXIY_WEBHOOK_SECRET sozlanmagan (.env)');
+// Roxiy webhook'i imzosiz (hujjatida HMAC/signature ko'rsatilmagan). Bunga
+// qarshi bitta UMUMIY (butun sayt uchun bitta) maxfiy tokenni ishlatish
+// (avvalgi yondashuv) xavfli edi: agar bu token biror yo'l bilan sizib
+// chiqsa (masalan callback_url haqiqatda foydalanuvchi brauzeriga qaytish
+// manzili ham bo'lib chiqsa — Roxiy buni aniq hujjatlashtirmagan), o'sha
+// TOKENNI bilgan har kim BOSHQA istalgan (hali to'lanmagan) buyurtmani
+// ham "to'landi" deb belgilab, uning obunasini bepul faollashtira olardi.
+//
+// Shu sabab endi HAR BIR TO'LOV UCHUN ALOHIDA, tasodifiy token
+// ishlatiladi (webhookToken, generatsiya: subscriptionPayments.ts,
+// saqlanadi: Payment.webhookToken). Bitta to'lovning tokeni sizib chiqsa
+// ham, u FAQAT o'sha (allaqachon 'paid' bo'lib bo'lgan, demak qayta
+// ishlatib bo'lmaydigan) bitta yozuvga taalluqli — boshqa hech qanday
+// buyurtmaga ta'sir qilolmaydi.
+export function buildRoxiyCallbackUrl(webhookToken: string): string {
   const url = new URL(`${getBackendUrl()}${ROXIY_WEBHOOK_PATH}`);
-  url.searchParams.set('secret', ROXIY_WEBHOOK_SECRET);
+  url.searchParams.set('wt', webhookToken);
   return url.toString();
 }
 
-export function isValidRoxiyWebhookSecret(secret: unknown): boolean {
-  if (typeof secret !== 'string' || !ROXIY_WEBHOOK_SECRET) return false;
-  // timingSafeEqual — bu token webhookning YAGONA himoyasi (Roxiy imzo
-  // qo'shmagan) bo'lgani uchun oddiy `===` o'rniga: qat'iy uzunlikdagi
-  // (SHA-256) xesh'larni solishtiramiz — shu bilan uzunlik/mos kelgan
-  // belgilar soni orqali vaqt farqidan (timing) token taxmin qilinishining
-  // oldi olinadi.
-  const a = createHash('sha256').update(secret).digest();
-  const b = createHash('sha256').update(ROXIY_WEBHOOK_SECRET).digest();
-  return timingSafeEqual(a, b);
-}
-
-export async function createRoxiyOrder(amount: number, note: string): Promise<RoxiyOrder> {
+export async function createRoxiyOrder(amount: number, note: string, webhookToken: string): Promise<RoxiyOrder> {
   if (!ROXIY_API_KEY) throw new Error('ROXIY_API_KEY sozlanmagan (.env)');
 
   let res: Response;
@@ -72,7 +64,7 @@ export async function createRoxiyOrder(amount: number, note: string): Promise<Ro
     res = await fetch(ROXIY_API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-API-Key': ROXIY_API_KEY },
-      body: JSON.stringify({ amount, callback_url: buildRoxiyCallbackUrl(), note }),
+      body: JSON.stringify({ amount, callback_url: buildRoxiyCallbackUrl(webhookToken), note }),
       signal: AbortSignal.timeout(15000),
     });
   } catch (err: any) {

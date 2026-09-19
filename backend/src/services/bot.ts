@@ -2194,12 +2194,16 @@ bot.on('callback_query', async (query: any) => {
 
   // "💳 To'lash" tugmasi — firma admin/o'rinbosari botdan chiqmasdan turib
   // Click/Payme/Paynet orqali to'lashni tanlaydi. AYNAN saytdagi POST /pay
-  // bilan bir xil xizmat funksiyasini chaqiradi (services/subscriptionPayments.ts)
-  // — tekshiruvlar (rad etilgan obuna, noto'g'ri tarif) ikkalasida ham bir xil.
+  // bilan bir xil xizmat funksiyasini chaqiradi (services/subscriptionPayments.ts).
+  // XATO TUZATILDI: saytdagi POST /pay requireOwnerOrAdmin bilan FAQAT
+  // direktor/o'rinbosarga ruxsat beradi — bu yerda avval HAR QANDAY shu
+  // firmaga biriktirilgan xodim (ishchi/prorab/brigadir ham) to'lov
+  // yarata olardi, garchi izohda "ikkalasida ham bir xil tekshiruv"
+  // deyilgan bo'lsa-da amalda rol tekshiruvi yo'q edi.
   if (data.startsWith('roxiypay:')) {
     await bot.answerCallbackQuery(query.id).catch(() => {});
     const planKey = data.slice('roxiypay:'.length);
-    if (!user?.companyId) return;
+    if (!user?.companyId || !isAdmin(user.role)) return;
     // Tarif tugmalarini DARHOL yashirib qo'yamiz — aks holda foydalanuvchi
     // eski xabardagi tugmalarni qayta-qayta bosib, bitta obuna uchun bir
     // nechta alohida (bir-biriga bog'liq bo'lmagan) Roxiy buyurtmasi

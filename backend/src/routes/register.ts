@@ -250,18 +250,53 @@ router.post('/complete', async (req, res) => {
     createdCompany.ownerUserId = String(ownerUser._id);
     await createdCompany.save();
 
-    // Obuna: tanlangan tarif bilan, admin tasdiqini kutadi (PENDING)
+    // Obuna: tanlangan tarif bilan.
+    // XATO TUZATILDI ("admin to'lovni tasdiqlamasa firma avtomatik
+    // ochmayapti", "to'lovni tanlash joyi hech qayerda chiqmayapti"):
+    // BEPUL (1 oy sinov) tarif uchun dasturchi tasdig'i UMUMAN kerak
+    // emas edi — $0 uchun "tasdiqlash" tushunchasining o'zi ma'nosiz,
+    // shu sabab BEPUL tarif endi DARHOL 'active' qilib yaratiladi.
+    // PULLIK tariflar uchun esa endi pastda haqiqiy Roxiy to'lov
+    // buyurtmasi ham shu yerning o'zida yaratiladi (frontend "done"
+    // ekraniga to'g'ridan-to'g'ri Click/Payme/Paynet tugmasini
+    // ko'rsatish uchun) — dasturchiga qo'lda tasdiqlash/rad etish
+    // ILGARIGIDEK zaxira yo'l sifatida qoladi (Roxiy ishlamay qolsa
+    // yoki boshqa to'lov usuli — naqd/bank o'tkazmasi — kelishilsa).
     const planKey = (selectedPlan && PLAN_CONFIG[selectedPlan as string]) ? (selectedPlan as SelectedPlan) : '1month';
     const planInfo = PLAN_CONFIG[planKey];
+    const isFreePlan = planInfo.amount <= 0;
+    const now = new Date();
     const sub = await Subscription.create({
       companyId: String(createdCompany._id),
       userId: String(ownerUser._id),
       plan: 'PRO',
       selectedPlan: planKey,
       amount: planInfo.amount,
-      status: 'pending',
-      requestedAt: new Date(),
+      status: isFreePlan ? 'active' : 'pending',
+      requestedAt: now,
+      ...(isFreePlan ? {
+        approvedAt: now,
+        approvedBy: 'auto-free-trial',
+        currentPeriodStart: now,
+        currentPeriodEnd: new Date(now.getTime() + planInfo.days * 86400000),
+      } : {}),
     }).catch(() => null);
+
+    // Pullik tarif — Roxiy buyurtmasini shu yerda, ro'yxatdan o'tish
+    // tugagan ZAHOTI yaratamiz (foydalanuvchi keyinroq saytga qayta
+    // kirib, alohida to'lov qadamini bajarishi shart emas).
+    let payUrl: string | undefined;
+    let payProviders: { code: string; name: string; url: string }[] | undefined;
+    if (sub && !isFreePlan) {
+      try {
+        const { createSubscriptionPaymentOrder } = await import('../services/subscriptionPayments');
+        const result = await createSubscriptionPaymentOrder(String(createdCompany._id), String(ownerUser._id), planKey);
+        if (result.ok) { payUrl = result.order.pay_url; payProviders = result.order.providers; }
+        else console.error('register/complete: roxiy order error:', result.error);
+      } catch (err) {
+        console.error('register/complete: roxiy order threw:', err);
+      }
+    }
 
     // Rozilik audit izlari
     const ip = clientIp(req);
@@ -277,32 +312,53 @@ router.post('/complete', async (req, res) => {
     reg.otpTokenHash = hashToken('used-' + String(reg._id));
     await reg.save();
 
-    // Dasturchiga bildirishnoma
+    // Dasturchiga bildirishnoma — BEPUL tarifda oddiy FYI (harakat kerak
+    // emas, allaqachon 'active'), PULLIK tarifda esa Tasdiqlash/Rad etish
+    // tugmalari ZAXIRA yo'l sifatida qoladi (Roxiy orqali avtomatik
+    // to'lanadi, lekin naqd/boshqa usul kelishilsa qo'lda ham tasdiqlash
+    // mumkin bo'lib qolsin).
     const DEVELOPER_CHAT_ID = process.env.DEVELOPER_CHAT_ID;
     if (DEVELOPER_CHAT_ID && sub) {
       const planInfo2 = PLAN_CONFIG[planKey];
       const subIdStr = String(sub._id);
-      const msgText = `🆕 <b>Yangi obuna so'rovi!</b>\n\n` +
-        `👤 ${ownerUser.firstName} ${ownerUser.lastName || ''}\n` +
-        `📞 ${ownerUser.phone}\n` +
-        `🏢 ${createdCompany.name} (${createdCompany.branchId})\n` +
-        `📦 Tarif: ${planInfo2.label} — ${planInfo2.amount.toLocaleString()} so'm\n\n` +
-        `Tasdiqlash yoki rad etish uchun admin panelga kiring yoki pastdagi tugmalarni bosing:`;
-      await bot.sendMessage(DEVELOPER_CHAT_ID, msgText, {
-        parse_mode: 'HTML',
-        reply_markup: {
-          inline_keyboard: [[
-            { text: '✅ Tasdiqlash', callback_data: `sub_approve_${subIdStr}` },
-            { text: '❌ Rad etish',  callback_data: `sub_reject_${subIdStr}` },
-          ]],
-        },
-      }).catch((e: any) => console.error('bot developer notify error:', e));
+      if (isFreePlan) {
+        const msgText = `🆕 <b>Yangi firma (bepul sinov)</b>\n\n` +
+          `👤 ${ownerUser.firstName} ${ownerUser.lastName || ''}\n` +
+          `📞 ${ownerUser.phone}\n` +
+          `🏢 ${createdCompany.name} (${createdCompany.branchId})\n` +
+          `📦 Tarif: ${planInfo2.label}\n\n` +
+          `Obuna avtomatik faollashtirildi, harakat talab qilinmaydi.`;
+        await bot.sendMessage(DEVELOPER_CHAT_ID, msgText, { parse_mode: 'HTML' }).catch((e: any) => console.error('bot developer notify error:', e));
+      } else {
+        const msgText = `🆕 <b>Yangi obuna so'rovi!</b>\n\n` +
+          `👤 ${ownerUser.firstName} ${ownerUser.lastName || ''}\n` +
+          `📞 ${ownerUser.phone}\n` +
+          `🏢 ${createdCompany.name} (${createdCompany.branchId})\n` +
+          `📦 Tarif: ${planInfo2.label} — ${planInfo2.amount.toLocaleString()} so'm\n\n` +
+          (payUrl
+            ? `Roxiy orqali to'lov havolasi yuborildi — to'lansa avtomatik faollashadi. Zarur bo'lsa qo'lda ham tasdiqlashingiz/rad etishingiz mumkin:`
+            : `Tasdiqlash yoki rad etish uchun admin panelga kiring yoki pastdagi tugmalarni bosing:`);
+        await bot.sendMessage(DEVELOPER_CHAT_ID, msgText, {
+          parse_mode: 'HTML',
+          reply_markup: {
+            inline_keyboard: [[
+              { text: '✅ Tasdiqlash', callback_data: `sub_approve_${subIdStr}` },
+              { text: '❌ Rad etish',  callback_data: `sub_reject_${subIdStr}` },
+            ]],
+          },
+        }).catch((e: any) => console.error('bot developer notify error:', e));
+      }
     }
 
-    // JWT BERILMAYDI — foydalanuvchi admin tasdiqini kutishi kerak
+    // Pullik tarifda hali JWT berilmaydi (to'lov tasdiqlanguncha) — lekin
+    // BEPUL tarifda obuna allaqachon 'active', shu sabab frontend bu
+    // javobni ko'rib darhol login ekraniga o'tkazadi (parol bilan kirish).
     return res.status(201).json({
       ok: true,
-      subscriptionPending: true,
+      subscriptionPending: !isFreePlan,
+      isFreePlan,
+      payUrl,
+      payProviders,
       phone: ownerUser.phone,
       language: ownerUser.language || 'uz',
       selectedPlan: planKey,

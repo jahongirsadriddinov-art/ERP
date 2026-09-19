@@ -8,19 +8,35 @@ import Subscription from '../models/Subscription';
 import Payment from '../models/Payment';
 import { createRoxiyOrder, RoxiyOrder } from './roxiy';
 import { getPlanInfo } from '../config/plans';
+import { checkPromoCode } from './promoCodes';
 
 export type CreateSubscriptionPaymentResult =
-  | { ok: true; order: RoxiyOrder }
+  | { ok: true; order: RoxiyOrder; amount: number }
   | { ok: false; error: string; httpStatus: number };
 
 export async function createSubscriptionPaymentOrder(
   companyId: string,
   userId: string | undefined,
-  planKey: string
+  planKey: string,
+  promoCode?: string
 ): Promise<CreateSubscriptionPaymentResult> {
   const planInfo = getPlanInfo(planKey);
   if (!planInfo || planInfo.amount <= 0) {
     return { ok: false, error: "Noto'g'ri yoki bepul tarif — to'lov shart emas", httpStatus: 400 };
+  }
+
+  // Promokod — faqat mavjud (yangilanayotgan) obuna uchun ham ishlaydi
+  // endi, ro'yxatdan o'tishdagi bilan bir xil qoida: limit FAQAT to'lov
+  // muvaffaqiyatli bo'lganda (webhook) sarflanadi, bu yerda faqat
+  // hisoblanadi.
+  let amount = planInfo.amount;
+  let appliedPromo: string | undefined;
+  if (promoCode) {
+    const promoResult = await checkPromoCode(promoCode, planKey, planInfo.amount);
+    if (!promoResult.ok) return { ok: false, error: promoResult.error || 'Promokod yaroqsiz', httpStatus: 400 };
+    amount = promoResult.finalAmount!;
+    appliedPromo = promoCode.trim().toUpperCase();
+    if (amount <= 0) return { ok: false, error: "Promokod bilan summa 0 bo'lib qoldi — dasturchi bilan bog'laning", httpStatus: 400 };
   }
 
   // Atomik topish-yoki-yaratish — ikkita bir vaqtdagi so'rov bitta firma
@@ -47,12 +63,12 @@ export async function createSubscriptionPaymentOrder(
   // izohga qarang (nega bitta umumiy maxfiy kalit emas).
   const webhookToken = randomBytes(24).toString('hex');
   const note = `QurilishERP ${planInfo.label} — ${companyId}`;
-  const order = await createRoxiyOrder(planInfo.amount, note, webhookToken);
+  const order = await createRoxiyOrder(amount, note, webhookToken);
 
   await Payment.create({
     companyId,
     subscriptionId: String(sub._id),
-    amount: planInfo.amount,
+    amount,
     currency: 'UZS',
     status: 'pending',
     provider: 'roxiy',
@@ -60,7 +76,8 @@ export async function createSubscriptionPaymentOrder(
     webhookToken,
     plan: planKey,
     days: planInfo.days,
+    promoCode: appliedPromo,
   });
 
-  return { ok: true, order };
+  return { ok: true, order, amount };
 }

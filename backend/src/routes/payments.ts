@@ -231,6 +231,8 @@ router.get('/roxiy/webhook', async (req, res) => {
           sub.userId ? User.findById(sub.userId).lean().catch(() => null) : Promise.resolve(null),
         ]);
 
+        if (claimed.promoCode) await consumePromoCode(claimed.promoCode);
+
         if (user && (user as any).telegramChatId) {
           const expStr = sub.currentPeriodEnd.toLocaleDateString('uz-UZ', { day: '2-digit', month: '2-digit', year: 'numeric' });
           await bot.sendMessage((user as any).telegramChatId,

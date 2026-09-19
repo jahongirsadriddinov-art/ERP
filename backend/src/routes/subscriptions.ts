@@ -71,14 +71,16 @@ router.post('/pay', requireAuth, requireOwnerOrAdmin, async (req, res) => {
     if (!t?.companyId) return res.status(400).json({ error: 'Firma topilmadi' });
 
     const planKey = (req.body?.selectedPlan || '') as SelectedPlan;
+    const promoCode = typeof req.body?.promoCode === 'string' && req.body.promoCode.trim() ? req.body.promoCode.trim() : undefined;
     // Haqiqiy yaratish/tekshirish mantig'i services/subscriptionPayments.ts'da —
     // bot.ts'dagi "💳 To'lash" tugmalari ham AYNAN shu funksiyani chaqiradi,
     // shu sabab ikkalasida ham bir xil tekshiruvlar (rad etilgan obuna,
-    // noto'g'ri tarif) qo'llanadi.
-    const result = await createSubscriptionPaymentOrder(String(t.companyId), (req as any).user?.userId, planKey);
+    // noto'g'ri tarif) qo'llanadi. Promokod faqat shu (veb) yo'ldan
+    // qo'llaniladi — botda matn kiritish qadami yo'q.
+    const result = await createSubscriptionPaymentOrder(String(t.companyId), (req as any).user?.userId, planKey, promoCode);
     if (!result.ok) return res.status(result.httpStatus).json({ error: result.error });
 
-    res.json({ ok: true, payUrl: result.order.pay_url, providers: result.order.providers });
+    res.json({ ok: true, payUrl: result.order.pay_url, providers: result.order.providers, amount: result.amount });
   } catch (err: any) {
     console.error('subscriptions/pay error:', err);
     res.status(500).json({ error: 'Server xatoligi' });

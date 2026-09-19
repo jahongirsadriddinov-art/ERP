@@ -3842,6 +3842,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
     }).catch(() => {});
   }, []);
   const [payingPlan, setPayingPlan] = useState<string | null>(null);
+  const [renewPromoCode, setRenewPromoCode] = useState("");
   const handlePay = async (planKey: string) => {
     if (payingPlan) return;
     setPayingPlan(planKey);
@@ -3849,7 +3850,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
       const r = await fetch(`${API_BASE}/api/admin/subscriptions/pay`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem("token")}` },
-        body: JSON.stringify({ selectedPlan: planKey }),
+        body: JSON.stringify({ selectedPlan: planKey, promoCode: renewPromoCode.trim() || undefined }),
       });
       const d = await r.json().catch(() => ({}));
       if (!r.ok || !d.ok) { toast.error(d.error || t('profile.payError')); return; }
@@ -4128,6 +4129,9 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
                     {(subData.status === 'pending' || subData.status === 'expired') && (
                       <div className="px-5 py-4 space-y-2">
                         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('profile.payPrompt')}</p>
+                        <input value={renewPromoCode} onChange={e => setRenewPromoCode(e.target.value.toUpperCase())}
+                          placeholder={t('register.promoCodePlaceholder')}
+                          className="w-full text-sm border border-border/50 rounded-xl px-3 py-2.5 bg-white/50 dark:bg-black/20 font-mono uppercase mb-1" />
                         {payablePlans.map(plan => (
                           <button key={plan.key} disabled={!!payingPlan} onClick={() => handlePay(plan.key)}
                             className="w-full flex items-center justify-between gap-2 px-4 py-3 rounded-2xl border border-border/60 hover:border-primary/50 hover:bg-primary/5 liquid-transition disabled:opacity-60 text-left">

@@ -3785,6 +3785,38 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
   }, [currentUser.role]);
   const myProjectCount = (currentUser.projectIds || []).length;
 
+  // Click/Payme/Paynet orqali o'zi to'lash (Roxiy) — backend PLAN_CONFIG
+  // bilan bir xil (backend/src/config/plans.ts). Faqat pullik tariflar.
+  const PAYABLE_PLANS = [
+    { key: '3month' as const, label: t('register.plan3Month'), amount: 1_400_000 },
+    { key: '6month' as const, label: t('register.plan6Month'), amount: 3_500_000 },
+    { key: '12month' as const, label: t('register.plan12Month'), amount: 7_700_000 },
+  ];
+  const [payingPlan, setPayingPlan] = useState<string | null>(null);
+  const handlePay = async (planKey: string) => {
+    if (payingPlan) return;
+    setPayingPlan(planKey);
+    try {
+      const r = await fetch(`${API_BASE}/api/admin/subscriptions/pay`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem("token")}` },
+        body: JSON.stringify({ selectedPlan: planKey }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok || !d.ok) { toast.error(d.error || t('profile.payError')); return; }
+      // Tauri/Capacitor'da to'lov sahifasi ilova ichidagi WebView'da EMAS,
+      // qurilmaning o'z (tizim) brauzerida ochilishi kerak — aks holda
+      // Click/Payme/Paynet'ning qaytish/deep-link oqimi ilova ichida
+      // "qamalib" qolishi mumkin.
+      if (isNative()) await openExternalUrl(d.payUrl);
+      else window.open(d.payUrl, '_blank', 'noopener,noreferrer');
+    } catch {
+      toast.error(t('profile.payError'));
+    } finally {
+      setPayingPlan(null);
+    }
+  };
+
   // ── Har bo'lim uchun alohida ekran (rasmdagi "Personal/General/..." kabi) ──
   if (activePanel) {
     const panelTitle = {
@@ -3992,6 +4024,24 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
                     {(subData.status === 'expired' || subData.status === 'rejected') && (
                       <div className="px-5 py-4 bg-red-500/5">
                         <p className="text-xs text-red-600 dark:text-red-400 flex items-start gap-1.5"><MorphIcon icon={AlertCircle} className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />{t('profile.subExpiredContact')} <a href="https://t.me/Sadriddinov_Jahongir" className="underline font-semibold">@Sadriddinov_Jahongir</a></p>
+                      </div>
+                    )}
+                    {/* O'zi to'lash (Click/Payme/Paynet) — dasturchi tasdig'ini
+                        kutmasdan. "rejected"da ko'rsatilmaydi: backend baribir
+                        rad etadi, foydalanuvchini bekorga xatolikka olib
+                        bormaslik uchun — o'rniga yuqoridagi "bog'laning" xabari. */}
+                    {(subData.status === 'pending' || subData.status === 'expired') && (
+                      <div className="px-5 py-4 space-y-2">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('profile.payPrompt')}</p>
+                        {PAYABLE_PLANS.map(plan => (
+                          <button key={plan.key} disabled={!!payingPlan} onClick={() => handlePay(plan.key)}
+                            className="w-full flex items-center justify-between gap-2 px-4 py-3 rounded-2xl border border-border/60 hover:border-primary/50 hover:bg-primary/5 liquid-transition disabled:opacity-60 text-left">
+                            <span className="text-sm font-semibold">{plan.label}</span>
+                            <span className="flex items-center gap-2 text-sm font-bold text-primary">
+                              {payingPlan === plan.key ? <MorphIcon icon={Loader2} className="w-4 h-4 animate-spin" /> : `${plan.amount.toLocaleString()} ${t('common.som')}`}
+                            </span>
+                          </button>
+                        ))}
                       </div>
                     )}
                   </div>

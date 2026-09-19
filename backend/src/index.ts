@@ -30,6 +30,8 @@ import clientErrorRoutes from './routes/clientErrors';
 import backupRoutes from './routes/backup';
 import plansRoutes from './routes/plans';
 import promocodesRoutes from './routes/promocodes';
+import qrloginRoutes from './routes/qrlogin';
+import sessionsRoutes from './routes/sessions';
 import deployRoutes from './routes/deploy';
 import paymentsRoutes from './routes/payments';
 import filesRoutes from './routes/files';
@@ -158,6 +160,11 @@ app.get('/health', (_req, res) => res.json({
 // ochiq kaliti, Cloudinary proksi, CI deploy webhook'i) optionalAuth/
 // wrapper'siz qoldirildi — ularning har biri o'zi ANIQ sababga ega.
 app.use('/api/auth', optionalAuth, authRoutes); // ichida login/send-code kabi pre-auth yo'llar bor
+// qrlogin ICHIDA o'zi bo'linadi: /create, /code/:id, /finalize — auth shart
+// emas (hali login qilinmagan), /scan esa o'zining requireAuth'ini talab
+// qiladi (telefon ALLAQACHON login bo'lgan bo'lishi kerak).
+app.use('/api/auth/qrlogin', optionalAuth, qrloginRoutes);
+app.use('/api/sessions', requireAuth, sessionsRoutes); // "Ulangan qurilmalar" (ProfilePage)
 app.use('/api/register', registerRoutes); // v1.2 self-signup (pre-auth, ochiq)
 // Firma ichki ma'lumotlari — dasturchi kira olmaydi (blockDeveloper).
 // Dasturchi faqat: companies, subscriptions, messages/groups (support chat).

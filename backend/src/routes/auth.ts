@@ -1,5 +1,4 @@
 import { Router } from 'express';
-import jwt from 'jsonwebtoken';
 import User, { IUser } from '../models/User';
 import Company from '../models/Company';
 import Subscription from '../models/Subscription';
@@ -7,9 +6,10 @@ import Otp from '../models/Otp';
 import { bot } from '../services/bot';
 import { sendOtpSms } from '../services/eskizService';
 import { scoped, stamped } from '../middleware/scope';
-import { requireAuth, requireOwnerOrAdmin, JWT_SECRET } from '../middleware/auth';
+import { requireAuth, requireOwnerOrAdmin } from '../middleware/auth';
 import { normalizePhone, isValidUzPhone, hashPassword, verifyPassword } from '../utils/tokens';
 import { checkRate } from '../utils/rateLimit';
+import { issueTokenWithSession } from '../services/sessions';
 
 const router = Router();
 
@@ -22,12 +22,15 @@ const router = Router();
 // ISHONCHLI `req.ip`dan foydalanamiz.
 const clientIp = (req: any) => (req.ip || '').trim();
 
-// /login (eski, Telegram-kod) bilan /verify-otp (yangi, SMS-kod) IKKALASI ham
-// muvaffaqiyatli tasdiqlangandan keyin bir xil ishni qiladi: obuna holatini
-// tekshiradi, JWT beradi, user+company qaytaradi. Ikki joyda mantiqni
-// nusxalab, ikkalasi asta-sekin bir-biridan farqlanib ketmasligi uchun shu
-// yerga chiqarilgan.
-async function issueSession(user: IUser, res: any) {
+// /login (eski, Telegram-kod), /verify-otp (yangi, SMS-kod) va routes/
+// qrlogin.ts (QR orqali kirish) — UCHALASI ham muvaffaqiyatli
+// tasdiqlangandan keyin bir xil ishni qiladi: obuna holatini tekshiradi,
+// JWT beradi, user+company qaytaradi. Bir necha joyda mantiqni nusxalab,
+// asta-sekin bir-biridan farqlanib ketmasligi uchun shu yerga chiqarilgan
+// (shu sabab export qilingan — qrlogin.ts ham shu funksiyani chaqiradi,
+// bloklangan/kutilayotgan/muddati tugagan obuna tekshiruvlari QR orqali
+// kirishda ham AYNAN bir xil ishlashi uchun).
+export async function issueSession(user: IUser, res: any, req: any) {
   if ((user as any).isBlocked) {
     return res.status(403).json({ error: 'Hisobingiz bloklangan. Administrator bilan bog\'laning.', blocked: true });
   }
@@ -61,17 +64,13 @@ async function issueSession(user: IUser, res: any) {
     }
   }
 
-  const token = jwt.sign(
-    {
-      userId: user._id,
-      role: user.role,
-      companyId: user.companyId,
-      branchId: company?.branchId,
-      isOwner: user.isOwner || false
-    },
-    JWT_SECRET,
-    { expiresIn: '7d' }
-  );
+  const token = await issueTokenWithSession({
+    userId: String(user._id),
+    role: user.role,
+    companyId: user.companyId,
+    branchId: company?.branchId,
+    isOwner: user.isOwner || false,
+  }, req, 'password');
 
   return res.json({
     success: true,
@@ -223,7 +222,7 @@ router.post('/verify-otp', async (req, res) => {
     user.phoneVerifiedAt = new Date();
     await user.save();
 
-    return issueSession(user, res);
+    return issueSession(user, res, req);
   } catch (err) {
     console.error('[verify-otp]', err);
     return res.status(500).json({ success: false, error: 'Server xatoligi' });
@@ -383,7 +382,7 @@ router.post('/login', async (req, res) => {
     user.telegramVerificationCodeExpires = undefined;
     await user.save();
 
-    return issueSession(user, res);
+    return issueSession(user, res, req);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server xatoligi' });
@@ -423,10 +422,9 @@ router.post('/dev-login', async (req, res) => {
       await dev.save();
     }
 
-    const token = jwt.sign(
-      { userId: dev._id, role: 'dasturchi', isDeveloper: true },
-      process.env.JWT_SECRET || 'secret',
-      { expiresIn: '365d' }
+    const token = await issueTokenWithSession(
+      { userId: String(dev._id), role: 'dasturchi', isDeveloper: true },
+      req, 'dev', '365d'
     );
 
     return res.json({

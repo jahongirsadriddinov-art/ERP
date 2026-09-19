@@ -34,6 +34,16 @@ export const isNative = (): boolean => isTauri() || isCapacitor();
 export const isDesktopPointer = (): boolean =>
   typeof window !== 'undefined' && window.matchMedia?.('(hover: hover) and (pointer: fine)').matches;
 
+// Ekran KENGLIGIGA qarab — "telefon" EMAS (planshet/laptop/desktop, ya'ni
+// >=768px). isDesktopPointer()'dan farqi: planshet odatda teginish-asosiy
+// (hover:none) bo'lgani uchun isDesktopPointer() FALSE qaytaradi, lekin bu
+// yerda "laptop VA planshet" (faqat telefon emas) kerak bo'lgan joylar
+// uchun (masalan login sahifasidagi QR-orqali-kirish varianti — QRScanner
+// component'ining o'zi FAQAT telefon kamerasidan foydalanadi, shu sabab bu
+// variant telefon ekranida ma'nosiz).
+export const isTabletOrLarger = (): boolean =>
+  typeof window !== 'undefined' && window.matchMedia?.('(min-width: 768px)').matches;
+
 // Android back button handler — Capacitor orqali
 // ChatView da: orqaga chat ro'yxatiga; root sahifada: chiqish dialog
 let _backHandlerInstalled = false;

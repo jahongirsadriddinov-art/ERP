@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { runWithTenant, TenantContext } from './tenantContext';
 import User from '../models/User';
 import AppSettings from '../models/AppSettings';
+import Session from '../models/Session';
 
 // JWT payload — login vaqtida shu maydonlar imzolanadi.
 export interface JwtPayload {
@@ -13,6 +14,12 @@ export interface JwtPayload {
   isOwner?: boolean;
   isDeveloper?: boolean;
   isBlocked?: boolean;
+  // "Ulangan qurilmalar" (services/sessions.ts, models/Session.ts) — HAR
+  // BIR tokenga xos bir martalik identifikator. Eski (bu maydon
+  // kiritilishidan OLDIN berilgan) tokenlarda yo'q — shunday tokenlar
+  // Session tekshiruvisiz, faqat imzo asosida ishlashda davom etadi (7
+  // kunlik tabiiy muddati tugaguncha), zo'rlab chiqarib yubormaslik uchun.
+  jti?: string;
 }
 
 // Express Request ga req.user qo'shamiz.
@@ -99,7 +106,24 @@ export async function loadFreshUser(payload: JwtPayload) {
     // hisoblanadi — soxta/eskirgan da'voga ishonilmaydi.
     isDeveloper: fresh.role === 'dasturchi',
     isBlocked: !!fresh.isBlocked,
+    jti: payload.jti,
   } as JwtPayload;
+}
+
+// Session yozuvi bekor qilinganini (foydalanuvchi "Ulangan qurilmalar"dan
+// o'sha qurilmani chiqarib yuborgan) tekshiradi. `jti`siz eski tokenlarda
+// bu tekshiruv o'tkazib yuboriladi (yuqoridagi JwtPayload izohiga qarang).
+// lastSeenAt yozuvi HAR so'rovda EMAS, 5 daqiqada bir marta (throttled,
+// fire-and-forget) yangilanadi — ortiqcha yozish yukini oldini olish uchun.
+const LAST_SEEN_THROTTLE_MS = 5 * 60 * 1000;
+async function checkSessionNotRevoked(jti: string | undefined): Promise<boolean> {
+  if (!jti) return true;
+  const session = await Session.findOne({ jti }).select('revoked lastSeenAt').lean();
+  if (!session || session.revoked) return false;
+  if (!session.lastSeenAt || Date.now() - new Date(session.lastSeenAt).getTime() > LAST_SEEN_THROTTLE_MS) {
+    Session.updateOne({ jti }, { lastSeenAt: new Date() }).catch(() => {});
+  }
+  return true;
 }
 
 // Majburiy autentifikatsiya: token bo'lmasa yoki yaroqsiz bo'lsa 401.
@@ -121,6 +145,11 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     // DARHOL kuchga kiradi.
     if (fresh.isBlocked) {
       return res.status(403).json({ error: 'Hisobingiz bloklangan. Administrator bilan bog\'laning.', blocked: true });
+    }
+    // "Ulangan qurilmalar"dan chiqarib yuborilgan (revoked) sessiya —
+    // middleware/auth.ts'dagi checkSessionNotRevoked izohiga qarang.
+    if (!(await checkSessionNotRevoked(fresh.jti))) {
+      return res.status(401).json({ error: 'Sessiya tugatilgan — qaytadan kiring', sessionRevoked: true });
     }
     // Texnik ishlar rejimi — dasturchidan boshqa hech kim (u qayta yoqishi
     // kerak bo'lgani uchun) o'tolmaydi.

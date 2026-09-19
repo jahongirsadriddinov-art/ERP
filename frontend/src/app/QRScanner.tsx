@@ -18,6 +18,7 @@ interface QRScanResult {
 interface Props {
   onClose: () => void;
   onResult?: (result: QRScanResult) => void;
+  onLoginQrVerified?: () => void;
   token?: string;
 }
 
@@ -27,7 +28,7 @@ interface Props {
 // uchun to'g'ri bo'lsa ham.
 type CameraIssue = "denied" | "unavailable" | "busy" | "insecure" | "unknown";
 
-export default function QRScanner({ onClose, onResult, token }: Props) {
+export default function QRScanner({ onClose, onResult, onLoginQrVerified, token }: Props) {
   const { t } = useTranslation();
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -40,6 +41,17 @@ export default function QRScanner({ onClose, onResult, token }: Props) {
   const [result, setResult] = useState<QRScanResult | null>(null);
   const [cameraIssue, setCameraIssue] = useState<CameraIssue | null>(null);
   const [stalled, setStalled] = useState(false);
+
+  // Laptop/planshetga "QR kod orqali kirish" — App.tsx'dagi QrLoginPanel'da
+  // ko'rsatilgan "qrlogin:<sessionId>:<code>" matnini o'qiganda ishga
+  // tushadi. Oddiy QR'lardan farqli o'laroq bitta skan bilan tugamaydi —
+  // kod har 3 soniyada almashadi va KETMA-KET 3 tasi skanerlanishi kerak
+  // (backend/src/routes/qrlogin.ts'dagi izohga qarang), shu sabab kamera
+  // yopilmasdan davom etadi va pastda 3 bo'lakli progress ko'rsatiladi.
+  const [loginQrMode, setLoginQrMode] = useState(false);
+  const [loginScanCount, setLoginScanCount] = useState(0);
+  const [loginDone, setLoginDone] = useState(false);
+  const lastLoginRawRef = useRef<string | null>(null);
 
   const stopCamera = useCallback(() => {
     if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
@@ -119,7 +131,50 @@ export default function QRScanner({ onClose, onResult, token }: Props) {
     });
   }, []);
 
+  // "qrlogin:<sessionId>:<code>" — laptop/planshet ekranida qadam-baqadam
+  // (har 3s) almashib turadigan login QR'i. Kamerani TO'XTATMAYDI (keyingi
+  // rotatsiyani ham o'qish kerak) va odatiy "processing/success" ekraniga
+  // o'tmaydi — buning o'rniga "scanning" holatida qolib, pastda progress
+  // ko'rsatadi.
+  const handleLoginQR = useCallback(async (rawData: string) => {
+    setLoginQrMode(true);
+    // Kamera bir xil kadrni o'nlab marta (30-60fps) o'qiydi, QR esa 3
+    // soniya davomida O'ZGARMAYDI — bir xil matnni serverga qayta-qayta
+    // yubormaslik uchun oxirgi YUBORILGAN matn bilan solishtiramiz.
+    if (rawData === lastLoginRawRef.current) {
+      animFrameRef.current = requestAnimationFrame(scanLoop);
+      return;
+    }
+    lastLoginRawRef.current = rawData;
+    const [, sessionId, code] = rawData.split(':');
+    if (!sessionId || !code) { animFrameRef.current = requestAnimationFrame(scanLoop); return; }
+    try {
+      const r = await fetch(`${API_BASE}/api/auth/qrlogin/scan`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ sessionId, code }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (r.ok && d.ok) {
+        setLoginScanCount(d.scannedCount || 0);
+        if (d.verified) {
+          setLoginDone(true);
+          stopCamera();
+          onLoginQrVerified?.();
+          return;
+        }
+      }
+      // Noto'g'ri/eskirgan kod — shunchaki keyingi rotatsiyani kutamiz,
+      // xato ko'rsatmaymiz (bu normal holat, foydalanuvchi xatosi emas).
+    } catch { /* tarmoq xatosi — keyingi kadrda qayta urinamiz */ }
+    animFrameRef.current = requestAnimationFrame(scanLoop);
+  }, [token, stopCamera, onLoginQrVerified]);
+
   const handleQRData = useCallback(async (rawData: string) => {
+    if (rawData.startsWith('qrlogin:')) {
+      await handleLoginQR(rawData);
+      return;
+    }
     setStatus("processing");
     stopCamera();
     try {
@@ -144,7 +199,7 @@ export default function QRScanner({ onClose, onResult, token }: Props) {
       setErrorMsg(t('qrScanner.serverError'));
       setStatus("error");
     }
-  }, [token, onResult, stopCamera]);
+  }, [token, onResult, stopCamera, handleLoginQR]);
 
   useEffect(() => {
     startCamera();
@@ -216,8 +271,37 @@ export default function QRScanner({ onClose, onResult, token }: Props) {
               />
             </div>
             <p className="absolute bottom-24 text-white/70 text-sm">
-              {stalled ? t('qrScanner.stalledHint') : t('qrScanner.scanHint')}
+              {loginQrMode ? t('qrScanner.loginScanHint') : stalled ? t('qrScanner.stalledHint') : t('qrScanner.scanHint')}
             </p>
+
+            {/* Login-QR progress — 3 bo'lakka bo'lingan chiziq, har bir
+                muvaffaqiyatli (yangi rotatsiyadagi) skan bittasini "to'ldiradi". */}
+            {loginQrMode && (
+              <div className="absolute bottom-14 left-1/2 -translate-x-1/2 flex items-center gap-2">
+                {[0, 1, 2].map(i => (
+                  <div key={i} className="w-14 h-1.5 rounded-full bg-white/20 overflow-hidden">
+                    <motion.div className="h-full bg-primary"
+                      initial={{ width: "0%" }}
+                      animate={{ width: loginScanCount > i ? "100%" : "0%" }}
+                      transition={{ duration: 0.35, ease: "easeOut" }} />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Login-QR tasdiqlandi — kompyuter/planshet endi o'zi tizimga kiradi */}
+        {loginQrMode && loginDone && (
+          <div className="absolute inset-0 bg-black/80 flex items-center justify-center p-6">
+            <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+              className="bg-card rounded-2xl p-6 w-full max-w-sm text-center space-y-4">
+              <div className="w-14 h-14 rounded-full bg-green-500/15 flex items-center justify-center mx-auto">
+                <MorphIcon icon={CheckCircle} className="w-7 h-7 text-green-500" />
+              </div>
+              <p className="font-semibold text-foreground">{t('qrScanner.loginVerified')}</p>
+              <button onClick={() => { stopCamera(); onClose(); }} className="btn btn-primary w-full">{t('qrScanner.closeBtn')}</button>
+            </motion.div>
           </div>
         )}
 

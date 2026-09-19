@@ -48,6 +48,8 @@ import Palette from "@hugeicons/core-free-icons/PaletteIcon";
 import Sun from "@hugeicons/core-free-icons/Sun01Icon";
 import Moon from "@hugeicons/core-free-icons/Moon02Icon";
 import Monitor from "@hugeicons/core-free-icons/ComputerIcon";
+import Smartphone from "@hugeicons/core-free-icons/SmartPhone01Icon";
+import LogOutDevice from "@hugeicons/core-free-icons/Logout03Icon";
 import PhoneOff from "@hugeicons/core-free-icons/PhoneOff01Icon";
 import MicOff from "@hugeicons/core-free-icons/MicOff01Icon";
 import VideoOff from "@hugeicons/core-free-icons/VideoOffIcon";
@@ -76,7 +78,8 @@ import { API_BASE, parseSmetaFile, uploadChatMedia } from "./api";
 import { connectSocket, getSocket, disconnectSocket } from "./socket";
 import { motion, AnimatePresence } from "motion/react";
 import { setSiteLanguage, SiteLang, langLabel } from "./i18n";
-import { installAndroidBackHandler, saveOrShareBlob, openExternalUrl, isNative } from "./platform";
+import { installAndroidBackHandler, saveOrShareBlob, openExternalUrl, isNative, isTabletOrLarger } from "./platform";
+import QrLoginPanel from "./QrLoginPanel";
 import { AppDownloadCards } from "./AppDownload";
 import LanguageSwitcher from "./i18n/LanguageSwitcher";
 import { Skeleton, SkeletonList, SkeletonPage, SkeletonMessage, SkeletonTable, SkeletonProfile } from "./Skeleton";
@@ -3752,7 +3755,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
   ];
 
   const activeTheme = COLOR_THEMES.find(t => t.id === colorTheme) || COLOR_THEMES[0];
-  const [activePanel, setActivePanel] = useState<null | "bg" | "appearance" | "color" | "perms" | "projects" | "language" | "subscription" | "currency" | "sound">(null);
+  const [activePanel, setActivePanel] = useState<null | "bg" | "appearance" | "color" | "perms" | "projects" | "language" | "subscription" | "currency" | "sound" | "devices">(null);
   const APPEARANCE_LABELS: Record<string, string> = { light: t('profile.themeLight'), dark: t('profile.themeDark'), system: t('profile.themeSystem') };
 
   // ── Ovoz effektlari (uisfx, "zen" pack) — yoqilgan/o'chirilgan va balandlik
@@ -3768,6 +3771,31 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
   const handleSoundVolume = (percent: number) => {
     setSoundVolState(percent);
     setSoundVolume(percent / 100);
+  };
+
+  // "Ulangan qurilmalar" — profil bo'limi ochilganda yuklanadi (har safar
+  // qayta ochilganda yangilanadi, "revoke" tugmasidan keyin ro'yxat darhol
+  // to'g'ri ko'rinishi uchun).
+  const [devicesList, setDevicesList] = useState<any[]>([]);
+  const [devicesLoading, setDevicesLoading] = useState(false);
+  const [revokingDevice, setRevokingDevice] = useState<string | null>(null);
+  const loadDevices = () => {
+    setDevicesLoading(true);
+    fetch(`${API_BASE}/api/sessions`, { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } })
+      .then(r => r.ok ? r.json() : [])
+      .then(d => setDevicesList(Array.isArray(d) ? d : []))
+      .catch(() => {})
+      .finally(() => setDevicesLoading(false));
+  };
+  useEffect(() => { if (activePanel === "devices") loadDevices(); }, [activePanel]);
+  const revokeDevice = async (id: string) => {
+    setRevokingDevice(id);
+    try {
+      const r = await fetch(`${API_BASE}/api/sessions/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } });
+      if (r.ok) { setDevicesList(prev => prev.filter(d => d.id !== id)); toast.success(t('profile.deviceRevoked')); }
+      else toast.error(t('common.error'));
+    } catch { toast.error(t('common.error')); }
+    setRevokingDevice(null);
   };
 
   const [subData, setSubData] = useState<any>(null);
@@ -3827,6 +3855,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
       bg: t('profile.bgThemes'), appearance: t('profile.appearanceMode'), color: t('profile.colorTheme'),
       perms: t('profile.permissions'), projects: t('profile.myObjects'), language: t('profile.language'),
       subscription: t('profile.subscriptionStatus'), currency: t('profile.currencyRate'), sound: t('profile.sound'),
+      devices: t('profile.connectedDevices'),
     }[activePanel];
     return (
       <motion.div key={activePanel} initial={{ opacity: 0, x: 28 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 28 }}
@@ -3964,6 +3993,39 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
                     onChange={e => handleSoundVolume(Number(e.target.value))}
                     onMouseUp={() => playSound("select")} onTouchEnd={() => playSound("select")}
                     className="w-full accent-primary" aria-label={t('profile.soundVolume')} />
+                </div>
+              )}
+            </div>
+          )}
+          {activePanel === "devices" && (
+            <div className="surface overflow-hidden">
+              {devicesLoading ? (
+                <SkeletonList items={2} withAvatar={false} />
+              ) : devicesList.length === 0 ? (
+                <p className="text-center text-sm text-muted-foreground py-10">{t('profile.noDevices')}</p>
+              ) : (
+                <div className="divide-y divide-border/50">
+                  {devicesList.map(d => (
+                    <div key={d.id} className="flex items-center gap-3 px-4 py-3.5">
+                      <div className="icon-chip flex-shrink-0"><MorphIcon icon={Smartphone} className="w-4 h-4" /></div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-sm font-semibold truncate">{d.deviceLabel}</p>
+                          {d.current && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-green-500/15 text-green-700 dark:text-green-400 flex-shrink-0">{t('profile.thisDevice')}</span>}
+                        </div>
+                        <p className="text-[11px] text-muted-foreground">
+                          {d.loginMethod === 'qr' ? t('profile.loginMethodQr') : d.loginMethod === 'dev' ? t('profile.loginMethodDev') : t('profile.loginMethodPassword')}
+                          {' · '}{t('profile.lastSeen', { date: new Date(d.lastSeenAt || d.createdAt).toLocaleString('uz-UZ', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) })}
+                        </p>
+                      </div>
+                      {!d.current && (
+                        <button onClick={() => revokeDevice(d.id)} disabled={revokingDevice === d.id} aria-label={t('profile.revokeDevice')}
+                          className="w-9 h-9 rounded-lg border border-red-500/30 text-red-600 hover:bg-red-500/10 flex items-center justify-center disabled:opacity-40 flex-shrink-0">
+                          {revokingDevice === d.id ? <MorphIcon icon={Loader2} className="w-4 h-4 animate-spin" /> : <MorphIcon icon={LogOutDevice} className="w-4 h-4" />}
+                        </button>
+                      )}
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
@@ -4179,6 +4241,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
               { key: "currency" as const, icon: DollarSign, label: t('profile.currencyRate'), hint: null as string|null, swatch: null },
             ] : []),
             { key: "sound" as const, icon: soundOn ? Volume2 : VolumeX, label: t('profile.sound'), hint: soundOn ? t('profile.soundOn') : t('profile.soundOff'), swatch: null },
+            { key: "devices" as const, icon: Smartphone, label: t('profile.connectedDevices'), hint: null as string|null, swatch: null },
             ...(isAdmin(currentUser.role) ? [{ key: "subscription" as const, icon: CreditCard, label: t('profile.subscriptionStatus'),
               hint: subData?.status === 'active' ? (subData.daysLeft !== null ? t('profile.daysLeftValue', { count: subData.daysLeft }) : t('profile.subStatusActive')) : subData?.status === 'pending' ? t('profile.subStatusPending') : subData?.status === 'expired' ? t('profile.subStatusExpired') : subData?.status === 'rejected' ? t('profile.subStatusRejected') : subLoading ? "..." : t('common.notFound'),
               swatch: null }] : []),
@@ -4364,7 +4427,7 @@ function LoginScreen({ onLogin, onRegister, onBack }: { onLogin: (u: any, compan
   const [phone, setPhone] = useState("+998 ");
   const [code, setCode] = useState("");
   const [password, setPassword] = useState("");
-  const [step, setStep] = useState<"phone" | "code" | "devpass" | "blocked">("phone");
+  const [step, setStep] = useState<"phone" | "code" | "devpass" | "blocked" | "qr">("phone");
   const [blockedReason, setBlockedReason] = useState<'pending'|'expired'|'rejected'|null>(null);
   const [error, setError] = useState("");
   const [timeLeft, setTimeLeft] = useState(0);
@@ -4569,7 +4632,18 @@ function LoginScreen({ onLogin, onRegister, onBack }: { onLogin: (u: any, compan
             <button type="submit" disabled={submitting} className="w-full bg-gradient-to-r from-primary via-primary to-blue-700 text-white text-sm font-bold py-3.5 rounded-full shadow-lg shadow-primary/30 hover:shadow-xl hover:shadow-primary/35 hover:-translate-y-0.5 active:scale-[0.98] liquid-transition disabled:opacity-60 disabled:pointer-events-none">
               {t('login.getCode')}
             </button>
+            {/* Faqat laptop/planshet ekranida — QRScanner.tsx faqat telefon
+                kamerasidan foydalanadi, shu sabab telefon ekranida bu
+                variantning ma'nosi yo'q. */}
+            {isTabletOrLarger() && (
+              <button type="button" onClick={() => setStep("qr")}
+                className="w-full text-xs font-semibold text-muted-foreground hover:text-primary py-1">
+                {t('login.qrLoginLink')}
+              </button>
+            )}
           </form>
+        ) : step === "qr" ? (
+          <QrLoginPanel onLogin={onLogin} onBack={() => setStep("phone")} />
         ) : step === "blocked" ? (
           <div className="space-y-4 text-center">
             <div className="flex flex-col items-center gap-3">
@@ -6051,7 +6125,8 @@ export default function App() {
         <Suspense fallback={null}>
           <QRScanner token={localStorage.getItem("token") || ""}
             onClose={() => setQrScanOpen(false)}
-            onResult={r => { toast.success(`QR skan: ${r.type === 'material' ? r.data.name : r.type === 'object' ? r.data.name : 'Tranzaksiya'}`); setQrScanOpen(false); }} />
+            onResult={r => { toast.success(`QR skan: ${r.type === 'material' ? r.data.name : r.type === 'object' ? r.data.name : 'Tranzaksiya'}`); setQrScanOpen(false); }}
+            onLoginQrVerified={() => playSound("success")} />
         </Suspense>
       )}
 

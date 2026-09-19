@@ -123,6 +123,11 @@ interface BotDict {
   subRejectedNotify: string;
   subApprovedShort: (p: { planLabel: string }) => string;
   subRejectedShort: string;
+  subPayPrompt: string;
+  subPayBtnLabel: (p: { label: string; amount: string }) => string;
+  subPayLinkMsg: (p: { label: string; amount: string }) => string;
+  subPayLinkBtn: string;
+  subPayError: string;
 
   transferIncoming: (p: { amount: string; unit: string; name: string }) => string;
   transferNewFull: (p: { name: string; qty: string; unit: string; sender: string; date: string }) => string;
@@ -314,6 +319,11 @@ const uz: BotDict = {
   subRejectedNotify: "❌ <b>Obuna rad etildi</b>\n\nTo'lov va savollar uchun: <a href=\"https://t.me/Sadriddinov_Jahongir\">@Sadriddinov_Jahongir</a>",
   subApprovedShort: (p: { planLabel: string }) => `✅ Obuna tasdiqlandi (${p.planLabel})`,
   subRejectedShort: '❌ Obuna rad etildi',
+  subPayPrompt: "💳 Qaysi tarifni to'lamoqchisiz? Click, Payme yoki Paynet orqali to'lashingiz mumkin — to'lov tasdiqlangach obuna avtomatik faollashadi.",
+  subPayBtnLabel: (p: { label: string; amount: string }) => `${p.label} — ${p.amount} so'm`,
+  subPayLinkMsg: (p: { label: string; amount: string }) => `💳 <b>${p.label}</b> — <b>${p.amount} so'm</b>\n\nTo'lash uchun quyidagi tugmani bosing. To'lov tasdiqlangach, obuna avtomatik faollashadi.`,
+  subPayLinkBtn: "💳 To'lash",
+  subPayError: "⚠️ To'lov havolasini yaratib bo'lmadi. Birozdan so'ng qayta urining.",
 
   transferIncoming: (p: { amount: string; unit: string; name: string }) => `📦 Sizga *${p.amount} ${p.unit} ${p.name}* yuborildi. Qabul qildingizmi?`,
   transferNewFull: (p: { name: string; qty: string; unit: string; sender: string; date: string }) => `📦 *Yangi yukxat keldi!*\n\n📌 Material: *${p.name}*\nMiqdor: *${p.qty} ${p.unit}*\nYuboruvchi: ${p.sender}\nSana: ${p.date}\n\nQabul qilasizmi?`,
@@ -513,6 +523,11 @@ const ru: BotDict = {
   subRejectedNotify: '❌ <b>Подписка отклонена</b>\n\nПо вопросам оплаты: <a href="https://t.me/Sadriddinov_Jahongir">@Sadriddinov_Jahongir</a>',
   subApprovedShort: (p) => `✅ Подписка подтверждена (${p.planLabel})`,
   subRejectedShort: '❌ Подписка отклонена',
+  subPayPrompt: '💳 Какой тариф хотите оплатить? Можно оплатить через Click, Payme или Paynet — подписка активируется автоматически после оплаты.',
+  subPayBtnLabel: (p) => `${p.label} — ${p.amount} сум`,
+  subPayLinkMsg: (p) => `💳 <b>${p.label}</b> — <b>${p.amount} сум</b>\n\nНажмите кнопку ниже, чтобы оплатить. После подтверждения оплаты подписка активируется автоматически.`,
+  subPayLinkBtn: '💳 Оплатить',
+  subPayError: '⚠️ Не удалось создать ссылку для оплаты. Попробуйте позже.',
 
   transferIncoming: (p) => `📦 Вам отправлено *${p.amount} ${p.unit} ${p.name}*. Вы приняли?`,
   transferNewFull: (p) => `📦 *Новая накладная!*\n\n📌 Материал: *${p.name}*\nКоличество: *${p.qty} ${p.unit}*\nОтправитель: ${p.sender}\nДата: ${p.date}\n\nПринимаете?`,

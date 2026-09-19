@@ -6,21 +6,17 @@ import Payment from '../models/Payment';
 import { requireDeveloper, requireAuth, requireOwnerOrAdmin } from '../middleware/auth';
 import { getTenant } from '../middleware/tenantContext';
 import { bot } from '../services/bot';
-import { createRoxiyOrder } from '../services/roxiy';
+import { createSubscriptionPaymentOrder } from '../services/subscriptionPayments';
 import { extendPeriodEnd } from '../utils/subscriptionPeriod';
+import { PLAN_CONFIG, SelectedPlan } from '../config/plans';
 
 const router = Router();
 
-// Har bir tarifda BIRINCHI OY BEPUL — umumiy summadan 1 oylik narx (700 000) ayirilgan.
-export const PLAN_CONFIG: Record<string, { label: string; days: number; amount: number }> = {
-  'bepul':   { label: '1 oy bepul', days: 30,  amount: 0 },
-  '1month':  { label: '1 oylik',   days: 30,  amount: 0 },
-  '3month':  { label: '3 oylik',   days: 90,  amount: 1_400_000 },
-  '6month':  { label: '6 oylik',   days: 180, amount: 3_500_000 },
-  '12month': { label: '12 oylik',  days: 365, amount: 7_700_000 },
-};
-
-export type SelectedPlan = string;
+// PLAN_CONFIG/SelectedPlan endi config/plans.ts'da yashaydi (bot.ts ham
+// shu tariflardan Roxiy to'lov tugmalarini yasay olishi uchun) — bu
+// yerdan qayta eksport qilinadi, chunki register.ts va bot.ts hali ham
+// shu manzildan import qiladi.
+export { PLAN_CONFIG, SelectedPlan };
 
 const SITE_URL = process.env.SITE_URL || 'http://localhost:5173';
 
@@ -68,56 +64,14 @@ router.post('/pay', requireAuth, requireOwnerOrAdmin, async (req, res) => {
     if (!t?.companyId) return res.status(400).json({ error: 'Firma topilmadi' });
 
     const planKey = (req.body?.selectedPlan || '') as SelectedPlan;
-    // Object.hasOwn — PLAN_CONFIG oddiy obyekt bo'lgani uchun `PLAN_CONFIG['__proto__']`
-    // kabi prototip zanjiridagi nom yuborilsa, oddiy `PLAN_CONFIG[planKey]` yolg'on-
-    // ijobiy (Object.prototype) qaytarib, quyidagi tekshiruvni chetlab o'tishi mumkin edi.
-    const planInfo = Object.hasOwn(PLAN_CONFIG, planKey) ? PLAN_CONFIG[planKey] : undefined;
-    if (!planInfo || planInfo.amount <= 0) {
-      return res.status(400).json({ error: "Noto'g'ri yoki bepul tarif — to'lov shart emas" });
-    }
+    // Haqiqiy yaratish/tekshirish mantig'i services/subscriptionPayments.ts'da —
+    // bot.ts'dagi "💳 To'lash" tugmalari ham AYNAN shu funksiyani chaqiradi,
+    // shu sabab ikkalasida ham bir xil tekshiruvlar (rad etilgan obuna,
+    // noto'g'ri tarif) qo'llanadi.
+    const result = await createSubscriptionPaymentOrder(String(t.companyId), (req as any).user?.userId, planKey);
+    if (!result.ok) return res.status(result.httpStatus).json({ error: result.error });
 
-    // Atomik topish-yoki-yaratish — ikkita bir vaqtdagi so'rov bitta firma
-    // uchun ikkita alohida (pending) Subscription yozuvini yaratib
-    // qo'ymasligi uchun (avval alohida findOne+save bo'lgan, poyga holati
-    // bo'lgan). TO'LIQ kafolat EMAS (companyId'da unique index yo'q —
-    // amaliyotda juda kam ehtimoldagi bir vaqtdagi ikkita birinchi to'lov
-    // holatida baribir ikkita yozuv paydo bo'lishi mumkin), lekin oldingi
-    // (umuman himoyasiz) holatdan ancha yaxshi.
-    const sub = await Subscription.findOneAndUpdate(
-      { companyId: String(t.companyId) },
-      { $setOnInsert: { companyId: String(t.companyId), userId: (req as any).user?.userId, status: 'pending' } },
-      { upsert: true, new: true, sort: { createdAt: -1 } }
-    );
-
-    // Dasturchi rad etgan obunani foydalanuvchi o'zi to'lab, tekshiruvsiz
-    // qayta faollashtira olmasin — rad etish qarori shu yerda chetlab
-    // o'tilmasligi kerak.
-    if (sub.status === 'rejected') {
-      return res.status(403).json({ error: "Obunangiz rad etilgan — dasturchi bilan bog'laning" });
-    }
-
-    // MUHIM: sub.selectedPlan bu yerda YOZILMAYDI — to'lov hali 'pending'
-    // turgan paytda boshqa /pay so'rovi (tarif almashtirish) uni
-    // almashtirib yuborishi mumkin edi. Qancha kun/qaysi tarif berilishi
-    // FAQAT quyidagi Payment yozuvidan (plan/days) olinadi — webhook
-    // to'lovni tasdiqlagach, aynan SHU yozuvdagi qiymatlar bilan
-    // sub.selectedPlan ham sinxronlanadi (routes/payments.ts).
-    const note = `QurilishERP ${planInfo.label} — ${t.companyId}`;
-    const order = await createRoxiyOrder(planInfo.amount, note);
-
-    await Payment.create({
-      companyId: String(t.companyId),
-      subscriptionId: String(sub._id),
-      amount: planInfo.amount,
-      currency: 'UZS',
-      status: 'pending',
-      provider: 'roxiy',
-      externalId: order.order_hash,
-      plan: planKey,
-      days: planInfo.days,
-    });
-
-    res.json({ ok: true, payUrl: order.pay_url, providers: order.providers });
+    res.json({ ok: true, payUrl: result.order.pay_url, providers: result.order.providers });
   } catch (err: any) {
     console.error('subscriptions/pay error:', err);
     res.status(500).json({ error: 'Server xatoligi' });

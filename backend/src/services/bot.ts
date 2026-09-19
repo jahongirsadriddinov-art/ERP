@@ -17,6 +17,8 @@ import { tb, langLabel, BotLang } from '../i18n/bot';
 import { getBackendUrl } from '../utils/backendUrl';
 import { uploadFileToCloud } from '../config/cloudinary';
 import { todayInTashkent, tashkentHour } from '../utils/tz';
+import { PLAN_CONFIG, PAYABLE_PLAN_KEYS } from '../config/plans';
+import { createSubscriptionPaymentOrder } from './subscriptionPayments';
 
 dotenv.config();
 
@@ -1680,6 +1682,23 @@ bot.on('message', async (msg: any) => {
           tb(user.language, 'subStatusMsg', { status: statusText, end: endDate }),
           { parse_mode: 'HTML', reply_markup: await keyboardForUser(user, user.language) }
         );
+
+        // "pending" (hali tasdiqlanmagan/to'lanmagan) yoki "expired" (muddati
+        // o'tgan) holatlarda — o'zi Click/Payme/Paynet orqali to'lab, dasturchi
+        // tasdig'isiz avtomatik faollashtira olishi uchun har bir pullik tarif
+        // uchun tugma ko'rsatamiz ("rejected"da ko'rsatilmaydi — bu holatda
+        // to'lov baribir createSubscriptionPaymentOrder tomonidan rad etiladi,
+        // foydalanuvchini keraksiz xatolik xabariga olib bormaslik uchun).
+        if ((sub.status === 'pending' || sub.status === 'expired') && user.companyId) {
+          await bot.sendMessage(chatId, tb(user.language, 'subPayPrompt'), {
+            reply_markup: {
+              inline_keyboard: PAYABLE_PLAN_KEYS.map(key => ([{
+                text: tb(user.language, 'subPayBtnLabel', { label: PLAN_CONFIG[key].label, amount: PLAN_CONFIG[key].amount.toLocaleString('uz-UZ') }),
+                callback_data: `roxiypay:${key}`,
+              }])),
+            },
+          });
+        }
       } catch { bot.sendMessage(chatId, tb(user.language, 'genericError'), { reply_markup: await keyboardForUser(user, user.language) }); }
       return;
     }
@@ -2169,6 +2188,38 @@ bot.on('callback_query', async (query: any) => {
     } catch (err) {
       console.error('Bot sub callback error:', err);
       await bot.answerCallbackQuery(query.id, { text: tb(lang, 'genericError') });
+    }
+    return;
+  }
+
+  // "💳 To'lash" tugmasi — firma admin/o'rinbosari botdan chiqmasdan turib
+  // Click/Payme/Paynet orqali to'lashni tanlaydi. AYNAN saytdagi POST /pay
+  // bilan bir xil xizmat funksiyasini chaqiradi (services/subscriptionPayments.ts)
+  // — tekshiruvlar (rad etilgan obuna, noto'g'ri tarif) ikkalasida ham bir xil.
+  if (data.startsWith('roxiypay:')) {
+    await bot.answerCallbackQuery(query.id).catch(() => {});
+    const planKey = data.slice('roxiypay:'.length);
+    if (!user?.companyId) return;
+    // Tarif tugmalarini DARHOL yashirib qo'yamiz — aks holda foydalanuvchi
+    // eski xabardagi tugmalarni qayta-qayta bosib, bitta obuna uchun bir
+    // nechta alohida (bir-biriga bog'liq bo'lmagan) Roxiy buyurtmasi
+    // yaratib qo'yishi mumkin edi (har biri o'zicha to'lansa muammo emas,
+    // lekin keraksiz chalkashlik).
+    if (messageId) await bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: messageId }).catch(() => {});
+    try {
+      const result = await createSubscriptionPaymentOrder(String(user.companyId), String(user._id), planKey);
+      if (!result.ok) {
+        await bot.sendMessage(chatId, result.error, { reply_markup: await keyboardForUser(user, user.language) });
+        return;
+      }
+      const planInfo = PLAN_CONFIG[planKey];
+      await bot.sendMessage(chatId,
+        tb(user.language, 'subPayLinkMsg', { label: planInfo.label, amount: planInfo.amount.toLocaleString('uz-UZ') }),
+        { parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ text: tb(user.language, 'subPayLinkBtn'), url: result.order.pay_url }]] } }
+      );
+    } catch (err) {
+      console.error('Bot roxiypay callback error:', err);
+      await bot.sendMessage(chatId, tb(user.language, 'subPayError'), { reply_markup: await keyboardForUser(user, user.language) });
     }
     return;
   }

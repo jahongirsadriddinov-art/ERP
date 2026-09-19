@@ -12,6 +12,7 @@ export interface JwtPayload {
   branchId?: string;
   isOwner?: boolean;
   isDeveloper?: boolean;
+  isBlocked?: boolean;
 }
 
 // Express Request ga req.user qo'shamiz.
@@ -86,7 +87,7 @@ function readToken(req: Request): string | null {
 // tenant konteksti tuziladi — bitta yengil, indekslangan (_id bo'yicha)
 // so'rov, sezilarli sekinlashuvsiz.
 export async function loadFreshUser(payload: JwtPayload) {
-  const fresh = await User.findById(payload.userId).select('role companyId isOwner').lean();
+  const fresh = await User.findById(payload.userId).select('role companyId isOwner isBlocked').lean();
   if (!fresh) return null;
   return {
     userId: payload.userId,
@@ -97,6 +98,7 @@ export async function loadFreshUser(payload: JwtPayload) {
     // isDeveloper token'dagi bayroqdan EMAS, bazadagi ENG YANGI roldan
     // hisoblanadi — soxta/eskirgan da'voga ishonilmaydi.
     isDeveloper: fresh.role === 'dasturchi',
+    isBlocked: !!fresh.isBlocked,
   } as JwtPayload;
 }
 
@@ -112,6 +114,13 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     const fresh = await loadFreshUser(payload);
     if (!fresh) {
       return res.status(401).json({ error: 'Hisobingiz topilmadi — qayta kiring' });
+    }
+    // Bloklangan foydalanuvchi — HAR so'rovda tekshiriladi (yuqoridagi
+    // izohda tushuntirilgan "eskirgan token" muammosi bilan bir xil sabab),
+    // shu sabab bloklash eski (hali muddati tugamagan) token bilan ham
+    // DARHOL kuchga kiradi.
+    if (fresh.isBlocked) {
+      return res.status(403).json({ error: 'Hisobingiz bloklangan. Administrator bilan bog\'laning.', blocked: true });
     }
     // Texnik ishlar rejimi — dasturchidan boshqa hech kim (u qayta yoqishi
     // kerak bo'lgani uchun) o'tolmaydi.

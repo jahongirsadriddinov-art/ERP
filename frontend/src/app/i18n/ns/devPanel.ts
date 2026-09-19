@@ -28,11 +28,13 @@ export const uz = {
       selfDelete: "O'z akkauntingizni o'chirib bo'lmaydi",
       changeRole: "O'zgartirishda xatolik",
       assignCompany: "Firmaga biriktirishda xatolik",
+      block: "Bloklashda xatolik",
     },
     confirm: {
       rejectSub: "Rad etilsinmi?",
       deleteCompany: "\"{{name}}\" firmasi va uning BARCHA ma'lumotlari ({{userCount}} user, {{objectCount}} obyekt) o'chiriladi. Davom etasizmi?",
       deleteUser: "\"{{name}}\" ({{phone}}) o'chirilsinmi?",
+      blockUser: "\"{{name}}\" ({{phone}}) bloklansinmi? U tizimga kira olmay qoladi.",
     },
     assignSuccessToast: "{{name}} firmaga biriktirildi. Xodim qayta login qilishi kerak.",
     subscriptions: {
@@ -88,6 +90,11 @@ export const uz = {
       noCompanyOption: "— firmasiz —",
       developerOption: "Dasturchi",
       deleteAria: "Foydalanuvchini o'chirish",
+      blockAria: "Bloklash",
+      unblockAria: "Blokdan chiqarish",
+      blockedBadge: "BLOKLANGAN",
+      blockedToast: "{{name}} bloklandi",
+      unblockedToast: "{{name}} blokdan chiqarildi",
     },
     planLabels: {
       bepul: "1 oy bepul",
@@ -129,11 +136,13 @@ export const ru = {
       selfDelete: "Нельзя удалить свой аккаунт",
       changeRole: "Ошибка при изменении",
       assignCompany: "Ошибка при привязке к компании",
+      block: "Ошибка при блокировке",
     },
     confirm: {
       rejectSub: "Отклонить?",
       deleteCompany: "Компания \"{{name}}\" и ВСЕ её данные ({{userCount}} user, {{objectCount}} объект) будут удалены. Продолжить?",
       deleteUser: "Удалить \"{{name}}\" ({{phone}})?",
+      blockUser: "Заблокировать \"{{name}}\" ({{phone}})? Он не сможет войти в систему.",
     },
     assignSuccessToast: "{{name}} привязан к компании. Сотруднику нужно войти заново.",
     subscriptions: {
@@ -189,6 +198,11 @@ export const ru = {
       noCompanyOption: "— без компании —",
       developerOption: "Разработчик",
       deleteAria: "Удалить пользователя",
+      blockAria: "Заблокировать",
+      unblockAria: "Разблокировать",
+      blockedBadge: "ЗАБЛОКИРОВАН",
+      blockedToast: "{{name}} заблокирован",
+      unblockedToast: "{{name}} разблокирован",
     },
     planLabels: {
       bepul: "1 месяц бесплатно",

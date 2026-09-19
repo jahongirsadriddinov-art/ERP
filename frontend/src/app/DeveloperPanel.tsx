@@ -9,6 +9,8 @@ import Send from "@hugeicons/core-free-icons/SendIcon";
 import FileText from "@hugeicons/core-free-icons/FileTextIcon";
 import MapPin from "@hugeicons/core-free-icons/PinLocation01Icon";
 import RefreshCw from "@hugeicons/core-free-icons/Refresh01Icon";
+import Lock from "@hugeicons/core-free-icons/LockIcon";
+import Unlock from "@hugeicons/core-free-icons/LockOpenIcon";
 import { MorphIcon } from "morphicons/react";
 import { toast } from "sonner";
 import { API_BASE } from "./api";
@@ -174,6 +176,13 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
     if (!window.confirm(t('devPanel.confirm.deleteUser', { name: u.name, phone: u.phone }))) return;
     const res = await fetch(`${API_BASE}/api/users/${u.id}`, { method: "DELETE", headers: authHdr });
     if (res.ok) load(); else setErr(t('devPanel.errors.delete'));
+  };
+  const toggleBlock = async (u: any) => {
+    const action = u.isBlocked ? "unblock" : "block";
+    if (!u.isBlocked && !window.confirm(t('devPanel.confirm.blockUser', { name: u.name, phone: u.phone }))) return;
+    const res = await fetch(`${API_BASE}/api/users/${u.id}/${action}`, { method: "PATCH", headers: authHdr });
+    if (res.ok) { load(); toast.success(u.isBlocked ? t('devPanel.users.unblockedToast', { name: u.name }) : t('devPanel.users.blockedToast', { name: u.name })); }
+    else { const d = await res.json().catch(() => ({})); setErr(d.error || t('devPanel.errors.block')); }
   };
   const changeRole = async (u: any, role: string) => {
     const res = await fetch(`${API_BASE}/api/auth/users/${u.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ role }) });
@@ -497,9 +506,12 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
         ) : (
           users.length === 0 ? <p className="text-center text-sm text-muted-foreground py-12">{t('devPanel.users.empty')}</p> :
           users.map(u => (
-            <div key={u.id} className="surface rounded-2xl p-3.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div key={u.id} className={`surface rounded-2xl p-3.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 ${u.isBlocked ? "ring-1 ring-red-500/40" : ""}`}>
               <div className="min-w-0">
-                <p className="text-sm font-semibold truncate">{u.name}</p>
+                <div className="flex items-center gap-1.5">
+                  <p className="text-sm font-semibold truncate">{u.name}</p>
+                  {u.isBlocked && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-600 dark:text-red-400 shrink-0">{t('devPanel.users.blockedBadge')}</span>}
+                </div>
                 <p className="text-[11px] text-muted-foreground font-mono">{u.phone}</p>
                 <p className={`text-[11px] truncate ${u.companyId ? "text-muted-foreground" : "text-red-500 font-semibold"}`}>{u.companyId ? companyName(u.companyId) : t('devPanel.users.noCompany')}{u.isOwner ? t('devPanel.users.ownerSuffix') : ""}</p>
               </div>
@@ -517,6 +529,14 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
                   {["direktor","orinbosar","prorab","brigadir","ishchi"].map(r => <option key={r} value={r}>{ROLE_LABELS[r as Role]}</option>)}
                   {u.role === "dasturchi" && <option value="dasturchi">{t('devPanel.users.developerOption')}</option>}
                 </select>
+                {u.role !== "dasturchi" && !u.isOwner && (
+                  <button onClick={() => toggleBlock(u)} disabled={u.id === currentUser.id}
+                    aria-label={u.isBlocked ? t('devPanel.users.unblockAria') : t('devPanel.users.blockAria')}
+                    title={u.isBlocked ? t('devPanel.users.unblockAria') : t('devPanel.users.blockAria')}
+                    className={`w-9 h-9 rounded-lg border flex items-center justify-center disabled:opacity-30 shrink-0 liquid-transition ${u.isBlocked ? "border-green-500/30 text-green-600 hover:bg-green-500/10" : "border-orange-500/30 text-orange-600 hover:bg-orange-500/10"}`}>
+                    <MorphIcon icon={u.isBlocked ? Unlock : Lock} className="w-4 h-4" />
+                  </button>
+                )}
                 <button onClick={() => deleteUser(u)} disabled={u.id === currentUser.id} aria-label={t('devPanel.users.deleteAria')}
                   className="w-9 h-9 rounded-lg border border-red-500/30 text-red-600 hover:bg-red-500/10 flex items-center justify-center disabled:opacity-30 shrink-0">
                   <MorphIcon icon={Trash2} className="w-4 h-4"  />

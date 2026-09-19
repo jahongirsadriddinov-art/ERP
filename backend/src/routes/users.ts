@@ -23,7 +23,8 @@ router.get('/', async (req, res) => {
       brigade: u.brigade,
       projectIds: u.projectIds || [],
       companyId: u.companyId || null, // dasturchi qaysi firma ekanini ko'rishi uchun
-      isOwner: u.isOwner || false
+      isOwner: u.isOwner || false,
+      isBlocked: u.isBlocked || false,
     }));
     res.json(formatted);
   } catch (err) {
@@ -80,6 +81,38 @@ router.put('/:id', async (req, res) => {
     res.status(500).json({ error: 'Server xatoligi' });
   }
 });
+
+// PATCH /api/users/:id/block va /:id/unblock — foydalanuvchini bloklash.
+// Dasturchi — istalgan foydalanuvchini; firma admin/o'rinbosari — FAQAT
+// o'z firmasidagi xodimlarni (scoped() shuni kafolatlaydi), firma egasini
+// EMAS (xavfsizlik: oddiy admin/o'rinbosar direktorni bloklab qo'yolmasin).
+// Bloklangan foydalanuvchi requireAuth'da HAR so'rovda tekshiriladi — shu
+// sabab eski (hali muddati tugamagan) tokeni ham darhol ishlamay qoladi.
+async function setBlocked(req: any, res: any, blocked: boolean) {
+  try {
+    const tenant = getTenant();
+    if (!tenant?.isDeveloper && tenant?.role !== 'direktor' && tenant?.role !== 'orinbosar') {
+      return res.status(403).json({ error: 'Ruxsat yo\'q' });
+    }
+    if (String(req.params.id) === String(tenant?.userId)) {
+      return res.status(400).json({ error: 'O\'zingizni bloklay olmaysiz' });
+    }
+    const user = await User.findOne(scoped({ _id: req.params.id }));
+    if (!user) return res.status(404).json({ error: 'Foydalanuvchi topilmadi' });
+    if (!tenant?.isDeveloper && (user.isOwner || user.role === 'dasturchi')) {
+      return res.status(403).json({ error: 'Bu foydalanuvchini bloklay olmaysiz' });
+    }
+    user.isBlocked = blocked;
+    user.blockedAt = blocked ? new Date() : undefined;
+    user.blockedBy = blocked ? String(tenant?.userId || '') : undefined;
+    await user.save();
+    res.json({ ok: true, id: user._id, isBlocked: user.isBlocked });
+  } catch (err) {
+    res.status(500).json({ error: 'Server xatoligi' });
+  }
+}
+router.patch('/:id/block', (req, res) => setBlocked(req, res, true));
+router.patch('/:id/unblock', (req, res) => setBlocked(req, res, false));
 
 // PATCH /api/users/:id/courses — kurslar ro'yxatini yangilash
 router.patch('/:id/courses', async (req, res) => {

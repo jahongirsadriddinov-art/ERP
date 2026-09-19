@@ -28,6 +28,10 @@ const clientIp = (req: any) => (req.ip || '').trim();
 // nusxalab, ikkalasi asta-sekin bir-biridan farqlanib ketmasligi uchun shu
 // yerga chiqarilgan.
 async function issueSession(user: IUser, res: any) {
+  if ((user as any).isBlocked) {
+    return res.status(403).json({ error: 'Hisobingiz bloklangan. Administrator bilan bog\'laning.', blocked: true });
+  }
+
   const [company, sub] = await Promise.all([
     user.companyId ? Company.findById(user.companyId) : Promise.resolve(null),
     (user.companyId && user.role !== 'dasturchi')

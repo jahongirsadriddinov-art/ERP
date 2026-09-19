@@ -46,6 +46,11 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
 
   // Qadam 2 — tarif tanlash
   const [selectedPlan, setSelectedPlan] = useState<'1month'|'3month'|'6month'|'12month'|null>(null);
+  // Qadam 3 — pullik tarifda to'lov usuli: "online" (Click/Payme/Paynet,
+  // dasturchi tasdig'isiz avtomatik) yoki "admin" (dasturchi qo'lda
+  // tasdiqlaydi — naqd/bank o'tkazmasi kabi boshqa kelishuvlar uchun).
+  // Bepul tarifda ishlatilmaydi (backend baribir e'tiborsiz qoldiradi).
+  const [paymentMethod, setPaymentMethod] = useState<'online'|'admin'>('online');
   const [regDoneInfo, setRegDoneInfo] = useState<{phone:string;planLabel:string;planAmount:number;companyName:string;branchId:string;ownerName:string;isFreePlan:boolean;payUrl?:string;payProviders?:{code:string;name:string;url:string}[]}|null>(null);
   const [doneCopied, setDoneCopied] = useState(false);
 
@@ -224,6 +229,7 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
         body: JSON.stringify({
           token: reg.token,
           selectedPlan: selectedPlan || '1month',
+          paymentMethod,
           owner: { firstName, lastName, middleName, email, position, password },
           company: { name: companyName, legalName, inn, activityType, region, employeeRange, currency },
           logoUrl,
@@ -421,13 +427,45 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
                   {selectedPlan==='1month'?t('register.plan1MonthDays'):selectedPlan==='3month'?t('register.plan3MonthDays'):selectedPlan==='6month'?t('register.plan6MonthDays'):t('register.plan12MonthDays')}
                 </p>
               </div>
+
+              {/* Pullik tarifda — to'lov usulini tanlash. Bepul tarifda
+                  ko'rsatilmaydi (backend baribir e'tiborsiz qoldiradi —
+                  hech narsa to'lanmaydi). */}
+              {selectedPlan !== '1month' && (
+                <div className="space-y-2.5">
+                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">{t('register.paymentMethodTitle')}</p>
+                  {([
+                    { key: 'online' as const, title: t('register.paymentMethodOnline'), desc: t('register.paymentMethodOnlineDesc') },
+                    { key: 'admin' as const, title: t('register.paymentMethodAdmin'), desc: t('register.paymentMethodAdminDesc') },
+                  ]).map(opt => {
+                    const selected = paymentMethod === opt.key;
+                    return (
+                      <button key={opt.key} type="button" onClick={() => setPaymentMethod(opt.key)}
+                        className={`w-full text-left rounded-2xl border-2 p-4 liquid-transition ${selected ? 'border-primary bg-primary/5' : 'border-border/60 hover:border-primary/30'}`}>
+                        <div className="flex items-center gap-2 mb-1">
+                          <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${selected ? 'border-primary' : 'border-muted-foreground/40'}`}>
+                            {selected && <div className="w-2 h-2 rounded-full bg-primary" />}
+                          </div>
+                          <p className="text-sm font-bold">{opt.title}</p>
+                        </div>
+                        <p className="text-xs text-muted-foreground pl-6">{opt.desc}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
               <div className="surface rounded-2xl p-4 space-y-3">
-                {[
+                {(selectedPlan !== '1month' && paymentMethod === 'online' ? [
+                  { n: "1", t: t('register.onlineStep1Title'), d: t('register.onlineStep1Desc') },
+                  { n: "2", t: t('register.onlineStep2Title'), d: t('register.onlineStep2Desc') },
+                  { n: "3", t: t('register.onlineStep3Title'), d: t('register.onlineStep3Desc') },
+                ] : [
                   { n: "1", t: t('register.step1Title'), d: t('register.step1Desc') },
                   { n: "2", t: t('register.step2Title'), d: t('register.step2Desc', { handle: '@Sadriddinov_Jahongir' }) },
                   { n: "3", t: t('register.step3Title'), d: t('register.step3Desc') },
                   { n: "4", t: t('register.step4Title'), d: t('register.step4Desc') },
-                ].map(s => (
+                ]).map(s => (
                   <div key={s.n} className="flex items-start gap-3">
                     <div className="w-6 h-6 rounded-full bg-primary text-white text-xs flex items-center justify-center font-bold flex-shrink-0 mt-0.5">{s.n}</div>
                     <div><p className="text-sm font-semibold">{s.t}</p><p className="text-xs text-muted-foreground">{s.d}</p></div>
@@ -601,19 +639,26 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
                 <div>
                   <h2 className="text-xl font-bold mb-1">{t('register.doneTitle')}</h2>
                   <p className="text-sm text-muted-foreground">
-                    {regDoneInfo.isFreePlan ? t('register.doneSubtitleFree')
-                      : regDoneInfo.payUrl ? t('register.doneSubtitlePay')
+                    {regDoneInfo.payUrl ? t('register.doneSubtitlePay')
+                      : regDoneInfo.isFreePlan ? t('register.doneSubtitleFree')
                       : t('register.doneSubtitle', { handle: '@Sadriddinov_Jahongir' })}
                   </p>
                 </div>
               </div>
 
-              {regDoneInfo.isFreePlan ? (
+              {/* MUHIM: bepul tarif ham, "admin orqali" tanlangan pullik
+                  tarif ham — ikkalasi ham hali dasturchi tasdig'ini
+                  kutadi (aniqlashtirilgan talab: "tekin bo'lsa ham admin
+                  tasdiqlashi kerak"), shu sabab "kirish" tugmasi EMAS,
+                  "tushunarli" tugmasi ko'rsatiladi. Farq faqat: bepulda
+                  operatorga yuboriladigan ma'lumot yo'q (to'lov haqida
+                  gap yo'q), shu sabab copy-paste blok ko'rsatilmaydi. */}
+              {!regDoneInfo.payUrl && regDoneInfo.isFreePlan ? (
                 <div className="surface rounded-2xl p-4 space-y-3 text-center">
                   <p className="text-sm text-muted-foreground">{t('register.freeActivatedDesc', { phone: regDoneInfo.phone })}</p>
                   <button onClick={onBack}
                     className="w-full bg-primary text-white text-sm font-bold py-3.5 rounded-xl min-h-[48px] active:scale-[0.98] transition-transform">
-                    {t('register.goToLoginBtn')}
+                    {t('common.understood')}
                   </button>
                 </div>
               ) : regDoneInfo.payUrl ? (

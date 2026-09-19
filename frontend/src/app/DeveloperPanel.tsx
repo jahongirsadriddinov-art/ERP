@@ -235,8 +235,8 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
   const expiringSoonCount = subs.filter(s => s.status === "active" && typeof s.daysLeft === "number" && s.daysLeft <= 3).length;
 
   return (
-    <div className="min-h-screen bg-background" style={{ paddingTop: "env(safe-area-inset-top)" }}>
-      <header className="glass sticky top-0 z-20 px-4 py-3 flex items-center justify-between gap-2 border-b border-border/50">
+    <div className="h-[100dvh] flex flex-col overflow-hidden bg-background" style={{ paddingTop: "env(safe-area-inset-top)" }}>
+      <header className="glass sticky top-0 z-20 px-4 py-3 flex items-center justify-between gap-2 border-b border-border/50 flex-shrink-0">
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-slate-700 to-slate-900 text-white flex items-center justify-center text-sm font-bold shadow-sm shrink-0">🛠</div>
           <div className="min-w-0">
@@ -252,7 +252,7 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
 
       {/* Umumiy ko'rinish — statistika kartochkalari, barcha tab'larda ko'rinadi */}
       {!loading && (
-        <div className="mx-4 mt-3 grid grid-cols-2 md:grid-cols-4 gap-2.5">
+        <div className="mx-4 mt-3 grid grid-cols-2 md:grid-cols-4 gap-2.5 flex-shrink-0">
           {[
             { label: t('devPanel.stats.totalFirms'), value: companies.length, accent: "text-primary" },
             { label: t('devPanel.stats.activeSubs'), value: activeSubsCount, accent: "text-green-600 dark:text-green-400" },
@@ -267,12 +267,12 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
         </div>
       )}
       {expiringSoonCount > 0 && (
-        <div className="mx-4 mt-2.5 flex items-center gap-2 text-[11px] font-semibold text-orange-700 dark:text-orange-400 bg-orange-500/10 border border-orange-500/20 rounded-xl px-3 py-2">
+        <div className="mx-4 mt-2.5 flex items-center gap-2 text-[11px] font-semibold text-orange-700 dark:text-orange-400 bg-orange-500/10 border border-orange-500/20 rounded-xl px-3 py-2 flex-shrink-0">
           ⚠️ {expiringSoonCount} {t('devPanel.stats.expiringSoon')}
         </div>
       )}
 
-      <div className="mx-4 mt-3 flex items-center gap-2">
+      <div className="mx-4 mt-3 flex items-center gap-2 flex-shrink-0">
         <div className="flex-1 nav-pill-desktop grid grid-cols-2 sm:flex sm:flex-wrap gap-1 p-1 rounded-2xl sm:rounded-full">
           <button onClick={() => setTab("subscriptions")} className={`relative py-2 rounded-full text-[13px] font-semibold liquid-transition sm:flex-1 ${tab === "subscriptions" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
             {t('devPanel.tabs.subscriptions')} {subs.filter(s => s.status === "pending").length > 0 && <span className="ml-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full badge-pulse">{subs.filter(s => s.status === "pending").length}</span>}
@@ -296,9 +296,9 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
         </button>
       </div>
 
-      {err && <div className="mx-4 mt-3 bg-red-500/10 text-red-700 dark:text-red-400 text-sm p-3 rounded-lg border border-red-500/20">{err}</div>}
+      {err && <div className="mx-4 mt-3 bg-red-500/10 text-red-700 dark:text-red-400 text-sm p-3 rounded-lg border border-red-500/20 flex-shrink-0">{err}</div>}
 
-      <div className="p-4 space-y-3 pb-24">
+      <div className="flex-1 overflow-y-auto p-4 space-y-3 pb-24">
         {loading ? (
           <SkeletonList items={5}/>
         ) : tab === "subscriptions" ? (

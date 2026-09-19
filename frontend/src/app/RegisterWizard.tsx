@@ -361,7 +361,11 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
 
       {/* pb-24 = sticky button height uchun joy qoldiradi — content uning ostiga tushib ketmaydi */}
       <div className="relative z-10 flex-1 overflow-y-auto scrollbar-hide px-4 py-6 pb-24 flex flex-col">
-        <div className="w-full max-w-md mx-auto flex-1 flex flex-col">
+        {/* "tarif" qadamida (davr x daraja jadvali) kengroq — aks holda
+            desktop'da 3 ustunli jadval max-w-md (448px) ichiga siqilib,
+            kartochkalar juda kichik ko'rinardi. Qolgan qadamlar (formalar)
+            tor bir ustunli holicha qoladi — ular uchun bu qulayroq. */}
+        <div className={`w-full mx-auto flex-1 flex flex-col ${step === "tarif" ? "max-w-4xl" : "max-w-md"}`}>
           {error && <div className="bg-red-500/10 text-red-700 dark:text-red-400 text-sm p-3 rounded-lg border border-red-500/20 text-center mb-4 animate-pop-in">{error}</div>}
 
           {/* ── Qadam 1: Ogohlantirish ── */}
@@ -429,7 +433,7 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
 
               {/* Shu davr uchun 3 daraja (Oddiy/Standart/Premium) — narx va
                   funksiyalar admin panelidan (Dasturchi paneli → Tariflar) keladi. */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 {tieredPlans(planPeriod).map((plan, i) => {
                   const selected = selectedPlan === plan.key;
                   const featured = plan.tier === 3;
@@ -438,28 +442,28 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
                       initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0, scale: selected ? 1.02 : 1 }}
                       transition={{ delay: i * 0.05, type: "spring", stiffness: 320, damping: 26 }}
                       whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }}
-                      className={`relative w-full rounded-3xl p-4 text-left ${
+                      className={`relative w-full rounded-3xl p-6 text-left ${
                         featured
                           ? "shadow-xl shadow-primary/30 text-white"
                           : `border-2 ${selected ? "border-primary bg-primary/8 shadow-md shadow-primary/20" : "border-border/50 bg-white/40 dark:bg-black/20 hover:border-primary/40"}`
                       }`}
                       style={featured ? { background: "linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%)", border: selected ? "2px solid white" : "2px solid transparent" } : undefined}>
                       {selected && (
-                        <span className={`absolute -top-2.5 -right-2.5 w-7 h-7 rounded-full flex items-center justify-center shadow-md ${featured ? "bg-white text-primary" : "bg-primary text-white"}`}>
-                          <MorphIcon icon={Check} className="w-4 h-4" />
+                        <span className={`absolute -top-3 -right-3 w-8 h-8 rounded-full flex items-center justify-center shadow-md ${featured ? "bg-white text-primary" : "bg-primary text-white"}`}>
+                          <MorphIcon icon={Check} className="w-5 h-5" />
                         </span>
                       )}
-                      <p className={`text-sm font-bold leading-tight ${featured ? "text-white" : ""}`}>{plan.label}</p>
-                      <p className={`text-2xl font-bold mt-1.5 ${featured ? "text-white" : "text-primary"}`}>
-                        {plan.amount.toLocaleString('uz-UZ')}<span className="text-[11px] font-normal ml-0.5">{t('register.som')}</span>
+                      <p className={`text-lg font-bold leading-tight ${featured ? "text-white" : ""}`}>{plan.label}</p>
+                      <p className={`text-3xl font-bold mt-2 ${featured ? "text-white" : "text-primary"}`}>
+                        {plan.amount.toLocaleString('uz-UZ')}<span className="text-sm font-normal ml-1">{t('register.som')}</span>
                       </p>
-                      <p className={`text-[11px] mt-0.5 ${featured ? "text-white/70" : "text-muted-foreground"}`}>{t('register.daysCount', { count: plan.days })}</p>
-                      <div className="mt-3 space-y-1.5">
+                      <p className={`text-sm mt-1 ${featured ? "text-white/70" : "text-muted-foreground"}`}>{t('register.daysCount', { count: plan.days })}</p>
+                      <div className="mt-4 space-y-2.5">
                         {featureRegistry.map(f => {
                           const included = plan.features.includes(f.key);
                           return (
-                            <div key={f.key} className={`flex items-center gap-1.5 text-[11px] ${included ? (featured ? "text-white/90" : "text-foreground/80") : (featured ? "text-white/40 line-through" : "text-muted-foreground/50 line-through")}`}>
-                              <MorphIcon icon={CheckCircle} className={`w-3.5 h-3.5 flex-shrink-0 ${included ? "text-green-500" : "opacity-30"}`} />{f.label}
+                            <div key={f.key} className={`flex items-center gap-2 text-sm ${included ? (featured ? "text-white/90" : "text-foreground/80") : (featured ? "text-white/40 line-through" : "text-muted-foreground/50 line-through")}`}>
+                              <MorphIcon icon={CheckCircle} className={`w-4 h-4 flex-shrink-0 ${included ? "text-green-500" : "opacity-30"}`} />{f.label}
                             </div>
                           );
                         })}

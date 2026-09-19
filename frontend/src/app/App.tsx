@@ -3785,13 +3785,17 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
   }, [currentUser.role]);
   const myProjectCount = (currentUser.projectIds || []).length;
 
-  // Click/Payme/Paynet orqali o'zi to'lash (Roxiy) — backend PLAN_CONFIG
-  // bilan bir xil (backend/src/config/plans.ts). Faqat pullik tariflar.
-  const PAYABLE_PLANS = [
-    { key: '3month' as const, label: t('register.plan3Month'), amount: 1_400_000 },
-    { key: '6month' as const, label: t('register.plan6Month'), amount: 3_500_000 },
-    { key: '12month' as const, label: t('register.plan12Month'), amount: 7_700_000 },
-  ];
+  // Click/Payme/Paynet orqali o'zi to'lash (Roxiy) — tariflar ENDI admin
+  // panelidan (Dasturchi paneli → Tariflar) boshqariladi, shu sabab bu
+  // yerda qattiq yozilmaydi, jonli (live) ro'yxatdan olinadi. XATO
+  // TUZATILDI: avval bu yerda 3 ta qattiq yozilgan (eskirgan) tarif/narx
+  // bo'lardi — admin narxni o'zgartirsa ham bu ro'yxat yangilanmasdi.
+  const [payablePlans, setPayablePlans] = useState<{ key: string; label: string; amount: number }[]>([]);
+  useEffect(() => {
+    fetch(`${API_BASE}/api/plans`).then(r => r.ok ? r.json() : []).then((list: any[]) => {
+      setPayablePlans(list.filter(p => p.amount > 0).map(p => ({ key: p.key, label: p.label, amount: p.amount })));
+    }).catch(() => {});
+  }, []);
   const [payingPlan, setPayingPlan] = useState<string | null>(null);
   const handlePay = async (planKey: string) => {
     if (payingPlan) return;
@@ -4033,7 +4037,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
                     {(subData.status === 'pending' || subData.status === 'expired') && (
                       <div className="px-5 py-4 space-y-2">
                         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('profile.payPrompt')}</p>
-                        {PAYABLE_PLANS.map(plan => (
+                        {payablePlans.map(plan => (
                           <button key={plan.key} disabled={!!payingPlan} onClick={() => handlePay(plan.key)}
                             className="w-full flex items-center justify-between gap-2 px-4 py-3 rounded-2xl border border-border/60 hover:border-primary/50 hover:bg-primary/5 liquid-transition disabled:opacity-60 text-left">
                             <span className="text-sm font-semibold">{plan.label}</span>

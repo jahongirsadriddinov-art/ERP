@@ -19,6 +19,8 @@ export const uz = {
     flipCamera: "Kamerani almashtirish",
     cameraFlipError: "Kamerani almashtirib bo'lmadi",
     hangup: "Qo'ng'iroqni tugatish",
+    switchToNormal: "Oddiy dinamikka o'tish",
+    switchToSpeaker: "Karnayga o'tish",
   },
 };
 
@@ -43,5 +45,7 @@ export const ru = {
     flipCamera: "Переключить камеру",
     cameraFlipError: "Не удалось переключить камеру",
     hangup: "Завершить звонок",
+    switchToNormal: "Переключить на обычный динамик",
+    switchToSpeaker: "Переключить на громкую связь",
   },
 };

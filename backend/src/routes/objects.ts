@@ -5,12 +5,25 @@ import ObjectModel from '../models/Object';
 import Material from '../models/Material';
 import { parseSmeta } from '../services/smetaParser';
 import { scoped, stamped } from '../middleware/scope';
+import { requireOwnerOrAdmin } from '../middleware/auth';
+import { logAudit } from '../services/audit';
+import { getTenant } from '../middleware/tenantContext';
+import User from '../models/User';
 
 const router = Router();
 const upload = multer({ dest: 'uploads/', limits: { fileSize: 50 * 1024 * 1024 } });
 
+// XAVFSIZLIK — TOPILMA (audit): quyidagi ikkita yo'lda (yaratish, status
+// o'zgartirish) HECH QANDAY rol tekshiruvi yo'q edi — oddiy ishchi ham
+// yangi obyekt yaratishi yoki istalgan obyektni "tugallangan" deb
+// belgilashi mumkin edi. Frontend (App.tsx) bu tugmalarni allaqachon
+// faqat direktor/orinbosarga ko'rsatadi — endi backend ham AYNAN shu
+// qoidani (requireOwnerOrAdmin) talab qiladi. GET / va smeta yuklash
+// ATAYLAB cheklanmagan qoladi — BARCHA xodim loyihalar ro'yxatini
+// ko'rishi kerak (masalan tranzaksiya/davomat uchun projectId tanlash).
+
 // Create Object
-router.post('/', async (req, res) => {
+router.post('/', requireOwnerOrAdmin, async (req, res) => {
   try {
     const { name, budget, location, foremanId } = req.body;
 
@@ -36,6 +49,20 @@ router.post('/', async (req, res) => {
       foremanId: foremanId || undefined,
     }));
     await obj.save();
+
+    const t = getTenant();
+    if (t?.userId) {
+      const actor = await User.findById(t.userId).lean().catch(() => null);
+      if (actor) {
+        logAudit({
+          userId: t.userId, userName: `${actor.firstName} ${actor.lastName || ''}`.trim(), userRole: actor.role,
+          action: 'create', entity: 'object', entityId: String(obj._id),
+          description: `Yangi obyekt yaratildi: "${obj.name}"`,
+          newValue: { name: obj.name, budget: obj.budget }, companyId: t.companyId, req,
+        }).catch(() => {});
+      }
+    }
+
     res.status(201).json(obj);
   } catch (err) {
     res.status(500).json({ error: 'Server xatoligi' });
@@ -172,14 +199,29 @@ router.get('/', async (req, res) => {
 });
 
 // Update Object Status
-router.patch('/:id/status', async (req, res) => {
+router.patch('/:id/status', requireOwnerOrAdmin, async (req, res) => {
   try {
     const { status } = req.body;
     if (!['active', 'paused', 'completed'].includes(status)) {
       return res.status(400).json({ error: 'Noto\'g\'ri status' });
     }
+    const before = await ObjectModel.findOne(scoped({ _id: req.params.id })).lean();
+    if (!before) return res.status(404).json({ error: 'Obyekt topilmadi' });
     const obj = await ObjectModel.findOneAndUpdate(scoped({ _id: req.params.id }), { status }, { new: true });
-    if (!obj) return res.status(404).json({ error: 'Obyekt topilmadi' });
+
+    const t = getTenant();
+    if (t?.userId && before.status !== status) {
+      const actor = await User.findById(t.userId).lean().catch(() => null);
+      if (actor) {
+        logAudit({
+          userId: t.userId, userName: `${actor.firstName} ${actor.lastName || ''}`.trim(), userRole: actor.role,
+          action: 'update', entity: 'object', entityId: String(req.params.id),
+          description: `Obyekt holati o'zgartirildi: "${before.name}" — ${before.status} → ${status}`,
+          oldValue: { status: before.status }, newValue: { status }, companyId: t.companyId, req,
+        }).catch(() => {});
+      }
+    }
+
     res.json(obj);
   } catch (err) {
     res.status(500).json({ error: 'Server xatoligi' });

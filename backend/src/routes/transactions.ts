@@ -549,7 +549,27 @@ router.delete('/:id', async (req, res) => {
     if (!isBoss && !isCreator) {
       return res.status(403).json({ error: 'Faqat direktor, orinbosar yoki yozuvni yaratgan xodim o\'chira oladi' });
     }
+    // XAVFSIZLIK/MOLIYAVIY BUTUNLIK — TOPILMA (audit): tasdiqlangan
+    // (confirmed) tranzaksiyani ham hech qanday izsiz o'chirib bo'lardi —
+    // moliyaviy hisobotlarga ishonchni buzadi. Endi tasdiqlangan yozuvni
+    // O'CHIRIB bo'lmaydi (faqat pending/rejected) — moliyaviy tuzatish
+    // kerak bo'lsa, yangi (masalan manfiy) tranzaksiya yaratish orqali
+    // qilinishi kerak, tarixni yo'q qilish orqali emas.
+    if (tx.status === 'confirmed') {
+      return res.status(409).json({ error: "Tasdiqlangan tranzaksiyani o'chirib bo'lmaydi" });
+    }
+    const snapshot = tx.toObject();
     await tx.deleteOne();
+
+    if (actor) {
+      logAudit({
+        userId: actingUserId, userName: `${actor.firstName} ${actor.lastName || ''}`.trim(), userRole: actor.role,
+        action: 'delete', entity: 'transaction', entityId: req.params.id,
+        description: `Tranzaksiya o'chirildi: ${tx.type === 'transfer' ? tx.materialName : tx.description || '—'}${tx.amount ? ` — ${tx.amount.toLocaleString()} so'm` : ''}`,
+        oldValue: snapshot, companyId: actor.companyId, req,
+      }).catch(() => {});
+    }
+
     res.json({ message: "O'chirildi" });
   } catch (err) {
     res.status(500).json({ error: 'Server xatoligi' });

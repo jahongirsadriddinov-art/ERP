@@ -6050,7 +6050,7 @@ export default function App() {
         )}
         {page==="reports" && admin && (
           <Suspense fallback={<SkeletonPage variant="dashboard" />}>
-            <ReportsPage projects={projects} expenses={expenses} users={users}/>
+            <ReportsPage projects={projects} expenses={expenses} incomes={incomes} users={users}/>
           </Suspense>
         )}
         {page==="chat" && (

@@ -4,6 +4,7 @@ import { scoped } from '../middleware/scope';
 import { getTenant } from '../middleware/tenantContext';
 import { emitToUser } from '../services/socket';
 import { blockDeveloper } from '../middleware/auth';
+import { logAudit } from '../services/audit';
 
 const router = Router();
 
@@ -106,6 +107,19 @@ async function setBlocked(req: any, res: any, blocked: boolean) {
     user.blockedAt = blocked ? new Date() : undefined;
     user.blockedBy = blocked ? String(tenant?.userId || '') : undefined;
     await user.save();
+
+    if (tenant?.userId) {
+      const actor = await User.findById(tenant.userId).lean().catch(() => null);
+      if (actor) {
+        logAudit({
+          userId: tenant.userId, userName: `${actor.firstName} ${actor.lastName || ''}`.trim(), userRole: actor.role,
+          action: 'update', entity: 'user', entityId: String(user._id),
+          description: `Foydalanuvchi ${blocked ? 'bloklandi' : 'blokdan chiqarildi'}: ${user.firstName} ${user.lastName || ''}`.trim(),
+          newValue: { isBlocked: blocked }, companyId: tenant.companyId, req,
+        }).catch(() => {});
+      }
+    }
+
     res.json({ ok: true, id: user._id, isBlocked: user.isBlocked });
   } catch (err) {
     res.status(500).json({ error: 'Server xatoligi' });
@@ -175,6 +189,20 @@ router.delete('/:id', blockDeveloper, async (req, res) => {
     }
     const user = await User.findOneAndDelete(scoped({ _id: req.params.id }));
     if (!user) return res.status(404).json({ error: 'Foydalanuvchi topilmadi' });
+
+    if (tenant?.userId) {
+      const actor = await User.findById(tenant.userId).lean().catch(() => null);
+      if (actor) {
+        logAudit({
+          userId: tenant.userId, userName: `${actor.firstName} ${actor.lastName || ''}`.trim(), userRole: actor.role,
+          action: 'delete', entity: 'user', entityId: String(user._id),
+          description: `Foydalanuvchi o'chirildi: ${user.firstName} ${user.lastName || ''} (${user.phone})`.trim(),
+          oldValue: { firstName: user.firstName, lastName: user.lastName, phone: user.phone, role: user.role },
+          companyId: tenant.companyId, req,
+        }).catch(() => {});
+      }
+    }
+
     res.json({ message: 'O\'chirildi' });
   } catch (err) {
     res.status(500).json({ error: 'Server xatoligi' });

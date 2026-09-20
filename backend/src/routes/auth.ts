@@ -10,6 +10,7 @@ import { requireAuth, requireOwnerOrAdmin } from '../middleware/auth';
 import { normalizePhone, isValidUzPhone, hashPassword, verifyPassword } from '../utils/tokens';
 import { checkRate } from '../utils/rateLimit';
 import { issueTokenWithSession } from '../services/sessions';
+import { logAudit } from '../services/audit';
 
 const router = Router();
 
@@ -511,6 +512,7 @@ router.put('/users/:id', requireAuth, requireOwnerOrAdmin, async (req, res) => {
       return res.status(403).json({ error: "Bu lavozimni faqat dasturchi paneli orqali o'zgartirish mumkin" });
     }
 
+    const oldRole = user.role;
     if (firstName) user.firstName = firstName;
     if (lastName !== undefined) user.lastName = lastName;
     if (role) user.role = role;
@@ -522,6 +524,21 @@ router.put('/users/:id', requireAuth, requireOwnerOrAdmin, async (req, res) => {
       user.phone = formattedPhone;
     }
     await user.save();
+
+    // XAVFSIZLIK — TOPILMA (audit): rol o'zgartirish (imtiyoz eskalatsiyasi
+    // uchun eng nozik amallardan biri) hech qayerda qayd etilmasdi.
+    if (role && oldRole !== role && requester?.userId) {
+      const actor = await User.findById(requester.userId).lean().catch(() => null);
+      if (actor) {
+        logAudit({
+          userId: requester.userId, userName: `${actor.firstName} ${actor.lastName || ''}`.trim(), userRole: actor.role,
+          action: 'update', entity: 'user', entityId: String(user._id),
+          description: `Foydalanuvchi lavozimi o'zgartirildi: ${user.firstName} ${user.lastName || ''} — ${oldRole} → ${role}`.trim(),
+          oldValue: { role: oldRole }, newValue: { role }, companyId: requester.companyId, req,
+        }).catch(() => {});
+      }
+    }
+
     return res.json({
       id: user._id,
       name: user.firstName + (user.lastName ? ' ' + user.lastName : ''),

@@ -3,6 +3,7 @@ import type { Server as HttpServer } from 'http';
 import jwt from 'jsonwebtoken';
 import { JWT_SECRET, JwtPayload, loadFreshUser } from '../middleware/auth';
 import Group from '../models/Group';
+import { sendPushToUser } from './push';
 
 let io: Server | null = null;
 
@@ -102,7 +103,25 @@ export function initSocket(httpServer: HttpServer): Server {
       else if (data.to) io?.to(`user:${data.to}`).emit(event, data);
       else if (data.groupId) socket.to(`group:${data.groupId}`).emit(event, data);
     };
-    socket.on('call:offer', relay('call:offer'));
+    // XATO TUZATILDI ("qo'ng'iroq qilganda qabul qiluvchida hech qanday
+    // ogohlantirish/ovoz chiqmayapti"): call:offer FAQAT socket.io orqali
+    // ulangan (ilova ochiq, tab faol) tomonga yetib borardi — agar
+    // qabul qiluvchining ilovasi fon rejimida yoki yopiq bo'lsa (juda
+    // oddiy holat), u qo'ng'iroq haqida UMUMAN bilib qolmasdi (na tovush,
+    // na chiqib turuvchi bildirishnoma). Endi transactions.ts'dagi bilan
+    // bir xil Web Push (sendPushToUser — bu chinakam qurilma
+    // bildirishnomasi, ilova yopiq bo'lsa ham keladi) qo'shildi.
+    socket.on('call:offer', (data: any) => {
+      relay('call:offer')(data);
+      if (data?.to) {
+        const isVideo = data.mode === 'video';
+        sendPushToUser(String(data.to), {
+          title: isVideo ? "📹 Video qo'ng'iroq" : "📞 Qo'ng'iroq",
+          body: `${data.fromName || 'Xodim'} sizga qo'ng'iroq qilmoqda`,
+          tag: 'call',
+        }).catch(() => {});
+      }
+    });
     socket.on('call:answer', relay('call:answer'));
     socket.on('call:ice', relay('call:ice'));
     socket.on('call:end', relay('call:end'));

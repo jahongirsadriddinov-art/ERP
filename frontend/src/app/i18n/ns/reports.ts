@@ -22,6 +22,12 @@ export const uz = {
     dateTo: "Gacha",
     exportExcel: "Excel'ga yuklab olish",
     exportEmpty: "Tanlangan davrda hisobot yo'q",
+    pnlTitle: "Foyda-zarar",
+    pnlIncome: "Daromad",
+    pnlExpense: "Xarajat",
+    pnlNet: "Sof foyda/zarar",
+    budgetVsActual: "Byudjet vs haqiqat (obyektlar bo'yicha)",
+    overBudget: "Byudjetdan {{percent}}% oshib ketdi",
   },
 };
 
@@ -49,5 +55,11 @@ export const ru = {
     dateTo: "По",
     exportExcel: "Скачать в Excel",
     exportEmpty: "За выбранный период отчётов нет",
+    pnlTitle: "Прибыль и убытки",
+    pnlIncome: "Доход",
+    pnlExpense: "Расход",
+    pnlNet: "Чистая прибыль/убыток",
+    budgetVsActual: "Бюджет vs факт (по объектам)",
+    overBudget: "Превышение бюджета на {{percent}}%",
   },
 };

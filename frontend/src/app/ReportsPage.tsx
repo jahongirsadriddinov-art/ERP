@@ -13,8 +13,8 @@ import { Project, Expense, AppUser, ExpType, EXP_LABELS, CHART_COLORS, fmt, isAd
 // Ushbu sahifa recharts kutubxonasini ishlatadi (og'ir kutubxona) — shuning
 // uchun alohida faylga chiqarilgan va App.tsx da React.lazy orqali faqat
 // "Hisobotlar" bo'limiga kirilganda yuklanadi (boshlang'ich bundle kichrayadi).
-export default function ReportsPage({ projects, expenses, users }:
-  { projects: Project[]; expenses: Expense[]; users: AppUser[] }) {
+export default function ReportsPage({ projects, expenses, incomes, users }:
+  { projects: Project[]; expenses: Expense[]; incomes: Expense[]; users: AppUser[] }) {
   const { t } = useTranslation();
   const [selProj, setSelProj] = useState("all");
   const [dateFrom, setDateFrom] = useState("");
@@ -24,6 +24,25 @@ export default function ReportsPage({ projects, expenses, users }:
     .filter(e=>!dateFrom||e.date>=dateFrom)
     .filter(e=>!dateTo||e.date<=dateTo);
   const total = filtExp.reduce((a,e)=>a+e.amount,0);
+  // Foyda-zarar (P&L) — avval bu sahifada UMUMAN yo'q edi (faqat xarajat
+  // ko'rsatilardi, daromad tomoni yo'q). `incomes` App.tsx'da ALLAQACHON
+  // alohida saqlanadi (type==='income' tranzaksiyalar) — shu yerga qo'shib,
+  // haqiqiy foyda/zarar hisoblanadi.
+  const filtInc = (selProj==="all"?incomes:incomes.filter(e=>e.projectId===selProj))
+    .filter(e=>e.status==="confirmed")
+    .filter(e=>!dateFrom||e.date>=dateFrom)
+    .filter(e=>!dateTo||e.date<=dateTo);
+  const totalIncome = filtInc.reduce((a,e)=>a+e.amount,0);
+  const netProfit = totalIncome - total;
+  // Byudjet vs haqiqat — har bir obyekt uchun rejalashtirilgan (Project.budget)
+  // va haqiqiy sarflangan (shu obyektga bog'langan tasdiqlangan xarajatlar
+  // yig'indisi) taqqoslanadi. Avval bu taqqoslash HECH QAYERDA yo'q edi.
+  const budgetRows = projects.map(p => {
+    const spent = expenses.filter(e => e.projectId === p.id && e.status === "confirmed").reduce((a, e) => a + e.amount, 0);
+    const budget = p.budget || 0;
+    const percent = budget > 0 ? Math.min(999, Math.round((spent / budget) * 100)) : null;
+    return { id: p.id, name: p.name, budget, spent, percent, over: budget > 0 && spent > budget };
+  }).filter(r => r.budget > 0 || r.spent > 0);
   const byType = (Object.keys(EXP_LABELS) as ExpType[]).map(k=>({name:EXP_LABELS[k],value:filtExp.filter(e=>e.type===k).reduce((a,e)=>a+e.amount,0)})).filter(d=>d.value>0);
   const byProject = projects.map(p=>({name:p.name.split(" ").slice(0,2).join(" "),chiqim:expenses.filter(e=>e.projectId===p.id&&e.status==="confirmed").reduce((a,e)=>a+e.amount,0)}));
   const byPerson = users.filter(u=>!isAdmin(u.role)).map(u=>{const parts=u.name.split(" ");const shortName=parts[0]+(parts[1]?" "+parts[1][0]+".":"");return{name:shortName,total:expenses.filter(e=>e.toUserId===u.id&&e.status==="confirmed").reduce((a,e)=>a+e.amount,0)};}).filter(d=>d.total>0);
@@ -56,6 +75,26 @@ export default function ReportsPage({ projects, expenses, users }:
         </div>
       </div>
       <div className="flex-1 overflow-y-auto scrollbar-hide space-y-3">
+        {/* Foyda-zarar (P&L) */}
+        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28 }}
+          className="surface p-4">
+          <p className="text-sm md:text-xs font-semibold mb-3 font-['Roboto_Slab',serif]">{t('reports.pnlTitle')}</p>
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <p className="text-sm md:text-xs text-muted-foreground">{t('reports.pnlIncome')}</p>
+              <p className="text-sm font-bold font-mono mt-1 text-green-600 dark:text-green-400">{fmt(totalIncome)}</p>
+            </div>
+            <div>
+              <p className="text-sm md:text-xs text-muted-foreground">{t('reports.pnlExpense')}</p>
+              <p className="text-sm font-bold font-mono mt-1 text-accent">{fmt(total)}</p>
+            </div>
+            <div>
+              <p className="text-sm md:text-xs text-muted-foreground">{t('reports.pnlNet')}</p>
+              <p className={`text-sm font-bold font-mono mt-1 ${netProfit >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>{netProfit >= 0 ? "+" : ""}{fmt(netProfit)}</p>
+            </div>
+          </div>
+        </motion.div>
+
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[[t('reports.totalExpense'),total,"text-accent"],[EXP_LABELS.material,filtExp.filter(e=>e.type==="material").reduce((a,e)=>a+e.amount,0),"text-orange-700"],[EXP_LABELS.oylik,filtExp.filter(e=>e.type==="oylik").reduce((a,e)=>a+e.amount,0),"text-blue-600"],[t('reports.other'),filtExp.filter(e=>!["material","oylik"].includes(e.type)).reduce((a,e)=>a+e.amount,0),"text-purple-600"]].map(([l,v,c],i)=>(
             <motion.div key={String(l)} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i*0.04, type: "spring", stiffness: 300, damping: 28 }}
@@ -78,6 +117,29 @@ export default function ReportsPage({ projects, expenses, users }:
             </ResponsiveContainer>
           </motion.div>
         </div>
+        {budgetRows.length > 0 && (
+          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12, type: "spring", stiffness: 300, damping: 28 }} className="surface overflow-hidden">
+            <div className="px-4 py-2.5 border-b border-border"><p className="text-sm md:text-xs font-semibold font-['Roboto_Slab',serif]">{t('reports.budgetVsActual')}</p></div>
+            <div className="divide-y divide-border/50">
+              {budgetRows.map(r => (
+                <div key={r.id} className="px-4 py-3 space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm md:text-xs font-semibold truncate">{r.name}</span>
+                    <span className={`text-sm md:text-xs font-mono font-semibold whitespace-nowrap ${r.over ? "text-red-600 dark:text-red-400" : "text-foreground"}`}>
+                      {fmt(r.spent)} {r.budget > 0 && `/ ${fmt(r.budget)}`}
+                    </span>
+                  </div>
+                  {r.percent != null && (
+                    <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                      <div className={`h-full rounded-full ${r.over ? "bg-red-500" : "bg-primary"}`} style={{ width: `${Math.min(100, r.percent)}%` }} />
+                    </div>
+                  )}
+                  {r.over && <p className="text-[10px] text-red-600 dark:text-red-400">{t('reports.overBudget', { percent: r.percent })}</p>}
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        )}
         {byPerson.length>0&&(
           <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.14, type: "spring", stiffness: 300, damping: 28 }} className="surface p-4">
             <p className="text-sm md:text-xs font-semibold mb-3 font-['Roboto_Slab',serif]">{t('reports.byPerson')}</p>

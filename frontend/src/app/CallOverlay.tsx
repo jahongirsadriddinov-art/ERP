@@ -8,6 +8,8 @@ import VideoOff from "@hugeicons/core-free-icons/VideoOffIcon";
 import Users2 from "@hugeicons/core-free-icons/UserGroup02Icon";
 import SwitchCamera from "@hugeicons/core-free-icons/CameraRotated01Icon";
 import ZoomIn from "@hugeicons/core-free-icons/ZoomInIcon";
+import VolumeHigh from "@hugeicons/core-free-icons/VolumeHighIcon";
+import VolumeLow from "@hugeicons/core-free-icons/VolumeLowIcon";
 import { MorphIcon } from "morphicons/react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
@@ -381,8 +383,18 @@ function RemoteVideo({ stream, label }: { stream: MediaStream; label: string }) 
     </div>
   );
 }
+// XATO TUZATILDI ("ovoz juda past, kichkina karnaydan chiqyapti"): oddiy
+// <audio> elementi orqali chiqarilgan WebRTC ovozi iOS Safari'da (mikrofon
+// FAOL bo'lgani uchun) ko'pincha "quloq" (earpiece/receiver) dinamigiga
+// yo'naltiriladi — bu telefon suhbati uchun mo'ljallangan, juda past
+// ovozli dinamik, asosiy (pastki) karnay EMAS. <video> elementi esa xuddi
+// shu audio oqimi bilan ham asosiy karnayga yo'naltiriladi (iOS'ning
+// ma'lum, hujjatlashtirilgan xatti-harakati — ovozli qo'ng'iroqda ham
+// video elementidan foydalanish keng tarqalgan yechim). Shu sabab bu
+// yerda <audio> o'rniga KO'RINMAS <video> ishlatiladi — video track yo'q,
+// faqat audio eshitiladi, lekin karnay tanlash to'g'ri ishlaydi.
 function RemoteAudio({ stream }: { stream: MediaStream }) {
-  const ref = useRef<HTMLAudioElement>(null);
+  const ref = useRef<HTMLVideoElement>(null);
   useEffect(() => { if (ref.current) { ref.current.srcObject = stream; ref.current.play().catch(()=>{}); } }, [stream]);
-  return <audio ref={ref} autoPlay/>;
+  return <video ref={ref} autoPlay playsInline className="w-0 h-0 opacity-0 absolute pointer-events-none" />;
 }

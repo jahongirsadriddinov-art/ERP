@@ -6,6 +6,7 @@ import User from '../models/User';
 import { scoped, stamped } from '../middleware/scope';
 import { getTenant } from '../middleware/tenantContext';
 import { tb, BotLang } from '../i18n/bot';
+import { logAudit } from '../services/audit';
 
 const router = Router();
 
@@ -94,6 +95,16 @@ router.post('/send', async (req, res) => {
           }
         ).catch(console.error);
       }
+    }
+
+    const sender = await User.findById(senderId).lean().catch(() => null);
+    if (sender) {
+      logAudit({
+        userId: senderId, userName: `${sender.firstName} ${sender.lastName || ''}`.trim(), userRole: sender.role,
+        action: 'update', entity: 'material', entityId: String(material._id),
+        description: `Material yuborildi: ${material.name} — ${amount} ${material.unit}${receiver ? ` → ${receiver.firstName} ${receiver.lastName || ''}`.trim() : ''}`,
+        newValue: { sent: material.sent, remaining: material.remaining }, companyId: sender.companyId, req,
+      }).catch(() => {});
     }
 
     res.json({ material, transaction });

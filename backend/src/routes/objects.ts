@@ -3,6 +3,7 @@ import multer from 'multer';
 import fs from 'fs';
 import ObjectModel from '../models/Object';
 import Material from '../models/Material';
+import ProjectMedia from '../models/ProjectMedia';
 import { parseSmeta } from '../services/smetaParser';
 import { scoped, stamped } from '../middleware/scope';
 import { requireOwnerOrAdmin } from '../middleware/auth';
@@ -223,6 +224,73 @@ router.patch('/:id/status', requireOwnerOrAdmin, async (req, res) => {
     }
 
     res.json(obj);
+  } catch (err) {
+    res.status(500).json({ error: 'Server xatoligi' });
+  }
+});
+
+// ── Ish jarayoni rasm/video (ProjectMedia) ──────────────────────────────────
+// Aniq talab: "oddiy ishchi... boshqa hamma o'zi qo'lda yuborayotgan
+// narsasini kiritadigan qil" — FAQAT direktor/o'rinbosar EMAS, BARCHA
+// xodim (ishchi, brigadir, prorab ham) qo'shishi/ko'rishi mumkin, chunki
+// ob'ektda bevosita ishlayotgan aynan ular. Fayl aloqasi mavjud
+// /api/messages/upload (Cloudinary) orqali OLDINDAN yuklanadi, bu yerga
+// faqat natijaviy URL yuboriladi.
+
+// GET /api/objects/:id/media — shu obyektning barcha rasm/videolari.
+router.get('/:id/media', async (req, res) => {
+  try {
+    const obj = await ObjectModel.findOne(scoped({ _id: req.params.id })).select('_id').lean();
+    if (!obj) return res.status(404).json({ error: 'Obyekt topilmadi' });
+    const media = await ProjectMedia.find({ objectId: req.params.id }).sort({ createdAt: -1 }).lean();
+    res.json(media.map(m => ({ id: m._id, type: m.type, url: m.url, caption: m.caption, uploadedBy: m.uploadedBy, createdAt: m.createdAt })));
+  } catch (err) {
+    res.status(500).json({ error: 'Server xatoligi' });
+  }
+});
+
+// POST /api/objects/:id/media — yangi rasm/video qo'shish (ISTALGAN xodim).
+router.post('/:id/media', async (req, res) => {
+  try {
+    const t = getTenant();
+    if (!t?.userId) return res.status(401).json({ error: 'Autentifikatsiya talab etiladi' });
+    const { url, type, caption } = req.body || {};
+    if (!url || typeof url !== 'string') return res.status(400).json({ error: 'Fayl URL kerak' });
+    if (!['image', 'video'].includes(type)) return res.status(400).json({ error: "Tur 'image' yoki 'video' bo'lishi kerak" });
+
+    const obj = await ObjectModel.findOne(scoped({ _id: req.params.id })).select('_id').lean();
+    if (!obj) return res.status(404).json({ error: 'Obyekt topilmadi' });
+
+    const actor = await User.findById(t.userId).lean().catch(() => null);
+    if (!actor) return res.status(401).json({ error: 'Foydalanuvchi topilmadi' });
+
+    const media = await ProjectMedia.create(stamped({
+      objectId: req.params.id,
+      type,
+      url,
+      caption: caption ? String(caption).slice(0, 300) : undefined,
+      uploadedBy: { userId: t.userId, name: `${actor.firstName} ${actor.lastName || ''}`.trim(), role: actor.role },
+    }));
+
+    res.status(201).json({ id: media._id, type: media.type, url: media.url, caption: media.caption, uploadedBy: media.uploadedBy, createdAt: media.createdAt });
+  } catch (err) {
+    res.status(500).json({ error: 'Server xatoligi' });
+  }
+});
+
+// DELETE /api/objects/:id/media/:mediaId — faqat yuklagan xodimning o'zi
+// yoki direktor/orinbosar o'chira oladi.
+router.delete('/:id/media/:mediaId', async (req, res) => {
+  try {
+    const t = getTenant();
+    if (!t?.userId) return res.status(401).json({ error: 'Autentifikatsiya talab etiladi' });
+    const media = await ProjectMedia.findOne(scoped({ _id: req.params.mediaId, objectId: req.params.id }));
+    if (!media) return res.status(404).json({ error: 'Topilmadi' });
+    const isOwner = String(media.uploadedBy?.userId) === String(t.userId);
+    const isBoss = t.role === 'direktor' || t.role === 'orinbosar';
+    if (!isOwner && !isBoss) return res.status(403).json({ error: 'Faqat yuklagan xodim yoki admin o\'chira oladi' });
+    await media.deleteOne();
+    res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: 'Server xatoligi' });
   }

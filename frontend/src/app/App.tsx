@@ -1987,7 +1987,47 @@ function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSe
     onUpdateStatus: (pid: string, status: "active"|"paused"|"completed") => void;
   }) {
   const { t } = useTranslation();
-  const [tab, setTab] = useState<"required"|"smeta"|"pending"|"confirmed">("required");
+  const [tab, setTab] = useState<"required"|"smeta"|"pending"|"confirmed"|"media">("required");
+  // Ish jarayoni rasm/video — BARCHA xodim (ishchi, brigadir, prorab ham)
+  // qo'sha oladi, faqat direktor/o'rinbosar emas (aniq talab).
+  const [mediaItems, setMediaItems] = useState<{ id: string; type: 'image'|'video'; url: string; caption?: string; uploadedBy: { userId: string; name: string; role: string }; createdAt: string }[]>([]);
+  const [mediaLoading, setMediaLoading] = useState(false);
+  const [uploadingMedia, setUploadingMedia] = useState(false);
+  const mediaFileRef = useRef<HTMLInputElement>(null);
+  const loadMedia = async () => {
+    setMediaLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/objects/${project.id}/media`);
+      if (res.ok) setMediaItems(await res.json());
+    } catch {}
+    setMediaLoading(false);
+  };
+  useEffect(() => { loadMedia(); /* eslint-disable-next-line */ }, [project.id]);
+  const handleMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingMedia(true);
+    try {
+      const { url } = await uploadChatMedia(file, file.name);
+      const type = file.type.startsWith('video') ? 'video' : 'image';
+      const res = await fetch(`${API_BASE}/api/objects/${project.id}/media`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url, type }),
+      });
+      if (res.ok) { const m = await res.json(); setMediaItems(prev => [m, ...prev]); toast.success(t('objectDetail.mediaUploaded')); }
+      else toast.error(t('objectDetail.mediaUploadError'));
+    } catch { toast.error(t('objectDetail.mediaUploadError')); }
+    setUploadingMedia(false);
+    e.target.value = '';
+  };
+  const handleMediaDelete = async (mediaId: string) => {
+    if (!window.confirm(t('objectDetail.confirmMediaDelete'))) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/objects/${project.id}/media/${mediaId}`, { method: 'DELETE' });
+      if (res.ok) setMediaItems(prev => prev.filter(m => m.id !== mediaId));
+      else toast.error(t('common.error'));
+    } catch { toast.error(t('common.error')); }
+  };
   const [showSend, setShowSend] = useState(false);
   const [uploadingSmeta, setUploadingSmeta] = useState(false);
   const [smetaMsg, setSmetaMsg] = useState("");
@@ -2083,7 +2123,7 @@ function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSe
         </div>
       </div>
       <div className="glass border-b border-border px-3 py-2 flex gap-1 overflow-x-auto scrollbar-hide">
-        {([["required",t('objectDetail.tabRequired'),project.requiredMaterials.length], ...(project.smeta ? [["smeta",t('objectDetail.tabSmeta'),project.smeta.resources.length] as [string,string,number]] : []), ["pending",t('objectDetail.tabPending'),pendT.length],["confirmed",t('objectDetail.tabConfirmed'),confT.length]] as [string,string,number][]).map(([k,l,c])=>(
+        {([["required",t('objectDetail.tabRequired'),project.requiredMaterials.length], ...(project.smeta ? [["smeta",t('objectDetail.tabSmeta'),project.smeta.resources.length] as [string,string,number]] : []), ["pending",t('objectDetail.tabPending'),pendT.length],["confirmed",t('objectDetail.tabConfirmed'),confT.length],["media",t('objectDetail.tabMedia'),mediaItems.length]] as [string,string,number][]).map(([k,l,c])=>(
           <button key={k} onClick={()=>setTab(k as any)} className={`relative flex items-center gap-1.5 text-sm md:text-xs py-2 px-3 rounded-full font-medium liquid-transition whitespace-nowrap ${tab===k?"text-primary":"text-muted-foreground hover:text-foreground"}`}>
             {tab===k && (
               <motion.div layoutId="objectDetailTabPill" className="absolute inset-0 rounded-full bg-primary/10 -z-10"
@@ -2197,6 +2237,43 @@ function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSe
           <div className="flex-1 overflow-y-auto p-4 scrollbar-hide pb-24 sm:pb-4 space-y-2 animate-slide-up-fade">
             {confT.length===0?<div className="text-center py-10 text-muted-foreground animate-pop-in"><MorphIcon icon={Package} className="w-10 h-10 mx-auto mb-2 opacity-30" /><p className="text-sm md:text-xs">{t('objectDetail.noConfirmed')}</p></div>
             :confT.map(t=><TransferRow key={t.id} t={t} currentUser={currentUser} allUsers={users} projects={[project]} onConfirm={onConfirm} onReject={onReject}/>)}
+          </div>
+        )}
+        {tab==="media" && (
+          <div className="flex-1 overflow-y-auto p-3 scrollbar-hide pb-24 sm:pb-4 space-y-3 animate-slide-up-fade">
+            {/* Aniq talab: BARCHA xodim (ishchi, brigadir, prorab ham)
+                qo'sha oladi — direktor/o'rinbosarga cheklanmagan. */}
+            <input ref={mediaFileRef} type="file" accept="image/*,video/*" capture="environment" className="hidden" onChange={handleMediaUpload} />
+            <button onClick={() => mediaFileRef.current?.click()} disabled={uploadingMedia}
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-bold border-2 border-dashed border-border/60 text-muted-foreground hover:border-primary/40 hover:text-primary liquid-transition disabled:opacity-50">
+              {uploadingMedia ? <MorphIcon icon={Loader2} className="w-4 h-4 animate-spin" /> : <MorphIcon icon={Camera} className="w-4 h-4" />}
+              {uploadingMedia ? t('objectDetail.mediaUploading') : t('objectDetail.mediaAddBtn')}
+            </button>
+            {mediaLoading ? (
+              <SkeletonList items={3} withAvatar={false} />
+            ) : mediaItems.length === 0 ? (
+              <div className="text-center py-10 text-muted-foreground animate-pop-in"><MorphIcon icon={Camera} className="w-10 h-10 mx-auto mb-2 opacity-30" /><p className="text-sm md:text-xs">{t('objectDetail.mediaEmpty')}</p></div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {mediaItems.map(m => (
+                  <div key={m.id} className="relative rounded-xl overflow-hidden bg-muted aspect-square group">
+                    {m.type === 'video' ? (
+                      <video src={m.url} className="w-full h-full object-cover" controls playsInline />
+                    ) : (
+                      <img src={m.url} alt="" loading="lazy" className="w-full h-full object-cover cursor-pointer" onClick={() => window.open(m.url, '_blank')} />
+                    )}
+                    <div className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[9px] px-1.5 py-1 flex items-center justify-between">
+                      <span className="truncate">{m.uploadedBy?.name || '—'}</span>
+                      {(m.uploadedBy?.userId === currentUser.id || isAdmin(currentUser.role)) && (
+                        <button onClick={() => handleMediaDelete(m.id)} aria-label={t('common.delete')} className="ml-1 flex-shrink-0 opacity-80 hover:opacity-100">
+                          <MorphIcon icon={Trash2} className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -41,6 +41,9 @@ const MessageSchema: Schema = new Schema({
 // Suhbat bo'yicha xabarlarni tezkor yuklash
 MessageSchema.index({ fromUserId: 1, toUserId: 1, timestamp: -1 });
 MessageSchema.index({ groupId: 1, timestamp: -1 });
+// GET / yo'li {companyId}.sort({createdAt}) so'raydi — bir xil sabab bilan
+// (Transaction.ts'dagi izohga qarang) qo'sh indeks kerak.
+MessageSchema.index({ companyId: 1, createdAt: -1 });
 // Global search uchun matn indeksi
 MessageSchema.index({ text: 'text' });
 

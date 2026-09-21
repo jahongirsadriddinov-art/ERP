@@ -1,5 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { requireAuth } from '../middleware/auth';
+import { requireFeature } from '../middleware/requireFeature';
 import { getTenant } from '../middleware/tenantContext';
 import { scoped, stamped } from '../middleware/scope';
 import User from '../models/User';
@@ -113,7 +114,7 @@ Kerakli ma'lumotni tabiiy tilda so'rang:
 
 
 // POST /api/ai/chat
-router.post('/chat', requireAuth, requireBoss, async (req, res) => {
+router.post('/chat', requireAuth, requireBoss, requireFeature('ai_assistant'), async (req, res) => {
   try {
     const { message, history = [] } = req.body;
     if (!message?.trim()) return res.status(400).json({ error: 'Xabar kerak' });
@@ -172,7 +173,7 @@ router.post('/chat', requireAuth, requireBoss, async (req, res) => {
 
 // POST /api/ai/execute — tasdiqlashdan so'ng amal bajarish (send_message)
 // va bevosita bajarish (add_user, delete_user, update_user)
-router.post('/execute', requireAuth, requireBoss, async (req, res) => {
+router.post('/execute', requireAuth, requireBoss, requireFeature('ai_assistant'), async (req, res) => {
   try {
     const { action } = req.body;
     if (!action?.type) return res.status(400).json({ error: 'Amal kerak' });

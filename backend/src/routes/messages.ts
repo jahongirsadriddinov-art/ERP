@@ -16,6 +16,7 @@ import { bot } from '../services/bot';
 import { uploadFileToCloud } from '../config/cloudinary';
 import { getBackendUrl } from '../utils/backendUrl';
 import { createNotification } from '../services/notifications';
+import { checkRate } from '../utils/rateLimit';
 
 if (ffmpegPath) ffmpeg.setFfmpegPath(ffmpegPath);
 
@@ -180,6 +181,14 @@ export async function relayMessageToTelegram(chatId: string, senderName: string,
 // darhol rad etiladi.
 router.post('/upload', requireAuth, upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Fayl yuklanmadi' });
+  // Suiiste'mol qarshi: bitta foydalanuvchi daqiqasiga ko'p bo'lsa 30 ta fayl
+  // yuklashi mumkin (Cloudinary/serverga haddan tashqari yuk, Telegram relay
+  // orqali spam ehtimoli — messages.ts POST '/' bilan bir xil chegara).
+  const uid = getTenant()?.userId;
+  if (uid) {
+    const rl = checkRate(`msgupload:${uid}`, 30, 60 * 1000);
+    if (!rl.allowed) return res.status(429).json({ error: `Juda ko'p fayl yuklandi. ${rl.retryAfterSec} soniyadan keyin urining.` });
+  }
   try {
     const { url } = await uploadFileToCloud(req.file.path, 'qurilish-chat', req.file.originalname);
     res.json({ url, fileName: req.file.originalname, fileSize: req.file.size });
@@ -208,14 +217,19 @@ router.get('/', async (req, res) => {
     if (!uid) return res.status(401).json({ error: 'Autentifikatsiya talab etiladi' });
     const groups = await Group.find(scoped({ memberIds: uid })).select('_id');
     const groupIds = groups.map(g => String(g._id));
+    // MIQYOSLILIK: cheklovsiz bo'lsa faol firma oylar/yillar davomida to'plagan
+    // BARCHA xabarlarni har safar to'liq qaytarardi — vaqt o'tishi bilan sekin-
+    // lashadi. Eng so'nggi 3000 tasini olib (kamdan-kam holatda yetarli emas),
+        // eski tartibga (eskidan-yangiga) qaytaramiz — frontend'ning kutgan tartibi
+    // o'zgarmaydi, faqat juda uzoq tarix qisqartiriladi.
     const messages = await Message.find(scoped({
       $or: [
         { fromUserId: uid },
         { toUserId: uid },
         ...(groupIds.length ? [{ groupId: { $in: groupIds } }] : []),
       ],
-    })).sort({ createdAt: 1 });
-    res.json(messages.map(shape));
+    })).sort({ createdAt: -1 }).limit(3000);
+    res.json(messages.reverse().map(shape));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server xatoligi' });
@@ -235,6 +249,14 @@ router.post('/', async (req, res) => {
     const fromUserId = getTenant()?.userId;
     if (!fromUserId || (!toUserId && !groupId) || (!text?.trim() && !mediaUrl && !location)) {
       return res.status(400).json({ error: 'Avtorizatsiya va (toUserId yoki groupId) va text/media kerak' });
+    }
+    // Suiiste'mol qarshi: har bir xabar Telegram bot orqali relay qilinadi
+    // (guruh bo'lsa HAR BIR a'zoga) — cheklovsiz bo'lsa bitta xodim boshqa
+    // xodim(lar)ning Telegramini yoki botning o'zini spam bilan to'ldirishi
+    // mumkin edi. 40 xabar/daqiqa oddiy chat uchun yetarlicha keng.
+    const rl = checkRate(`msgsend:${fromUserId}`, 40, 60 * 1000);
+    if (!rl.allowed) {
+      return res.status(429).json({ error: `Juda ko'p xabar. ${rl.retryAfterSec} soniyadan keyin urining.` });
     }
     let msgData: any = stamped({
       fromUserId: String(fromUserId),

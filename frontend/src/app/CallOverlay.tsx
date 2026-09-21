@@ -24,17 +24,42 @@ import { playSound } from "./sound";
 // ulanadigan (oddiy NAT) tarmoqda ishlaydi. Ikki tomon turli tarmoqlarda bo'lsa
 // (mobil internet vs Wi-Fi, ofis firewall va h.k. — real foydalanishda odatiy hol)
 // ICE ulanmay qoladi va na ovoz, na video hech qachon kelmaydi ("ulanmoqda..."da
-// abadiy qolib ketadi). Open Relay Project'ning bepul TURN serveri shu holatlarda
-// P2P o'rniga trafikni relay qiladi.
-const ICE_CONFIG: RTCConfiguration = {
-  iceServers: [
+// abadiy qolib ketadi).
+//
+// XATO/CHEKLOV: Open Relay Project'ning BEPUL TURN serveri ("video qo'ng'iroqda
+// kamera ko'rinmayapti/ovoz kelmayapti" shikoyatlarining eng ehtimoliy sababi)
+// — bu OMMAVIY, hammabop bepul xizmat bo'lgani uchun tez-tez ortiqcha
+// yuklangan/vaqtincha ishlamay qoladi, ammo ICE "connected" holatiga baribir
+// o'tishi mumkin (relay o'zi trafikni o'tkazolmasa ham) — natijada "ulangan"
+// deb ko'rinadigan, lekin haqiqiy audio/video BAYTI kelmaydigan qo'ng'iroq
+// (pastdagi watchMediaFlow shuni avtomatik aniqlab ICE restart qiladi, lekin
+// TURN provayderning O'ZI ishlamasa restart ham yordam bermaydi). HAQIQIY,
+// ishonchli yechim — pullik TURN xizmati (Twilio, Xirsys, metered.ca pullik
+// tarifi va h.k.). Kod o'zgartirishsiz almashtirish uchun VITE_TURN_URL(S)/
+// VITE_TURN_USERNAME/VITE_TURN_CREDENTIAL muhit o'zgaruvchilari qo'shildi —
+// build vaqtida shular o'rnatilgan bo'lsa O'SHA ishlatiladi, aks holda bepul
+// (ishonchsiz) standart TURN'ga qaytiladi.
+function buildIceConfig(): RTCConfiguration {
+  const stunServers: RTCIceServer[] = [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:global.stun.twilio.com:3478' },
-    { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
-    { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
-    { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
-  ],
-};
+  ];
+  const customUrls = (import.meta.env.VITE_TURN_URLS as string | undefined)?.split(',').map(s => s.trim()).filter(Boolean);
+  const customUsername = import.meta.env.VITE_TURN_USERNAME as string | undefined;
+  const customCredential = import.meta.env.VITE_TURN_CREDENTIAL as string | undefined;
+  if (customUrls?.length && customUsername && customCredential) {
+    return { iceServers: [...stunServers, { urls: customUrls, username: customUsername, credential: customCredential }] };
+  }
+  return {
+    iceServers: [
+      ...stunServers,
+      { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+      { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+      { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
+    ],
+  };
+}
+const ICE_CONFIG: RTCConfiguration = buildIceConfig();
 
 export default function CallOverlay({ currentUser, users, call, onClose }:
   { currentUser: AppUser; users: AppUser[]; call: ActiveCall; onClose: () => void }) {

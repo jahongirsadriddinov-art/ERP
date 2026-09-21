@@ -198,4 +198,30 @@ router.patch('/:id', async (req, res) => {
   }
 });
 
+// Guruhni butunlay o'chirish — faqat yaratuvchi yoki guruh admini.
+// Aniq talab: "chat guruh boshqaruvi" (nomi o'zgartirish/a'zo chiqarish/
+// guruhni o'chirish) to'liq bo'lishi kerak — o'chirish yagona yetishmagan
+// amal edi (qolganlari, shu jumladan a'zo qo'shish/chiqarish, allaqachon
+// bor edi — faqat frontend ularni ko'rsatmasdi).
+router.delete('/:id', async (req, res) => {
+  try {
+    const tenant = getTenant();
+    const actorId = tenant?.userId;
+    if (!actorId) return res.status(401).json({ error: 'Autentifikatsiya talab etiladi' });
+    const group = await Group.findOne(scoped({ _id: req.params.id }));
+    if (!group) return res.status(404).json({ error: 'Guruh topilmadi' });
+    if (group.devSupport) return res.status(400).json({ error: "Dasturchi bilan aloqa guruhini o'chirib bo'lmaydi" });
+    const isCreator = String(group.createdBy) === String(actorId);
+    const isGroupAdmin = (group.adminIds || []).includes(String(actorId));
+    if (!isCreator && !isGroupAdmin) return res.status(403).json({ error: "Faqat guruh yaratuvchisi yoki admini o'chira oladi" });
+    const memberIds = group.memberIds || [];
+    await group.deleteOne();
+    memberIds.forEach(uid => emitToUser(uid, 'group:removed', { id: String(req.params.id) }));
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server xatoligi' });
+  }
+});
+
 export default router;

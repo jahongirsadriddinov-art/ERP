@@ -3,8 +3,11 @@ import PromoCode from '../models/PromoCode';
 import { requireAuth, requireDeveloper } from '../middleware/auth';
 import { getPlanInfo } from '../config/plans';
 import { checkPromoCode } from '../services/promoCodes';
+import { checkRate } from '../utils/rateLimit';
 
 const router = Router();
+
+const clientIp = (req: any) => (req.ip || '').trim();
 
 // POST /api/promocodes/validate — RO'YXATDAN O'TISH paytida hali login
 // qilmagan foydalanuvchi ham promokodni tekshira olishi kerak, shu sabab
@@ -12,6 +15,13 @@ const router = Router();
 // services/promoCodes.ts'dagi izohga qarang.
 router.post('/validate', async (req, res) => {
   try {
+    // Xavfsizlik: auth talab qilinmagani uchun (ro'yxatdan o'tishda ishlatiladi)
+    // rate limit bo'lmasa promo-kodlarni IP bo'yicha cheksiz "brute-force"
+    // qilib topish mumkin edi.
+    const ipCheck = checkRate(`promovalidate:${clientIp(req)}`, 20, 10 * 60 * 1000);
+    if (!ipCheck.allowed) {
+      return res.status(429).json({ ok: false, error: "Juda ko'p urinish. Keyinroq qayta urining." });
+    }
     const { code, planKey } = req.body || {};
     if (!code || !planKey) return res.status(400).json({ ok: false, error: 'Kod va tarif kerak' });
     const planInfo = getPlanInfo(planKey);

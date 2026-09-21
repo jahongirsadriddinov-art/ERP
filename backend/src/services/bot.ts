@@ -2349,6 +2349,22 @@ export async function notifyUser(userId: string, message: string) {
   }
 }
 
+// Server ishdan chiqishi/kutilmagan xatolar haqida DASTURCHIga (super-admin,
+// firma admin emas) ogohlantirish — avval bunday mexanizm YO'Q edi, xato
+// haqida FAQAT Render loglarini qo'lda tekshirsangiz yoki foydalanuvchi
+// shikoyat qilsa bilib olardingiz.
+export async function notifyDeveloper(message: string) {
+  try {
+    const devs = await User.find({ role: 'dasturchi', telegramChatId: { $exists: true, $ne: '' } }).select('telegramChatId').lean();
+    for (const dev of devs) {
+      if (!dev.telegramChatId) continue;
+      await bot.sendMessage(dev.telegramChatId, message, { parse_mode: 'Markdown' }).catch(() => {});
+    }
+  } catch (err) {
+    console.error('notifyDeveloper error:', err);
+  }
+}
+
 export async function notifyAdmins(message: string, inlineKeyboard?: any[][]) {
   try {
     const admins = await User.find({ role: { $in: ['direktor', 'orinbosar'] }, telegramChatId: { $exists: true, $ne: '' } });

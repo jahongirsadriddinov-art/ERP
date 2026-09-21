@@ -159,7 +159,7 @@ router.post('/finalize', async (req, res) => {
     const user = await User.findById(session.userId);
     if (!user) return res.status(404).json({ error: 'Foydalanuvchi topilmadi' });
 
-    return issueSession(user, res, req);
+    return issueSession(user, res, req, 'qr');
   } catch (err) {
     res.status(500).json({ error: 'Server xatoligi' });
   }

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import Company from '../models/Company';
 import { getTenant } from '../middleware/tenantContext';
 import { requireAuth, requireOwnerOrAdmin } from '../middleware/auth';
+import { requireFeature } from '../middleware/requireFeature';
 
 const router = Router();
 
@@ -71,7 +72,7 @@ router.get('/rates', async (_req, res) => {
 // ishlatishni xohlashi mumkin — Oʻzbekistonda odatiy amaliyot). Faqat
 // direktor/o'rinbosar/egasi o'zgartira oladi. usdRate/eurRate — null yoki 0
 // yuborilsa, o'sha valyuta uchun qayta CBU kursiga qaytadi (custom o'chadi).
-router.put('/custom', requireAuth, requireOwnerOrAdmin, async (req, res) => {
+router.put('/custom', requireAuth, requireOwnerOrAdmin, requireFeature('multi_currency'), async (req, res) => {
   const t = getTenant();
   if (!t?.companyId) return res.status(400).json({ error: "Firma konteksti topilmadi" });
 

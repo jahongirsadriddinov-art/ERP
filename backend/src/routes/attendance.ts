@@ -117,7 +117,7 @@ router.get('/', async (req, res) => {
 router.post('/checkin', async (req, res) => {
   try {
     const tenant = getTenant();
-    const { lat, lng, note } = req.body;
+    const { lat, lng, note, biometricVerified } = req.body;
     const userId = tenant?.userId;
     if (!userId) return res.status(401).json({ error: 'Autentifikatsiya talab etiladi' });
 
@@ -144,6 +144,12 @@ router.post('/checkin', async (req, res) => {
     if (lat != null) record.lat = lat;
     if (lng != null) record.lng = lng;
     if (note) record.note = note;
+    // XAVFSIZLIK: biometrik holatni faqat `true` sifatida qabul qilamiz —
+    // klient hech narsa yubormasa (biometrik yoqilmagan/qo'llab-quvvatlanmaydigan
+    // qurilma) maydon shunchaki bo'sh qoladi, `false` deb YOZILMAYDI (bu
+    // "tekshirilib, muvaffaqiyatsiz bo'ldi" bilan "umuman tekshirilmadi"ni
+    // adashtirib yubormasligi uchun).
+    if (biometricVerified === true) record.biometricVerified = true;
     await record.save();
 
     const payload = { ...record.toObject(), id: record._id };

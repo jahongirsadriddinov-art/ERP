@@ -1,0 +1,33 @@
+name: Frontend build check
+
+# Frontend'da HECH QANDAY CI tekshiruvi yo'q edi — na test, na hatto oddiy
+# "build muvaffaqiyatli o'tadimi" tekshiruvi (mavjud android-build.yml
+# butun APK/EXE ni qurishga soatlab vaqt sarflaydi, tez fikr-mulohaza
+# bermaydi). Bu workflow har bir PR/push'da frontend'ning tez (bir necha
+# soniyalik) `vite build`'i orqali sintaksis/import xatolarini DARHOL
+# ushlaydi — to'liq native ilova qurilishini kutmasdan.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend-build-check.yml'
+  pull_request:
+    paths:
+      - 'frontend/**'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run build

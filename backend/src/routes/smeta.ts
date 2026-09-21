@@ -48,7 +48,7 @@ router.post('/parse', upload.single('smeta'), async (req: Request, res: Response
     return res.json(result);
   } catch (err) {
     console.error('[smeta] parse xatosi:', err);
-    return res.status(500).json({ error: 'Parse xatosi: ' + (err as Error).message });
+    return res.status(500).json({ error: "Faylni tahlil qilishda xatolik yuz berdi. Fayl formatini tekshirib qayta urining." });
   } finally {
     fs.unlink(file.path, () => {});
   }

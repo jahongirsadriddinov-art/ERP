@@ -12,7 +12,7 @@ export interface ISession extends Document {
   deviceLabel: string;
   userAgent?: string;
   ip?: string;
-  loginMethod: 'password' | 'qr' | 'dev';
+  loginMethod: 'password' | 'otp' | 'qr' | 'dev';
   revoked: boolean;
   lastSeenAt: Date;
   createdAt: Date;
@@ -24,7 +24,7 @@ const SessionSchema: Schema = new Schema({
   deviceLabel: { type: String, required: true },
   userAgent: { type: String },
   ip: { type: String },
-  loginMethod: { type: String, enum: ['password', 'qr', 'dev'], default: 'password' },
+  loginMethod: { type: String, enum: ['password', 'otp', 'qr', 'dev'], default: 'password' },
   revoked: { type: Boolean, default: false },
   lastSeenAt: { type: Date, default: () => new Date() },
 }, { timestamps: true });

@@ -36,17 +36,53 @@ import deployRoutes from './routes/deploy';
 import paymentsRoutes from './routes/payments';
 import filesRoutes from './routes/files';
 import statusRoutes from './routes/status';
+import equipmentRoutes from './routes/equipment';
+import safetyRoutes from './routes/safety';
+import documentsRoutes from './routes/documents';
+import payrollRoutes from './routes/payroll';
+import publicClientRoutes from './routes/publicClient';
+import export1cRoutes from './routes/export1c';
+import announcementsRoutes from './routes/announcements';
 import { initSocket } from './services/socket';
 import { optionalAuth, requireAuth, blockDeveloper } from './middleware/auth';
 // Import bot to start it + get bot instance for webhook route
-import { bot } from './services/bot';
+import { bot, notifyDeveloper } from './services/bot';
+import { checkRate } from './utils/rateLimit';
 
 dotenv.config();
+
+// KUZATUV — avval xato/ishdan chiqish haqida FAQAT Render loglarini qo'lda
+// tekshirsangiz yoki foydalanuvchi shikoyat qilsa bilib olardingiz (proaktiv
+// ogohlantirish yo'q edi). Endi har ikkala holatda ham dasturchiga (Telegram
+// bot orqali, allaqachon ulangan) DARHOL xabar boradi. `checkRate` bilan
+// soatiga max 10 ta xabarga cheklanadi — bitta xato "storm" (masalan bir
+// zaiflik tez-tez qaytarilsa) Telegramni to'ldirib tashlamasin.
+function alertDeveloperOnce(kind: string, detail: string) {
+  const rl = checkRate('crash-alert', 10, 60 * 60 * 1000);
+  if (!rl.allowed) return;
+  notifyDeveloper(`🚨 *Server xatosi* (${kind})\n\n\`${detail.slice(0, 500)}\``).catch(() => {});
+}
 
 // Himoya to'ri: catch qilinmagan Promise xatolari (masalan Telegram API 400/bloklangan
 // foydalanuvchi) SERVERNI O'LDIRMASIN — faqat log qilamiz.
 process.on('unhandledRejection', (reason: any) => {
-  console.error('⚠️ Unhandled Rejection (server tirik qoldi):', reason?.message || reason);
+  const detail = reason?.stack || reason?.message || String(reason);
+  console.error('⚠️ Unhandled Rejection (server tirik qoldi):', detail);
+  alertDeveloperOnce('unhandledRejection', detail);
+});
+// AVVAL BU HECH QAYERDA TUTILMAGAN edi — uncaughtException Node'ning standart
+// xatti-harakati bo'yicha butun processni DARHOL to'xtatadi. Buni tutish
+// serverni "tirik" qoldirmaydi (xavfli bo'lardi — noaniq holatda davom etish),
+// lekin hech bo'lmaganda SABABNI yo'qotmasdan (Render avtomatik qayta ishga
+// tushirishidan OLDIN) dasturchiga xabar berish imkonini beradi.
+process.on('uncaughtException', (err: any) => {
+  const detail = err?.stack || err?.message || String(err);
+  console.error('🚨 Uncaught Exception (server qayta ishga tushmoqda):', detail);
+  alertDeveloperOnce('uncaughtException', detail);
+  // Node'ning rasmiy tavsiyasi: uncaughtException'dan keyin davom ETTIRMASLIK
+  // kerak (holat noaniq bo'lishi mumkin) — Telegram xabari yuborilishi uchun
+  // qisqa kechikish bilan chiqamiz, Render/PM2 avtomatik qayta ishga tushiradi.
+  setTimeout(() => process.exit(1), 1500);
 });
 
 const app = express();
@@ -204,6 +240,15 @@ app.use('/api/notifications',   requireAuth, notificationRoutes);
 app.use('/api/currency',        optionalAuth, currencyRoutes);
 app.use('/api/files',           filesRoutes); // Cloudinary proksi — auth shart emas (bloklangan tarmoqlar uchun)
 app.use('/api/status',          statusRoutes); // sayt yoqiq/o'chiqligi — login ekranidan OLDIN ham so'raladi, auth shart emas
+app.use('/api/equipment',       requireAuth, blockDeveloper, equipmentRoutes);
+app.use('/api/safety',          requireAuth, blockDeveloper, safetyRoutes);
+app.use('/api/documents',       requireAuth, blockDeveloper, documentsRoutes);
+app.use('/api/payroll',         requireAuth, blockDeveloper, payrollRoutes);
+app.use('/api/export1c',        requireAuth, blockDeveloper, export1cRoutes);
+app.use('/api/announcements',   requireAuth, blockDeveloper, announcementsRoutes);
+// publicClientRoutes — mijoz portali, ATAYLAB auth shart emas (mijoz tizim
+// foydalanuvchisi emas) — o'zining ichida taxmin qilib bo'lmaydigan token bilan himoyalangan.
+app.use('/api/public',          publicClientRoutes);
 app.use('/api/dashboard',       requireAuth, blockDeveloper, dashboardRoutes);
 app.use('/api/errors',          optionalAuth, clientErrorRoutes); // login ekranidan oldingi xatolar ham yozilishi kerak
 app.use('/api/admin',           requireAuth, backupRoutes);

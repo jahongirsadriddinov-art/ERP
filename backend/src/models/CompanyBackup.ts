@@ -16,7 +16,7 @@ export interface ICompanyBackup extends Document {
   companyId: string;
   companyName: string;
   branchId?: string;
-  reason: 'company_deleted';
+  reason: 'company_deleted' | 'pre_import_restore';
   deletedBy: { userId: string; name: string; role: string };
   snapshot: {
     company: any;
@@ -36,7 +36,7 @@ const CompanyBackupSchema: Schema = new Schema({
   companyId: { type: String, required: true, index: true },
   companyName: { type: String, required: true },
   branchId: { type: String },
-  reason: { type: String, enum: ['company_deleted'], default: 'company_deleted' },
+  reason: { type: String, enum: ['company_deleted', 'pre_import_restore'], default: 'company_deleted' },
   deletedBy: { type: Schema.Types.Mixed, required: true },
   snapshot: { type: Schema.Types.Mixed, required: true },
   restoredAt: { type: Date },

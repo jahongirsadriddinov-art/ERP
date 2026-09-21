@@ -56,13 +56,25 @@ router.get('/proxy', async (req, res) => {
     const overrideFilename = typeof req.query.filename === 'string' ? req.query.filename : null;
     const overrideType = typeof req.query.type === 'string' ? req.query.type : null;
 
-    res.setHeader('Content-Type', overrideType || upstream.headers.get('content-type') || 'application/octet-stream');
+    const contentType = overrideType || upstream.headers.get('content-type') || 'application/octet-stream';
+    res.setHeader('Content-Type', contentType);
     res.setHeader('Accept-Ranges', upstream.headers.get('accept-ranges') || 'bytes');
     const len = upstream.headers.get('content-length');
     if (len) res.setHeader('Content-Length', len);
     const contentRange = upstream.headers.get('content-range');
     if (contentRange) res.setHeader('Content-Range', contentRange);
-    if (overrideFilename) {
+    // XAVFSIZLIK: SVG ichiga <script>/onload kabi JS yashirish mumkin —
+    // brauzer bu proksi URL'ini to'g'ridan-to'g'ri (yangi tabda) ochsa, skript
+    // BIZNING backend domenimiz nomidan ishga tushishi mumkin edi (stored XSS).
+    // Chat/ish-jarayoni rasmlari sifatida SVG deyarli hech qachon kerak emas —
+    // funksiyani buzmasdan eng oddiy yechim: SVG har doim "yuklab olish"
+    // sifatida qaytariladi (inline render/skript ishga tushmaydi), boshqa
+        // barcha rasm/video turlari avvalgidek inline ko'rsatiladi.
+    const isSvg = /image\/svg/i.test(contentType);
+    if (isSvg) {
+      const safeName = (overrideFilename || 'image.svg').replace(/["\r\n]/g, '_');
+      res.setHeader('Content-Disposition', `attachment; filename="${safeName}"`);
+    } else if (overrideFilename) {
       res.setHeader('Content-Disposition', `attachment; filename="${overrideFilename.replace(/["\r\n]/g, '_')}"`);
     } else {
       const cd = upstream.headers.get('content-disposition');

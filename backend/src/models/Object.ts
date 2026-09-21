@@ -9,6 +9,7 @@ export interface IObject extends Document {
   smetaFileUrl?: string;
   smeta?: any; // to'liq deterministik parser natijasi (ParseResult) — qurilmalar orasida sinxron bo'lishi uchun
   companyId?: string; // v1.2 multi-tenant (nullable)
+  clientShareToken?: string; // mijoz portali — login talab qilmaydigan ochiq havola (routes/publicClient.ts)
   createdAt: Date;
   updatedAt: Date;
 }
@@ -21,7 +22,8 @@ const ObjectSchema: Schema = new Schema({
   budget: { type: Number },
   smetaFileUrl: { type: String },
   smeta: { type: Schema.Types.Mixed },
-  companyId: { type: String, index: true } // v1.2 multi-tenant
+  companyId: { type: String, index: true }, // v1.2 multi-tenant
+  clientShareToken: { type: String, index: true, sparse: true },
 }, { timestamps: true });
 
 // Search uchun indekslar

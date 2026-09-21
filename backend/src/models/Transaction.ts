@@ -94,4 +94,10 @@ const TransactionSchema: Schema = new Schema({
   companyId: { type: String, index: true } // v1.2 multi-tenant
 }, { timestamps: true });
 
+// Ro'yxat yo'li (GET /) doim {companyId}.sort({createdAt}) shaklida so'raydi —
+// yakka companyId indeksi Mongo'ga mos hujjatlarni topib, keyin ALOHIDA
+// xotirada saralashga majbur qiladi (katta firmalarda sekinlashadi). Qo'sh
+// indeks ikkalasini ham bitta amalda, saralashsiz beradi.
+TransactionSchema.index({ companyId: 1, createdAt: -1 });
+
 export default mongoose.model<ITransaction>('Transaction', TransactionSchema);

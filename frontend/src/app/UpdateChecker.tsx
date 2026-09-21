@@ -40,14 +40,24 @@ export default function UpdateChecker() {
 
   useEffect(() => {
     if (!isNative()) return;
-    fetch(`${API_BASE}/api/deploy/latest`).then(r => r.ok ? r.json() : null).then(d => {
-      if (!d?.available || !d.version) return;
-      const url = isAndroid() ? d.apkUrl : isTauri() ? d.exeUrl : undefined;
-      if (!url) return; // shu platforma uchun build yo'q (masalan iOS)
-      if (compareVersions(d.version, __APP_VERSION__) > 0) {
-        setInfo({ version: d.version, notes: d.notes, url });
-      }
-    }).catch(() => {});
+    const check = () => {
+      fetch(`${API_BASE}/api/deploy/latest`).then(r => r.ok ? r.json() : null).then(d => {
+        if (!d?.available || !d.version) return;
+        const url = isAndroid() ? d.apkUrl : isTauri() ? d.exeUrl : undefined;
+        if (!url) return; // shu platforma uchun build yo'q (masalan iOS)
+        if (compareVersions(d.version, __APP_VERSION__) > 0) {
+          setInfo({ version: d.version, notes: d.notes, url });
+        }
+      }).catch(() => {});
+    };
+    check();
+    // XATO TUZATILDI: avval FAQAT ilova ochilgan zahoti (bir marta) tekshirilardi
+    // — ilova kunlab/haftalab yopilmasdan ochiq tursa (masalan Windows'da
+    // doim ishlaydigan kompyuter), yangi versiya chiqqanidan keyin ham
+    // foydalanuvchi buni HECH QACHON ko'rmas edi, faqat qo'lda ilovani
+    // qayta ochsa bilardi. Endi har 4 soatda ham qayta tekshiriladi.
+    const interval = setInterval(check, 4 * 60 * 60 * 1000);
+    return () => clearInterval(interval);
   }, []);
 
   if (!info) return null;

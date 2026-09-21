@@ -13,6 +13,7 @@ export interface AttendanceDoc extends Document {
   note?: string;
   status: 'present' | 'late' | 'absent' | 'half';
   workHours?: number; // calculated on checkout
+  biometricVerified?: boolean; // check-in vaqtida barmoq izi/Face ID tasdiqlangan (buddy-punching'ga qarshi)
 }
 
 const AttendanceSchema = new Schema<AttendanceDoc>({
@@ -28,6 +29,7 @@ const AttendanceSchema = new Schema<AttendanceDoc>({
   note: String,
   status: { type: String, enum: ['present', 'late', 'absent', 'half'], default: 'present' },
   workHours: Number,
+  biometricVerified: Boolean,
 }, { timestamps: true });
 
 AttendanceSchema.index({ userId: 1, date: 1 }, { unique: true });

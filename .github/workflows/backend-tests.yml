@@ -1,0 +1,33 @@
+name: Backend tests
+
+# XAVFSIZLIK/SIFAT — TOPILMA (audit): backend/src'da testlar (rateLimit,
+# smeta parser, scope/tenant, tokens, plans, payroll) mavjud edi, lekin
+# HECH QAYERDA avtomatik ishga tushirilmasdi — CI faqat APK/EXE qurar edi,
+# testlarni EMAS. Demak har bir push/PR ularni buzsa ham hech kim (hatto
+# GitHub'ning o'zi ham) bundan ogoh bo'lmasdi. Endi backend/ ichida
+# o'zgarish bo'lgan har bir push/PR'da testlar avtomatik ishlaydi.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend-tests.yml'
+  pull_request:
+    paths:
+      - 'backend/**'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npm test

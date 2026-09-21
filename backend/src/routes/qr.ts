@@ -6,8 +6,10 @@ import ObjectModel from '../models/Object';
 import Transaction from '../models/Transaction';
 import User from '../models/User';
 import { logAudit } from '../services/audit';
+import { requireFeature } from '../middleware/requireFeature';
 
 const router = Router();
+router.use(requireFeature('qr_tools'));
 
 // Duplicate QR scan protection: userId:qrKey → timestamp
 const recentScans = new Map<string, number>();

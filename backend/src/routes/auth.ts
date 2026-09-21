@@ -7,7 +7,7 @@ import { bot } from '../services/bot';
 import { sendOtpSms } from '../services/eskizService';
 import { scoped, stamped } from '../middleware/scope';
 import { requireAuth, requireOwnerOrAdmin } from '../middleware/auth';
-import { normalizePhone, isValidUzPhone, hashPassword, verifyPassword } from '../utils/tokens';
+import { normalizePhone, isValidUzPhone, hashPassword, verifyPassword, isStrongPassword } from '../utils/tokens';
 import { checkRate } from '../utils/rateLimit';
 import { issueTokenWithSession } from '../services/sessions';
 import { logAudit } from '../services/audit';
@@ -31,7 +31,7 @@ const clientIp = (req: any) => (req.ip || '').trim();
 // (shu sabab export qilingan — qrlogin.ts ham shu funksiyani chaqiradi,
 // bloklangan/kutilayotgan/muddati tugagan obuna tekshiruvlari QR orqali
 // kirishda ham AYNAN bir xil ishlashi uchun).
-export async function issueSession(user: IUser, res: any, req: any) {
+export async function issueSession(user: IUser, res: any, req: any, loginMethod: 'password' | 'otp' | 'qr' | 'dev' = 'password') {
   if ((user as any).isBlocked) {
     return res.status(403).json({ error: 'Hisobingiz bloklangan. Administrator bilan bog\'laning.', blocked: true });
   }
@@ -71,7 +71,7 @@ export async function issueSession(user: IUser, res: any, req: any) {
     companyId: user.companyId,
     branchId: company?.branchId,
     isOwner: user.isOwner || false,
-  }, req, 'password');
+  }, req, loginMethod);
 
   return res.json({
     success: true,
@@ -223,7 +223,7 @@ router.post('/verify-otp', async (req, res) => {
     user.phoneVerifiedAt = new Date();
     await user.save();
 
-    return issueSession(user, res, req);
+    return issueSession(user, res, req, 'otp');
   } catch (err) {
     console.error('[verify-otp]', err);
     return res.status(500).json({ success: false, error: 'Server xatoligi' });
@@ -406,7 +406,7 @@ router.post('/dev-login', async (req, res) => {
       return res.status(400).json({ error: 'Telefon va parol kiritilishi shart' });
     }
     const normalized = normalizePhone(phone);
-    if (normalized !== DEVELOPER_PHONE || password !== DEVELOPER_PASSWORD) {
+    if (normalized !== DEVELOPER_PHONE) {
       return res.status(401).json({ error: 'Telefon yoki parol noto\'g\'ri' });
     }
 
@@ -421,6 +421,19 @@ router.post('/dev-login', async (req, res) => {
     } else if (dev.role !== 'dasturchi') {
       dev.role = 'dasturchi';
       await dev.save();
+    }
+
+    // XAVFSIZLIK/TIKLASH: avval parol FAQAT .env'dagi statik qiymat bilan
+    // solishtirilardi — unutilsa yoki almashtirish kerak bo'lsa, hech qanday
+    // o'z-o'ziga xizmat yo'li yo'q edi (faqat Render Environment orqali qo'lda).
+    // Endi bazada (passwordHash, /dev-password/* orqali) o'rnatilgan parol
+    // BOR bo'lsa O'SHA tekshiriladi, aks holda eski .env qiymatiga qaytiladi
+    // (orqaga mos, hozirgi parolni sindirmaydi).
+    const passwordOk = dev.passwordHash
+      ? await verifyPassword(password, dev.passwordHash)
+      : password === DEVELOPER_PASSWORD;
+    if (!passwordOk) {
+      return res.status(401).json({ error: 'Telefon yoki parol noto\'g\'ri' });
     }
 
     const token = await issueTokenWithSession(
@@ -448,9 +461,85 @@ router.post('/dev-login', async (req, res) => {
   }
 });
 
+// ─── Dasturchi parolini tiklash ("parolni unutdim") ──────────────────────────
+// Muammo: dasturchi paroli avval FAQAT .env orqali (server qayta ishga
+// tushirilmasa) o'zgartirilar edi — o'zi uchun hech qanday "unutdim" yo'li yo'q
+// edi. Yechim: bir martalik kod dasturchining O'ZINING (allaqachon botga
+// ulangan) Telegram chatiga yuboriladi — faqat SHU raqamga ulangan chat
+// borsagina ishlaydi, demak begona kod so'rasa ham hech kimga hech narsa
+// bormaydi (mavjudlikni oshkor qilmaslik uchun javob har doim bir xil).
+router.post('/dev-password/request-reset', async (req, res) => {
+  const ip = clientIp(req);
+  const rl = checkRate(`devpwreset:req:${ip}`, 3, 15 * 60 * 1000);
+  if (!rl.allowed) {
+    return res.status(429).json({ error: `Juda ko'p urinish. ${rl.retryAfterSec} soniyadan keyin urining.` });
+  }
+  try {
+    const dev = await User.findOne({ phone: DEVELOPER_PHONE });
+    if (dev?.telegramChatId) {
+      const code = Math.floor(1000 + Math.random() * 9000).toString();
+      const otpHash = await hashPassword(code);
+      await Otp.findOneAndUpdate(
+        { phone: `devreset:${DEVELOPER_PHONE}` },
+        { phone: `devreset:${DEVELOPER_PHONE}`, otpHash, attempts: 0, expiresAt: new Date(Date.now() + OTP_TTL_MS) },
+        { upsert: true, setDefaultsOnInsert: true }
+      );
+      await bot.sendMessage(dev.telegramChatId, `🔐 Dasturchi parolini tiklash kodi: <code>${code}</code>\nKod 2 daqiqa amal qiladi. So'ramagan bo'lsangiz — e'tibor bermang.`, { parse_mode: 'HTML' }).catch(() => {});
+    }
+    // Har doim bir xil javob — mavjudlik/ulanganlik holatini oshkor qilmaymiz.
+    return res.json({ success: true, message: "Agar Telegram ulangan bo'lsa, kod yuborildi" });
+  } catch (err) {
+    console.error('[dev-password/request-reset]', err);
+    return res.status(500).json({ success: false, error: 'Server xatoligi' });
+  }
+});
+
+router.post('/dev-password/confirm-reset', async (req, res) => {
+  const ip = clientIp(req);
+  const rl = checkRate(`devpwreset:confirm:${ip}`, 10, 15 * 60 * 1000);
+  if (!rl.allowed) {
+    return res.status(429).json({ error: `Juda ko'p urinish. ${rl.retryAfterSec} soniyadan keyin urining.` });
+  }
+  try {
+    const { code, newPassword } = req.body || {};
+    if (!code || !newPassword) {
+      return res.status(400).json({ success: false, error: 'Kod va yangi parol kiritilishi shart' });
+    }
+    if (!isStrongPassword(newPassword)) {
+      return res.status(400).json({ success: false, error: "Parol kamida 8 belgi bo'lishi kerak" });
+    }
+    const otpDoc = await Otp.findOne({ phone: `devreset:${DEVELOPER_PHONE}` }).sort({ createdAt: -1 });
+    if (!otpDoc || otpDoc.expiresAt < new Date()) {
+      if (otpDoc) await otpDoc.deleteOne();
+      return res.status(400).json({ success: false, error: "Kod topilmadi yoki muddati tugagan" });
+    }
+    if (otpDoc.attempts >= OTP_MAX_ATTEMPTS) {
+      await otpDoc.deleteOne();
+      return res.status(400).json({ success: false, error: "Urinishlar soni tugadi. Qaytadan so'rang." });
+    }
+    const isCorrect = await verifyPassword(String(code), otpDoc.otpHash);
+    if (!isCorrect) {
+      otpDoc.attempts += 1;
+      await otpDoc.save();
+      return res.status(400).json({ success: false, error: "Kod noto'g'ri" });
+    }
+    await otpDoc.deleteOne();
+
+    const dev = await User.findOne({ phone: DEVELOPER_PHONE });
+    if (!dev) return res.status(404).json({ success: false, error: 'Dasturchi hisobi topilmadi' });
+    dev.passwordHash = await hashPassword(newPassword);
+    await dev.save();
+
+    return res.json({ success: true, message: 'Parol yangilandi' });
+  } catch (err) {
+    console.error('[dev-password/confirm-reset]', err);
+    return res.status(500).json({ success: false, error: 'Server xatoligi' });
+  }
+});
+
 // Admin: Add new user
 router.post('/users', requireAuth, requireOwnerOrAdmin, async (req, res) => {
-  const { firstName, lastName, phone, role, brigade, projectIds } = req.body;
+  const { firstName, lastName, phone, role, brigade, projectIds, baseSalary } = req.body;
 
   if (!firstName || !phone || !role) {
     return res.status(400).json({ error: 'firstName, phone va role kiritilishi shart' });
@@ -473,6 +562,7 @@ router.post('/users', requireAuth, requireOwnerOrAdmin, async (req, res) => {
       phone: formattedPhone,
       role,
       ...(brigade && brigade.trim() ? { brigade } : {}),
+      ...(baseSalary != null && !isNaN(Number(baseSalary)) ? { baseSalary: Number(baseSalary) } : {}),
       projectIds: Array.isArray(projectIds) ? projectIds : []
     }));
 
@@ -485,6 +575,7 @@ router.post('/users', requireAuth, requireOwnerOrAdmin, async (req, res) => {
       lastName: newUser.lastName,
       phone: newUser.phone,
       role: newUser.role,
+      baseSalary: newUser.baseSalary,
       projectIds: newUser.projectIds || []
     });
   } catch (err) {
@@ -495,7 +586,7 @@ router.post('/users', requireAuth, requireOwnerOrAdmin, async (req, res) => {
 
 // Admin: Update user
 router.put('/users/:id', requireAuth, requireOwnerOrAdmin, async (req, res) => {
-  const { firstName, lastName, phone, role, brigade, projectIds } = req.body;
+  const { firstName, lastName, phone, role, brigade, projectIds, baseSalary } = req.body;
   try {
     const user = await User.findOne(scoped({ _id: req.params.id }));
     if (!user) return res.status(404).json({ error: 'Foydalanuvchi topilmadi' });
@@ -517,6 +608,7 @@ router.put('/users/:id', requireAuth, requireOwnerOrAdmin, async (req, res) => {
     if (lastName !== undefined) user.lastName = lastName;
     if (role) user.role = role;
     if (brigade !== undefined) user.brigade = brigade;
+    if (baseSalary !== undefined) user.baseSalary = baseSalary === null || baseSalary === '' ? undefined : Number(baseSalary);
     if (Array.isArray(projectIds)) user.projectIds = projectIds;
     if (phone) {
       let formattedPhone = phone.replace(/\s+/g, '');
@@ -545,6 +637,7 @@ router.put('/users/:id', requireAuth, requireOwnerOrAdmin, async (req, res) => {
       phone: user.phone,
       role: user.role,
       brigade: user.brigade,
+      baseSalary: user.baseSalary,
       projectIds: user.projectIds || []
     });
   } catch (err) {

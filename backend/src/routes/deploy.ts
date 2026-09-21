@@ -6,8 +6,16 @@ import User from '../models/User';
 import AppRelease from '../models/AppRelease';
 import { bot } from '../services/bot';
 import { getBackendUrl } from '../utils/backendUrl';
+import { checkRate } from '../utils/rateLimit';
 
 const router = Router();
+
+const clientIp = (req: any) => (req.ip || '').trim();
+// Maxfiy kalitni cheksiz sinab ko'rishning oldini oladi (auth/JWT yo'q,
+// faqat statik kalit bilan himoyalangan yo'llar — brute-force imkoniyati bor edi).
+function checkDeploySecretRate(req: any): boolean {
+  return checkRate(`deploysecret:${clientIp(req)}`, 10, 10 * 60 * 1000).allowed;
+}
 
 // GET /api/deploy/latest — HAMMAGA OCHIQ (auth/secret talab qilmaydi — login
 // qilmagan mehmon ham landing page'dan yuklab olishi kerak). Faqat versiya
@@ -61,6 +69,7 @@ const upload = multer({ dest: 'uploads/', limits: { fileSize: 200 * 1024 * 1024 
 // qo'lda-broadcast yo'lida qabul qilingan cheklov, yangilik emas).
 router.post('/upload-artifact', upload.single('file'), async (req, res) => {
   try {
+    if (!checkDeploySecretRate(req)) return res.status(429).json({ error: "Juda ko'p urinish" });
     const secret = req.headers['x-deploy-secret'];
     const expected = process.env.DEPLOY_BROADCAST_SECRET;
     if (!expected || secret !== expected) {
@@ -113,6 +122,7 @@ router.post('/upload-artifact', upload.single('file'), async (req, res) => {
 // dasturchiga yubor boshqa hichkimga yuborma".)
 router.post('/broadcast-update', async (req, res) => {
   try {
+    if (!checkDeploySecretRate(req)) return res.status(429).json({ error: "Juda ko'p urinish" });
     const secret = req.headers['x-deploy-secret'];
     const expected = process.env.DEPLOY_BROADCAST_SECRET;
     if (!expected || secret !== expected) {

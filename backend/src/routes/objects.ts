@@ -10,9 +10,24 @@ import { requireOwnerOrAdmin } from '../middleware/auth';
 import { logAudit } from '../services/audit';
 import { getTenant } from '../middleware/tenantContext';
 import User from '../models/User';
+import { getBackendUrl } from '../utils/backendUrl';
+import { randomBytes } from 'crypto';
 
 const router = Router();
 const upload = multer({ dest: 'uploads/', limits: { fileSize: 50 * 1024 * 1024 } });
+
+// Media URL bizning O'ZIMIZ (backend proksi/upload) manziliga tegishli bo'lishi
+// SHART — aks holda ixtiyoriy tashqi (hatto zararli/aldov) havolani "loyiha
+// rasmi" sifatida kiritish mumkin edi.
+function isOwnMediaUrl(url: string): boolean {
+  try {
+    const own = new URL(getBackendUrl());
+    const u = new URL(url);
+    return u.hostname === own.hostname;
+  } catch {
+    return false;
+  }
+}
 
 // XAVFSIZLIK — TOPILMA (audit): quyidagi ikkita yo'lda (yaratish, status
 // o'zgartirish) HECH QANDAY rol tekshiruvi yo'q edi — oddiy ishchi ham
@@ -199,6 +214,56 @@ router.get('/', async (req, res) => {
   }
 });
 
+// Loyihani tahrirlash (nom/byudjet/manzil/prorab) — yaratilgandan keyin
+// o'zgartirish imkoni yo'q edi (aniq bo'shliq: xato yozilgan nom yoki
+// byudjetni tuzatish uchun loyihani o'chirib qayta yaratishdan boshqa
+// yo'l yo'q edi).
+router.patch('/:id', requireOwnerOrAdmin, async (req, res) => {
+  try {
+    const { name, budget, location, foremanId } = req.body || {};
+    const before = await ObjectModel.findOne(scoped({ _id: req.params.id })).lean();
+    if (!before) return res.status(404).json({ error: 'Obyekt topilmadi' });
+
+    const update: any = {};
+    if (name !== undefined) {
+      const trimmed = String(name).trim();
+      if (trimmed.length < 2 || trimmed.length > 200) {
+        return res.status(400).json({ error: 'Obyekt nomi 2-200 belgi oralig\'ida bo\'lishi kerak' });
+      }
+      update.name = trimmed;
+    }
+    if (budget !== undefined) {
+      const b = budget === null || budget === '' ? undefined : Number(budget);
+      if (b !== undefined && (isNaN(b) || b < 0 || b > 1e15)) {
+        return res.status(400).json({ error: "Byudjet noto'g'ri" });
+      }
+      update.budget = b;
+    }
+    if (location !== undefined) update.location = location ? String(location).trim() : undefined;
+    if (foremanId !== undefined) update.foremanId = foremanId || undefined;
+
+    const obj = await ObjectModel.findOneAndUpdate(scoped({ _id: req.params.id }), update, { new: true });
+
+    const t = getTenant();
+    if (t?.userId) {
+      const actor = await User.findById(t.userId).lean().catch(() => null);
+      if (actor) {
+        logAudit({
+          userId: t.userId, userName: `${actor.firstName} ${actor.lastName || ''}`.trim(), userRole: actor.role,
+          action: 'update', entity: 'object', entityId: String(req.params.id),
+          description: `Obyekt tahrirlandi: "${before.name}"`,
+          oldValue: { name: before.name, budget: before.budget, location: before.location, foremanId: before.foremanId },
+          newValue: update, companyId: t.companyId, req,
+        }).catch(() => {});
+      }
+    }
+
+    res.json(obj);
+  } catch (err) {
+    res.status(500).json({ error: 'Server xatoligi' });
+  }
+});
+
 // Update Object Status
 router.patch('/:id/status', requireOwnerOrAdmin, async (req, res) => {
   try {
@@ -256,6 +321,7 @@ router.post('/:id/media', async (req, res) => {
     if (!t?.userId) return res.status(401).json({ error: 'Autentifikatsiya talab etiladi' });
     const { url, type, caption } = req.body || {};
     if (!url || typeof url !== 'string') return res.status(400).json({ error: 'Fayl URL kerak' });
+    if (!isOwnMediaUrl(url)) return res.status(400).json({ error: "Fayl avval /api/messages/upload orqali yuklanishi kerak" });
     if (!['image', 'video'].includes(type)) return res.status(400).json({ error: "Tur 'image' yoki 'video' bo'lishi kerak" });
 
     const obj = await ObjectModel.findOne(scoped({ _id: req.params.id })).select('_id').lean();
@@ -290,6 +356,39 @@ router.delete('/:id/media/:mediaId', async (req, res) => {
     const isBoss = t.role === 'direktor' || t.role === 'orinbosar';
     if (!isOwner && !isBoss) return res.status(403).json({ error: 'Faqat yuklagan xodim yoki admin o\'chira oladi' });
     await media.deleteOne();
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Server xatoligi' });
+  }
+});
+
+// ── Mijoz portali (client portal) ───────────────────────────────────────────
+// Aniq bo'shliq (agent auditida topilgan): mijoz/buyurtmachi loyiha
+// jarayonini kuzatish uchun HECH QANDAY imkoniyatga ega emas edi. To'liq
+// alohida login tizimi qurish o'rniga — eng oddiy, xavfsiz yechim: har bir
+// obyekt uchun taxmin qilib bo'lmaydigan (32 bayt tasodifiy) HAVOLA, login
+// talab qilmaydi, faqat O'QISH uchun (moliyaviy tafsilotlarsiz — faqat
+// nom/holat/progress/rasm-video). routes/publicClient.ts shu tokenni o'qiydi.
+router.post('/:id/client-link', requireOwnerOrAdmin, async (req, res) => {
+  try {
+    const obj = await ObjectModel.findOne(scoped({ _id: req.params.id }));
+    if (!obj) return res.status(404).json({ error: 'Obyekt topilmadi' });
+    obj.clientShareToken = randomBytes(24).toString('hex');
+    await obj.save();
+    // MUHIM: BACKEND (/api/...) emas, FRONTEND sahifasi (main.tsx'da /client/:token
+    // ni ushlab, ClientViewPage'ni render qiladi, u o'zi ICHIDAN backend
+        // API'ni chaqiradi) — mijoz to'g'ridan-to'g'ri API JSON'ini emas, chiroyli sahifani ko'rishi kerak.
+    const frontendUrl = process.env.SITE_URL || 'http://localhost:5173';
+    res.json({ token: obj.clientShareToken, url: `${frontendUrl.replace(/\/$/, '')}/client/${obj.clientShareToken}` });
+  } catch (err) {
+    res.status(500).json({ error: 'Server xatoligi' });
+  }
+});
+
+router.delete('/:id/client-link', requireOwnerOrAdmin, async (req, res) => {
+  try {
+    const obj = await ObjectModel.findOneAndUpdate(scoped({ _id: req.params.id }), { $unset: { clientShareToken: 1 } });
+    if (!obj) return res.status(404).json({ error: 'Obyekt topilmadi' });
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: 'Server xatoligi' });

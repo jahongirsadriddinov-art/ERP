@@ -28,6 +28,8 @@ import Camera from "@hugeicons/core-free-icons/Camera01Icon";
 import Home from "@hugeicons/core-free-icons/Home01Icon";
 import UserPlus from "@hugeicons/core-free-icons/UserAdd01Icon";
 import Edit from "@hugeicons/core-free-icons/Edit02Icon";
+import Settings from "@hugeicons/core-free-icons/Settings02Icon";
+import Megaphone from "@hugeicons/core-free-icons/Megaphone01Icon";
 import Trash from "@hugeicons/core-free-icons/Delete02Icon";
 import Search from "@hugeicons/core-free-icons/Search01Icon";
 import AlertCircle from "@hugeicons/core-free-icons/AlertCircleIcon";
@@ -71,7 +73,7 @@ import Volume2 from "@hugeicons/core-free-icons/VolumeHighIcon";
 import VolumeX from "@hugeicons/core-free-icons/VolumeOffIcon";
 import { MorphIcon, type IconNode } from "morphicons/react";
 import { toast, Toaster } from "sonner";
-import { isSoundEnabled, setSoundEnabled, getSoundVolume, setSoundVolume, playSound } from "./sound";
+import { isSoundEnabled, setSoundEnabled, getSoundVolume, setSoundVolume, playSound, sfx } from "./sound";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { API_BASE, parseSmetaFile, uploadChatMedia } from "./api";
@@ -85,7 +87,7 @@ import LanguageSwitcher from "./i18n/LanguageSwitcher";
 import { Skeleton, SkeletonList, SkeletonPage, SkeletonMessage, SkeletonTable, SkeletonProfile } from "./Skeleton";
 import { useGeoTracker } from "./useGeoTracker";
 import PullToRefresh from "./PullToRefresh";
-import { isPinSet, useAppLock, markActiveNow, clearPin, PinSetupScreen, PinLockScreen, ChangePinModal, isBiometricEnabled, setBiometricEnabled, biometricAvailable, nativeBiometricSupported, registerWebAuthnBiometric, getLockTimeoutMin, setLockTimeoutMin, LOCK_TIMEOUT_OPTIONS } from "./AppLock";
+import { isPinSet, useAppLock, markActiveNow, clearPin, PinSetupScreen, PinLockScreen, ChangePinModal, isBiometricEnabled, setBiometricEnabled, biometricAvailable, biometricSupported, tryBiometricUnlock, nativeBiometricSupported, registerWebAuthnBiometric, getLockTimeoutMin, setLockTimeoutMin, LOCK_TIMEOUT_OPTIONS } from "./AppLock";
 
 // recharts og'ir kutubxona — faqat "Hisobotlar" bo'limiga kirilganda yuklanadi
 // (boshlang'ich bundle hajmini kamaytiradi, sayt tezroq ochiladi).
@@ -146,6 +148,7 @@ export interface AppUser {
   id: string; name: string; role: Role; phone: string;
   avatar?: string; brigade?: string; projectIds: string[];
   isOwner?: boolean; companyId?: string; language?: SiteLang;
+  baseSalary?: number; // ish haqi hisob-kitobi uchun oylik/kunlik stavka
 }
 export interface Project {
   id: string; name: string; location: string; foremanId: string;
@@ -577,7 +580,8 @@ function AddUserModal({ currentUser, users, projects, onClose, onAdd }:
   const { t } = useTranslation();
   const [form, setForm] = useState({
     name: "", phone: "+998 ", role: "ishchi" as Role,
-    brigade: currentUser.brigade ?? "", newBrigade: "", projectIds: [] as string[]
+    brigade: currentUser.brigade ?? "", newBrigade: "", projectIds: [] as string[],
+    baseSalary: "",
   });
   const [err, setErr] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -605,7 +609,8 @@ function AddUserModal({ currentUser, users, projects, onClose, onAdd }:
       phone: form.phone,
       role: form.role,
       brigade: (form.role === "brigadir" || form.role === "ishchi") ? (form.brigade === "__new__" ? form.newBrigade : form.brigade) : undefined,
-      projectIds: form.projectIds
+      projectIds: form.projectIds,
+      baseSalary: form.baseSalary ? Number(form.baseSalary) : undefined,
     };
     setErr(""); setSubmitting(true);
     const result = await onAdd(newUser);
@@ -646,6 +651,13 @@ function AddUserModal({ currentUser, users, projects, onClose, onAdd }:
               {allowedRoles.map(r => <option key={r} value={r}>{roleLabel(t, r)}</option>)}
             </select>
           </div>
+          {isAdmin(currentUser.role) && (
+            <div>
+              <label className="text-sm md:text-xs font-medium block mb-1">{t('addUser.baseSalaryLabel')}</label>
+              <input type="number" min="0" className="w-full text-sm md:text-xs border border-border rounded px-3 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary"
+                placeholder={t('addUser.baseSalaryPlaceholder') as string} value={form.baseSalary} onChange={e => setForm({...form, baseSalary: e.target.value})}/>
+            </div>
+          )}
           {(form.role === "brigadir" || form.role === "ishchi") && (
             <div>
               <label className="text-sm md:text-xs font-medium block mb-1">{t('addUser.brigadeLabel')}</label>
@@ -1361,7 +1373,7 @@ function MyTransfersPanel({ currentUser, transfers, allUsers, projects, onConfir
 // ─── Edit User Modal ─────────────────────────────────────────────────────────────
 function EditUserModal({ user, currentUser, onClose, onUpdate }: { user: AppUser; currentUser: AppUser; onClose: () => void; onUpdate: (u: AppUser) => void }) {
   const { t } = useTranslation();
-  const [form, setForm] = useState({ name: user.name, role: user.role, phone: user.phone, brigade: user.brigade || "" });
+  const [form, setForm] = useState({ name: user.name, role: user.role, phone: user.phone, brigade: user.brigade || "", baseSalary: user.baseSalary != null ? String(user.baseSalary) : "" });
   // "Direktor" va "dasturchi" lavozimini FAQAT dasturchi paneli o'zgartira oladi —
   // oddiy admin (direktor/o'rinbosar) tahrirlash oynasidan xodimni direktor yoki
   // dasturchi qilib qo'ya olmasligi kerak (imtiyoz eskalatsiyasi xatosi edi).
@@ -1375,7 +1387,11 @@ function EditUserModal({ user, currentUser, onClose, onUpdate }: { user: AppUser
           <h3 className="font-semibold text-sm flex items-center gap-2"><MorphIcon icon={Edit} className="w-4 h-4 text-primary" />{t('editUser.title')}</h3>
           <button aria-label={t('editUser.close')} onClick={onClose} className="p-1 rounded hover:bg-muted"><MorphIcon icon={X} className="w-4 h-4 text-muted-foreground" /></button>
         </div>
-        <form onSubmit={e => { e.preventDefault(); onUpdate({...user, ...form}); onClose(); }} className="p-4 space-y-3">
+        <form onSubmit={e => {
+          e.preventDefault();
+          onUpdate({ ...user, ...form, baseSalary: form.baseSalary ? Number(form.baseSalary) : undefined });
+          onClose();
+        }} className="p-4 space-y-3">
           <div>
             <label className="text-sm md:text-xs font-medium block mb-1">{t('editUser.nameLabel')}</label>
             <input className="w-full text-sm md:text-xs border border-border rounded px-2.5 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
@@ -1396,6 +1412,13 @@ function EditUserModal({ user, currentUser, onClose, onUpdate }: { user: AppUser
               {!editableRoles.includes(form.role) && <option value={form.role}>{roleLabel(t, form.role)}</option>}
             </select>
           </div>
+          {isAdmin(currentUser.role) && (
+            <div>
+              <label className="text-sm md:text-xs font-medium block mb-1">{t('addUser.baseSalaryLabel')}</label>
+              <input type="number" min="0" className="w-full text-sm md:text-xs border border-border rounded px-2.5 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary"
+                placeholder={t('addUser.baseSalaryPlaceholder') as string} value={form.baseSalary} onChange={e => setForm({...form, baseSalary: e.target.value})}/>
+            </div>
+          )}
           {["ishchi", "brigadir"].includes(form.role) && (
             <div>
               <label className="text-sm md:text-xs font-medium block mb-1">{t('editUser.brigadeLabel')}</label>
@@ -1439,6 +1462,28 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
     totalExpenses: number; pendingTransfers: number; todayAttendance: number;
   } | null>(null);
   const [backupLoading, setBackupLoading] = useState(false);
+  const [showEquipment, setShowEquipment] = useState(false);
+  const [showSafety, setShowSafety] = useState(false);
+  const [showDocuments, setShowDocuments] = useState(false);
+  const [showPayroll, setShowPayroll] = useState(false);
+  const [export1cLoading, setExport1cLoading] = useState(false);
+  const handleExport1c = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    setExport1cLoading(true);
+    try {
+      const r = await fetch(`${API_BASE}/api/export1c/transactions`, { headers: { Authorization: `Bearer ${token}` } });
+      if (!r.ok) { toast.error(t('dashboard.backupError')); return; }
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `1c-export-${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch { toast.error(t('dashboard.backupError')); }
+    finally { setExport1cLoading(false); }
+  };
 
   useEffect(() => {
     localStorage.setItem("admin_activeTab", activeTab);
@@ -1471,6 +1516,37 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
       toast.success(t('dashboard.backupSuccess'));
     } catch { toast.error(t('dashboard.backupError')); }
     finally { setBackupLoading(false); }
+  };
+
+  // Backup faylni TIRIK (mavjud) firmaga qayta yuklash — avval faqat
+  // O'CHIRILGAN firmani tiklash mumkin edi (routes/companies.ts). Juda
+  // xavfli amal (joriy ma'lumotlarni backup holatiga qaytaradi, keyingi
+  // o'zgarishlar yo'qoladi) — shu sabab ikki bosqichli tasdiqlash: fayl
+  // tanlash + aniq matn yozib tasdiqlash.
+  const importFileRef = useRef<HTMLInputElement>(null);
+  const [importLoading, setImportLoading] = useState(false);
+  const handleImportBackup = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    const typed = window.prompt(t('dashboard.importConfirmPrompt') as string);
+    if (typed !== t('dashboard.importConfirmWord')) { if (typed !== null) toast.error(t('dashboard.importConfirmMismatch')); return; }
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    setImportLoading(true);
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      const r = await fetch(`${API_BASE}/api/admin/backup/import`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ companyId: parsed.companyId, data: parsed.data, confirm: true }),
+      });
+      const data = await r.json();
+      if (!r.ok) { toast.error(data.error || t('dashboard.backupError')); return; }
+      toast.success(t('dashboard.importSuccess'));
+    } catch { toast.error(t('dashboard.backupError')); }
+    finally { setImportLoading(false); }
   };
 
   const brigades = [...new Set(users.filter(u => u.brigade).map(u => u.brigade!))];
@@ -1517,8 +1593,41 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
             {t('dashboard.backup')}
           </button>
         )}
+        {hasFeature('backup') && (
+          <>
+            <input ref={importFileRef} type="file" accept="application/json" className="hidden" onChange={handleImportBackup} />
+            <button onClick={() => importFileRef.current?.click()} disabled={importLoading}
+              title={t('dashboard.importWarning') as string}
+              className="flex items-center gap-1.5 text-xs border border-destructive/30 text-destructive rounded-lg px-3 py-1.5 hover:bg-destructive/10 active:scale-95 liquid-transition disabled:opacity-60 flex-shrink-0 whitespace-nowrap">
+              {importLoading ? <MorphIcon icon={Loader2} className="w-3.5 h-3.5 animate-spin" /> : <MorphIcon icon={Upload} className="w-3.5 h-3.5" />}
+              {t('dashboard.importBackup')}
+            </button>
+          </>
+        )}
+        <button onClick={handleExport1c} disabled={export1cLoading}
+          className="flex items-center gap-1.5 text-xs border border-border rounded-lg px-3 py-1.5 hover:bg-muted active:scale-95 liquid-transition disabled:opacity-60 text-muted-foreground hover:text-foreground flex-shrink-0 whitespace-nowrap">
+          {export1cLoading ? <MorphIcon icon={Loader2} className="w-3.5 h-3.5 animate-spin" /> : <MorphIcon icon={Download} className="w-3.5 h-3.5" />}
+          {t('dashboard.export1c')}
+        </button>
       </div>
     )}
+    {/* Boshqaruv — jihozlar/xavfsizlik/hujjatlar/ish haqi (avval umuman yo'q
+        edi, product-audit'da topilgan bo'shliqlar). Har biri o'z modalida
+        ochiladi — mavjud accordion/grid tuzilishini o'zgartirmasdan. */}
+    <div className="flex-shrink-0 flex items-center gap-2 px-3 pt-2 pb-1 overflow-x-auto scrollbar-hide">
+      <button onClick={() => setShowEquipment(true)} className="flex items-center gap-1.5 text-xs border border-border rounded-lg px-3 py-1.5 hover:bg-muted active:scale-95 liquid-transition flex-shrink-0 whitespace-nowrap">
+        <MorphIcon icon={Package} className="w-3.5 h-3.5 text-primary" />{t('management.equipment')}
+      </button>
+      <button onClick={() => setShowSafety(true)} className="flex items-center gap-1.5 text-xs border border-border rounded-lg px-3 py-1.5 hover:bg-muted active:scale-95 liquid-transition flex-shrink-0 whitespace-nowrap">
+        <MorphIcon icon={AlertTriangle} className="w-3.5 h-3.5 text-amber-500" />{t('management.safety')}
+      </button>
+      <button onClick={() => setShowDocuments(true)} className="flex items-center gap-1.5 text-xs border border-border rounded-lg px-3 py-1.5 hover:bg-muted active:scale-95 liquid-transition flex-shrink-0 whitespace-nowrap">
+        <MorphIcon icon={FileText} className="w-3.5 h-3.5 text-blue-500" />{t('management.documents')}
+      </button>
+      <button onClick={() => setShowPayroll(true)} className="flex items-center gap-1.5 text-xs border border-border rounded-lg px-3 py-1.5 hover:bg-muted active:scale-95 liquid-transition flex-shrink-0 whitespace-nowrap">
+        <MorphIcon icon={Wallet} className="w-3.5 h-3.5 text-green-600" />{t('management.payroll')}
+      </button>
+    </div>
     {/* Desktop: 4-column grid */}
     <div className="hidden md:grid md:grid-cols-2 xl:grid-cols-4 gap-3 overflow-hidden bg-background p-3 flex-1 min-h-0">
       {/* Col 1 */}
@@ -1841,7 +1950,401 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
       {editUser && <EditUserModal currentUser={currentUser} user={editUser} onClose={()=>setEditUser(null)} onUpdate={u=>{onUpdateUser(u);setEditUser(null);}}/>}
       {showSend && <SendTransferModal currentUser={currentUser} projects={projects} allUsers={users} onClose={()=>setShowSend(false)} onSend={t=>{onSendTransfer(t);setShowSend(false);}}/>}
       {showAddObject && <AddObjectModal users={users} onClose={()=>setShowAddObject(false)} onAdd={p=>{onAddProject(p);setShowAddObject(false);}}/>}
+      {showEquipment && <EquipmentModal projects={projects} onClose={()=>setShowEquipment(false)}/>}
+      {showSafety && <SafetyModal projects={projects} onClose={()=>setShowSafety(false)}/>}
+      {showDocuments && <DocumentsModal projects={projects} currentUser={currentUser} onClose={()=>setShowDocuments(false)}/>}
+      {showPayroll && <PayrollModal users={users} onClose={()=>setShowPayroll(false)}/>}
     </>
+  );
+}
+
+// ─── Umumiy "Boshqaruv" modal skeleton — jihoz/xavfsizlik/hujjat/ish haqi
+// modallarining barchasi bir xil qobiq (header+yopish) ishlatadi. ────────────
+function ManagementModalShell({ icon, title, onClose, children }: { icon: any; title: string; onClose: () => void; children: React.ReactNode }) {
+  useModalPresence();
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 modal-backdrop animate-fade-in p-4" onClick={onClose}>
+      <div className="glass-modal rounded-2xl w-full max-w-lg p-5 animate-slide-up-fade max-h-[85vh] overflow-y-auto scrollbar-hide" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-bold text-sm flex items-center gap-2"><MorphIcon icon={icon} className="w-4 h-4 text-primary" />{title}</h3>
+          <button aria-label={i18n_common_close} onClick={onClose} className="p-1.5 hover:bg-muted rounded-full"><MorphIcon icon={X} className="w-4 h-4" /></button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+const i18n_common_close = "Yopish";
+
+// ─── Jihoz/texnika kuzatuvi ──────────────────────────────────────────────────
+function EquipmentModal({ projects, onClose }: { projects: Project[]; onClose: () => void }) {
+  const { t } = useTranslation();
+  const [list, setList] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [name, setName] = useState(""); const [type, setType] = useState(""); const [objectId, setObjectId] = useState("");
+  const [adding, setAdding] = useState(false);
+
+  const load = async () => {
+    setLoading(true);
+    try { const r = await fetch(`${API_BASE}/api/equipment`); if (r.ok) setList(await r.json()); } catch {}
+    setLoading(false);
+  };
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
+
+  const add = async () => {
+    if (!name.trim()) return;
+    setAdding(true);
+    try {
+      const r = await fetch(`${API_BASE}/api/equipment`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name.trim(), type: type.trim() || undefined, objectId: objectId || undefined }) });
+      if (r.ok) { setName(""); setType(""); setObjectId(""); load(); } else toast.error(t('common.error'));
+    } catch { toast.error(t('common.error')); }
+    setAdding(false);
+  };
+  const setStatus = async (id: string, status: string) => {
+    try { await fetch(`${API_BASE}/api/equipment/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) }); load(); } catch {}
+  };
+  const remove = async (id: string) => {
+    if (!window.confirm(t('common.confirmDelete') as string)) return;
+    try { await fetch(`${API_BASE}/api/equipment/${id}`, { method: 'DELETE' }); load(); } catch {}
+  };
+  const statusColor: Record<string,string> = { available: 'text-green-600 bg-green-500/10', in_use: 'text-blue-600 bg-blue-500/10', maintenance: 'text-amber-600 bg-amber-500/10', broken: 'text-red-600 bg-red-500/10' };
+  const statusLabel: Record<string,string> = { available: t('management.eqAvailable'), in_use: t('management.eqInUse'), maintenance: t('management.eqMaintenance'), broken: t('management.eqBroken') };
+
+  return (
+    <ManagementModalShell icon={Package} title={t('management.equipment')} onClose={onClose}>
+      <div className="space-y-2 mb-4">
+        <input value={name} onChange={e=>setName(e.target.value)} placeholder={t('management.eqNamePlaceholder') as string} className="w-full text-sm border border-border rounded-lg px-3 py-2 bg-input-background focus:outline-none" />
+        <div className="grid grid-cols-2 gap-2">
+          <input value={type} onChange={e=>setType(e.target.value)} placeholder={t('management.eqTypePlaceholder') as string} className="text-sm border border-border rounded-lg px-3 py-2 bg-input-background focus:outline-none" />
+          <select value={objectId} onChange={e=>setObjectId(e.target.value)} className="text-sm border border-border rounded-lg px-3 py-2 bg-input-background focus:outline-none">
+            <option value="">{t('management.eqNoProject')}</option>
+            {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        </div>
+        <button onClick={add} disabled={adding || !name.trim()} className="btn btn-primary w-full py-2 text-sm disabled:opacity-50">{t('common.add')}</button>
+      </div>
+      {loading ? <SkeletonList items={3} withAvatar={false} /> : list.length === 0 ? (
+        <p className="text-sm text-muted-foreground text-center py-6">{t('management.eqEmpty')}</p>
+      ) : (
+        <div className="space-y-1.5">
+          {list.map(e => (
+            <div key={e.id} className="flex items-center gap-2 border border-border/50 rounded-xl px-3 py-2">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">{e.name}{e.type ? ` — ${e.type}` : ''}</p>
+                {e.objectId && <p className="text-[10px] text-muted-foreground truncate">{projects.find(p=>p.id===e.objectId)?.name || ''}</p>}
+              </div>
+              <select value={e.status} onChange={ev=>setStatus(e.id, ev.target.value)} className={`text-[10px] font-semibold rounded-full px-2 py-1 border-none focus:outline-none ${statusColor[e.status]}`}>
+                {Object.keys(statusLabel).map(k => <option key={k} value={k}>{statusLabel[k]}</option>)}
+              </select>
+              <button onClick={()=>remove(e.id)} aria-label={t('common.delete')} className="p-1 text-muted-foreground hover:text-destructive"><MorphIcon icon={Trash} className="w-3.5 h-3.5" /></button>
+            </div>
+          ))}
+        </div>
+      )}
+    </ManagementModalShell>
+  );
+}
+
+// ─── Xavfsizlik hodisalari ───────────────────────────────────────────────────
+function SafetyModal({ projects, onClose }: { projects: Project[]; onClose: () => void }) {
+  const { t } = useTranslation();
+  const [list, setList] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [title, setTitleField] = useState(""); const [severity, setSeverity] = useState("medium"); const [objectId, setObjectId] = useState("");
+  const [adding, setAdding] = useState(false);
+
+  const load = async () => {
+    setLoading(true);
+    try { const r = await fetch(`${API_BASE}/api/safety`); if (r.ok) setList(await r.json()); } catch {}
+    setLoading(false);
+  };
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
+
+  const add = async () => {
+    if (!title.trim()) return;
+    setAdding(true);
+    try {
+      const r = await fetch(`${API_BASE}/api/safety`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: title.trim(), severity, objectId: objectId || undefined }) });
+      if (r.ok) { setTitleField(""); setSeverity("medium"); setObjectId(""); load(); } else toast.error(t('common.error'));
+    } catch { toast.error(t('common.error')); }
+    setAdding(false);
+  };
+  const setStatus = async (id: string, status: string) => {
+    try { await fetch(`${API_BASE}/api/safety/${id}/status`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) }); load(); } catch {}
+  };
+  const sevColor: Record<string,string> = { low: 'text-muted-foreground bg-muted', medium: 'text-amber-600 bg-amber-500/10', high: 'text-orange-600 bg-orange-500/10', critical: 'text-red-600 bg-red-500/10' };
+  const statusLabel: Record<string,string> = { open: t('management.safOpen'), investigating: t('management.safInvestigating'), resolved: t('management.safResolved') };
+
+  return (
+    <ManagementModalShell icon={AlertTriangle} title={t('management.safety')} onClose={onClose}>
+      <div className="space-y-2 mb-4">
+        <input value={title} onChange={e=>setTitleField(e.target.value)} placeholder={t('management.safTitlePlaceholder') as string} className="w-full text-sm border border-border rounded-lg px-3 py-2 bg-input-background focus:outline-none" />
+        <div className="grid grid-cols-2 gap-2">
+          <select value={severity} onChange={e=>setSeverity(e.target.value)} className="text-sm border border-border rounded-lg px-3 py-2 bg-input-background focus:outline-none">
+            <option value="low">{t('management.sevLow')}</option>
+            <option value="medium">{t('management.sevMedium')}</option>
+            <option value="high">{t('management.sevHigh')}</option>
+            <option value="critical">{t('management.sevCritical')}</option>
+          </select>
+          <select value={objectId} onChange={e=>setObjectId(e.target.value)} className="text-sm border border-border rounded-lg px-3 py-2 bg-input-background focus:outline-none">
+            <option value="">{t('management.eqNoProject')}</option>
+            {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        </div>
+        <button onClick={add} disabled={adding || !title.trim()} className="btn btn-primary w-full py-2 text-sm disabled:opacity-50">{t('management.safReportBtn')}</button>
+      </div>
+      {loading ? <SkeletonList items={3} withAvatar={false} /> : list.length === 0 ? (
+        <p className="text-sm text-muted-foreground text-center py-6">{t('management.safEmpty')}</p>
+      ) : (
+        <div className="space-y-1.5">
+          {list.map((inc:any) => (
+            <div key={inc.id} className="border border-border/50 rounded-xl px-3 py-2">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium truncate">{inc.title}</p>
+                  <p className="text-[10px] text-muted-foreground">{inc.reportedBy?.name} · {new Date(inc.occurredAt).toLocaleDateString('uz-UZ')}</p>
+                </div>
+                <span className={`text-[9px] font-bold rounded-full px-2 py-0.5 flex-shrink-0 ${sevColor[inc.severity]}`}>{inc.severity.toUpperCase()}</span>
+              </div>
+              <select value={inc.status} onChange={ev=>setStatus(inc.id, ev.target.value)} className="mt-1.5 text-[10px] font-semibold border border-border rounded-full px-2 py-1 bg-transparent focus:outline-none">
+                {Object.keys(statusLabel).map(k => <option key={k} value={k}>{statusLabel[k]}</option>)}
+              </select>
+            </div>
+          ))}
+        </div>
+      )}
+    </ManagementModalShell>
+  );
+}
+
+// ─── Hujjat/shartnoma boshqaruvi ─────────────────────────────────────────────
+function DocumentsModal({ projects, currentUser, onClose }: { projects: Project[]; currentUser: AppUser; onClose: () => void }) {
+  const { t } = useTranslation();
+  const [list, setList] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [category, setCategory] = useState("contract"); const [objectId, setObjectId] = useState("");
+  const fileRef = useRef<HTMLInputElement>(null);
+  const canSign = isAdmin(currentUser.role);
+
+  const load = async () => {
+    setLoading(true);
+    try { const r = await fetch(`${API_BASE}/api/documents`); if (r.ok) setList(await r.json()); } catch {}
+    setLoading(false);
+  };
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
+
+  const sign = async (id: string) => {
+    try {
+      const r = await fetch(`${API_BASE}/api/documents/${id}/sign`, { method: 'POST' });
+      if (r.ok) load(); else toast.error((await r.json().catch(()=>({})))?.error || t('common.error'));
+    } catch { toast.error(t('common.error')); }
+  };
+
+  const upload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]; e.target.value = '';
+    if (!file) return;
+    setUploading(true);
+    try {
+      const up = await uploadChatMedia(file, file.name);
+      const r = await fetch(`${API_BASE}/api/documents`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: file.name, fileUrl: up.url, fileName: file.name, category, objectId: objectId || undefined }) });
+      if (r.ok) load(); else toast.error(t('common.error'));
+    } catch { toast.error(t('common.error')); }
+    setUploading(false);
+  };
+  const remove = async (id: string) => {
+    if (!window.confirm(t('common.confirmDelete') as string)) return;
+    try { await fetch(`${API_BASE}/api/documents/${id}`, { method: 'DELETE' }); load(); } catch {}
+  };
+  const catLabel: Record<string,string> = { contract: t('management.catContract'), permit: t('management.catPermit'), invoice: t('management.catInvoice'), other: t('management.catOther') };
+
+  return (
+    <ManagementModalShell icon={FileText} title={t('management.documents')} onClose={onClose}>
+      <div className="space-y-2 mb-4">
+        <div className="grid grid-cols-2 gap-2">
+          <select value={category} onChange={e=>setCategory(e.target.value)} className="text-sm border border-border rounded-lg px-3 py-2 bg-input-background focus:outline-none">
+            {Object.keys(catLabel).map(k => <option key={k} value={k}>{catLabel[k]}</option>)}
+          </select>
+          <select value={objectId} onChange={e=>setObjectId(e.target.value)} className="text-sm border border-border rounded-lg px-3 py-2 bg-input-background focus:outline-none">
+            <option value="">{t('management.eqNoProject')}</option>
+            {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        </div>
+        <input ref={fileRef} type="file" className="hidden" onChange={upload} />
+        <button onClick={()=>fileRef.current?.click()} disabled={uploading} className="btn btn-primary w-full py-2 text-sm disabled:opacity-50 flex items-center justify-center gap-2">
+          {uploading ? <MorphIcon icon={Loader2} className="w-4 h-4 animate-spin" /> : <MorphIcon icon={Upload} className="w-4 h-4" />}
+          {t('management.docUploadBtn')}
+        </button>
+      </div>
+      {loading ? <SkeletonList items={3} withAvatar={false} /> : list.length === 0 ? (
+        <p className="text-sm text-muted-foreground text-center py-6">{t('management.docEmpty')}</p>
+      ) : (
+        <div className="space-y-1.5">
+          {list.map((d:any) => {
+            const iSigned = (d.signatures || []).some((s:any) => s.userId === currentUser.id);
+            return (
+            <div key={d.id} className="border border-border/50 rounded-xl px-3 py-2">
+              <div className="flex items-center gap-2">
+                <MorphIcon icon={FileText} className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                <button onClick={()=>openExternalUrl(d.fileUrl)} className="flex-1 min-w-0 text-left">
+                  <p className="text-sm font-medium truncate">{d.title}</p>
+                  <p className="text-[10px] text-muted-foreground">{catLabel[d.category]} · {d.uploadedBy?.name}</p>
+                </button>
+                {canSign && !iSigned && (
+                  <button onClick={()=>sign(d.id)} title={t('management.docSignBtn')} aria-label={t('management.docSignBtn')} className="p-1 text-muted-foreground hover:text-primary"><MorphIcon icon={Check} className="w-3.5 h-3.5" /></button>
+                )}
+                <button onClick={()=>remove(d.id)} aria-label={t('common.delete')} className="p-1 text-muted-foreground hover:text-destructive"><MorphIcon icon={Trash} className="w-3.5 h-3.5" /></button>
+              </div>
+              {(d.signatures || []).length > 0 && (
+                <p className="text-[10px] text-green-600 mt-1 pl-6">{t('management.docSignedBy', { names: d.signatures.map((s:any)=>s.name).join(', ') })}</p>
+              )}
+            </div>
+          );})}
+        </div>
+      )}
+    </ManagementModalShell>
+  );
+}
+
+// ─── Ish haqi hisob-kitobi ────────────────────────────────────────────────────
+function PayrollModal({ users, onClose }: { users: AppUser[]; onClose: () => void }) {
+  const { t } = useTranslation();
+  const [period, setPeriod] = useState(() => new Date().toISOString().slice(0,7));
+  const [list, setList] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [calculating, setCalculating] = useState(false);
+
+  const load = async (p: string) => {
+    setLoading(true);
+    try { const r = await fetch(`${API_BASE}/api/payroll?period=${p}`); if (r.ok) setList(await r.json()); } catch {}
+    setLoading(false);
+  };
+  useEffect(() => { load(period); /* eslint-disable-next-line */ }, [period]);
+
+  const calculate = async () => {
+    setCalculating(true);
+    try {
+      const r = await fetch(`${API_BASE}/api/payroll/calculate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ period }) });
+      if (r.ok) { const d = await r.json(); setList(d.records); toast.success(t('management.payrollCalculated', { count: d.count })); }
+      else toast.error(t('common.error'));
+    } catch { toast.error(t('common.error')); }
+    setCalculating(false);
+  };
+  const patch = async (id: string, body: any) => {
+    try { const r = await fetch(`${API_BASE}/api/payroll/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); if (r.ok) load(period); } catch {}
+  };
+  const statusLabel: Record<string,string> = { draft: t('management.payDraft'), finalized: t('management.payFinalized'), paid: t('management.payPaid') };
+
+  return (
+    <ManagementModalShell icon={Wallet} title={t('management.payroll')} onClose={onClose}>
+      <div className="flex items-center gap-2 mb-4">
+        <input type="month" value={period} onChange={e=>setPeriod(e.target.value)} className="flex-1 text-sm border border-border rounded-lg px-3 py-2 bg-input-background focus:outline-none" />
+        <button onClick={calculate} disabled={calculating} className="btn btn-primary px-4 py-2 text-sm disabled:opacity-50 whitespace-nowrap">
+          {calculating ? <MorphIcon icon={Loader2} className="w-4 h-4 animate-spin" /> : t('management.payCalculateBtn')}
+        </button>
+      </div>
+      {loading ? <SkeletonList items={3} withAvatar={false} /> : list.length === 0 ? (
+        <p className="text-sm text-muted-foreground text-center py-6">{t('management.payEmpty')}</p>
+      ) : (
+        <div className="space-y-2">
+          {list.map((r:any) => (
+            <div key={r.id} className="border border-border/50 rounded-xl px-3 py-2.5">
+              <div className="flex items-center justify-between mb-1.5">
+                <p className="text-sm font-semibold truncate">{r.userName}</p>
+                <span className="text-sm font-mono font-bold text-primary">{r.netPay.toLocaleString()} so'm</span>
+              </div>
+              <p className="text-[10px] text-muted-foreground mb-1.5">{t('management.payDaysWorked', { days: r.presentDays })} · {t('management.payBase', { amount: r.baseSalary.toLocaleString() })}</p>
+              <div className="grid grid-cols-3 gap-1.5">
+                <input type="number" defaultValue={r.bonuses} placeholder={t('management.payBonus') as string} disabled={r.status==='paid'}
+                  onBlur={e=>patch(r.id, { bonuses: Number(e.target.value)||0 })} className="text-xs border border-border rounded-lg px-2 py-1.5 bg-input-background focus:outline-none disabled:opacity-50" />
+                <input type="number" defaultValue={r.deductions} placeholder={t('management.payDeduction') as string} disabled={r.status==='paid'}
+                  onBlur={e=>patch(r.id, { deductions: Number(e.target.value)||0 })} className="text-xs border border-border rounded-lg px-2 py-1.5 bg-input-background focus:outline-none disabled:opacity-50" />
+                <select value={r.status} disabled={r.status==='paid'} onChange={e=>patch(r.id, { status: e.target.value })} className="text-xs border border-border rounded-lg px-2 py-1.5 bg-input-background focus:outline-none disabled:opacity-50">
+                  {Object.keys(statusLabel).map(k => <option key={k} value={k}>{statusLabel[k]}</option>)}
+                </select>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </ManagementModalShell>
+  );
+}
+
+// ─── Ichki e'lonlar taxtasi ──────────────────────────────────────────────────
+// Chat'dan farqli — bir yo'nalishli (direktor/o'rinbosardan hammaga),
+// javob/muhokama uchun mo'ljallanmagan. BARCHA xodim ko'radi, faqat admin yozadi.
+function AnnouncementsModal({ currentUser, onClose }: { currentUser: AppUser; onClose: () => void }) {
+  const { t } = useTranslation();
+  const [list, setList] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [title, setTitleField] = useState("");
+  const [body, setBody] = useState("");
+  const [posting, setPosting] = useState(false);
+  const canPost = isAdmin(currentUser.role);
+
+  const load = async () => {
+    setLoading(true);
+    try { const r = await fetch(`${API_BASE}/api/announcements`); if (r.ok) setList(await r.json()); } catch {}
+    setLoading(false);
+  };
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
+
+  const post = async () => {
+    if (!title.trim() || !body.trim()) return;
+    setPosting(true);
+    try {
+      const r = await fetch(`${API_BASE}/api/announcements`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: title.trim(), body: body.trim() }) });
+      if (r.ok) { setTitleField(""); setBody(""); setShowForm(false); load(); } else toast.error(t('common.error'));
+    } catch { toast.error(t('common.error')); }
+    setPosting(false);
+  };
+
+  const remove = async (id: string) => {
+    if (!window.confirm(t('common.confirmDelete') as string)) return;
+    try { const r = await fetch(`${API_BASE}/api/announcements/${id}`, { method: 'DELETE' }); if (r.ok) load(); } catch {}
+  };
+
+  return (
+    <ManagementModalShell icon={Megaphone} title={t('announcements.title')} onClose={onClose}>
+      {canPost && (
+        showForm ? (
+          <div className="space-y-2 mb-4">
+            <input value={title} onChange={e=>setTitleField(e.target.value)} placeholder={t('announcements.titlePlaceholder') as string}
+              className="w-full text-sm border border-border rounded-lg px-3 py-2 bg-input-background focus:outline-none" autoFocus />
+            <textarea value={body} onChange={e=>setBody(e.target.value)} placeholder={t('announcements.bodyPlaceholder') as string} rows={3}
+              className="w-full text-sm border border-border rounded-lg px-3 py-2 bg-input-background focus:outline-none resize-none" />
+            <div className="flex gap-2">
+              <button onClick={()=>setShowForm(false)} className="btn btn-outline flex-1 py-2 text-sm">{t('common.cancel')}</button>
+              <button onClick={post} disabled={posting || !title.trim() || !body.trim()} className="btn btn-primary flex-1 py-2 text-sm disabled:opacity-50">{t('announcements.postBtn')}</button>
+            </div>
+          </div>
+        ) : (
+          <button onClick={()=>setShowForm(true)} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold border-2 border-dashed border-border/60 text-muted-foreground hover:border-primary/40 hover:text-primary liquid-transition mb-4">
+            <MorphIcon icon={Plus} className="w-4 h-4" />{t('announcements.newBtn')}
+          </button>
+        )
+      )}
+      {loading ? <SkeletonList items={3} withAvatar={false} /> : list.length === 0 ? (
+        <p className="text-sm text-muted-foreground text-center py-6">{t('announcements.empty')}</p>
+      ) : (
+        <div className="space-y-2">
+          {list.map((a: any) => (
+            <div key={a.id} className="border border-border/50 rounded-xl px-3 py-2.5">
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-sm font-semibold">{a.title}</p>
+                {canPost && (
+                  <button onClick={()=>remove(a.id)} aria-label={t('common.delete')} className="p-1 text-muted-foreground hover:text-destructive flex-shrink-0"><MorphIcon icon={Trash} className="w-3.5 h-3.5" /></button>
+                )}
+              </div>
+              <p className="text-sm text-foreground/80 whitespace-pre-wrap mt-1">{a.body}</p>
+              <p className="text-[10px] text-muted-foreground mt-1.5">{a.postedBy?.name} · {new Date(a.createdAt).toLocaleDateString('uz-UZ')}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </ManagementModalShell>
   );
 }
 
@@ -1981,13 +2484,15 @@ function SmetaResultView({ smeta }: { smeta: SmetaResult }) {
   );
 }
 
-function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSendTransfer, onConfirm, onReject, onSmetaUploaded, onUpdateStatus }:
+function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSendTransfer, onConfirm, onReject, onSmetaUploaded, onUpdateStatus, onUpdateProject }:
   { project: Project; currentUser: AppUser; users: AppUser[]; transfers: Transfer[];
     onBack: () => void; onSendTransfer: (t: Transfer) => void; onConfirm: (id: string, d?: string) => void; onReject: (id: string) => void; onSmetaUploaded: (pid: string, result: SmetaResult) => void;
     onUpdateStatus: (pid: string, status: "active"|"paused"|"completed") => void;
+    onUpdateProject: (pid: string, patch: Partial<Project>) => void;
   }) {
   const { t } = useTranslation();
   const [tab, setTab] = useState<"required"|"smeta"|"pending"|"confirmed"|"media">("required");
+  const [showEditProject, setShowEditProject] = useState(false);
   // Ish jarayoni rasm/video — BARCHA xodim (ishchi, brigadir, prorab ham)
   // qo'sha oladi, faqat direktor/o'rinbosar emas (aniq talab).
   const [mediaItems, setMediaItems] = useState<{ id: string; type: 'image'|'video'; url: string; caption?: string; uploadedBy: { userId: string; name: string; role: string }; createdAt: string }[]>([]);
@@ -2063,6 +2568,27 @@ function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSe
                 ("obyekt statusini o'zgartiradigan tugma yo'qolib qoldi").
                 Endi faqat nomning o'zi qirqiladi, select doim ko'rinadi. */}
             <span className="truncate min-w-0">{project.name}</span>
+            {isAdmin(currentUser.role) && (
+              <button type="button" onClick={() => setShowEditProject(true)} aria-label={t('objectDetail.editProject')} title={t('objectDetail.editProject')}
+                className="p-1 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-full flex-shrink-0 liquid-transition">
+                <MorphIcon icon={Edit} className="w-3.5 h-3.5" />
+              </button>
+            )}
+            {isAdmin(currentUser.role) && (
+              <button type="button" onClick={async () => {
+                try {
+                  const res = await fetch(`${API_BASE}/api/objects/${project.id}/client-link`, { method: 'POST' });
+                  const data = await res.json();
+                  if (res.ok && data.url) {
+                    await navigator.clipboard.writeText(data.url).catch(() => {});
+                    toast.success(t('objectDetail.clientLinkCopied'));
+                  } else toast.error(t('common.error'));
+                } catch { toast.error(t('common.error')); }
+              }} aria-label={t('objectDetail.clientLinkBtn')} title={t('objectDetail.clientLinkBtn')}
+                className="p-1 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-full flex-shrink-0 liquid-transition">
+                <MorphIcon icon={Share2} className="w-3.5 h-3.5" />
+              </button>
+            )}
             <select
               className="text-xs bg-transparent border-none font-semibold focus:outline-none cursor-pointer liquid-transition outline-none flex-shrink-0"
               style={{ color: project.status === "active" ? "#22c55e" : project.status === "paused" ? "#f59e0b" : "#3b82f6" }}
@@ -2088,7 +2614,6 @@ function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSe
             ketardi" — endi w-full bilan navbatdagi qatorga tushadi, katta
             ekranda (sm+) xuddi eskisidek bir qatorda turaveradi. */}
         <div className="flex items-center gap-2 flex-shrink-0 w-full sm:w-auto justify-end">
-        {project.pdfFile && <button className="flex items-center gap-1 text-sm md:text-xs bg-accent text-white px-2.5 py-1.5 rounded hover:bg-accent/90 font-medium flex-shrink-0 dark:bg-accent/10 dark:text-accent dark:hover:bg-accent/20"><MorphIcon icon={Download} className="w-3.5 h-3.5" />PDF</button>}
           <input type="file" id="smeta-upload" className="hidden" accept=".pdf,.xlsx,.xls,.docx,.doc,.csv,.txt" onChange={async e=>{
             const file = e.target.files?.[0];
             if(!file) return;
@@ -2278,16 +2803,95 @@ function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSe
         )}
       </div>
       {showSend && <SendTransferModal currentUser={currentUser} projects={[project]} allUsers={users} onClose={()=>setShowSend(false)} onSend={t=>{onSendTransfer(t);setShowSend(false);}} initialTransfer={initialTransferData}/>}
-      {selectedMat && <MaterialDetailsModal mat={selectedMat} confT={confT} pendT={pendT} onClose={() => setSelectedMat(null)} onSend={() => {
+      {selectedMat && <MaterialDetailsModal mat={selectedMat} confT={confT} pendT={pendT} objectId={project.id} canEdit={isAdmin(currentUser.role)}
+        onClose={() => setSelectedMat(null)} onSend={() => {
         setInitialTransferData({ projectId: project.id, materialName: selectedMat.name, unit: selectedMat.unit });
         setShowSend(true);
-      }} />}
+      }}
+        onUpdated={patch => {
+          const updated = { ...selectedMat, ...patch };
+          onUpdateProject(project.id, { requiredMaterials: project.requiredMaterials.map(m => m.id === selectedMat.id ? updated : m) });
+          setSelectedMat(updated);
+        }} />}
+      {showEditProject && (
+        <ProjectEditModal project={project} users={users} onClose={() => setShowEditProject(false)}
+          onSave={patch => { onUpdateProject(project.id, patch); setShowEditProject(false); }} />
+      )}
+    </div>
+  );
+}
+
+// ─── Loyihani tahrirlash modali ───────────────────────────────────────────────
+function ProjectEditModal({ project, users, onClose, onSave }:
+  { project: Project; users: AppUser[]; onClose: () => void; onSave: (patch: Partial<Project>) => void }) {
+  const { t } = useTranslation();
+  useModalPresence();
+  const [name, setName] = useState(project.name);
+  const [budget, setBudget] = useState(project.budget ? String(project.budget) : "");
+  const [location, setLocation] = useState(project.location || "");
+  const [foremanId, setForemanId] = useState(project.foremanId || "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const foremen = users.filter(u => u.role === 'prorab' || u.role === 'brigadir' || u.role === 'direktor' || u.role === 'orinbosar');
+
+  const save = async () => {
+    if (name.trim().length < 2) { setError(t('objectDetail.editNameError')); return; }
+    setSaving(true); setError("");
+    try {
+      const res = await fetch(`${API_BASE}/api/objects/${project.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name.trim(), budget: budget ? Number(budget) : null, location: location.trim(), foremanId: foremanId || null }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error || t('common.error')); return; }
+      onSave({ name: name.trim(), budget: budget ? Number(budget) : 0, location: location.trim(), foremanId: foremanId || undefined });
+    } catch { setError(t('common.error')); } finally { setSaving(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 modal-backdrop animate-fade-in p-4" onClick={onClose}>
+      <div className="glass-modal rounded-2xl w-full max-w-sm p-5 animate-slide-up-fade" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-bold text-sm flex items-center gap-2"><MorphIcon icon={Edit} className="w-4 h-4 text-primary" />{t('objectDetail.editProject')}</h3>
+          <button aria-label={t('groupCreate.close')} onClick={onClose} className="p-1.5 hover:bg-muted rounded-full"><MorphIcon icon={X} className="w-4 h-4" /></button>
+        </div>
+        {error && <div className="bg-red-500/10 text-red-600 text-xs p-2 rounded-lg mb-2">{error}</div>}
+        <div className="space-y-2.5">
+          <div>
+            <label className="text-xs text-muted-foreground block mb-1">{t('objectDetail.editNameLabel')}</label>
+            <input value={name} onChange={e => setName(e.target.value)} autoFocus
+              className="w-full text-sm border border-border rounded-lg px-3 py-2 bg-input-background focus:outline-none" />
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground block mb-1">{t('objectDetail.editBudgetLabel')}</label>
+            <input type="number" min="0" value={budget} onChange={e => setBudget(e.target.value)}
+              className="w-full text-sm border border-border rounded-lg px-3 py-2 bg-input-background focus:outline-none" />
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground block mb-1">{t('objectDetail.editLocationLabel')}</label>
+            <input value={location} onChange={e => setLocation(e.target.value)}
+              className="w-full text-sm border border-border rounded-lg px-3 py-2 bg-input-background focus:outline-none" />
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground block mb-1">{t('objectDetail.editForemanLabel')}</label>
+            <select value={foremanId} onChange={e => setForemanId(e.target.value)}
+              className="w-full text-sm border border-border rounded-lg px-3 py-2 bg-input-background focus:outline-none">
+              <option value="">{t('objectDetail.editForemanNone')}</option>
+              {foremen.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+            </select>
+          </div>
+        </div>
+        <button disabled={saving} onClick={save} className="btn btn-primary w-full py-2.5 mt-4 disabled:opacity-50">
+          {t('common.save')}
+        </button>
+      </div>
     </div>
   );
 }
 
 // ─── Material Details Modal ───────────────────────────────────────────────────
-function MaterialDetailsModal({ mat, confT, pendT, onClose, onSend }: { mat: ReqMat; confT: Transfer[]; pendT: Transfer[]; onClose: () => void; onSend?: () => void; }) {
+function MaterialDetailsModal({ mat, confT, pendT, objectId, canEdit, onClose, onSend, onUpdated }:
+  { mat: ReqMat; confT: Transfer[]; pendT: Transfer[]; objectId: string; canEdit?: boolean; onClose: () => void; onSend?: () => void; onUpdated?: (patch: Partial<ReqMat>) => void; }) {
   // `t` diqqat: bu komponentda transfer o'zgaruvchisi sifatida ham ishlatiladi
   // (.filter/.map(t=>...)), shuning uchun tarjima funksiyasi `tt` deb nomlangan.
   const { t: tt } = useTranslation();
@@ -2296,16 +2900,66 @@ function MaterialDetailsModal({ mat, confT, pendT, onClose, onSend }: { mat: Req
   const pending = pendT.filter(t=>t.materialName===mat.name).reduce((a,t)=>a+t.quantity,0);
   const totalSpent = sent * (mat.price || 0);
 
+  const [editing, setEditing] = useState(false);
+  const [eName, setEName] = useState(mat.name);
+  const [eUnit, setEUnit] = useState(mat.unit);
+  const [eQty, setEQty] = useState(String(mat.quantity));
+  const [ePrice, setEPrice] = useState(mat.price != null ? String(mat.price) : "");
+  const [saving, setSaving] = useState(false);
+
+  const saveEdit = async () => {
+    if (!eName.trim()) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/materials/object/${objectId}/by-name`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentName: mat.name, name: eName.trim(), unit: eUnit.trim(), needed: Number(eQty) || 0, price: ePrice ? Number(ePrice) : null }),
+      });
+      if (res.ok) {
+        onUpdated?.({ name: eName.trim(), unit: eUnit.trim(), quantity: Number(eQty) || 0, price: ePrice ? Number(ePrice) : undefined });
+        setEditing(false);
+      } else toast.error(tt('common.error'));
+    } catch { toast.error(tt('common.error')); }
+    setSaving(false);
+  };
+
   return (
     <div className="fixed inset-0 bg-black/60 z-[60] flex flex-col justify-end sm:justify-center sm:items-center backdrop-blur-sm liquid-transition">
       <div className="bg-background/90 backdrop-blur-xl w-full sm:w-[450px] sm:rounded-2xl rounded-t-[2rem] overflow-hidden animate-slide-up-fade flex flex-col shadow-2xl border border-white/20">
         <div className="p-5 border-b border-border/50 flex justify-between items-center bg-card/50">
           <h3 className="font-semibold text-base truncate pr-4">{mat.name}</h3>
           <div className="flex items-center gap-2">
+            {canEdit && !editing && <button onClick={()=>setEditing(true)} aria-label={tt('materialDetails.editBtn')} title={tt('materialDetails.editBtn')} className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-full liquid-transition"><MorphIcon icon={Edit} className="w-4 h-4" /></button>}
             {onSend && <button onClick={()=>{onClose(); onSend();}} className="flex items-center gap-1.5 bg-primary text-white text-sm md:text-xs px-3 py-1.5 rounded-full hover:bg-primary/90 font-medium liquid-transition shadow-md shadow-primary/20"><MorphIcon icon={Send} className="w-3 h-3" />{tt('common.send')}</button>}
             <button aria-label={tt('common.close')} onClick={onClose} className="p-1.5 text-muted-foreground hover:bg-muted/50 rounded-full liquid-transition bg-muted/20"><MorphIcon icon={X} className="w-4 h-4" /></button>
           </div>
         </div>
+        {editing ? (
+          <div className="p-4 space-y-2.5">
+            <div>
+              <label className="text-xs text-muted-foreground block mb-1">{tt('objectDetail.editNameLabel')}</label>
+              <input value={eName} onChange={e=>setEName(e.target.value)} autoFocus className="w-full text-sm border border-border rounded-lg px-3 py-2 bg-input-background focus:outline-none" />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-xs text-muted-foreground block mb-1">{tt('objectDetail.colUnit')}</label>
+                <input value={eUnit} onChange={e=>setEUnit(e.target.value)} className="w-full text-sm border border-border rounded-lg px-3 py-2 bg-input-background focus:outline-none" />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground block mb-1">{tt('objectDetail.colQty')}</label>
+                <input type="number" min="0" value={eQty} onChange={e=>setEQty(e.target.value)} className="w-full text-sm border border-border rounded-lg px-3 py-2 bg-input-background focus:outline-none" />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground block mb-1">{tt('objectDetail.colPrice')}</label>
+              <input type="number" min="0" value={ePrice} onChange={e=>setEPrice(e.target.value)} className="w-full text-sm border border-border rounded-lg px-3 py-2 bg-input-background focus:outline-none" />
+            </div>
+            <div className="flex gap-2 pt-1">
+              <button onClick={()=>setEditing(false)} className="btn btn-outline flex-1 py-2">{tt('common.cancel')}</button>
+              <button onClick={saveEdit} disabled={saving} className="btn btn-primary flex-1 py-2 disabled:opacity-50">{tt('common.save')}</button>
+            </div>
+          </div>
+        ) : (
         <div className="p-4 overflow-y-auto overflow-x-hidden">
           <div className="grid grid-cols-2 gap-3 mb-4">
             <div className="bg-muted p-2.5 rounded-lg border border-border">
@@ -2340,6 +2994,7 @@ function MaterialDetailsModal({ mat, confT, pendT, onClose, onSend }: { mat: Req
             </div>
           )}
         </div>
+        )}
       </div>
     </div>
   );
@@ -2653,7 +3308,7 @@ export function VoicePlayer({ src, mine }: { src: string; mine?: boolean }) {
 }
 
 // ─── Chat Page ─────────────────────────────────────────────────────────────────
-function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, onMarkRead, onEdit, onDelete, onPin, onChatOpen, onCreateGroup, onStartCall, canModifyMessages, onGetDevSupport }:
+function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, onMarkRead, onEdit, onDelete, onPin, onChatOpen, onCreateGroup, onStartCall, canModifyMessages, onGetDevSupport, onRenameGroup, onAddGroupMembers, onRemoveGroupMember, onLeaveGroup, onDeleteGroup }:
   {
     currentUser: AppUser; users: AppUser[]; messages: Msg[];
     groups: Group[]; onlineUsers: string[];
@@ -2666,11 +3321,17 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
     onStartCall: (mode: 'voice'|'video', target: { peer?: AppUser; group?: Group }) => void;
     canModifyMessages?: boolean;
     onGetDevSupport?: () => Promise<Group|null>;
+    onRenameGroup: (groupId: string, name: string) => Promise<void>;
+    onAddGroupMembers: (groupId: string, memberIds: string[]) => Promise<void>;
+    onRemoveGroupMember: (groupId: string, userId: string) => Promise<void>;
+    onLeaveGroup: (groupId: string) => Promise<void>;
+    onDeleteGroup: (groupId: string) => Promise<void>;
   }
 ) {
   const [selUser, setSelUser] = useState<AppUser|null>(null);
   const [selGroup, setSelGroup] = useState<Group|null>(null);
   const [showNewGroup, setShowNewGroup] = useState(false);
+  const [showGroupSettings, setShowGroupSettings] = useState(false);
   const [text, setText] = useState("");
   const [showAttach, setShowAttach] = useState(false);
   const [ctxMenu, setCtxMenu] = useState<{msgId:string; x:number; y:number}|null>(null);
@@ -2738,6 +3399,15 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
   const closeChat = () => { setSelUser(null); setSelGroup(null); setSelectMode(false); setSelected(new Set()); };
 
   useEffect(() => { onChatOpen(!!(selUser || selGroup)); }, [selUser, selGroup]);
+  // Guruh ma'lumoti (a'zolar/nomi) yangilansa yoki guruh o'chirilsa/undan
+  // chiqib ketilsa — ochiq suhbat oynasi eskirgan nusxani ko'rsatib
+  // qolmasin (masalan boshqa qurilmada nomi o'zgartirilgan bo'lsa).
+  useEffect(() => {
+    if (!selGroup) return;
+    const fresh = groups.find(g => g.id === selGroup.id);
+    if (!fresh) { setSelGroup(null); setShowGroupSettings(false); }
+    else if (fresh !== selGroup) setSelGroup(fresh);
+  }, [groups, selGroup]);
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
     if (selUser && unread(selUser.id) > 0) onMarkRead(selUser.id);
@@ -3021,22 +3691,25 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
                 <MorphIcon icon={ChevronLeft} className="w-5 h-5" />
               </button>
               {selGroup ? (
-                selGroup.devSupport
-                  ? <div className="w-9 h-9 rounded-full bg-orange-500/15 flex items-center justify-center flex-shrink-0 text-xl">🛠</div>
-                  : <div className="w-9 h-9 rounded-full bg-primary/15 text-primary flex items-center justify-center flex-shrink-0 overflow-hidden">
-                      {selGroup.avatar ? <img src={selGroup.avatar} className="w-full h-full object-cover"/> : <MorphIcon icon={Users2} className="w-[18px] h-[18px]" />}
-                    </div>
+                <button type="button" onClick={() => !selGroup.devSupport && setShowGroupSettings(true)} disabled={selGroup.devSupport} className="flex-shrink-0 disabled:cursor-default">
+                  {selGroup.devSupport
+                    ? <div className="w-9 h-9 rounded-full bg-orange-500/15 flex items-center justify-center flex-shrink-0 text-xl">🛠</div>
+                    : <div className="w-9 h-9 rounded-full bg-primary/15 text-primary flex items-center justify-center flex-shrink-0 overflow-hidden">
+                        {selGroup.avatar ? <img src={selGroup.avatar} className="w-full h-full object-cover"/> : <MorphIcon icon={Users2} className="w-[18px] h-[18px]" />}
+                      </div>}
+                </button>
               ) : <div className="relative"><Avatar user={selUser!} size="sm"/>{isOnline(selUser!.id) && <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-card"/>}</div>}
-              <div className="flex-1 min-w-0">
+              <button type="button" onClick={() => selGroup && !selGroup.devSupport && setShowGroupSettings(true)} className="flex-1 min-w-0 text-left" disabled={!selGroup || selGroup.devSupport}>
                 <p className="text-sm font-semibold truncate">{selGroup ? (selGroup.devSupport ? tChat('common.roles.dasturchi') : selGroup.name) : selUser!.name}</p>
                 {selGroup
                   ? <p className="text-[11px] text-muted-foreground truncate">{selGroup.devSupport ? tChat('chat.devSupportSubtitle') : tChat('chat.memberCount', { count: selGroup.memberIds?.length || 0 })}</p>
                   : <p className="text-[11px] text-muted-foreground">{isOnline(selUser!.id) ? <span className="text-green-800 dark:text-green-400">onlayn</span> : roleLabel(tChat, selUser!.role)}</p>}
-              </div>
+              </button>
               {!selectMode && !selGroup?.devSupport && (
                 <div className="flex items-center gap-1 flex-shrink-0">
                   <button onClick={() => onStartCall('voice', { peer: selUser || undefined, group: selGroup || undefined })} title={tChat('chat.voiceCall')} aria-label={tChat('chat.voiceCall')} className="btn btn-ghost w-9 h-9 p-0 rounded-full text-primary"><MorphIcon icon={Phone} className="w-[18px] h-[18px]" /></button>
                   <button onClick={() => onStartCall('video', { peer: selUser || undefined, group: selGroup || undefined })} title={tChat('chat.videoCall')} aria-label={tChat('chat.videoCall')} className="btn btn-ghost w-9 h-9 p-0 rounded-full text-primary"><MorphIcon icon={VideoIcon} className="w-[18px] h-[18px]" /></button>
+                  {selGroup && <button onClick={() => setShowGroupSettings(true)} title={tChat('groupSettings.title')} aria-label={tChat('groupSettings.title')} className="btn btn-ghost w-9 h-9 p-0 rounded-full text-muted-foreground"><MorphIcon icon={Settings} className="w-[18px] h-[18px]" /></button>}
                 </div>
               )}
               {selectMode && (
@@ -3194,7 +3867,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
               <div className="flex items-center gap-2 bg-amber-500/10 px-4 py-2 border-t border-amber-500/25 flex-shrink-0">
                 <MorphIcon icon={Edit} className="w-4 h-4 text-amber-600 flex-shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-[10px] font-semibold text-amber-800 dark:text-amber-400">Tahrirlash</p>
+                  <p className="text-[10px] font-semibold text-amber-800 dark:text-amber-400">{tChat('chat.edit')}</p>
                   <p className="text-xs text-muted-foreground truncate">{messages.find(m=>m.id===editingId)?.text}</p>
                 </div>
                 <button aria-label={tChat('chat.cancelEditAria')} onClick={()=>{setEditingId(null);setEditText("");}} className="p-1 text-muted-foreground hover:text-foreground flex-shrink-0"><MorphIcon icon={X} className="w-4 h-4" /></button>
@@ -3287,6 +3960,128 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
         <GroupCreateModal contacts={contacts} onClose={() => setShowNewGroup(false)}
           onCreate={async (name, ids) => { const g = await onCreateGroup(name, ids); setShowNewGroup(false); if (g) { setSelGroup(g); setSelUser(null); } }}/>
       )}
+
+      {/* Guruh sozlamalari (a'zolar, nomi, chiqish/o'chirish) */}
+      {showGroupSettings && selGroup && (
+        <GroupSettingsModal group={selGroup} users={users} currentUser={currentUser} contacts={contacts}
+          onClose={() => setShowGroupSettings(false)}
+          onRename={name => onRenameGroup(selGroup.id, name)}
+          onAddMembers={ids => onAddGroupMembers(selGroup.id, ids)}
+          onRemoveMember={uid => onRemoveGroupMember(selGroup.id, uid)}
+          onLeave={async () => { await onLeaveGroup(selGroup.id); setShowGroupSettings(false); closeChat(); }}
+          onDelete={async () => { await onDeleteGroup(selGroup.id); setShowGroupSettings(false); closeChat(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Guruh sozlamalari modal ────────────────────────────────────────────────────
+function GroupSettingsModal({ group, users, currentUser, contacts, onClose, onRename, onAddMembers, onRemoveMember, onLeave, onDelete }: {
+  group: Group; users: AppUser[]; currentUser: AppUser; contacts: AppUser[]; onClose: () => void;
+  onRename: (name: string) => Promise<void>;
+  onAddMembers: (memberIds: string[]) => Promise<void>;
+  onRemoveMember: (userId: string) => Promise<void>;
+  onLeave: () => Promise<void>;
+  onDelete: () => Promise<void>;
+}) {
+  const { t } = useTranslation();
+  useModalPresence();
+  const isGroupAdmin = (group.adminIds || []).includes(currentUser.id);
+  const isCreator = String(group.createdBy) === String(currentUser.id);
+  const [editingName, setEditingName] = useState(false);
+  const [name, setName] = useState(group.name);
+  const [showAddMembers, setShowAddMembers] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const memberUsers = (group.memberIds || []).map(id => users.find(u => u.id === id)).filter(Boolean) as AppUser[];
+  const nonMembers = contacts.filter(u => !(group.memberIds || []).includes(u.id));
+
+  const saveName = async () => {
+    if (!name.trim() || name.trim() === group.name) { setEditingName(false); return; }
+    setBusy(true);
+    try { await onRename(name.trim()); } finally { setBusy(false); setEditingName(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 modal-backdrop animate-fade-in p-4" onClick={onClose}>
+      <div className="glass-modal rounded-2xl w-full max-w-sm p-5 animate-slide-up-fade max-h-[80vh] overflow-y-auto scrollbar-hide" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-bold text-sm flex items-center gap-2"><MorphIcon icon={Users2} className="w-4 h-4 text-primary" />{t('groupSettings.title')}</h3>
+          <button aria-label={t('groupCreate.close')} onClick={onClose} className="p-1.5 hover:bg-muted rounded-full"><MorphIcon icon={X} className="w-4 h-4" /></button>
+        </div>
+
+        {editingName ? (
+          <div className="flex items-center gap-2 mb-4">
+            <input value={name} onChange={e => setName(e.target.value)} autoFocus
+              className="flex-1 text-sm border border-border rounded-lg px-3 py-2 bg-input-background focus:outline-none" />
+            <button onClick={saveName} disabled={busy} className="btn btn-primary px-3 py-2 text-xs disabled:opacity-50">{t('common.save')}</button>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-sm font-semibold truncate">{group.name}</p>
+            {isGroupAdmin && (
+              <button onClick={() => setEditingName(true)} aria-label={t('groupSettings.rename')} className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-full">
+                <MorphIcon icon={Edit} className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        )}
+
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{t('groupSettings.members', { count: memberUsers.length })}</p>
+          {isGroupAdmin && nonMembers.length > 0 && (
+            <button onClick={() => setShowAddMembers(v => !v)} className="text-xs font-semibold text-primary hover:underline">{t('groupSettings.addMembers')}</button>
+          )}
+        </div>
+
+        {showAddMembers && (
+          <AddGroupMembersInline contacts={nonMembers} onAdd={async ids => { setBusy(true); try { await onAddMembers(ids); } finally { setBusy(false); setShowAddMembers(false); } }} />
+        )}
+
+        <div className="space-y-1 mb-4">
+          {memberUsers.map(u => (
+            <div key={u.id} className="flex items-center gap-2.5 px-1 py-1.5">
+              <Avatar user={u} size="sm" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm truncate">{u.name}{u.id === currentUser.id ? ` (${t('chat.you')})` : ''}</p>
+                {(group.adminIds || []).includes(u.id) && <p className="text-[10px] text-primary font-semibold">{t('groupSettings.adminBadge')}</p>}
+              </div>
+              {isGroupAdmin && u.id !== currentUser.id && (
+                <button onClick={() => onRemoveMember(u.id)} aria-label={t('groupSettings.removeMember')} className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-full">
+                  <MorphIcon icon={X} className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+
+        <div className="space-y-2 pt-3 border-t border-border/50">
+          <button onClick={onLeave} className="w-full text-sm font-semibold text-amber-600 hover:bg-amber-500/10 rounded-xl py-2.5">{t('groupSettings.leaveGroup')}</button>
+          {isCreator && (
+            <button onClick={() => { if (window.confirm(t('groupSettings.confirmDelete') as string)) onDelete(); }}
+              className="w-full text-sm font-semibold text-destructive hover:bg-destructive/10 rounded-xl py-2.5">{t('groupSettings.deleteGroup')}</button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AddGroupMembersInline({ contacts, onAdd }: { contacts: AppUser[]; onAdd: (ids: string[]) => void }) {
+  const { t } = useTranslation();
+  const [sel, setSel] = useState<Set<string>>(new Set());
+  const toggle = (id: string) => setSel(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
+  return (
+    <div className="bg-muted/30 rounded-xl p-2 mb-3 space-y-1 max-h-40 overflow-y-auto scrollbar-hide">
+      {contacts.map(u => (
+        <button key={u.id} type="button" onClick={() => toggle(u.id)}
+          className={`w-full flex items-center gap-2.5 px-2 py-1.5 rounded-lg text-left ${sel.has(u.id) ? 'bg-primary/10' : 'hover:bg-muted/50'}`}>
+          <Avatar user={u} size="sm" />
+          <p className="text-sm flex-1 truncate">{u.name}</p>
+          <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${sel.has(u.id) ? 'bg-primary border-primary' : 'border-border'}`}>{sel.has(u.id) && <MorphIcon icon={Check} className="w-2.5 h-2.5 text-white" />}</div>
+        </button>
+      ))}
+      <button disabled={sel.size === 0} onClick={() => onAdd(Array.from(sel))} className="btn btn-primary w-full py-2 text-xs mt-1 disabled:opacity-40">{t('groupSettings.addSelected', { count: sel.size })}</button>
     </div>
   );
 }
@@ -4540,6 +5335,11 @@ function LoginScreen({ onLogin, onRegister, onBack }: { onLogin: (u: any, compan
   const [step, setStep] = useState<"phone" | "code" | "devpass" | "blocked" | "qr">("phone");
   const [blockedReason, setBlockedReason] = useState<'pending'|'expired'|'rejected'|null>(null);
   const [error, setError] = useState("");
+  // Dasturchi paroli "unutdim" oqimi — devpass qadamida qo'shimcha holat.
+  const [devResetStage, setDevResetStage] = useState<"none" | "requested" | "done">("none");
+  const [devResetCode, setDevResetCode] = useState("");
+  const [devResetNewPassword, setDevResetNewPassword] = useState("");
+  const [devResetBusy, setDevResetBusy] = useState(false);
   const [timeLeft, setTimeLeft] = useState(0);
   const [loginCompanyName] = useState(() => localStorage.getItem("erp_companyName") || "QurilishERP");
   const [loginCompanyLogo] = useState(() => localStorage.getItem("erp_companyLogo") || "");
@@ -4639,6 +5439,38 @@ function LoginScreen({ onLogin, onRegister, onBack }: { onLogin: (u: any, compan
       setError(t('login.serverError'));
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleDevResetRequest = async () => {
+    setDevResetBusy(true); setError("");
+    try {
+      await fetch(API_BASE + "/api/auth/dev-password/request-reset", { method: "POST" });
+      setDevResetStage("requested");
+    } catch {
+      setError(t('login.serverError'));
+    } finally {
+      setDevResetBusy(false);
+    }
+  };
+
+  const handleDevResetConfirm = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setDevResetBusy(true); setError("");
+    try {
+      const res = await fetch(API_BASE + "/api/auth/dev-password/confirm-reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: devResetCode, newPassword: devResetNewPassword }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error || t('login.genericError')); return; }
+      setDevResetStage("done");
+      setPassword(devResetNewPassword);
+    } catch {
+      setError(t('login.serverError'));
+    } finally {
+      setDevResetBusy(false);
     }
   };
 
@@ -4804,7 +5636,31 @@ function LoginScreen({ onLogin, onRegister, onBack }: { onLogin: (u: any, compan
             <button type="submit" disabled={submitting} className="w-full bg-gradient-to-r from-primary via-primary to-blue-700 text-white text-sm font-bold py-3.5 rounded-full shadow-lg shadow-primary/30 hover:shadow-xl hover:shadow-primary/35 hover:-translate-y-0.5 active:scale-[0.98] liquid-transition disabled:opacity-60 disabled:pointer-events-none">
               {t('login.signIn')}
             </button>
-            <button type="button" onClick={() => { setStep("phone"); setPassword(""); }} className="w-full text-sm md:text-xs text-muted-foreground hover:text-foreground py-2 liquid-transition">
+            {devResetStage === "none" && (
+              <button type="button" onClick={handleDevResetRequest} disabled={devResetBusy}
+                className="w-full text-sm md:text-xs text-primary hover:underline py-1 liquid-transition disabled:opacity-60">
+                {t('login.devForgotPassword')}
+              </button>
+            )}
+            {devResetStage === "requested" && (
+              <div className="bg-primary/5 border border-primary/10 rounded-xl p-3 space-y-2">
+                <p className="text-xs text-muted-foreground text-center">{t('login.devResetSentHint')}</p>
+                <input type="text" inputMode="numeric" placeholder={t('login.devResetCodePlaceholder') as string}
+                  className="w-full text-base text-center border border-border/50 rounded-xl px-4 py-2.5 bg-white/50 dark:bg-black/20 focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  value={devResetCode} onChange={e => setDevResetCode(e.target.value.replace(/\D/g, "").slice(0, 4))} />
+                <input type="password" placeholder={t('login.devResetNewPasswordPlaceholder') as string}
+                  className="w-full text-sm border border-border/50 rounded-xl px-4 py-2.5 bg-white/50 dark:bg-black/20 focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  value={devResetNewPassword} onChange={e => setDevResetNewPassword(e.target.value)} />
+                <button type="button" onClick={handleDevResetConfirm as any} disabled={devResetBusy || devResetCode.length !== 4 || devResetNewPassword.length < 8}
+                  className="w-full bg-primary text-white text-sm font-bold py-2.5 rounded-full disabled:opacity-50">
+                  {t('login.devResetConfirmBtn')}
+                </button>
+              </div>
+            )}
+            {devResetStage === "done" && (
+              <p className="text-xs text-green-600 text-center">{t('login.devResetSuccessHint')}</p>
+            )}
+            <button type="button" onClick={() => { setStep("phone"); setPassword(""); setDevResetStage("none"); }} className="w-full text-sm md:text-xs text-muted-foreground hover:text-foreground py-2 liquid-transition">
               {t('login.changeNumber')}
             </button>
           </form>
@@ -4848,6 +5704,78 @@ function LoginScreen({ onLogin, onRegister, onBack }: { onLogin: (u: any, compan
         </div>
       )}
 
+    </main>
+  );
+}
+
+// ─── Mijoz portali (client portal) ──────────────────────────────────────────
+// Login TALAB QILMAYDI — main.tsx URL'da /client/:token ko'rsa, butun
+// autentifikatsiyalangan ilova o'rniga shu komponent render qilinadi.
+// Faqat xavfsiz/umumiy ma'lumot (nom/holat/progress/rasm-video) —
+// moliyaviy tafsilot yo'q (backend/src/routes/publicClient.ts'ga qarang).
+export function ClientViewPage({ token }: { token: string }) {
+  const [data, setData] = useState<{ name: string; location?: string; status: string; progressPercent: number; media: { type: 'image'|'video'; url: string; caption?: string; createdAt: string }[] } | null>(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    fetch(`${API_BASE}/api/public/client-view/${token}`)
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(setData)
+      .catch(() => setError("Havola yaroqsiz yoki bekor qilingan"));
+  }, [token]);
+
+  const statusLabel = (s: string) => s === 'active' ? "Faol" : s === 'paused' ? "To'xtatilgan" : "Yakunlangan";
+  const statusColor = (s: string) => s === 'active' ? '#22c55e' : s === 'paused' ? '#f59e0b' : '#3b82f6';
+
+  if (error) return (
+    <main className="min-h-[100dvh] bg-background flex items-center justify-center p-6 text-center">
+      <div>
+        <MorphIcon icon={AlertCircle} className="w-10 h-10 mx-auto mb-3 text-destructive opacity-70" />
+        <p className="text-sm text-muted-foreground">{error}</p>
+      </div>
+    </main>
+  );
+  if (!data) return (
+    <main className="min-h-[100dvh] bg-background flex items-center justify-center">
+      <MorphIcon icon={Loader2} className="w-8 h-8 animate-spin text-primary" />
+    </main>
+  );
+
+  return (
+    <main className="min-h-[100dvh] bg-background">
+      <div className="glass border-b border-border px-5 py-4 flex items-center gap-3">
+        <div className="w-10 h-10 rounded-2xl bg-primary/15 text-primary flex items-center justify-center flex-shrink-0"><MorphIcon icon={Building2} className="w-5 h-5" /></div>
+        <div className="min-w-0">
+          <p className="text-base font-bold truncate">{data.name}</p>
+          {data.location && <p className="text-xs text-muted-foreground truncate">{data.location}</p>}
+        </div>
+      </div>
+      <div className="p-5 max-w-2xl mx-auto space-y-5">
+        <div className="surface rounded-2xl p-5">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-semibold" style={{ color: statusColor(data.status) }}>{statusLabel(data.status)}</span>
+            <span className="text-sm font-bold font-mono">{data.progressPercent}%</span>
+          </div>
+          <div className="h-2.5 rounded-full bg-muted overflow-hidden">
+            <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${data.progressPercent}%` }} />
+          </div>
+          <p className="text-[11px] text-muted-foreground mt-2">Material yetkazib berish progressi (moliyaviy ma'lumot ko'rsatilmaydi)</p>
+        </div>
+
+        <div>
+          <p className="text-sm font-bold mb-2">Ish jarayoni ({data.media.length})</p>
+          {data.media.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-8">Hali rasm/video qo'shilmagan</p>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {data.media.map((m, i) => (
+                <div key={i} className="relative rounded-xl overflow-hidden bg-muted aspect-square">
+                  {m.type === 'video' ? <video src={m.url} className="w-full h-full object-cover" controls playsInline /> : <img src={m.url} alt="" loading="lazy" className="w-full h-full object-cover" />}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
     </main>
   );
 }
@@ -4922,6 +5850,7 @@ export default function App() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [qrScanOpen, setQrScanOpen] = useState(false);
   const [qrGenData, setQrGenData] = useState<{type:"material"|"object"|"transaction";id:string;name:string}|null>(null);
+  const [showAnnouncements, setShowAnnouncements] = useState(false);
   const [page, setPage] = useState<NavPage>(() => {
     return (localStorage.getItem("page") as NavPage) || "dashboard";
   });
@@ -5183,6 +6112,22 @@ export default function App() {
     if (attendancePending) return;
     setAttendancePending(true);
     try {
+      // Barmoq izi/Face ID/Windows Hello tasdiqlash — agar xodim buni
+      // Profilda allaqachon yoqib qo'ygan bo'lsa (Profil > Xavfsizlik),
+      // "ishga keldim" tugmasi bosilganda ham so'raladi: bu boshqa birov
+      // xodimning telefonidan (yoki ulardan qarzga olib) o'rniga check-in
+      // qilib qo'yishining (odatiy amaliyot atamasi bilan — "buddy
+      // punching") oldini oladi. Yoqilmagan/qo'llab-quvvatlanmaydigan
+      // qurilmada — eski xatti-harakat (faqat joylashuv) o'zgarishsiz qoladi.
+      let biometricVerified: boolean | undefined;
+      if (isBiometricEnabled() && biometricSupported()) {
+        const ok = await tryBiometricUnlock();
+        if (!ok) {
+          toast.error(tApp('attendance.biometricRequired'));
+          return;
+        }
+        biometricVerified = true;
+      }
       const token = localStorage.getItem('token') || '';
       const headers: Record<string,string> = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
       // MAJBURIY: joylashuv olinmasa "Ishga keldim" tasdiqlanmaydi — botdagi
@@ -5197,12 +6142,12 @@ export default function App() {
           : "Joylashuvni aniqlab bo'lmadi. GPS yoqilganini tekshirib, qayta urinib ko'ring.");
         return;
       }
-      const body: any = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      const body: any = { lat: pos.coords.latitude, lng: pos.coords.longitude, ...(biometricVerified ? { biometricVerified: true } : {}) };
       const r = await fetch(`${API_BASE}/api/attendance/checkin`, { method: 'POST', headers, body: JSON.stringify(body) });
       if (r.ok) {
         const d = await r.json();
         setTodayAttendance(d);
-        toast.success('Ishga keldingiz!');
+        toast.success(tApp('attendance.checkedIn'));
       } else {
         const e = await r.json().catch(()=>({}));
         toast.error(e.error || 'Xatolik');
@@ -5444,9 +6389,23 @@ export default function App() {
       };
 
       // Kiruvchi qo'ng'iroq (faol qo'ng'iroq bo'lmasa)
+      // XATO TUZATILDI ("telefon qilganda ovoz chiqmayapti, ogohlantirish
+      // yo'q"): CallOverlay'ning ichki qo'ng'iroq ovozi Web Audio orqali
+      // ishlaydi (sound.ts) — brauzerning autoplay siyosati bo'yicha bu
+      // FAQAT foydalanuvchi sahifa bilan yaqinda o'zaro ta'sirda bo'lgan
+      // (bosgan/teккan) bo'lsagina ishlaydi. Qo'ng'iroq qabul qiluvchi aynan
+      // ANIQ shu holatda bo'ladi — sahifani ochib qo'yib, hech narsaga
+      // tegmagan holda kutmoqda — shu sabab ovoz "jimgina" chiqmasdan
+      // qolib ketardi. Bu yerda darhol (1) audio'ni qayta ochishga urinamiz
+      // (avval hech bo'lmaganda BIR marta ochilgan bo'lsa, ko'p brauzer buni
+      // yangi gestursiz ham davom ettiradi) va (2) mobil qurilmada tebranish
+      // (vibratsiya) — bu HECH QANDAY oldingi foydalanuvchi harakatini talab
+      // qilmaydi, shu sabab ovoz ishlamasa ham kamida FIZIK ogohlantirish beradi.
       const onCallOffer = (d: any) => {
         if (activeCallRef.current) return; // allaqachon qo'ng'iroqda — CallOverlay mesh'ni boshqaradi
         if (d.from === liveUser.id) return;
+        sfx.unlock().catch(() => {});
+        try { navigator.vibrate?.([400, 200, 400, 200, 400]); } catch {}
         setActiveCall({ direction: 'in', mode: d.mode || 'voice', peerId: d.from, groupId: d.groupId, offer: d.sdp, fromName: d.fromName });
       };
 
@@ -5744,6 +6703,10 @@ export default function App() {
           className="btn btn-ghost w-9 h-9 p-0 rounded-full">
           <MorphIcon icon={Search} className="w-[18px] h-[18px]" />
         </button>
+        <button onClick={()=>setShowAnnouncements(true)} title={tApp('announcements.title')} aria-label={tApp('announcements.title')}
+          className="btn btn-ghost w-9 h-9 p-0 rounded-full">
+          <MorphIcon icon={Megaphone} className="w-[18px] h-[18px]" />
+        </button>
         {hasFeature('qr_tools') && (
           <button onClick={()=>setQrScanOpen(true)} title={tApp('qrScanner.title')} aria-label={tApp('qrScanner.title')}
             className="btn btn-ghost w-9 h-9 p-0 rounded-full">
@@ -5864,7 +6827,7 @@ export default function App() {
   const handleAddUser = async (u: AppUser): Promise<{ ok: boolean; error?: string }> => {
     try {
       const nameParts = u.name.trim().split(" ");
-      const res = await fetch(API_BASE + "/api/auth/users", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({firstName: nameParts[0] || u.name, lastName: nameParts.slice(1).join(" ") || "", phone: u.phone, role: u.role, brigade: u.brigade, projectIds: u.projectIds || []}) });
+      const res = await fetch(API_BASE + "/api/auth/users", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({firstName: nameParts[0] || u.name, lastName: nameParts.slice(1).join(" ") || "", phone: u.phone, role: u.role, brigade: u.brigade, projectIds: u.projectIds || [], baseSalary: u.baseSalary}) });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
         setUsers(p=>[...p, {...data, id: data.id || data._id, name: data.name || u.name, projectIds: u.projectIds || []}]);
@@ -5884,7 +6847,8 @@ export default function App() {
         phone: u.phone,
         role: u.role,
         brigade: u.brigade,
-        projectIds: u.projectIds || []
+        projectIds: u.projectIds || [],
+        baseSalary: u.baseSalary,
       };
       const res = await fetch(`${API_BASE}/api/auth/users/${u.id}`, {
         method: "PUT",
@@ -6037,6 +7001,42 @@ export default function App() {
     } catch (err) { console.error(err); }
     return null;
   };
+  // Guruh boshqaruvi — backend allaqachon a'zolarga 'group:update'/'group:removed'
+  // socket hodisasini yuboradi (groups.ts), shu sabab bu yerda qo'lda setGroups
+  // qilish shart emas — yuqoridagi onGroupUpdate/onGroupRemoved effekti buni
+  // avtomatik bajaradi (ACTING foydalanuvchiga ham yuboriladi).
+  const handleRenameGroup = async (groupId: string, name: string) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/groups/${groupId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+      if (!res.ok) toast.error(tApp('common.error'));
+    } catch { toast.error(tApp('common.error')); }
+  };
+  const handleAddGroupMembers = async (groupId: string, memberIds: string[]) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/groups/${groupId}/members`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ memberIds }) });
+      if (!res.ok) toast.error(tApp('common.error'));
+    } catch { toast.error(tApp('common.error')); }
+  };
+  const handleRemoveGroupMember = async (groupId: string, userId: string) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/groups/${groupId}/leave`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId }) });
+      if (!res.ok) toast.error(tApp('common.error'));
+    } catch { toast.error(tApp('common.error')); }
+  };
+  const handleLeaveGroup = async (groupId: string) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/groups/${groupId}/leave`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+      if (res.ok) setGroups(p => p.filter(g => g.id !== groupId));
+      else toast.error(tApp('common.error'));
+    } catch { toast.error(tApp('common.error')); }
+  };
+  const handleDeleteGroup = async (groupId: string) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/groups/${groupId}`, { method: 'DELETE' });
+      if (res.ok) setGroups(p => p.filter(g => g.id !== groupId));
+      else toast.error((await res.json().catch(() => ({})))?.error || tApp('common.error'));
+    } catch { toast.error(tApp('common.error')); }
+  };
   const handleStartCall = (mode: 'voice'|'video', target: { peer?: AppUser; group?: Group }) => {
     if (target.group) setActiveCall({ direction: 'out', mode, groupId: target.group.id, memberIds: (target.group.memberIds || []).filter(id => id !== liveUser.id) });
     else if (target.peer) setActiveCall({ direction: 'out', mode, peerId: target.peer.id });
@@ -6078,13 +7078,13 @@ export default function App() {
             syncStatus === 'synced' ? 'bg-green-600/90 text-white' :
             'bg-amber-500/90 text-white'}`}>
           {isOffline ? (
-            <><MorphIcon icon={WifiOff} className="w-3.5 h-3.5" /><span>Internet yo'q — ma'lumotlar keshdan ko'rsatilmoqda</span></>
+            <><MorphIcon icon={WifiOff} className="w-3.5 h-3.5" /><span>{tApp('sync.offline')}</span></>
           ) : syncStatus === 'syncing' ? (
-            <><MorphIcon icon={Loader2} className="w-3.5 h-3.5 animate-spin" /><span>Sinxronlanmoqda...</span></>
+            <><MorphIcon icon={Loader2} className="w-3.5 h-3.5 animate-spin" /><span>{tApp('sync.syncing')}</span></>
           ) : syncStatus === 'synced' ? (
-            <><MorphIcon icon={CheckCheck} className="w-3.5 h-3.5" /><span>Sinxronlashdi</span></>
+            <><MorphIcon icon={CheckCheck} className="w-3.5 h-3.5" /><span>{tApp('sync.synced')}</span></>
           ) : (
-            <><MorphIcon icon={AlertCircle} className="w-3.5 h-3.5" /><span>{syncPending} ta o'zgartirish kutmoqda</span></>
+            <><MorphIcon icon={AlertCircle} className="w-3.5 h-3.5" /><span>{tApp('sync.pending', { count: syncPending })}</span></>
           )}
         </div>
       )}
@@ -6118,6 +7118,10 @@ export default function App() {
             onUpdateStatus={(pid, newStatus) => {
               setProjects(prev => prev.map(p => p.id === pid ? {...p, status: newStatus} : p));
             }}
+            onUpdateProject={(pid, patch) => {
+              setProjects(prev => prev.map(p => p.id === pid ? {...p, ...patch} : p));
+              setSelProject(prev => prev && prev.id === pid ? {...prev, ...patch} : prev);
+            }}
           />
         )}
         {page==="finance" && (
@@ -6136,7 +7140,9 @@ export default function App() {
             onEdit={handleEditMsg} onDelete={handleDeleteMsg} onPin={handlePinMsg}
             onChatOpen={open => setChatIsOpen(open)} onCreateGroup={handleCreateGroup} onStartCall={handleStartCall}
             canModifyMessages={liveUser.role === 'direktor' || liveUser.role === 'orinbosar'}
-            onGetDevSupport={handleGetDevSupport}/>
+            onGetDevSupport={handleGetDevSupport}
+            onRenameGroup={handleRenameGroup} onAddGroupMembers={handleAddGroupMembers}
+            onRemoveGroupMember={handleRemoveGroupMember} onLeaveGroup={handleLeaveGroup} onDeleteGroup={handleDeleteGroup}/>
         )}
         {page==="profile" && (
           <div className="flex-1 overflow-y-auto scrollbar-hide">
@@ -6244,6 +7250,11 @@ export default function App() {
         </Suspense>
       )}
 
+      {/* E'lonlar taxtasi */}
+      {showAnnouncements && (
+        <AnnouncementsModal currentUser={liveUser} onClose={() => setShowAnnouncements(false)} />
+      )}
+
       {/* QR Scanner */}
       {qrScanOpen && (
         <Suspense fallback={null}>
@@ -6301,7 +7312,7 @@ export default function App() {
                   )}
                   {/* Backend results: Materials */}
                   {(searchResults.materials||[]).length > 0 && (
-                    <div><p className="text-[10px] font-semibold text-muted-foreground mb-1.5 px-1">Materiallar</p>
+                    <div><p className="text-[10px] font-semibold text-muted-foreground mb-1.5 px-1">{tApp('search.materials')}</p>
                       {(searchResults.materials||[]).slice(0,5).map((m: any) => (
                         <div key={m.id} className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-muted liquid-transition">
                           <MorphIcon icon={Package} className="w-5 h-5 text-muted-foreground flex-shrink-0" />
@@ -6312,7 +7323,7 @@ export default function App() {
                   )}
                   {/* Backend results: Transactions */}
                   {(searchResults.transactions||[]).length > 0 && (
-                    <div><p className="text-[10px] font-semibold text-muted-foreground mb-1.5 px-1">Tranzaksiyalar</p>
+                    <div><p className="text-[10px] font-semibold text-muted-foreground mb-1.5 px-1">{tApp('search.transactions')}</p>
                       {(searchResults.transactions||[]).slice(0,5).map((t: any) => (
                         <button key={t.id} onClick={()=>{setGlobalSearch(false);setSearchQuery("");setSearchResults(null);setPage("finance");}}
                           className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-muted liquid-transition text-left">

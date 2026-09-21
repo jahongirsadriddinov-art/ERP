@@ -2,11 +2,12 @@ import { Router } from 'express';
 import AuditLog from '../models/AuditLog';
 import { getTenant } from '../middleware/tenantContext';
 import User from '../models/User';
+import { requireFeature } from '../middleware/requireFeature';
 
 const router = Router();
 
 // GET /api/audit-logs — admin/director only
-router.get('/', async (req, res) => {
+router.get('/', requireFeature('audit_log'), async (req, res) => {
   try {
     const tenant = getTenant();
     if (!tenant?.userId) return res.status(401).json({ error: 'Autentifikatsiya talab etiladi' });

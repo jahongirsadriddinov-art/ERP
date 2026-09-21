@@ -28,6 +28,7 @@ export interface IUser extends Document {
   // kabi) bu xotira tozalanib, "oldingi eslatma o'chirilmasdan yangisi
   // yuborilib qolish" xatosiga sabab bo'lardi (aniq xabar qilingan bug).
   lastReminderMsgId?: number;
+  baseSalary?: number;   // ish haqi hisob-kitobi (PayrollRecord) uchun oylik/kunlik stavka
   isBlocked?: boolean;   // dasturchi (istalgan user) yoki firma admini (o'z xodimi)
                           // tomonidan bloklangan — requireAuth HAR so'rovda
                           // tekshiradi, shu sabab bloklash DARHOL kuch oladi
@@ -58,6 +59,7 @@ const UserSchema: Schema = new Schema({
   language: { type: String, enum: ['uz', 'uz-cyrl', 'ru'], default: 'uz' },
   courses: [{ title: String, provider: String, year: Number, cert: String }],
   lastReminderMsgId: { type: Number },
+  baseSalary: { type: Number },
   isBlocked: { type: Boolean, default: false },
   blockedAt: { type: Date },
   blockedBy: { type: String },

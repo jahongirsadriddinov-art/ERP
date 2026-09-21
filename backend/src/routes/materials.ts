@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import Material from '../models/Material';
+import ObjectModel from '../models/Object';
 import Transaction from '../models/Transaction';
 import { bot } from '../services/bot';
 import User from '../models/User';
@@ -7,6 +8,8 @@ import { scoped, stamped } from '../middleware/scope';
 import { getTenant } from '../middleware/tenantContext';
 import { tb, BotLang } from '../i18n/bot';
 import { logAudit } from '../services/audit';
+import { checkRate } from '../utils/rateLimit';
+import { requireOwnerOrAdmin } from '../middleware/auth';
 
 const router = Router();
 
@@ -27,6 +30,83 @@ router.get('/object/:objectId', async (req, res) => {
   }
 });
 
+// Material qatorini tahrirlash (nom/birlik/kerakli miqdor/narx) — avval
+// smetani QAYTA yuklashdan boshqa yo'l yo'q edi (bu esa BUTUN ro'yxatni
+// almashtirardi — bitta qatorni tuzatish uchun yo'qotish xavfi katta).
+//
+// MUHIM: frontend'dagi "kerakli materiallar" ro'yxati ikki manbadan
+// kelishi mumkin — obyektda saqlangan smeta natijasidan (bunda har bir
+// qator sun'iy indeks bilan, HAQIQIY Material._id EMAS) yoki to'g'ridan-
+// to'g'ri Material kolleksiyasidan (haqiqiy _id bilan). Shu sabab bu yo'l
+// _id EMAS, objectId+nom bo'yicha izlaydi — ikkala holatda ham ishonchli
+// ishlaydi (Material.findOneAndUpdate({objectId,name}) naqshi
+// transactions.ts'dagi confirm bilan bir xil).
+router.patch('/object/:objectId/by-name', requireOwnerOrAdmin, async (req, res) => {
+  try {
+    const { currentName, name, unit, needed, price } = req.body || {};
+    if (!currentName) return res.status(400).json({ error: 'currentName kerak' });
+    const mat = await Material.findOne(scoped({ objectId: req.params.objectId, name: currentName }));
+    if (!mat) return res.status(404).json({ error: 'Material topilmadi' });
+
+    const before = { name: mat.name, unit: mat.unit, needed: mat.needed, price: mat.price };
+    if (name !== undefined) {
+      const trimmed = String(name).trim();
+      if (!trimmed) return res.status(400).json({ error: 'Nomi bo\'sh bo\'lmasligi kerak' });
+      mat.name = trimmed;
+    }
+    if (unit !== undefined) mat.unit = String(unit).trim() || mat.unit;
+    if (needed !== undefined) {
+      const n = Number(needed);
+      if (isNaN(n) || n < 0) return res.status(400).json({ error: "Kerakli miqdor noto'g'ri" });
+      mat.needed = n;
+      mat.remaining = Math.max(0, n - (mat.sent || 0));
+    }
+    if (price !== undefined) {
+      const p = price === null || price === '' ? undefined : Number(price);
+      if (p !== undefined && (isNaN(p) || p < 0)) return res.status(400).json({ error: "Narx noto'g'ri" });
+      mat.price = p;
+    }
+    await mat.save();
+
+    // SINXRONLASH: obyektning o'zida saqlangan xom smeta natijasi
+    // (Object.smeta.resources) frontend tomonidan Material kolleksiyasidan
+    // USTUVOR o'qiladi (App.tsx'dagi mapping'ga qarang) — shu sabab FAQAT
+    // Material hujjatini yangilash yetarli emas, aks holda tahrirlash
+    // sahifa qayta yuklanganda "yo'qolib qolgandek" ko'rinardi (eski smeta
+    // qiymati qaytadan ko'rsatilardi).
+    const obj = await ObjectModel.findOne(scoped({ _id: req.params.objectId }));
+    if (obj?.smeta?.resources?.length) {
+      const idx = obj.smeta.resources.findIndex((r: any) => r.group === 'material' && r.rawName === before.name);
+      if (idx !== -1) {
+        obj.smeta.resources[idx].rawName = mat.name;
+        obj.smeta.resources[idx].unit = mat.unit;
+        obj.smeta.resources[idx].qty = mat.needed;
+        obj.smeta.resources[idx].price = mat.price;
+        obj.markModified('smeta');
+        await obj.save();
+      }
+    }
+
+    const t = getTenant();
+    if (t?.userId) {
+      const actor = await User.findById(t.userId).lean().catch(() => null);
+      if (actor) {
+        logAudit({
+          userId: t.userId, userName: `${actor.firstName} ${actor.lastName || ''}`.trim(), userRole: actor.role,
+          action: 'update', entity: 'material', entityId: String(mat._id),
+          description: `Material tahrirlandi: "${before.name}" → "${mat.name}"`,
+          oldValue: before, newValue: { name: mat.name, unit: mat.unit, needed: mat.needed, price: mat.price },
+          companyId: t.companyId, req,
+        }).catch(() => {});
+      }
+    }
+
+    res.json(mat);
+  } catch (err) {
+    res.status(500).json({ error: 'Server xatoligi' });
+  }
+});
+
 // Send material
 router.post('/send', async (req, res) => {
   try {
@@ -38,6 +118,8 @@ router.post('/send', async (req, res) => {
     // ko'rsatishi mumkin edi. Endi faqat tekshirilgan tenant kontekstidan.
     const senderId = getTenant()?.userId;
     if (!senderId) return res.status(401).json({ error: 'Avtorizatsiya talab etiladi' });
+    const rl = checkRate(`matsend:${senderId}`, 20, 60 * 1000);
+    if (!rl.allowed) return res.status(429).json({ error: `Juda ko'p urinish. ${rl.retryAfterSec} soniyadan keyin urining.` });
 
     const material = await Material.findOne(scoped({ _id: materialId }));
     if (!material) {

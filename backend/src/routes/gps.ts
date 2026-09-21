@@ -3,6 +3,7 @@ import GpsLocation from '../models/GpsLocation';
 import { scoped, stamped } from '../middleware/scope';
 import { getTenant } from '../middleware/tenantContext';
 import { emitToCompany } from '../services/socket';
+import { requireFeature } from '../middleware/requireFeature';
 
 const router = Router();
 
@@ -36,7 +37,7 @@ router.get('/config', (_req, res) => {
 });
 
 // POST /api/gps — GPS koordinata saqlash
-router.post('/', async (req, res) => {
+router.post('/', requireFeature('gps_tracking'), async (req, res) => {
   try {
     const tenant = getTenant();
     if (!tenant?.userId) return res.status(401).json({ error: 'Autentifikatsiya talab etiladi' });
@@ -61,7 +62,7 @@ router.post('/', async (req, res) => {
 // chegarasini to'g'ri saqlaydi, lekin rol tekshiruvi yo'q edi, ya'ni oddiy
 // ishchi ham to'g'ridan-to'g'ri so'rov bilan BARCHA hamkasblarining
 // joriy joylashuvini ko'rishi mumkin edi.
-router.get('/latest', async (req, res) => {
+router.get('/latest', requireFeature('gps_tracking'), async (req, res) => {
   try {
     const tenant = getTenant();
     const isBoss = tenant?.isDeveloper || tenant?.role === 'direktor' || tenant?.role === 'orinbosar';
@@ -86,7 +87,7 @@ router.get('/latest', async (req, res) => {
 // `from`/`to` (ISO sana-vaqt) — "Kuzatuv" sahifasidagi xodim profilida
 // tanlangan KUN uchun to'liq GPS izini (trail) olish uchun qo'shildi.
 // Berilmasa — eski xatti-harakat (oxirgi N nuqta) saqlanadi.
-router.get('/user/:id', async (req, res) => {
+router.get('/user/:id', requireFeature('gps_tracking'), async (req, res) => {
   try {
     const tenant = getTenant();
     const isSelf = String(req.params.id) === String(tenant?.userId);

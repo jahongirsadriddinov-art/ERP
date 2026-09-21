@@ -250,7 +250,7 @@ router.post('/', async (req, res) => {
     res.status(201).json(responseBody);
   } catch (err) {
     console.error('Transaction POST error:', err);
-    res.status(500).json({ error: 'Server xatoligi: ' + (err as Error).message });
+    res.status(500).json({ error: 'Server xatoligi' });
   }
 });
 

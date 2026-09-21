@@ -1,7 +1,7 @@
 
 import { createRoot } from "react-dom/client";
 import { MotionConfig } from "motion/react";
-import App from "./app/App.tsx";
+import App, { ClientViewPage } from "./app/App.tsx";
 import UpdateChecker from "./app/UpdateChecker.tsx";
 import { ErrorBoundary } from "./app/ErrorBoundary.tsx";
 import { API_BASE } from "./app/api.ts";
@@ -29,11 +29,21 @@ window.addEventListener('unhandledrejection', (event) => {
   }
 });
 
+// Mijoz portali (client portal) — /client/:token ochilsa, login talab
+// qiladigan asosiy ilova o'rniga faqat shu (ochiq, xavfsiz) sahifa
+// render qilinadi. React Router yo'q (butun ilova bitta SPA holat
+// mashinasi) — shu sabab bu yerda oddiy pathname tekshiruvi kifoya.
+const clientViewMatch = window.location.pathname.match(/^\/client\/([0-9a-f]{48})$/);
+
 createRoot(document.getElementById("root")!).render(
   <ErrorBoundary>
     <MotionConfig reducedMotion="user">
-      <App />
-      <UpdateChecker />
+      {clientViewMatch ? <ClientViewPage token={clientViewMatch[1]} /> : (
+        <>
+          <App />
+          <UpdateChecker />
+        </>
+      )}
     </MotionConfig>
   </ErrorBoundary>
 );

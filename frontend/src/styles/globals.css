@@ -314,6 +314,29 @@ input, textarea, [contenteditable="true"], [contenteditable=""] {
 }
 .nav-pop { animation: navPop 0.36s cubic-bezier(0.34,1.56,0.64,1) forwards; }
 
+/* ── AI yordamchi — premium "tirik" nishoncha ──────────────────────────
+   Sekin aylanuvchi gradient halqa (icon ortida) + yumshoq "nafas olish"
+   porlashi — AI'ning oddiy statik belgidan farqli, "aqlli/faol" his
+   qilinishi uchun. */
+@keyframes aiRingSpin { to { transform: rotate(360deg); } }
+.ai-ring {
+  position: absolute; inset: -3px; border-radius: inherit;
+  background: conic-gradient(from 0deg, var(--primary), var(--accent), var(--primary));
+  animation: aiRingSpin 3.2s linear infinite;
+  opacity: 0.9;
+}
+@keyframes aiGlowPulse {
+  0%,100% { opacity: 0.55; transform: scale(1); }
+  50%     { opacity: 1;    transform: scale(1.08); }
+}
+.ai-glow-pulse { animation: aiGlowPulse 2.4s ease-in-out infinite; }
+
+@keyframes aiDotPulse {
+  0%,80%,100% { transform: scale(0.6); opacity: 0.5; }
+  40%         { transform: scale(1);   opacity: 1; }
+}
+.ai-thinking-dot { animation: aiDotPulse 1.2s ease-in-out infinite; }
+
 /* ── Table ──────────────────────────────────────────────────────────── */
 table { @apply w-full text-left border-collapse; }
 th {

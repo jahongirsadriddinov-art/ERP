@@ -7,6 +7,7 @@ import UserPlus from "@hugeicons/core-free-icons/UserAdd01Icon";
 import Trash2 from "@hugeicons/core-free-icons/Delete02Icon";
 import Edit from "@hugeicons/core-free-icons/Edit02Icon";
 import Zap from "@hugeicons/core-free-icons/FlashIcon";
+import AiSparkles from "@hugeicons/core-free-icons/AiSparklesIcon";
 import { MorphIcon } from "morphicons/react";
 import { useTranslation } from "react-i18next";
 import { API_BASE } from "./api";
@@ -140,19 +141,31 @@ export default function AIAssistant({ currentUser, users, token, open, onClose, 
         style={{ background: 'var(--card)' }}
         onClick={e => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="flex items-center gap-3 px-5 py-4 border-b border-border/30 flex-shrink-0"
-          style={{ background: 'linear-gradient(135deg, color-mix(in srgb, var(--primary) 8%, transparent), color-mix(in srgb, var(--accent) 6%, transparent))' }}>
-          <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-md"
-            style={{ background: 'linear-gradient(135deg, var(--primary), color-mix(in srgb, var(--primary) 70%, var(--accent)))' }}>
-            <span className="text-white text-lg leading-none">✨</span>
+        {/* Header — premium: sekin aylanuvchi gradient halqa + xira "blob"
+            fon, oddiy tekis panelning o'rniga chuqurlik va "tirik" tuyg'u beradi. */}
+        <div className="relative flex items-center gap-3 px-5 py-4 border-b border-border/30 flex-shrink-0 overflow-hidden"
+          style={{ background: 'linear-gradient(135deg, color-mix(in srgb, var(--primary) 10%, transparent), color-mix(in srgb, var(--accent) 8%, transparent))' }}>
+          <div className="absolute -top-8 -left-6 w-24 h-24 rounded-full blur-2xl pointer-events-none blob-anim"
+            style={{ background: 'color-mix(in srgb, var(--primary) 25%, transparent)' }} />
+          <div className="absolute -bottom-10 -right-4 w-28 h-28 rounded-full blur-2xl pointer-events-none blob-anim-slow"
+            style={{ background: 'color-mix(in srgb, var(--accent) 22%, transparent)' }} />
+          <div className="relative w-10 h-10 flex-shrink-0">
+            <div className="ai-ring" />
+            <div className="absolute inset-[3px] rounded-[14px] flex items-center justify-center shadow-md"
+              style={{ background: 'linear-gradient(135deg, var(--primary), color-mix(in srgb, var(--primary) 70%, var(--accent)))' }}>
+              <MorphIcon icon={AiSparkles} className="w-[18px] h-[18px] text-white" />
+            </div>
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold leading-tight">{t('ai.title')}</p>
+          <div className="relative flex-1 min-w-0">
+            <p className="text-sm font-bold leading-tight flex items-center gap-1.5">
+              {t('ai.title')}
+              <span className="text-[9px] font-bold tracking-wide px-1.5 py-0.5 rounded-full text-white uppercase"
+                style={{ background: 'linear-gradient(135deg, var(--primary), var(--accent))' }}>AI</span>
+            </p>
             <p className="text-[11px] text-muted-foreground mt-0.5 leading-none">{t('ai.subtitle')}</p>
           </div>
           <button onClick={onClose} aria-label={t('ai.close')}
-            className="w-8 h-8 rounded-xl flex items-center justify-center hover:bg-muted/60 text-muted-foreground transition-colors">
+            className="relative w-8 h-8 rounded-xl flex items-center justify-center hover:bg-muted/60 text-muted-foreground transition-colors flex-shrink-0">
             <MorphIcon icon={X} className="w-4 h-4" />
           </button>
         </div>
@@ -161,9 +174,12 @@ export default function AIAssistant({ currentUser, users, token, open, onClose, 
         <div className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-hide">
           {msgs.length === 0 && (
             <div className="text-center py-6 px-2">
-              <div className="w-14 h-14 rounded-2xl mx-auto mb-4 flex items-center justify-center shadow-lg"
-                style={{ background: 'linear-gradient(135deg, var(--primary), color-mix(in srgb, var(--primary) 70%, var(--accent)))' }}>
-                <span className="text-2xl">✨</span>
+              <div className="relative w-16 h-16 mx-auto mb-4">
+                <div className="ai-ring ai-glow-pulse" />
+                <div className="absolute inset-[3px] rounded-[18px] flex items-center justify-center shadow-lg"
+                  style={{ background: 'linear-gradient(135deg, var(--primary), color-mix(in srgb, var(--primary) 70%, var(--accent)))' }}>
+                  <MorphIcon icon={AiSparkles} className="w-7 h-7 text-white" />
+                </div>
               </div>
               <p className="text-sm font-semibold text-foreground mb-1">{t('ai.title')}</p>
               <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-line mb-4">{greeting}</p>
@@ -183,8 +199,14 @@ export default function AIAssistant({ currentUser, users, token, open, onClose, 
             </div>
           )}
           {msgs.map((m, i) => (
-            <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[85%] px-3.5 py-2.5 rounded-2xl text-[13px] leading-relaxed whitespace-pre-wrap ${
+            <div key={i} className={`flex items-end gap-2 ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+              {m.role === 'assistant' && (
+                <div className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 shadow-sm"
+                  style={{ background: 'linear-gradient(135deg, var(--primary), var(--accent))' }}>
+                  <MorphIcon icon={AiSparkles} className="w-3 h-3 text-white" />
+                </div>
+              )}
+              <div className={`max-w-[80%] px-3.5 py-2.5 rounded-2xl text-[13px] leading-relaxed whitespace-pre-wrap ${
                 m.role === 'user'
                   ? 'rounded-br-md text-white shadow-md'
                   : 'bg-muted/70 text-foreground rounded-bl-md'
@@ -195,11 +217,16 @@ export default function AIAssistant({ currentUser, users, token, open, onClose, 
             </div>
           ))}
           {loading && (
-            <div className="flex justify-start">
+            <div className="flex items-end gap-2 justify-start">
+              <div className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 shadow-sm"
+                style={{ background: 'linear-gradient(135deg, var(--primary), var(--accent))' }}>
+                <MorphIcon icon={AiSparkles} className="w-3 h-3 text-white" />
+              </div>
               <div className="bg-muted/70 px-4 py-3 rounded-2xl rounded-bl-md flex items-center gap-2">
                 <div className="flex gap-1">
                   {[0,1,2].map(i => (
-                    <div key={i} className="w-2 h-2 rounded-full bg-primary/70 animate-bounce" style={{ animationDelay: `${i*160}ms` }}/>
+                    <div key={i} className="w-2 h-2 rounded-full ai-thinking-dot"
+                      style={{ animationDelay: `${i*160}ms`, background: 'linear-gradient(135deg, var(--primary), var(--accent))' }}/>
                   ))}
                 </div>
                 <span className="text-[11px] text-muted-foreground">{t('ai.thinking')}</span>
@@ -248,8 +275,11 @@ export default function AIAssistant({ currentUser, users, token, open, onClose, 
             disabled={loading || !!pending}
           />
           <button onClick={send} disabled={loading || !input.trim() || !!pending} aria-label={t('ai.sendAriaLabel')}
-            className="w-10 h-10 rounded-2xl flex items-center justify-center disabled:opacity-35 transition-all active:scale-92 flex-shrink-0 shadow-md"
-            style={{ background: input.trim() ? 'linear-gradient(135deg, var(--primary), color-mix(in srgb, var(--primary) 80%, var(--accent)))' : 'var(--muted)' }}>
+            className="w-10 h-10 rounded-2xl flex items-center justify-center disabled:opacity-35 transition-all active:scale-92 flex-shrink-0"
+            style={{
+              background: input.trim() ? 'linear-gradient(135deg, var(--primary), color-mix(in srgb, var(--primary) 80%, var(--accent)))' : 'var(--muted)',
+              boxShadow: input.trim() ? '0 4px 16px color-mix(in srgb, var(--primary) 45%, transparent)' : undefined,
+            }}>
             {loading ? <MorphIcon icon={Loader2} className="w-4 h-4 text-white animate-spin" /> : <MorphIcon icon={Send} className="w-4 h-4 text-white" />}
           </button>
         </div>

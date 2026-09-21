@@ -30,6 +30,7 @@ import UserPlus from "@hugeicons/core-free-icons/UserAdd01Icon";
 import Edit from "@hugeicons/core-free-icons/Edit02Icon";
 import Settings from "@hugeicons/core-free-icons/Settings02Icon";
 import Megaphone from "@hugeicons/core-free-icons/Megaphone01Icon";
+import AiSparkles from "@hugeicons/core-free-icons/AiSparklesIcon";
 import Trash from "@hugeicons/core-free-icons/Delete02Icon";
 import Search from "@hugeicons/core-free-icons/Search01Icon";
 import AlertCircle from "@hugeicons/core-free-icons/AlertCircleIcon";
@@ -6695,8 +6696,9 @@ export default function App() {
       <div className="nav-pill-desktop flex items-center gap-1 px-1.5 py-1.5 rounded-full flex-shrink-0 ml-auto">
         {(liveUser.role === 'direktor' || liveUser.role === 'orinbosar') && hasFeature('ai_assistant') && (
           <button onClick={() => setAiOpen(true)} title="AI Yordamchi" aria-label="AI Yordamchi"
-            className="btn btn-ghost w-9 h-9 p-0 rounded-full">
-            <span className="text-base leading-none">✨</span>
+            className="relative w-9 h-9 p-0 rounded-full flex items-center justify-center flex-shrink-0 shadow-md active:scale-90 liquid-transition"
+            style={{ background: 'linear-gradient(135deg, var(--primary), var(--accent))' }}>
+            <MorphIcon icon={AiSparkles} className="w-[18px] h-[18px] text-white" />
           </button>
         )}
         <button onClick={()=>setGlobalSearch(true)} title={tApp('search.title')} aria-label={tApp('search.title')}

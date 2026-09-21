@@ -11,6 +11,9 @@ import AiSparkles from "@hugeicons/core-free-icons/AiSparklesIcon";
 import UserGroup from "@hugeicons/core-free-icons/UserGroup02Icon";
 import MessageIcon from "@hugeicons/core-free-icons/Message01Icon";
 import CalendarIcon from "@hugeicons/core-free-icons/Calendar03Icon";
+import Mic from "@hugeicons/core-free-icons/Mic01Icon";
+import MicOff from "@hugeicons/core-free-icons/MicOff01Icon";
+import VolumeHigh from "@hugeicons/core-free-icons/VolumeHighIcon";
 import { MorphIcon } from "morphicons/react";
 import { useTranslation } from "react-i18next";
 import { API_BASE } from "./api";
@@ -37,6 +40,37 @@ function actionIcon(type: string) {
   return <MorphIcon icon={Zap} className="w-4 h-4 text-amber-500" />;
 }
 
+// AI javobini "yozib chiqarayotgandek" bosqichma-bosqich ko'rsatadi — bir
+// zumda to'liq matn chiqishidan farqli, bu "o'ylab, javob yozayotgan aqlli
+// yordamchi" tuyg'usini beradi (ChatGPT/Claude uslubidagi tanish naqsh).
+// Faqat BIR MARTA, xabar birinchi qo'shilganda ishlaydi (useEffect'ning
+// `text` bog'liqligi — eski xabarlar qayta render bo'lganda animatsiya
+// TAKRORLANMAYDI, chunki matn qiymati o'zgarmagan).
+function StreamingText({ text, onTick }: { text: string; onTick?: () => void }) {
+  const [shown, setShown] = useState('');
+  useEffect(() => {
+    let i = 0;
+    const step = Math.max(1, Math.ceil(text.length / 45));
+    const id = setInterval(() => {
+      i += step;
+      setShown(text.slice(0, i));
+      onTick?.();
+      if (i >= text.length) clearInterval(id);
+    }, 14);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [text]);
+  return <>{shown}</>;
+}
+
+// Ovoz orqali kiritish/eshittirish — brauzerning o'zining Web Speech API'si
+// (server'ga hech narsa yuborilmaydi, to'liq mahalliy). Har ikkalasi ham
+// qo'llab-quvvatlanmasa (masalan ba'zi brauzerlar/WebView'lar) tugmalar
+// shunchaki ko'rsatilmaydi — "ishlamaydigan tugma" ko'rsatishdan ko'ra yaxshiroq.
+const SpeechRecognitionAPI: any = typeof window !== 'undefined' ? ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition) : null;
+const speechRecognitionSupported = !!SpeechRecognitionAPI;
+const speechSynthesisSupported = typeof window !== 'undefined' && 'speechSynthesis' in window;
+
 export default function AIAssistant({ currentUser, users, token, open, onClose, onUserAdded, onUserDeleted, onUserUpdated }:
   {
     currentUser: AppUser; users: AppUser[]; token: string; open: boolean; onClose: () => void;
@@ -44,19 +78,68 @@ export default function AIAssistant({ currentUser, users, token, open, onClose, 
     onUserDeleted?: (id: string) => void;
     onUserUpdated?: (u: AppUser) => void;
   }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   useModalPresence();
   const [msgs, setMsgs] = useState<AiMsg[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [pending, setPending] = useState<{ action: AiAction; response: string } | null>(null);
+  const [listening, setListening] = useState(false);
+  const [speakingIdx, setSpeakingIdx] = useState<number | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const recognitionRef = useRef<any>(null);
 
   const authHdr = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
+  const speechLang = i18n.language?.startsWith('ru') ? 'ru-RU' : 'uz-UZ';
 
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [msgs, pending, loading]);
+  const scrollDown = () => bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  useEffect(() => { scrollDown(); }, [msgs, pending, loading]);
   useEffect(() => { if (open) setTimeout(() => inputRef.current?.focus(), 120); }, [open]);
+  // Modal yopilganda tinglash/gapirish davom etib qolmasin.
+  useEffect(() => { if (!open) { recognitionRef.current?.stop(); window.speechSynthesis?.cancel(); } }, [open]);
+
+  // Ovozni matnga — natija KELGANDA to'g'ridan-to'g'ri yuboriladi (input
+  // state orqali emas, `send(transcript)` ga bevosita berib) — aks holda
+  // React'ning eskirgan (stale) `input` qiymati muammosi yuzaga kelardi.
+  const toggleListening = () => {
+    if (!speechRecognitionSupported) return;
+    if (listening) { recognitionRef.current?.stop(); return; }
+    const recognition = new SpeechRecognitionAPI();
+    recognition.lang = speechLang;
+    recognition.interimResults = true;
+    recognition.maxAlternatives = 1;
+    recognition.onstart = () => setListening(true);
+    recognition.onerror = () => setListening(false);
+    recognition.onend = () => setListening(false);
+    recognition.onresult = (e: any) => {
+      let transcript = '';
+      let isFinal = false;
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        transcript += e.results[i][0].transcript;
+        if (e.results[i].isFinal) isFinal = true;
+      }
+      setInput(transcript);
+      if (isFinal && transcript.trim()) {
+        recognition.stop();
+        send(transcript.trim());
+      }
+    };
+    recognitionRef.current = recognition;
+    recognition.start();
+  };
+
+  const speak = (text: string, idx: number) => {
+    if (!speechSynthesisSupported) return;
+    window.speechSynthesis.cancel();
+    if (speakingIdx === idx) { setSpeakingIdx(null); return; }
+    const utter = new SpeechSynthesisUtterance(text.replace(/[✅⚠️❌]/g, ''));
+    utter.lang = speechLang;
+    utter.onend = () => setSpeakingIdx(null);
+    utter.onerror = () => setSpeakingIdx(null);
+    setSpeakingIdx(idx);
+    window.speechSynthesis.speak(utter);
+  };
 
   const executeAction = async (action: AiAction): Promise<string> => {
     try {
@@ -85,8 +168,8 @@ export default function AIAssistant({ currentUser, users, token, open, onClose, 
     }
   };
 
-  const send = async () => {
-    const text = input.trim();
+  const send = async (overrideText?: string) => {
+    const text = (overrideText ?? input).trim();
     if (!text || loading) return;
     setInput('');
     const newMsgs: AiMsg[] = [...msgs, { role: 'user', content: text }];
@@ -212,13 +295,22 @@ export default function AIAssistant({ currentUser, users, token, open, onClose, 
                   <MorphIcon icon={AiSparkles} className="w-3 h-3 text-white" />
                 </div>
               )}
-              <div className={`max-w-[80%] px-3.5 py-2.5 rounded-2xl text-[13px] leading-relaxed whitespace-pre-wrap ${
-                m.role === 'user'
-                  ? 'rounded-br-md text-white shadow-md'
-                  : 'ai-glass-bubble text-foreground rounded-bl-md'
-              }`}
-                style={m.role === 'user' ? { background: 'linear-gradient(135deg, var(--primary), color-mix(in srgb, var(--primary) 80%, var(--accent)))' } : undefined}>
-                {m.content}
+              <div className="flex flex-col gap-1 max-w-[80%]">
+                <div className={`px-3.5 py-2.5 rounded-2xl text-[13px] leading-relaxed whitespace-pre-wrap ${
+                  m.role === 'user'
+                    ? 'rounded-br-md text-white shadow-md'
+                    : 'ai-glass-bubble text-foreground rounded-bl-md'
+                }`}
+                  style={m.role === 'user' ? { background: 'linear-gradient(135deg, var(--primary), color-mix(in srgb, var(--primary) 80%, var(--accent)))' } : undefined}>
+                  {m.role === 'assistant' ? <StreamingText text={m.content} onTick={scrollDown} /> : m.content}
+                </div>
+                {m.role === 'assistant' && speechSynthesisSupported && (
+                  <button onClick={() => speak(m.content, i)} aria-label={t('ai.readAloud')}
+                    className={`self-start flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full transition-colors ${speakingIdx === i ? 'text-white' : 'text-muted-foreground hover:text-foreground'}`}
+                    style={speakingIdx === i ? { background: 'linear-gradient(135deg, var(--primary), var(--accent))' } : undefined}>
+                    <MorphIcon icon={VolumeHigh} className="w-3 h-3" /> {speakingIdx === i ? t('ai.stopReading') : t('ai.readAloud')}
+                  </button>
+                )}
               </div>
             </div>
           ))}
@@ -269,19 +361,34 @@ export default function AIAssistant({ currentUser, users, token, open, onClose, 
           <div ref={bottomRef}/>
         </div>
 
-        {/* Input — suzuvchi "pill" panel, oddiy chiziqli maydon o'rniga */}
+        {/* Input — suzuvchi "pill" panel + ovozli kiritish tugmasi */}
         <div className="px-3 pb-3 pt-2 flex-shrink-0">
-          <div className="ai-glass-bubble flex items-center gap-2 rounded-full pl-4 pr-1.5 py-1.5 focus-within:ring-2 focus-within:ring-primary/30 transition-all">
+          {listening && (
+            <div className="flex items-center justify-center gap-1 mb-2">
+              {[0,1,2,3,4].map(i => (
+                <div key={i} className="w-1 rounded-full ai-thinking-dot" style={{ height: 12 + (i % 3) * 6, animationDelay: `${i * 90}ms`, background: 'linear-gradient(180deg, var(--primary), var(--accent))' }} />
+              ))}
+              <span className="text-[11px] text-muted-foreground ml-1.5">{t('ai.listening')}</span>
+            </div>
+          )}
+          <div className="ai-glass-bubble flex items-center gap-1.5 rounded-full pl-4 pr-1.5 py-1.5 focus-within:ring-2 focus-within:ring-primary/30 transition-all">
             <input
               ref={inputRef}
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && !e.shiftKey && send()}
-              placeholder={t('ai.placeholder')}
+              placeholder={listening ? t('ai.listeningPlaceholder') as string : t('ai.placeholder')}
               className="flex-1 min-w-0 text-[14px] bg-transparent focus:outline-none placeholder:text-muted-foreground/50"
               disabled={loading || !!pending}
             />
-            <button onClick={send} disabled={loading || !input.trim() || !!pending} aria-label={t('ai.sendAriaLabel')}
+            {speechRecognitionSupported && (
+              <button onClick={toggleListening} disabled={loading || !!pending} aria-label={listening ? t('ai.stopListening') : t('ai.startListening')}
+                className={`w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-92 flex-shrink-0 disabled:opacity-35 ${listening ? 'text-white' : 'text-muted-foreground hover:text-foreground bg-muted/60'}`}
+                style={listening ? { background: 'linear-gradient(135deg, #ef4444, #f97316)' } : undefined}>
+                <MorphIcon icon={listening ? MicOff : Mic} className="w-4 h-4" />
+              </button>
+            )}
+            <button onClick={() => send()} disabled={loading || !input.trim() || !!pending} aria-label={t('ai.sendAriaLabel')}
               className="w-9 h-9 rounded-full flex items-center justify-center disabled:opacity-35 transition-all active:scale-92 flex-shrink-0"
               style={{
                 background: input.trim() ? 'linear-gradient(135deg, var(--primary), color-mix(in srgb, var(--primary) 80%, var(--accent)))' : 'var(--muted)',

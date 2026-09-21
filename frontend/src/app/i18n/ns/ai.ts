@@ -23,6 +23,12 @@ export const uz = {
   actionDone: "Bajarildi",
   actionError: "Xatolik",
   executeError: "Amalga oshirishda xatolik",
+  readAloud: "Ovozda o'qish",
+  stopReading: "To'xtatish",
+  listening: "Tinglanmoqda...",
+  listeningPlaceholder: "Gapiring...",
+  startListening: "Ovoz orqali kiritish",
+  stopListening: "Tinglashni to'xtatish",
 };
 
 export const ru = {
@@ -50,4 +56,10 @@ export const ru = {
   actionDone: "Выполнено",
   actionError: "Ошибка",
   executeError: "Ошибка при выполнении",
+  readAloud: "Озвучить",
+  stopReading: "Остановить",
+  listening: "Слушаю...",
+  listeningPlaceholder: "Говорите...",
+  startListening: "Голосовой ввод",
+  stopListening: "Остановить прослушивание",
 };

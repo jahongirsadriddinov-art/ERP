@@ -71,6 +71,35 @@ const SpeechRecognitionAPI: any = typeof window !== 'undefined' ? ((window as an
 const speechRecognitionSupported = !!SpeechRecognitionAPI;
 const speechSynthesisSupported = typeof window !== 'undefined' && 'speechSynthesis' in window;
 
+// XATO TUZATILDI ("ovozli o'qiganda inglizcha gapirdi"): faqat
+// `utterance.lang = 'uz-UZ'` deb qo'yish YETARLI EMAS edi — deyarli
+// hech qanday qurilmada tayyor o'zbekcha OVOZ (voice) o'rnatilmagan,
+// shu sabab brauzer buni jimgina o'zining STANDART (odatda inglizcha)
+// ovoziga almashtirib qo'yardi. Endi mavjud ovozlar ro'yxatidan ANIQ
+// mos ovoz TANLAYMIZ (`utterance.voice`) — topilmasa, eng yaqin
+// qarindosh til (turkiy — talaffuzi o'zbekchaga yaqinroq, keyin ruscha)
+// bilan almashtiramiz, "inglizcha bo'lib qolish"ning oldini olish uchun.
+let cachedVoices: SpeechSynthesisVoice[] = [];
+function loadVoices(): SpeechSynthesisVoice[] {
+  if (!speechSynthesisSupported) return [];
+  const v = window.speechSynthesis.getVoices();
+  if (v.length) cachedVoices = v;
+  return cachedVoices;
+}
+if (speechSynthesisSupported) {
+  loadVoices();
+  // Ko'p brauzerda ovozlar ro'yxati ASINXRON yuklanadi (sahifa ochilgan
+  // zahoti bo'sh qaytadi) — shu hodisa kelganda qayta o'qiymiz.
+  window.speechSynthesis.onvoiceschanged = loadVoices;
+}
+function pickVoice(target: 'uz' | 'ru'): SpeechSynthesisVoice | undefined {
+  const voices = loadVoices();
+  if (!voices.length) return undefined;
+  const byPrefix = (p: string) => voices.find(v => v.lang.toLowerCase().startsWith(p));
+  if (target === 'ru') return byPrefix('ru') || byPrefix('uz') || byPrefix('tr');
+  return byPrefix('uz') || byPrefix('tr') || byPrefix('ru');
+}
+
 export default function AIAssistant({ currentUser, users, token, open, onClose, onUserAdded, onUserDeleted, onUserUpdated }:
   {
     currentUser: AppUser; users: AppUser[]; token: string; open: boolean; onClose: () => void;
@@ -134,7 +163,15 @@ export default function AIAssistant({ currentUser, users, token, open, onClose, 
     window.speechSynthesis.cancel();
     if (speakingIdx === idx) { setSpeakingIdx(null); return; }
     const utter = new SpeechSynthesisUtterance(text.replace(/[✅⚠️❌]/g, ''));
-    utter.lang = speechLang;
+    const target = i18n.language?.startsWith('ru') ? 'ru' : 'uz';
+    const voice = pickVoice(target);
+    if (voice) { utter.voice = voice; utter.lang = voice.lang; } else { utter.lang = speechLang; }
+    // "ovozi juda past" — volume standart bo'yicha 1.0 bo'lishi kerak, lekin
+    // ba'zi WebView/qurilmalarda aniq ko'rsatilmasa pastroq chiqadi, shu
+    // sabab MAKSIMAL qiymatni majburan belgilaymiz.
+    utter.volume = 1;
+    utter.rate = 1;
+    utter.pitch = 1;
     utter.onend = () => setSpeakingIdx(null);
     utter.onerror = () => setSpeakingIdx(null);
     setSpeakingIdx(idx);

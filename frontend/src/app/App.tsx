@@ -1574,7 +1574,7 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
         naqshi) ishlatiladi — hech qaysi chip HECH QACHON kesilmaydi yoki
         siqilmaydi, shunchaki kerak bo'lsa yon tomonga suriladi. */}
     {stats && (
-      <div className="flex-shrink-0 hidden md:flex items-center gap-2 px-3 pt-3 pb-1 overflow-x-auto scrollbar-hide scroll-smooth">
+      <div className="flex-shrink-0 hidden md:flex items-center gap-2 pl-3 pr-6 pt-3 pb-1 overflow-x-auto scrollbar-hide scroll-smooth">
         {[
           { label: t('dashboard.activeObjects'), value: stats.activeProjects, color: "text-green-600 dark:text-green-400" },
           { label: t('dashboard.totalStaff'), value: stats.totalEmployees, color: "text-blue-600 dark:text-blue-300" },
@@ -7183,7 +7183,15 @@ export default function App() {
           onClose={()=>setShowSend(false)} onSend={t=>{handleSendTransfer(t);setShowSend(false);}}/>
       )}
 
-      {/* Mobile Bottom Navigation — Premium Liquid Glass, labels + spring-animated */}
+      {/* Mobile Bottom Navigation — 3-avlod ("butunlay boshqacha" so'ralgach):
+          avvalgi ikkita variant HAM tub jihatdan bir xil naqsh edi — keng
+          to'rtburchak "yoritilgan fon" tugma ustida sirg'alib yurar edi,
+          shu sabab foydalanuvchiga "hali ham oddiy" tuyulardi. Endi butunlay
+          boshqa naqsh: faol bo'lim ustida KENG FON emas, balki ikonaning
+          o'ZI atrofida SUZUVCHI DOIRAVIY "bubble" (fintech-ilovalar uslubi)
+          — ikkinchisidan farqli, bu FAQAT ikonani o'rab oladi (label'ni
+          emas), shu bilan "aktiv tugma" endi butunlay boshqacha shaklda
+          ko'zga tashlanadi. */}
       <nav className={`ios-bottom-bar flex items-center justify-around ${(page==='chat' && chatIsOpen) || anyBigModalOpen ? 'ios-bottom-bar-hidden' : ''}`}>
         {NAV.map(n => (
           <motion.button key={n.key} onClick={() => { setPage(n.key); setSelProject(null); }}
@@ -7191,26 +7199,28 @@ export default function App() {
             transition={{ type: "spring", stiffness: 520, damping: 30 }}
             aria-label={n.label}
             aria-current={page===n.key ? "page" : undefined}
-            className={`flex flex-col items-center justify-center gap-[3px] px-3 py-2 min-w-[56px] h-[60px] relative z-10 ${page===n.key?"text-white":"text-white/48"}`}
+            className={`flex flex-col items-center justify-center gap-[4px] px-3 py-2 min-w-[56px] h-[60px] relative z-10 ${page===n.key?"text-white":"text-white/48"}`}
           >
-            {page === n.key && (
-              <motion.div
-                layoutId="mobileNavLiquidPill"
-                className="absolute inset-x-1 top-1 h-10 rounded-2xl liquid-pill -z-10"
-                transition={{ type: "spring", stiffness: 500, damping: 34 }}
+            <div className="relative flex items-center justify-center w-10 h-10">
+              {page === n.key && (
+                <motion.div
+                  layoutId="mobileNavBubble"
+                  className="nav-bubble absolute inset-0 rounded-full"
+                  transition={{ type: "spring", stiffness: 480, damping: 30 }}
                 />
-            )}
-            <div className={`flex items-center justify-center w-[26px] h-[26px] transition-all duration-200 ${page===n.key?"scale-110":""}`}>
-              {n.key === "profile"
-                ? <div className={`rounded-full overflow-hidden transition-all duration-200 ${page===n.key?"ring-2 ring-white/80 shadow-md scale-110":"opacity-60"}`}><Avatar user={liveUser} size="sm"/></div>
-                : <MorphIcon icon={n.icon} className="w-[18px] h-[18px]" />}
+              )}
+              <div className={`relative z-[1] flex items-center justify-center w-[26px] h-[26px] transition-all duration-200 ${page===n.key?"scale-110":""}`}>
+                {n.key === "profile"
+                  ? <div className={`rounded-full overflow-hidden transition-all duration-200 ${page===n.key?"ring-2 ring-white/90 shadow-md scale-110":"opacity-60"}`}><Avatar user={liveUser} size="sm"/></div>
+                  : <MorphIcon icon={n.icon} className="w-[18px] h-[18px]" />}
+              </div>
+              {!!n.badge && n.badge>0 && (
+                <span className="badge-pulse absolute -top-1 -right-1 min-w-[16px] h-4 px-0.5 bg-red-500 text-white rounded-full text-[9px] flex items-center justify-center font-bold shadow border border-black/20 z-[2]">{n.badge > 9 ? '9+' : n.badge}</span>
+              )}
             </div>
-            <span className={`text-[9px] font-semibold leading-none tracking-wide transition-all duration-200 ${page===n.key?"opacity-100":"opacity-45"}`}>
+            <span className={`nav-label text-[9px] font-semibold leading-none tracking-wide transition-all duration-200 ${page===n.key?"opacity-100 nav-label-active":"opacity-40"}`}>
               {n.label}
             </span>
-            {!!n.badge && n.badge>0 && (
-              <span className="badge-pulse absolute top-1 right-1 min-w-[16px] h-4 px-0.5 bg-red-500 text-white rounded-full text-[9px] flex items-center justify-center font-bold shadow border border-black/20">{n.badge > 9 ? '9+' : n.badge}</span>
-            )}
           </motion.button>
         ))}
       </nav>
@@ -7222,8 +7232,19 @@ export default function App() {
         </Suspense>
       )}
 
-      {/* AI Yordamchi — faqat direktor va o'rinbosar; endi FAQAT header'dagi ✨ tugmasidan ochiladi */}
-      {(liveUser.role === 'direktor' || liveUser.role === 'orinbosar') && aiOpen && (
+      {/* AI Yordamchi — faqat direktor va o'rinbosar; endi FAQAT header'dagi ✨ tugmasidan ochiladi.
+          XATO TUZATILDI ("AI'dan chiqib qaytib kirsam chat yo'q", "ovozli
+          o'qish yopgandan keyin ham gapiraverdi"): avval bu blok `aiOpen &&`
+          shartiga bog'liq bo'lib, modal yopilganda <AIAssistant> BUTUNLAY
+          UNMOUNT bo'lardi — shu bilan uning ichidagi butun chat tarixi
+          (useState) yo'qolardi VA "modal yopilganda gapirishni to'xtat"
+          useEffect'i HECH QACHON ishlamas edi (chunki u `open` prop FALSE
+          bo'lib qayta render bo'lishini kutadi, unmount esa buni chetlab
+          o'tadi). Endi komponent doim montaj qilingan holda qoladi — ko'rinish
+          FAQAT `open` prop orqali (`AIAssistant` ichida `if (!open) return
+          null`) boshqariladi, shu bilan ham chat tarixi saqlanadi, ham
+          yopilganda ovoz/tinglash to'g'ri to'xtaydi. */}
+      {(liveUser.role === 'direktor' || liveUser.role === 'orinbosar') && (
         <Suspense fallback={
           <div className="fixed inset-0 bg-black/50 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4">
             <div className="bg-card w-full sm:max-w-md sm:rounded-2xl rounded-t-3xl overflow-hidden" style={{ height: 'min(600px, 85vh)' }}>

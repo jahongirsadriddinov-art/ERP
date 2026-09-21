@@ -360,6 +360,38 @@ input, textarea, [contenteditable="true"], [contenteditable=""] {
   -webkit-background-clip: text; background-clip: text; color: transparent;
 }
 
+/* ── AI — 2-avlod dizayn: "shisha" (glass) panel + atrof-porlash orb ──────
+   Ikkalasi ham FAQAT doira/blur shakllar ishlatadi (romb xatosidan
+   saqlanish uchun hech qachon kvadrat+aylanish birikmasi qo'llanmaydi). */
+@keyframes aiAmbientPulse {
+  0%,100% { opacity: 0.35; transform: translate(-50%,-50%) scale(1); }
+  50%     { opacity: 0.6;  transform: translate(-50%,-50%) scale(1.12); }
+}
+.ai-ambient-glow {
+  position: absolute; top: 50%; left: 50%;
+  width: 140%; height: 140%;
+  border-radius: 9999px;
+  background: radial-gradient(circle, var(--primary), var(--accent) 55%, transparent 75%);
+  filter: blur(18px);
+  animation: aiAmbientPulse 3s ease-in-out infinite;
+  z-index: 0;
+}
+.ai-glass-panel {
+  background: color-mix(in srgb, var(--card) 88%, transparent);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+.ai-glass-bubble {
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
+  border: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
+  backdrop-filter: blur(8px);
+}
+@keyframes aiStatusPulse {
+  0%,100% { box-shadow: 0 0 0 0 color-mix(in srgb, #22c55e 55%, transparent); }
+  50%     { box-shadow: 0 0 0 4px color-mix(in srgb, #22c55e 0%, transparent); }
+}
+.ai-status-dot { animation: aiStatusPulse 2s ease-in-out infinite; }
+
 /* ── Table ──────────────────────────────────────────────────────────── */
 table { @apply w-full text-left border-collapse; }
 th {

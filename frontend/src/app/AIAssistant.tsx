@@ -8,6 +8,9 @@ import Trash2 from "@hugeicons/core-free-icons/Delete02Icon";
 import Edit from "@hugeicons/core-free-icons/Edit02Icon";
 import Zap from "@hugeicons/core-free-icons/FlashIcon";
 import AiSparkles from "@hugeicons/core-free-icons/AiSparklesIcon";
+import UserGroup from "@hugeicons/core-free-icons/UserGroup02Icon";
+import MessageIcon from "@hugeicons/core-free-icons/Message01Icon";
+import CalendarIcon from "@hugeicons/core-free-icons/Calendar03Icon";
 import { MorphIcon } from "morphicons/react";
 import { useTranslation } from "react-i18next";
 import { API_BASE } from "./api";
@@ -137,19 +140,22 @@ export default function AIAssistant({ currentUser, users, token, open, onClose, 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
       <div
-        className="w-full sm:max-w-md h-[88vh] sm:h-auto sm:max-h-[680px] sm:rounded-3xl rounded-t-3xl shadow-2xl border border-border/40 flex flex-col overflow-hidden animate-slide-up-fade"
-        style={{ background: 'var(--card)' }}
+        className="ai-glass-panel w-full sm:max-w-md h-[88vh] sm:h-auto sm:max-h-[680px] sm:rounded-3xl rounded-t-3xl shadow-2xl border border-border/40 flex flex-col overflow-hidden animate-slide-up-fade"
         onClick={e => e.stopPropagation()}
       >
-        {/* Header — restrained premium: doim mukammal doira bo'lgan aylanuvchi
-            gradient halqa (romb bo'lib qolish xatosi tuzatildi) + tagida
-            yupqa gradient chiziq. Xira "blob" fon ATAYLAB olib tashlandi —
-            qorong'i mavzuda his-tuyg'usiz "loyqa" ko'rinishga sabab bo'lgan edi. */}
-        <div className="relative flex items-center gap-3 px-5 py-4 flex-shrink-0 bg-card">
-          <div className="ai-badge-ring w-11 h-11 flex-shrink-0">
-            <div className="ai-badge-inner">
-              <MorphIcon icon={AiSparkles} className="w-[18px] h-[18px] text-white" />
+        {/* Header — 2-avlod: shisha panel + orb atrofida yumshoq "nafas
+            olayotgan" porlash (faqat doira/blur shakllar — romb xatosi
+            takrorlanmasligi uchun hech qachon kvadrat+aylanish qo'llanmaydi),
+            avatarda "faol/onlayn" nuqtasi. */}
+        <div className="relative flex items-center gap-3 px-5 py-4 flex-shrink-0 border-b border-border/20">
+          <div className="relative w-11 h-11 flex-shrink-0">
+            <div className="ai-ambient-glow" />
+            <div className="ai-badge-ring w-full h-full relative z-[1]">
+              <div className="ai-badge-inner">
+                <MorphIcon icon={AiSparkles} className="w-[18px] h-[18px] text-white" />
+              </div>
             </div>
+            <span className="ai-status-dot absolute bottom-0 right-0 w-3 h-3 rounded-full bg-green-500 border-2 z-[2]" style={{ borderColor: 'var(--card)' }} />
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-bold leading-tight flex items-center gap-1.5">
@@ -163,30 +169,36 @@ export default function AIAssistant({ currentUser, users, token, open, onClose, 
             className="w-8 h-8 rounded-xl flex items-center justify-center hover:bg-muted/60 text-muted-foreground transition-colors flex-shrink-0">
             <MorphIcon icon={X} className="w-4 h-4" />
           </button>
-          <div className="absolute bottom-0 left-5 right-5 h-px" style={{ background: 'linear-gradient(90deg, transparent, color-mix(in srgb, var(--primary) 40%, transparent), color-mix(in srgb, var(--accent) 40%, transparent), transparent)' }} />
         </div>
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-hide">
           {msgs.length === 0 && (
             <div className="text-center py-6 px-2">
-              <div className="ai-badge-ring ai-glow-pulse w-16 h-16 mx-auto mb-4">
-                <div className="ai-badge-inner">
-                  <MorphIcon icon={AiSparkles} className="w-7 h-7 text-white" />
+              <div className="relative w-16 h-16 mx-auto mb-4">
+                <div className="ai-ambient-glow ai-glow-pulse" />
+                <div className="ai-badge-ring w-full h-full relative z-[1]">
+                  <div className="ai-badge-inner">
+                    <MorphIcon icon={AiSparkles} className="w-7 h-7 text-white" />
+                  </div>
                 </div>
               </div>
               <p className="text-sm font-semibold text-foreground mb-1">{t('ai.title')}</p>
               <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-line mb-4">{greeting}</p>
-              <div className="flex flex-wrap gap-2 justify-center">
+              <div className="flex flex-col gap-2 max-w-[260px] mx-auto">
                 {[
-                  t('ai.hints.employeeList'),
-                  t('ai.hints.addEmployee'),
-                  t('ai.hints.sendMessage'),
-                  t('ai.hints.todayTasks'),
-                ].map(hint => (
-                  <button key={hint} onClick={() => { setInput(hint); inputRef.current?.focus(); }}
-                    className="text-[11px] px-3 py-2 rounded-2xl border border-border/70 bg-muted/40 hover:bg-muted/80 transition-colors font-medium">
-                    {hint}
+                  { icon: UserGroup, label: t('ai.hints.employeeList') },
+                  { icon: UserPlus, label: t('ai.hints.addEmployee') },
+                  { icon: MessageIcon, label: t('ai.hints.sendMessage') },
+                  { icon: CalendarIcon, label: t('ai.hints.todayTasks') },
+                ].map(({ icon, label }) => (
+                  <button key={label} onClick={() => { setInput(label); inputRef.current?.focus(); }}
+                    className="ai-glass-bubble flex items-center gap-2.5 text-[12px] px-3.5 py-2.5 rounded-2xl hover:bg-muted/40 transition-colors font-medium text-left">
+                    <span className="w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0"
+                      style={{ background: 'color-mix(in srgb, var(--primary) 14%, transparent)' }}>
+                      <MorphIcon icon={icon} className="w-3.5 h-3.5" style={{ color: 'var(--primary)' }} />
+                    </span>
+                    {label}
                   </button>
                 ))}
               </div>
@@ -203,7 +215,7 @@ export default function AIAssistant({ currentUser, users, token, open, onClose, 
               <div className={`max-w-[80%] px-3.5 py-2.5 rounded-2xl text-[13px] leading-relaxed whitespace-pre-wrap ${
                 m.role === 'user'
                   ? 'rounded-br-md text-white shadow-md'
-                  : 'bg-muted/70 text-foreground rounded-bl-md'
+                  : 'ai-glass-bubble text-foreground rounded-bl-md'
               }`}
                 style={m.role === 'user' ? { background: 'linear-gradient(135deg, var(--primary), color-mix(in srgb, var(--primary) 80%, var(--accent)))' } : undefined}>
                 {m.content}
@@ -216,7 +228,7 @@ export default function AIAssistant({ currentUser, users, token, open, onClose, 
                 style={{ background: 'linear-gradient(135deg, var(--primary), var(--accent))' }}>
                 <MorphIcon icon={AiSparkles} className="w-3 h-3 text-white" />
               </div>
-              <div className="bg-muted/70 px-4 py-3 rounded-2xl rounded-bl-md flex items-center gap-2">
+              <div className="ai-glass-bubble px-4 py-3 rounded-2xl rounded-bl-md flex items-center gap-2">
                 <div className="flex gap-1">
                   {[0,1,2].map(i => (
                     <div key={i} className="w-2 h-2 rounded-full ai-thinking-dot"
@@ -257,25 +269,27 @@ export default function AIAssistant({ currentUser, users, token, open, onClose, 
           <div ref={bottomRef}/>
         </div>
 
-        {/* Input */}
-        <div className="flex items-center gap-2.5 px-4 py-3.5 border-t border-border/30 flex-shrink-0 bg-card/50">
-          <input
-            ref={inputRef}
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && !e.shiftKey && send()}
-            placeholder={t('ai.placeholder')}
-            className="flex-1 text-[14px] bg-muted/50 rounded-2xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-primary/30 placeholder:text-muted-foreground/50 border border-border/40 focus:border-primary/30 transition-all"
-            disabled={loading || !!pending}
-          />
-          <button onClick={send} disabled={loading || !input.trim() || !!pending} aria-label={t('ai.sendAriaLabel')}
-            className="w-10 h-10 rounded-2xl flex items-center justify-center disabled:opacity-35 transition-all active:scale-92 flex-shrink-0"
-            style={{
-              background: input.trim() ? 'linear-gradient(135deg, var(--primary), color-mix(in srgb, var(--primary) 80%, var(--accent)))' : 'var(--muted)',
-              boxShadow: input.trim() ? '0 4px 16px color-mix(in srgb, var(--primary) 45%, transparent)' : undefined,
-            }}>
-            {loading ? <MorphIcon icon={Loader2} className="w-4 h-4 text-white animate-spin" /> : <MorphIcon icon={Send} className="w-4 h-4 text-white" />}
-          </button>
+        {/* Input — suzuvchi "pill" panel, oddiy chiziqli maydon o'rniga */}
+        <div className="px-3 pb-3 pt-2 flex-shrink-0">
+          <div className="ai-glass-bubble flex items-center gap-2 rounded-full pl-4 pr-1.5 py-1.5 focus-within:ring-2 focus-within:ring-primary/30 transition-all">
+            <input
+              ref={inputRef}
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && !e.shiftKey && send()}
+              placeholder={t('ai.placeholder')}
+              className="flex-1 min-w-0 text-[14px] bg-transparent focus:outline-none placeholder:text-muted-foreground/50"
+              disabled={loading || !!pending}
+            />
+            <button onClick={send} disabled={loading || !input.trim() || !!pending} aria-label={t('ai.sendAriaLabel')}
+              className="w-9 h-9 rounded-full flex items-center justify-center disabled:opacity-35 transition-all active:scale-92 flex-shrink-0"
+              style={{
+                background: input.trim() ? 'linear-gradient(135deg, var(--primary), color-mix(in srgb, var(--primary) 80%, var(--accent)))' : 'var(--muted)',
+                boxShadow: input.trim() ? '0 4px 16px color-mix(in srgb, var(--primary) 45%, transparent)' : undefined,
+              }}>
+              {loading ? <MorphIcon icon={Loader2} className="w-4 h-4 text-white animate-spin" /> : <MorphIcon icon={Send} className="w-4 h-4 text-white" />}
+            </button>
+          </div>
         </div>
       </div>
     </div>

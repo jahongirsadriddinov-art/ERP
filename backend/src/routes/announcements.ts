@@ -6,6 +6,7 @@ import { getTenant } from '../middleware/tenantContext';
 import { requireOwnerOrAdmin } from '../middleware/auth';
 import { logAudit } from '../services/audit';
 import { sendPushToUser } from '../services/push';
+import { bot } from '../services/bot';
 
 const router = Router();
 
@@ -39,10 +40,16 @@ router.post('/', requireOwnerOrAdmin, async (req, res) => {
 
     // Hammaga (o'zidan tashqari) push bildirishnoma — e'lon "javob kerak
     // emas" bo'lsa ham, xodim buni DARHOL bilishi kerak (ProjectMedia/
-    // SafetyIncident'dagi bir xil naqsh).
-    const teammates = await User.find(scoped({ _id: { $ne: t.userId } })).select('_id').lean();
+    // SafetyIncident'dagi bir xil naqsh). Ilova ochiq bo'lmagan xodimlar
+    // buni ko'rmasligi mumkin edi — shu sabab Telegram botiga ham (agar
+    // xodim botni ulagan bo'lsa) bir xil xabar yuboriladi (messages.ts'dagi
+    // relay bilan bir xil naqsh).
+    const teammates = await User.find(scoped({ _id: { $ne: t.userId } })).select('_id telegramChatId').lean();
     for (const u of teammates) {
       sendPushToUser(String(u._id), { title: `📢 ${ann.title}`, body: ann.body.slice(0, 120), tag: 'announcement' }).catch(() => {});
+      if (u.telegramChatId) {
+        bot.sendMessage(u.telegramChatId, `📢 <b>${ann.title}</b>\n\n${ann.body}`, { parse_mode: 'HTML' }).catch(() => {});
+      }
     }
 
     await logAudit({

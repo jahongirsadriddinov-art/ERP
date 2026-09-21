@@ -3,7 +3,6 @@ import User from '../models/User';
 import { scoped } from '../middleware/scope';
 import { getTenant } from '../middleware/tenantContext';
 import { emitToUser } from '../services/socket';
-import { blockDeveloper } from '../middleware/auth';
 import { logAudit } from '../services/audit';
 
 const router = Router();
@@ -178,10 +177,17 @@ router.get('/:id/profile', async (req, res) => {
 // orinbosar o'chira oladi (companies.ts'dagi deleteCompany kabi
 // pattern — o'zini o'chirmaslik tekshiruvi frontendda mavjud, bu yerda
 // ham qo'shildi, chunki backend hech qachon frontendga ishonmasligi kerak).
-router.delete('/:id', blockDeveloper, async (req, res) => {
+// XATO TUZATILDI ("admin panelda o'chirib bo'lmayapti"): bu yo'l avval
+// `blockDeveloper` bilan himoyalangan edi — bu middleware dasturchini FIRMA
+// ICHKI ma'lumotlaridan (tranzaksiya, material va h.k.) qaytarish uchun
+// mo'ljallangan, lekin foydalanuvchini o'chirish shu faylning GET/PUT
+// yo'llarida ALLAQACHON dasturchi uchun ATAYLAB ochiq (companyId'siz "eski
+// bug qurboni" yoki test hisoblarni tozalash uchun) — shu sabab DELETE ham
+// xuddi o'sha PUT'dagi bilan bir xil qoidaga moslashtirildi.
+router.delete('/:id', async (req, res) => {
   try {
     const tenant = getTenant();
-    if (tenant?.role !== 'direktor' && tenant?.role !== 'orinbosar') {
+    if (!tenant?.isDeveloper && tenant?.role !== 'direktor' && tenant?.role !== 'orinbosar') {
       return res.status(403).json({ error: 'Faqat direktor yoki o\'rinbosar xodimni o\'chira oladi' });
     }
     if (String(req.params.id) === String(tenant?.userId)) {

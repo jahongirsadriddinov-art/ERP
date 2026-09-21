@@ -141,43 +141,37 @@ export default function AIAssistant({ currentUser, users, token, open, onClose, 
         style={{ background: 'var(--card)' }}
         onClick={e => e.stopPropagation()}
       >
-        {/* Header — premium: sekin aylanuvchi gradient halqa + xira "blob"
-            fon, oddiy tekis panelning o'rniga chuqurlik va "tirik" tuyg'u beradi. */}
-        <div className="relative flex items-center gap-3 px-5 py-4 border-b border-border/30 flex-shrink-0 overflow-hidden"
-          style={{ background: 'linear-gradient(135deg, color-mix(in srgb, var(--primary) 10%, transparent), color-mix(in srgb, var(--accent) 8%, transparent))' }}>
-          <div className="absolute -top-8 -left-6 w-24 h-24 rounded-full blur-2xl pointer-events-none blob-anim"
-            style={{ background: 'color-mix(in srgb, var(--primary) 25%, transparent)' }} />
-          <div className="absolute -bottom-10 -right-4 w-28 h-28 rounded-full blur-2xl pointer-events-none blob-anim-slow"
-            style={{ background: 'color-mix(in srgb, var(--accent) 22%, transparent)' }} />
-          <div className="relative w-10 h-10 flex-shrink-0">
-            <div className="ai-ring" />
-            <div className="absolute inset-[3px] rounded-[14px] flex items-center justify-center shadow-md"
-              style={{ background: 'linear-gradient(135deg, var(--primary), color-mix(in srgb, var(--primary) 70%, var(--accent)))' }}>
+        {/* Header — restrained premium: doim mukammal doira bo'lgan aylanuvchi
+            gradient halqa (romb bo'lib qolish xatosi tuzatildi) + tagida
+            yupqa gradient chiziq. Xira "blob" fon ATAYLAB olib tashlandi —
+            qorong'i mavzuda his-tuyg'usiz "loyqa" ko'rinishga sabab bo'lgan edi. */}
+        <div className="relative flex items-center gap-3 px-5 py-4 flex-shrink-0 bg-card">
+          <div className="ai-badge-ring w-11 h-11 flex-shrink-0">
+            <div className="ai-badge-inner">
               <MorphIcon icon={AiSparkles} className="w-[18px] h-[18px] text-white" />
             </div>
           </div>
-          <div className="relative flex-1 min-w-0">
+          <div className="flex-1 min-w-0">
             <p className="text-sm font-bold leading-tight flex items-center gap-1.5">
-              {t('ai.title')}
-              <span className="text-[9px] font-bold tracking-wide px-1.5 py-0.5 rounded-full text-white uppercase"
+              <span className="ai-gradient-text">{t('ai.title')}</span>
+              <span className="text-[9px] font-bold tracking-wide px-1.5 py-0.5 rounded-full text-white uppercase flex-shrink-0"
                 style={{ background: 'linear-gradient(135deg, var(--primary), var(--accent))' }}>AI</span>
             </p>
             <p className="text-[11px] text-muted-foreground mt-0.5 leading-none">{t('ai.subtitle')}</p>
           </div>
           <button onClick={onClose} aria-label={t('ai.close')}
-            className="relative w-8 h-8 rounded-xl flex items-center justify-center hover:bg-muted/60 text-muted-foreground transition-colors flex-shrink-0">
+            className="w-8 h-8 rounded-xl flex items-center justify-center hover:bg-muted/60 text-muted-foreground transition-colors flex-shrink-0">
             <MorphIcon icon={X} className="w-4 h-4" />
           </button>
+          <div className="absolute bottom-0 left-5 right-5 h-px" style={{ background: 'linear-gradient(90deg, transparent, color-mix(in srgb, var(--primary) 40%, transparent), color-mix(in srgb, var(--accent) 40%, transparent), transparent)' }} />
         </div>
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-hide">
           {msgs.length === 0 && (
             <div className="text-center py-6 px-2">
-              <div className="relative w-16 h-16 mx-auto mb-4">
-                <div className="ai-ring ai-glow-pulse" />
-                <div className="absolute inset-[3px] rounded-[18px] flex items-center justify-center shadow-lg"
-                  style={{ background: 'linear-gradient(135deg, var(--primary), color-mix(in srgb, var(--primary) 70%, var(--accent)))' }}>
+              <div className="ai-badge-ring ai-glow-pulse w-16 h-16 mx-auto mb-4">
+                <div className="ai-badge-inner">
                   <MorphIcon icon={AiSparkles} className="w-7 h-7 text-white" />
                 </div>
               </div>

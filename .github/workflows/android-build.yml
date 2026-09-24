@@ -59,7 +59,12 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - uses: android-actions/setup-android@v3
+      # ubuntu-latest'da Android SDK oldindan o'rnatilgan (ANDROID_HOME).
+      # setup-android@v3 qadami takroriy ravishda muvaffaqiyatsiz bo'layotgan
+      # edi — uni olib tashlab, faqat litsenziyalarni qabul qilamiz, kerakli
+      # platforma/build-tools'ni Gradle o'zi yuklaydi.
+      - name: Accept Android SDK licenses
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
 
       - name: Install frontend deps
         run: npm ci

@@ -146,7 +146,19 @@
      qarang) — HAMMASI qattiq belgilangan (Tailwind) border-radius bilan,
      hech qanday `inherit`/conic-gradient ishlatilmaydi. */
   .ios-bottom-bar {
-    @apply fixed left-3 right-3 z-50 sm:hidden;
+    /* XATO TUZATILDI ("ipad'da qirqilib qolyapti, telefondagidek bo'lsin"):
+       avval `sm:hidden` edi (640px'dan boshlab yashirin) — deyarli har
+       qanday planshet (iPad portret ~768-834px) shu chegaradan KENGROQ,
+       shu sabab ular doim USTKI (desktop) 3 orolchali sarlavha + siqilgan
+       ko'p ustunli panelni ko'rar edi. Endi `lg:hidden` (1024px) — barcha
+       portret planshetlar telefon tajribasini (pastki navigatsiya bilan)
+       oladi, faqat haqiqiy kengroq (noutbuk/desktop/landshaft planshet)
+       ekranlarda desktop ko'rinish qoladi. Shu bilan birga headerdagi
+       o'rtadagi nav pill (pastda) va dashboard panel/akkordeon almashuvi
+       ham xuddi shu `lg` chegarasiga moslashtirildi — ikkalasi HAR DOIM
+       bir xil chegarada almashishi kerak, aks holda ikkalasi ham
+       yashirin yoki ikkalasi ham ko'rinadigan oraliq paydo bo'ladi. */
+    @apply fixed left-3 right-3 z-50 lg:hidden;
     bottom: calc(env(safe-area-inset-bottom, 12px) + 12px);
     padding: 6px 8px;
     border-radius: 26px;

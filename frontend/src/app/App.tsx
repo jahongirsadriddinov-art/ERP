@@ -1574,7 +1574,7 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
         naqshi) ishlatiladi — hech qaysi chip HECH QACHON kesilmaydi yoki
         siqilmaydi, shunchaki kerak bo'lsa yon tomonga suriladi. */}
     {stats && (
-      <div className="flex-shrink-0 hidden md:flex items-center gap-2 pl-3 pr-6 pt-3 pb-1 overflow-x-auto scrollbar-hide scroll-smooth">
+      <div className="flex-shrink-0 hidden lg:flex items-center gap-2 pl-3 pr-6 pt-3 pb-1 overflow-x-auto scrollbar-hide scroll-smooth">
         {[
           { label: t('dashboard.activeObjects'), value: stats.activeProjects, color: "text-green-600 dark:text-green-400" },
           { label: t('dashboard.totalStaff'), value: stats.totalEmployees, color: "text-blue-600 dark:text-blue-300" },
@@ -1630,7 +1630,7 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
       </button>
     </div>
     {/* Desktop: 4-column grid */}
-    <div className="hidden md:grid md:grid-cols-2 xl:grid-cols-4 gap-3 overflow-hidden bg-background p-3 flex-1 min-h-0">
+    <div className="hidden lg:grid lg:grid-cols-2 xl:grid-cols-4 gap-3 overflow-hidden bg-background p-3 flex-1 min-h-0">
       {/* Col 1 */}
       <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28 }}
         className="surface flex flex-col overflow-hidden">
@@ -1783,7 +1783,7 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
     </div>
 
     {/* Mobile: Accordion */}
-    <div className="flex flex-col md:hidden overflow-y-auto scrollbar-hide bg-background pb-4">
+    <div className="flex flex-col lg:hidden overflow-y-auto scrollbar-hide bg-background pb-4">
       {sections.map(section => {
         const isOpen = activeTab === section.key;
         return (
@@ -6680,7 +6680,7 @@ export default function App() {
         </div>
         <span className="text-sm font-bold tracking-tight hidden lg:block whitespace-nowrap">{companyName}</span>
       </div>
-      <nav className="hidden sm:flex items-center gap-0.5 lg:gap-1 nav-pill-desktop px-1.5 py-1.5 rounded-full w-fit flex-shrink-0">
+      <nav className="hidden lg:flex items-center gap-0.5 lg:gap-1 nav-pill-desktop px-1.5 py-1.5 rounded-full w-fit flex-shrink-0">
         {NAV.map(n=>(
           <button key={n.key} onClick={()=>{setPage(n.key);setSelProject(null);}}
             className={`relative flex items-center gap-1.5 lg:gap-2 text-sm md:text-[13px] lg:text-sm px-2.5 md:px-2.5 lg:px-4 py-2 lg:py-2.5 rounded-full z-10 liquid-transition whitespace-nowrap ${page===n.key?"text-primary font-semibold":"text-muted-foreground hover:text-foreground"}`}>
@@ -7092,7 +7092,7 @@ export default function App() {
       )}
 
       {/* Top bar — admin only (Mobile/Tablet only) */}
-      <div className="block md:hidden">
+      <div className="block lg:hidden">
         {admin && <BottomFinanceBar expenses={expenses} projects={projects}/>}
       </div>
 

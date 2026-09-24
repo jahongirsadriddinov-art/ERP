@@ -8,6 +8,8 @@ import Material from '../models/Material';
 import Message from '../models/Message';
 import Group from '../models/Group';
 import Attendance from '../models/Attendance';
+import ObjectModel from '../models/Object';
+import { EXP_T, expLang, parseExpenseText, voiceToExpense, ParsedExpense } from './botExpense';
 import GpsLocation from '../models/GpsLocation';
 import AppRelease from '../models/AppRelease';
 import AppSettings from '../models/AppSettings';
@@ -1002,6 +1004,172 @@ bot.on('edited_message', async (msg: any) => {
   saveLocationFromTelegram(chatId, msg.location.latitude, msg.location.longitude, msg.location.horizontal_accuracy, 'bot_live').catch(() => {});
 });
 
+// ─── "➕ Chiqim qo'shish" — matn yoki OVOZLI xabar → tasdiqlash → chiqim ───────
+// Xotiradagi holat (server qayta ishga tushsa tozalanadi — foydalanuvchi tugmani
+// qayta bosadi). chatId → kutilayotgan kiritish; draftId → tasdiqlash kutayotgan qoralama.
+const pendingExpenseEntry = new Map<number, { userId: string }>();
+interface ExpenseDraft {
+  chatId: number; userId: string; amount: number; description: string;
+  projectId?: string; projectName?: string; transcript?: string;
+  approverId?: string; approverName?: string; createdAt: number;
+}
+const pendingExpenseDrafts = new Map<string, ExpenseDraft>();
+
+async function startExpenseFlow(chatId: number, user: any) {
+  pendingExpenseEntry.set(chatId, { userId: String(user._id) });
+  const T = EXP_T[expLang(user.language)];
+  await bot.sendMessage(chatId, T.prompt, {
+    parse_mode: 'Markdown',
+    reply_markup: { inline_keyboard: [[{ text: T.cancelBtn, callback_data: 'expcancel' }]] },
+  });
+}
+
+// Direktor/o'rinbosardan boshqa rol chiqim yaratsa — saytdagi qoida bilan bir xil:
+// tasdiqlovchi (direktor/o'rinbosar) SHART. Botda tanlash oynasi yo'q, shu sabab
+// avval firma egasi, so'ng direktor, so'ng o'rinbosar avtomatik tanlanadi.
+async function findExpenseApprover(user: any) {
+  if (isAdmin(user.role) || !user.companyId) return null;
+  const base: any = { companyId: user.companyId, role: { $in: ['direktor', 'orinbosar'] } };
+  return (await User.findOne({ ...base, isOwner: true }).catch(() => null))
+    || (await User.findOne({ ...base, role: 'direktor' }).catch(() => null))
+    || (await User.findOne(base).catch(() => null));
+}
+
+async function matchExpenseProject(user: any, name?: string) {
+  const q = (name || '').toLowerCase().trim();
+  if (q.length < 2) return null;
+  const objs = await ObjectModel.find(user.companyId ? { companyId: user.companyId } : {}).select('name').lean();
+  return objs.find((o: any) => { const n = String(o.name).toLowerCase(); return n.includes(q) || (n.length >= 3 && q.includes(n)); }) || null;
+}
+
+async function sendExpenseDraft(chatId: number, user: any, parsed: ParsedExpense) {
+  const T = EXP_T[expLang(user.language)];
+  const proj: any = await matchExpenseProject(user, parsed.projectName);
+  const approver: any = await findExpenseApprover(user);
+  pendingExpenseEntry.delete(chatId);
+  if (!isAdmin(user.role) && !approver) { await bot.sendMessage(chatId, T.noApprover); return; }
+
+  const now = Date.now();
+  for (const [k, d] of pendingExpenseDrafts) if (now - d.createdAt > 30 * 60 * 1000) pendingExpenseDrafts.delete(k);
+  const id = Math.random().toString(36).slice(2, 10);
+  const approverName = approver ? `${approver.firstName} ${approver.lastName || ''}`.trim() : undefined;
+  pendingExpenseDrafts.set(id, {
+    chatId, userId: String(user._id), amount: parsed.amount, description: parsed.description,
+    projectId: proj ? String(proj._id) : undefined, projectName: proj?.name, transcript: parsed.transcript,
+    approverId: approver ? String(approver._id) : undefined, approverName, createdAt: now,
+  });
+  const lines = [T.confirmTitle, ''];
+  if (parsed.transcript) lines.push(T.heard(parsed.transcript), '');
+  lines.push(T.amountLine(parsed.amount), T.descLine(parsed.description),
+    T.projLine(proj?.name ?? (parsed.projectName ? `${parsed.projectName} ❓` : undefined)));
+  if (approverName) lines.push(T.approverLine(approverName));
+  lines.push('', T.ask);
+  await bot.sendMessage(chatId, lines.join('\n'), {
+    reply_markup: { inline_keyboard: [
+      [{ text: T.okBtn, callback_data: `expok_${id}` }, { text: T.cancelBtn, callback_data: `expno_${id}` }],
+      [{ text: T.retryBtn, callback_data: `expretry_${id}` }],
+    ] },
+  });
+}
+
+// true → xabar shu oqimda ishlatildi (asosiy handler davom etmasin).
+async function handleExpenseInput(msg: any, chatId: number): Promise<boolean> {
+  const st = pendingExpenseEntry.get(chatId);
+  if (!st) return false;
+  const user: any = await User.findById(st.userId).catch(() => null);
+  if (!user) { pendingExpenseEntry.delete(chatId); return false; }
+  const T = EXP_T[expLang(user.language)];
+  try {
+    if (msg.voice || msg.audio) {
+      const media = msg.voice || msg.audio;
+      const notice = await bot.sendMessage(chatId, T.processing);
+      let parsed: ParsedExpense | null = null;
+      try {
+        const link = await bot.getFileLink(media.file_id);
+        const buf = Buffer.from(await (await fetch(link)).arrayBuffer());
+        parsed = await voiceToExpense(buf, media.mime_type || 'audio/ogg');
+      } catch (e: any) {
+        bot.deleteMessage(chatId, notice.message_id).catch(() => {});
+        if (e?.message === 'NO_GEMINI') { await bot.sendMessage(chatId, T.noGemini, { parse_mode: 'Markdown' }); return true; }
+        console.error('[bot expense voice]', e);
+        await bot.sendMessage(chatId, T.voiceFail);
+        return true;
+      }
+      bot.deleteMessage(chatId, notice.message_id).catch(() => {});
+      if (!parsed) { await bot.sendMessage(chatId, T.voiceFail); return true; }
+      await sendExpenseDraft(chatId, user, parsed);
+      return true;
+    }
+    if (msg.text) {
+      const text = String(msg.text).trim();
+      // Raqamsiz matn yoki buyruq — bu boshqa menyu tugmasi: chiqim kiritishni
+      // bekor qilib, xabarni asosiy handlerga qaytaramiz.
+      if (text.startsWith('/') || !/\d/.test(text)) { pendingExpenseEntry.delete(chatId); return false; }
+      const parsed = parseExpenseText(text);
+      if (!parsed) { await bot.sendMessage(chatId, T.parseHint, { parse_mode: 'Markdown' }); return true; }
+      await sendExpenseDraft(chatId, user, parsed);
+      return true;
+    }
+  } catch (e) {
+    console.error('[bot expense]', e);
+    await bot.sendMessage(chatId, T.error).catch(() => {});
+    return true;
+  }
+  return false;
+}
+
+async function handleExpenseCallback(query: any, data: string, user: any, chatId: number, messageId: number) {
+  await bot.answerCallbackQuery(query.id).catch(() => {});
+  if (!user || !chatId) return;
+  const T = EXP_T[expLang(user.language)];
+  const edit = (text: string, kb?: any) =>
+    bot.editMessageText(text, { chat_id: chatId, message_id: messageId, ...(kb ? { reply_markup: kb } : {}) }).catch(() => {});
+
+  if (data === 'expcancel') { pendingExpenseEntry.delete(chatId); await edit(T.cancelled); return; }
+  const id = data.slice(data.indexOf('_') + 1);
+  if (data.startsWith('expretry_')) { pendingExpenseDrafts.delete(id); await edit(T.cancelled); await startExpenseFlow(chatId, user); return; }
+
+  const draft = pendingExpenseDrafts.get(id);
+  if (!draft || draft.chatId !== chatId || draft.userId !== String(user._id)) { await edit(T.expired); return; }
+  pendingExpenseDrafts.delete(id); // ikki marta bosilsa ikki chiqim yaratilmasin
+  if (data.startsWith('expno_')) {
+    await edit(T.cancelled, { inline_keyboard: [[{ text: T.retryBtn, callback_data: 'expretry_x' }]] });
+    return;
+  }
+
+  // expok — chiqimni yaratish (saytdagi POST /api/transactions bilan bir xil qoidalar)
+  try {
+    const admin = isAdmin(user.role);
+    const txData: any = {
+      type: 'expense', status: admin ? 'confirmed' : 'pending', date: todayInTashkent(),
+      amount: draft.amount, description: draft.description, createdById: String(user._id), companyId: user.companyId,
+    };
+    if (draft.projectId) txData.projectId = draft.projectId;
+    if (!admin) { txData.requiresAdminApproval = true; txData.approverId = draft.approverId; }
+    const tx: any = await Transaction.create(txData);
+    const payload = { ...tx.toObject(), id: tx._id };
+    emitToUser(String(user._id), 'transaction:new', payload);
+    if (!admin && draft.approverId) {
+      emitToUser(draft.approverId, 'transaction:new', payload);
+      const approver: any = await User.findById(draft.approverId).catch(() => null);
+      if (approver?.telegramChatId) {
+        const aLang = approver.language as BotLang | undefined;
+        const requester = `${user.firstName} ${user.lastName || ''}`.trim();
+        bot.sendMessage(approver.telegramChatId,
+          tb(aLang, 'approverPaymentNew', { amount: `${draft.amount.toLocaleString()} so'm`, reason: draft.description, date: tx.date || '—', requester }),
+          { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[
+            { text: tb(aLang, 'confirmBtn'), callback_data: `confirm_${tx._id}` },
+            { text: tb(aLang, 'rejectBtn'), callback_data: `reject_${tx._id}` },
+          ]] } }).catch(console.error);
+      }
+    }
+    await edit(admin ? T.savedAdmin(draft.amount) : T.savedPending(draft.amount, draft.approverName || '—'));
+  } catch (e) {
+    console.error('[bot expense create]', e);
+    await edit(T.error);
+  }
+}
+
 // ─── Text message handler — main menu ─────────────────────────────────────────
 bot.on('message', async (msg: any) => {
   const chatId = msg.chat.id;
@@ -1149,6 +1317,10 @@ bot.on('message', async (msg: any) => {
     }
     return;
   }
+
+  // ── Chiqim qo'shish oqimi (matn yoki ovoz) — voice'lar `!msg.text` tekshiruvidan
+  // OLDIN ushlanishi shart, shu sabab bu yerda.
+  if (pendingExpenseEntry.has(chatId) && (await handleExpenseInput(msg, chatId))) return;
 
   // ── "⚙️ Tugmalarni sozlash" ichida tugma/xabar matnini tahrirlash — tanlangan
   // kalitning KEYINGI matn xabari shu kalitga saqlanadi.
@@ -1331,6 +1503,12 @@ bot.on('message', async (msg: any) => {
         ]],
       },
     });
+    return;
+  }
+
+  // ── Chiqim qo'shish (dasturchidan boshqa hamma rol) ───────────────────────
+  if (!developer && text === SL(admin ? 'admin' : 'user', 'kb_addExpense')) {
+    await startExpenseFlow(chatId, user);
     return;
   }
 
@@ -2227,6 +2405,11 @@ bot.on('callback_query', async (query: any) => {
       console.error('Bot roxiypay callback error:', err);
       await bot.sendMessage(chatId, tb(user.language, 'subPayError'), { reply_markup: await keyboardForUser(user, user.language) });
     }
+    return;
+  }
+
+  if (/^exp(ok|no|retry|cancel)/.test(data)) {
+    await handleExpenseCallback(query, data, user, chatId, messageId);
     return;
   }
 

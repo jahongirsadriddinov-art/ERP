@@ -9,6 +9,7 @@ import { AppUser, Avatar, Transfer, Expense, fmtWorkDuration, roleLabel } from "
 import { API_BASE } from "./api";
 import WorkerMap, { NavigateChoiceModal } from "./WorkerMap";
 import WorkerProfileModal from "./WorkerProfileModal";
+import { accuracyQuality, QUALITY_COLOR } from "./useGeoTracker";
 
 interface AttendanceEntry {
   userId: string;
@@ -30,7 +31,7 @@ interface AttendanceEntry {
 // (GET /api/attendance/list, faqat direktor/orinbosar/dasturchi).
 export default function GpsTrackingPage({ users, gpsLocations, refreshing, onRefresh, transfers, expenses }: {
   users: AppUser[];
-  gpsLocations: Array<{userId: string; lat: number; lng: number; accuracy?: number; timestamp: string; source?: 'site'|'bot_live'|'bot_once'}>;
+  gpsLocations: Array<{userId: string; lat: number; lng: number; accuracy?: number; timestamp: string; source?: 'site'|'bot_live'|'bot_once'; speed?: number; battery?: number; charging?: boolean; network?: string}>;
   refreshing: boolean;
   onRefresh: () => void;
   transfers: Transfer[];
@@ -160,7 +161,7 @@ export default function GpsTrackingPage({ users, gpsLocations, refreshing, onRef
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold truncate">{u.name}</p>
                   <p className="text-[11px] text-muted-foreground">{roleLabel(t, u.role)}</p>
-                  {loc ? (
+                  {loc ? (<>
                     <div className="flex items-center gap-1.5 mt-1">
                       <MorphIcon icon={MapPin} className="w-3 h-3 text-muted-foreground/60 flex-shrink-0" />
                       <span className="text-[10px] text-muted-foreground">{loc.lat.toFixed(5)}, {loc.lng.toFixed(5)}</span>
@@ -170,12 +171,22 @@ export default function GpsTrackingPage({ users, gpsLocations, refreshing, onRef
                           ekanini bilmasdi. >300m — odatda GPS chip emas, tarmoq/IP-
                           asosli taxminiy joylashuv, shu sabab alohida rangda ajratiladi. */}
                       {loc.accuracy != null && (
-                        <span className={`text-[9px] font-mono flex-shrink-0 ${loc.accuracy > 300 ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground/70'}`}>
-                          ±{Math.round(loc.accuracy)}m
+                        <span className={`text-[9px] font-mono flex-shrink-0 ${QUALITY_COLOR[accuracyQuality(loc.accuracy)!]}`}>
+                          ±{Math.round(loc.accuracy)}m · {t(`gps.q_${accuracyQuality(loc.accuracy)}`)}
                         </span>
                       )}
                     </div>
-                  ) : (
+                    {/* Batareya, tezlik, tarmoq — GPS ishonchliligi va xodim qurilmasi haqida */}
+                    <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 mt-0.5 text-[10px] text-muted-foreground">
+                      {loc.battery != null && (
+                        <span className={loc.battery <= 20 && !loc.charging ? 'text-red-600 dark:text-red-400 font-semibold' : ''}>
+                          🔋 {Math.round(loc.battery)}%{loc.charging ? ' ⚡' : ''}
+                        </span>
+                      )}
+                      {loc.speed != null && <span>{loc.speed * 3.6 >= 3 ? `🚶 ${Math.round(loc.speed * 3.6)} ${t('gps.kmh')}` : `⏸ ${t('gps.still')}`}</span>}
+                      {loc.network && <span>{loc.network === 'offline' ? '📴' : '📶'} {loc.network}</span>}
+                    </div>
+                  </>) : (
                     <p className="text-[10px] text-muted-foreground mt-1">{t('gps.noGpsData')}</p>
                   )}
                 </div>

@@ -13,6 +13,12 @@ export interface GpsLocationDoc extends Document {
   lat: number;
   lng: number;
   accuracy?: number;
+  speed?: number;      // m/s (qurilma bergan bo'lsa)
+  heading?: number;    // 0-360 daraja
+  altitude?: number;   // metr
+  battery?: number;    // 0-100 (%) — Battery Status API
+  charging?: boolean;
+  network?: string;    // 'wifi' | '4g' | '3g' | '2g' | 'offline' ...
   timestamp: Date;
   projectId?: string;
   source: GpsSource;
@@ -24,6 +30,12 @@ const GpsLocationSchema = new Schema<GpsLocationDoc>({
   lat: { type: Number, required: true },
   lng: { type: Number, required: true },
   accuracy: Number,
+  speed: Number,
+  heading: Number,
+  altitude: Number,
+  battery: Number,
+  charging: Boolean,
+  network: String,
   timestamp: { type: Date, default: Date.now },
   projectId: String,
   source: { type: String, enum: ['site', 'bot_live', 'bot_once'], default: 'site' },

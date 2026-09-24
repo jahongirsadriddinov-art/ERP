@@ -8,7 +8,7 @@ import { MorphIcon } from "morphicons/react";
 import { useTranslation } from "react-i18next";
 import { AppUser } from "./App";
 
-interface GpsPoint { userId: string; lat: number; lng: number; accuracy?: number; timestamp: string; source?: 'site'|'bot_live'|'bot_once' }
+interface GpsPoint { userId: string; lat: number; lng: number; accuracy?: number; timestamp: string; source?: 'site'|'bot_live'|'bot_once'; speed?: number; battery?: number; charging?: boolean; network?: string }
 
 // Toshkent — hech qanday xodim GPS ma'lumoti bo'lmaganda xaritaning boshlang'ich
 // markazi (aks holda [0,0] — Gvineya qo'ltig'ida ochiladi).
@@ -91,7 +91,7 @@ export default function WorkerMap({ users, gpsLocations, focusUserId }: { users:
       const veryRough = (loc.accuracy || 0) > 300; // ~300m'dan katta — odatda tarmoq/IP-asosli, GPS chip emas
       const statusWord = live ? (stale ? t('map.stale') : t('map.live')) : t('map.lastKnown');
       markersRef.current[loc.userId].bindTooltip(
-        `${user.name} · ${statusWord}${loc.accuracy ? ` · ±${Math.round(loc.accuracy)}m` : ''}`,
+        `${user.name} · ${statusWord}${loc.accuracy ? ` · ±${Math.round(loc.accuracy)}m` : ''}${loc.battery != null ? ` · 🔋${Math.round(loc.battery)}%` : ''}`,
         { direction: 'top', offset: [0, -18] }
       );
 

@@ -87,7 +87,7 @@ import QrLoginPanel from "./QrLoginPanel";
 import { AppDownloadCards } from "./AppDownload";
 import LanguageSwitcher from "./i18n/LanguageSwitcher";
 import { Skeleton, SkeletonList, SkeletonPage, SkeletonMessage, SkeletonTable, SkeletonProfile } from "./Skeleton";
-import { useGeoTracker } from "./useGeoTracker";
+import { useGeoTracker, accuracyQuality, QUALITY_COLOR, type GpsStatus } from "./useGeoTracker";
 import PullToRefresh from "./PullToRefresh";
 import { isPinSet, useAppLock, markActiveNow, clearPin, PinSetupScreen, PinLockScreen, ChangePinModal, isBiometricEnabled, setBiometricEnabled, biometricAvailable, biometricSupported, tryBiometricUnlock, nativeBiometricSupported, registerWebAuthnBiometric, getLockTimeoutMin, setLockTimeoutMin, LOCK_TIMEOUT_OPTIONS } from "./AppLock";
 
@@ -4700,8 +4700,8 @@ function SecuritySettingsCard() {
   );
 }
 
-function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdateUser, onCompanyNameChange, onCompanyLogoChange, onBgChange, onColorThemeChange, colorTheme, themeMode, onThemeModeChange, canEditCompany, todayAttendance, onCheckIn, onCheckOut, gpsTracking, onLockNow, canBackup, backupLoading, onBackup, importLoading, onImportBackup, importFileRef }:
-  { currentUser: AppUser; projects: Project[]; onUpdateAvatar: (url: string) => void; onLogout: () => void; onUpdateUser: (u: AppUser) => void; onCompanyNameChange: (name: string) => void; onCompanyLogoChange: (logo: string) => void; onBgChange: (bg: string) => void; onColorThemeChange: (id: string) => void; colorTheme: string; themeMode: "light"|"dark"|"system"; onThemeModeChange: (m: "light"|"dark"|"system") => void; canEditCompany?: boolean; todayAttendance: null | { status: string; checkIn?: string; checkOut?: string; workHours?: number }; onCheckIn: () => void; onCheckOut: () => void; gpsTracking: boolean; onLockNow: () => void;
+function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdateUser, onCompanyNameChange, onCompanyLogoChange, onBgChange, onColorThemeChange, colorTheme, themeMode, onThemeModeChange, canEditCompany, todayAttendance, onCheckIn, onCheckOut, gpsTracking, gpsStatus, onLockNow, canBackup, backupLoading, onBackup, importLoading, onImportBackup, importFileRef }:
+  { currentUser: AppUser; projects: Project[]; onUpdateAvatar: (url: string) => void; onLogout: () => void; onUpdateUser: (u: AppUser) => void; onCompanyNameChange: (name: string) => void; onCompanyLogoChange: (logo: string) => void; onBgChange: (bg: string) => void; onColorThemeChange: (id: string) => void; colorTheme: string; themeMode: "light"|"dark"|"system"; onThemeModeChange: (m: "light"|"dark"|"system") => void; canEditCompany?: boolean; todayAttendance: null | { status: string; checkIn?: string; checkOut?: string; workHours?: number }; onCheckIn: () => void; onCheckOut: () => void; gpsTracking: boolean; onLockNow: () => void; gpsStatus?: GpsStatus;
     canBackup?: boolean; backupLoading?: boolean; onBackup?: () => void; importLoading?: boolean; onImportBackup?: (e: React.ChangeEvent<HTMLInputElement>) => void; importFileRef?: React.RefObject<HTMLInputElement>; }) {
   const { t, i18n } = useTranslation();
   const changeLanguage = async (lang: SiteLang) => {
@@ -5414,6 +5414,42 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
                 <div className={`w-2 h-2 rounded-full flex-shrink-0 ${gpsTracking ? 'bg-green-500 animate-pulse' : 'bg-muted-foreground/40'}`}/>
                 <span>{gpsTracking ? t('profile.gpsActive') : t('profile.gpsWaiting')}</span>
               </div>
+              {/* GPS batafsil holati: aniqlik, batareya, moslashtirilgan interval,
+                  oxirgi o'lchov, offline navbat va xatolik ogohlantirishlari. */}
+              {gpsTracking && gpsStatus && (
+                <div className="mb-3 space-y-2">
+                  {(gpsStatus.state === 'denied' || gpsStatus.state === 'unavailable' || gpsStatus.state === 'timeout') && (
+                    <p className="text-[11px] rounded-lg px-2.5 py-1.5 bg-red-500/10 text-red-600 dark:text-red-400">
+                      ⚠ {t(gpsStatus.state === 'denied' ? 'gps.warnDenied' : gpsStatus.state === 'timeout' ? 'gps.warnTimeout' : 'gps.warnUnavailable')}
+                    </p>
+                  )}
+                  <div className="grid grid-cols-2 gap-1.5 text-[11px]">
+                    <div className="rounded-lg bg-muted/40 px-2.5 py-1.5">
+                      <p className="text-[9px] uppercase tracking-wide text-muted-foreground">{t('gps.accuracy')}</p>
+                      <p className={`font-semibold ${QUALITY_COLOR[accuracyQuality(gpsStatus.accuracy) || 'ok']}`}>
+                        {gpsStatus.accuracy != null ? `±${gpsStatus.accuracy} m · ${t(`gps.q_${accuracyQuality(gpsStatus.accuracy)}`)}` : '—'}
+                      </p>
+                    </div>
+                    <div className="rounded-lg bg-muted/40 px-2.5 py-1.5">
+                      <p className="text-[9px] uppercase tracking-wide text-muted-foreground">{t('gps.battery')}</p>
+                      <p className={`font-semibold ${gpsStatus.battery != null && gpsStatus.battery <= 20 && !gpsStatus.charging ? 'text-red-600 dark:text-red-400' : ''}`}>
+                        {gpsStatus.battery != null ? `${gpsStatus.battery}%${gpsStatus.charging ? ' ⚡' : ''}` : '—'}
+                      </p>
+                    </div>
+                    <div className="rounded-lg bg-muted/40 px-2.5 py-1.5">
+                      <p className="text-[9px] uppercase tracking-wide text-muted-foreground">{t('gps.interval')}</p>
+                      <p className="font-semibold">{gpsStatus.intervalMs ? t('gps.everySec', { sec: Math.round(gpsStatus.intervalMs / 1000) }) : '—'}{gpsStatus.moving != null ? ` · ${t(gpsStatus.moving ? 'gps.moving' : 'gps.still')}` : ''}</p>
+                    </div>
+                    <div className="rounded-lg bg-muted/40 px-2.5 py-1.5">
+                      <p className="text-[9px] uppercase tracking-wide text-muted-foreground">{t('gps.lastFix')}</p>
+                      <p className="font-semibold">{gpsStatus.lastFixAt ? new Date(gpsStatus.lastFixAt).toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Asia/Tashkent' }) : '—'}</p>
+                    </div>
+                  </div>
+                  {(gpsStatus.queued > 0 || gpsStatus.network === 'offline') && (
+                    <p className="text-[11px] text-amber-700 dark:text-amber-400">📡 {t('gps.queuedNote', { count: gpsStatus.queued })}</p>
+                  )}
+                </div>
+              )}
               <div className="flex gap-2">
                 {!todayAttendance?.checkOut ? (
                   <button onClick={() => { if (confirm(t('profile.confirmFinishWork'))) onCheckOut(); }} className="flex-1 btn btn-outline text-xs py-2.5 rounded-xl flex items-center justify-center gap-1.5 border-red-400/40 text-red-600 dark:text-red-400 hover:bg-red-500/10">
@@ -6117,7 +6153,7 @@ export default function App() {
   // aniqlangandan keyin chaqiriladi).
   const [todayAttendance, setTodayAttendance] = useState<null | { status: string; checkIn?: string; checkOut?: string; workHours?: number }>(null);
   // GPS admin ko'rinishi uchun
-  const [gpsLocations, setGpsLocations] = useState<Array<{userId: string; lat: number; lng: number; accuracy?: number; timestamp: string; source?: 'site'|'bot_live'|'bot_once'}>>([]);
+  const [gpsLocations, setGpsLocations] = useState<Array<{userId: string; lat: number; lng: number; accuracy?: number; timestamp: string; source?: 'site'|'bot_live'|'bot_once'; speed?: number; battery?: number; charging?: boolean; network?: string}>>([]);
   const [gpsRefreshing, setGpsRefreshing] = useState(false);
 
   // Offline/online detection + SW sync messages
@@ -6278,7 +6314,7 @@ export default function App() {
   // to'xtatadi/boshlaydi). To'liq mantiq useGeoTracker.ts'da. siteEnabled=false
   // (texnik ishlar rejimi) bo'lsa ham darhol to'xtaydi — foydalanuvchi aniq
   // talabi: "sayt ochirilgan bolsa ham joylashuv uzatip turishi ochmasin".
-  const { gpsTracking } = useGeoTracker(liveUser?.id, liveUser?.role, isWorking, siteEnabled);
+  const { gpsTracking, gpsStatus } = useGeoTracker(liveUser?.id, liveUser?.role, isWorking, siteEnabled);
 
   // Push bildirishnoma ro'yxatdan o'tkazish — XATO TUZATILDI: avval bu
   // faqat main.tsx'dagi 'storage' hodisasiga bog'liq edi, u esa FAQAT
@@ -6654,7 +6690,7 @@ export default function App() {
         if (!payload?.userId) return;
         setGpsLocations(prev => {
           const idx = prev.findIndex(g => g.userId === payload.userId);
-          const item = { userId: payload.userId, lat: payload.lat, lng: payload.lng, accuracy: payload.accuracy, timestamp: payload.timestamp, source: payload.source };
+          const item = { userId: payload.userId, lat: payload.lat, lng: payload.lng, accuracy: payload.accuracy, timestamp: payload.timestamp, source: payload.source, speed: payload.speed, battery: payload.battery, charging: payload.charging, network: payload.network };
           return idx >= 0 ? prev.map((g, i) => i === idx ? item : g) : [...prev, item];
         });
       };
@@ -7428,6 +7464,7 @@ export default function App() {
               onImportBackup={handleImportBackup}
               importFileRef={importFileRef}
               gpsTracking={gpsTracking}
+              gpsStatus={gpsStatus}
               onLockNow={lockAppNow}/>
           </div>
         )}

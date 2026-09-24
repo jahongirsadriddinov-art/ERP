@@ -33,6 +33,7 @@ export default function WorkerProfileModal({ worker, transfers, expenses, onClos
   const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [trail, setTrail] = useState<GpsPoint[]>([]);
   const [trailLoading, setTrailLoading] = useState(false);
+  const [summary, setSummary] = useState<any | null>(null);
 
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -55,8 +56,12 @@ export default function WorkerProfileModal({ worker, transfers, expenses, onClos
   useEffect(() => {
     setTrailLoading(true);
     const token = localStorage.getItem('token') || '';
-    const from = `${selectedDate}T00:00:00`;
-    const to = `${selectedDate}T23:59:59`;
+    // Toshkent kuni (UTC+5) — server UTC'da ishlaydi, +05:00 siz kun chegarasi 5 soatga siljirdi.
+    const from = `${selectedDate}T00:00:00+05:00`;
+    const to = `${selectedDate}T23:59:59+05:00`;
+    setSummary(null);
+    fetch(`${API_BASE}/api/gps/user/${worker.id}/summary?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : null).then(d => setSummary(d)).catch(() => setSummary(null));
     fetch(`${API_BASE}/api/gps/user/${worker.id}?from=${from}&to=${to}`, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.ok ? r.json() : [])
       .then(d => setTrail(Array.isArray(d) ? d : []))
@@ -219,6 +224,23 @@ export default function WorkerProfileModal({ worker, transfers, expenses, onClos
               )}
             </div>
             {trail.length > 0 && <p className="text-[10px] text-muted-foreground">{t('workerProfile.trailPoints', { count: trail.length })}</p>}
+            {summary && summary.points > 0 && (
+              <div className="grid grid-cols-3 gap-1.5 pt-1">
+                {([
+                  [t('gps.sumDistance'), summary.distanceM >= 1000 ? `${(summary.distanceM / 1000).toFixed(1)} km` : `${summary.distanceM} m`],
+                  [t('gps.sumPoints'), String(summary.points)],
+                  [t('gps.sumAvgAcc'), summary.avgAccuracy != null ? `±${summary.avgAccuracy} m` : '—'],
+                  [t('gps.sumBestAcc'), summary.bestAccuracy != null ? `±${summary.bestAccuracy} m` : '—'],
+                  [t('gps.sumMaxSpeed'), summary.maxSpeedKmh != null ? `${summary.maxSpeedKmh} ${t('gps.kmh')}` : '—'],
+                  [t('gps.sumBattery'), summary.lastBattery != null ? `${summary.lastBattery}%${summary.minBattery != null ? ` (min ${summary.minBattery}%)` : ''}` : '—'],
+                ] as [string, string][]).map(([k, v]) => (
+                  <div key={k} className="rounded-lg bg-muted/40 px-2 py-1.5">
+                    <p className="text-[9px] uppercase tracking-wide text-muted-foreground">{k}</p>
+                    <p className="text-[11px] font-semibold">{v}</p>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>

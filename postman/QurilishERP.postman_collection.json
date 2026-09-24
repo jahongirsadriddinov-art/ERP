@@ -2041,7 +2041,7 @@
           }
         },
         {
-          "name": "Koordinata yuborish",
+          "name": "Koordinata yuborish (telemetriya bilan)",
           "request": {
             "method": "POST",
             "header": [
@@ -2062,12 +2062,74 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"lat\": 41.311,\n  \"lng\": 69.279,\n  \"accuracy\": 12,\n  \"projectId\": \"{{objectId}}\"\n}",
+              "raw": "{\n  \"lat\": 41.311,\n  \"lng\": 69.279,\n  \"accuracy\": 12,\n  \"speed\": 0.4,\n  \"heading\": 90,\n  \"altitude\": 440,\n  \"battery\": 76,\n  \"charging\": false,\n  \"network\": \"4g\",\n  \"projectId\": \"{{objectId}}\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
                 }
               }
+            }
+          }
+        },
+        {
+          "name": "Offline yig'ilgan nuqtalarni yuborish (batch)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/gps/batch",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "gps",
+                "batch"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"points\": [\n    {\n      \"lat\": 41.311,\n      \"lng\": 69.279,\n      \"accuracy\": 15,\n      \"battery\": 80,\n      \"timestamp\": \"2026-09-24T19:07:48.407Z\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Kunlik GPS xulosasi (masofa, aniqlik, batareya)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/gps/user/{{userId}}/summary?from=2025-01-01T00:00:00+05:00&to=2025-01-01T23:59:59+05:00",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "gps",
+                "user",
+                "{{userId}}",
+                "summary"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2025-01-01T00:00:00+05:00"
+                },
+                {
+                  "key": "to",
+                  "value": "2025-01-01T23:59:59+05:00"
+                }
+              ]
             }
           }
         },

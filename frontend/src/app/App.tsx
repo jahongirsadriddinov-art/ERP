@@ -6957,17 +6957,17 @@ export default function App() {
         <div className="w-7 h-7 rounded-full flex items-center justify-center overflow-hidden bg-gradient-to-br from-accent to-accent/75 shadow-sm flex-shrink-0">
           {companyLogo ? <img src={companyLogo} alt="Logo" className="w-full h-full object-contain"/> : <MorphIcon icon={Building2} className="w-3.5 h-3.5 text-white" />}
         </div>
-        <span className="text-sm font-bold tracking-tight hidden lg:block whitespace-nowrap">{companyName}</span>
+        <span className="text-sm font-bold tracking-tight hidden lg:block whitespace-nowrap max-w-[140px] truncate">{companyName}</span>
       </div>
       <nav className="hidden lg:flex items-center gap-0.5 lg:gap-1 nav-pill-desktop px-1.5 py-1.5 rounded-full w-fit flex-shrink-0">
         {NAV.map(n=>(
           <button key={n.key} onClick={()=>{setPage(n.key);setSelProject(null);}}
-            className={`relative flex items-center gap-1.5 lg:gap-2 text-sm md:text-[13px] lg:text-sm px-2.5 md:px-2.5 lg:px-4 py-2 lg:py-2.5 rounded-full z-10 liquid-transition whitespace-nowrap ${page===n.key?"text-primary font-semibold":"text-muted-foreground hover:text-foreground"}`}>
+            title={n.label} aria-label={n.label} className={`relative flex items-center gap-1.5 lg:gap-2 text-sm md:text-[13px] lg:text-sm px-2.5 md:px-2.5 lg:px-4 py-2 lg:py-2.5 rounded-full z-10 liquid-transition whitespace-nowrap ${page===n.key?"text-primary font-semibold":"text-muted-foreground hover:text-foreground"}`}>
             {page===n.key && (
               <motion.div layoutId="desktopNavPill" className="absolute inset-0 rounded-full bg-primary/10 -z-10"
                 transition={{ type: "spring", stiffness: 480, damping: 34 }}  />
             )}
-            <MorphIcon icon={n.icon} className="w-[18px] h-[18px] lg:w-5 lg:h-5 flex-shrink-0" /><span className="hidden md:inline">{n.label}</span>
+            <MorphIcon icon={n.icon} className="w-[18px] h-[18px] lg:w-5 lg:h-5 flex-shrink-0" /><span className={page===n.key ? "inline" : "hidden 2xl:inline"}>{n.label}</span>
             {!!n.badge && n.badge>0 && <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-accent text-accent-foreground rounded-full text-[10px] flex items-center justify-center font-bold shadow-sm">{n.badge}</span>}
           </button>
         ))}
@@ -7007,7 +7007,7 @@ export default function App() {
         </button>
         <button onClick={()=>{setPage("profile");setSelProject(null);}} className="flex items-center gap-2 hover:bg-white/5 pl-1 pr-1 sm:pr-3 py-1 rounded-full liquid-transition">
           <Avatar user={liveUser} size="sm"/>
-          <div className="hidden sm:block text-left">
+          <div className="hidden 2xl:block text-left">
             <p className="text-[11px] font-semibold leading-none">{liveUser.name.split(" ")[0]}</p>
             <p className="text-[9px] text-muted-foreground mt-0.5">{roleLabel(tApp, liveUser.role)}</p>
           </div>

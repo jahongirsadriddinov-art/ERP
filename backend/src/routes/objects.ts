@@ -294,6 +294,46 @@ router.patch('/:id/status', requireOwnerOrAdmin, async (req, res) => {
   }
 });
 
+// DELETE /api/objects/:id — obyektni BUTUNLAY o'chiradi. Aniq talab:
+// avval faqat status (tugallangan/to'xtatilgan) o'zgartirish mumkin edi,
+// obyektni umuman o'chirish imkoni yo'q edi. Bog'liq Material va
+// ProjectMedia yozuvlari ham birga o'chiriladi (aks holda "egasiz" qolib
+// bazani chiqindiga to'ldirardi) — lekin tarixiy Tranzaksiya/Hujjat/
+// Jihoz/Xavfsizlik yozuvlari SAQLANIB QOLADI (moliyaviy/audit tarix hech
+// qachon o'chirilmaydi, faqat endi mavjud bo'lmagan obyektga ishora
+// qiladi — bu allaqachon frontend/eksportda tolerantlik bilan ishlov
+// beriladi, masalan export1c.ts'dagi `objectName.get(...) || ''`).
+router.delete('/:id', requireOwnerOrAdmin, async (req, res) => {
+  try {
+    const obj = await ObjectModel.findOneAndDelete(scoped({ _id: req.params.id }));
+    if (!obj) return res.status(404).json({ error: 'Obyekt topilmadi' });
+
+    await Promise.all([
+      Material.deleteMany({ objectId: req.params.id }),
+      ProjectMedia.deleteMany({ objectId: req.params.id }),
+    ]);
+
+    const t = getTenant();
+    if (t?.userId) {
+      const actor = await User.findById(t.userId).lean().catch(() => null);
+      if (actor) {
+        logAudit({
+          userId: t.userId, userName: `${actor.firstName} ${actor.lastName || ''}`.trim(), userRole: actor.role,
+          action: 'delete', entity: 'object', entityId: String(req.params.id),
+          description: `Obyekt o'chirildi: "${obj.name}"`,
+          oldValue: { name: obj.name, budget: obj.budget, location: obj.location, status: obj.status },
+          companyId: t.companyId, req,
+        }).catch(() => {});
+      }
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[objects delete]', err);
+    res.status(500).json({ error: 'Server xatoligi' });
+  }
+});
+
 // ── Ish jarayoni rasm/video (ProjectMedia) ──────────────────────────────────
 // Aniq talab: "oddiy ishchi... boshqa hamma o'zi qo'lda yuborayotgan
 // narsasini kiritadigan qil" — FAQAT direktor/o'rinbosar EMAS, BARCHA

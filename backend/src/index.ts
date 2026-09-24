@@ -42,12 +42,12 @@ import documentsRoutes from './routes/documents';
 import payrollRoutes from './routes/payroll';
 import publicClientRoutes from './routes/publicClient';
 import export1cRoutes from './routes/export1c';
-import announcementsRoutes from './routes/announcements';
+import announcementsRoutes, { devRouter as devAnnouncementsRoutes } from './routes/announcements';
 import callsRoutes from './routes/calls';
 import geocodeRoutes from './routes/geocode';
 import { startMeteredTurnRefreshLoop } from './services/meteredTurn';
 import { initSocket } from './services/socket';
-import { optionalAuth, requireAuth, blockDeveloper } from './middleware/auth';
+import { optionalAuth, requireAuth, blockDeveloper, requireDeveloper } from './middleware/auth';
 // Import bot to start it + get bot instance for webhook route
 import { bot, notifyDeveloper } from './services/bot';
 import { checkRate } from './utils/rateLimit';
@@ -251,6 +251,7 @@ app.use('/api/documents',       requireAuth, blockDeveloper, documentsRoutes);
 app.use('/api/payroll',         requireAuth, blockDeveloper, payrollRoutes);
 app.use('/api/export1c',        requireAuth, blockDeveloper, export1cRoutes);
 app.use('/api/announcements',   requireAuth, blockDeveloper, announcementsRoutes);
+app.use('/api/dev-announcements', requireAuth, requireDeveloper, devAnnouncementsRoutes);
 // publicClientRoutes — mijoz portali, ATAYLAB auth shart emas (mijoz tizim
 // foydalanuvchisi emas) — o'zining ichida taxmin qilib bo'lmaydigan token bilan himoyalangan.
 app.use('/api/public',          publicClientRoutes);

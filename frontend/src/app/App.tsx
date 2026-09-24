@@ -78,6 +78,7 @@ import { isSoundEnabled, setSoundEnabled, getSoundVolume, setSoundVolume, playSo
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { API_BASE, parseSmetaFile, uploadChatMedia } from "./api";
+import { AnnouncementComposer, AnnouncementContent, AnnouncementPopup, type AnnouncementData } from "./AnnouncementParts";
 import { connectSocket, getSocket, disconnectSocket } from "./socket";
 import { motion, AnimatePresence } from "motion/react";
 import { setSiteLanguage, SiteLang, langLabel } from "./i18n";
@@ -2420,12 +2421,9 @@ function PayrollModal({ users, onClose }: { users: AppUser[]; onClose: () => voi
 // javob/muhokama uchun mo'ljallanmagan. BARCHA xodim ko'radi, faqat admin yozadi.
 function AnnouncementsModal({ currentUser, onClose }: { currentUser: AppUser; onClose: () => void }) {
   const { t } = useTranslation();
-  const [list, setList] = useState<any[]>([]);
+  const [list, setList] = useState<AnnouncementData[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [title, setTitleField] = useState("");
-  const [body, setBody] = useState("");
-  const [posting, setPosting] = useState(false);
   const canPost = isAdmin(currentUser.role);
 
   const load = async () => {
@@ -2434,16 +2432,6 @@ function AnnouncementsModal({ currentUser, onClose }: { currentUser: AppUser; on
     setLoading(false);
   };
   useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
-
-  const post = async () => {
-    if (!title.trim() || !body.trim()) return;
-    setPosting(true);
-    try {
-      const r = await fetch(`${API_BASE}/api/announcements`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: title.trim(), body: body.trim() }) });
-      if (r.ok) { setTitleField(""); setBody(""); setShowForm(false); load(); } else toast.error(t('common.error'));
-    } catch { toast.error(t('common.error')); }
-    setPosting(false);
-  };
 
   const remove = async (id: string) => {
     if (!window.confirm(t('common.confirmDelete') as string)) return;
@@ -2454,16 +2442,7 @@ function AnnouncementsModal({ currentUser, onClose }: { currentUser: AppUser; on
     <ManagementModalShell icon={Megaphone} title={t('announcements.title')} onClose={onClose}>
       {canPost && (
         showForm ? (
-          <div className="space-y-2 mb-4">
-            <input value={title} onChange={e=>setTitleField(e.target.value)} placeholder={t('announcements.titlePlaceholder') as string}
-              className="w-full text-sm border border-border rounded-lg px-3 py-2 bg-input-background focus:outline-none" autoFocus />
-            <textarea value={body} onChange={e=>setBody(e.target.value)} placeholder={t('announcements.bodyPlaceholder') as string} rows={3}
-              className="w-full text-sm border border-border rounded-lg px-3 py-2 bg-input-background focus:outline-none resize-none" />
-            <div className="flex gap-2">
-              <button onClick={()=>setShowForm(false)} className="btn btn-outline flex-1 py-2 text-sm">{t('common.cancel')}</button>
-              <button onClick={post} disabled={posting || !title.trim() || !body.trim()} className="btn btn-primary flex-1 py-2 text-sm disabled:opacity-50">{t('announcements.postBtn')}</button>
-            </div>
-          </div>
+          <AnnouncementComposer endpoint="/api/announcements" onCancel={()=>setShowForm(false)} onPosted={()=>{ setShowForm(false); load(); }} />
         ) : (
           <button onClick={()=>setShowForm(true)} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold border-2 border-dashed border-border/60 text-muted-foreground hover:border-primary/40 hover:text-primary liquid-transition mb-4">
             <MorphIcon icon={Plus} className="w-4 h-4" />{t('announcements.newBtn')}
@@ -2474,7 +2453,7 @@ function AnnouncementsModal({ currentUser, onClose }: { currentUser: AppUser; on
         <p className="text-sm text-muted-foreground text-center py-6">{t('announcements.empty')}</p>
       ) : (
         <div className="space-y-2.5">
-          {list.map((a: any) => (
+          {list.map(a => (
             <div key={a.id} className="glass-card rounded-2xl p-3.5 border border-border/40 relative overflow-hidden">
               <div className="absolute left-0 top-0 bottom-0 w-1" style={{ background: 'linear-gradient(180deg, var(--primary), var(--accent))' }} />
               <div className="flex items-start gap-2.5">
@@ -2484,12 +2463,15 @@ function AnnouncementsModal({ currentUser, onClose }: { currentUser: AppUser; on
                 </span>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2">
-                    <p className="text-sm font-semibold break-words min-w-0">{a.title}</p>
-                    {canPost && (
+                    <p className="text-sm font-semibold break-words min-w-0">
+                      {a.title}
+                      {a.isGlobal && <span className="ml-1.5 align-middle text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-primary/15 text-primary">{t('announcements.globalBadge')}</span>}
+                    </p>
+                    {canPost && !a.isGlobal && (
                       <button onClick={()=>remove(a.id)} aria-label={t('common.delete')} className="p-1 text-muted-foreground hover:text-destructive flex-shrink-0 rounded-lg hover:bg-destructive/10 liquid-transition"><MorphIcon icon={Trash} className="w-3.5 h-3.5" /></button>
                     )}
                   </div>
-                  <p className="text-sm text-foreground/80 whitespace-pre-wrap break-words mt-1">{a.body}</p>
+                  <div className="mt-1"><AnnouncementContent a={a} /></div>
                   <p className="text-[10px] text-muted-foreground mt-1.5">{a.postedBy?.name} · {new Date(a.createdAt).toLocaleDateString('uz-UZ')}</p>
                 </div>
               </div>
@@ -7032,6 +7014,7 @@ export default function App() {
             className="text-xs text-muted-foreground hover:text-foreground underline">{tApp('checkinGate.logout')}</button>
         </motion.div>
       </main>
+      <AnnouncementPopup />
       <Toaster position="top-center" richColors closeButton/>
     </>
   );
@@ -7672,6 +7655,9 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* Yangi/ko'rilmagan e'lonlar — kirganda BIR MARTA avtomatik chiqadi */}
+      <AnnouncementPopup />
 
       {/* Bildirishnoma toast'lari */}
       <Toaster position="top-center" richColors closeButton/>

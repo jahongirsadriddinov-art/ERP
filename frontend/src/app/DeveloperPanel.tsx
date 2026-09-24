@@ -19,11 +19,13 @@ import type { AppUser, Msg, Role } from "./App";
 import { ROLE_LABELS, VoicePlayer } from "./App";
 import { SkeletonList, SkeletonMessage } from "./Skeleton";
 import { openExternalUrl } from "./platform";
+import { AnnouncementComposer, GlobalAnnouncementList } from "./AnnouncementParts";
 
 // ─── Developer Panel ────────────────────────────────────────────────────────────
 export default function DeveloperPanel({ currentUser, onLogout }: { currentUser: AppUser; onLogout: () => void }) {
   const { t } = useTranslation();
-  const [tab, setTab] = useState<"firms" | "users" | "subscriptions" | "messages" | "plans" | "promocodes">("subscriptions");
+  const [tab, setTab] = useState<"firms" | "users" | "subscriptions" | "messages" | "plans" | "promocodes" | "announcements">("subscriptions");
+  const [annReload, setAnnReload] = useState(0);
   const [companies, setCompanies] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [subs, setSubs] = useState<any[]>([]);
@@ -343,6 +345,9 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
           <button onClick={() => setTab("promocodes")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition sm:flex-1 ${tab === "promocodes" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
             {t('devPanel.tabs.promocodes')}
           </button>
+          <button onClick={() => setTab("announcements")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition sm:flex-1 ${tab === "announcements" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
+            {t('devPanel.tabs.announcements')}
+          </button>
         </div>
         {/* Ma'lumotlar FAQAT panel birinchi ochilganda yuklanardi — keyin
             (masalan panel ochiq turgan payt boshqa joyda yangi to'lov/
@@ -652,6 +657,15 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
               </div>
             </div>
           ))
+        ) : tab === "announcements" ? (
+          // ── Global e'lon — BARCHA firmalarning BARCHA xodimlariga (kirganda avtomatik oyna + push + Telegram) ──
+          <div className="space-y-3">
+            <div className="surface rounded-2xl p-4">
+              <p className="text-xs text-muted-foreground mb-3">{t('devPanel.announcements.hint')}</p>
+              <AnnouncementComposer endpoint="/api/dev-announcements" onPosted={() => setAnnReload(k => k + 1)} />
+            </div>
+            <GlobalAnnouncementList reloadKey={annReload} />
+          </div>
         ) : tab === "plans" ? (
           // ── Tariflar — narx/kun/yorliq/funksiyalarni tahrirlash, yangi tarif qo'shish ──
           <div className="space-y-3">

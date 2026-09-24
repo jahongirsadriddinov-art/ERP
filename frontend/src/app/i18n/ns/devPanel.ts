@@ -11,6 +11,10 @@ export const uz = {
       messages: "💬 Xabarlar",
       plans: "Tariflar",
       promocodes: "Promokodlar",
+      announcements: "📢 E'lon",
+    },
+    announcements: {
+      hint: "Bu e'lon BARCHA firmalarning BARCHA xodimlariga yuboriladi: tizimga kirganda oyna sifatida chiqadi, push va Telegram bot orqali ham boradi.",
     },
     stats: {
       totalFirms: "Firmalar",
@@ -171,6 +175,10 @@ export const ru = {
       messages: "💬 Сообщения",
       plans: "Тарифы",
       promocodes: "Промокоды",
+      announcements: "📢 Объявление",
+    },
+    announcements: {
+      hint: "Это объявление получат ВСЕ сотрудники ВСЕХ компаний: окно при входе, push и Telegram-бот.",
     },
     stats: {
       totalFirms: "Компании",

@@ -952,7 +952,11 @@ function SendTransferModal({ currentUser, projects, allUsers, onClose, onSend, i
   const myProjects = projects;
   const canBrowseSmeta = isAdmin(currentUser.role);
   const selProj = projects.find(p => p.id === projectId);
-  const targets = allUsers.filter(u => u.id !== currentUser.id && (isAdmin(currentUser.role) || u.projectIds.some(pid => pid === projectId)));
+  // Direktor/o'rinbosar odatda hech bir obyektga "biriktirilmagan" bo'ladi
+  // (projectIds bo'sh) — avval ishchi/prorab/brigadir uchun "Kimga" ro'yxatida
+  // ular umuman chiqmasdi va bu xodimlar material yubora olmasdi. Endi
+  // rahbarlar HAR DOIM tanlash mumkin; qolganlar esa shu obyektga biriktirilgan bo'lsa.
+  const targets = allUsers.filter(u => u.id !== currentUser.id && (isAdmin(currentUser.role) || isAdmin(u.role) || (u.projectIds || []).some(pid => pid === projectId)));
 
   const toggleMat = (m: ReqMat) => {
     const exists = selMats.find(s => s.name === m.name);

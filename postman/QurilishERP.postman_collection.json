@@ -887,6 +887,24 @@
           }
         },
         {
+          "name": "Obyektni BUTUNLAY o'chirish (materiallari bilan)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/objects/{{objectId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "objects",
+                "{{objectId}}"
+              ]
+            }
+          }
+        },
+        {
           "name": "Mijoz uchun ochiq havola yaratish",
           "request": {
             "method": "POST",
@@ -2134,6 +2152,139 @@
           }
         },
         {
+          "name": "Suhbatlar tarixi ro'yxati",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/ai/conversations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "ai",
+                "conversations"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Suhbatni saqlash (yangi)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/ai/conversations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "ai",
+                "conversations"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Salom\"\n    },\n    {\n      \"role\": \"assistant\",\n      \"content\": \"Assalomu alaykum!\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const d = pm.response.json();",
+                  "if (d && d.id) pm.environment.set('aiConversationId', d.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Suhbatni ochish",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/ai/conversations/{{aiConversationId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "ai",
+                "conversations",
+                "{{aiConversationId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Suhbatni yangilash",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/ai/conversations/{{aiConversationId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "ai",
+                "conversations",
+                "{{aiConversationId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Salom\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Suhbatni o'chirish",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/ai/conversations/{{aiConversationId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "ai",
+                "conversations",
+                "{{aiConversationId}}"
+              ]
+            }
+          }
+        },
+        {
           "name": "AI taklif qilgan amalni bajarish",
           "request": {
             "method": "POST",
@@ -2209,7 +2360,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"title\": \"Ertaga ish vaqti o'zgardi\",\n  \"body\": \"Ertangi kuni ish 08:00 da boshlanadi.\"\n}",
+              "raw": "{\n  \"title\": \"Ertaga ish vaqti o'zgardi\",\n  \"body\": \"Ertangi kuni ish 08:00 da boshlanadi.\",\n  \"minViewSeconds\": 5,\n  \"location\": {\n    \"lat\": 41.311,\n    \"lng\": 69.279\n  }\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -2229,6 +2380,25 @@
               }
             }
           ]
+        },
+        {
+          "name": "E'londa 'ko'rildi' belgisi (popup yopilganda)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/announcements/{{announcementId}}/seen",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "announcements",
+                "{{announcementId}}",
+                "seen"
+              ]
+            }
+          }
         },
         {
           "name": "E'lonni o'chirish",
@@ -4075,6 +4245,192 @@
           }
         ]
       }
+    },
+    {
+      "name": "[Dasturchi] Global e'lon (hamma firmalarga)",
+      "item": [
+        {
+          "name": "Global e'lonlar ro'yxati",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/dev-announcements",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "dev-announcements"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Global e'lon yuborish",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/dev-announcements",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "dev-announcements"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Texnik ishlar\",\n  \"body\": \"Bugun 23:00 da qisqa texnik ishlar bo'ladi.\",\n  \"minViewSeconds\": 5\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const d = pm.response.json();",
+                  "if (d && d.id) pm.environment.set('devAnnouncementId', d.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Global e'lonni o'chirish",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/dev-announcements/{{devAnnouncementId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "dev-announcements",
+                "{{devAnnouncementId}}"
+              ]
+            }
+          }
+        }
+      ],
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{devToken}}",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Qo'ng'iroq (TURN) va manzil qidirish",
+      "item": [
+        {
+          "name": "ICE server sozlamasi (Metered TURN)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/calls/ice-config",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "calls",
+                "ice-config"
+              ]
+            }
+          }
+        },
+        {
+          "name": "TURN trafik sarfi (admin)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/calls/turn-usage",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "calls",
+                "turn-usage"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Manzil qidirish (autocomplete)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/geocode/search?q=Chilonzor Toshkent",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "geocode",
+                "search"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "Chilonzor Toshkent"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Koordinata -> manzil",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/geocode/reverse?lat=41.311&lng=69.279",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "geocode",
+                "reverse"
+              ],
+              "query": [
+                {
+                  "key": "lat",
+                  "value": "41.311"
+                },
+                {
+                  "key": "lng",
+                  "value": "69.279"
+                }
+              ]
+            }
+          }
+        }
+      ]
     },
     {
       "name": "36. Deploy (CI, maxfiy sarlavha bilan)",

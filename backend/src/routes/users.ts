@@ -193,7 +193,19 @@ router.delete('/:id', async (req, res) => {
     if (String(req.params.id) === String(tenant?.userId)) {
       return res.status(400).json({ error: 'O\'z hisobingizni o\'chira olmaysiz' });
     }
-    const user = await User.findOneAndDelete(scoped({ _id: req.params.id }));
+    // XAVFSIZLIK TUZATILDI (security-review topilmasi): dasturchi uchun
+    // ochilgan ruxsat aslida `scoped()` orqali CHEKSIZ edi — `scoped()`
+    // dasturchi uchun HECH QANDAY filtr qo'shmaydi (barcha firmalarni
+    // ko'rish uchun), shu sabab bu yo'l orqali dasturchi ISTALGAN
+    // firmaning ISTALGAN xodimini (hatto egasini ham) o'chira olardi —
+    // niyat esa FAQAT companyId'siz ("eski bug qurboni"/test) hisoblarni
+    // tozalash edi. Endi dasturchi uchun filtr ANIQ shu doiraga
+    // cheklangan; direktor/orinbosar avvalgidek faqat o'z firmasi
+    // doirasida (`scoped()`) ishlaydi.
+    const filter: any = tenant?.isDeveloper
+      ? { _id: req.params.id, companyId: { $in: [null, undefined] }, isOwner: { $ne: true } }
+      : scoped({ _id: req.params.id });
+    const user = await User.findOneAndDelete(filter);
     if (!user) return res.status(404).json({ error: 'Foydalanuvchi topilmadi' });
 
     if (tenant?.userId) {

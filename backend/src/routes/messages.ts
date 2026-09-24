@@ -35,6 +35,26 @@ function mediaUrlToLocalPath(url?: string): string | null {
   }
 }
 
+// XAVFSIZLIK TUZATILDI (security-review topilmasi — SSRF): pastki
+// `resolveMediaFile` avval `mediaUrl` (POST /api/messages'da ISTALGAN
+// autentifikatsiyalangan xodim — hatto oddiy ishchi ham — o'zi kiritadigan
+// qiymat) qanday host bo'lishidan qat'i nazar to'g'ridan-to'g'ri
+// `fetch(url)` qilardi. Bu backend'ning O'ZINI ichki tarmoq/bulut metama'lumot
+// manzillariga (masalan 169.254.169.254) so'rov yuborishga majburlash uchun
+// ishlatilishi mumkin edi (SSRF). Endi FAQAT bizning O'ZIMIZ backend'imizga
+// tegishli URL'lar yuklab olinadi (objects.ts'dagi isOwnMediaUrl bilan bir
+// xil naqsh) — bizning /api/files/proxy yo'limiz o'zi Cloudinary'ga
+// cheklangan (SSRF-himoyalangan), shu sabab bu yetarli.
+function isOwnBackendUrl(url: string): boolean {
+  try {
+    const u = new URL(url);
+    const own = new URL(getBackendUrl());
+    return u.hostname === own.hostname;
+  } catch {
+    return false;
+  }
+}
+
 // XATO TUZATILDI ("ovozli xabarlar/video xom webm bo'lib Telegram'ga
 // ketyapti"): pastdagi convertToOggOpus/convertToMp4 FAQAT mahalliy fayl
 // yo'li bilan ishlaydi, lekin production'da media DEYARLI HAR DOIM
@@ -48,6 +68,7 @@ async function resolveMediaFile(url?: string): Promise<{ path: string; temp: boo
   if (!url) return null;
   const local = mediaUrlToLocalPath(url);
   if (local) return { path: local, temp: false };
+  if (!isOwnBackendUrl(url)) return null; // tashqi/ishonchsiz host — yuklab olinmaydi (SSRF himoyasi)
   try {
     const r = await fetch(url);
     if (!r.ok) return null;

@@ -1495,7 +1495,7 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `1c-export-${new Date().toISOString().split('T')[0]}.csv`;
+      a.download = `1c-export-${new Date().toISOString().split('T')[0]}.xlsx`;
       document.body.appendChild(a); a.click(); document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch { toast.error(t('dashboard.backupError')); }

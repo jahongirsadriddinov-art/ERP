@@ -237,6 +237,23 @@ const SMETA_GROUP_LABEL: Record<string,string> = {
 };
 const SMETA_GROUP_ORDER = ["labor","general","machinery","material","equipment"];
 
+// XATO TUZATILDI ("scroll ishlamayapti, yon tarafdagini ko'rib bo'lmayapti"):
+// keng jadvallar (Talab/Smeta) touch qurilmada barmoq bilan chapga-o'ngga
+// suriladi (touch-pan-x), lekin DESKTOP sichqoncha g'ildiragi bilan
+// gorizontal scroll qilishning tabiiy usuli yo'q (Shift+g'ildirak hech kim
+// bilmaydigan, ko'rinmas imo-ishora) — scrollbar ham `scrollbar-hide` bilan
+// yashirilgan, shu sabab desktop foydalanuvchi uchun o'ng tomondagi
+// ustunlarga (Narx, Summa) umuman yeta olmasdi. Bu handler oddiy vertikal
+// g'ildirak aylantirishni — FAQAT haqiqatan gorizontal ortiqcha joy bo'lsa —
+// gorizontal scrollga aylantiradi, sichqoncha jadval ustida bo'lganda.
+function hwheel(e: React.WheelEvent<HTMLDivElement>) {
+  const el = e.currentTarget;
+  if (el.scrollWidth > el.clientWidth && e.deltaY !== 0 && e.deltaX === 0) {
+    el.scrollLeft += e.deltaY;
+    e.preventDefault();
+  }
+}
+
 // To'liq aniqlik — HECH NIMANI YAXLITLAMAYDI (kasr, tiyin, manfiy saqlanadi). null → "-".
 function fmtNum(n: number|null|undefined): string {
   if (n == null || Number.isNaN(n)) return "-";
@@ -2423,7 +2440,7 @@ function SmetaResultView({ smeta }: { smeta: SmetaResult }) {
                 ("smeta bo'limida chapga qimirlatib bo'lmayapti"). Talab
                 jadvalidagi bilan bir xil touch-action izolyatsiyasi. */}
             {open && (
-              <div className="overflow-x-auto scrollbar-hide border-t border-border touch-pan-x">
+              <div className="overflow-x-auto scrollbar-hide border-t border-border touch-pan-x" onWheel={hwheel}>
                 <table className="w-full text-left text-xs">
                   <thead className="bg-muted/40 text-muted-foreground"><tr>
                     <th className="px-2 py-1.5">№</th><th className="px-2 py-1.5">Шифр</th><th className="px-2 py-1.5">Наименование</th>
@@ -2473,7 +2490,7 @@ function SmetaResultView({ smeta }: { smeta: SmetaResult }) {
                     <span className="flex items-center gap-1 shrink-0"><span className="text-[10px] text-muted-foreground whitespace-nowrap">{w.norms.length} n.</span><MorphIcon icon={wo ? ChevronUp : ChevronDown} className="w-3.5 h-3.5" /></span>
                   </button>
                   {wo && w.norms.length > 0 && (
-                    <div className="overflow-x-auto scrollbar-hide px-4 pb-2 touch-pan-x">
+                    <div className="overflow-x-auto scrollbar-hide px-4 pb-2 touch-pan-x" onWheel={hwheel}>
                       <table className="w-full text-left text-[11px]">
                         <thead className="text-muted-foreground"><tr><th className="py-1 pr-2">№</th><th className="pr-2">Шифр</th><th className="pr-2">Наименование</th><th className="pr-2">Ед.</th><th className="text-right pr-2">На ед.</th><th className="text-right">По проекту</th></tr></thead>
                         <tbody>
@@ -2501,15 +2518,17 @@ function SmetaResultView({ smeta }: { smeta: SmetaResult }) {
   );
 }
 
-function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSendTransfer, onConfirm, onReject, onSmetaUploaded, onUpdateStatus, onUpdateProject }:
+function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSendTransfer, onConfirm, onReject, onSmetaUploaded, onUpdateStatus, onUpdateProject, onDeleteProject }:
   { project: Project; currentUser: AppUser; users: AppUser[]; transfers: Transfer[];
     onBack: () => void; onSendTransfer: (t: Transfer) => void; onConfirm: (id: string, d?: string) => void; onReject: (id: string) => void; onSmetaUploaded: (pid: string, result: SmetaResult) => void;
     onUpdateStatus: (pid: string, status: "active"|"paused"|"completed") => void;
     onUpdateProject: (pid: string, patch: Partial<Project>) => void;
+    onDeleteProject: (pid: string) => void;
   }) {
   const { t } = useTranslation();
   const [tab, setTab] = useState<"required"|"smeta"|"pending"|"confirmed"|"media">("required");
   const [showEditProject, setShowEditProject] = useState(false);
+  const [deletingProject, setDeletingProject] = useState(false);
   // Ish jarayoni rasm/video — BARCHA xodim (ishchi, brigadir, prorab ham)
   // qo'sha oladi, faqat direktor/o'rinbosar emas (aniq talab).
   const [mediaItems, setMediaItems] = useState<{ id: string; type: 'image'|'video'; url: string; caption?: string; uploadedBy: { userId: string; name: string; role: string }; createdAt: string }[]>([]);
@@ -2604,6 +2623,24 @@ function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSe
               }} aria-label={t('objectDetail.clientLinkBtn')} title={t('objectDetail.clientLinkBtn')}
                 className="p-1 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-full flex-shrink-0 liquid-transition">
                 <MorphIcon icon={Share2} className="w-3.5 h-3.5" />
+              </button>
+            )}
+            {isAdmin(currentUser.role) && (
+              <button type="button" disabled={deletingProject} onClick={async () => {
+                if (!confirm(t('objectDetail.confirmDeleteProject', { name: project.name }))) return;
+                setDeletingProject(true);
+                try {
+                  const res = await fetch(`${API_BASE}/api/objects/${project.id}`, { method: 'DELETE' });
+                  if (res.ok) {
+                    toast.success(t('objectDetail.deleteProjectSuccess'));
+                    onDeleteProject(project.id);
+                    onBack();
+                  } else toast.error(t('objectDetail.deleteProjectError'));
+                } catch { toast.error(t('objectDetail.deleteProjectError')); }
+                setDeletingProject(false);
+              }} aria-label={t('objectDetail.deleteProject')} title={t('objectDetail.deleteProject')}
+                className="p-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-full flex-shrink-0 liquid-transition disabled:opacity-50">
+                {deletingProject ? <MorphIcon icon={Loader2} className="w-3.5 h-3.5 animate-spin" /> : <MorphIcon icon={Trash} className="w-3.5 h-3.5" />}
               </button>
             )}
             <select
@@ -2732,7 +2769,7 @@ function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSe
                 ustida gorizontal imo-ishora ustuvor bo'ladi, sahifa esa
                 jadvaldan TASHQARIDA odatdagidek vertikal suriladi. */}
             <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden scrollbar-hide pb-20 sm:pb-2">
-              <div className="overflow-x-auto scrollbar-hide touch-pan-x">
+              <div className="overflow-x-auto scrollbar-hide touch-pan-x" onWheel={hwheel}>
                 <table className="w-full min-w-max text-left border-collapse text-[11px] leading-tight">
                   <thead className="sticky top-0 z-10 bg-card">
                     <tr className="border-b border-border">
@@ -7139,6 +7176,9 @@ export default function App() {
             onUpdateProject={(pid, patch) => {
               setProjects(prev => prev.map(p => p.id === pid ? {...p, ...patch} : p));
               setSelProject(prev => prev && prev.id === pid ? {...prev, ...patch} : prev);
+            }}
+            onDeleteProject={(pid) => {
+              setProjects(prev => prev.filter(p => p.id !== pid));
             }}
           />
         )}

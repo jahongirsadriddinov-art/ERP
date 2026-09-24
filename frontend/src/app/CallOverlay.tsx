@@ -16,6 +16,7 @@ import { useTranslation } from "react-i18next";
 import { getSocket } from "./socket";
 import { AppUser, ActiveCall } from "./App";
 import { playSound } from "./sound";
+import { API_BASE } from "./api";
 
 // Qo'ng'iroq oynasi (WebRTC) — kamdan-kam ishlatiladi (faqat qo'ng'iroq
 // paytida), shuning uchun alohida faylga chiqarilib React.lazy orqali
@@ -59,7 +60,28 @@ function buildIceConfig(): RTCConfiguration {
     ],
   };
 }
-const ICE_CONFIG: RTCConfiguration = buildIceConfig();
+// XATO TUZATILDI ("kamera/mikrafon ishlamayapti, qora ekran"): yuqoridagi
+// bepul/statik TURN endi FAQAT zaxira (fallback) — backend Metered.ca
+// orqali davriy yangilanadigan, ancha ishonchli TURN credential'larni
+// keshlab turadi (backend/src/services/meteredTurn.ts). Har bir qo'ng'iroq
+// boshlanishida O'SHA konfiguratsiya so'raladi; backend sozlanmagan yoki
+// so'rov muvaffaqiyatsiz bo'lsa, jimgina statik konfiguratsiyaga qaytadi
+// — hech qachon qo'ng'iroqni butunlay to'xtatib qo'ymaydi.
+async function resolveIceConfig(): Promise<RTCConfiguration> {
+  try {
+    const token = localStorage.getItem('token');
+    const res = await fetch(`${API_BASE}/api/calls/ice-config`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.configured && Array.isArray(data.iceServers) && data.iceServers.length) {
+        return { iceServers: data.iceServers };
+      }
+    }
+  } catch {}
+  return buildIceConfig();
+}
 
 export default function CallOverlay({ currentUser, users, call, onClose }:
   { currentUser: AppUser; users: AppUser[]; call: ActiveCall; onClose: () => void }) {
@@ -70,6 +92,7 @@ export default function CallOverlay({ currentUser, users, call, onClose }:
   // streamReady — accept() bu promise'ni kutib stream tayyor bo'lganini bildiradi
   const streamReadyResolve = useRef<((s: MediaStream) => void) | null>(null);
   const streamReady = useRef<Promise<MediaStream>>(new Promise(res => { streamReadyResolve.current = res; }));
+  const iceConfigRef = useRef<RTCConfiguration>(buildIceConfig());
   const pcs = useRef<Record<string, RTCPeerConnection>>({});
   const pendingIce = useRef<Record<string, RTCIceCandidateInit[]>>({});
   const [remote, setRemote] = useState<Record<string, MediaStream>>({});
@@ -137,7 +160,7 @@ export default function CallOverlay({ currentUser, users, call, onClose }:
 
   const makePC = (peerId: string) => {
     if (pcs.current[peerId]) return pcs.current[peerId];
-    const pc = new RTCPeerConnection(ICE_CONFIG);
+    const pc = new RTCPeerConnection(iceConfigRef.current);
     localStream.current?.getTracks().forEach(t => pc.addTrack(t, localStream.current!));
     pc.onicecandidate = e => { if (e.candidate) socket?.emit('call:ice', { to: peerId, from: currentUser.id, candidate: e.candidate }); };
     pc.ontrack = e => { setRemote(prev => ({ ...prev, [peerId]: e.streams[0] })); setStatus('connected'); watchMediaFlow(peerId, pc); };
@@ -173,7 +196,16 @@ export default function CallOverlay({ currentUser, users, call, onClose }:
     let cancelled = false;
     (async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: call.mode === 'video' ? { facingMode } : false });
+        // Ikkalasini PARALLEL boshlaymiz — ICE konfiguratsiyasi (o'z
+        // backendimizga so'rov) odatda getUserMedia (foydalanuvchidan ruxsat
+        // so'rash + kamerani ishga tushirish) dan tezroq tugaydi, shu sabab
+        // pastda birinchi peer connection yaratilguncha deyarli doim tayyor
+        // bo'ladi — TURN konfiguratsiyasi ESKIRIB QOLGAN holda emas, TO'G'RI
+        // (Metered'dan) holatda ishlatiladi.
+        const [stream] = await Promise.all([
+          navigator.mediaDevices.getUserMedia({ audio: true, video: call.mode === 'video' ? { facingMode } : false }),
+          resolveIceConfig().then(cfg => { iceConfigRef.current = cfg; }),
+        ]);
         if (cancelled) { stream.getTracks().forEach(t => t.stop()); return; }
         localStream.current = stream;
         if (localRef.current) { localRef.current.srcObject = stream; localRef.current.play().catch(()=>{}); }

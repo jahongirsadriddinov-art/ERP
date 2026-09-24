@@ -43,6 +43,8 @@ import payrollRoutes from './routes/payroll';
 import publicClientRoutes from './routes/publicClient';
 import export1cRoutes from './routes/export1c';
 import announcementsRoutes from './routes/announcements';
+import callsRoutes from './routes/calls';
+import { startMeteredTurnRefreshLoop } from './services/meteredTurn';
 import { initSocket } from './services/socket';
 import { optionalAuth, requireAuth, blockDeveloper } from './middleware/auth';
 // Import bot to start it + get bot instance for webhook route
@@ -234,6 +236,7 @@ app.use('/api/audit-logs',      requireAuth, auditRoutes);
 app.use('/api/search',          requireAuth, searchRoutes);
 app.use('/api/qr',              requireAuth, qrRoutes);
 app.use('/api/notifications',   requireAuth, notificationRoutes);
+app.use('/api/calls',           requireAuth, callsRoutes);
 // currency.ts'ning GET /rates ATAYLAB firma konteksti bo'lmasa ham ochiq
 // CBU/standart kursini qaytaradi (o'zining ichida shunday loyihalangan);
 // PUT /custom o'zi requireAuth talab qiladi — shu sabab bu yerda optionalAuth.
@@ -303,6 +306,7 @@ initSocket(httpServer); // Socket.io (real-time chat, bildirishnoma, qo'ng'iroq 
 // muvaffaqiyatsiz bo'lsa ham server tirik qoladi va xato log'da ko'rinadi.
 httpServer.listen(PORT, () => {
   console.log(`Server running on port ${PORT} (HTTP + Socket.io)`);
+  startMeteredTurnRefreshLoop();
 });
 
 mongoose.connect(MONGODB_URI)

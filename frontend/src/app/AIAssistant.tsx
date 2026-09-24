@@ -14,6 +14,8 @@ import CalendarIcon from "@hugeicons/core-free-icons/Calendar03Icon";
 import Mic from "@hugeicons/core-free-icons/Mic01Icon";
 import MicOff from "@hugeicons/core-free-icons/MicOff01Icon";
 import VolumeHigh from "@hugeicons/core-free-icons/VolumeHighIcon";
+import HistoryIcon from "@hugeicons/core-free-icons/Clock01Icon";
+import PlusIcon from "@hugeicons/core-free-icons/Add01Icon";
 import { MorphIcon } from "morphicons/react";
 import { useTranslation } from "react-i18next";
 import { API_BASE } from "./api";
@@ -138,6 +140,14 @@ export default function AIAssistant({ currentUser, users, token, open, onClose, 
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<any>(null);
+  // Suhbatlar tarixi — har bir yakunlangan almashuvdan keyin serverga saqlanadi
+  // (routes/ai.ts /conversations), "Yangi suhbat" eskisini yo'qotmaydi.
+  const [convId, setConvId] = useState<string | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
+  const [history, setHistory] = useState<{ id: string; title: string; updatedAt: string; count: number }[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const savedCountRef = useRef(0);
+  const savingRef = useRef(false);
 
   const authHdr = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
   const speechLang = i18n.language?.startsWith('ru') ? 'ru-RU' : 'uz-UZ';
@@ -196,6 +206,66 @@ export default function AIAssistant({ currentUser, users, token, open, onClose, 
     utter.onerror = () => setSpeakingIdx(null);
     setSpeakingIdx(idx);
     window.speechSynthesis.speak(utter);
+  };
+
+  // Avtomatik saqlash: javob to'liq kelgach (loading tugagach) va xabarlar
+  // soni oxirgi saqlanganidan farq qilsa — yangi suhbat yaratiladi yoki
+  // mavjudi yangilanadi. Tarixdan ochilgan suhbat qayta saqlanmaydi (son teng).
+  useEffect(() => {
+    if (loading || msgs.length === 0 || msgs.length === savedCountRef.current || savingRef.current) return;
+    const timer = setTimeout(async () => {
+      if (savingRef.current) return;
+      savingRef.current = true;
+      const count = msgs.length;
+      try {
+        if (convId) {
+          const r = await fetch(`${API_BASE}/api/ai/conversations/${convId}`, { method: 'PUT', headers: authHdr, body: JSON.stringify({ messages: msgs }) });
+          if (r.ok) savedCountRef.current = count;
+        } else {
+          const r = await fetch(`${API_BASE}/api/ai/conversations`, { method: 'POST', headers: authHdr, body: JSON.stringify({ messages: msgs }) });
+          if (r.ok) { const d = await r.json(); setConvId(d.id); savedCountRef.current = count; }
+        }
+      } catch {}
+      savingRef.current = false;
+    }, 500);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [msgs, loading]);
+
+  const stopMedia = () => { recognitionRef.current?.stop(); window.speechSynthesis?.cancel(); setSpeakingIdx(null); };
+  const newChat = () => {
+    stopMedia();
+    setMsgs([]); setConvId(null); setPending(null); setInput(''); setShowHistory(false);
+    savedCountRef.current = 0;
+  };
+  const openHistory = async () => {
+    setShowHistory(true); setHistoryLoading(true);
+    try {
+      const r = await fetch(`${API_BASE}/api/ai/conversations`, { headers: authHdr });
+      if (r.ok) setHistory(await r.json());
+    } catch {}
+    setHistoryLoading(false);
+  };
+  const openConversation = async (id: string) => {
+    try {
+      const r = await fetch(`${API_BASE}/api/ai/conversations/${id}`, { headers: authHdr });
+      if (!r.ok) return;
+      const d = await r.json();
+      stopMedia();
+      setMsgs(d.messages || []); setConvId(id); setPending(null);
+      savedCountRef.current = (d.messages || []).length;
+      setShowHistory(false);
+    } catch {}
+  };
+  const deleteConversation = async (id: string) => {
+    if (!window.confirm(t('ai.confirmDeleteConv') as string)) return;
+    try {
+      const r = await fetch(`${API_BASE}/api/ai/conversations/${id}`, { method: 'DELETE', headers: authHdr });
+      if (r.ok) {
+        setHistory(h => h.filter(x => x.id !== id));
+        if (id === convId) newChat();
+      }
+    } catch {}
   };
 
   const executeAction = async (action: AiAction): Promise<string> => {
@@ -305,12 +375,40 @@ export default function AIAssistant({ currentUser, users, token, open, onClose, 
             </p>
             <p className="text-[11px] text-muted-foreground mt-0.5 leading-none">{t('ai.subtitle')}</p>
           </div>
+          <button onClick={newChat} disabled={msgs.length === 0 && !showHistory} aria-label={t('ai.newChat')} title={t('ai.newChat')}
+            className="w-8 h-8 rounded-xl flex items-center justify-center hover:bg-muted/60 text-muted-foreground transition-colors flex-shrink-0 disabled:opacity-30">
+            <MorphIcon icon={PlusIcon} className="w-4 h-4" />
+          </button>
+          <button onClick={() => (showHistory ? setShowHistory(false) : openHistory())} aria-label={t('ai.history')} title={t('ai.history')}
+            className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors flex-shrink-0 ${showHistory ? 'bg-primary/15 text-primary' : 'hover:bg-muted/60 text-muted-foreground'}`}>
+            <MorphIcon icon={HistoryIcon} className="w-4 h-4" />
+          </button>
           <button onClick={onClose} aria-label={t('ai.close')}
             className="w-8 h-8 rounded-xl flex items-center justify-center hover:bg-muted/60 text-muted-foreground transition-colors flex-shrink-0">
             <MorphIcon icon={X} className="w-4 h-4" />
           </button>
         </div>
 
+        {showHistory ? (
+          <div className="flex-1 overflow-y-auto p-4 space-y-2 scrollbar-hide">
+            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground px-1 mb-1">{t('ai.history')}</p>
+            {historyLoading ? (
+              <p className="text-sm text-muted-foreground text-center py-8">...</p>
+            ) : history.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8">{t('ai.historyEmpty')}</p>
+            ) : history.map(h => (
+              <div key={h.id} className={`ai-glass-bubble flex items-center gap-2 rounded-2xl pl-3.5 pr-1.5 py-2.5 ${h.id === convId ? 'ring-1 ring-primary/40' : ''}`}>
+                <button onClick={() => openConversation(h.id)} className="flex-1 min-w-0 text-left">
+                  <p className="text-[13px] font-medium truncate">{h.title || t('ai.untitled')}</p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">{new Date(h.updatedAt).toLocaleString('uz-UZ', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} · {t('ai.messagesCount', { count: h.count })}</p>
+                </button>
+                <button onClick={() => deleteConversation(h.id)} aria-label={t('ai.deleteConv')} className="w-8 h-8 rounded-xl flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 flex-shrink-0">
+                  <MorphIcon icon={Trash2} className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (<>
         {/* Messages */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-hide">
           {msgs.length === 0 && (
@@ -455,6 +553,7 @@ export default function AIAssistant({ currentUser, users, token, open, onClose, 
             </button>
           </div>
         </div>
+        </>)}
       </div>
     </div>
   );

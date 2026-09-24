@@ -29,6 +29,13 @@ export const uz = {
   listeningPlaceholder: "Gapiring...",
   startListening: "Ovoz orqali kiritish",
   stopListening: "Tinglashni to'xtatish",
+  newChat: "Yangi suhbat",
+  history: "Suhbatlar tarixi",
+  historyEmpty: "Hali saqlangan suhbat yo'q",
+  untitled: "Nomsiz suhbat",
+  messagesCount: "{{count}} ta xabar",
+  deleteConv: "Suhbatni o'chirish",
+  confirmDeleteConv: "Bu suhbat tarixdan o'chirilsinmi?",
 };
 
 export const ru = {
@@ -62,4 +69,11 @@ export const ru = {
   listeningPlaceholder: "Говорите...",
   startListening: "Голосовой ввод",
   stopListening: "Остановить прослушивание",
+  newChat: "Новый чат",
+  history: "История чатов",
+  historyEmpty: "Сохранённых чатов пока нет",
+  untitled: "Без названия",
+  messagesCount: "{{count}} сообщ.",
+  deleteConv: "Удалить чат",
+  confirmDeleteConv: "Удалить этот чат из истории?",
 };

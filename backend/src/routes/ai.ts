@@ -7,6 +7,7 @@ import User from '../models/User';
 import ObjectModel from '../models/Object';
 import Transaction from '../models/Transaction';
 import Message from '../models/Message';
+import AiConversation from '../models/AiConversation';
 import { emitToUser } from '../services/socket';
 import { relayMessageToTelegram } from './messages';
 
@@ -308,6 +309,63 @@ router.post('/execute', requireAuth, requireBoss, requireFeature('ai_assistant')
     console.error('[AI execute]', err.message);
     res.status(500).json({ error: 'Amalga oshirishda xatolik' });
   }
+});
+
+// ─── Suhbatlar tarixi ─────────────────────────────────────────────────────────
+// Faqat joriy foydalanuvchining O'Z suhbatlari (userId token'dan — body'dagi
+// qiymatga ishonilmaydi).
+const cleanMessages = (raw: any): { role: 'user' | 'assistant'; content: string }[] =>
+  (Array.isArray(raw) ? raw : []).slice(-300)
+    .filter((m: any) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
+    .map((m: any) => ({ role: m.role, content: m.content.slice(0, 8000) }));
+
+const convGuard = [requireAuth, requireBoss, requireFeature('ai_assistant')] as const;
+
+router.get('/conversations', ...convGuard, async (_req, res) => {
+  try {
+    const uid = String(getTenant()?.userId || '');
+    const list = await AiConversation.find({ userId: uid }).sort({ updatedAt: -1 }).limit(100).select('title updatedAt messages').lean();
+    res.json(list.map(c => ({ id: c._id, title: c.title, updatedAt: c.updatedAt, count: (c.messages || []).length })));
+  } catch { res.status(500).json({ error: 'Server xatoligi' }); }
+});
+
+router.get('/conversations/:id', ...convGuard, async (req, res) => {
+  try {
+    const uid = String(getTenant()?.userId || '');
+    const c = await AiConversation.findOne({ _id: req.params.id, userId: uid }).lean();
+    if (!c) return res.status(404).json({ error: 'Topilmadi' });
+    res.json({ id: c._id, title: c.title, messages: c.messages });
+  } catch { res.status(500).json({ error: 'Server xatoligi' }); }
+});
+
+router.post('/conversations', ...convGuard, async (req, res) => {
+  try {
+    const uid = String(getTenant()?.userId || '');
+    const messages = cleanMessages(req.body?.messages);
+    if (!messages.length) return res.status(400).json({ error: "Bo'sh suhbat" });
+    const title = String(req.body?.title || messages.find(m => m.role === 'user')?.content || 'Suhbat').trim().slice(0, 60);
+    const c = await AiConversation.create(stamped({ userId: uid, title, messages }));
+    res.status(201).json({ id: c._id, title: c.title });
+  } catch { res.status(500).json({ error: 'Server xatoligi' }); }
+});
+
+router.put('/conversations/:id', ...convGuard, async (req, res) => {
+  try {
+    const uid = String(getTenant()?.userId || '');
+    const messages = cleanMessages(req.body?.messages);
+    const c = await AiConversation.findOneAndUpdate({ _id: req.params.id, userId: uid }, { messages }, { new: true });
+    if (!c) return res.status(404).json({ error: 'Topilmadi' });
+    res.json({ ok: true });
+  } catch { res.status(500).json({ error: 'Server xatoligi' }); }
+});
+
+router.delete('/conversations/:id', ...convGuard, async (req, res) => {
+  try {
+    const uid = String(getTenant()?.userId || '');
+    const r = await AiConversation.deleteOne({ _id: req.params.id, userId: uid });
+    if (!r.deletedCount) return res.status(404).json({ error: 'Topilmadi' });
+    res.json({ ok: true });
+  } catch { res.status(500).json({ error: 'Server xatoligi' }); }
 });
 
 export default router;

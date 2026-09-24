@@ -7188,8 +7188,15 @@ export default function App() {
         )}
       </main>
 
-      {/* Bottom bar — admin only (Desktop only) */}
-      <div className="hidden md:block">
+      {/* Bottom bar — admin only (Desktop only).
+          XATO TUZATILDI ("Jami chiqimlar ikkita bo'lib qolgan, navbar
+          orqasida ko'rinyapti"): bu juftlik (yuqoridagi mobil/tablet
+          nusxasi bilan) ESKI `md` chegarada qolib ketgan edi, holbuki
+          o'sha nusxa endi `lg`ga ko'chirilgan — natijada 768-1023px
+          oralig'ida (portret planshet) IKKALASI HAM bir vaqtda ko'rinib,
+          pastkisi oddiy hujjat oqimida suzuvchi pastki navbar orqasida
+          "sizib chiqib" turardi. Endi ikkalasi ham bir xil `lg` chegarada. */}
+      <div className="hidden lg:block">
         {admin && <BottomFinanceBar expenses={expenses} projects={projects}/>}
       </div>
 

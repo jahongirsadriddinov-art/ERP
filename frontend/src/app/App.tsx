@@ -2455,17 +2455,26 @@ function AnnouncementsModal({ currentUser, onClose }: { currentUser: AppUser; on
       {loading ? <SkeletonList items={3} withAvatar={false} /> : list.length === 0 ? (
         <p className="text-sm text-muted-foreground text-center py-6">{t('announcements.empty')}</p>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-2.5">
           {list.map((a: any) => (
-            <div key={a.id} className="border border-border/50 rounded-xl px-3 py-2.5">
-              <div className="flex items-start justify-between gap-2">
-                <p className="text-sm font-semibold">{a.title}</p>
-                {canPost && (
-                  <button onClick={()=>remove(a.id)} aria-label={t('common.delete')} className="p-1 text-muted-foreground hover:text-destructive flex-shrink-0"><MorphIcon icon={Trash} className="w-3.5 h-3.5" /></button>
-                )}
+            <div key={a.id} className="glass-card rounded-2xl p-3.5 border border-border/40 relative overflow-hidden">
+              <div className="absolute left-0 top-0 bottom-0 w-1" style={{ background: 'linear-gradient(180deg, var(--primary), var(--accent))' }} />
+              <div className="flex items-start gap-2.5">
+                <span className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
+                  style={{ background: 'color-mix(in srgb, var(--primary) 14%, transparent)' }}>
+                  <MorphIcon icon={Megaphone} className="w-4 h-4" style={{ color: 'var(--primary)' }} />
+                </span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-sm font-semibold break-words min-w-0">{a.title}</p>
+                    {canPost && (
+                      <button onClick={()=>remove(a.id)} aria-label={t('common.delete')} className="p-1 text-muted-foreground hover:text-destructive flex-shrink-0 rounded-lg hover:bg-destructive/10 liquid-transition"><MorphIcon icon={Trash} className="w-3.5 h-3.5" /></button>
+                    )}
+                  </div>
+                  <p className="text-sm text-foreground/80 whitespace-pre-wrap break-words mt-1">{a.body}</p>
+                  <p className="text-[10px] text-muted-foreground mt-1.5">{a.postedBy?.name} · {new Date(a.createdAt).toLocaleDateString('uz-UZ')}</p>
+                </div>
               </div>
-              <p className="text-sm text-foreground/80 whitespace-pre-wrap mt-1">{a.body}</p>
-              <p className="text-[10px] text-muted-foreground mt-1.5">{a.postedBy?.name} · {new Date(a.createdAt).toLocaleDateString('uz-UZ')}</p>
             </div>
           ))}
         </div>
@@ -4652,8 +4661,9 @@ function SecuritySettingsCard() {
   );
 }
 
-function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdateUser, onCompanyNameChange, onCompanyLogoChange, onBgChange, onColorThemeChange, colorTheme, themeMode, onThemeModeChange, canEditCompany, todayAttendance, onCheckIn, onCheckOut, gpsTracking, onLockNow }:
-  { currentUser: AppUser; projects: Project[]; onUpdateAvatar: (url: string) => void; onLogout: () => void; onUpdateUser: (u: AppUser) => void; onCompanyNameChange: (name: string) => void; onCompanyLogoChange: (logo: string) => void; onBgChange: (bg: string) => void; onColorThemeChange: (id: string) => void; colorTheme: string; themeMode: "light"|"dark"|"system"; onThemeModeChange: (m: "light"|"dark"|"system") => void; canEditCompany?: boolean; todayAttendance: null | { status: string; checkIn?: string; checkOut?: string; workHours?: number }; onCheckIn: () => void; onCheckOut: () => void; gpsTracking: boolean; onLockNow: () => void }) {
+function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdateUser, onCompanyNameChange, onCompanyLogoChange, onBgChange, onColorThemeChange, colorTheme, themeMode, onThemeModeChange, canEditCompany, todayAttendance, onCheckIn, onCheckOut, gpsTracking, onLockNow, canBackup, backupLoading, onBackup, importLoading, onImportBackup, importFileRef }:
+  { currentUser: AppUser; projects: Project[]; onUpdateAvatar: (url: string) => void; onLogout: () => void; onUpdateUser: (u: AppUser) => void; onCompanyNameChange: (name: string) => void; onCompanyLogoChange: (logo: string) => void; onBgChange: (bg: string) => void; onColorThemeChange: (id: string) => void; colorTheme: string; themeMode: "light"|"dark"|"system"; onThemeModeChange: (m: "light"|"dark"|"system") => void; canEditCompany?: boolean; todayAttendance: null | { status: string; checkIn?: string; checkOut?: string; workHours?: number }; onCheckIn: () => void; onCheckOut: () => void; gpsTracking: boolean; onLockNow: () => void;
+    canBackup?: boolean; backupLoading?: boolean; onBackup?: () => void; importLoading?: boolean; onImportBackup?: (e: React.ChangeEvent<HTMLInputElement>) => void; importFileRef?: React.RefObject<HTMLInputElement>; }) {
   const { t, i18n } = useTranslation();
   const changeLanguage = async (lang: SiteLang) => {
     setSiteLanguage(lang);
@@ -5008,6 +5018,23 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
           {activePanel === "currency" && (
             <CurrencyPanel canEdit={isAdmin(currentUser.role) || !!currentUser.isOwner}/>
           )}
+          {activePanel === "backup" && (
+            <div className="surface overflow-hidden p-4 space-y-3">
+              <p className="text-xs text-muted-foreground">{t('profile.backupHint')}</p>
+              <button onClick={onBackup} disabled={backupLoading}
+                className="w-full flex items-center justify-center gap-2 btn btn-outline py-3 rounded-xl text-sm font-semibold disabled:opacity-60">
+                {backupLoading ? <MorphIcon icon={Loader2} className="w-4 h-4 animate-spin" /> : <MorphIcon icon={Download} className="w-4 h-4" />}
+                {t('dashboard.backup')}
+              </button>
+              <input ref={importFileRef} type="file" accept="application/json" className="hidden" onChange={onImportBackup} />
+              <button onClick={() => importFileRef?.current?.click()} disabled={importLoading}
+                title={t('dashboard.importWarning') as string}
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold border border-destructive/30 text-destructive hover:bg-destructive/10 liquid-transition disabled:opacity-60">
+                {importLoading ? <MorphIcon icon={Loader2} className="w-4 h-4 animate-spin" /> : <MorphIcon icon={Upload} className="w-4 h-4" />}
+                {t('dashboard.importBackup')}
+              </button>
+            </div>
+          )}
           {activePanel === "sound" && (
             <div className="surface overflow-hidden">
               <div className="p-3">
@@ -5295,6 +5322,13 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
             ...(isAdmin(currentUser.role) ? [{ key: "subscription" as const, icon: CreditCard, label: t('profile.subscriptionStatus'),
               hint: subData?.status === 'active' ? (subData.daysLeft !== null ? t('profile.daysLeftValue', { count: subData.daysLeft }) : t('profile.subStatusActive')) : subData?.status === 'pending' ? t('profile.subStatusPending') : subData?.status === 'expired' ? t('profile.subStatusExpired') : subData?.status === 'rejected' ? t('profile.subStatusRejected') : subLoading ? "..." : t('common.notFound'),
               swatch: null }] : []),
+            // XATO TUZATILDI ("backup'ni telefonga profil qismiga qo'sh"):
+            // Backup/tiklash avval FAQAT desktop sarlavhasidagi statistika
+            // qatorida bor edi — bu qator endi planshet/telefonda umuman
+            // ko'rsatilmaydi (`hidden lg:flex`), shu sabab mobil foydalanuvchi
+            // (direktor/o'rinbosar) uchun backup imkoni butunlay yo'qolgan
+            // edi. Endi Profil bo'limida — barcha o'lchamda ko'rinadi.
+            ...(canBackup ? [{ key: "backup" as const, icon: Download, label: t('profile.backupTitle'), hint: null as string|null, swatch: null }] : []),
           ].map((row, i) => (
             <button key={row.key} onClick={() => setActivePanel(row.key)}
               className={`w-full flex items-center gap-3 px-4 py-3.5 hover:bg-muted/30 liquid-transition text-left ${i > 0 ? "border-t border-border/50" : ""}`}>
@@ -7308,6 +7342,12 @@ export default function App() {
               todayAttendance={todayAttendance}
               onCheckIn={handleCheckIn}
               onCheckOut={handleCheckOut}
+              canBackup={isAdmin(liveUser.role) && hasFeature('backup')}
+              backupLoading={backupLoading}
+              onBackup={handleBackup}
+              importLoading={importLoading}
+              onImportBackup={handleImportBackup}
+              importFileRef={importFileRef}
               gpsTracking={gpsTracking}
               onLockNow={lockAppNow}/>
           </div>

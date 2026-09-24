@@ -738,6 +738,83 @@ function AddUserModal({ currentUser, users, projects, onClose, onAdd }:
   );
 }
 
+// Manzil kiritish — yozayotganda takliflar (OpenStreetMap Nominatim orqali,
+// backend proksi qiladi) va "joriy joylashuvni aniqlash" (GPS + teskari
+// geokodlash) tugmasi bilan. Obyekt qo'shish VA tahrirlash — ikkalasida
+// ham ishlatiladi.
+function LocationInput({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
+  const { t } = useTranslation();
+  const [suggestions, setSuggestions] = useState<{ label: string }[]>([]);
+  const [open, setOpen] = useState(false);
+  const [locating, setLocating] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const onDocClick = (e: MouseEvent) => { if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, []);
+
+  const authHeader = () => {
+    const token = localStorage.getItem('token');
+    return token ? { Authorization: `Bearer ${token}` } : undefined;
+  };
+
+  const search = (q: string) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (q.trim().length < 3) { setSuggestions([]); return; }
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/geocode/search?q=${encodeURIComponent(q)}`, { headers: authHeader() });
+        if (res.ok) { const data = await res.json(); setSuggestions(data); setOpen(data.length > 0); }
+      } catch {}
+    }, 400);
+  };
+
+  const detectLocation = () => {
+    if (!navigator.geolocation) { toast.error(t('addObject.geoUnsupported')); return; }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(async pos => {
+      try {
+        const res = await fetch(`${API_BASE}/api/geocode/reverse?lat=${pos.coords.latitude}&lng=${pos.coords.longitude}`, { headers: authHeader() });
+        if (res.ok) { const data = await res.json(); onChange(data.label); }
+        else toast.error(t('addObject.geoFailed'));
+      } catch { toast.error(t('addObject.geoFailed')); }
+      setLocating(false);
+    }, () => { toast.error(t('addObject.geoDenied')); setLocating(false); }, { enableHighAccuracy: true, timeout: 10000 });
+  };
+
+  return (
+    <div className="relative" ref={wrapRef}>
+      <div className="flex gap-1.5">
+        <input
+          className="w-full text-sm md:text-xs border border-border rounded px-3 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary"
+          placeholder={placeholder}
+          value={value}
+          onChange={e => { onChange(e.target.value); search(e.target.value); }}
+          onFocus={() => { if (suggestions.length) setOpen(true); }}
+        />
+        <button type="button" onClick={detectLocation} disabled={locating}
+          title={t('addObject.useCurrentLocation')} aria-label={t('addObject.useCurrentLocation')}
+          className="flex-shrink-0 w-9 flex items-center justify-center border border-border rounded bg-input-background hover:bg-muted liquid-transition disabled:opacity-50">
+          {locating ? <MorphIcon icon={Loader2} className="w-3.5 h-3.5 animate-spin" /> : <MorphIcon icon={MapPin} className="w-3.5 h-3.5 text-primary" />}
+        </button>
+      </div>
+      {open && suggestions.length > 0 && (
+        <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-card border border-border rounded-lg shadow-lg max-h-48 overflow-y-auto scrollbar-hide">
+          {suggestions.map((s, i) => (
+            <button key={i} type="button" onClick={() => { onChange(s.label); setOpen(false); setSuggestions([]); }}
+              className="w-full text-left px-3 py-2 text-xs hover:bg-muted liquid-transition border-b border-border/30 last:border-0">
+              {s.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Add Object Modal ────────────────────────────────────────────────────────
 function AddObjectModal({ users, onClose, onAdd }:
   { users: AppUser[]; onClose: () => void; onAdd: (p: Project) => void }) {
@@ -803,7 +880,7 @@ function AddObjectModal({ users, onClose, onAdd }:
         </div>
         <form onSubmit={handleSubmit} className="p-4 space-y-3">
           <div><label className="text-sm md:text-xs font-medium block mb-1">{t('addObject.nameLabel')}</label><input className="w-full text-sm md:text-xs border border-border rounded px-3 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary" placeholder={t('addObject.namePlaceholder')} value={form.name} onChange={e=>setForm({...form,name:e.target.value})} required/></div>
-          <div><label className="text-sm md:text-xs font-medium block mb-1">{t('addObject.locationLabel')}</label><input className="w-full text-sm md:text-xs border border-border rounded px-3 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary" placeholder={t('addObject.locationPlaceholder')} value={form.location} onChange={e=>setForm({...form,location:e.target.value})}/></div>
+          <div><label className="text-sm md:text-xs font-medium block mb-1">{t('addObject.locationLabel')}</label><LocationInput placeholder={t('addObject.locationPlaceholder')} value={form.location} onChange={v=>setForm({...form,location:v})}/></div>
           <div><label className="text-sm md:text-xs font-medium block mb-1">{t('addObject.budgetLabel')}</label><input type="number" className="w-full text-sm md:text-xs border border-border rounded px-3 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary" placeholder="50000000" value={form.budget} onChange={e=>setForm({...form,budget:e.target.value})}/></div>
           <div>
             <label className="text-sm md:text-xs font-medium block mb-1">{t('addObject.foremanLabel')}</label>
@@ -2923,8 +3000,7 @@ function ProjectEditModal({ project, users, onClose, onSave }:
           </div>
           <div>
             <label className="text-xs text-muted-foreground block mb-1">{t('objectDetail.editLocationLabel')}</label>
-            <input value={location} onChange={e => setLocation(e.target.value)}
-              className="w-full text-sm border border-border rounded-lg px-3 py-2 bg-input-background focus:outline-none" />
+            <LocationInput value={location} onChange={setLocation} />
           </div>
           <div>
             <label className="text-xs text-muted-foreground block mb-1">{t('objectDetail.editForemanLabel')}</label>

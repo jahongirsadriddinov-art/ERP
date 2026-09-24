@@ -44,6 +44,7 @@ import publicClientRoutes from './routes/publicClient';
 import export1cRoutes from './routes/export1c';
 import announcementsRoutes from './routes/announcements';
 import callsRoutes from './routes/calls';
+import geocodeRoutes from './routes/geocode';
 import { startMeteredTurnRefreshLoop } from './services/meteredTurn';
 import { initSocket } from './services/socket';
 import { optionalAuth, requireAuth, blockDeveloper } from './middleware/auth';
@@ -237,6 +238,7 @@ app.use('/api/search',          requireAuth, searchRoutes);
 app.use('/api/qr',              requireAuth, qrRoutes);
 app.use('/api/notifications',   requireAuth, notificationRoutes);
 app.use('/api/calls',           requireAuth, callsRoutes);
+app.use('/api/geocode',         requireAuth, geocodeRoutes);
 // currency.ts'ning GET /rates ATAYLAB firma konteksti bo'lmasa ham ochiq
 // CBU/standart kursini qaytaradi (o'zining ichida shunday loyihalangan);
 // PUT /custom o'zi requireAuth talab qiladi — shu sabab bu yerda optionalAuth.

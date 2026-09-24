@@ -1644,7 +1644,11 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
     e.target.value = '';
     if (!file) return;
     const typed = window.prompt(t('dashboard.importConfirmPrompt') as string);
-    if (typed !== t('dashboard.importConfirmWord')) { if (typed !== null) toast.error(t('dashboard.importConfirmMismatch')); return; }
+    // Katta/kichik harf farqi endi muhim emas — "TASDIQLAYMAN" yoki
+    // "tasdiqlayman" (yoki aralash) baravar qabul qilinadi, faqat SO'Z
+    // to'g'ri yozilishi muhim.
+    const expected = (t('dashboard.importConfirmWord') as string).trim().toUpperCase();
+    if ((typed || '').trim().toUpperCase() !== expected) { if (typed !== null) toast.error(t('dashboard.importConfirmMismatch')); return; }
     const token = localStorage.getItem("token");
     if (!token) return;
     setImportLoading(true);
@@ -1659,6 +1663,14 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
       const data = await r.json();
       if (!r.ok) { toast.error(data.error || t('dashboard.backupError')); return; }
       toast.success(t('dashboard.importSuccess'));
+      // XATO TUZATILDI ("backup qildi keyin avtomatik o'zi yangilasin sayt"):
+      // tiklashdan keyin serverdagi BARCHA ma'lumot (users/projects/
+      // transactions va h.k.) almashtirilgan, lekin sahifadagi eski React
+      // state hali eski (tiklashdan OLDINGI) holatda qolardi — foydalanuvchi
+      // qo'lda sahifani yangilamaguncha ilova eskirgan ma'lumotni ko'rsatardi.
+      // Toast ko'rinishi uchun qisqa kechikish bilan sahifa to'liq qayta
+      // yuklanadi.
+      setTimeout(() => window.location.reload(), 1500);
     } catch { toast.error(t('dashboard.backupError')); }
     finally { setImportLoading(false); }
   };

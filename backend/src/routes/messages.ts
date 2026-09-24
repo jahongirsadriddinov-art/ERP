@@ -35,6 +35,32 @@ function mediaUrlToLocalPath(url?: string): string | null {
   }
 }
 
+// XATO TUZATILDI ("ovozli xabarlar/video xom webm bo'lib Telegram'ga
+// ketyapti"): pastdagi convertToOggOpus/convertToMp4 FAQAT mahalliy fayl
+// yo'li bilan ishlaydi, lekin production'da media DEYARLI HAR DOIM
+// Cloudinary'ga yuklanadi (yuqoridagi `uploadFileToCloud`, mahalliy
+// /uploads/ FAQAT Cloudinary ishlamay qolganda zaxira) — shu sabab
+// `mediaUrlToLocalPath` deyarli har doim `null` qaytarib, konvertatsiya
+// HECH QACHON ishga tushmas, xabar xom formatda (`sendDocument`/xom
+// `sendVideo`) ketaverar edi. Endi mahalliy fayl topilmasa, URL vaqtincha
+// yuklab olinadi — ffmpeg URL bilan emas, FAYL bilan ishlaydi.
+async function resolveMediaFile(url?: string): Promise<{ path: string; temp: boolean } | null> {
+  if (!url) return null;
+  const local = mediaUrlToLocalPath(url);
+  if (local) return { path: local, temp: false };
+  try {
+    const r = await fetch(url);
+    if (!r.ok) return null;
+    const ext = path.extname(new URL(url).pathname) || '';
+    const tmpPath = path.join(os.tmpdir(), `dl_${Date.now()}_${Math.round(Math.random() * 1e6)}${ext}`);
+    fs.writeFileSync(tmpPath, Buffer.from(await r.arrayBuffer()));
+    return { path: tmpPath, temp: true };
+  } catch (err) {
+    console.error('[media download]', err);
+    return null;
+  }
+}
+
 // Brauzerda yozilgan audio/webm'ni haqiqiy OGG/Opus'ga aylantiradi — Telegram
 // sendVoice buni "ovozli xabar" pufakchasi sifatida to'g'ri ochadi (webm'ni
 // sendDocument bilan yuborish faylni ochadi, lekin native ovozli xabar ko'rinishida
@@ -103,26 +129,29 @@ export async function relayMessageToTelegram(chatId: string, senderName: string,
         break;
       case 'video': {
         const isMp4 = /\.mp4(\?|$)/i.test(m.mediaUrl || '');
-        const localVidPath = isMp4 ? null : mediaUrlToLocalPath(m.mediaUrl);
         if (isMp4) {
           await bot.sendVideo(chatId, m.mediaUrl, { caption });
-        } else if (localVidPath) {
-          let convertedVid: string | null = null;
-          try {
-            convertedVid = await convertToMp4(localVidPath);
-            // fileOptions.contentType aniq ko'rsatilmasa, node-telegram-bot-api
-            // kelajakda "application/octet-stream"ga default qiladi (deprecation
-            // warning Render log'ida ko'rinib turgan edi) — convertToMp4 doim
-            // haqiqiy .mp4 chiqaradi, shuning uchun aniq belgilaymiz.
-            await bot.sendVideo(chatId, fs.createReadStream(convertedVid), { caption }, { contentType: 'video/mp4' });
-          } catch (err) {
-            console.error('[video transcode]', err);
-            await bot.sendVideo(chatId, m.mediaUrl, { caption }).catch(() => bot.sendDocument(chatId, m.mediaUrl!, { caption }));
-          } finally {
-            if (convertedVid) fs.unlink(convertedVid, () => {});
-          }
         } else {
-          await bot.sendVideo(chatId, m.mediaUrl, { caption });
+          const src = await resolveMediaFile(m.mediaUrl);
+          if (src) {
+            let convertedVid: string | null = null;
+            try {
+              convertedVid = await convertToMp4(src.path);
+              // fileOptions.contentType aniq ko'rsatilmasa, node-telegram-bot-api
+              // kelajakda "application/octet-stream"ga default qiladi (deprecation
+              // warning Render log'ida ko'rinib turgan edi) — convertToMp4 doim
+              // haqiqiy .mp4 chiqaradi, shuning uchun aniq belgilaymiz.
+              await bot.sendVideo(chatId, fs.createReadStream(convertedVid), { caption }, { contentType: 'video/mp4' });
+            } catch (err) {
+              console.error('[video transcode]', err);
+              await bot.sendVideo(chatId, m.mediaUrl, { caption }).catch(() => bot.sendDocument(chatId, m.mediaUrl!, { caption }));
+            } finally {
+              if (convertedVid) fs.unlink(convertedVid, () => {});
+              if (src.temp) fs.unlink(src.path, () => {});
+            }
+          } else {
+            await bot.sendVideo(chatId, m.mediaUrl, { caption });
+          }
         }
         break;
       }
@@ -135,23 +164,26 @@ export async function relayMessageToTelegram(chatId: string, senderName: string,
         // yuboramiz. Faqat ffmpeg muvaffaqiyatsiz bo'lsa (masalan mahalliy fayl
         // topilmasa) hujjat sifatida zaxira yo'l bilan yuboriladi.
         const isOgg = /\.ogg(\?|$)/i.test(m.mediaUrl || '');
-        const localPath = isOgg ? null : mediaUrlToLocalPath(m.mediaUrl);
         if (isOgg) {
           await bot.sendVoice(chatId, m.mediaUrl, { caption: senderName });
-        } else if (localPath) {
-          let converted: string | null = null;
-          try {
-            converted = await convertToOggOpus(localPath);
-            // Xuddi shu sabab bilan — convertToOggOpus doim haqiqiy OGG/Opus chiqaradi.
-            await bot.sendVoice(chatId, fs.createReadStream(converted), { caption: senderName }, { contentType: 'audio/ogg' });
-          } catch (err) {
-            console.error('[voice transcode]', err);
-            await bot.sendDocument(chatId, m.mediaUrl, { caption: `🎤 ${caption}` });
-          } finally {
-            if (converted) fs.unlink(converted, () => {});
-          }
         } else {
-          await bot.sendDocument(chatId, m.mediaUrl, { caption: `🎤 ${caption}` });
+          const src = await resolveMediaFile(m.mediaUrl);
+          if (src) {
+            let converted: string | null = null;
+            try {
+              converted = await convertToOggOpus(src.path);
+              // Xuddi shu sabab bilan — convertToOggOpus doim haqiqiy OGG/Opus chiqaradi.
+              await bot.sendVoice(chatId, fs.createReadStream(converted), { caption: senderName }, { contentType: 'audio/ogg' });
+            } catch (err) {
+              console.error('[voice transcode]', err);
+              await bot.sendDocument(chatId, m.mediaUrl, { caption: `🎤 ${caption}` });
+            } finally {
+              if (converted) fs.unlink(converted, () => {});
+              if (src.temp) fs.unlink(src.path, () => {});
+            }
+          } else {
+            await bot.sendDocument(chatId, m.mediaUrl, { caption: `🎤 ${caption}` });
+          }
         }
         break;
       }

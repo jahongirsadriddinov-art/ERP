@@ -3875,13 +3875,15 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
                 <p className="text-sm font-semibold truncate">{selGroup ? (selGroup.devSupport ? tChat('common.roles.dasturchi') : selGroup.name) : selUser!.name}</p>
                 {selGroup
                   ? (selGroup.activeVideoChat
-                      ? <p className="text-[11px] text-green-600 dark:text-green-400 truncate font-medium">{tChat('chat.videoChatActive', { count: selGroup.activeVideoChat.participantIds.length })}</p>
+                      ? <p className="text-[11px] text-green-600 dark:text-green-400 truncate font-medium">{tChat('chat.videoChatActive', { count: selGroup.activeVideoChat.participantIds?.length ?? 0 })}</p>
                       : <p className="text-[11px] text-muted-foreground truncate">{selGroup.devSupport ? tChat('chat.devSupportSubtitle') : tChat('chat.memberCount', { count: selGroup.memberIds?.length || 0 })}</p>)
                   : <p className="text-[11px] text-muted-foreground">{isOnline(selUser!.id) ? <span className="text-green-800 dark:text-green-400">onlayn</span> : roleLabel(tChat, selUser!.role)}</p>}
               </button>
               {!selectMode && !selGroup?.devSupport && (
                 <div className="flex items-center gap-1 flex-shrink-0">
-                  <button onClick={() => onStartCall('voice', { peer: selUser || undefined, group: selGroup || undefined })} title={tChat('chat.voiceCall')} aria-label={tChat('chat.voiceCall')} className="btn btn-ghost w-9 h-9 p-0 rounded-full text-primary"><MorphIcon icon={Phone} className="w-[18px] h-[18px]" /></button>
+                  {/* Guruhda faqat bitta video chat ikonkasi (kamera ixtiyoriy, alohida
+                      ovozli qo'ng'iroq kerak emas); 1:1 chatda ikkala tugma qoladi. */}
+                  {!selGroup && <button onClick={() => onStartCall('voice', { peer: selUser || undefined })} title={tChat('chat.voiceCall')} aria-label={tChat('chat.voiceCall')} className="btn btn-ghost w-9 h-9 p-0 rounded-full text-primary"><MorphIcon icon={Phone} className="w-[18px] h-[18px]" /></button>}
                   {/* Guruhda — Telegram-ga o'xshash DOIMIY video chat: hech
                       kim chaqirilmaydi, faol bo'lsa yashil nuqta bilan
                       "qo'shilish", aks holda oddiy "boshlash" ko'rinishi. */}
@@ -6629,12 +6631,12 @@ export default function App() {
       // (call:join/offer orqali) boshqaradi.
       const onVideoChatActive = (d: any) => {
         setGroups(prev => prev.map(g => g.id === d.groupId
-          ? { ...g, activeVideoChat: { startedBy: d.startedBy, startedByName: d.startedByName, startedAt: d.startedAt, mode: d.mode, participantIds: d.participantIds } }
+          ? { ...g, activeVideoChat: { startedBy: d.startedBy, startedByName: d.startedByName, startedAt: d.startedAt, mode: d.mode, participantIds: d.participantIds || [] } }
           : g));
       };
       const onVideoChatParticipants = (d: any) => {
         setGroups(prev => prev.map(g => g.id === d.groupId && g.activeVideoChat
-          ? { ...g, activeVideoChat: { ...g.activeVideoChat, participantIds: d.participantIds } }
+          ? { ...g, activeVideoChat: { ...g.activeVideoChat, participantIds: d.participantIds || [] } }
           : g));
       };
       const onVideoChatEnded = (d: any) => {

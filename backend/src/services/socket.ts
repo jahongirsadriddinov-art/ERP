@@ -155,7 +155,14 @@ export function initSocket(httpServer: HttpServer): Server {
           participantIds: [userId],
         } as any;
         await group.save();
-        io?.to(`group:${data.groupId}`).emit('videochat:active', { groupId: data.groupId, ...group.activeVideoChat });
+        const avc = group.activeVideoChat!;
+        // Mongoose subdocument'ni to'g'ridan-to'g'ri yoyib (spread) bo'lmaydi —
+        // ichki maydonlari ($__, _doc) chiqib, participantIds yo'qoladi va
+        // frontend `.length` o'qiganda qulab tushardi. Aniq oddiy obyekt.
+        io?.to(`group:${data.groupId}`).emit('videochat:active', {
+          groupId: data.groupId, startedBy: avc.startedBy, startedByName: avc.startedByName,
+          startedAt: avc.startedAt, mode: avc.mode, participantIds: [...(avc.participantIds || [])],
+        });
         // Guruhdagi boshqa a'zolarga (ilova fon/yopiq bo'lsa ham) push —
         // call:offer'dagi bilan bir xil naqsh.
         (group.memberIds || []).forEach((mid: string) => {

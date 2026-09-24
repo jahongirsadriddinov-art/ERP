@@ -237,18 +237,21 @@ const SMETA_GROUP_LABEL: Record<string,string> = {
 };
 const SMETA_GROUP_ORDER = ["labor","general","machinery","material","equipment"];
 
-// XATO TUZATILDI ("scroll ishlamayapti, yon tarafdagini ko'rib bo'lmayapti"):
-// keng jadvallar (Talab/Smeta) touch qurilmada barmoq bilan chapga-o'ngga
-// suriladi (touch-pan-x), lekin DESKTOP sichqoncha g'ildiragi bilan
-// gorizontal scroll qilishning tabiiy usuli yo'q (Shift+g'ildirak hech kim
-// bilmaydigan, ko'rinmas imo-ishora) — scrollbar ham `scrollbar-hide` bilan
-// yashirilgan, shu sabab desktop foydalanuvchi uchun o'ng tomondagi
-// ustunlarga (Narx, Summa) umuman yeta olmasdi. Bu handler oddiy vertikal
-// g'ildirak aylantirishni — FAQAT haqiqatan gorizontal ortiqcha joy bo'lsa —
-// gorizontal scrollga aylantiradi, sichqoncha jadval ustida bo'lganda.
+// XATO TUZATILDI (2-marta — "pastga tushirsam yon tomonga surilib
+// qolyapti, avtomatik boshqa tomonga o'tmayapti"): oldingi urinish
+// HAR QANDAY vertikal g'ildirak aylantirishni gorizontalga aylantirib
+// yuborgan edi — natijada jadval ustida oddiy pastga-tepaga scroll
+// QILISH BUTUNLAY ishlamay qoldi (aynan foydalanuvchi tasvirlagan xato).
+// TO'G'RI yechim: ODDIY g'ildirak — HECH NARSA o'zgarmaydi (brauzerning
+// o'z tabiiy vertikal scrolli ishlaydi, tashqi konteynerga o'tadi).
+// Faqat Shift bosib turilganda gorizontalga aylanadi (standart brauzer
+// konvensiyasi) — pastdagi scrollbar (endi ko'rinadigan, scrollbar-hide
+// OLIB TASHLANGAN) esa sichqoncha bilan sudrab ko'rish uchun asosiy,
+// Shift bilishni talab qilmaydigan usul.
 function hwheel(e: React.WheelEvent<HTMLDivElement>) {
+  if (!e.shiftKey) return; // oddiy aylantirish — vertikal, hech narsa qilinmaydi
   const el = e.currentTarget;
-  if (el.scrollWidth > el.clientWidth && e.deltaY !== 0 && e.deltaX === 0) {
+  if (el.scrollWidth > el.clientWidth) {
     el.scrollLeft += e.deltaY;
     e.preventDefault();
   }
@@ -2517,7 +2520,7 @@ function SmetaResultView({ smeta }: { smeta: SmetaResult }) {
                 ("smeta bo'limida chapga qimirlatib bo'lmayapti"). Talab
                 jadvalidagi bilan bir xil touch-action izolyatsiyasi. */}
             {open && (
-              <div className="overflow-x-auto scrollbar-hide border-t border-border touch-pan-x" onWheel={hwheel}>
+              <div className="overflow-x-auto border-t border-border touch-pan-x" onWheel={hwheel}>
                 <table className="w-full text-left text-xs">
                   <thead className="bg-muted/40 text-muted-foreground"><tr>
                     <th className="px-2 py-1.5">№</th><th className="px-2 py-1.5">Шифр</th><th className="px-2 py-1.5">Наименование</th>
@@ -2567,7 +2570,7 @@ function SmetaResultView({ smeta }: { smeta: SmetaResult }) {
                     <span className="flex items-center gap-1 shrink-0"><span className="text-[10px] text-muted-foreground whitespace-nowrap">{w.norms.length} n.</span><MorphIcon icon={wo ? ChevronUp : ChevronDown} className="w-3.5 h-3.5" /></span>
                   </button>
                   {wo && w.norms.length > 0 && (
-                    <div className="overflow-x-auto scrollbar-hide px-4 pb-2 touch-pan-x" onWheel={hwheel}>
+                    <div className="overflow-x-auto px-4 pb-2 touch-pan-x" onWheel={hwheel}>
                       <table className="w-full text-left text-[11px]">
                         <thead className="text-muted-foreground"><tr><th className="py-1 pr-2">№</th><th className="pr-2">Шифр</th><th className="pr-2">Наименование</th><th className="pr-2">Ед.</th><th className="text-right pr-2">На ед.</th><th className="text-right">По проекту</th></tr></thead>
                         <tbody>
@@ -2846,7 +2849,7 @@ function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSe
                 ustida gorizontal imo-ishora ustuvor bo'ladi, sahifa esa
                 jadvaldan TASHQARIDA odatdagidek vertikal suriladi. */}
             <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden scrollbar-hide pb-20 sm:pb-2">
-              <div className="overflow-x-auto scrollbar-hide touch-pan-x" onWheel={hwheel}>
+              <div className="overflow-x-auto touch-pan-x" onWheel={hwheel}>
                 <table className="w-full min-w-max text-left border-collapse text-[11px] leading-tight">
                   <thead className="sticky top-0 z-10 bg-card">
                     <tr className="border-b border-border">

@@ -76,9 +76,7 @@ const speechSynthesisSupported = typeof window !== 'undefined' && 'speechSynthes
 // hech qanday qurilmada tayyor o'zbekcha OVOZ (voice) o'rnatilmagan,
 // shu sabab brauzer buni jimgina o'zining STANDART (odatda inglizcha)
 // ovoziga almashtirib qo'yardi. Endi mavjud ovozlar ro'yxatidan ANIQ
-// mos ovoz TANLAYMIZ (`utterance.voice`) — topilmasa, eng yaqin
-// qarindosh til (turkiy — talaffuzi o'zbekchaga yaqinroq, keyin ruscha)
-// bilan almashtiramiz, "inglizcha bo'lib qolish"ning oldini olish uchun.
+// mos ovoz TANLAYMIZ (`utterance.voice`).
 let cachedVoices: SpeechSynthesisVoice[] = [];
 function loadVoices(): SpeechSynthesisVoice[] {
   if (!speechSynthesisSupported) return [];
@@ -92,12 +90,34 @@ if (speechSynthesisSupported) {
   // zahoti bo'sh qaytadi) — shu hodisa kelganda qayta o'qiymiz.
   window.speechSynthesis.onvoiceschanged = loadVoices;
 }
+// XATO TUZATILDI ("ovozi xunik ekan"): bir xil tilda ko'pincha BIR NECHTA
+// ovoz mavjud bo'ladi — masalan eski "Desktop"/SAPI ovozlari (robotsimon,
+// past sifat) va zamonaviy "Online"/"Natural"/Google ovozlari (tabiiy
+// eshitiladigan). Avval FAQAT birinchi topilgan ovoz olinardi — ko'pincha
+// aynan o'sha eski, yomon ovoz edi. Endi bir nechta nomzod bo'lsa,
+// sifatliroq ko'rinadigan nomga ega ovoz TANLAB olinadi. Shuningdek
+// zaxira til tartibi ruscha->turkcha (avval turkcha->ruscha edi) — ruscha
+// ovozlar deyarli hamma qurilmada (Android/Windows/Chrome) ancha
+// sifatliroq va tabiiyroq chiqadi, garchi turkcha talaffuz jihatidan
+// o'zbekchaga yaqinroq bo'lsa ham.
+function bestVoiceOf(candidates: SpeechSynthesisVoice[]): SpeechSynthesisVoice | undefined {
+  if (!candidates.length) return undefined;
+  const score = (v: SpeechSynthesisVoice) => {
+    const n = v.name.toLowerCase();
+    let s = 0;
+    if (n.includes('online') || n.includes('natural') || n.includes('neural')) s += 3;
+    if (n.includes('google')) s += 2;
+    if (n.includes('desktop')) s -= 2;
+    return s;
+  };
+  return [...candidates].sort((a, b) => score(b) - score(a))[0];
+}
 function pickVoice(target: 'uz' | 'ru'): SpeechSynthesisVoice | undefined {
   const voices = loadVoices();
   if (!voices.length) return undefined;
-  const byPrefix = (p: string) => voices.find(v => v.lang.toLowerCase().startsWith(p));
+  const byPrefix = (p: string) => bestVoiceOf(voices.filter(v => v.lang.toLowerCase().startsWith(p)));
   if (target === 'ru') return byPrefix('ru') || byPrefix('uz') || byPrefix('tr');
-  return byPrefix('uz') || byPrefix('tr') || byPrefix('ru');
+  return byPrefix('uz') || byPrefix('ru') || byPrefix('tr');
 }
 
 export default function AIAssistant({ currentUser, users, token, open, onClose, onUserAdded, onUserDeleted, onUserUpdated }:

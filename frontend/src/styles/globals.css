@@ -209,20 +209,18 @@
     will-change: transform;
   }
 
-  /* 3-avlod aktiv-tab ko'rsatkichi — keng "yoritilgan fon" o'rniga ikonaning
-     o'zini o'rab turgan suzuvchi DOIRA (hech qachon `inherit` radius yoki
-     kvadrat+aylanish ishlatilmaydi — romb xatosi tarixi sabab qat'iy
-     `rounded-full`/doiraviy shakl). */
-  .nav-bubble {
-    background: linear-gradient(135deg, var(--primary), var(--accent));
-    box-shadow:
-      0 0 0 4px color-mix(in srgb, var(--primary) 16%, transparent),
-      0 6px 18px color-mix(in srgb, var(--primary) 60%, transparent),
-      inset 0 1px 1px rgba(255,255,255,0.35);
+  /* 4-avlod aktiv-tab ko'rsatkichi — foydalanuvchi bergan namunaga
+     ("fintech" ilova, orqa fonsiz, faqat rang o'zgarishi + bar tepasida
+     suzuvchi ingichka chiziq) moslab qat'iy `rounded-full` chiziq —
+     hech qachon `inherit` radius yoki kvadrat+aylanish ishlatilmaydi
+     (romb xatosi tarixi sabab). */
+  .nav-active-stripe {
+    width: 28px;
+    height: 3px;
+    border-radius: 9999px;
+    background: linear-gradient(90deg, var(--primary), var(--accent));
+    box-shadow: 0 0 8px color-mix(in srgb, var(--primary) 70%, transparent);
     will-change: transform;
-  }
-  .nav-label-active {
-    text-shadow: 0 0 12px color-mix(in srgb, var(--primary) 70%, transparent);
   }
 
   .pt-safe-top { padding-top: env(safe-area-inset-top, 0px); }

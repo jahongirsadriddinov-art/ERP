@@ -7192,6 +7192,11 @@ export default function App() {
           — ikkinchisidan farqli, bu FAQAT ikonani o'rab oladi (label'ni
           emas), shu bilan "aktiv tugma" endi butunlay boshqacha shaklda
           ko'zga tashlanadi. */}
+      {/* 4-avlod — foydalanuvchi ko'rsatgan namunaga ("fintech" uslubi) moslab
+          qayta ishlandi: aktiv bo'lim endi ORQA FON (bubble/pill) bilan emas,
+          faqat IKONA+YORLIQ RANGI (kulrang → primary) bilan va bar ustida
+          suzuvchi ingichka "urg'u chizig'i" (accent stripe) bilan
+          ko'rsatiladi — namunadagi aynan shu naqsh. */}
       <nav className={`ios-bottom-bar flex items-center justify-around ${(page==='chat' && chatIsOpen) || anyBigModalOpen ? 'ios-bottom-bar-hidden' : ''}`}>
         {NAV.map(n => (
           <motion.button key={n.key} onClick={() => { setPage(n.key); setSelProject(null); }}
@@ -7199,26 +7204,27 @@ export default function App() {
             transition={{ type: "spring", stiffness: 520, damping: 30 }}
             aria-label={n.label}
             aria-current={page===n.key ? "page" : undefined}
-            className={`flex flex-col items-center justify-center gap-[4px] px-3 py-2 min-w-[56px] h-[60px] relative z-10 ${page===n.key?"text-white":"text-white/48"}`}
+            className="flex flex-col items-center justify-center gap-[4px] px-3 py-2 min-w-[56px] h-[60px] relative z-10"
+            style={{ color: page===n.key ? 'var(--primary)' : 'rgba(255,255,255,0.42)' }}
           >
+            {page === n.key && (
+              <motion.div
+                layoutId="mobileNavActiveStripe"
+                className="nav-active-stripe absolute top-0 left-1/2 -translate-x-1/2"
+                transition={{ type: "spring", stiffness: 480, damping: 30 }}
+              />
+            )}
             <div className="relative flex items-center justify-center w-10 h-10">
-              {page === n.key && (
-                <motion.div
-                  layoutId="mobileNavBubble"
-                  className="nav-bubble absolute inset-0 rounded-full"
-                  transition={{ type: "spring", stiffness: 480, damping: 30 }}
-                />
-              )}
-              <div className={`relative z-[1] flex items-center justify-center w-[26px] h-[26px] transition-all duration-200 ${page===n.key?"scale-110":""}`}>
+              <div className="relative z-[1] flex items-center justify-center w-[26px] h-[26px]">
                 {n.key === "profile"
-                  ? <div className={`rounded-full overflow-hidden transition-all duration-200 ${page===n.key?"ring-2 ring-white/90 shadow-md scale-110":"opacity-60"}`}><Avatar user={liveUser} size="sm"/></div>
-                  : <MorphIcon icon={n.icon} className="w-[18px] h-[18px]" />}
+                  ? <div className={`rounded-full overflow-hidden transition-all duration-200 ${page===n.key?"ring-2 ring-current shadow-md":"opacity-70"}`}><Avatar user={liveUser} size="sm"/></div>
+                  : <MorphIcon icon={n.icon} className="w-[19px] h-[19px]" />}
               </div>
               {!!n.badge && n.badge>0 && (
                 <span className="badge-pulse absolute -top-1 -right-1 min-w-[16px] h-4 px-0.5 bg-red-500 text-white rounded-full text-[9px] flex items-center justify-center font-bold shadow border border-black/20 z-[2]">{n.badge > 9 ? '9+' : n.badge}</span>
               )}
             </div>
-            <span className={`nav-label text-[9px] font-semibold leading-none tracking-wide transition-all duration-200 ${page===n.key?"opacity-100 nav-label-active":"opacity-40"}`}>
+            <span className="text-[9px] font-semibold leading-none tracking-wide">
               {n.label}
             </span>
           </motion.button>

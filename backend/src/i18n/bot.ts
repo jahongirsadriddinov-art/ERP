@@ -20,6 +20,7 @@ interface BotDict {
   kb_incomingTransfers: string;
   kb_sentTransfers: string;
   kb_incomingPayments: string;
+  kb_addExpense: string;
   kb_firmsList: string;
   kb_allUsers: string;
   kb_chatHistory: string;
@@ -216,6 +217,7 @@ const uz: BotDict = {
   kb_incomingTransfers: '📦 Menga kelgan yukxatlar',
   kb_sentTransfers: '📤 Yuborgan yukxatlarim',
   kb_incomingPayments: "📬 Menga kelgan to'lovlar",
+  kb_addExpense: "➕ Chiqim qo'shish",
   kb_firmsList: "🏢 Firmalar ro'yxati",
   kb_allUsers: '👥 Barcha foydalanuvchilar',
   kb_chatHistory: '💬 Chat tarixi',
@@ -420,6 +422,7 @@ const ru: BotDict = {
   kb_incomingTransfers: '📦 Полученные накладные',
   kb_sentTransfers: '📤 Отправленные накладные',
   kb_incomingPayments: '📬 Полученные платежи',
+  kb_addExpense: '➕ Добавить расход',
   kb_firmsList: '🏢 Список компаний',
   kb_allUsers: '👥 Все пользователи',
   kb_chatHistory: '💬 История чата',

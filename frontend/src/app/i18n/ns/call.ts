@@ -28,6 +28,10 @@ export const uz = {
     videoChatInviteText: "🎥 {{name}} sizni \"{{group}}\" guruhining video chatiga taklif qildi",
     joinVideoChatBtn: "Qo'shilish",
     close: "Yopish",
+    you: "Siz",
+    participantsCount: "{{count}} ishtirokchi",
+    leaveMenuTitle: "Video chatdan chiqish",
+    cancel: "Bekor qilish",
   },
 };
 
@@ -61,5 +65,9 @@ export const ru = {
     videoChatInviteText: "🎥 {{name}} приглашает вас в видеочат группы \"{{group}}\"",
     joinVideoChatBtn: "Присоединиться",
     close: "Закрыть",
+    you: "Вы",
+    participantsCount: "{{count}} участн.",
+    leaveMenuTitle: "Выйти из видеочата",
+    cancel: "Отмена",
   },
 };

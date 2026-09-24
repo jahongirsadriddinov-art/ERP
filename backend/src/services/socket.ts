@@ -128,6 +128,8 @@ export function initSocket(httpServer: HttpServer): Server {
     socket.on('call:end', relay('call:end'));
     socket.on('call:reject', relay('call:reject'));
     socket.on('call:join', relay('call:join'));
+    // Kamera/mikrofon holati (Telegram'dagi kabi plitkada avatar/ovoz belgisi uchun)
+    socket.on('call:state', relay('call:state'));
 
     // ── Guruh video chat (Telegram-ga o'xshash) ─────────────────────────────
     // Yuqoridagi call:* WebRTC signalizatsiyasidan FARQLI — bu yerda hech
@@ -141,10 +143,17 @@ export function initSocket(httpServer: HttpServer): Server {
       if (!group || !(group.memberIds || []).includes(userId)) return null;
       return group;
     };
-    socket.on('videochat:start', async (data: { groupId?: string; mode?: 'voice' | 'video' }) => {
+    socket.on('videochat:start', async (data: { groupId?: string; mode?: 'voice' | 'video' }, ack?: (r: any) => void) => {
       if (!data?.groupId) return;
       const group = await requireMembership(data.groupId);
       if (!group) return;
+      // Eski/"arvoh" holat: hamma ishtirokchi oflayn bo'lsa (masalan server qayta
+      // ishga tushgan yoki xato bilan uzilgan) — eskisini tozalab, yangidan boshlaymiz.
+      if (group.activeVideoChat) {
+        const alive = (group.activeVideoChat.participantIds || []).filter((id: string) => userSockets.has(id));
+        if (alive.length === 0) group.activeVideoChat = undefined;
+        else if (alive.length !== group.activeVideoChat.participantIds.length) group.activeVideoChat.participantIds = alive;
+      }
       if (!group.activeVideoChat) {
         const starter = await User.findById(userId).select('firstName lastName').lean().catch(() => null);
         group.activeVideoChat = {
@@ -181,6 +190,9 @@ export function initSocket(httpServer: HttpServer): Server {
         }
         io?.to(`group:${data.groupId}`).emit('videochat:participants', { groupId: data.groupId, participantIds: group.activeVideoChat.participantIds });
       }
+      // Qo'shilayotgan kishi (joiner) HAMMA mavjud ishtirokchiga o'zi offer
+      // yuboradi — glare (ikki tomonlama offer) bo'lmasligi uchun aniq qoida.
+      ack?.({ participantIds: [...(group.activeVideoChat?.participantIds || [])] });
     });
     socket.on('videochat:join', async (data: { groupId?: string }) => {
       if (!data?.groupId) return;
@@ -221,6 +233,23 @@ export function initSocket(httpServer: HttpServer): Server {
 
     socket.on('disconnect', () => {
       if (userId) { removeUserSocket(userId, socket.id); broadcastPresence(); }
+      // Video chatda turgan foydalanuvchining BARCHA ulanishi uzilsa (tab yopildi,
+      // internet ketdi) — "arvoh" ishtirokchi bo'lib qolmasligi uchun chiqariladi.
+      if (userId && !userSockets.has(userId)) {
+        Group.find({ 'activeVideoChat.participantIds': userId }).then(async (gs: any[]) => {
+          for (const g of gs) {
+            g.activeVideoChat.participantIds = g.activeVideoChat.participantIds.filter((id: string) => id !== userId);
+            if (g.activeVideoChat.participantIds.length === 0) {
+              g.activeVideoChat = undefined;
+              await g.save();
+              io?.to(`group:${String(g._id)}`).emit('videochat:ended', { groupId: String(g._id) });
+            } else {
+              await g.save();
+              io?.to(`group:${String(g._id)}`).emit('videochat:participants', { groupId: String(g._id), participantIds: g.activeVideoChat.participantIds });
+            }
+          }
+        }).catch(() => {});
+      }
     });
   });
 

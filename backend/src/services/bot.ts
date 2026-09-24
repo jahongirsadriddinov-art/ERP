@@ -134,6 +134,7 @@ const ADMIN_KEYBOARD = async (lang?: BotLang) => {
         [{ text: L('kb_financeStatus') }, { text: L('kb_objects') }],
         [{ text: L('kb_staffList') }, { text: L('kb_report') }],
         [{ text: L('kb_subscriptionStatus') }],
+        [{ text: L('kb_addExpense') }],
       ];
   return {
     keyboard: [[openSiteBtn(lang)], ...rows, [{ text: tb(lang, 'kb_language') }]],
@@ -152,6 +153,7 @@ const USER_KEYBOARD = async (lang?: BotLang) => {
         [{ text: L('kb_incomingTransfers') }],
         [{ text: L('kb_sentTransfers') }],
         [{ text: L('kb_incomingPayments') }],
+        [{ text: L('kb_addExpense') }],
       ];
   return {
     keyboard: [[openSiteBtn(lang)], ...rows, [{ text: tb(lang, 'kb_language') }]],
@@ -488,8 +490,8 @@ const DEV_LABEL_KEYS = ['kb_broadcast', 'kb_disableSite', 'kb_enableSite', 'kb_d
 const DEFAULT_DEV_ORDER = ['kb_broadcast', 'siteToggle', 'botToggle', 'kb_firmsList', 'kb_allUsers', 'kb_allSubscriptions', 'kb_generalStats', 'kb_chatHistory', 'kb_devSettings'];
 // Admin (direktor/orinbosar) va ishchi (worker) menyulari — bularda
 // "toggle atom" yo'q, har biri oddiy statik kalit.
-const ADMIN_LABEL_KEYS = ['kb_chat', 'kb_pendingApprovals', 'kb_financeStatus', 'kb_objects', 'kb_staffList', 'kb_report', 'kb_subscriptionStatus'] as const;
-const USER_LABEL_KEYS = ['kb_chat', 'kb_incomingTransfers', 'kb_sentTransfers', 'kb_incomingPayments'] as const;
+const ADMIN_LABEL_KEYS = ['kb_chat', 'kb_pendingApprovals', 'kb_financeStatus', 'kb_objects', 'kb_staffList', 'kb_report', 'kb_subscriptionStatus', 'kb_addExpense'] as const;
+const USER_LABEL_KEYS = ['kb_chat', 'kb_incomingTransfers', 'kb_sentTransfers', 'kb_incomingPayments', 'kb_addExpense'] as const;
 const ORDER_BY_SCOPE: Record<KbScope, readonly string[]> = { dev: DEFAULT_DEV_ORDER, admin: ADMIN_LABEL_KEYS, user: USER_LABEL_KEYS };
 const LABEL_KEYS_BY_SCOPE: Record<KbScope, readonly string[]> = { dev: DEV_LABEL_KEYS, admin: ADMIN_LABEL_KEYS, user: USER_LABEL_KEYS };
 const SCOPE_TITLE_KEY: Record<KbScope, 'kb_devSettingsScopeDev' | 'kb_devSettingsScopeAdmin' | 'kb_devSettingsScopeUser'> = {

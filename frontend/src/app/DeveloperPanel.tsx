@@ -567,7 +567,7 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
                           <div className={`max-w-[80%] px-3 py-2 rounded-2xl text-xs ${mine?'bg-gradient-to-br from-primary to-primary/90 text-white':'bg-muted'}`}>
                             {!mine && sender && <p className="text-[9px] font-semibold text-primary mb-0.5">{sender.name}</p>}
                             {m.type==='image' && m.mediaUrl && (
-                              <img src={m.mediaUrl} alt={t('devPanel.messages.imageAlt')} loading="lazy" decoding="async" className="rounded-xl max-w-full max-h-52 object-cover mb-1 cursor-pointer" onClick={()=>window.open(m.mediaUrl,'_blank')}/>
+                              <img src={m.mediaUrl} alt={t('devPanel.messages.imageAlt')} decoding="async" className="rounded-xl max-w-full max-h-52 object-cover mb-1 cursor-pointer" onClick={()=>window.open(m.mediaUrl,'_blank')}/>
                             )}
                             {m.type==='video' && m.mediaUrl && (
                               <video src={m.mediaUrl} controls preload="metadata" className="rounded-xl max-w-full max-h-52 mb-1"/>

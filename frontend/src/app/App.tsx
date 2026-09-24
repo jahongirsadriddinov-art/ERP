@@ -2931,7 +2931,7 @@ function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSe
                     {m.type === 'video' ? (
                       <video src={m.url} className="w-full h-full object-cover" controls playsInline />
                     ) : (
-                      <img src={m.url} alt="" loading="lazy" className="w-full h-full object-cover cursor-pointer" onClick={() => window.open(m.url, '_blank')} />
+                      <img src={m.url} alt="" className="w-full h-full object-cover cursor-pointer" onClick={() => window.open(m.url, '_blank')} />
                     )}
                     <div className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[9px] px-1.5 py-1 flex items-center justify-between">
                       <span className="truncate">{m.uploadedBy?.name || '—'}</span>
@@ -3678,7 +3678,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
           </div>
         )}
         {m.type==='image' && m.mediaUrl && (
-          <img src={m.mediaUrl} alt={tChat('chat.imageAlt')} loading="lazy" decoding="async" className="rounded-xl max-w-full max-h-52 object-cover mb-1 cursor-pointer" onClick={()=>window.open(m.mediaUrl,'_blank')}/>
+          <img src={m.mediaUrl} alt={tChat('chat.imageAlt')} decoding="async" className="rounded-xl max-w-full max-h-52 object-cover mb-1 cursor-pointer" onClick={()=>window.open(m.mediaUrl,'_blank')}/>
         )}
         {m.type==='video' && m.mediaUrl && (
           <video src={m.mediaUrl} controls preload="metadata" className="rounded-xl max-w-full max-h-52 mb-1"/>
@@ -5914,7 +5914,7 @@ export function ClientViewPage({ token }: { token: string }) {
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {data.media.map((m, i) => (
                 <div key={i} className="relative rounded-xl overflow-hidden bg-muted aspect-square">
-                  {m.type === 'video' ? <video src={m.url} className="w-full h-full object-cover" controls playsInline /> : <img src={m.url} alt="" loading="lazy" className="w-full h-full object-cover" />}
+                  {m.type === 'video' ? <video src={m.url} className="w-full h-full object-cover" controls playsInline /> : <img src={m.url} alt="" className="w-full h-full object-cover" />}
                 </div>
               ))}
             </div>

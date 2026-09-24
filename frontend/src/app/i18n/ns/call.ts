@@ -21,6 +21,13 @@ export const uz = {
     hangup: "Qo'ng'iroqni tugatish",
     switchToNormal: "Oddiy dinamikka o'tish",
     switchToSpeaker: "Karnayga o'tish",
+    leaveVideoChat: "Video chatdan chiqish",
+    endForEveryone: "Hammaga yakunlash",
+    inviteToVideoChat: "Taklif qilish",
+    inviteSent: "Taklif yuborildi",
+    videoChatInviteText: "🎥 {{name}} sizni \"{{group}}\" guruhining video chatiga taklif qildi",
+    joinVideoChatBtn: "Qo'shilish",
+    close: "Yopish",
   },
 };
 
@@ -47,5 +54,12 @@ export const ru = {
     hangup: "Завершить звонок",
     switchToNormal: "Переключить на обычный динамик",
     switchToSpeaker: "Переключить на громкую связь",
+    leaveVideoChat: "Покинуть видеочат",
+    endForEveryone: "Завершить для всех",
+    inviteToVideoChat: "Пригласить",
+    inviteSent: "Приглашение отправлено",
+    videoChatInviteText: "🎥 {{name}} приглашает вас в видеочат группы \"{{group}}\"",
+    joinVideoChatBtn: "Присоединиться",
+    close: "Закрыть",
   },
 };

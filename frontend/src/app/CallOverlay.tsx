@@ -10,11 +10,12 @@ import SwitchCamera from "@hugeicons/core-free-icons/CameraRotated01Icon";
 import ZoomIn from "@hugeicons/core-free-icons/ZoomInIcon";
 import VolumeHigh from "@hugeicons/core-free-icons/VolumeHighIcon";
 import VolumeLow from "@hugeicons/core-free-icons/VolumeLowIcon";
+import X from "@hugeicons/core-free-icons/Cancel01Icon";
 import { MorphIcon } from "morphicons/react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import { getSocket } from "./socket";
-import { AppUser, ActiveCall } from "./App";
+import { AppUser, ActiveCall, Msg } from "./App";
 import { playSound } from "./sound";
 import { API_BASE } from "./api";
 
@@ -83,9 +84,10 @@ async function resolveIceConfig(): Promise<RTCConfiguration> {
   return buildIceConfig();
 }
 
-export default function CallOverlay({ currentUser, users, call, onClose }:
-  { currentUser: AppUser; users: AppUser[]; call: ActiveCall; onClose: () => void }) {
+export default function CallOverlay({ currentUser, users, call, onClose, onSendMessage }:
+  { currentUser: AppUser; users: AppUser[]; call: ActiveCall; onClose: () => void; onSendMessage?: (m: Msg) => void }) {
   const { t } = useTranslation();
+  const [showInvite, setShowInvite] = useState(false);
   const socket = getSocket();
   const localRef = useRef<HTMLVideoElement>(null);
   const localStream = useRef<MediaStream | null>(null);
@@ -217,7 +219,18 @@ export default function CallOverlay({ currentUser, users, call, onClose }:
         // accept() shu promise'ni kutib turib stream tayyor bo'lgandan keyin createAnswer qiladi
         streamReadyResolve.current?.(stream);
       } catch (e: any) { toast.error(t('call.permissionRequired', { message: e?.message || '' })); onClose(); return; }
-      if (call.direction === 'out') {
+      if (call.videoChat && call.groupId) {
+        // Telegram-ga o'xshash guruh video chat — hech kim CHAQIRILMAYDI.
+        // "Boshlash yoki qo'shilish" — bittasi (backend allaqachon faol
+        // bo'lsa "qo'shilish"ga aylantiradi), so'ng call:join — bu ALLAQACHON
+        // xonada bo'lgan har bir kishining CallOverlay'i (onJoin orqali)
+        // bizga offerTo() qiladi, mesh shu tarzda tabiiy tarzda o'sadi.
+        // "Ringing" tushunchasi yo'q — mahalliy media tayyor bo'lishi bilan
+        // "ulangan" deb hisoblanadi (yolg'iz bo'lsak ham).
+        socket?.emit('videochat:start', { groupId: call.groupId, mode: call.mode });
+        socket?.emit('call:join', { groupId: call.groupId, from: currentUser.id });
+        setStatus('connected');
+      } else if (call.direction === 'out') {
         const targets = call.groupId ? (call.memberIds || []) : (call.peerId ? [call.peerId] : []);
         targets.forEach(t => offerTo(t));
       }
@@ -254,6 +267,15 @@ export default function CallOverlay({ currentUser, users, call, onClose }:
     };
     const onEnd = (d: any) => { playSound('disconnect'); closePeer(d.from); if (Object.keys(pcs.current).length === 0) onClose(); };
     const onReject = (d: any) => { toast.message(t('call.declined')); onEnd(d); };
+    // Video chatni BOSHLAGAN odam "hammaga yakunlash"ni bossa — bu HAMMA
+    // ishtirokchi uchun keladi (call:end'dan farqli, bu shartsiz yopiladi,
+    // o'zining pcs.current bo'sh-bo'shligiga qaramasdan).
+    const onVideoChatEnded = (d: any) => {
+      if (call.videoChat && call.groupId && d.groupId === call.groupId) {
+        playSound('disconnect');
+        onClose();
+      }
+    };
 
     socket?.on('call:answer', onAnswer);
     socket?.on('call:ice', onIce);
@@ -261,14 +283,17 @@ export default function CallOverlay({ currentUser, users, call, onClose }:
     socket?.on('call:join', onJoin);
     socket?.on('call:end', onEnd);
     socket?.on('call:reject', onReject);
+    socket?.on('videochat:ended', onVideoChatEnded);
 
     return () => {
       cancelled = true;
       socket?.off('call:answer', onAnswer); socket?.off('call:ice', onIce); socket?.off('call:offer', onOffer);
       socket?.off('call:join', onJoin); socket?.off('call:end', onEnd); socket?.off('call:reject', onReject);
+      socket?.off('videochat:ended', onVideoChatEnded);
       Object.values(pcs.current).forEach(pc => pc.close()); pcs.current = {};
       Object.values(statsTimers.current).forEach(clearInterval); statsTimers.current = {};
       localStream.current?.getTracks().forEach(t => t.stop());
+      if (call.videoChat && call.groupId) socket?.emit('videochat:leave', { groupId: call.groupId });
     };
   }, []);
 
@@ -284,8 +309,32 @@ export default function CallOverlay({ currentUser, users, call, onClose }:
     socket?.emit('call:answer', { to: from, from: currentUser.id, sdp: ans });
     if (call.groupId) socket?.emit('call:join', { groupId: call.groupId, from: currentUser.id });
   };
+  // Aniq odamni video chatga taklif qilish — oddiy DM xabar sifatida
+  // yuboriladi (backend'da 'video_invite' turi), chatda maxsus "Qo'shilish"
+  // tugmasi bilan ko'rinadi (App.tsx'dagi renderBubble'ga qarang).
+  const inviteUser = (userId: string) => {
+    if (!call.groupId || !onSendMessage) return;
+    onSendMessage({
+      id: `msg${Date.now()}_${Math.round(Math.random() * 1e6)}`,
+      fromUserId: currentUser.id, toUserId: userId, text: t('call.videoChatInviteText', { name: currentUser.name, group: call.groupName || '' }),
+      timestamp: new Date().toISOString(), read: false,
+      type: 'video_invite', videoChatGroupId: call.groupId,
+    });
+    toast.success(t('call.inviteSent'));
+    setShowInvite(false);
+  };
   const decline = () => { playSound('disconnect'); socket?.emit('call:reject', { to: call.peerId, from: currentUser.id }); onClose(); };
   const hangup = () => { playSound('disconnect'); Object.keys(pcs.current).forEach(pid => socket?.emit('call:end', { to: pid, from: currentUser.id })); onClose(); };
+  // Faqat video chatni BOSHLAGAN odam ko'radi — hammaga (butun xonaga)
+  // tugatadi, oddiy "chiqish"dan farqli (backend serverda ham
+  // startedBy'ni tekshiradi — bu yerdagi shart faqat TUGMANI yashirish
+  // uchun, xavfsizlik uchun emas).
+  const endVideoChatForEveryone = () => {
+    if (!call.groupId) return;
+    playSound('disconnect');
+    socket?.emit('videochat:end', { groupId: call.groupId });
+    onClose();
+  };
   const toggleMute = () => { const m = !muted; localStream.current?.getAudioTracks().forEach(t => t.enabled = !m); setMuted(m); };
   const toggleCam = () => { const c = !camOff; localStream.current?.getVideoTracks().forEach(t => t.enabled = !c); setCamOff(c); };
 
@@ -454,10 +503,55 @@ export default function CallOverlay({ currentUser, users, call, onClose }:
                 <MorphIcon icon={SwitchCamera} className={`w-5 h-5 ${flipping ? 'animate-pulse' : ''}`} />
               </button>
             )}
-            <button onClick={hangup} aria-label={t('call.hangup')} className="w-16 h-16 rounded-full bg-red-500 text-white flex items-center justify-center active:scale-95 shadow-lg"><MorphIcon icon={PhoneOff} className="w-6 h-6" /></button>
+            {call.videoChat && !!call.groupMemberIds?.length && (
+              <button onClick={() => setShowInvite(true)} aria-label={t('call.inviteToVideoChat')} title={t('call.inviteToVideoChat')}
+                className="w-14 h-14 rounded-full flex items-center justify-center text-white active:scale-95 bg-white/10">
+                <MorphIcon icon={Users2} className="w-5 h-5" />
+              </button>
+            )}
+            {/* "Hammaga yakunlash" — FAQAT video chatni boshlagan odamga
+                ko'rinadi (butun xonani yopadi), oddiy "Chiqish"dan alohida
+                tugma sifatida — boshqalarga bu tugma umuman ko'rsatilmaydi,
+                ular faqat chiqishi (pastdagi hangup) mumkin. */}
+            {call.videoChat && call.startedBy === currentUser.id && (
+              <button onClick={endVideoChatForEveryone} aria-label={t('call.endForEveryone')} title={t('call.endForEveryone')}
+                className="w-14 h-14 rounded-full flex items-center justify-center text-white active:scale-95 bg-red-500/25 border-2 border-red-500">
+                <MorphIcon icon={PhoneOff} className="w-5 h-5 text-red-400" />
+              </button>
+            )}
+            <button onClick={hangup} aria-label={call.videoChat ? t('call.leaveVideoChat') : t('call.hangup')} className="w-16 h-16 rounded-full bg-red-500 text-white flex items-center justify-center active:scale-95 shadow-lg"><MorphIcon icon={PhoneOff} className="w-6 h-6" /></button>
           </>
         )}
       </div>
+
+      {/* Taklif qilish — guruh a'zolaridan hali xonada yo'qlarni tanlash */}
+      {showInvite && (
+        <div className="absolute inset-0 bg-black/70 flex items-end sm:items-center justify-center p-4 z-10" onClick={() => setShowInvite(false)}>
+          <div className="bg-[#131A2C] rounded-2xl w-full max-w-sm max-h-[70vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
+              <p className="text-white text-sm font-bold">{t('call.inviteToVideoChat')}</p>
+              <button onClick={() => setShowInvite(false)} aria-label={t('call.close')} className="text-white/60 hover:text-white p-1"><MorphIcon icon={X} className="w-4 h-4" /></button>
+            </div>
+            <div className="overflow-y-auto">
+              {(call.groupMemberIds || [])
+                .filter(uid => uid !== currentUser.id && !remote[uid])
+                .map(uid => {
+                  const u = userById(uid);
+                  if (!u) return null;
+                  return (
+                    <button key={uid} onClick={() => inviteUser(uid)} className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/5 text-left">
+                      <div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">{u.name.charAt(0)}</div>
+                      <span className="text-white text-sm flex-1 truncate">{u.name}</span>
+                    </button>
+                  );
+                })}
+              {(call.groupMemberIds || []).filter(uid => uid !== currentUser.id && !remote[uid]).length === 0 && (
+                <p className="text-white/50 text-sm text-center py-8">{t('common.notFound')}</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

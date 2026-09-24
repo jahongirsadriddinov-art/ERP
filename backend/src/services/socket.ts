@@ -3,6 +3,7 @@ import type { Server as HttpServer } from 'http';
 import jwt from 'jsonwebtoken';
 import { JWT_SECRET, JwtPayload, loadFreshUser } from '../middleware/auth';
 import Group from '../models/Group';
+import User from '../models/User';
 import { sendPushToUser } from './push';
 
 let io: Server | null = null;
@@ -127,6 +128,89 @@ export function initSocket(httpServer: HttpServer): Server {
     socket.on('call:end', relay('call:end'));
     socket.on('call:reject', relay('call:reject'));
     socket.on('call:join', relay('call:join'));
+
+    // ── Guruh video chat (Telegram-ga o'xshash) ─────────────────────────────
+    // Yuqoridagi call:* WebRTC signalizatsiyasidan FARQLI — bu yerda hech
+    // kim "chaqirilmaydi" (rings), shunchaki guruhda "video chat FAOL"
+    // holati saqlanadi (Group.activeVideoChat), shu bilan boshqa a'zolar
+    // guruhni keyinroq ochsa ham "Qo'shilish" tugmasini ko'radi. Haqiqiy
+    // media ulanishi (offer/answer/ice) hamon call:* orqali, frontend
+    // o'zi qo'shimcha ravishda call:join'ni ham chaqiradi.
+    const requireMembership = async (groupId: string): Promise<any> => {
+      const group = await Group.findById(groupId).catch(() => null);
+      if (!group || !(group.memberIds || []).includes(userId)) return null;
+      return group;
+    };
+    socket.on('videochat:start', async (data: { groupId?: string; mode?: 'voice' | 'video' }) => {
+      if (!data?.groupId) return;
+      const group = await requireMembership(data.groupId);
+      if (!group) return;
+      if (!group.activeVideoChat) {
+        const starter = await User.findById(userId).select('firstName lastName').lean().catch(() => null);
+        group.activeVideoChat = {
+          startedBy: userId,
+          startedByName: starter ? `${starter.firstName || ''} ${starter.lastName || ''}`.trim() || 'Xodim' : 'Xodim',
+          startedAt: new Date(),
+          mode: data.mode === 'voice' ? 'voice' : 'video',
+          participantIds: [userId],
+        } as any;
+        await group.save();
+        io?.to(`group:${data.groupId}`).emit('videochat:active', { groupId: data.groupId, ...group.activeVideoChat });
+        // Guruhdagi boshqa a'zolarga (ilova fon/yopiq bo'lsa ham) push —
+        // call:offer'dagi bilan bir xil naqsh.
+        (group.memberIds || []).forEach((mid: string) => {
+          if (mid === userId) return;
+          sendPushToUser(mid, {
+            title: '📹 Guruh video chat',
+            body: `${group.activeVideoChat!.startedByName} video chat boshladi — qo'shilish uchun bosing`,
+            tag: 'videochat',
+          }).catch(() => {});
+        });
+      } else {
+        // Allaqachon faol — bu "boshlash" emas, "qo'shilish" bo'ladi.
+        if (!group.activeVideoChat.participantIds.includes(userId)) {
+          group.activeVideoChat.participantIds.push(userId);
+          await group.save();
+        }
+        io?.to(`group:${data.groupId}`).emit('videochat:participants', { groupId: data.groupId, participantIds: group.activeVideoChat.participantIds });
+      }
+    });
+    socket.on('videochat:join', async (data: { groupId?: string }) => {
+      if (!data?.groupId) return;
+      const group = await requireMembership(data.groupId);
+      if (!group?.activeVideoChat) return;
+      if (!group.activeVideoChat.participantIds.includes(userId)) {
+        group.activeVideoChat.participantIds.push(userId);
+        await group.save();
+      }
+      io?.to(`group:${data.groupId}`).emit('videochat:participants', { groupId: data.groupId, participantIds: group.activeVideoChat.participantIds });
+    });
+    socket.on('videochat:leave', async (data: { groupId?: string }) => {
+      if (!data?.groupId) return;
+      const group = await requireMembership(data.groupId);
+      if (!group?.activeVideoChat) return;
+      group.activeVideoChat.participantIds = group.activeVideoChat.participantIds.filter((id: string) => id !== userId);
+      if (group.activeVideoChat.participantIds.length === 0) {
+        group.activeVideoChat = undefined;
+        await group.save();
+        io?.to(`group:${data.groupId}`).emit('videochat:ended', { groupId: data.groupId });
+      } else {
+        await group.save();
+        io?.to(`group:${data.groupId}`).emit('videochat:participants', { groupId: data.groupId, participantIds: group.activeVideoChat.participantIds });
+      }
+    });
+    // XAVFSIZLIK: "hammaga tugatish" FAQAT boshlagan odam uchun — bu
+    // tekshiruv MAJBURIY ravishda SERVERDA, chunki mijoz kodini o'zgartirib
+    // (masalan brauzer konsolidan) tekshiruvsiz shu hodisani yuborishi
+    // mumkin edi.
+    socket.on('videochat:end', async (data: { groupId?: string }) => {
+      if (!data?.groupId) return;
+      const group = await requireMembership(data.groupId);
+      if (!group?.activeVideoChat || group.activeVideoChat.startedBy !== userId) return;
+      group.activeVideoChat = undefined;
+      await group.save();
+      io?.to(`group:${data.groupId}`).emit('videochat:ended', { groupId: data.groupId });
+    });
 
     socket.on('disconnect', () => {
       if (userId) { removeUserSocket(userId, socket.id); broadcastPresence(); }

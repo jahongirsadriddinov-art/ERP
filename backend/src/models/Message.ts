@@ -7,7 +7,8 @@ export interface IMessage extends Document {
   text: string;
   timestamp: string;
   read: boolean;
-  type?: 'text' | 'image' | 'video' | 'file' | 'audio' | 'location';
+  type?: 'text' | 'image' | 'video' | 'file' | 'audio' | 'location' | 'video_invite';
+  videoChatGroupId?: string;
   mediaUrl?: string;
   fileName?: string;
   fileSize?: number;
@@ -26,7 +27,11 @@ const MessageSchema: Schema = new Schema({
   text: { type: String, default: '' },
   timestamp: { type: String },
   read: { type: Boolean, default: false },
-  type: { type: String, enum: ['text', 'image', 'video', 'file', 'audio', 'location'] },
+  type: { type: String, enum: ['text', 'image', 'video', 'file', 'audio', 'location', 'video_invite'] },
+  // 'video_invite' xabarlari uchun — qaysi guruhning video chatiga
+  // taklif qilinganini bildiradi (bu DM xabari, `groupId` maydoni band —
+  // u guruh xabari ekanini emas, "qaysi guruh"ni bildirish uchun ishlatiladi).
+  videoChatGroupId: { type: String },
   mediaUrl: { type: String },
   fileName: { type: String },
   fileSize: { type: Number },

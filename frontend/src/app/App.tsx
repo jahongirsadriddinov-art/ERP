@@ -199,9 +199,10 @@ export interface Expense {
 export interface Msg {
   id: string; fromUserId: string; toUserId: string; groupId?: string;
   text: string; timestamp: string; read: boolean;
-  type?: 'text'|'image'|'video'|'file'|'audio'|'location';
+  type?: 'text'|'image'|'video'|'file'|'audio'|'location'|'video_invite';
   mediaUrl?: string; fileName?: string; fileSize?: number;
   location?: { lat: number; lng: number };
+  videoChatGroupId?: string; // 'video_invite' xabari — qaysi guruhning video chatiga taklif
   replyToId?: string; edited?: boolean; pinned?: boolean; deleted?: boolean;
   // Optimistik yuborish holati — faqat lokal, serverga hech qachon
   // yuborilmaydi/saqlanmaydi. Yo'q (undefined) === serverdan kelgan/
@@ -209,10 +210,18 @@ export interface Msg {
   // "failed" — yuborilmadi, qayta urinish (retry) ko'rsatiladi.
   status?: 'sending' | 'failed';
 }
+// Telegram-ga o'xshash "guruh video chat" — hech kim chaqirilmaydi,
+// istalgan a'zo istalgan vaqt qo'shilishi/chiqishi mumkin (App.tsx'dagi
+// videochat:* socket hodisalariga qarang).
+export interface ActiveVideoChat {
+  startedBy: string; startedByName: string; startedAt: string;
+  mode: 'voice'|'video'; participantIds: string[];
+}
 interface Group {
   id: string; name: string; avatar?: string;
   memberIds: string[]; adminIds: string[]; createdBy: string;
   devSupport?: boolean;
+  activeVideoChat?: ActiveVideoChat;
 }
 export interface ActiveCall {
   direction: 'out'|'in';
@@ -222,6 +231,15 @@ export interface ActiveCall {
   memberIds?: string[];  // guruhda chaqiriladigan a'zolar
   offer?: any;           // incoming SDP offer
   fromName?: string;
+  // Telegram-ga o'xshash guruh video chat belgisi — true bo'lsa, CallOverlay
+  // hech kimni "chaqirmaydi" (memberIds bo'sh), o'rniga videochat:start/join
+  // hodisalarini yuboradi; faqat startedBy === joriy user bo'lsa "hammaga
+  // yakunlash" tugmasi ko'rinadi.
+  videoChat?: boolean;
+  startedBy?: string;
+  startedByName?: string;
+  groupName?: string;        // taklif xabari matni uchun
+  groupMemberIds?: string[]; // taklif qilish uchun a'zolar ro'yxati (memberIds — ringing uchun — bo'sh qoldiriladi)
 }
 
 // ─── Smeta (deterministik parser natijasi — POST /api/smeta/parse) ─────────────
@@ -3462,7 +3480,7 @@ export function VoicePlayer({ src, mine }: { src: string; mine?: boolean }) {
 }
 
 // ─── Chat Page ─────────────────────────────────────────────────────────────────
-function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, onMarkRead, onEdit, onDelete, onPin, onChatOpen, onCreateGroup, onStartCall, canModifyMessages, onGetDevSupport, onRenameGroup, onAddGroupMembers, onRemoveGroupMember, onLeaveGroup, onDeleteGroup }:
+function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, onMarkRead, onEdit, onDelete, onPin, onChatOpen, onCreateGroup, onStartCall, onStartVideoChat, canModifyMessages, onGetDevSupport, onRenameGroup, onAddGroupMembers, onRemoveGroupMember, onLeaveGroup, onDeleteGroup }:
   {
     currentUser: AppUser; users: AppUser[]; messages: Msg[];
     groups: Group[]; onlineUsers: string[];
@@ -3473,6 +3491,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
     onChatOpen: (open: boolean) => void;
     onCreateGroup: (name: string, memberIds: string[]) => Promise<any>;
     onStartCall: (mode: 'voice'|'video', target: { peer?: AppUser; group?: Group }) => void;
+    onStartVideoChat: (group: Group) => void;
     canModifyMessages?: boolean;
     onGetDevSupport?: () => Promise<Group|null>;
     onRenameGroup: (groupId: string, name: string) => Promise<void>;
@@ -3713,6 +3732,23 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
             <div><p className="text-xs font-medium">{tChat('chat.locationLabel')}</p><p className="text-[10px] opacity-70">{m.location.lat.toFixed(4)}, {m.location.lng.toFixed(4)}</p></div>
           </a>
         )}
+        {/* Video chatga taklif — bosilsa TO'G'RIDAN-TO'G'RI o'sha guruhning
+            video chatiga qo'shiladi (aniq talab: "taklifni bossa video
+            chatga avtomatik o'tadigan bo'lsin"). */}
+        {m.type==='video_invite' && (
+          <button onClick={() => {
+            const g = groups.find(gr => gr.id === m.videoChatGroupId);
+            if (g) onStartVideoChat(g); else toast.error(tChat('common.notFound'));
+          }} className="flex items-center gap-2.5 bg-green-500/10 border border-green-500/30 rounded-xl px-3 py-2.5 mb-1 hover:bg-green-500/20 liquid-transition text-left w-full">
+            <span className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center flex-shrink-0">
+              <MorphIcon icon={VideoIcon} className="w-4 h-4 text-green-500" />
+            </span>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-bold text-green-600 dark:text-green-400">{tChat('call.joinVideoChatBtn')}</p>
+              <p className="text-[11px] opacity-70 truncate">{m.text}</p>
+            </div>
+          </button>
+        )}
         {/* XATO TUZATILDI: avval bu tekshiruv m.text'ni QATTIQ KODLANGAN
             o'zbekcha yorliqlar bilan solishtirardi ("🖼️ Rasm" va h.k.) —
             xabar matni endi jo'natuvchining o'sha paytdagi tiliga qarab
@@ -3720,7 +3756,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
             ko'rayotgan qabul qiluvchi uchun solishtiruv mos kelmay, avtomatik
             yorliq rasm/video ostida QAYTA matn sifatida ham chiqib qolardi.
             m.type — til-mustaqil, doim to'g'ri ishlaydi. */}
-        {m.text && !(m.type && (['image','video','audio','location'] as (string|undefined)[]).includes(m.type)) && (
+        {m.text && !(m.type && (['image','video','audio','location','video_invite'] as (string|undefined)[]).includes(m.type)) && (
           <p className="leading-relaxed whitespace-pre-wrap break-words text-sm md:text-xs">{m.text}</p>
         )}
       </>
@@ -3856,13 +3892,28 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
               <button type="button" onClick={() => selGroup && !selGroup.devSupport && setShowGroupSettings(true)} className="flex-1 min-w-0 text-left" disabled={!selGroup || selGroup.devSupport}>
                 <p className="text-sm font-semibold truncate">{selGroup ? (selGroup.devSupport ? tChat('common.roles.dasturchi') : selGroup.name) : selUser!.name}</p>
                 {selGroup
-                  ? <p className="text-[11px] text-muted-foreground truncate">{selGroup.devSupport ? tChat('chat.devSupportSubtitle') : tChat('chat.memberCount', { count: selGroup.memberIds?.length || 0 })}</p>
+                  ? (selGroup.activeVideoChat
+                      ? <p className="text-[11px] text-green-600 dark:text-green-400 truncate font-medium">{tChat('chat.videoChatActive', { count: selGroup.activeVideoChat.participantIds.length })}</p>
+                      : <p className="text-[11px] text-muted-foreground truncate">{selGroup.devSupport ? tChat('chat.devSupportSubtitle') : tChat('chat.memberCount', { count: selGroup.memberIds?.length || 0 })}</p>)
                   : <p className="text-[11px] text-muted-foreground">{isOnline(selUser!.id) ? <span className="text-green-800 dark:text-green-400">onlayn</span> : roleLabel(tChat, selUser!.role)}</p>}
               </button>
               {!selectMode && !selGroup?.devSupport && (
                 <div className="flex items-center gap-1 flex-shrink-0">
                   <button onClick={() => onStartCall('voice', { peer: selUser || undefined, group: selGroup || undefined })} title={tChat('chat.voiceCall')} aria-label={tChat('chat.voiceCall')} className="btn btn-ghost w-9 h-9 p-0 rounded-full text-primary"><MorphIcon icon={Phone} className="w-[18px] h-[18px]" /></button>
-                  <button onClick={() => onStartCall('video', { peer: selUser || undefined, group: selGroup || undefined })} title={tChat('chat.videoCall')} aria-label={tChat('chat.videoCall')} className="btn btn-ghost w-9 h-9 p-0 rounded-full text-primary"><MorphIcon icon={VideoIcon} className="w-[18px] h-[18px]" /></button>
+                  {/* Guruhda — Telegram-ga o'xshash DOIMIY video chat: hech
+                      kim chaqirilmaydi, faol bo'lsa yashil nuqta bilan
+                      "qo'shilish", aks holda oddiy "boshlash" ko'rinishi. */}
+                  {selGroup ? (
+                    <button onClick={() => onStartVideoChat(selGroup)}
+                      title={selGroup.activeVideoChat ? tChat('chat.videoChatJoin') : tChat('chat.videoCall')}
+                      aria-label={selGroup.activeVideoChat ? tChat('chat.videoChatJoin') : tChat('chat.videoCall')}
+                      className={`btn w-9 h-9 p-0 rounded-full relative ${selGroup.activeVideoChat ? 'bg-green-500/15 text-green-600 dark:text-green-400' : 'btn-ghost text-primary'}`}>
+                      <MorphIcon icon={VideoIcon} className="w-[18px] h-[18px]" />
+                      {selGroup.activeVideoChat && <span className="absolute top-0.5 right-0.5 w-2 h-2 bg-green-500 rounded-full animate-pulse border border-card" />}
+                    </button>
+                  ) : (
+                    <button onClick={() => onStartCall('video', { peer: selUser || undefined })} title={tChat('chat.videoCall')} aria-label={tChat('chat.videoCall')} className="btn btn-ghost w-9 h-9 p-0 rounded-full text-primary"><MorphIcon icon={VideoIcon} className="w-[18px] h-[18px]" /></button>
+                  )}
                   {selGroup && <button onClick={() => setShowGroupSettings(true)} title={tChat('groupSettings.title')} aria-label={tChat('groupSettings.title')} className="btn btn-ghost w-9 h-9 p-0 rounded-full text-muted-foreground"><MorphIcon icon={Settings} className="w-[18px] h-[18px]" /></button>}
                 </div>
               )}
@@ -6588,6 +6639,26 @@ export default function App() {
         setActiveCall({ direction: 'in', mode: d.mode || 'voice', peerId: d.from, groupId: d.groupId, offer: d.sdp, fromName: d.fromName });
       };
 
+      // Guruh video chat (Telegram-ga o'xshash) — bu HECH KIMNI chaqirmaydi,
+      // shu sabab `call:offer` orqali emas, alohida `videochat:*`
+      // hodisalari orqali keladi. Faqat guruh ro'yxatidagi (`groups`)
+      // `activeVideoChat` maydonini yangilaydi — bu "Qo'shilish" banerini
+      // ko'rsatish uchun yetarli, haqiqiy media ulanishi CallOverlay o'zi
+      // (call:join/offer orqali) boshqaradi.
+      const onVideoChatActive = (d: any) => {
+        setGroups(prev => prev.map(g => g.id === d.groupId
+          ? { ...g, activeVideoChat: { startedBy: d.startedBy, startedByName: d.startedByName, startedAt: d.startedAt, mode: d.mode, participantIds: d.participantIds } }
+          : g));
+      };
+      const onVideoChatParticipants = (d: any) => {
+        setGroups(prev => prev.map(g => g.id === d.groupId && g.activeVideoChat
+          ? { ...g, activeVideoChat: { ...g.activeVideoChat, participantIds: d.participantIds } }
+          : g));
+      };
+      const onVideoChatEnded = (d: any) => {
+        setGroups(prev => prev.map(g => g.id === d.groupId ? { ...g, activeVideoChat: undefined } : g));
+      };
+
       // Til boshqa qurilmadan (masalan bot orqali) o'zgartirilsa — shu yerda ham
       // darhol yangi tilga o'tadi (va aksincha, sayt orqali o'zgartirsa botga ham boradi).
       // Adminlar uchun GPS real-time update
@@ -6643,6 +6714,9 @@ export default function App() {
       socket.on("group:update", onGroupUpdate);
       socket.on("group:removed", onGroupRemoved);
       socket.on("call:offer", onCallOffer);
+      socket.on("videochat:active", onVideoChatActive);
+      socket.on("videochat:participants", onVideoChatParticipants);
+      socket.on("videochat:ended", onVideoChatEnded);
       socket.on("transaction:update", onTxUpdate);
       socket.on("transaction:new", onTxNew);
       socket.on("user:language", onLanguage);
@@ -6686,6 +6760,9 @@ export default function App() {
         socket.off("group:update", onGroupUpdate);
         socket.off("group:removed", onGroupRemoved);
         socket.off("call:offer", onCallOffer);
+        socket.off("videochat:active", onVideoChatActive);
+        socket.off("videochat:participants", onVideoChatParticipants);
+        socket.off("videochat:ended", onVideoChatEnded);
         socket.off("user:language", onLanguage);
         socket.off("transaction:update", onTxUpdate);
         socket.off("transaction:new", onTxNew);
@@ -7221,6 +7298,19 @@ export default function App() {
     if (target.group) setActiveCall({ direction: 'out', mode, groupId: target.group.id, memberIds: (target.group.memberIds || []).filter(id => id !== liveUser.id) });
     else if (target.peer) setActiveCall({ direction: 'out', mode, peerId: target.peer.id });
   };
+  // Guruh video chat (Telegram-ga o'xshash) — oddiy qo'ng'iroqdan farqli,
+  // HECH KIM chaqirilmaydi (`memberIds: []`) — CallOverlay buni ko'rib,
+  // shunchaki mahalliy media tayyorlaydi va videochat:start/join hodisasini
+  // yuboradi. Boshlash va qo'shilish bir xil — farqi faqat `startedBy`da
+  // (guruhda allaqachon faol bo'lsa, o'shani ishlatamiz).
+  const handleStartOrJoinVideoChat = (group: Group) => {
+    const active = group.activeVideoChat;
+    setActiveCall({
+      direction: 'out', mode: active?.mode || 'video', groupId: group.id, memberIds: [],
+      videoChat: true, startedBy: active?.startedBy || liveUser.id, startedByName: active?.startedByName || liveUser.name,
+      groupName: group.name, groupMemberIds: group.memberIds,
+    });
+  };
   const handleUpdateAvatar = (url: string) => setUsers(p=>p.map(u=>u.id===liveUser.id?{...u,avatar:url}:u));
   // Deterministik parser natijasini qabul qiladi: byudjet meta'dan, materiallar
   // 'material' guruhidan (to'liq aniq qty), butun natija proj.smeta'da saqlanadi.
@@ -7321,7 +7411,7 @@ export default function App() {
           <ChatPage currentUser={liveUser} users={users} messages={messages} groups={groups} onlineUsers={onlineUsers}
             onSend={handleSendMsg} onMarkRead={handleMarkRead}
             onEdit={handleEditMsg} onDelete={handleDeleteMsg} onPin={handlePinMsg}
-            onChatOpen={open => setChatIsOpen(open)} onCreateGroup={handleCreateGroup} onStartCall={handleStartCall}
+            onChatOpen={open => setChatIsOpen(open)} onCreateGroup={handleCreateGroup} onStartCall={handleStartCall} onStartVideoChat={handleStartOrJoinVideoChat}
             canModifyMessages={liveUser.role === 'direktor' || liveUser.role === 'orinbosar'}
             onGetDevSupport={handleGetDevSupport}
             onRenameGroup={handleRenameGroup} onAddGroupMembers={handleAddGroupMembers}
@@ -7428,7 +7518,7 @@ export default function App() {
       {/* Qo'ng'iroq (WebRTC) */}
       {activeCall && (
         <Suspense fallback={null}>
-          <CallOverlay currentUser={liveUser} users={users} call={activeCall} onClose={() => setActiveCall(null)}/>
+          <CallOverlay currentUser={liveUser} users={users} call={activeCall} onClose={() => setActiveCall(null)} onSendMessage={handleSendMsg}/>
         </Suspense>
       )}
 

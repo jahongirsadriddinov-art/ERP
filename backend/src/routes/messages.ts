@@ -292,7 +292,7 @@ router.get('/', async (req, res) => {
 // Xabar yuborish (DM yoki guruh) + real-time broadcast
 router.post('/', async (req, res) => {
   try {
-    const { toUserId, groupId, text, type, mediaUrl, fileName, fileSize, location, replyToId } = req.body;
+    const { toUserId, groupId, text, type, mediaUrl, fileName, fileSize, location, replyToId, videoChatGroupId } = req.body;
     // XAVFSIZLIK: fromUserId AVVAL to'g'ridan-to'g'ri so'rov tanasidan
     // olinardi — istalgan autentifikatsiyalangan foydalanuvchi o'zini
     // BOSHQA birov (hatto boshqa firma xodimi) sifatida ko'rsatib xabar
@@ -302,6 +302,15 @@ router.post('/', async (req, res) => {
     const fromUserId = getTenant()?.userId;
     if (!fromUserId || (!toUserId && !groupId) || (!text?.trim() && !mediaUrl && !location)) {
       return res.status(400).json({ error: 'Avtorizatsiya va (toUserId yoki groupId) va text/media kerak' });
+    }
+    // "Video chatga taklif" xabari — yuboruvchi HAQIQATAN ham o'sha guruh
+    // a'zosi ekanini tekshiramiz, aks holda istalgan kishi istalgan
+    // guruhning video chatiga "taklif" soxtalashtira olardi.
+    if (type === 'video_invite' && videoChatGroupId) {
+      const inviteGroup = await Group.findById(String(videoChatGroupId)).select('memberIds').lean();
+      if (!inviteGroup || !(inviteGroup.memberIds || []).includes(String(fromUserId))) {
+        return res.status(403).json({ error: "Siz bu guruh a'zosi emassiz" });
+      }
     }
     // Suiiste'mol qarshi: har bir xabar Telegram bot orqali relay qilinadi
     // (guruh bo'lsa HAR BIR a'zoga) — cheklovsiz bo'lsa bitta xodim boshqa
@@ -319,6 +328,7 @@ router.post('/', async (req, res) => {
       timestamp: new Date().toISOString(),
       read: false,
       ...(type && { type }),
+      ...(videoChatGroupId && { videoChatGroupId: String(videoChatGroupId) }),
       ...(mediaUrl && { mediaUrl }),
       ...(fileName && { fileName }),
       ...(fileSize != null && { fileSize }),

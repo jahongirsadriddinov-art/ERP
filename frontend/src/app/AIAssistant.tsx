@@ -18,7 +18,7 @@ import { MorphIcon } from "morphicons/react";
 import { useTranslation } from "react-i18next";
 import { API_BASE } from "./api";
 import type { AppUser } from "./App";
-import { useModalPresence } from "./App";
+import { useModalPresenceWhen } from "./App";
 
 interface AiMsg { role: 'user'|'assistant'; content: string; }
 interface AiAction {
@@ -108,7 +108,7 @@ export default function AIAssistant({ currentUser, users, token, open, onClose, 
     onUserUpdated?: (u: AppUser) => void;
   }) {
   const { t, i18n } = useTranslation();
-  useModalPresence();
+  useModalPresenceWhen(open);
   const [msgs, setMsgs] = useState<AiMsg[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);

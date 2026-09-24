@@ -137,6 +137,22 @@ export function useModalPresence() {
     return () => { openModalCount--; notifyModalListeners(); };
   }, []);
 }
+// AIAssistant kabi modallar uchun — ular endi chat tarixini saqlab qolish
+// uchun DOIM montaj qilingan holda qoladi (faqat `open` prop orqali
+// ko'rsatiladi/yashiriladi), shu sabab oddiy `useModalPresence()` (faqat
+// mount/unmount'da hisoblaydigan) ishlatilsa, hisoblagich BIR MARTA
+// ko'tarilib qolib, komponent hech qachon unmount bo'lmagani uchun
+// pastki navbar foydalanuvchi AI oynasini yopgandan keyin ham ABADIY
+// yashirin qolib ketardi (aynan shu sabab "navigation bar umuman
+// ko'rinmayapti" xatosi). Bu variant hisoblagichni `open`ning o'ziga
+// bog'laydi — modal HAQIQATDA ochiq bo'lgandagina hisoblanadi.
+export function useModalPresenceWhen(active: boolean) {
+  useEffect(() => {
+    if (!active) return;
+    openModalCount++; notifyModalListeners();
+    return () => { openModalCount--; notifyModalListeners(); };
+  }, [active]);
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export type Role = "direktor" | "orinbosar" | "prorab" | "brigadir" | "ishchi" | "dasturchi";

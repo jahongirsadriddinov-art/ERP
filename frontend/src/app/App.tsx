@@ -82,6 +82,7 @@ import { AnnouncementComposer, AnnouncementContent, AnnouncementPopup, type Anno
 import { connectSocket, getSocket, disconnectSocket } from "./socket";
 import { motion, AnimatePresence } from "motion/react";
 import { setSiteLanguage, SiteLang, langLabel } from "./i18n";
+import { isTelegramMiniApp, getTelegramInitData, markManualLogout, clearManualLogout, telegramAutoLoginAllowed } from "./telegramWebApp";
 import { installAndroidBackHandler, saveOrShareBlob, openExternalUrl, isNative, isTabletOrLarger } from "./platform";
 import QrLoginPanel from "./QrLoginPanel";
 import { AppDownloadCards } from "./AppDownload";
@@ -200,7 +201,8 @@ export interface Expense {
 export interface Msg {
   id: string; fromUserId: string; toUserId: string; groupId?: string;
   text: string; timestamp: string; read: boolean;
-  type?: 'text'|'image'|'video'|'file'|'audio'|'location'|'video_invite';
+  type?: 'text'|'image'|'video'|'file'|'audio'|'location'|'video_invite'|'video_event';
+  videoEvent?: { kind: 'started'|'ended'; durationSec?: number; by?: string }; // guruhdagi tizim xabari
   mediaUrl?: string; fileName?: string; fileSize?: number;
   location?: { lat: number; lng: number };
   videoChatGroupId?: string; // 'video_invite' xabari — qaysi guruhning video chatiga taklif
@@ -526,6 +528,12 @@ function RoleBadge({ role }: { role: Role }) {
 }
 
 // ─── Notification Bell (liquid-glass dropdown, real data) ─────────────────────
+function fmtVideoDuration(sec: number): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+}
+
 function timeAgoShort(iso: string | undefined, t: (key: string) => string): string {
   if (!iso) return "";
   const diffMs = Date.now() - new Date(iso).getTime();
@@ -1882,7 +1890,7 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
           )}
           <div className="mt-3 pt-3 border-t border-border">
             <p className="text-sm md:text-xs font-semibold text-muted-foreground uppercase mb-2">{t('dashboard.allWorkers')}</p>
-            {users.filter(u => u.role==="ishchi").map(m => (
+            {users.filter(u => u.role==="ishchi" || u.role==="brigadir").map(m => (
               <div key={m.id} className="flex items-center gap-2 py-1.5 px-3 hover:bg-muted/40 rounded transition-colors group mb-1">
                 <Avatar user={m} size="sm"/>
                 <div className="flex-1 min-w-0"><p className="text-sm md:text-xs text-foreground truncate">{m.name}</p></div>
@@ -2037,7 +2045,7 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
                     ))}
                     <div className="pt-2 border-t border-border">
                       <p className="text-sm md:text-xs font-semibold text-muted-foreground uppercase mb-2">{t('dashboard.allWorkers')}</p>
-                      {users.filter(u => u.role==="ishchi").map(m => (
+                      {users.filter(u => u.role==="ishchi" || u.role==="brigadir").map(m => (
                         <div key={m.id} className="flex items-center gap-3 py-2.5 px-2 border-b border-border/30">
                           <Avatar user={m} size="sm"/>
                           <div className="flex-1"><p className="text-sm">{m.name}</p></div>
@@ -3731,7 +3739,18 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
         {m.type==='video_invite' && (
           <button onClick={() => {
             const g = groups.find(gr => gr.id === m.videoChatGroupId);
-            if (g) onStartVideoChat(g); else toast.error(tChat('common.notFound'));
+            if (!g) { toast.error(tChat('common.notFound')); return; }
+            // Havola eskirgan bo'lishi mumkin — avval serverdan holatini so'raymiz.
+            const sock = getSocket();
+            if (!sock) { onStartVideoChat(g); return; }
+            sock.emit('videochat:check', { groupId: g.id }, (r: any) => {
+              if (r?.active) { onStartVideoChat(g); return; }
+              if (r?.lastEndedAt) {
+                const min = Math.max(0, Math.floor((Date.now() - new Date(r.lastEndedAt).getTime()) / 60000));
+                const ago = min < 1 ? tChat('call.agoNow') : min < 60 ? tChat('call.agoMin', { count: min }) : min < 1440 ? tChat('call.agoHour', { count: Math.floor(min / 60) }) : tChat('call.agoDay', { count: Math.floor(min / 1440) });
+                toast.message(tChat('call.videoChatEndedToast', { ago, duration: fmtVideoDuration(r.lastDurationSec || 0) }));
+              } else toast.message(tChat('call.videoChatEndedSimple'));
+            });
           }} className="flex items-center gap-2.5 bg-green-500/10 border border-green-500/30 rounded-xl px-3 py-2.5 mb-1 hover:bg-green-500/20 liquid-transition text-left w-full">
             <span className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center flex-shrink-0">
               <MorphIcon icon={VideoIcon} className="w-4 h-4 text-green-500" />
@@ -3951,6 +3970,17 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
               <div className="min-h-full flex flex-col justify-end gap-1.5 max-w-3xl mx-auto w-full p-3">
               {thread.length===0 && <div className="text-center py-8 text-muted-foreground text-sm">Xabar yo'q. Birinchi bo'ling!</div>}
               {thread.map(m => {
+                if (m.type === 'video_event') {
+                  const ev = m.videoEvent;
+                  const label = ev?.kind === 'ended'
+                    ? tChat('call.videoChatEventEnded', { duration: fmtVideoDuration(ev.durationSec || 0) })
+                    : tChat('call.videoChatEventStarted', { name: ev?.by || '' });
+                  return (
+                    <div key={m.id} className="flex justify-center my-1">
+                      <span className="text-[11px] text-muted-foreground bg-muted/60 border border-border/50 rounded-full px-3 py-1">{label} · {new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    </div>
+                  );
+                }
                 const mine = m.fromUserId===currentUser.id;
                 const isSel = selected.has(m.id);
                 return (
@@ -5506,7 +5536,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
         </button>
 
         <motion.button initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28, delay: 0.26 }}
-          onClick={() => { localStorage.removeItem("currentUser"); localStorage.removeItem("token"); onLogout(); }}
+          onClick={() => { markManualLogout(); localStorage.removeItem("currentUser"); localStorage.removeItem("token"); onLogout(); }}
           className="w-full flex items-center justify-center gap-2.5 text-sm border-2 border-border rounded-2xl px-4 py-3.5 text-muted-foreground hover:bg-red-500/10 hover:text-red-600 hover:border-red-500/30 liquid-transition font-semibold">
           <MorphIcon icon={LogOut} className="w-4 h-4" />{t('profile.logout')}
         </motion.button>
@@ -6072,7 +6102,8 @@ export default function App() {
     // to'g'ridan-to'g'ri kirish ekraniga tushadi, landing sahifasi UMUMAN
     // ko'rsatilmaydi (birinchi o'rnatishda ham). Faqat brauzerda (veb
     // sayt sifatida) birinchi tashrifda landing ko'rsatiladi.
-    if (isNative()) return "login";
+    // Telegram Mini App ham marketing sayti emas — faqat kirish ekrani.
+    if (isNative() || isTelegramMiniApp()) return "login";
     if (typeof window !== "undefined") {
       const sp = new URLSearchParams(window.location.search);
       if (sp.get("rid") || sp.has("register")) return "register";
@@ -6123,6 +6154,37 @@ export default function App() {
   const [companyLogo, setCompanyLogo] = useState(() => localStorage.getItem("erp_companyLogo") || "");
   const [siteBg, setSiteBg] = useState(() => localStorage.getItem("erp_profileBg") || "");
   const [branchId, setBranchId] = useState(() => localStorage.getItem("erp_branchId") || "");
+  // Telegram Mini App: bot orqali ochilganda botga ulangan hisobga avtomatik kirish.
+  // Hisob topilmasa/xato bo'lsa — oddiy login ekrani ko'rsatiladi.
+  const [tgAutoBusy, setTgAutoBusy] = useState(() => telegramAutoLoginAllowed());
+  useEffect(() => {
+    if (!tgAutoBusy) return;
+    let alive = true;
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/auth/telegram-webapp`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ initData: getTelegramInitData() }),
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!alive || !data?.token || !data?.user) return;
+        const u = {
+          id: data.user.id || data.user._id,
+          name: data.user.firstName + (data.user.lastName ? " " + data.user.lastName : ""),
+          phone: data.user.phone, role: data.user.role, projectIds: data.user.projectIds || [],
+          isOwner: data.user.isOwner || false, companyId: data.user.companyId, language: data.user.language,
+        };
+        localStorage.setItem("token", data.token);
+        localStorage.setItem("currentUser", JSON.stringify(u));
+        if (data.user.language) setSiteLanguage(data.user.language);
+        setCurrentUser(u); setPage("dashboard"); applyCompany(data.company);
+      } catch { /* login ekrani ko'rsatiladi */ }
+      finally { if (alive) setTgAutoBusy(false); }
+    })();
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // Firma brendini serverdan (login/register javobidan) qo'llaydi — endi brend
   // qurilma emas, FIRMAGA bog'liq. Boshqa firmaga kirsangiz to'g'ri brend chiqadi.
   const applyCompany = (company: any) => {
@@ -6874,6 +6936,7 @@ export default function App() {
     // shu yerdan chiqarilgan toast() chaqiruvlari (masalan SMS OTP test-rejim
     // kodini ko'rsatish) hech qayerda ko'rinmasdi. Har bir "erta return"
     // filialida o'zining Toaster'i bo'lishi shart.
+    if (tgAutoBusy) return <div className="min-h-screen bg-background flex items-center justify-center"><MorphIcon icon={Loader2} className="w-8 h-8 animate-spin text-primary" /></div>;
     return (
       <>
         {authView === "landing"
@@ -6885,7 +6948,7 @@ export default function App() {
           ? <Suspense fallback={<div className="min-h-screen bg-background"><SkeletonPage variant="form" /></div>}>
               <RegisterWizard onBack={()=>setAuthView("login")} onDone={(u,company)=>{playSound("success");setCurrentUser(u);setPage("dashboard");setAuthView("login");applyCompany(company);}}/>
             </Suspense>
-          : <LoginScreen onLogin={(u,company)=>{playSound("unlock");setCurrentUser(u);setPage("dashboard");applyCompany(company);}} onRegister={()=>setAuthView("register")} onBack={()=>setAuthView("landing")}/>}
+          : <LoginScreen onLogin={(u,company)=>{playSound("unlock");clearManualLogout();setCurrentUser(u);setPage("dashboard");applyCompany(company);}} onRegister={()=>setAuthView("register")} onBack={(isTelegramMiniApp() || isNative()) ? undefined : ()=>setAuthView("landing")}/>}
         <Toaster position="top-center" richColors closeButton/>
       </>
     );
@@ -7060,7 +7123,7 @@ export default function App() {
             {attendancePending ? <MorphIcon icon={Loader2} className="w-5 h-5 animate-spin" /> : <MorphIcon icon={MapPin} className="w-5 h-5" />}
             {tApp('checkinGate.checkInBtn')}
           </button>
-          <button onClick={()=>{playSound("lock");localStorage.removeItem("currentUser"); localStorage.removeItem("token"); setCurrentUser(null); setAuthView("login");}}
+          <button onClick={()=>{playSound("lock");markManualLogout();localStorage.removeItem("currentUser"); localStorage.removeItem("token"); setCurrentUser(null); setAuthView("login");}}
             className="text-xs text-muted-foreground hover:text-foreground underline">{tApp('checkinGate.logout')}</button>
         </motion.div>
       </main>

@@ -7,8 +7,9 @@ export interface IMessage extends Document {
   text: string;
   timestamp: string;
   read: boolean;
-  type?: 'text' | 'image' | 'video' | 'file' | 'audio' | 'location' | 'video_invite';
+  type?: 'text' | 'image' | 'video' | 'file' | 'audio' | 'location' | 'video_invite' | 'video_event';
   videoChatGroupId?: string;
+  videoEvent?: { kind: 'started' | 'ended'; durationSec?: number; by?: string };
   mediaUrl?: string;
   fileName?: string;
   fileSize?: number;
@@ -27,11 +28,13 @@ const MessageSchema: Schema = new Schema({
   text: { type: String, default: '' },
   timestamp: { type: String },
   read: { type: Boolean, default: false },
-  type: { type: String, enum: ['text', 'image', 'video', 'file', 'audio', 'location', 'video_invite'] },
+  type: { type: String, enum: ['text', 'image', 'video', 'file', 'audio', 'location', 'video_invite', 'video_event'] },
   // 'video_invite' xabarlari uchun — qaysi guruhning video chatiga
   // taklif qilinganini bildiradi (bu DM xabari, `groupId` maydoni band —
   // u guruh xabari ekanini emas, "qaysi guruh"ni bildirish uchun ishlatiladi).
   videoChatGroupId: { type: String },
+  // 'video_event' — guruhdagi tizim xabari (video chat boshlandi/tugadi + davomiyligi).
+  videoEvent: { type: new Schema({ kind: String, durationSec: Number, by: String }, { _id: false }), default: undefined },
   mediaUrl: { type: String },
   fileName: { type: String },
   fileSize: { type: Number },

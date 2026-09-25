@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import { JWT_SECRET, JwtPayload, loadFreshUser } from '../middleware/auth';
 import Group from '../models/Group';
 import User from '../models/User';
+import Message from '../models/Message';
 import { sendPushToUser } from './push';
 
 let io: Server | null = null;
@@ -23,6 +24,42 @@ function removeUserSocket(userId: string, socketId: string) {
 }
 function broadcastPresence() {
   io?.emit('presence', { online: Array.from(userSockets.keys()) });
+}
+
+
+function fmtDuration(sec: number): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+}
+
+// Guruhga tizim xabari (Telegram'dagi "video chat boshlandi / tugadi · davomiyligi")
+async function postVideoChatEvent(group: any, byUserId: string, text: string, videoEvent: { kind: 'started' | 'ended'; durationSec?: number; by?: string }) {
+  try {
+    const msg = await Message.create({
+      fromUserId: byUserId, toUserId: '', groupId: String(group._id), text,
+      timestamp: new Date().toISOString(), read: false, type: 'video_event', videoEvent,
+      ...(group.companyId ? { companyId: group.companyId } : {}),
+    });
+    io?.to(`group:${String(group._id)}`).emit('message:new', { ...msg.toObject(), id: msg._id });
+  } catch (e) { console.error('[videochat event]', (e as Error).message); }
+}
+
+// Faol video chatni yakunlaydi: oxirgi holatni saqlaydi, hammaga 'ended' yuboradi va
+// guruhga davomiylik bilan "tugadi" xabarini tashlaydi. silent — arvoh (server qayta
+// ishga tushgandan qolgan) holatni tozalashda xabar chiqarmaslik uchun.
+async function finishVideoChat(group: any, silent = false) {
+  const avc = group.activeVideoChat;
+  if (!avc) return;
+  const endedAt = new Date();
+  const durationSec = Math.max(0, Math.round((+endedAt - +new Date(avc.startedAt)) / 1000));
+  const startedBy = avc.startedBy;
+  const startedByName = avc.startedByName;
+  group.lastVideoChat = { startedAt: avc.startedAt, endedAt, startedByName, durationSec };
+  group.activeVideoChat = undefined;
+  await group.save();
+  io?.to(`group:${String(group._id)}`).emit('videochat:ended', { groupId: String(group._id), endedAt, durationSec });
+  if (!silent) await postVideoChatEvent(group, startedBy, `📹 Video chat tugadi · ${fmtDuration(durationSec)}`, { kind: 'ended', durationSec, by: startedByName });
 }
 
 export function initSocket(httpServer: HttpServer): Server {
@@ -151,7 +188,7 @@ export function initSocket(httpServer: HttpServer): Server {
       // ishga tushgan yoki xato bilan uzilgan) — eskisini tozalab, yangidan boshlaymiz.
       if (group.activeVideoChat) {
         const alive = (group.activeVideoChat.participantIds || []).filter((id: string) => userSockets.has(id));
-        if (alive.length === 0) group.activeVideoChat = undefined;
+        if (alive.length === 0) await finishVideoChat(group, true);
         else if (alive.length !== group.activeVideoChat.participantIds.length) group.activeVideoChat.participantIds = alive;
       }
       if (!group.activeVideoChat) {
@@ -172,6 +209,7 @@ export function initSocket(httpServer: HttpServer): Server {
           groupId: data.groupId, startedBy: avc.startedBy, startedByName: avc.startedByName,
           startedAt: avc.startedAt, mode: avc.mode, participantIds: [...(avc.participantIds || [])],
         });
+        postVideoChatEvent(group, userId, `📹 ${avc.startedByName} video chat boshladi`, { kind: 'started', by: avc.startedByName });
         // Guruhdagi boshqa a'zolarga (ilova fon/yopiq bo'lsa ham) push —
         // call:offer'dagi bilan bir xil naqsh.
         (group.memberIds || []).forEach((mid: string) => {
@@ -210,9 +248,7 @@ export function initSocket(httpServer: HttpServer): Server {
       if (!group?.activeVideoChat) return;
       group.activeVideoChat.participantIds = group.activeVideoChat.participantIds.filter((id: string) => id !== userId);
       if (group.activeVideoChat.participantIds.length === 0) {
-        group.activeVideoChat = undefined;
-        await group.save();
-        io?.to(`group:${data.groupId}`).emit('videochat:ended', { groupId: data.groupId });
+        await finishVideoChat(group);
       } else {
         await group.save();
         io?.to(`group:${data.groupId}`).emit('videochat:participants', { groupId: data.groupId, participantIds: group.activeVideoChat.participantIds });
@@ -226,9 +262,22 @@ export function initSocket(httpServer: HttpServer): Server {
       if (!data?.groupId) return;
       const group = await requireMembership(data.groupId);
       if (!group?.activeVideoChat || group.activeVideoChat.startedBy !== userId) return;
-      group.activeVideoChat = undefined;
-      await group.save();
-      io?.to(`group:${data.groupId}`).emit('videochat:ended', { groupId: data.groupId });
+      await finishVideoChat(group);
+    });
+
+    // Eski "Qo'shilish" havolasi bosilganda — hozir faolmi yoki tugaganmi (va qachon).
+    socket.on('videochat:check', async (data: { groupId?: string }, ack?: (r: any) => void) => {
+      if (!data?.groupId || typeof ack !== 'function') return;
+      const group = await requireMembership(data.groupId);
+      if (!group) return ack({ active: false, notFound: true });
+      const avc = group.activeVideoChat;
+      const last = group.lastVideoChat;
+      ack({
+        active: !!avc,
+        mode: avc?.mode,
+        lastEndedAt: last?.endedAt || null,
+        lastDurationSec: last?.durationSec ?? null,
+      });
     });
 
     socket.on('disconnect', () => {
@@ -240,9 +289,7 @@ export function initSocket(httpServer: HttpServer): Server {
           for (const g of gs) {
             g.activeVideoChat.participantIds = g.activeVideoChat.participantIds.filter((id: string) => id !== userId);
             if (g.activeVideoChat.participantIds.length === 0) {
-              g.activeVideoChat = undefined;
-              await g.save();
-              io?.to(`group:${String(g._id)}`).emit('videochat:ended', { groupId: String(g._id) });
+              await finishVideoChat(g);
             } else {
               await g.save();
               io?.to(`group:${String(g._id)}`).emit('videochat:participants', { groupId: String(g._id), participantIds: g.activeVideoChat.participantIds });

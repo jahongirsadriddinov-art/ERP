@@ -303,6 +303,8 @@ router.post('/', async (req, res) => {
     if (!fromUserId || (!toUserId && !groupId) || (!text?.trim() && !mediaUrl && !location)) {
       return res.status(400).json({ error: 'Avtorizatsiya va (toUserId yoki groupId) va text/media kerak' });
     }
+    // 'video_event' — faqat server (socket.ts) yaratadi; mijoz soxta tizim xabari yubora olmasin.
+    if (type === 'video_event') return res.status(400).json({ error: "Noto'g'ri xabar turi" });
     // "Video chatga taklif" xabari — yuboruvchi HAQIQATAN ham o'sha guruh
     // a'zosi ekanini tekshiramiz, aks holda istalgan kishi istalgan
     // guruhning video chatiga "taklif" soxtalashtira olardi.

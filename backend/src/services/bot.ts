@@ -116,6 +116,14 @@ const isHttps = SITE_URL.startsWith('https');
 // o'z ochiq manzili (SITE_URL frontend manzili, bunga mos kelmaydi).
 const BACKEND_URL = getBackendUrl();
 
+// Bot chatidagi doimiy "menyu" tugmasi (yozish maydoni yonida) — Mini App'ni
+// (saytni) bir bosishda ochadi; ochilganda telefon raqami botga ulangan hisob
+// avtomatik kiritiladi (routes/auth.ts /telegram-webapp).
+if (isHttps) {
+  Promise.resolve((bot as any).setChatMenuButton?.({ menu_button: JSON.stringify({ type: 'web_app', text: 'QurilishERP', web_app: { url: SITE_URL } }) }))
+    .catch((e: Error) => console.error('[bot menu button]', e.message));
+}
+
 // Klaviaturalar til bo'yicha — foydalanuvchining o'zi tanlagan (yoki saytdan
 // sinxronlangan) tiliga qarab tugma matnlari o'zgaradi.
 const openSiteBtn = (lang?: BotLang) => isHttps
@@ -2806,27 +2814,24 @@ async function broadcastVersionFiles(items: { fileId: string; kind: 'apk' | 'exe
     telegramChatId: { $exists: true, $ne: '' },
   }).select('telegramChatId').lean();
 
-  // XATO TUZATILDI: avval izoh (caption) faqat albomdagi BIRINCHI elementga
-  // biriktirilardi — nazariyada Telegram shu elementning izohini butun
-  // albom uchun ko'rsatishi kerak, lekin DOCUMENT turidagi albomlarda buni
-  // har xil mijozlar/holatlar har xil ko'rsatishi mumkin ekan (aniq xabar
-  // qilingan xato: dasturchi o'zi yuborgan ko'rinish bilan qabul
-  // qiluvchining ko'rgani mos kelmadi — bitta faylda izoh bor, ikkinchisi
-  // butunlay alohida, izohsiz chiqib ketdi). Endi izoh HECH QAYSI faylga
-  // BIRIKTIRILMAYDI — ALOHIDA, mustaqil xabar sifatida (albomdan OLDIN)
-  // yuboriladi. Bu har doim bir xil, aniq va ishonchli ko'rinadi — na
-  // Telegram'ning albom-izoh joylashuvi haqidagi noaniq xatti-harakatiga
-  // bog'liq.
+  // Izoh (matn + premium emoji/formatlash) albomning BIRINCHI faylida — Telegram uni
+  // butun albomning izohi qilib, dasturchi yuborgan ko'rinishda BITTA guruh sifatida
+  // ko'rsatadi. Faqat izoh 1024 belgidan uzun bo'lsa (Telegram chegarasi) alohida
+  // xabar bo'lib, albomdan oldin ketadi.
   const caption = customCaption ?? `🆕 QurilishERP — yangi versiya (${version})`;
   const captionEntities = customCaption ? customCaptionEntities : undefined;
-  const media = items.map(item => ({ type: 'document' as const, media: item.fileId }));
+  const inlineCaption = caption.length <= 1024;
+  const media = items.map((item, i) => ({
+    type: 'document' as const, media: item.fileId,
+    ...(i === 0 && inlineCaption ? { caption, ...(captionEntities?.length ? { caption_entities: captionEntities } : {}) } : {}),
+  }));
 
   let sent = 0, failed = 0;
   for (const u of users) {
     if (!u.telegramChatId) continue;
     try {
-      await bot.sendMessage(u.telegramChatId, caption, { entities: captionEntities?.length ? captionEntities : undefined });
-      await bot.sendMediaGroup(u.telegramChatId, media);
+      if (!inlineCaption) await bot.sendMessage(u.telegramChatId, caption, { entities: captionEntities?.length ? captionEntities : undefined });
+      await bot.sendMediaGroup(u.telegramChatId, media as any);
       sent++;
     } catch (err) {
       failed++;
@@ -2863,7 +2868,7 @@ function scheduleMediaGroupBroadcast(groupId: string, chatId: number, lang: BotL
     pendingMediaGroup.delete(groupId);
     broadcastVersionFiles(entry!.items, entry!.chatId, entry!.lang, entry!.caption, entry!.captionEntities)
       .catch(err => console.error('[media group broadcast]', err));
-  }, 1500);
+  }, 2500);
 }
 
 // entities — dasturchi yozgan xabardagi Telegram formatlash/PREMIUM EMOJI

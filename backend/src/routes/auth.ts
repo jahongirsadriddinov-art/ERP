@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import crypto from 'crypto';
 import User, { IUser } from '../models/User';
 import Company from '../models/Company';
 import Subscription from '../models/Subscription';
@@ -31,7 +32,7 @@ const clientIp = (req: any) => (req.ip || '').trim();
 // (shu sabab export qilingan — qrlogin.ts ham shu funksiyani chaqiradi,
 // bloklangan/kutilayotgan/muddati tugagan obuna tekshiruvlari QR orqali
 // kirishda ham AYNAN bir xil ishlashi uchun).
-export async function issueSession(user: IUser, res: any, req: any, loginMethod: 'password' | 'otp' | 'qr' | 'dev' = 'password') {
+export async function issueSession(user: IUser, res: any, req: any, loginMethod: 'password' | 'otp' | 'qr' | 'dev' | 'telegram' = 'password') {
   if ((user as any).isBlocked) {
     return res.status(403).json({ error: 'Hisobingiz bloklangan. Administrator bilan bog\'laning.', blocked: true });
   }
@@ -387,6 +388,50 @@ router.post('/login', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server xatoligi' });
+  }
+});
+
+
+// ─── Telegram Mini App (bot ichidagi "Ilovani ochish" tugmasi) orqali avto-kirish ──
+// Telegram mijozi Mini App ochilganda initData'ni BOT TOKENI bilan HMAC imzolab beradi
+// (https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app) —
+// imzo to'g'ri bo'lsa, so'rov aynan shu Telegram foydalanuvchisidan kelgani isbotlanadi
+// (soxtalashtirib bo'lmaydi, chunki bot tokenini faqat biz bilamiz). Shu Telegram ID'ga
+// ulangan (telegramChatId) YAGONA hisob bo'lsa, parolsiz sessiya beriladi. Dasturchi
+// (super-admin) hisobi bundan mustasno — u faqat parol bilan kiradi.
+function verifyTelegramInitData(initData: string, botToken: string, maxAgeSec = 24 * 60 * 60): string | null {
+  if (!initData || initData.length > 4096) return null;
+  const params = new URLSearchParams(initData);
+  const hash = (params.get('hash') || '').toLowerCase();
+  if (!/^[0-9a-f]{64}$/.test(hash)) return null;
+  params.delete('hash');
+  const dataCheckString = [...params.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([k, v]) => `${k}=${v}`).join('\n');
+  const secret = crypto.createHmac('sha256', 'WebAppData').update(botToken).digest();
+  const calc = crypto.createHmac('sha256', secret).update(dataCheckString).digest('hex');
+  if (!crypto.timingSafeEqual(Buffer.from(calc), Buffer.from(hash))) return null;
+  const authDate = Number(params.get('auth_date'));
+  if (!authDate || Date.now() / 1000 - authDate > maxAgeSec) return null;
+  try {
+    const u = JSON.parse(params.get('user') || '');
+    return u?.id ? String(u.id) : null;
+  } catch { return null; }
+}
+
+router.post('/telegram-webapp', async (req, res) => {
+  try {
+    const ipCheck = checkRate(`tgwebapp:ip:${clientIp(req)}`, 30, 10 * 60 * 1000);
+    if (!ipCheck.allowed) return res.status(429).json({ error: "Juda ko'p urinish. Keyinroq qayta urining." });
+    const botToken = process.env.TELEGRAM_BOT_TOKEN;
+    const tgId = botToken ? verifyTelegramInitData(String(req.body?.initData || ''), botToken) : null;
+    if (!tgId) return res.status(401).json({ error: "Telegram ma'lumoti tasdiqlanmadi" });
+    const users = await User.find({ telegramChatId: tgId }).limit(2);
+    // Bir Telegram'ga bir nechta hisob ulangan bo'lsa — qaysi biri ekanini taxmin qilmaymiz.
+    if (users.length !== 1) return res.status(404).json({ error: 'Bu Telegram hisobiga ulangan yagona foydalanuvchi topilmadi' });
+    if (users[0].role === 'dasturchi') return res.status(403).json({ error: 'Dasturchi faqat parol bilan kiradi' });
+    return issueSession(users[0], res, req, 'telegram');
+  } catch (err) {
+    console.error('[tg-webapp login]', err);
+    return res.status(500).json({ error: 'Server xatoligi' });
   }
 });
 

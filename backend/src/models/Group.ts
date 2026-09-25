@@ -22,6 +22,7 @@ export interface IGroup extends Document {
   companyId?: string; // v1.2 multi-tenant (nullable)
   devSupport?: boolean; // har firma uchun dasturchi-support chat
   activeVideoChat?: IActiveVideoChat;
+  lastVideoChat?: { startedAt: Date; endedAt: Date; startedByName: string; durationSec: number };
   createdAt: Date;
   updatedAt: Date;
 }
@@ -41,6 +42,17 @@ const GroupSchema: Schema = new Schema({
       startedAt: { type: Date, required: true },
       mode: { type: String, enum: ['voice', 'video'], required: true },
       participantIds: { type: [String], default: [] },
+    }, { _id: false }),
+    default: undefined,
+  },
+  // Oxirgi tugagan video chat — eski "Qo'shilish" havolasi bosilganda
+  // "tugagan, N daqiqa oldin" deb ko'rsatish uchun.
+  lastVideoChat: {
+    type: new Schema({
+      startedAt: { type: Date },
+      endedAt: { type: Date },
+      startedByName: { type: String },
+      durationSec: { type: Number },
     }, { _id: false }),
     default: undefined,
   },

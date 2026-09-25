@@ -6,6 +6,17 @@
       <meta charset="UTF-8" />
       <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 
+      <!-- Tezlik: backend (Render bepul tarifda uxlab qoladi) — sahifa resurslari
+           yuklanayotgan paytdayoq uni "uyg'otamiz" va ulanishni oldindan ochamiz. -->
+      <link rel="preconnect" href="https://qurilisherp-backend.onrender.com" crossorigin />
+      <script>
+        (function () {
+          try {
+            if (location.protocol.indexOf('http') === 0) fetch('https://qurilisherp-backend.onrender.com/health', { mode: 'no-cors', cache: 'no-store' }).catch(function () {});
+          } catch (e) {}
+        })();
+      </script>
+
       <!-- Tema-chaqnashini (FOUC) oldini olish -->
       <script>
         (function () {

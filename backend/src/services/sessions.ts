@@ -30,7 +30,7 @@ function deviceLabelFromUA(ua: string): string {
 export async function issueTokenWithSession(
   payload: SessionTokenPayload,
   req: { headers: any; ip?: string },
-  loginMethod: 'password' | 'otp' | 'qr' | 'dev',
+  loginMethod: 'password' | 'otp' | 'qr' | 'dev' | 'telegram',
   expiresIn: string = '7d'
 ): Promise<string> {
   const jti = randomBytes(16).toString('hex');

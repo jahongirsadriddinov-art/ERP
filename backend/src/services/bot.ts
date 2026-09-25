@@ -39,6 +39,39 @@ export const bot = new TelegramBot(token, useWebhook ? { polling: false } : {
   polling: { params: { allowed_updates: ['message', 'edited_message', 'callback_query', 'my_chat_member'] } },
 });
 
+// Markdown/HTML formatlashda foydalanuvchi matni (ism, firma nomi, `_`, `*`, `<`) tufayli
+// Telegram "can't parse entities" (400) qaytarsa — xabar YO'QOLMASIN va "unhandledRejection"
+// bo'lmasin: formatlashsiz (oddiy matn) qayta yuboriladi.
+function stripFormatting(text: string, mode: string): string {
+  if (mode === 'HTML') {
+    return text.replace(/<[^>]+>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&');
+  }
+  return text;
+}
+const isParseError = (e: any) => /can't parse entities/i.test(String(e?.message || ''));
+const rawSendMessage = bot.sendMessage.bind(bot);
+(bot as any).sendMessage = async (chatId: any, text: any, opts?: any) => {
+  try { return await rawSendMessage(chatId, text, opts); }
+  catch (e) {
+    if (opts?.parse_mode && isParseError(e)) {
+      const { parse_mode, ...rest } = opts;
+      return rawSendMessage(chatId, stripFormatting(String(text), String(parse_mode)), rest);
+    }
+    throw e;
+  }
+};
+const rawEditMessageText = bot.editMessageText.bind(bot);
+(bot as any).editMessageText = async (text: any, opts?: any) => {
+  try { return await rawEditMessageText(text, opts); }
+  catch (e) {
+    if (opts?.parse_mode && isParseError(e)) {
+      const { parse_mode, ...rest } = opts;
+      return rawEditMessageText(stripFormatting(String(text), String(parse_mode)), rest);
+    }
+    throw e;
+  }
+};
+
 // Polling'dagi xatolarni birxil joyda ushlaymiz — webhook ishlab
 // tursa umuman chaqirilmaydi (zararsiz), lekin webhook muvaffaqiyatsiz
 // bo'lib pollingga qaytilsa (pastda) ham, oddiy local dev polling

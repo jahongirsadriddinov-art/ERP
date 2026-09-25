@@ -452,7 +452,18 @@ const RESTRICTED_KEYBOARD = (lang?: BotLang) => ({
 const BROADCAST_MODE_KEYBOARD = (lang?: BotLang) => ({
   keyboard: [[{ text: tb(lang, 'kb_broadcastEnd') }]],
   resize_keyboard: true,
+  is_persistent: true,
 });
+
+// Dasturchi menyusidagi HAR QANDAY tugma matni (o'zgartirilgan nomlar ham) yoki
+// /buyruq — "Xabar yuborish" rejimida bularni xabar deb hammaga yubormaslik uchun.
+async function isDevMenuText(text: string, lang?: BotLang): Promise<boolean> {
+  if (text.startsWith('/')) return true;
+  const kb: any = await DEVELOPER_KEYBOARD(lang);
+  const labels = new Set<string>();
+  for (const row of kb.keyboard as any[][]) for (const b of row) if (b?.text) labels.add(b.text);
+  return labels.has(text);
+}
 
 // Dasturchi UCH XIL menyuni ("kb-scope") mustaqil o'zgartira oladi: o'z
 // menyusini (dev), admin (direktor/orinbosar) menyusini, va ishchi menyusini
@@ -1418,6 +1429,11 @@ bot.on('message', async (msg: any) => {
       pendingBroadcastChoice.delete(chatId);
       await bot.sendMessage(chatId, tb(bcLang, 'broadcastAutoEnded'), { reply_markup: await keyboardForUser(bcUser, bcLang) });
     }
+    else if (msg.text && await isDevMenuText(msg.text, bcLang)) {
+      // Dasturchi menyu tugmasini yoki /buyruq bosdi — bu XABAR EMAS: rejim
+      // yopiladi va u oddiy buyruq sifatida bajariladi (hammaga ketmaydi).
+      pendingBroadcastChoice.delete(chatId);
+    }
     else {
       if (msg.text === tb(bcLang, 'kb_broadcastEnd')) {
         pendingBroadcastChoice.delete(chatId);
@@ -1425,7 +1441,7 @@ bot.on('message', async (msg: any) => {
         return;
       }
       if (msg.text && !msg.document) {
-        await bot.sendMessage(chatId, tb(bcLang, 'versionBroadcastStarted'));
+        await bot.sendMessage(chatId, tb(bcLang, 'versionBroadcastStarted'), { reply_markup: BROADCAST_MODE_KEYBOARD(bcLang) });
         await broadcastTextMessage(msg.text, msg.entities, chatId, bcLang);
         return;
       }
@@ -1681,6 +1697,10 @@ bot.on('message', async (msg: any) => {
 
     // ── "Xabar yuborish" — shu paytdan "⏹ Yakunlash"gacha yuborilgan HAR
     // BIR matn/apk/exe fayl tasdiqsiz, darhol hammaga ketadi.
+    if (text === tb(user.language, 'kb_broadcastEnd')) {
+      await bot.sendMessage(chatId, tb(user.language, 'broadcastEnded'), { reply_markup: await keyboardForUser(user, user.language) });
+      return;
+    }
     if (text === L('kb_broadcast')) {
       pendingBroadcastChoice.set(chatId, Date.now());
       bot.sendMessage(chatId, tb(user.language, 'broadcastPrompt'), { reply_markup: BROADCAST_MODE_KEYBOARD(user.language as BotLang | undefined) });
@@ -2746,7 +2766,7 @@ async function broadcastVersionFile(fileId: string, kind: 'apk' | 'exe', fromCha
     }
     await new Promise(r => setTimeout(r, 50));
   }
-  await bot.sendMessage(fromChatId, tb(fromLang, 'versionBroadcastDone', { sent: String(sent), failed: String(failed) }));
+  await bot.sendMessage(fromChatId, tb(fromLang, 'versionBroadcastDone', { sent: String(sent), failed: String(failed) }), pendingBroadcastChoice.has(fromChatId) ? { reply_markup: BROADCAST_MODE_KEYBOARD(fromLang) } : undefined);
 }
 
 // Dasturchi APK VA EXE'ni BIR ALBOM sifatida (Telegram "media group" —
@@ -2814,7 +2834,7 @@ async function broadcastVersionFiles(items: { fileId: string; kind: 'apk' | 'exe
     }
     await new Promise(r => setTimeout(r, 50));
   }
-  await bot.sendMessage(fromChatId, tb(fromLang, 'versionBroadcastDone', { sent: String(sent), failed: String(failed) }));
+  await bot.sendMessage(fromChatId, tb(fromLang, 'versionBroadcastDone', { sent: String(sent), failed: String(failed) }), pendingBroadcastChoice.has(fromChatId) ? { reply_markup: BROADCAST_MODE_KEYBOARD(fromLang) } : undefined);
 }
 
 // "📢 Xabar yuborish" rejimida dasturchi bir nechta faylni ALBOM sifatida
@@ -2867,7 +2887,7 @@ async function broadcastTextMessage(text: string, entities: any[] | undefined, f
     }
     await new Promise(r => setTimeout(r, 50));
   }
-  await bot.sendMessage(fromChatId, tb(fromLang, 'versionBroadcastDone', { sent: String(sent), failed: String(failed) }));
+  await bot.sendMessage(fromChatId, tb(fromLang, 'versionBroadcastDone', { sent: String(sent), failed: String(failed) }), pendingBroadcastChoice.has(fromChatId) ? { reply_markup: BROADCAST_MODE_KEYBOARD(fromLang) } : undefined);
 }
 
 // Ishchi jonli joylashuvni VAQTLI (masalan 1 soatlik) tanlagan bo'lsa —

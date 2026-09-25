@@ -45,6 +45,8 @@
          so'rovlarni avtomatik boshqaradi — FAQAT shu permissionlar
          manifestda mavjud bo'lsagina. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Ilova ichidan yangilash: yuklangan APK o'rnatuvchisini ochish uchun -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />

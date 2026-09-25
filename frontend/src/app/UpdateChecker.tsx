@@ -7,22 +7,16 @@ import { useTranslation } from "react-i18next";
 import { API_BASE } from "./api";
 import { isNative, isAndroid, isTauri, openExternalUrl } from "./platform";
 
-// Faqat o'rnatilgan ilovalarda (Windows exe / Android APK) ma'noli — veb
-// sayt har safar ochilganda avtomatik eng yangi kodni oladi (Vercel), shu
-// sabab bu yerda hech narsa qilinmaydi. AppRelease (backend/src/models/
-// AppRelease.ts) — dasturchi bot orqali (yoki CI) yangi versiya
-// yuklaganda yangilanadigan yagona yozuv; GET /api/deploy/latest shundan
-// o'qiydi.
-//
-// MUHIM: bu haqiqiy "o'zi yuklab, o'zi o'rnatib, qayta ochadigan" avtomatik
-// yangilanish EMAS — Windows/Android ikkalasi ham operatsion tizim
-// xavfsizligi tufayli veb-sahifadan sukut bo'yicha o'rnatuvchini
-// so'rovsiz ishga tushirishga yo'l qo'ymaydi (bu Tauri yoki bizning
-// kodimizning kamchiligi emas). "Yangilash" tugmasi eng yangi fayl
-// yuklab olishni boshlaydi — undan keyin foydalanuvchi uni ochishi
-// (o'rnatishi) kerak. To'liq sukut ostidagi avtomatik yangilanish uchun
-// alohida ish kerak bo'ladi: Windows'da rasmiy tauri-plugin-updater
-// (imzo kaliti bilan), Android'da esa maxsus o'rnatish ruxsati oqimi.
+type Phase = "idle" | "downloading" | "installing" | "permission" | "error";
+
+// Faqat o'rnatilgan ilovalarda (Windows exe / Android APK) ma'noli — veb sayt har safar
+// ochilganda eng yangi kodni o'zi oladi (Vercel). Yangi versiya chiqsa ilova o'zi so'raydi
+// ("Yangilashni xohlaysizmi?"), "Yangilash" bosilsa yangi o'rnatuvchini internetdan o'zi
+// yuklab oladi va o'rnatishni boshlaydi:
+//   - Windows (Tauri): src-tauri/src/lib.rs `download_and_install_update` — yuklab, passive
+//     rejimda o'rnatadi va ilovani o'zi qayta ochadi.
+//   - Android (Capacitor): AppUpdaterPlugin.java — APK'ni yuklaydi va tizim o'rnatuvchisini
+//     ochadi (Android sukut ostida o'rnatishga ruxsat bermaydi — bitta "O'rnatish" bosiladi).
 function compareVersions(a: string, b: string): number {
   const pa = a.split('.').map(n => parseInt(n, 10) || 0);
   const pb = b.split('.').map(n => parseInt(n, 10) || 0);
@@ -37,6 +31,8 @@ export default function UpdateChecker() {
   const { t } = useTranslation();
   const [info, setInfo] = useState<{ version: string; notes?: string; url?: string } | null>(null);
   const [dismissed, setDismissed] = useState(false);
+  const [phase, setPhase] = useState<Phase>("idle");
+  const [percent, setPercent] = useState(0);
 
   useEffect(() => {
     if (!isNative()) return;
@@ -47,21 +43,49 @@ export default function UpdateChecker() {
         if (!url) return; // shu platforma uchun build yo'q (masalan iOS)
         // Aynan shu versiya o'rnatilgan bo'lsa (CI build'i) — qayta taklif qilinmaydi.
         if (d.version !== __APP_VERSION__ && compareVersions(d.version, __APP_VERSION__) >= 0) {
-          setInfo({ version: d.version, notes: d.notes, url });
+          setInfo(prev => (prev?.version === d.version ? prev : { version: d.version, notes: d.notes, url }));
         }
       }).catch(() => {});
     };
     check();
-    // XATO TUZATILDI: avval FAQAT ilova ochilgan zahoti (bir marta) tekshirilardi
-    // — ilova kunlab/haftalab yopilmasdan ochiq tursa (masalan Windows'da
-    // doim ishlaydigan kompyuter), yangi versiya chiqqanidan keyin ham
-    // foydalanuvchi buni HECH QACHON ko'rmas edi, faqat qo'lda ilovani
-    // qayta ochsa bilardi. Endi har 4 soatda ham qayta tekshiriladi.
-    const interval = setInterval(check, 4 * 60 * 60 * 1000);
-    return () => clearInterval(interval);
+    // Har 30 daqiqada va ilova fondan qaytganda ham qayta tekshiriladi.
+    const interval = setInterval(check, 30 * 60 * 1000);
+    const onVisible = () => { if (document.visibilityState === "visible") check(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => { clearInterval(interval); document.removeEventListener("visibilitychange", onVisible); };
   }, []);
 
+  const startUpdate = async () => {
+    if (!info?.url) return;
+    setPhase("downloading"); setPercent(0);
+    const onProgress = (p: { downloaded: number; total: number }) =>
+      setPercent(p.total > 0 ? Math.min(100, Math.round((p.downloaded * 100) / p.total)) : 0);
+    try {
+      if (isTauri()) {
+        const [{ invoke }, { listen }] = await Promise.all([import("@tauri-apps/api/core"), import("@tauri-apps/api/event")]);
+        const unlisten = await listen<{ downloaded: number; total: number }>("update-progress", e => onProgress(e.payload));
+        try {
+          await invoke("download_and_install_update", { url: info.url });
+          setPhase("installing"); // ilova o'zi yopiladi va o'rnatuvchi ishga tushadi
+        } finally { unlisten(); }
+      } else if (isAndroid()) {
+        const { registerPlugin } = await import("@capacitor/core");
+        const AppUpdater = registerPlugin<any>("AppUpdater");
+        const handle = await AppUpdater.addListener("progress", onProgress);
+        try { await AppUpdater.download({ url: info.url }); } finally { handle.remove(); }
+        setPhase("installing");
+        await AppUpdater.install();
+        setPhase("idle");
+      }
+    } catch (e: any) {
+      const msg = String(e?.message || e || "");
+      if (msg.includes("PERMISSION")) setPhase("permission");
+      else { console.error("[update]", e); setPhase("error"); }
+    }
+  };
+
   if (!info) return null;
+  const busy = phase === "downloading" || phase === "installing";
 
   return (
     <AnimatePresence>
@@ -79,24 +103,48 @@ export default function UpdateChecker() {
               <p className="font-bold text-foreground">{t('update.title')}</p>
               <p className="text-xs text-muted-foreground mt-0.5">{t('update.versionLabel', { version: info.version })}</p>
             </div>
-            {info.notes && (
+            {info.notes && phase === "idle" && (
               <div className="bg-muted/50 rounded-2xl p-3.5 max-h-40 overflow-y-auto">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5">{t('update.whatsNew')}</p>
                 <p className="text-xs text-foreground/80 whitespace-pre-line leading-relaxed">{info.notes}</p>
               </div>
             )}
-            <div className="flex gap-2">
-              <button onClick={() => setDismissed(true)}
-                className="flex-1 py-3 rounded-xl text-sm font-semibold border border-border/60 text-muted-foreground hover:bg-muted">
-                {t('update.later')}
-              </button>
-              <button onClick={() => openExternalUrl(info.url!)}
-                className="flex-1 flex items-center justify-center gap-1.5 py-3 rounded-xl text-sm font-bold text-white shadow-lg shadow-primary/25"
-                style={{ background: "linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%)" }}>
-                <MorphIcon icon={Download} className="w-4 h-4" /> {t('update.updateNow')}
-              </button>
-            </div>
-            <p className="text-[10px] text-muted-foreground text-center leading-relaxed">{t('update.installHint')}</p>
+
+            {phase === "idle" && <p className="text-sm text-center text-foreground/80">{t('update.question')}</p>}
+
+            {busy && (
+              <div className="space-y-2">
+                <div className="h-2 rounded-full bg-muted overflow-hidden">
+                  <div className="h-full rounded-full transition-all duration-300"
+                    style={{ width: `${phase === "installing" ? 100 : percent}%`, background: "linear-gradient(90deg, var(--primary), var(--accent))" }} />
+                </div>
+                <p className="text-xs text-center text-muted-foreground">
+                  {phase === "installing" ? t('update.installing') : t('update.downloading', { percent })}
+                </p>
+              </div>
+            )}
+            {phase === "permission" && <p className="text-xs text-center text-amber-600 dark:text-amber-400 leading-relaxed">{t('update.permissionNeeded')}</p>}
+            {phase === "error" && (
+              <p className="text-xs text-center text-red-600 dark:text-red-400 leading-relaxed">
+                {t('update.failed')}{" "}
+                <button className="underline font-semibold" onClick={() => openExternalUrl(info.url!)}>{t('update.openManually')}</button>
+              </p>
+            )}
+
+            {!busy && (
+              <div className="flex gap-2">
+                <button onClick={() => { setDismissed(true); setPhase("idle"); }}
+                  className="flex-1 py-3 rounded-xl text-sm font-semibold border border-border/60 text-muted-foreground hover:bg-muted">
+                  {t('update.later')}
+                </button>
+                <button onClick={startUpdate}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-3 rounded-xl text-sm font-bold text-white shadow-lg shadow-primary/25"
+                  style={{ background: "linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%)" }}>
+                  <MorphIcon icon={Download} className="w-4 h-4" /> {phase === "idle" ? t('update.updateNow') : t('update.retry')}
+                </button>
+              </div>
+            )}
+            {phase === "idle" && isAndroid() && <p className="text-[10px] text-muted-foreground text-center leading-relaxed">{t('update.installHintAndroid')}</p>}
           </motion.div>
         </motion.div>
       ) : (

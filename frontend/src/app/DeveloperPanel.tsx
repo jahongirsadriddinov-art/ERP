@@ -309,7 +309,7 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
 
       {/* Umumiy ko'rinish — statistika kartochkalari, barcha tab'larda ko'rinadi */}
       {!loading && (
-        <div className="mx-4 mt-3 grid grid-cols-2 md:grid-cols-4 gap-2.5 flex-shrink-0">
+        <div className="mx-4 md:mx-6 xl:mx-auto xl:max-w-7xl xl:w-[calc(100%-3rem)] mt-3 grid grid-cols-2 md:grid-cols-4 gap-2.5 flex-shrink-0">
           {[
             { label: t('devPanel.stats.totalFirms'), value: companies.length, accent: "text-primary" },
             { label: t('devPanel.stats.activeSubs'), value: activeSubsCount, accent: "text-green-600 dark:text-green-400" },
@@ -324,28 +324,28 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
         </div>
       )}
       {expiringSoonCount > 0 && (
-        <div className="mx-4 mt-2.5 flex items-center gap-2 text-[11px] font-semibold text-orange-700 dark:text-orange-400 bg-orange-500/10 border border-orange-500/20 rounded-xl px-3 py-2 flex-shrink-0">
+        <div className="mx-4 md:mx-6 xl:mx-auto xl:max-w-7xl xl:w-[calc(100%-3rem)] mt-2.5 flex items-center gap-2 text-[11px] font-semibold text-orange-700 dark:text-orange-400 bg-orange-500/10 border border-orange-500/20 rounded-xl px-3 py-2 flex-shrink-0">
           ⚠️ {expiringSoonCount} {t('devPanel.stats.expiringSoon')}
         </div>
       )}
 
-      <div className="mx-4 mt-3 flex items-center gap-2 flex-shrink-0">
-        <div className="flex-1 nav-pill-desktop grid grid-cols-2 sm:flex sm:flex-wrap gap-1 p-1 rounded-2xl sm:rounded-full">
-          <button onClick={() => setTab("subscriptions")} className={`relative py-2 rounded-full text-[13px] font-semibold liquid-transition sm:flex-1 ${tab === "subscriptions" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
+      <div className="mx-4 md:mx-6 xl:mx-auto xl:max-w-7xl xl:w-[calc(100%-3rem)] mt-3 flex items-center gap-2 flex-shrink-0">
+        <div className="flex-1 min-w-0 nav-pill-desktop flex gap-1 p-1 rounded-full overflow-x-auto scrollbar-hide">
+          <button onClick={() => setTab("subscriptions")} className={`relative py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "subscriptions" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
             {t('devPanel.tabs.subscriptions')} {subs.filter(s => s.status === "pending").length > 0 && <span className="ml-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full badge-pulse">{subs.filter(s => s.status === "pending").length}</span>}
           </button>
-          <button onClick={() => setTab("firms")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition sm:flex-1 ${tab === "firms" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>{t('devPanel.tabs.firms', { count: companies.length })}</button>
-          <button onClick={() => setTab("users")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition sm:flex-1 ${tab === "users" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>{t('devPanel.tabs.users')}</button>
-          <button onClick={() => setTab("messages")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition sm:flex-1 ${tab === "messages" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
+          <button onClick={() => setTab("firms")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "firms" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>{t('devPanel.tabs.firms', { count: companies.length })}</button>
+          <button onClick={() => setTab("users")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "users" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>{t('devPanel.tabs.users')}</button>
+          <button onClick={() => setTab("messages")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "messages" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
             {t('devPanel.tabs.messages')}
           </button>
-          <button onClick={() => setTab("plans")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition sm:flex-1 ${tab === "plans" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
+          <button onClick={() => setTab("plans")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "plans" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
             {t('devPanel.tabs.plans')}
           </button>
-          <button onClick={() => setTab("promocodes")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition sm:flex-1 ${tab === "promocodes" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
+          <button onClick={() => setTab("promocodes")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "promocodes" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
             {t('devPanel.tabs.promocodes')}
           </button>
-          <button onClick={() => setTab("announcements")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition sm:flex-1 ${tab === "announcements" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
+          <button onClick={() => setTab("announcements")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "announcements" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
             {t('devPanel.tabs.announcements')}
           </button>
         </div>
@@ -359,9 +359,9 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
         </button>
       </div>
 
-      {err && <div className="mx-4 mt-3 bg-red-500/10 text-red-700 dark:text-red-400 text-sm p-3 rounded-lg border border-red-500/20 flex-shrink-0">{err}</div>}
+      {err && <div className="mx-4 md:mx-6 xl:mx-auto xl:max-w-7xl xl:w-[calc(100%-3rem)] mt-3 bg-red-500/10 text-red-700 dark:text-red-400 text-sm p-3 rounded-lg border border-red-500/20 flex-shrink-0">{err}</div>}
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-3 pb-24">
+      <div className={`flex-1 overflow-y-auto p-4 md:px-[max(1.5rem,calc((100%-80rem)/2))] pb-24 ${["subscriptions", "firms", "users"].includes(tab) ? "grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-3 content-start [&>p]:col-span-full [&>*:only-child]:col-span-full" : "space-y-3"}`}>
         {loading ? (
           <SkeletonList items={5}/>
         ) : tab === "subscriptions" ? (

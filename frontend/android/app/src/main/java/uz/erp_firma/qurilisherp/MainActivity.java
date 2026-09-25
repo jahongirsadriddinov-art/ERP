@@ -32,6 +32,8 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
+        // Ilova ichidan yangilash plagini — super.onCreate'dan OLDIN ro'yxatdan o'tishi shart.
+        registerPlugin(AppUpdaterPlugin.class);
         super.onCreate(savedInstanceState);
 
         // Android 13+ (API 33) — bildirishnoma ko'rsatish uchun runtime

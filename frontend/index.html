@@ -17,6 +17,21 @@
         })();
       </script>
 
+      <!-- Telegram Mini App ichida ochilgan bo'lsagina Telegram skripti yuklanadi
+           (ready/expand — to'liq balandlik). initData baribir URL hash'dan ham o'qiladi. -->
+      <script>
+        (function () {
+          try {
+            if (location.hash.indexOf('tgWebAppData') === -1) return;
+            var s = document.createElement('script');
+            s.src = 'https://telegram.org/js/telegram-web-app.js';
+            s.async = true;
+            s.onload = function () { try { var w = window.Telegram.WebApp; w.ready(); w.expand(); } catch (e) {} };
+            document.head.appendChild(s);
+          } catch (e) {}
+        })();
+      </script>
+
       <!-- Tema-chaqnashini (FOUC) oldini olish -->
       <script>
         (function () {

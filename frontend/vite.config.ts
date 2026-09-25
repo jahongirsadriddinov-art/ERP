@@ -83,10 +83,19 @@ export default defineConfig({
             id.includes('node_modules/d3/') ||
             id.includes('node_modules/victory-vendor') ||
             id.includes('node_modules/internmap') ||
-            id.includes('node_modules/robust-predicates')
+            id.includes('node_modules/robust-predicates') ||
+            id.includes('node_modules/lodash') ||
+            id.includes('node_modules/decimal.js-light') ||
+            id.includes('node_modules/react-smooth') ||
+            id.includes('node_modules/fast-equals') ||
+            id.includes('node_modules/recharts-scale')
           ) {
             return 'vendor-charts';
           }
+          // Faqat lazy sahifalar ishlatadigan og'ir kutubxonalar — umumiy 'vendor'ga
+          // qo'shilsa, u har sahifada oldindan yuklanib qoladi (tezlikni pasaytiradi).
+          if (id.includes('node_modules/leaflet')) return 'vendor-leaflet';
+          if (id.includes('node_modules/jsqr') || id.includes('node_modules/qrcode') || id.includes('node_modules/dijkstrajs') || id.includes('node_modules/pngjs')) return 'vendor-qr';
           // Socket.io
           if (id.includes('node_modules/socket.io-client') || id.includes('node_modules/engine.io')) {
             return 'vendor-socket';

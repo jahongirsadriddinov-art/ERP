@@ -17,7 +17,7 @@ export interface IAnnouncement extends Document {
   body: string;
   mediaUrl?: string;
   mediaType?: 'image' | 'video';
-  location?: { lat: number; lng: number };
+  location?: { lat: number; lng: number; label?: string };
   minViewSeconds: number;
   seenBy: string[];
   postedBy: { userId: string; name: string; role: string };
@@ -31,7 +31,7 @@ const AnnouncementSchema: Schema = new Schema({
   body: { type: String, required: true },
   mediaUrl: { type: String },
   mediaType: { type: String, enum: ['image', 'video'] },
-  location: { lat: { type: Number }, lng: { type: Number } },
+  location: { lat: { type: Number }, lng: { type: Number }, label: { type: String } },
   minViewSeconds: { type: Number, default: 2, min: 2, max: 60 },
   seenBy: { type: [String], default: [] },
   postedBy: { type: Schema.Types.Mixed, required: true },

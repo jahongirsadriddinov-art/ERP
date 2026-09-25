@@ -87,6 +87,26 @@ jobs:
       - name: Install frontend deps
         run: npm ci
 
+      # Maxfiy imzo kaliti (GitHub secrets: ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD,
+      # ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD). Yo'q bo'lsa repo'dagi zaxira debug kalit ishlatiladi.
+      - name: Restore Android signing key (if secrets set)
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KS_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KS_B64" ]; then
+            echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+            echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/release.keystore" >> "$GITHUB_ENV"
+            echo "ANDROID_KEYSTORE_PASSWORD=$KS_PASS" >> "$GITHUB_ENV"
+            echo "ANDROID_KEY_ALIAS=$KS_ALIAS" >> "$GITHUB_ENV"
+            echo "ANDROID_KEY_PASSWORD=$KEY_PASS" >> "$GITHUB_ENV"
+            echo "Maxfiy imzo kaliti ishlatilmoqda"
+          else
+            echo "::warning::ANDROID_KEYSTORE_BASE64 o'rnatilmagan — ochiq zaxira debug kalit ishlatilmoqda (xavfsiz emas)."
+          fi
+
       - name: Build web bundle (embeds VITE_API_URL from .env.production)
         run: npm run build
 

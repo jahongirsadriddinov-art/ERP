@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, lazy, Suspense } from "react";
 import { MorphIcon } from "morphicons/react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
@@ -11,10 +11,12 @@ import Trash from "@hugeicons/core-free-icons/Delete02Icon";
 import { API_BASE, uploadChatMedia } from "./api";
 import { getSocket } from "./socket";
 
+const LocationPicker = lazy(() => import("./LocationPicker"));
+
 export interface AnnouncementData {
   id: string; title: string; body: string;
   mediaUrl?: string; mediaType?: 'image' | 'video';
-  location?: { lat: number; lng: number };
+  location?: { lat: number; lng: number; label?: string };
   minViewSeconds?: number; isGlobal?: boolean; seen?: boolean;
   postedBy?: { name?: string; role?: string }; createdAt: string;
 }
@@ -35,7 +37,7 @@ export function AnnouncementContent({ a }: { a: AnnouncementData }) {
         <a href={`https://maps.google.com/?q=${a.location.lat},${a.location.lng}`} target="_blank" rel="noopener noreferrer"
           className="inline-flex items-center gap-1.5 mt-2 text-xs font-medium text-primary hover:underline">
           <MorphIcon icon={LocationIcon} className="w-3.5 h-3.5" />
-          {a.location.lat.toFixed(5)}, {a.location.lng.toFixed(5)}
+          {a.location.label || `${a.location.lat.toFixed(5)}, ${a.location.lng.toFixed(5)}`}
         </a>
       )}
     </div>
@@ -50,7 +52,43 @@ export function AnnouncementComposer({ endpoint, onPosted, onCancel }: { endpoin
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [media, setMedia] = useState<{ url: string; type: 'image' | 'video' } | null>(null);
-  const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [location, setLocation] = useState<{ lat: number; lng: number; label?: string } | null>(null);
+  const [showMap, setShowMap] = useState(false);
+  const [query, setQuery] = useState("");
+  const [suggestions, setSuggestions] = useState<{ label: string; lat: number; lng: number }[]>([]);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const geoHeaders = (): Record<string, string> => {
+    const token = localStorage.getItem('token');
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  };
+  // Koordinatani o'qiladigan manzilga aylantiradi (xato bo'lsa manzilsiz qoladi)
+  const reverseLabel = async (lat: number, lng: number) => {
+    try {
+      const r = await fetch(`${API_BASE}/api/geocode/reverse?lat=${lat}&lng=${lng}`, { headers: geoHeaders() });
+      if (r.ok) { const d = await r.json(); return String(d.label || ''); }
+    } catch {}
+    return '';
+  };
+  const searchAddress = (q: string) => {
+    setQuery(q);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (q.trim().length < 3) { setSuggestions([]); return; }
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const r = await fetch(`${API_BASE}/api/geocode/search?q=${encodeURIComponent(q)}`, { headers: geoHeaders() });
+        if (r.ok) setSuggestions(await r.json());
+      } catch {}
+    }, 450);
+  };
+  const pickSuggestion = (s: { label: string; lat: number; lng: number }) => {
+    setLocation({ lat: s.lat, lng: s.lng, label: s.label });
+    setQuery(s.label); setSuggestions([]);
+  };
+  const pickOnMap = async (lat: number, lng: number) => {
+    setLocation({ lat, lng });
+    const label = await reverseLabel(lat, lng);
+    if (label) { setLocation({ lat, lng, label }); setQuery(label); }
+  };
   const [minView, setMinView] = useState(2);
   const [uploading, setUploading] = useState(false);
   const [locating, setLocating] = useState(false);
@@ -75,7 +113,12 @@ export function AnnouncementComposer({ endpoint, onPosted, onCancel }: { endpoin
     if (!navigator.geolocation) { toast.error(t('addObject.geoUnsupported')); return; }
     setLocating(true);
     navigator.geolocation.getCurrentPosition(
-      pos => { setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }); setLocating(false); },
+      async pos => {
+        const { latitude: lat, longitude: lng } = pos.coords;
+        setLocation({ lat, lng }); setLocating(false);
+        const label = await reverseLabel(lat, lng);
+        if (label) { setLocation({ lat, lng, label }); setQuery(label); }
+      },
       () => { toast.error(t('addObject.geoDenied')); setLocating(false); },
       { enableHighAccuracy: true, timeout: 10000 },
     );
@@ -94,7 +137,7 @@ export function AnnouncementComposer({ endpoint, onPosted, onCancel }: { endpoin
         }),
       });
       if (r.ok) {
-        setTitle(""); setBody(""); setMedia(null); setLocation(null); setMinView(2);
+        setTitle(""); setBody(""); setMedia(null); setLocation(null); setQuery(""); setShowMap(false); setMinView(2);
         toast.success(t('announcements.posted'));
         onPosted();
       } else {
@@ -124,8 +167,30 @@ export function AnnouncementComposer({ endpoint, onPosted, onCancel }: { endpoin
       {location && (
         <div className="flex items-center gap-2 text-xs bg-primary/10 text-primary rounded-lg px-3 py-2">
           <MorphIcon icon={LocationIcon} className="w-3.5 h-3.5 flex-shrink-0" />
-          <span className="flex-1 truncate">{location.lat.toFixed(5)}, {location.lng.toFixed(5)}</span>
-          <button type="button" onClick={() => setLocation(null)} aria-label={t('announcements.removeAttachment')}><MorphIcon icon={X} className="w-3.5 h-3.5" /></button>
+          <span className="flex-1 truncate">{location.label || `${location.lat.toFixed(5)}, ${location.lng.toFixed(5)}`}</span>
+          <button type="button" onClick={() => { setLocation(null); setQuery(""); }} aria-label={t('announcements.removeAttachment')}><MorphIcon icon={X} className="w-3.5 h-3.5" /></button>
+        </div>
+      )}
+
+      {/* Manzil: qo'lda yozib qidirish (takliflar chiqadi) yoki kartadan tanlash */}
+      <div className="relative">
+        <input value={query} onChange={e => searchAddress(e.target.value)} placeholder={t('announcements.addressPlaceholder') as string}
+          className="w-full text-sm border border-border rounded-lg px-3 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary" />
+        {suggestions.length > 0 && (
+          <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-card border border-border rounded-lg shadow-lg max-h-48 overflow-y-auto scrollbar-hide">
+            {suggestions.map((sg, i) => (
+              <button key={i} type="button" onClick={() => pickSuggestion(sg)}
+                className="w-full text-left px-3 py-2 text-xs hover:bg-muted liquid-transition border-b border-border/30 last:border-0">{sg.label}</button>
+            ))}
+          </div>
+        )}
+      </div>
+      {showMap && (
+        <div className="space-y-1">
+          <Suspense fallback={<div className="w-full h-[260px] rounded-xl border border-border bg-muted/40 flex items-center justify-center"><MorphIcon icon={Loader2} className="w-5 h-5 animate-spin text-muted-foreground" /></div>}>
+            <LocationPicker value={location ? { lat: location.lat, lng: location.lng } : null} onPick={pickOnMap} />
+          </Suspense>
+          <p className="text-[10px] text-muted-foreground">{t('announcements.mapHint')}</p>
         </div>
       )}
 
@@ -140,6 +205,11 @@ export function AnnouncementComposer({ endpoint, onPosted, onCancel }: { endpoin
           className="flex items-center gap-1.5 text-xs font-medium border border-border rounded-full px-3 py-1.5 hover:bg-muted liquid-transition disabled:opacity-50">
           {locating ? <MorphIcon icon={Loader2} className="w-3.5 h-3.5 animate-spin" /> : <MorphIcon icon={LocationIcon} className="w-3.5 h-3.5" />}
           {t('announcements.attachLocation')}
+        </button>
+        <button type="button" onClick={() => setShowMap(v => !v)} aria-pressed={showMap}
+          className={`flex items-center gap-1.5 text-xs font-medium border rounded-full px-3 py-1.5 liquid-transition ${showMap ? "border-primary bg-primary/10 text-primary" : "border-border hover:bg-muted"}`}>
+          <MorphIcon icon={LocationIcon} className="w-3.5 h-3.5" />
+          {showMap ? t('announcements.hideMap') : t('announcements.pickOnMap')}
         </button>
         <label className="flex items-center gap-1.5 text-xs text-muted-foreground ml-auto">
           {t('announcements.minViewLabel')}

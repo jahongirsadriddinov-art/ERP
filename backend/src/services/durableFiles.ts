@@ -47,6 +47,8 @@ export async function serveDurableUpload(req: Request, res: Response) {
     const doc: any = await StoredFile.findOne({ name }).lean();
     if (!doc) return res.status(404).end();
     res.setHeader('Content-Type', doc.contentType || 'application/octet-stream');
+    // SVG ichida skript bo'lishi mumkin — hech qachon inline ko'rsatilmaydi (stored XSS'ning oldi)
+    if (/\.svg$/i.test(name) || /svg/i.test(String(doc.contentType))) res.setHeader('Content-Disposition', 'attachment');
     // O'zgarmas nomlilar (APK/exe "latest") har safar yangilanadi — kesh qilinmasin
     res.setHeader('Cache-Control', /latest/i.test(name) ? 'no-cache' : 'public, max-age=31536000, immutable');
     const buf: Buffer = (doc.data && doc.data.buffer) ? Buffer.from(doc.data.buffer) : Buffer.from(doc.data);

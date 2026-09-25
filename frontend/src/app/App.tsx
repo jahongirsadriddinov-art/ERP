@@ -40,6 +40,7 @@ import Paperclip from "@hugeicons/core-free-icons/Attachment01Icon";
 import Mic from "@hugeicons/core-free-icons/Mic01Icon";
 import VideoIcon from "@hugeicons/core-free-icons/Video01Icon";
 import ImageIcon from "@hugeicons/core-free-icons/Image01Icon";
+import MapIcon from "@hugeicons/core-free-icons/MapIcon";
 import FileText from "@hugeicons/core-free-icons/FileTextIcon";
 import CornerDownLeft from "@hugeicons/core-free-icons/CornerDownLeftIcon";
 import Share2 from "@hugeicons/core-free-icons/Share01Icon";
@@ -103,6 +104,7 @@ const DeveloperPanel = lazy(() => import("./DeveloperPanel"));
 const AIAssistant = lazy(() => import("./AIAssistant"));
 const QRScanner = lazy(() => import("./QRScanner"));
 const LandingPage = lazy(() => import("./LandingPage"));
+const LocationPicker = lazy(() => import("./LocationPicker"));
 const QRGenerator = lazy(() => import("./QRGenerator"));
 const GpsTrackingPage = lazy(() => import("./GpsTrackingPage"));
 import type { LandingFocus } from "./LandingPage";
@@ -800,6 +802,9 @@ function LocationInput({ value, onChange, placeholder }: { value: string; onChan
   const [suggestions, setSuggestions] = useState<{ label: string }[]>([]);
   const [open, setOpen] = useState(false);
   const [locating, setLocating] = useState(false);
+  const [mapOpen, setMapOpen] = useState(false);
+  const [picked, setPicked] = useState<{ lat: number; lng: number; label: string } | null>(null);
+  const [pickLoading, setPickLoading] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
 
@@ -816,13 +821,13 @@ function LocationInput({ value, onChange, placeholder }: { value: string; onChan
 
   const search = (q: string) => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (q.trim().length < 3) { setSuggestions([]); return; }
+    if (q.trim().length < 2) { setSuggestions([]); return; }
     debounceRef.current = setTimeout(async () => {
       try {
         const res = await fetch(`${API_BASE}/api/geocode/search?q=${encodeURIComponent(q)}`, { headers: authHeader() });
         if (res.ok) { const data = await res.json(); setSuggestions(data); setOpen(data.length > 0); }
       } catch {}
-    }, 400);
+    }, 220);
   };
 
   const detectLocation = () => {
@@ -853,7 +858,37 @@ function LocationInput({ value, onChange, placeholder }: { value: string; onChan
           className="flex-shrink-0 w-9 flex items-center justify-center border border-border rounded bg-input-background hover:bg-muted liquid-transition disabled:opacity-50">
           {locating ? <MorphIcon icon={Loader2} className="w-3.5 h-3.5 animate-spin" /> : <MorphIcon icon={MapPin} className="w-3.5 h-3.5 text-primary" />}
         </button>
+        <button type="button" onClick={() => { setPicked(null); setMapOpen(true); }}
+          title={t('addObject.pickOnMap')} aria-label={t('addObject.pickOnMap')}
+          className="flex-shrink-0 w-9 flex items-center justify-center border border-border rounded bg-input-background hover:bg-muted liquid-transition">
+          <MorphIcon icon={MapIcon} className="w-3.5 h-3.5 text-primary" />
+        </button>
       </div>
+      {mapOpen && (
+        <div className="fixed inset-0 z-[130] bg-black/60 flex items-end sm:items-center justify-center p-3" onClick={() => setMapOpen(false)}>
+          <div className="bg-card border border-border rounded-2xl w-full max-w-2xl p-3 space-y-2 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-bold">{t('addObject.pickOnMap')}</p>
+              <button type="button" onClick={() => setMapOpen(false)} aria-label={t('common.cancel')} className="p-1 text-muted-foreground hover:text-foreground"><MorphIcon icon={X} className="w-4 h-4" /></button>
+            </div>
+            <Suspense fallback={<div className="w-full h-[55vh] rounded-xl border border-border bg-muted/40 flex items-center justify-center"><MorphIcon icon={Loader2} className="w-5 h-5 animate-spin text-muted-foreground" /></div>}>
+              <LocationPicker height={typeof window !== 'undefined' ? Math.round(window.innerHeight * 0.55) : 360} value={picked ? { lat: picked.lat, lng: picked.lng } : null}
+                onPick={async (lat, lng) => {
+                  setPicked({ lat, lng, label: '' }); setPickLoading(true);
+                  let label = '';
+                  try {
+                    const res = await fetch(`${API_BASE}/api/geocode/reverse?lat=${lat}&lng=${lng}`, { headers: authHeader() });
+                    if (res.ok) label = String((await res.json()).label || '');
+                  } catch {}
+                  setPicked({ lat, lng, label: label || `${lat.toFixed(5)}, ${lng.toFixed(5)}` }); setPickLoading(false);
+                }} />
+            </Suspense>
+            <p className="text-xs text-muted-foreground min-h-[1rem] truncate">{pickLoading ? '…' : picked?.label || t('addObject.mapHint')}</p>
+            <button type="button" disabled={!picked || pickLoading} onClick={() => { if (picked) { onChange(picked.label); setMapOpen(false); } }}
+              className="w-full btn btn-primary py-2.5 rounded-xl text-sm font-bold disabled:opacity-50">{t('addObject.confirmPlace')}</button>
+          </div>
+        </div>
+      )}
       {open && suggestions.length > 0 && (
         <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-card border border-border rounded-lg shadow-lg max-h-48 overflow-y-auto scrollbar-hide">
           {suggestions.map((s, i) => (

@@ -45,7 +45,8 @@ function parseAnnouncementBody(body: any): { data?: any; error?: string } {
   if (location) {
     const lat = Number(location.lat), lng = Number(location.lng);
     if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return { error: "Lokatsiya noto'g'ri" };
-    data.location = { lat, lng };
+    const label = typeof location.label === 'string' ? location.label.trim().slice(0, 200) : '';
+    data.location = label ? { lat, lng, label } : { lat, lng };
   }
   return { data };
 }

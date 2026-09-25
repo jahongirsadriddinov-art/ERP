@@ -31,10 +31,20 @@ android {
         // Barqaror (repo'dagi) debug kalit — aks holda har CI runner o'zining tasodifiy
         // kalitini yaratadi va yangi APK eskisi ustiga O'RNATILMAYDI ("paket ziddiyati").
         debug {
-            storeFile file('debug.keystore')
-            storePassword 'android'
-            keyAlias 'androiddebugkey'
-            keyPassword 'android'
+            // CI: GitHub secret'lardan tiklangan MAXFIY kalit (ANDROID_KEYSTORE_*). Secret bo'lmasa —
+            // repo'dagi ochiq debug kalit (faqat vaqtincha zaxira: u ochiq, shuning uchun xavfsiz emas).
+            def ciKs = System.getenv('ANDROID_KEYSTORE_PATH')
+            if (ciKs) {
+                storeFile file(ciKs)
+                storePassword System.getenv('ANDROID_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('ANDROID_KEY_ALIAS')
+                keyPassword System.getenv('ANDROID_KEY_PASSWORD')
+            } else {
+                storeFile file('debug.keystore')
+                storePassword 'android'
+                keyAlias 'androiddebugkey'
+                keyPassword 'android'
+            }
         }
         release {
             if (keystorePropertiesFile.exists()) {

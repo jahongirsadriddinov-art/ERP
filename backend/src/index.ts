@@ -110,9 +110,6 @@ app.set('trust proxy', 1);
 
 app.use(helmet({
   crossOriginEmbedderPolicy: false,  // WebRTC + socket.io uchun kerak
-  // helmet standarti "same-origin" — frontend (erp-firma.uz / tauri.localhost / Android) boshqa origin'da,
-  // shu sabab backend'dan kelgan rasm/video/ovoz (chat, ish jarayoni, logo) brauzer tomonidan BLOKLANARDI.
-  crossOriginResourcePolicy: { policy: 'cross-origin' },
   contentSecurityPolicy: false,       // Frontend Vercel'da serve bo'lgani uchun backend CSP kerak emas
 }));
 // MUHIM: origin bitta qat'iy satr bo'lsa (masalan faqat "https://erp-firma.uz"),
@@ -168,6 +165,9 @@ app.use(express.json({ limit: '60mb' }));
 // yoqish mumkin: brauzer buni QAYTA SO'RAMASDAN to'g'ridan-to'g'ri qurilma
 // xotirasidan (disk keshidan) o'qib beradi — chat qayta ochilganda rasm/video/
 // ovoz darhol, tarmoqqa chiqmasdan ko'rinadi.
+// helmet standarti CORP "same-origin" — frontend (erp-firma.uz / tauri.localhost / Android) boshqa origin'da,
+// shu sabab rasm/video/ovoz BLOKLANARDI. Faqat fayl yo'llari uchun "cross-origin" (API javoblari himoyada qoladi).
+app.use(['/uploads', '/api/files'], (_req, res, next) => { res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin'); next(); });
 app.use('/uploads', express.static('uploads', { maxAge: '365d', immutable: true }));
 app.get('/uploads/:name', serveDurableUpload); // diskda yo'q bo'lsa (deploy'dan keyin) MongoDB nusxasidan
 

@@ -32,6 +32,7 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
   // Tariflar — ENDI kodda qattiq yozilmagan, backenddagi Plan kolleksiyasidan
   // (routes/plans.ts) o'qiladi va shu yerning o'zidan tahrirlanadi.
   const [plans, setPlans] = useState<any[]>([]);
+  const [openPlanGroup, setOpenPlanGroup] = useState<string | null>("1month");
   const [features, setFeatures] = useState<{ key: string; label: string }[]>([]);
   const [planSaving, setPlanSaving] = useState<string|null>(null);
   const [newPlan, setNewPlan] = useState<{ key: string; label: string; days: string; amount: string; features: string[]; period: string; tier: string } | null>(null);
@@ -669,8 +670,28 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
         ) : tab === "plans" ? (
           // ── Tariflar — narx/kun/yorliq/funksiyalarni tahrirlash, yangi tarif qo'shish ──
           <div className="space-y-3">
-            {plans.map(p => (
-              <div key={p.key} className={`surface rounded-2xl p-4 space-y-3 ${!p.active ? "opacity-50" : ""}`}>
+            {/* Tariflar davr bo'yicha guruhlangan: sarlavha bosilganda FAQAT shu davrning tariflari ochiladi (accordion) */}
+            {([
+              { key: "1month", label: t('devPanel.plans.period1Month') },
+              { key: "3month", label: t('devPanel.plans.period3Month') },
+              { key: "12month", label: t('devPanel.plans.period12Month') },
+              { key: "", label: t('devPanel.plans.periodNone') },
+            ]).map(g => {
+              const list = plans.filter(p => (p.period || "") === g.key).sort((x, y) => (x.tier || 0) - (y.tier || 0) || (x.order || 0) - (y.order || 0));
+              if (list.length === 0) return null;
+              const open = openPlanGroup === g.key;
+              return (
+                <div key={g.key || "none"} className="surface border border-border rounded-2xl overflow-hidden">
+                  <button onClick={() => setOpenPlanGroup(open ? null : g.key)} aria-expanded={open}
+                    className={`w-full flex items-center gap-3 px-4 py-3.5 text-left liquid-transition ${open ? "bg-primary/5" : "hover:bg-muted/30"}`}>
+                    <span className="text-sm font-bold flex-1">{g.label}</span>
+                    <span className="text-[11px] font-semibold text-muted-foreground bg-muted/60 rounded-full px-2 py-0.5">{list.length}</span>
+                    <MorphIcon icon={ChevronLeft} className={`w-4 h-4 text-muted-foreground liquid-transition ${open ? "-rotate-90" : "rotate-180"}`} />
+                  </button>
+                  {open && (
+                    <div className="p-3 border-t border-border grid grid-cols-1 xl:grid-cols-2 gap-3">
+                      {list.map(p => (
+              <div key={p.key} className={`surface border border-border rounded-2xl p-4 space-y-3 ${!p.active ? "opacity-50" : ""}`}>
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-[11px] font-mono text-muted-foreground">{p.key}</span>
                   <button onClick={() => savePlan({ ...p, active: !p.active })} disabled={planSaving === p.key}
@@ -743,7 +764,12 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
                   </button>
                 </div>
               </div>
-            ))}
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
 
             {/* Yangi tarif qo'shish */}
             {newPlan ? (

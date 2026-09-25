@@ -3,6 +3,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { getBackendUrl } from '../utils/backendUrl';
+import { persistUploadedFile } from '../services/durableFiles';
 
 const CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME;
 const API_KEY = process.env.CLOUDINARY_API_KEY;
@@ -69,6 +70,7 @@ export async function uploadFileToCloud(
       const renamed = `${filePath}${ext}`;
       try { fs.renameSync(filePath, renamed); fileName = path.basename(renamed); } catch {}
     }
+    await persistUploadedFile(path.join(path.dirname(filePath), fileName));
     return { url: `${getBackendUrl()}/uploads/${fileName}` };
   }
   const ext = originalName ? path.extname(originalName).toLowerCase() : '';

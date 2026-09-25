@@ -1,3 +1,4 @@
+import { persistUploadedFile } from '../services/durableFiles';
 import { Router } from 'express';
 import multer from 'multer';
 import fs from 'fs';
@@ -90,6 +91,7 @@ router.post('/upload-artifact', upload.single('file'), async (req, res) => {
     const destPath = path.join(destDir, stableName);
     fs.copyFileSync(req.file.path, destPath);
     fs.unlinkSync(req.file.path);
+    await persistUploadedFile(destPath);
     const url = `${getBackendUrl()}/uploads/${stableName}`;
     res.json({ ok: true, url });
   } catch (err) {

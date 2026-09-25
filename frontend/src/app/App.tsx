@@ -513,9 +513,30 @@ const SEED_MSGS: Msg[] = [
 ];
 
 // ─── Small Components ─────────────────────────────────────────────────────────
+// Rasm yuklanmasa (fayl o'chgan/tarmoq xatosi) — "singan rasm" belgisi o'rniga tartibli belgi.
+function SafeImg({ src, alt, className, onClick, fallbackClassName }: { src: string; alt?: string; className?: string; onClick?: () => void; fallbackClassName?: string }) {
+  const [bad, setBad] = useState(false);
+  useEffect(() => { setBad(false); }, [src]);
+  if (bad) return (
+    <div className={`${fallbackClassName || 'w-full h-full'} flex items-center justify-center bg-muted/40 text-muted-foreground border border-dashed border-border rounded-xl`} title={alt}>
+      <MorphIcon icon={ImageIcon} className="w-6 h-6 opacity-50" />
+    </div>
+  );
+  return <img src={src} alt={alt || ""} decoding="async" className={className} onClick={onClick} onError={() => setBad(true)} />;
+}
+function CompanyLogo({ src, imgClass, iconClass }: { src?: string; imgClass: string; iconClass: string }) {
+  const [bad, setBad] = useState(false);
+  useEffect(() => { setBad(false); }, [src]);
+  return src && !bad
+    ? <img src={src} alt="Logo" className={imgClass} onError={() => setBad(true)} />
+    : <MorphIcon icon={Building2} className={iconClass} />;
+}
+
 export function Avatar({ user, size = "md" }: { user: AppUser; size?: "sm"|"md"|"lg" }) {
   const sz = { sm: "w-7 h-7 text-sm md:text-xs", md: "w-9 h-9 text-sm md:text-xs", lg: "w-16 h-16 text-xl" }[size];
-  if (user.avatar) return <img src={user.avatar} alt={user.name} className={`${sz} rounded-full object-cover flex-shrink-0`}/>;
+  const [avatarBad, setAvatarBad] = useState(false);
+  useEffect(() => { setAvatarBad(false); }, [user.avatar]);
+  if (user.avatar && !avatarBad) return <img src={user.avatar} alt={user.name} className={`${sz} rounded-full object-cover flex-shrink-0`} onError={() => setAvatarBad(true)}/>;
   const initials = user.name.split(" ").map(w => w[0]).slice(0,2).join("");
   return (
     <div className={`${sz} rounded-full bg-primary/15 flex items-center justify-center font-bold text-primary dark:text-white flex-shrink-0 select-none`}>
@@ -2961,7 +2982,7 @@ function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSe
                     {m.type === 'video' ? (
                       <video src={m.url} className="w-full h-full object-cover" controls playsInline />
                     ) : (
-                      <img src={m.url} alt="" className="w-full h-full object-cover cursor-pointer" onClick={() => window.open(m.url, '_blank')} />
+                      <SafeImg src={m.url} className="w-full h-full object-cover cursor-pointer" onClick={() => window.open(m.url, '_blank')} />
                     )}
                     <div className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[9px] px-1.5 py-1 flex items-center justify-between">
                       <span className="truncate">{m.uploadedBy?.name || '—'}</span>
@@ -3709,7 +3730,7 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
           </div>
         )}
         {m.type==='image' && m.mediaUrl && (
-          <img src={m.mediaUrl} alt={tChat('chat.imageAlt')} decoding="async" className="rounded-xl max-w-full max-h-52 object-cover mb-1 cursor-pointer" onClick={()=>window.open(m.mediaUrl,'_blank')}/>
+          <SafeImg src={m.mediaUrl as string} alt={tChat('chat.imageAlt')} className="rounded-xl max-w-full max-h-52 object-cover mb-1 cursor-pointer" fallbackClassName="w-40 h-28" onClick={()=>window.open(m.mediaUrl,'_blank')}/>
         )}
         {m.type==='video' && m.mediaUrl && (
           <video src={m.mediaUrl} controls preload="metadata" className="rounded-xl max-w-full max-h-52 mb-1"/>
@@ -5014,7 +5035,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
     return (
       <motion.div key={activePanel} initial={{ opacity: 0, x: 28 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 28 }}
         transition={{ type: "spring", stiffness: 380, damping: 34 }}
-        className="overflow-y-auto scrollbar-hide max-w-lg md:max-w-4xl lg:max-w-6xl 2xl:max-w-7xl mx-auto w-full pb-10">
+        className="max-w-lg md:max-w-4xl lg:max-w-6xl 2xl:max-w-7xl mx-auto w-full pb-10">
         <div className="flex items-center gap-3 px-4 md:px-6 py-4 sticky top-0 bg-background/80 backdrop-blur-xl z-10">
           <button onClick={() => setActivePanel(null)} aria-label={t('common.back')} className="btn btn-ghost w-10 h-10 p-0 rounded-full flex-shrink-0"><MorphIcon icon={ChevronLeft} className="w-5 h-5" /></button>
           {activeRow && (activeRow.swatch
@@ -5027,11 +5048,11 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
         </div>
         <div className="px-4 md:px-6 lg:grid lg:grid-cols-12 lg:gap-6 lg:items-start">
           {/* Chap: boshqa bo'limlarga tez o'tish (faqat kompyuterda) */}
-          <aside className="hidden lg:block lg:col-span-4 xl:col-span-3 sticky top-20">
-            <div className="surface overflow-hidden p-2 space-y-0.5">
+          <aside className="hidden lg:block lg:col-span-4 xl:col-span-3 sticky top-20 max-h-[calc(100dvh-11rem)] overflow-y-auto scrollbar-hide">
+            <div className="surface border border-border overflow-hidden p-2 space-y-0.5">
               {menuRows.map(row => (
                 <button key={row.key} onClick={() => setActivePanel(row.key)}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left liquid-transition ${row.key === activePanel ? "bg-primary/10 text-primary font-semibold" : "hover:bg-muted/40 text-foreground"}`}>
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left border liquid-transition ${row.key === activePanel ? "bg-primary/10 text-primary font-semibold border-primary/30" : "border-transparent hover:bg-muted/40 hover:border-border text-foreground"}`}>
                   {row.swatch
                     ? <div className="w-8 h-8 rounded-lg flex-shrink-0" style={row.swatch}/>
                     : <div className="icon-chip w-8 h-8"><MorphIcon icon={row.icon} className="w-4 h-4" /></div>}
@@ -5043,7 +5064,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
           </aside>
           <div className="space-y-4 lg:col-span-8 xl:col-span-9 min-w-0">
           {activePanel === "bg" && (
-            <div className="surface overflow-hidden">
+            <div className="surface border border-border overflow-hidden">
               <div className="px-4 py-3 border-b border-border flex items-center gap-2">
                 <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex-1">{t('profile.chooseBgImage')}</p>
                 <span className="text-[10px] text-muted-foreground hidden sm:block">{t('profile.appliesSiteWide')}</span>
@@ -5073,7 +5094,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
             </div>
           )}
           {activePanel === "appearance" && (
-            <div className="surface overflow-hidden">
+            <div className="surface border border-border overflow-hidden">
               <div className="p-3">
                 <div className="grid grid-cols-3 gap-2">
                   {([["light",t('profile.themeLight'),Sun],["dark",t('profile.themeDark'),Moon],["system",t('profile.themeSystem'),Monitor]] as [ "light"|"dark"|"system", string, IconNode ][]).map(([m,label,Icon]) => (
@@ -5088,7 +5109,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
             </div>
           )}
           {activePanel === "color" && (
-            <div className="surface overflow-hidden">
+            <div className="surface border border-border overflow-hidden">
               <div className="px-3 py-3">
                 <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-6 gap-3">
                   {COLOR_THEMES.map(ct => {
@@ -5116,7 +5137,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
             </div>
           )}
           {activePanel === "perms" && (
-            <div className="surface overflow-hidden">
+            <div className="surface border border-border overflow-hidden">
               {perms.map(([label, has]) => (
                 <div key={label} className="flex items-center justify-between px-4 py-3 border-b border-border/50 last:border-0 hover:bg-muted/20 liquid-transition">
                   <span className="text-sm text-foreground">{label}</span>
@@ -5126,7 +5147,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
             </div>
           )}
           {activePanel === "projects" && (
-            <div className="surface overflow-hidden">
+            <div className="surface border border-border overflow-hidden">
               {(!currentUser.projectIds || currentUser.projectIds.length === 0)
                 ? <p className="px-4 py-4 text-sm text-muted-foreground text-center">{t('profile.noneAssigned')}</p>
                 : projects.filter(p => currentUser.projectIds.includes(p.id)).map(p => (
@@ -5141,7 +5162,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
             </div>
           )}
           {activePanel === "language" && (
-            <div className="surface overflow-hidden p-5 flex flex-col items-center gap-3">
+            <div className="surface border border-border overflow-hidden p-5 flex flex-col items-center gap-3">
               <p className="text-xs text-muted-foreground text-center">{t('profile.languageHint')}</p>
               <LanguageSwitcher value={i18n.language as SiteLang} onChange={changeLanguage}/>
             </div>
@@ -5150,7 +5171,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
             <CurrencyPanel canEdit={isAdmin(currentUser.role) || !!currentUser.isOwner}/>
           )}
           {activePanel === "backup" && (
-            <div className="surface overflow-hidden p-4 space-y-3">
+            <div className="surface border border-border overflow-hidden p-4 space-y-3">
               <p className="text-xs text-muted-foreground">{t('profile.backupHint')}</p>
               <button onClick={onBackup} disabled={backupLoading}
                 className="w-full flex items-center justify-center gap-2 btn btn-outline py-3 rounded-xl text-sm font-semibold disabled:opacity-60">
@@ -5167,7 +5188,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
             </div>
           )}
           {activePanel === "sound" && (
-            <div className="surface overflow-hidden">
+            <div className="surface border border-border overflow-hidden">
               <div className="p-3">
                 <div className="grid grid-cols-2 gap-2">
                   {([[true, t('profile.soundOn'), Volume2], [false, t('profile.soundOff'), VolumeX]] as [boolean, string, IconNode][]).map(([val, label, Icon]) => (
@@ -5236,7 +5257,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
             </div>
           )}
           {activePanel === "subscription" && (
-            <div className="surface overflow-hidden">
+            <div className="surface border border-border overflow-hidden">
               {subLoading ? (
                 <SkeletonList items={1} withAvatar={false} />
               ) : !subData || subData.status === 'none' ? (
@@ -5330,11 +5351,11 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
   }
 
   return (
-    <div className="overflow-y-auto scrollbar-hide max-w-lg md:max-w-4xl lg:max-w-6xl 2xl:max-w-7xl mx-auto w-full pb-10">
+    <div className="max-w-lg md:max-w-4xl lg:max-w-6xl 2xl:max-w-7xl mx-auto w-full pb-10">
 
       {/* ── Company Banner ─────────────────────────── */}
       <motion.div initial={{ opacity: 0, scale: 1.04 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-        className="relative overflow-hidden h-[210px] md:h-[240px] lg:h-[260px] md:mx-6 md:mt-4 md:rounded-3xl" style={{ ...bannerStyle }}>
+        className="relative overflow-hidden h-[140px] md:h-[150px] lg:h-[160px] md:mx-6 md:mt-4 md:rounded-3xl border border-border/60" style={{ ...bannerStyle }}>
         <div className="absolute inset-0" style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.12) 0%, rgba(0,0,0,0.58) 100%)" }}/>
         {canEditCompany && (
           <button onClick={() => bgRef.current?.click()}
@@ -5344,10 +5365,10 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
           </button>
         )}
         <input ref={bgRef} type="file" accept="image/*" className="hidden" onChange={handleBgFile}/>
-        <div className="absolute bottom-0 left-0 right-0 px-5 pb-5 md:px-8 md:pb-7 flex items-end gap-4">
+        <div className="absolute bottom-0 left-0 right-0 px-5 pb-4 md:px-8 md:pb-5 flex items-end gap-4">
           <div className="relative flex-shrink-0">
-            <div className="w-16 h-16 md:w-20 md:h-20 rounded-2xl border-2 border-white/80 shadow-2xl overflow-hidden bg-white flex items-center justify-center">
-              {companyLogo ? <img src={companyLogo} alt="Logo" className="w-full h-full object-contain p-1"/> : <MorphIcon icon={Building2} className="w-8 h-8 text-primary" />}
+            <div className="w-14 h-14 md:w-16 md:h-16 rounded-2xl border-2 border-white/80 shadow-2xl overflow-hidden bg-white flex items-center justify-center">
+              <CompanyLogo src={companyLogo} imgClass="w-full h-full object-contain p-1" iconClass="w-8 h-8 text-primary" />
             </div>
             {canEditCompany && (
               <button onClick={() => logoRef.current?.click()} aria-label={t('profile.changeLogoAria')}
@@ -5387,7 +5408,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
         <div className="lg:col-span-4 xl:col-span-3 space-y-4 md:space-y-0 md:grid md:grid-cols-2 md:gap-4 lg:block lg:space-y-4 lg:sticky lg:top-2 min-w-0">
         {/* ── Profile Card ──────────────────────────── */}
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28, delay: 0.02 }}
-          className={`surface p-5 text-center relative ${hasAttendanceCard ? "" : "md:col-span-2 lg:col-span-1"}`}>
+          className={`surface border border-border p-5 text-center relative ${hasAttendanceCard ? "" : "md:col-span-2 lg:col-span-1"}`}>
           {isAdmin(currentUser.role) && !isEditing && (
             <button aria-label={t('common.edit')} onClick={() => setIsEditing(true)} className="absolute top-4 right-4 p-1.5 text-muted-foreground hover:bg-muted/50 hover:text-foreground rounded-lg liquid-transition"><MorphIcon icon={Edit} className="w-4 h-4" /></button>
           )}
@@ -5549,7 +5570,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
         <div className="lg:col-span-8 xl:col-span-9 space-y-4 min-w-0">
         {/* ── Sozlamalar menyusi: telefonda ro'yxat, planshet/noutbukda katakchalar ── */}
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28, delay: 0.06 }}>
-          <div className="surface overflow-hidden md:hidden">
+          <div className="surface border border-border overflow-hidden md:hidden">
             {menuRows.map((row, i) => (
               <button key={row.key} onClick={() => setActivePanel(row.key)}
                 className={`w-full flex items-center gap-3 px-4 py-3.5 hover:bg-muted/30 liquid-transition text-left ${i > 0 ? "border-t border-border/50" : ""}`}>
@@ -5565,7 +5586,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
           <div className="hidden md:grid md:grid-cols-2 xl:grid-cols-3 gap-3">
             {menuRows.map(row => (
               <button key={row.key} onClick={() => setActivePanel(row.key)}
-                className="surface rounded-2xl p-4 flex items-center gap-3 text-left hover:-translate-y-0.5 hover:shadow-lg liquid-transition min-w-0">
+                className="surface border border-border rounded-2xl p-4 flex items-center gap-3 text-left hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-lg liquid-transition min-w-0">
                 {row.swatch
                   ? <div className="w-11 h-11 rounded-xl flex-shrink-0" style={row.swatch}/>
                   : <div className="icon-chip w-11 h-11"><MorphIcon icon={row.icon} className="w-5 h-5" /></div>}
@@ -5881,7 +5902,7 @@ function LoginScreen({ onLogin, onRegister, onBack }: { onLogin: (u: any, compan
       <motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 26 }}
         className="mb-8 text-center relative z-10">
         <div className="w-16 h-16 bg-gradient-to-br from-primary to-primary/80 rounded-3xl flex items-center justify-center mx-auto mb-4 shadow-xl shadow-primary/20 overflow-hidden">
-          {loginCompanyLogo ? <img src={loginCompanyLogo} alt="Logo" className="w-full h-full object-contain p-1"/> : <MorphIcon icon={Building2} className="w-8 h-8 text-white" />}
+          <CompanyLogo src={loginCompanyLogo} imgClass="w-full h-full object-contain p-1" iconClass="w-8 h-8 text-white" />
         </div>
         <h1 className="text-3xl font-bold font-['Roboto_Slab',serif] bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70">{loginCompanyName}</h1>
         <p className="text-sm text-muted-foreground mt-1">{t('login.subtitle')}</p>
@@ -6117,7 +6138,7 @@ export function ClientViewPage({ token }: { token: string }) {
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {data.media.map((m, i) => (
                 <div key={i} className="relative rounded-xl overflow-hidden bg-muted aspect-square">
-                  {m.type === 'video' ? <video src={m.url} className="w-full h-full object-cover" controls playsInline /> : <img src={m.url} alt="" className="w-full h-full object-cover" />}
+                  {m.type === 'video' ? <video src={m.url} className="w-full h-full object-cover" controls playsInline /> : <SafeImg src={m.url} className="w-full h-full object-cover" />}
                 </div>
               ))}
             </div>
@@ -7083,7 +7104,7 @@ export default function App() {
       style={{ paddingTop: 'max(0.625rem, env(safe-area-inset-top))', paddingBottom: '0.625rem' }}>
       <div className="nav-pill-desktop flex items-center gap-2.5 px-3 py-2 rounded-full flex-shrink-0">
         <div className="w-7 h-7 rounded-full flex items-center justify-center overflow-hidden bg-gradient-to-br from-accent to-accent/75 shadow-sm flex-shrink-0">
-          {companyLogo ? <img src={companyLogo} alt="Logo" className="w-full h-full object-contain"/> : <MorphIcon icon={Building2} className="w-3.5 h-3.5 text-white" />}
+          <CompanyLogo src={companyLogo} imgClass="w-full h-full object-contain" iconClass="w-3.5 h-3.5 text-white" />
         </div>
         <span className="text-sm font-bold tracking-tight hidden lg:block whitespace-nowrap max-w-[140px] truncate">{companyName}</span>
       </div>
@@ -7169,7 +7190,7 @@ export default function App() {
         <motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 26 }}
           className="w-full max-w-sm surface rounded-3xl p-8 text-center space-y-5 relative">
           <div className="w-16 h-16 rounded-full flex items-center justify-center overflow-hidden bg-gradient-to-br from-accent to-accent/75 shadow-sm mx-auto">
-            {companyLogo ? <img src={companyLogo} alt="Logo" className="w-full h-full object-contain"/> : <MorphIcon icon={Building2} className="w-8 h-8 text-white" />}
+            <CompanyLogo src={companyLogo} imgClass="w-full h-full object-contain" iconClass="w-8 h-8 text-white" />
           </div>
           <div>
             <p className="text-lg font-bold">{tApp('checkinGate.welcome', { name: liveUser.name.split(' ')[0] })}</p>

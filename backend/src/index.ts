@@ -51,6 +51,8 @@ import { optionalAuth, requireAuth, blockDeveloper, requireDeveloper } from './m
 // Import bot to start it + get bot instance for webhook route
 import { bot, notifyDeveloper } from './services/bot';
 import { checkRate } from './utils/rateLimit';
+import { serveDurableUpload } from './services/durableFiles';
+import { cloudinaryEnabled } from './config/cloudinary';
 
 dotenv.config();
 
@@ -164,6 +166,7 @@ app.use(express.json({ limit: '60mb' }));
 // xotirasidan (disk keshidan) o'qib beradi — chat qayta ochilganda rasm/video/
 // ovoz darhol, tarmoqqa chiqmasdan ko'rinadi.
 app.use('/uploads', express.static('uploads', { maxAge: '365d', immutable: true }));
+app.get('/uploads/:name', serveDurableUpload); // diskda yo'q bo'lsa (deploy'dan keyin) MongoDB nusxasidan
 
 // Health-check — Render/uptime monitoring uchun. commit/deployedAt maydonlari
 // deploy'ning HAQIQATDA qachon va qaysi commit bilan yangilanganini masofadan
@@ -177,6 +180,7 @@ app.get('/health', (_req, res) => res.json({
   commit: process.env.RENDER_GIT_COMMIT || null,
   serverStartedAt: SERVER_STARTED_AT,
   db: mongoose.connection.readyState,
+  storage: cloudinaryEnabled ? 'cloudinary' : 'mongo-fallback',
 }));
 
 // XAVFSIZLIK — MUHIM TUZATISH: bu yo'llarning DEYARLI HAMMASI avval

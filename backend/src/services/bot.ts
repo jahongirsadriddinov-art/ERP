@@ -21,6 +21,7 @@ import { uploadFileToCloud } from '../config/cloudinary';
 import { todayInTashkent, tashkentHour } from '../utils/tz';
 import { PLAN_CONFIG, getPayablePlanKeys } from '../config/plans';
 import { createSubscriptionPaymentOrder } from './subscriptionPayments';
+import { persistUploadedFile } from './durableFiles';
 
 dotenv.config();
 
@@ -647,6 +648,7 @@ async function downloadTelegramFileToUploads(fileId: string, ext: string): Promi
     // turgan davrda ishlaydigan lokal URL bilan davom etamiz (butunlay
     // muvaffaqiyatsizlikdan ko'ra yaxshiroq).
     console.error('[bot media upload]', err);
+    await persistUploadedFile(tempPath);
     return { url: `${BACKEND_URL}/uploads/${filename}`, size: buf.length };
   }
 }
@@ -2785,6 +2787,7 @@ async function broadcastVersionFile(fileId: string, kind: 'apk' | 'exe', fromCha
     const destDir = path.join(process.cwd(), 'uploads');
     if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
     fs.writeFileSync(path.join(destDir, stableName), buf);
+    await persistUploadedFile(path.join(destDir, stableName));
   } catch (err) {
     console.error('[version broadcast] lokal nusxa saqlashda xato (baribir davom etamiz):', err);
   }
@@ -2848,6 +2851,7 @@ async function broadcastVersionFiles(items: { fileId: string; kind: 'apk' | 'exe
       const destDir = path.join(process.cwd(), 'uploads');
       if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
       fs.writeFileSync(path.join(destDir, stableName), buf);
+      await persistUploadedFile(path.join(destDir, stableName));
       setFields[item.kind === 'apk' ? 'apkUrl' : 'exeUrl'] = `${getBackendUrl()}/uploads/${stableName}`;
     } catch (err) {
       console.error('[version broadcast/group] lokal nusxa saqlashda xato (baribir davom etamiz):', err);

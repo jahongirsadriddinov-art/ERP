@@ -17,6 +17,7 @@ import { uploadFileToCloud } from '../config/cloudinary';
 import { getBackendUrl } from '../utils/backendUrl';
 import { createNotification } from '../services/notifications';
 import { checkRate } from '../utils/rateLimit';
+import { persistUploadedFile } from '../services/durableFiles';
 
 if (ffmpegPath) ffmpeg.setFfmpegPath(ffmpegPath);
 
@@ -252,6 +253,7 @@ router.post('/upload', requireAuth, upload.single('file'), async (req, res) => {
     // asosida hal qiladi (web: erp-firma.uz, Windows: tauri.localhost,
     // Android: localhost) — hech biri backend'nikiga to'g'ri kelmaydi, rasm/
     // fayl hech qayerda ochilmaydi.
+    await persistUploadedFile(req.file.path);
     res.json({ url: `${getBackendUrl()}/uploads/${req.file.filename}`, fileName: req.file.originalname, fileSize: req.file.size });
   }
 });

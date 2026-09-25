@@ -799,9 +799,11 @@ function AddUserModal({ currentUser, users, projects, onClose, onAdd }:
 // ham ishlatiladi.
 function LocationInput({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
   const { t } = useTranslation();
-  const [suggestions, setSuggestions] = useState<{ label: string }[]>([]);
+  const [suggestions, setSuggestions] = useState<{ label: string; lat?: number; lng?: number }[]>([]);
   const [open, setOpen] = useState(false);
   const [locating, setLocating] = useState(false);
+  // Tanlangan takliflar/GPS koordinatasi — xarita aynan shu joyni ko'rsatishi uchun
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [mapOpen, setMapOpen] = useState(false);
   const [picked, setPicked] = useState<{ lat: number; lng: number; label: string } | null>(null);
   const [pickLoading, setPickLoading] = useState(false);
@@ -836,7 +838,7 @@ function LocationInput({ value, onChange, placeholder }: { value: string; onChan
     navigator.geolocation.getCurrentPosition(async pos => {
       try {
         const res = await fetch(`${API_BASE}/api/geocode/reverse?lat=${pos.coords.latitude}&lng=${pos.coords.longitude}`, { headers: authHeader() });
-        if (res.ok) { const data = await res.json(); onChange(data.label); }
+        if (res.ok) { const data = await res.json(); onChange(data.label); setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }); }
         else toast.error(t('addObject.geoFailed'));
       } catch { toast.error(t('addObject.geoFailed')); }
       setLocating(false);
@@ -850,7 +852,7 @@ function LocationInput({ value, onChange, placeholder }: { value: string; onChan
           className="w-full text-sm md:text-xs border border-border rounded px-3 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary"
           placeholder={placeholder}
           value={value}
-          onChange={e => { onChange(e.target.value); search(e.target.value); }}
+          onChange={e => { onChange(e.target.value); setCoords(null); search(e.target.value); }}
           onFocus={() => { if (suggestions.length) setOpen(true); }}
         />
         <button type="button" onClick={detectLocation} disabled={locating}
@@ -858,7 +860,19 @@ function LocationInput({ value, onChange, placeholder }: { value: string; onChan
           className="flex-shrink-0 w-9 flex items-center justify-center border border-border rounded bg-input-background hover:bg-muted liquid-transition disabled:opacity-50">
           {locating ? <MorphIcon icon={Loader2} className="w-3.5 h-3.5 animate-spin" /> : <MorphIcon icon={MapPin} className="w-3.5 h-3.5 text-primary" />}
         </button>
-        <button type="button" onClick={() => { setPicked(null); setMapOpen(true); }}
+        <button type="button" onClick={async () => {
+            setMapOpen(true);
+            if (coords) { setPicked({ ...coords, label: value }); return; }
+            setPicked(null);
+            // Koordinata yo'q (faqat matn yozilgan) — yozilgan manzilning o'rnini topib, xaritani shu joyga olib boramiz
+            if (value.trim().length >= 2) {
+              try {
+                const res = await fetch(`${API_BASE}/api/geocode/search?q=${encodeURIComponent(value.trim())}`, { headers: authHeader() });
+                const hits = res.ok ? await res.json() : [];
+                if (hits[0]?.lat != null) { setCoords({ lat: hits[0].lat, lng: hits[0].lng }); setPicked({ lat: hits[0].lat, lng: hits[0].lng, label: value }); }
+              } catch {}
+            }
+          }}
           title={t('addObject.pickOnMap')} aria-label={t('addObject.pickOnMap')}
           className="flex-shrink-0 w-9 flex items-center justify-center border border-border rounded bg-input-background hover:bg-muted liquid-transition">
           <MorphIcon icon={MapIcon} className="w-3.5 h-3.5 text-primary" />
@@ -880,7 +894,7 @@ function LocationInput({ value, onChange, placeholder }: { value: string; onChan
                     const res = await fetch(`${API_BASE}/api/geocode/reverse?lat=${lat}&lng=${lng}`, { headers: authHeader() });
                     if (res.ok) label = String((await res.json()).label || '');
                   } catch {}
-                  setPicked({ lat, lng, label: label || `${lat.toFixed(5)}, ${lng.toFixed(5)}` }); setPickLoading(false);
+                  setPicked({ lat, lng, label: label || `${lat.toFixed(5)}, ${lng.toFixed(5)}` }); setCoords({ lat, lng }); setPickLoading(false);
                 }} />
             </Suspense>
             <p className="text-xs text-muted-foreground min-h-[1rem] truncate">{pickLoading ? '…' : picked?.label || t('addObject.mapHint')}</p>
@@ -892,7 +906,7 @@ function LocationInput({ value, onChange, placeholder }: { value: string; onChan
       {open && suggestions.length > 0 && (
         <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-card border border-border rounded-lg shadow-lg max-h-48 overflow-y-auto scrollbar-hide">
           {suggestions.map((s, i) => (
-            <button key={i} type="button" onClick={() => { onChange(s.label); setOpen(false); setSuggestions([]); }}
+            <button key={i} type="button" onClick={() => { onChange(s.label); setCoords(s.lat != null && s.lng != null ? { lat: s.lat, lng: s.lng } : null); setOpen(false); setSuggestions([]); }}
               className="w-full text-left px-3 py-2 text-xs hover:bg-muted liquid-transition border-b border-border/30 last:border-0">
               {s.label}
             </button>

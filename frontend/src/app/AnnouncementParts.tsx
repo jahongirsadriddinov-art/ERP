@@ -206,7 +206,19 @@ export function AnnouncementComposer({ endpoint, onPosted, onCancel }: { endpoin
           {locating ? <MorphIcon icon={Loader2} className="w-3.5 h-3.5 animate-spin" /> : <MorphIcon icon={LocationIcon} className="w-3.5 h-3.5" />}
           {t('announcements.attachLocation')}
         </button>
-        <button type="button" onClick={() => setShowMap(v => !v)} aria-pressed={showMap}
+        <button type="button" aria-pressed={showMap}
+          onClick={async () => {
+            const next = !showMap;
+            setShowMap(next);
+            // Manzil yozilgan-u, joy tanlanmagan bo'lsa — yozilgan manzilning o'rnini topib, xaritani shu yerga olib boramiz
+            if (next && !location && query.trim().length >= 2) {
+              try {
+                const r = await fetch(`${API_BASE}/api/geocode/search?q=${encodeURIComponent(query.trim())}`, { headers: geoHeaders() });
+                const hits = r.ok ? await r.json() : [];
+                if (hits[0]) setLocation({ lat: hits[0].lat, lng: hits[0].lng, label: hits[0].label });
+              } catch {}
+            }
+          }}
           className={`flex items-center gap-1.5 text-xs font-medium border rounded-full px-3 py-1.5 liquid-transition ${showMap ? "border-primary bg-primary/10 text-primary" : "border-border hover:bg-muted"}`}>
           <MorphIcon icon={LocationIcon} className="w-3.5 h-3.5" />
           {showMap ? t('announcements.hideMap') : t('announcements.pickOnMap')}

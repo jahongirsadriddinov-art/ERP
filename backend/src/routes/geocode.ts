@@ -23,7 +23,7 @@ type SearchHit = { label: string; lat: number; lng: number };
 // Photon (komoot, OpenStreetMap ma'lumoti) — yozayotganda taklif berishga mo'ljallangan, Nominatim'dan
 // ancha tez. Toshkent markaziga yaqin natijalar ustuvor; faqat O'zbekiston natijalari qoldiriladi.
 async function photonSearch(q: string): Promise<SearchHit[]> {
-  const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=15&lat=41.3&lon=69.24&lang=en`;
+  const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=12&lat=41.3&lon=69.24&lang=en&bbox=55.9,37.1,73.2,45.6`;
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), 2500);
   try {
@@ -50,13 +50,27 @@ async function photonSearch(q: string): Promise<SearchHit[]> {
   finally { clearTimeout(timer); }
 }
 
+function shortLabel(display: string): string {
+  const parts = display.split(', ').map(x => x.trim())
+    .filter(x => x && !/^\d{5,6}$/.test(x) && !/^(O[ʻ'’`]?zbekiston|Uzbekistan|Узбекистан)$/i.test(x));
+  return parts.slice(0, 4).join(', ');
+}
+
 async function nominatimSearch(q: string): Promise<SearchHit[]> {
   const url = `${NOMINATIM_BASE}/search?format=json&addressdetails=0&limit=8&accept-language=uz,ru&countrycodes=uz&q=${encodeURIComponent(q)}`;
-  const r = await fetch(url, { headers: { 'User-Agent': USER_AGENT } });
-  if (!r.ok) return [];
-  const data = await r.json() as Array<{ display_name: string; lat: string; lon: string }>;
-  return data.map(d => ({ label: d.display_name, lat: Number(d.lat), lng: Number(d.lon) }));
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 1800);
+  try {
+    const r = await fetch(url, { headers: { 'User-Agent': USER_AGENT }, signal: ctl.signal });
+    if (!r.ok) return [];
+    const data = await r.json() as Array<{ display_name: string; lat: string; lon: string }>;
+    return data.map(d => ({ label: shortLabel(d.display_name), lat: Number(d.lat), lng: Number(d.lon) }));
+  } catch { return []; }
+  finally { clearTimeout(timer); }
 }
+
+// Ikki nuqta ~300 m ichida bo'lsa — bir joy deb hisoblanadi (takrorlarni olib tashlash uchun)
+const near = (a: SearchHit, b: SearchHit) => Math.abs(a.lat - b.lat) < 0.003 && Math.abs(a.lng - b.lng) < 0.003;
 
 // GET /api/geocode/search?q=... — yozayotganda manzil takliflari.
 router.get('/search', async (req, res) => {
@@ -72,16 +86,21 @@ router.get('/search', async (req, res) => {
     const rl = checkRate(`geocode:search:${req.ip}`, 6, 1000);
     if (!rl.allowed) return res.json([]);
 
-    let data = await photonSearch(q);
-    if (data.length === 0) {
-      const nrl = checkRate('geocode:nominatim', 1, 1100); // Nominatim qoidasi: max 1/s
-      if (nrl.allowed) data = await nominatimSearch(q).catch(() => []);
-    }
-    if (data.length) {
+    // Ikkalasi PARALLEL: Photon tez, Nominatim aniqroq (asosiy natija odatda to'g'ri). Nominatim'ning
+    // natijalari birinchi, Photon'nikilar (yaqin nuqtalar takrorlanmasdan) undan keyin.
+    const nrl = checkRate('geocode:nominatim', 1, 1100); // Nominatim qoidasi: max 1/s
+    const [ph, nm] = await Promise.all([photonSearch(q), nrl.allowed ? nominatimSearch(q) : Promise.resolve([] as SearchHit[])]);
+    const data: SearchHit[] = [...nm];
+    for (const h of ph) if (!data.some(d => near(d, h))) data.push(h);
+    // Yozilgan so'z bilan BOSHLANADIGAN nomlar birinchi (aniq nom tepada chiqsin)
+    const ql = q.toLowerCase();
+    const score = (l: string) => { const x = l.toLowerCase(); return x.startsWith(ql) ? 0 : x.includes(ql) ? 1 : 2; };
+    const ranked = data.map((d, i) => ({ d, i })).sort((x, y) => score(x.d.label) - score(y.d.label) || x.i - y.i).map(x => x.d).slice(0, 8);
+    if (ranked.length) {
       if (searchCache.size > 500) searchCache.delete(searchCache.keys().next().value as string);
-      searchCache.set(key, { at: Date.now(), data });
+      searchCache.set(key, { at: Date.now(), data: ranked });
     }
-    res.json(data);
+    res.json(ranked);
   } catch (err) {
     console.error('[geocode/search]', err);
     res.json([]);

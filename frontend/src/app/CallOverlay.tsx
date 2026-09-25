@@ -11,6 +11,7 @@ import ZoomIn from "@hugeicons/core-free-icons/ZoomInIcon";
 import VolumeHigh from "@hugeicons/core-free-icons/VolumeHighIcon";
 import VolumeLow from "@hugeicons/core-free-icons/VolumeLowIcon";
 import X from "@hugeicons/core-free-icons/Cancel01Icon";
+import FlipHorizontal from "@hugeicons/core-free-icons/FlipHorizontalIcon";
 import { MorphIcon } from "morphicons/react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
@@ -295,7 +296,7 @@ export default function CallOverlay({ currentUser, users, call, onClose, onSendM
     closePeerRef.current = closePeer;
     // Video chatda (Telegram kabi) oxirgi odam chiqib ketsa ham xona ochiq qoladi —
     // yopish faqat o'zim chiqqanimda yoki boshlovchi "hammaga yakunlash" bosganda.
-    const onEnd = (d: any) => { playSound('disconnect'); closePeer(d.from); setPeerState(prev => { const c = { ...prev }; delete c[d.from]; return c; }); if (!call.videoChat && Object.keys(pcs.current).length === 0) onClose(); };
+    const onEnd = (d: any) => { playSound('disconnect'); closePeer(d.from); setPeerState(prev => { const c = { ...prev }; delete c[d.from]; return c; }); if (!call.videoChat && (!call.groupId || Object.keys(pcs.current).length === 0)) onClose(); };
     const onState = (d: any) => {
       if (!d || d.from === currentUser.id) return;
       setPeerState(prev => ({ ...prev, [d.from]: { cam: !!d.cam, mic: !!d.mic } }));
@@ -361,7 +362,15 @@ export default function CallOverlay({ currentUser, users, call, onClose, onSendM
     setShowInvite(false);
   };
   const decline = () => { playSound('disconnect'); socket?.emit('call:reject', { to: call.peerId, from: currentUser.id }); onClose(); };
-  const hangup = () => { playSound('disconnect'); Object.keys(pcs.current).forEach(pid => socket?.emit('call:end', { to: pid, from: currentUser.id })); onClose(); };
+  const hangup = () => {
+    playSound('disconnect');
+    // Hali ulanmagan (jiringlayotgan) tomonga ham "tugadi" yuboriladi — aks holda
+    // chaqiruvchi bekor qilganda qabul qiluvchida qo'ng'iroq oynasi ochiq qolardi.
+    const targets = new Set<string>([...Object.keys(pcs.current), ...(call.peerId ? [call.peerId] : []), ...(call.groupId && !call.videoChat ? (call.memberIds || []) : [])]);
+    targets.delete(currentUser.id);
+    targets.forEach(pid => socket?.emit('call:end', { to: pid, from: currentUser.id }));
+    onClose();
+  };
   // Faqat video chatni BOSHLAGAN odam ko'radi — hammaga (butun xonaga)
   // tugatadi, oddiy "chiqish"dan farqli (backend serverda ham
   // startedBy'ni tekshiradi — bu yerdagi shart faqat TUGMANI yashirish
@@ -495,10 +504,12 @@ export default function CallOverlay({ currentUser, users, call, onClose, onSendM
             <p className="text-white/50 text-xs">{t('call.participantsCount', { count: n })}</p>
           </div>
         </div>
-        <div className={`flex-1 min-h-0 grid ${cols} auto-rows-fr gap-2 p-2`}>
+        <div className="flex-1 min-h-0 overflow-y-auto p-2 flex">
+        <div className={`grid ${cols} gap-2 w-full m-auto sm:max-w-[calc((100dvh-10rem)*var(--f))]`} style={{ ['--f' as any]: n <= 1 ? 1 : n === 2 ? 2 : n <= 4 ? 1 : n <= 6 ? 1.5 : 3 / Math.ceil(n / 3) }}>
           {tiles.map(tile => (
-            <VideoTile key={tile.id} stream={tile.stream} name={tile.name} cam={tile.cam} mic={tile.mic} local={tile.local} mirror={facingMode === 'user'} />
+            <VideoTile key={tile.id} id={tile.local ? 'self' : tile.id} stream={tile.stream} name={tile.name} cam={tile.cam} mic={tile.mic} local={tile.local} mirror={facingMode === 'user'} />
           ))}
+        </div>
         </div>
         <div className="flex-shrink-0 pt-3 flex items-center justify-center gap-3" style={{ paddingBottom: 'max(1.5rem, calc(env(safe-area-inset-bottom) + 0.75rem))' }}>
           <button onClick={toggleMute} aria-label={muted ? t('call.unmute') : t('call.mute')} className={`w-12 h-12 rounded-full flex items-center justify-center text-white active:scale-95 ${muted ? 'bg-white/30' : 'bg-white/10'}`}><MorphIcon icon={muted ? MicOff : Mic} className="w-5 h-5" /></button>
@@ -555,7 +566,7 @@ export default function CallOverlay({ currentUser, users, call, onClose, onSendM
         {call.mode === 'video' && remoteEntries.length > 0 ? (
           <div className={`w-full h-full grid gap-1 ${remoteEntries.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
             {remoteEntries.map(([pid, stream]) => (
-              <RemoteVideo key={pid} stream={stream} label={userById(pid)?.name || ''}/>
+              <RemoteVideo key={pid} id={pid} stream={stream} label={userById(pid)?.name || ''}/>
             ))}
           </div>
         ) : (
@@ -666,8 +677,9 @@ export default function CallOverlay({ currentUser, users, call, onClose, onSendM
   );
 }
 
-function RemoteVideo({ stream, label }: { stream: MediaStream; label: string }) {
+function RemoteVideo({ id, stream, label }: { id: string; stream: MediaStream; label: string }) {
   const ref = useRef<HTMLVideoElement>(null);
+  const [flip, toggleFlip] = useFlip(id);
   // `autoPlay` attributi yolg'iz o'zi yetarli emas — bu element muted EMAS
   // (masofaviy ovoz shu orqali eshitiladi), va ba'zi brauzerlar (ayniqsa mobil)
   // muted bo'lmagan avtomatik play'ni jim tarzda bloklaydi: srcObject to'g'ri
@@ -676,8 +688,11 @@ function RemoteVideo({ stream, label }: { stream: MediaStream; label: string }) 
   useEffect(() => { if (ref.current) { ref.current.srcObject = stream; ref.current.play().catch(()=>{}); } }, [stream]);
   return (
     <div className="relative w-full h-full bg-black">
-      <video ref={ref} autoPlay playsInline className="w-full h-full object-cover"/>
-      {label && <span className="absolute bottom-2 left-2 text-white text-xs bg-black/50 px-2 py-0.5 rounded">{label}</span>}
+      <video ref={ref} autoPlay playsInline className="w-full h-full object-cover" style={flip ? { transform: 'scaleX(-1)' } : undefined}/>
+      <button onClick={toggleFlip} aria-label="Flip" className="absolute top-3 right-3 w-9 h-9 rounded-full bg-black/50 text-white flex items-center justify-center active:scale-95">
+        <MorphIcon icon={FlipHorizontal} className="w-4 h-4" />
+      </button>
+      {label &&<span className="absolute bottom-2 left-2 text-white text-xs bg-black/50 px-2 py-0.5 rounded">{label}</span>}
     </div>
   );
 }
@@ -700,18 +715,35 @@ function RemoteAudio({ stream }: { stream: MediaStream }) {
 // Telegram-ga o'xshash ishtirokchi plitkasi: kamera yoqiq bo'lsa video, aks holda
 // avatar. <video> HAR DOIM DOM'da turadi (kamera o'chiq bo'lsa ham) — shunda
 // ovoz to'xtamaydi, faqat tasvir yashiriladi.
-function VideoTile({ stream, name, cam, mic, local, mirror }: { stream: MediaStream | null; name: string; cam: boolean; mic: boolean; local: boolean; mirror: boolean }) {
+function useFlip(id: string): [boolean, () => void] {
+  const key = `vcFlip:${id}`;
+  const [flip, setFlip] = useState(() => { try { return localStorage.getItem(key) === '1'; } catch { return false; } });
+  const toggle = () => setFlip(f => { const n = !f; try { localStorage.setItem(key, n ? '1' : '0'); } catch {} return n; });
+  return [flip, toggle];
+}
+
+// Ba'zi qurilmalar (ayniqsa ba'zi Android old kameralari) tasvirni ko'zguga
+// o'xshab teskari uzatadi — kodda buni oldindan bilib bo'lmaydi, shuning uchun
+// har bir plitkada qo'lda "teskari qilish" tugmasi bor (tanlov eslab qolinadi).
+function VideoTile({ id, stream, name, cam, mic, local, mirror }: { id: string; stream: MediaStream | null; name: string; cam: boolean; mic: boolean; local: boolean; mirror: boolean }) {
   const ref = useRef<HTMLVideoElement>(null);
+  const [flip, toggleFlip] = useFlip(id);
   useEffect(() => {
     const el = ref.current;
     if (el && stream) { if (el.srcObject !== stream) el.srcObject = stream; el.play().catch(() => {}); }
   }, [stream]);
   const showVideo = cam && !!stream;
+  const mirrored = (local && mirror) !== flip;
   return (
-    <div className="relative rounded-2xl overflow-hidden bg-[#131A2C] min-h-0 border border-white/5">
+    <div className="relative aspect-square rounded-2xl overflow-hidden bg-[#131A2C] border border-white/5">
       <video ref={ref} autoPlay playsInline muted={local}
         className={`absolute inset-0 w-full h-full object-cover ${showVideo ? '' : 'opacity-0'}`}
-        style={local && mirror ? { transform: 'scaleX(-1)' } : undefined} />
+        style={mirrored ? { transform: 'scaleX(-1)' } : undefined} />
+      {showVideo && (
+        <button onClick={toggleFlip} aria-label="Flip" className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/50 text-white flex items-center justify-center active:scale-95">
+          <MorphIcon icon={FlipHorizontal} className="w-4 h-4" />
+        </button>
+      )}
       {!showVideo && (
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="w-20 h-20 rounded-full bg-white/10 flex items-center justify-center text-3xl font-bold text-white">{(name || '?').charAt(0).toUpperCase()}</div>

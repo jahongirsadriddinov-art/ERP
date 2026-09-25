@@ -1574,66 +1574,10 @@ function EditUserModal({ user, currentUser, onClose, onUpdate }: { user: AppUser
 }
 
 // ─── Dashboard (Admin) ────────────────────────────────────────────────────────
-function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onSendTransfer, onConfirmTransfer, onRejectTransfer, onSelectProject, onAddUser, onUpdateUser, onDeleteUser, onAddProject, hasFeature }:
-  { currentUser: AppUser; users: AppUser[]; projects: Project[]; transfers: Transfer[];
-    setUsers: React.Dispatch<React.SetStateAction<AppUser[]>>;
-    onSendTransfer: (t: Transfer) => void; onConfirmTransfer: (id: string, d?: string) => void;
-    onRejectTransfer: (id: string) => void; onSelectProject: (p: Project) => void; onAddUser: (u: AppUser) => Promise<{ ok: boolean; error?: string }>;
-    onUpdateUser: (u: AppUser) => void; onDeleteUser: (id: string) => void;
-    onAddProject: (p: Project) => void;
-    // Obuna tarifida "backup" funksiyasi yoqilganmi — App() komponentidan
-    // (companyFeatures/hasFeature) uzatiladi, chunki AdminDashboard alohida
-    // komponent bo'lib, o'zining obuna ma'lumotlarini so'ramaydi.
-    hasFeature: (key: string) => boolean;
-  }) {
+// Backup yuklab olish / tiklash — AdminDashboard va Profil sahifasi ikkalasida ishlatiladi.
+function useBackupActions() {
   const { t } = useTranslation();
-  const [showAddUser, setShowAddUser] = useState(false);
-  const [showSend, setShowSend] = useState(false);
-  const [showAddObject, setShowAddObject] = useState(false);
-  const [editUser, setEditUser] = useState<AppUser|null>(null);
-  const [activeTab, setActiveTab] = useState<string>(() => {
-    return localStorage.getItem("admin_activeTab") || "rahbariyat";
-  });
-  const [stats, setStats] = useState<{
-    activeProjects: number; totalProjects: number; totalEmployees: number;
-    totalExpenses: number; pendingTransfers: number; todayAttendance: number;
-  } | null>(null);
   const [backupLoading, setBackupLoading] = useState(false);
-  const [showEquipment, setShowEquipment] = useState(false);
-  const [showSafety, setShowSafety] = useState(false);
-  const [showDocuments, setShowDocuments] = useState(false);
-  const [showPayroll, setShowPayroll] = useState(false);
-  const [export1cLoading, setExport1cLoading] = useState(false);
-  const handleExport1c = async () => {
-    const token = localStorage.getItem("token");
-    if (!token) return;
-    setExport1cLoading(true);
-    try {
-      const r = await fetch(`${API_BASE}/api/export1c/transactions`, { headers: { Authorization: `Bearer ${token}` } });
-      if (!r.ok) { toast.error(t('dashboard.backupError')); return; }
-      const blob = await r.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `1c-export-${new Date().toISOString().split('T')[0]}.xlsx`;
-      document.body.appendChild(a); a.click(); document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    } catch { toast.error(t('dashboard.backupError')); }
-    finally { setExport1cLoading(false); }
-  };
-
-  useEffect(() => {
-    localStorage.setItem("admin_activeTab", activeTab);
-  }, [activeTab]);
-
-  useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) return;
-    fetch(`${API_BASE}/api/dashboard/stats`, {
-      headers: { Authorization: `Bearer ${token}` },
-    }).then(r => r.ok ? r.json() : null).then(d => { if (d) setStats(d); }).catch(() => {});
-  }, []);
-
   const handleBackup = async () => {
     const token = localStorage.getItem("token");
     if (!token) return;
@@ -1697,6 +1641,69 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
     } catch { toast.error(t('dashboard.backupError')); }
     finally { setImportLoading(false); }
   };
+  return { backupLoading, handleBackup, importFileRef, importLoading, handleImportBackup };
+}
+
+function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onSendTransfer, onConfirmTransfer, onRejectTransfer, onSelectProject, onAddUser, onUpdateUser, onDeleteUser, onAddProject, hasFeature }:
+  { currentUser: AppUser; users: AppUser[]; projects: Project[]; transfers: Transfer[];
+    setUsers: React.Dispatch<React.SetStateAction<AppUser[]>>;
+    onSendTransfer: (t: Transfer) => void; onConfirmTransfer: (id: string, d?: string) => void;
+    onRejectTransfer: (id: string) => void; onSelectProject: (p: Project) => void; onAddUser: (u: AppUser) => Promise<{ ok: boolean; error?: string }>;
+    onUpdateUser: (u: AppUser) => void; onDeleteUser: (id: string) => void;
+    onAddProject: (p: Project) => void;
+    // Obuna tarifida "backup" funksiyasi yoqilganmi — App() komponentidan
+    // (companyFeatures/hasFeature) uzatiladi, chunki AdminDashboard alohida
+    // komponent bo'lib, o'zining obuna ma'lumotlarini so'ramaydi.
+    hasFeature: (key: string) => boolean;
+  }) {
+  const { t } = useTranslation();
+  const [showAddUser, setShowAddUser] = useState(false);
+  const [showSend, setShowSend] = useState(false);
+  const [showAddObject, setShowAddObject] = useState(false);
+  const [editUser, setEditUser] = useState<AppUser|null>(null);
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    return localStorage.getItem("admin_activeTab") || "rahbariyat";
+  });
+  const [stats, setStats] = useState<{
+    activeProjects: number; totalProjects: number; totalEmployees: number;
+    totalExpenses: number; pendingTransfers: number; todayAttendance: number;
+  } | null>(null);
+  const [showEquipment, setShowEquipment] = useState(false);
+  const [showSafety, setShowSafety] = useState(false);
+  const [showDocuments, setShowDocuments] = useState(false);
+  const [showPayroll, setShowPayroll] = useState(false);
+  const [export1cLoading, setExport1cLoading] = useState(false);
+  const handleExport1c = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    setExport1cLoading(true);
+    try {
+      const r = await fetch(`${API_BASE}/api/export1c/transactions`, { headers: { Authorization: `Bearer ${token}` } });
+      if (!r.ok) { toast.error(t('dashboard.backupError')); return; }
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `1c-export-${new Date().toISOString().split('T')[0]}.xlsx`;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch { toast.error(t('dashboard.backupError')); }
+    finally { setExport1cLoading(false); }
+  };
+
+  useEffect(() => {
+    localStorage.setItem("admin_activeTab", activeTab);
+  }, [activeTab]);
+
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    fetch(`${API_BASE}/api/dashboard/stats`, {
+      headers: { Authorization: `Bearer ${token}` },
+    }).then(r => r.ok ? r.json() : null).then(d => { if (d) setStats(d); }).catch(() => {});
+  }, []);
+
+  const { backupLoading, handleBackup, importFileRef, importLoading, handleImportBackup } = useBackupActions();
 
   const brigades = [...new Set(users.filter(u => u.brigade).map(u => u.brigade!))];
 
@@ -6036,6 +6043,7 @@ export function ClientViewPage({ token }: { token: string }) {
 
 // ─── Main App ──────────────────────────────────────────────────────────────────
 export default function App() {
+  const { backupLoading, handleBackup, importFileRef, importLoading, handleImportBackup } = useBackupActions();
   const { t: tApp, i18n: i18nApp } = useTranslation();
   const anyBigModalOpen = useAnyBigModalOpen();
   const [users, setUsers] = useState<AppUser[]>([]);

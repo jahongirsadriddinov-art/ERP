@@ -110,6 +110,9 @@ app.set('trust proxy', 1);
 
 app.use(helmet({
   crossOriginEmbedderPolicy: false,  // WebRTC + socket.io uchun kerak
+  // helmet standarti "same-origin" — frontend (erp-firma.uz / tauri.localhost / Android) boshqa origin'da,
+  // shu sabab backend'dan kelgan rasm/video/ovoz (chat, ish jarayoni, logo) brauzer tomonidan BLOKLANARDI.
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
   contentSecurityPolicy: false,       // Frontend Vercel'da serve bo'lgani uchun backend CSP kerak emas
 }));
 // MUHIM: origin bitta qat'iy satr bo'lsa (masalan faqat "https://erp-firma.uz"),

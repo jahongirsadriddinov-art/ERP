@@ -6,7 +6,8 @@ import { readFileSync } from 'fs'
 
 // Ilova o'zining versiyasini bilishi uchun (App.tsx'dagi yangilanish
 // tekshiruvi, backend/src/routes/deploy.ts GET /latest bilan solishtiradi).
-const pkgVersion = JSON.parse(readFileSync(path.resolve(__dirname, 'package.json'), 'utf-8')).version
+// CI (VITE_APP_VERSION) backend /api/deploy/latest bilan AYNAN bir xil formatdagi versiyani beradi.
+const pkgVersion = process.env.VITE_APP_VERSION || JSON.parse(readFileSync(path.resolve(__dirname, 'package.json'), 'utf-8')).version
 
 
 function figmaAssetResolver() {

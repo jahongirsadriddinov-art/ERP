@@ -55,3 +55,6 @@ Thumbs.db
 
 # ─── Claude (lokal sozlamalar) ──────────────────────────────────
 .claude/
+
+# CI APK barqaror imzolanishi uchun (debug kalit — sir emas; yangilanishlar o'rnatilgan ilova ustiga tushishi uchun shart)
+!frontend/android/app/debug.keystore

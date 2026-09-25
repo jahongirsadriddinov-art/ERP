@@ -40,8 +40,26 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build-android:
+  # Bitta versiya nomi — ilovaga kiritiladi (yangilanish tekshiruvi uchun) VA botga
+  # yuboriladigan xabarda ishlatiladi.
+  meta:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - id: v
+        env:
+          VERSION_INPUT: ${{ inputs.version }}
+        run: |
+          V="$VERSION_INPUT"
+          if [ -z "$V" ]; then V="$(date -u +%Y.%m.%d)-${GITHUB_SHA::7}"; fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+
+  build-android:
+    needs: meta
+    runs-on: ubuntu-latest
+    env:
+      VITE_APP_VERSION: ${{ needs.meta.outputs.version }}
     defaults:
       run:
         working-directory: frontend
@@ -80,7 +98,7 @@ jobs:
 
       - name: Build debug APK
         working-directory: frontend/android
-        run: ./gradlew assembleDebug --no-daemon
+        run: ./gradlew assembleDebug --no-daemon -PappVersionCode=$((1000 + ${{ github.run_number }})) -PappVersionName=1.2.${{ github.run_number }}
 
       - uses: actions/upload-artifact@v4
         with:
@@ -89,7 +107,10 @@ jobs:
           retention-days: 30
 
   build-windows:
+    needs: meta
     runs-on: windows-latest
+    env:
+      VITE_APP_VERSION: ${{ needs.meta.outputs.version }}
     defaults:
       run:
         working-directory: frontend
@@ -124,6 +145,14 @@ jobs:
       - name: Install frontend deps
         run: npm ci
 
+      # Har build o'z versiyasiga ega bo'lsin — o'rnatuvchi (NSIS/MSI) eski o'rnatilgan
+      # nusxani yangi deb tanib, ustiga yozadi.
+      - name: Set unique app version
+        shell: bash
+        run: |
+          sed -i 's/"version": "1.2.0"/"version": "1.2.${{ github.run_number }}"/' src-tauri/tauri.conf.json
+          grep -n '"version"' src-tauri/tauri.conf.json
+
       # Xuddi mahalliy "npm run build:windows" bilan bir xil — mashinada
       # qo'lda qilingan build bilan aynan bir xil natija, boshqa
       # qo'shimcha, sinalmagan Action ishlatilmaydi.
@@ -143,7 +172,7 @@ jobs:
   # qo'lda ishga tushirilsa ham xuddi shunday, faqat versiya/izoh qo'lda
   # kiritilgan bo'lishi mumkin.
   broadcast:
-    needs: [build-android, build-windows]
+    needs: [meta, build-android, build-windows]
     runs-on: ubuntu-latest
     if: always() && needs.build-android.result == 'success' && needs.build-windows.result == 'success'
     steps:
@@ -161,7 +190,7 @@ jobs:
         env:
           DEPLOY_SECRET: ${{ secrets.DEPLOY_BROADCAST_SECRET }}
           BACKEND_URL: https://qurilisherp-backend.onrender.com
-          VERSION_INPUT: ${{ inputs.version }}
+          VERSION_INPUT: ${{ needs.meta.outputs.version }}
           NOTES: ${{ inputs.notes }}
         run: |
           set -e

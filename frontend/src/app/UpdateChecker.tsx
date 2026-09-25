@@ -45,7 +45,8 @@ export default function UpdateChecker() {
         if (!d?.available || !d.version) return;
         const url = isAndroid() ? d.apkUrl : isTauri() ? d.exeUrl : undefined;
         if (!url) return; // shu platforma uchun build yo'q (masalan iOS)
-        if (compareVersions(d.version, __APP_VERSION__) > 0) {
+        // Aynan shu versiya o'rnatilgan bo'lsa (CI build'i) — qayta taklif qilinmaydi.
+        if (d.version !== __APP_VERSION__ && compareVersions(d.version, __APP_VERSION__) >= 0) {
           setInfo({ version: d.version, notes: d.notes, url });
         }
       }).catch(() => {});

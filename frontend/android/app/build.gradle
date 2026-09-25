@@ -15,8 +15,10 @@ android {
         applicationId "uz.erp_firma.qurilisherp"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 3
-        versionName "1.2.0"
+        // CI har buildda -PappVersionCode / -PappVersionName beradi — Android faqat
+        // versionCode OSHGANDA yangi APK'ni eskisi ustiga o'rnatadi.
+        versionCode (project.findProperty('appVersionCode') ?: '3').toInteger()
+        versionName (project.findProperty('appVersionName') ?: '1.2.0')
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 
@@ -26,6 +28,14 @@ android {
     }
 
     signingConfigs {
+        // Barqaror (repo'dagi) debug kalit — aks holda har CI runner o'zining tasodifiy
+        // kalitini yaratadi va yangi APK eskisi ustiga O'RNATILMAYDI ("paket ziddiyati").
+        debug {
+            storeFile file('debug.keystore')
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+        }
         release {
             if (keystorePropertiesFile.exists()) {
                 storeFile file(keystoreProperties['storeFile'])

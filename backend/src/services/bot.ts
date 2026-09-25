@@ -2847,16 +2847,16 @@ async function broadcastVersionFiles(items: { fileId: string; kind: 'apk' | 'exe
     telegramChatId: { $exists: true, $ne: '' },
   }).select('telegramChatId').lean();
 
-  // Izoh (matn + premium emoji/formatlash) albomning BIRINCHI faylida — Telegram uni
-  // butun albomning izohi qilib, dasturchi yuborgan ko'rinishda BITTA guruh sifatida
-  // ko'rsatadi. Faqat izoh 1024 belgidan uzun bo'lsa (Telegram chegarasi) alohida
+  // Izoh (matn + premium emoji/formatlash) albomning OXIRGI faylida — ikkala fayl tepada,
+  // izoh ularning ostida BITTA guruh bo'lib ko'rinadi (birinchi faylda bo'lsa, ikkinchi
+  // fayl izohdan keyin alohida "pastda" qolib ketardi). Faqat izoh 1024 belgidan uzun bo'lsa (Telegram chegarasi) alohida
   // xabar bo'lib, albomdan oldin ketadi.
   const caption = customCaption ?? `🆕 QurilishERP — yangi versiya (${version})`;
   const captionEntities = customCaption ? customCaptionEntities : undefined;
   const inlineCaption = caption.length <= 1024;
   const media = items.map((item, i) => ({
     type: 'document' as const, media: item.fileId,
-    ...(i === 0 && inlineCaption ? { caption, ...(captionEntities?.length ? { caption_entities: captionEntities } : {}) } : {}),
+    ...(i === items.length - 1 && inlineCaption ? { caption, ...(captionEntities?.length ? { caption_entities: captionEntities } : {}) } : {}),
   }));
 
   let sent = 0, failed = 0;

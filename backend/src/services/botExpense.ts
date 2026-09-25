@@ -7,7 +7,23 @@ import { geminiAudioToJson, geminiConfigured } from './gemini';
 export type ExpLang = 'uz' | 'ru';
 export const expLang = (lang?: string): ExpLang => (lang === 'ru' ? 'ru' : 'uz');
 
-export interface ParsedExpense { amount: number; description: string; projectName?: string; transcript?: string }
+export type ExpCategory = 'oylik' | 'material' | 'jihozlar' | 'transport' | 'boshqa';
+export const EXP_CATEGORIES: ExpCategory[] = ['oylik', 'material', 'jihozlar', 'transport', 'boshqa'];
+export interface ParsedExpense { amount: number; description: string; projectName?: string; transcript?: string; category?: ExpCategory }
+
+// Saytdagi chiqim turlari (oylik/material/jihozlar/transport/boshqa) bilan BIR XIL bo'lishi shart —
+// aks holda sayt noma'lum turni xom kalit matni ("finance.types.expense") sifatida ko'rsatadi.
+const CAT_KEYWORDS: [ExpCategory, RegExp][] = [
+  ['oylik', /oylik|maosh|ish haqi|avans|premiya|mukofot|зарплат|оклад|аванс|премия|зп\b/i],
+  ['transport', /transport|benzin|dizel|yoqilg|solyarka|taksi|kamaz|yuk tashish|yo['’`]?l kira|mashina|avtomobil|бензин|топлив|дизел|такси|доставк|перевозк|транспорт|камаз|машин/i],
+  ['jihozlar', /jihoz|asbob|uskuna|instrument|drel|kompressor|nasos|perforator|generator|arenda|ijara|оборудован|инструмент|аренд|дрель|компрессор|насос|перфоратор/i],
+  ['material', /material|sement|g['’`]?isht|qum|shag['’`]?al|armatura|beton|taxta|bo['’`]?yoq|shifer|profil|gips|penoplast|izolyats|kabel|quvur|цемент|кирпич|песок|щебень|арматур|бетон|доск|краск|гипс|кабел|труб|материал/i],
+];
+export function guessExpenseCategory(description: string): ExpCategory {
+  for (const [cat, re] of CAT_KEYWORDS) if (re.test(description)) return cat;
+  return 'boshqa';
+}
+const asCategory = (v: any): ExpCategory | undefined => (EXP_CATEGORIES as string[]).includes(String(v)) ? (String(v) as ExpCategory) : undefined;
 
 const MAX_AMOUNT = 1e13;
 
@@ -25,7 +41,7 @@ export function parseExpenseText(text: string): ParsedExpense | null {
   if (t.includes(';')) {
     const [a, b, c] = t.split(';').map(x => x.trim());
     const amount = parseAmount(a || '');
-    if (amount && b) return { amount, description: b.slice(0, 300), projectName: c || undefined };
+    if (amount && b) return { amount, description: b.slice(0, 300), projectName: c || undefined, category: guessExpenseCategory(b) };
     return null;
   }
   const m = t.match(/(\d[\d\s.,]*\d|\d)/);
@@ -34,7 +50,7 @@ export function parseExpenseText(text: string): ParsedExpense | null {
   if (!amount) return null;
   const description = (t.slice(0, m.index) + ' ' + t.slice((m.index || 0) + m[1].length)).replace(/\s+/g, ' ').replace(/^[\s,.:-]+|[\s,.:-]+$/g, '').replace(/^(so'?m|сум|sum)\s+/i, '');
   if (!description) return null;
-  return { amount, description: description.slice(0, 300) };
+  return { amount, description: description.slice(0, 300), category: guessExpenseCategory(description) };
 }
 
 const VOICE_PROMPT = `Bu qurilish firmasi xodimining XARAJAT (chiqim) haqidagi OVOZLI xabari. Til o'zbekcha yoki ruscha bo'lishi mumkin.
@@ -43,7 +59,8 @@ const VOICE_PROMPT = `Bu qurilish firmasi xodimining XARAJAT (chiqim) haqidagi O
    - "amount": summa, FAQAT butun son so'mda (yuz ellik ming = 150000, ikki million = 2000000, 1.5 mln = 1500000, "полторы тысячи" = 1500). Aniqlab bo'lmasa 0.
    - "description": xarajat sababi/tavsifi, qisqa va aniq.
    - "projectName": agar obyekt/loyiha nomi aytilgan bo'lsa shu nom, aks holda "".
-Javob FAQAT JSON: {"transcript":"","amount":0,"description":"","projectName":""}`;
+   - "category": FAQAT shulardan biri: "oylik" (ish haqi/avans), "material" (qurilish materiallari), "jihozlar" (asbob-uskuna, ijara), "transport" (yoqilg'i, yuk/yo'l xarajati), "boshqa" (qolgan hammasi).
+Javob FAQAT JSON: {"transcript":"","amount":0,"description":"","projectName":"","category":"boshqa"}`;
 
 export async function voiceToExpense(audio: Buffer, mimeType: string): Promise<ParsedExpense | null> {
   if (!geminiConfigured()) throw new Error('NO_GEMINI');
@@ -54,6 +71,7 @@ export async function voiceToExpense(audio: Buffer, mimeType: string): Promise<P
   return {
     amount, description: description.slice(0, 300),
     projectName: String(r?.projectName || '').trim() || undefined,
+    category: asCategory(r?.category) ?? guessExpenseCategory(description),
     transcript: String(r?.transcript || '').trim() || undefined,
   };
 }
@@ -76,6 +94,9 @@ export const EXP_T = {
     descLine: (s: string) => `📝 Tavsif: ${s}`,
     projLine: (s?: string) => `🏗 Obyekt: ${s || '—'}`,
     approverLine: (s: string) => `👤 Tasdiqlovchi: ${s}`,
+    catLine: (s: string) => `🏷 Turi: ${s}`,
+    catBtn: '🏷 Turini o\'zgartirish',
+    cats: { oylik: 'Oylik', material: 'Material', jihozlar: 'Jihozlar', transport: 'Transport', boshqa: 'Boshqa' } as Record<string, string>,
     ask: "To'g'rimi?",
     savedAdmin: (n: number) => `✅ Chiqim saqlandi: ${fmtSum(n)} so'm`,
     savedPending: (n: number, who: string) => `✅ Chiqim yuborildi: ${fmtSum(n)} so'm\n⏳ ${who} tasdiqlashini kuting.`,
@@ -97,6 +118,9 @@ export const EXP_T = {
     descLine: (s: string) => `📝 Описание: ${s}`,
     projLine: (s?: string) => `🏗 Объект: ${s || '—'}`,
     approverLine: (s: string) => `👤 Утверждающий: ${s}`,
+    catLine: (s: string) => `🏷 Тип: ${s}`,
+    catBtn: '🏷 Сменить тип',
+    cats: { oylik: 'Зарплата', material: 'Материал', jihozlar: 'Оборудование', transport: 'Транспорт', boshqa: 'Прочее' } as Record<string, string>,
     ask: "Всё верно?",
     savedAdmin: (n: number) => `✅ Расход сохранён: ${fmtSum(n)} сум`,
     savedPending: (n: number, who: string) => `✅ Расход отправлен: ${fmtSum(n)} сум\n⏳ Ожидайте подтверждения: ${who}.`,

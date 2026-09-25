@@ -9,7 +9,7 @@ import Message from '../models/Message';
 import Group from '../models/Group';
 import Attendance from '../models/Attendance';
 import ObjectModel from '../models/Object';
-import { EXP_T, expLang, parseExpenseText, voiceToExpense, ParsedExpense } from './botExpense';
+import { EXP_T, expLang, parseExpenseText, voiceToExpense, ParsedExpense, ExpCategory, EXP_CATEGORIES, guessExpenseCategory } from './botExpense';
 import GpsLocation from '../models/GpsLocation';
 import AppRelease from '../models/AppRelease';
 import AppSettings from '../models/AppSettings';
@@ -1064,6 +1064,7 @@ interface ExpenseDraft {
   chatId: number; userId: string; amount: number; description: string;
   projectId?: string; projectName?: string; transcript?: string;
   approverId?: string; approverName?: string; createdAt: number;
+  category: ExpCategory; projLabel?: string;
 }
 const pendingExpenseDrafts = new Map<string, ExpenseDraft>();
 
@@ -1109,19 +1110,27 @@ async function sendExpenseDraft(chatId: number, user: any, parsed: ParsedExpense
     chatId, userId: String(user._id), amount: parsed.amount, description: parsed.description,
     projectId: proj ? String(proj._id) : undefined, projectName: proj?.name, transcript: parsed.transcript,
     approverId: approver ? String(approver._id) : undefined, approverName, createdAt: now,
+    category: parsed.category ?? guessExpenseCategory(parsed.description),
   });
+  const draft = pendingExpenseDrafts.get(id)!;
+  draft.projLabel = proj?.name ?? (parsed.projectName ? `${parsed.projectName} ❓` : undefined);
+  await bot.sendMessage(chatId, expenseDraftText(T, draft), { reply_markup: expenseDraftKeyboard(T, id) });
+}
+
+function expenseDraftText(T: any, d: ExpenseDraft): string {
   const lines = [T.confirmTitle, ''];
-  if (parsed.transcript) lines.push(T.heard(parsed.transcript), '');
-  lines.push(T.amountLine(parsed.amount), T.descLine(parsed.description),
-    T.projLine(proj?.name ?? (parsed.projectName ? `${parsed.projectName} ❓` : undefined)));
-  if (approverName) lines.push(T.approverLine(approverName));
+  if (d.transcript) lines.push(T.heard(d.transcript), '');
+  lines.push(T.amountLine(d.amount), T.descLine(d.description), T.catLine(T.cats[d.category]), T.projLine(d.projLabel));
+  if (d.approverName) lines.push(T.approverLine(d.approverName));
   lines.push('', T.ask);
-  await bot.sendMessage(chatId, lines.join('\n'), {
-    reply_markup: { inline_keyboard: [
-      [{ text: T.okBtn, callback_data: `expok_${id}` }, { text: T.cancelBtn, callback_data: `expno_${id}` }],
-      [{ text: T.retryBtn, callback_data: `expretry_${id}` }],
-    ] },
-  });
+  return lines.join('\n');
+}
+function expenseDraftKeyboard(T: any, id: string) {
+  return { inline_keyboard: [
+    [{ text: T.okBtn, callback_data: `expok_${id}` }, { text: T.cancelBtn, callback_data: `expno_${id}` }],
+    [{ text: T.catBtn, callback_data: `expcat_${id}` }],
+    [{ text: T.retryBtn, callback_data: `expretry_${id}` }],
+  ] };
 }
 
 // true → xabar shu oqimda ishlatildi (asosiy handler davom etmasin).
@@ -1183,6 +1192,11 @@ async function handleExpenseCallback(query: any, data: string, user: any, chatId
 
   const draft = pendingExpenseDrafts.get(id);
   if (!draft || draft.chatId !== chatId || draft.userId !== String(user._id)) { await edit(T.expired); return; }
+  if (data.startsWith('expcat_')) {
+    draft.category = EXP_CATEGORIES[(EXP_CATEGORIES.indexOf(draft.category) + 1) % EXP_CATEGORIES.length];
+    await edit(expenseDraftText(T, draft), expenseDraftKeyboard(T, id));
+    return;
+  }
   pendingExpenseDrafts.delete(id); // ikki marta bosilsa ikki chiqim yaratilmasin
   if (data.startsWith('expno_')) {
     await edit(T.cancelled, { inline_keyboard: [[{ text: T.retryBtn, callback_data: 'expretry_x' }]] });
@@ -1193,7 +1207,7 @@ async function handleExpenseCallback(query: any, data: string, user: any, chatId
   try {
     const admin = isAdmin(user.role);
     const txData: any = {
-      type: 'expense', status: admin ? 'confirmed' : 'pending', date: todayInTashkent(),
+      type: draft.category, status: admin ? 'confirmed' : 'pending', date: todayInTashkent(),
       amount: draft.amount, description: draft.description, createdById: String(user._id), companyId: user.companyId,
     };
     if (draft.projectId) txData.projectId = draft.projectId;

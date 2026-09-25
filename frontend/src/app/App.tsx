@@ -318,7 +318,9 @@ export const EXP_LABELS: Record<ExpType, string> = {
   jihozlar: "Jihozlar", transport: "Transport", boshqa: "Boshqa"
 };
 export function expLabel(t: (key: string) => string, type: ExpType): string {
-  return t(`finance.types.${type}`) || EXP_LABELS[type];
+  // Noma'lum tur (masalan eski bot yozuvlari: 'expense') xom kalit matni bo'lib chiqmasin.
+  const v = t(`finance.types.${type}`);
+  return v && !v.startsWith('finance.types.') ? v : (EXP_LABELS[type] || EXP_LABELS.boshqa);
 }
 
 // Chat — sidebar/last-message preview label uchun (audio/rasm/video/joylashuv/
@@ -4970,23 +4972,76 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
     }
   };
 
+  const hasAttendanceCard = (currentUser.role === 'ishchi' || currentUser.role === 'prorab' || currentUser.role === 'brigadir') && !!todayAttendance?.checkIn;
+
+  const menuRows = [
+            { key: "bg" as const, icon: Palette, label: t('profile.bgThemes'), hint: null as string|null,
+              swatch: (bannerStyle as any).background ? { background: (bannerStyle as any).background } : { backgroundImage: (bannerStyle as any).backgroundImage, backgroundSize: 'cover' } },
+            { key: "appearance" as const, icon: themeMode === "light" ? Sun : themeMode === "dark" ? Moon : Monitor, label: t('profile.appearanceMode'), hint: APPEARANCE_LABELS[themeMode], swatch: null },
+            { key: "color" as const, icon: Palette, label: t('profile.colorTheme'), hint: t(`profile.colorThemeNames.${activeTheme.id}`, { defaultValue: activeTheme.name }), swatch: { background: `linear-gradient(135deg, ${activeTheme.primary}, ${activeTheme.accent})` } },
+            { key: "language" as const, icon: Languages, label: t('profile.language'), hint: langLabel(i18n.language as SiteLang), swatch: null },
+            { key: "perms" as const, icon: CheckCircle, label: t('profile.permissions'), hint: `${perms.filter(([,has])=>has).length}/${perms.length}`, swatch: null },
+            { key: "projects" as const, icon: Building2, label: t('profile.myObjects'), hint: String(myProjectCount), swatch: null },
+            // Tarifda "multi_currency" o'chirilgan bo'lsa bu qator umuman
+            // ko'rsatilmaydi (subData.features hali kelmagan bo'lsa ham
+            // ko'rsatiladi — yuklanish paytida bo'sh menyu ko'rinmasin).
+            ...((!subData?.features || subData.features.includes('multi_currency')) ? [
+              { key: "currency" as const, icon: DollarSign, label: t('profile.currencyRate'), hint: null as string|null, swatch: null },
+            ] : []),
+            { key: "sound" as const, icon: soundOn ? Volume2 : VolumeX, label: t('profile.sound'), hint: soundOn ? t('profile.soundOn') : t('profile.soundOff'), swatch: null },
+            { key: "devices" as const, icon: Smartphone, label: t('profile.connectedDevices'), hint: null as string|null, swatch: null },
+            ...(isAdmin(currentUser.role) ? [{ key: "subscription" as const, icon: CreditCard, label: t('profile.subscriptionStatus'),
+              hint: subData?.status === 'active' ? (subData.daysLeft !== null ? t('profile.daysLeftValue', { count: subData.daysLeft }) : t('profile.subStatusActive')) : subData?.status === 'pending' ? t('profile.subStatusPending') : subData?.status === 'expired' ? t('profile.subStatusExpired') : subData?.status === 'rejected' ? t('profile.subStatusRejected') : subLoading ? "..." : t('common.notFound'),
+              swatch: null }] : []),
+            // XATO TUZATILDI ("backup'ni telefonga profil qismiga qo'sh"):
+            // Backup/tiklash avval FAQAT desktop sarlavhasidagi statistika
+            // qatorida bor edi — bu qator endi planshet/telefonda umuman
+            // ko'rsatilmaydi (`hidden lg:flex`), shu sabab mobil foydalanuvchi
+            // (direktor/o'rinbosar) uchun backup imkoni butunlay yo'qolgan
+            // edi. Endi Profil bo'limida — barcha o'lchamda ko'rinadi.
+            ...(canBackup ? [{ key: "backup" as const, icon: Download, label: t('profile.backupTitle'), hint: null as string|null, swatch: null }] : []),
+  ];
+
   // ── Har bo'lim uchun alohida ekran (rasmdagi "Personal/General/..." kabi) ──
   if (activePanel) {
     const panelTitle = {
       bg: t('profile.bgThemes'), appearance: t('profile.appearanceMode'), color: t('profile.colorTheme'),
       perms: t('profile.permissions'), projects: t('profile.myObjects'), language: t('profile.language'),
       subscription: t('profile.subscriptionStatus'), currency: t('profile.currencyRate'), sound: t('profile.sound'),
-      devices: t('profile.connectedDevices'),
+      devices: t('profile.connectedDevices'), backup: t('profile.backupTitle'),
     }[activePanel];
+    const activeRow = menuRows.find(r => r.key === activePanel);
     return (
       <motion.div key={activePanel} initial={{ opacity: 0, x: 28 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 28 }}
         transition={{ type: "spring", stiffness: 380, damping: 34 }}
-        className="overflow-y-auto scrollbar-hide max-w-lg md:max-w-2xl xl:max-w-3xl mx-auto w-full pb-10">
-        <div className="flex items-center gap-2 px-4 py-4 sticky top-0 bg-background/80 backdrop-blur-xl z-10">
-          <button onClick={() => setActivePanel(null)} aria-label={t('common.back')} className="btn btn-ghost w-9 h-9 p-0 rounded-full flex-shrink-0"><MorphIcon icon={ChevronLeft} className="w-5 h-5" /></button>
-          <h2 className="text-base font-bold">{panelTitle}</h2>
+        className="overflow-y-auto scrollbar-hide max-w-lg md:max-w-4xl lg:max-w-6xl 2xl:max-w-7xl mx-auto w-full pb-10">
+        <div className="flex items-center gap-3 px-4 md:px-6 py-4 sticky top-0 bg-background/80 backdrop-blur-xl z-10">
+          <button onClick={() => setActivePanel(null)} aria-label={t('common.back')} className="btn btn-ghost w-10 h-10 p-0 rounded-full flex-shrink-0"><MorphIcon icon={ChevronLeft} className="w-5 h-5" /></button>
+          {activeRow && (activeRow.swatch
+            ? <div className="w-10 h-10 rounded-xl flex-shrink-0 hidden md:block" style={activeRow.swatch}/>
+            : <div className="icon-chip w-10 h-10 hidden md:flex"><MorphIcon icon={activeRow.icon} className="w-5 h-5" /></div>)}
+          <div className="min-w-0">
+            <h2 className="text-base md:text-lg font-bold truncate">{panelTitle}</h2>
+            {activeRow?.hint && <p className="text-xs text-muted-foreground truncate">{activeRow.hint}</p>}
+          </div>
         </div>
-        <div className="px-4 space-y-4">
+        <div className="px-4 md:px-6 lg:grid lg:grid-cols-12 lg:gap-6 lg:items-start">
+          {/* Chap: boshqa bo'limlarga tez o'tish (faqat kompyuterda) */}
+          <aside className="hidden lg:block lg:col-span-4 xl:col-span-3 sticky top-20">
+            <div className="surface overflow-hidden p-2 space-y-0.5">
+              {menuRows.map(row => (
+                <button key={row.key} onClick={() => setActivePanel(row.key)}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left liquid-transition ${row.key === activePanel ? "bg-primary/10 text-primary font-semibold" : "hover:bg-muted/40 text-foreground"}`}>
+                  {row.swatch
+                    ? <div className="w-8 h-8 rounded-lg flex-shrink-0" style={row.swatch}/>
+                    : <div className="icon-chip w-8 h-8"><MorphIcon icon={row.icon} className="w-4 h-4" /></div>}
+                  <span className="text-sm flex-1 truncate">{row.label}</span>
+                  {row.hint && <span className="text-[11px] text-muted-foreground truncate max-w-[6rem]">{row.hint}</span>}
+                </button>
+              ))}
+            </div>
+          </aside>
+          <div className="space-y-4 lg:col-span-8 xl:col-span-9 min-w-0">
           {activePanel === "bg" && (
             <div className="surface overflow-hidden">
               <div className="px-4 py-3 border-b border-border flex items-center gap-2">
@@ -5268,40 +5323,11 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
               })()}
             </div>
           )}
+          </div>
         </div>
       </motion.div>
     );
   }
-
-  const hasAttendanceCard = (currentUser.role === 'ishchi' || currentUser.role === 'prorab' || currentUser.role === 'brigadir') && !!todayAttendance?.checkIn;
-
-  const menuRows = [
-            { key: "bg" as const, icon: Palette, label: t('profile.bgThemes'), hint: null as string|null,
-              swatch: (bannerStyle as any).background ? { background: (bannerStyle as any).background } : { backgroundImage: (bannerStyle as any).backgroundImage, backgroundSize: 'cover' } },
-            { key: "appearance" as const, icon: themeMode === "light" ? Sun : themeMode === "dark" ? Moon : Monitor, label: t('profile.appearanceMode'), hint: APPEARANCE_LABELS[themeMode], swatch: null },
-            { key: "color" as const, icon: Palette, label: t('profile.colorTheme'), hint: t(`profile.colorThemeNames.${activeTheme.id}`, { defaultValue: activeTheme.name }), swatch: { background: `linear-gradient(135deg, ${activeTheme.primary}, ${activeTheme.accent})` } },
-            { key: "language" as const, icon: Languages, label: t('profile.language'), hint: langLabel(i18n.language as SiteLang), swatch: null },
-            { key: "perms" as const, icon: CheckCircle, label: t('profile.permissions'), hint: `${perms.filter(([,has])=>has).length}/${perms.length}`, swatch: null },
-            { key: "projects" as const, icon: Building2, label: t('profile.myObjects'), hint: String(myProjectCount), swatch: null },
-            // Tarifda "multi_currency" o'chirilgan bo'lsa bu qator umuman
-            // ko'rsatilmaydi (subData.features hali kelmagan bo'lsa ham
-            // ko'rsatiladi — yuklanish paytida bo'sh menyu ko'rinmasin).
-            ...((!subData?.features || subData.features.includes('multi_currency')) ? [
-              { key: "currency" as const, icon: DollarSign, label: t('profile.currencyRate'), hint: null as string|null, swatch: null },
-            ] : []),
-            { key: "sound" as const, icon: soundOn ? Volume2 : VolumeX, label: t('profile.sound'), hint: soundOn ? t('profile.soundOn') : t('profile.soundOff'), swatch: null },
-            { key: "devices" as const, icon: Smartphone, label: t('profile.connectedDevices'), hint: null as string|null, swatch: null },
-            ...(isAdmin(currentUser.role) ? [{ key: "subscription" as const, icon: CreditCard, label: t('profile.subscriptionStatus'),
-              hint: subData?.status === 'active' ? (subData.daysLeft !== null ? t('profile.daysLeftValue', { count: subData.daysLeft }) : t('profile.subStatusActive')) : subData?.status === 'pending' ? t('profile.subStatusPending') : subData?.status === 'expired' ? t('profile.subStatusExpired') : subData?.status === 'rejected' ? t('profile.subStatusRejected') : subLoading ? "..." : t('common.notFound'),
-              swatch: null }] : []),
-            // XATO TUZATILDI ("backup'ni telefonga profil qismiga qo'sh"):
-            // Backup/tiklash avval FAQAT desktop sarlavhasidagi statistika
-            // qatorida bor edi — bu qator endi planshet/telefonda umuman
-            // ko'rsatilmaydi (`hidden lg:flex`), shu sabab mobil foydalanuvchi
-            // (direktor/o'rinbosar) uchun backup imkoni butunlay yo'qolgan
-            // edi. Endi Profil bo'limida — barcha o'lchamda ko'rinadi.
-            ...(canBackup ? [{ key: "backup" as const, icon: Download, label: t('profile.backupTitle'), hint: null as string|null, swatch: null }] : []),
-  ];
 
   return (
     <div className="overflow-y-auto scrollbar-hide max-w-lg md:max-w-4xl lg:max-w-6xl 2xl:max-w-7xl mx-auto w-full pb-10">

@@ -17,8 +17,8 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         // CI har buildda -PappVersionCode / -PappVersionName beradi — Android faqat
         // versionCode OSHGANDA yangi APK'ni eskisi ustiga o'rnatadi.
-        versionCode (project.findProperty('appVersionCode') ?: '3').toInteger()
-        versionName (project.findProperty('appVersionName') ?: '1.2.0')
+        versionCode Integer.parseInt((project.findProperty('appVersionCode') ?: '3').toString())
+        versionName (project.findProperty('appVersionName') ?: '1.2.0').toString()
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 

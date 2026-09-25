@@ -3,15 +3,18 @@
 // Namuna PDF: backend/uploads/smetas/1782282596580.pdf (haqiqiy fayl).
 import { describe, it, expect, beforeAll } from 'vitest';
 import * as path from 'path';
+import * as fs from 'fs';
 import { parseSmeta, ParseResult } from '../index';
 import { tokenizeNumbers, parseNum } from '../normalize';
 
 const FIXTURE = path.join(__dirname, '../../../uploads/smetas/1782282596580.pdf');
+// Namuna PDF git'da saqlanmaydi (uploads/ ignore) — CI'da yo'q bo'lsa fixture testlari o'tkazib yuboriladi.
+const HAS_FIXTURE = fs.existsSync(FIXTURE);
 let R: ParseResult;
 
-beforeAll(async () => { R = await parseSmeta(FIXTURE, '1782282596580.pdf'); }, 60000);
+beforeAll(async () => { if (HAS_FIXTURE) R = await parseSmeta(FIXTURE, '1782282596580.pdf'); }, 60000);
 
-describe('4-bo\'lim: resurslar (deterministik, aniq)', () => {
+describe.skipIf(!HAS_FIXTURE)('4-bo\'lim: resurslar (deterministik, aniq)', () => {
   it('308 ta resurs qatori', () => {
     expect(R.resources.length).toBe(308);
   });
@@ -58,7 +61,7 @@ describe('4-bo\'lim: resurslar (deterministik, aniq)', () => {
   });
 });
 
-describe('5-bo\'lim: ishlar + normalar', () => {
+describe.skipIf(!HAS_FIXTURE)('5-bo\'lim: ishlar + normalar', () => {
   it('jami 183 ish (barcha, edge case yopilgan)', () => {
     expect(R.works.length).toBe(183);
     const idx = R.works.map(w => w.index);
@@ -81,7 +84,7 @@ describe('5-bo\'lim: ishlar + normalar', () => {
   });
 });
 
-describe('meta + validatsiya', () => {
+describe.skipIf(!HAS_FIXTURE)('meta + validatsiya', () => {
   it('НДС bilan bosh summa = 865 180 958', () => {
     expect(R.meta.totalWithVat).toBe(865180958);
   });

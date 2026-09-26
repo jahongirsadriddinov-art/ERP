@@ -1338,8 +1338,42 @@ async function sendExpenseHistory(chatId: number, user: any) {
 }
 
 // ─── Text message handler — main menu ─────────────────────────────────────────
+// /res — botni "yangilash": shu chatdagi barcha yarim qolgan holatlar (chiqim kiritish, chat
+// rejimi, xabar yuborish rejimi, tugma tahrirlash, joylashuv kutish) tozalanadi va asosiy menyu
+// qaytadan yuboriladi. Hech qanday ma'lumot o'chirilmaydi.
+async function resetChatState(chatId: number) {
+  chatSessions.delete(chatId);
+  pendingCheckinLocation.delete(chatId);
+  pendingBroadcastChoice.delete(chatId);
+  pendingLabelEdit.delete(chatId);
+  pendingExpenseEntry.delete(chatId);
+  for (const [k, d] of pendingExpenseDrafts) if (d.chatId === chatId) pendingExpenseDrafts.delete(k);
+  const user: any = await User.findOne({ telegramChatId: chatId.toString() }).catch(() => null);
+  const lang = user?.language as BotLang | undefined;
+  const text = lang === 'ru' ? '🔄 Бот обновлён. Выберите действие в меню.' : "🔄 Bot yangilandi. Menyudan kerakli bo'limni tanlang.";
+  if (!user) {
+    await bot.sendMessage(chatId, tb(undefined, 'notRegistered'), { reply_markup: { remove_keyboard: true } }).catch(() => {});
+    return;
+  }
+  if (!isDev(user.role) && !(await isBotEnabled(true))) {
+    await bot.sendMessage(chatId, text, { reply_markup: RESTRICTED_KEYBOARD(lang) }).catch(() => {});
+    return;
+  }
+  await bot.sendMessage(chatId, text, { reply_markup: await keyboardForUser(user, lang) }).catch(() => {});
+}
+
+bot.setMyCommands([
+  { command: 'start', description: 'Botni boshlash / Запуск' },
+  { command: 'res', description: 'Botni yangilash / Обновить бота' },
+]).catch((e: Error) => console.error('[bot commands]', e.message));
+
 bot.on('message', async (msg: any) => {
   const chatId = msg.chat.id;
+
+  if (msg.chat?.type === 'private' && /^\/res(@\w+)?\s*$/i.test(String(msg.text || ''))) {
+    await resetChatState(chatId);
+    return;
+  }
 
   // ── Guruh/kanal xabari — majburiy-obuna kanal ID'sini ANIQLASHNING
   // ZAXIRA yo'li. Asosiy yo'l — 'my_chat_member' (bot administrator

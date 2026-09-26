@@ -319,6 +319,17 @@ initSocket(httpServer); // Socket.io (real-time chat, bildirishnoma, qo'ng'iroq 
 httpServer.listen(PORT, () => {
   console.log(`Server running on port ${PORT} (HTTP + Socket.io)`);
   startMeteredTurnRefreshLoop();
+  // Render bepul tarifi 15 daqiqa kiruvchi so'rov bo'lmasa serverni uxlatadi, uyg'otish esa
+  // ba'zan muvaffaqiyatsiz bo'ladi ("hibernate-wake-error" → 503). Server o'zining ommaviy
+  // manziliga har 9 daqiqada so'rov yuboradi (Render proksisi orqali — kiruvchi trafik
+  // hisoblanadi), shu bilan umuman uxlamaydi. Tashqi pinger (cron-job.org) zaxira bo'lib qoladi.
+  const selfUrl = process.env.RENDER_EXTERNAL_URL;
+  if (selfUrl) {
+    setInterval(() => {
+      fetch(`${selfUrl.replace(/\/+$/, '')}/health`, { signal: AbortSignal.timeout(15000) })
+        .catch((e: Error) => console.warn('[keep-alive]', e.message));
+    }, 9 * 60 * 1000);
+  }
 });
 
 mongoose.connect(MONGODB_URI)

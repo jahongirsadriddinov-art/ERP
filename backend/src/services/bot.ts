@@ -9,7 +9,8 @@ import Message from '../models/Message';
 import Group from '../models/Group';
 import Attendance from '../models/Attendance';
 import ObjectModel from '../models/Object';
-import { EXP_T, expLang, parseExpenseText, voiceToExpense, ParsedExpense, ExpCategory, EXP_CATEGORIES, guessExpenseCategory } from './botExpense';
+import { EXP_T, expLang, parseExpenseText, voiceToExpense, ParsedExpense, ExpCategory, EXP_CATEGORIES, guessExpenseCategory, fmtMoney } from './botExpense';
+import { getRatesForCompany } from '../routes/currency';
 import TransactionModel from '../models/Transaction';
 import GpsLocation from '../models/GpsLocation';
 import AppRelease from '../models/AppRelease';
@@ -1069,6 +1070,7 @@ interface ExpenseDraft {
   approverId?: string; approverName?: string; createdAt: number;
   category: ExpCategory; projLabel?: string;
   recipientName?: string; objectLabel?: string; voiceFileId?: string; rawText?: string;
+  currency: 'UZS' | 'USD' | 'EUR'; originalAmount: number; rate?: number; date: string; cleanText?: string;
 }
 const pendingExpenseDrafts = new Map<string, ExpenseDraft>();
 
@@ -1138,10 +1140,19 @@ async function sendExpenseDraft(chatId: number, user: any, parsed: ParsedExpense
 
   const now = Date.now();
   for (const [k, d] of pendingExpenseDrafts) if (now - d.createdAt > 30 * 60 * 1000) pendingExpenseDrafts.delete(k);
+  // Aytilgan valyutada saqlanadi; so'mdagi qiymat (sayt hisob-kitobi uchun) firma kursi bilan
+  const currency = parsed.currency || 'UZS';
+  let uzsAmount = parsed.amount, rate: number | undefined;
+  if (currency !== 'UZS') {
+    const rates = await getRatesForCompany(user.companyId);
+    rate = currency === 'USD' ? rates.USD : rates.EUR;
+    uzsAmount = Math.round(parsed.amount * rate);
+  }
   const id = Math.random().toString(36).slice(2, 10);
   const approverName = approver ? `${approver.firstName} ${approver.lastName || ''}`.trim() : undefined;
   pendingExpenseDrafts.set(id, {
-    chatId, userId: String(user._id), amount: parsed.amount, description: parsed.description,
+    chatId, userId: String(user._id), amount: uzsAmount, description: parsed.description,
+    currency, originalAmount: parsed.amount, rate, date: parsed.date || todayInTashkent(), cleanText: parsed.cleanText,
     projectId: proj ? String(proj._id) : undefined, projectName: proj?.name, transcript: parsed.transcript,
     approverId: approver ? String(approver._id) : undefined, approverName, createdAt: now,
     category: parsed.category ?? guessExpenseCategory(parsed.description),
@@ -1156,8 +1167,9 @@ async function sendExpenseDraft(chatId: number, user: any, parsed: ParsedExpense
 
 function expenseDraftText(T: any, d: ExpenseDraft): string {
   const lines = [T.confirmTitle, ''];
-  if (d.transcript) lines.push(T.heard(d.transcript), '');
-  lines.push(T.amountLine(d.amount), T.descLine(d.description), T.catLine(T.cats[d.category]), T.projLine(d.projLabel));
+  if (d.cleanText || d.transcript) lines.push(T.fullTextLine(d.cleanText || d.transcript), '');
+  lines.push(T.moneyLine(fmtMoney(d.originalAmount, d.currency), d.currency !== 'UZS' ? d.amount.toLocaleString('ru-RU') : undefined),
+    T.dateLine(d.date), T.descLine(d.description), T.catLine(T.cats[d.category]), T.projLine(d.projLabel));
   if (d.recipientName) lines.push(T.recipientLine(d.recipientName));
   if (d.approverName) lines.push(T.approverLine(d.approverName));
   lines.push('', T.ask);
@@ -1186,7 +1198,7 @@ async function handleExpenseInput(msg: any, chatId: number): Promise<boolean> {
       try {
         const link = await bot.getFileLink(media.file_id);
         const buf = Buffer.from(await (await fetch(link)).arrayBuffer());
-        parsed = await voiceToExpense(buf, media.mime_type || 'audio/ogg');
+        parsed = await voiceToExpense(buf, media.mime_type || 'audio/ogg', todayInTashkent());
       } catch (e: any) {
         bot.deleteMessage(chatId, notice.message_id).catch(() => {});
         if (e?.message === 'NO_GEMINI') { await bot.sendMessage(chatId, T.noGemini, { parse_mode: 'Markdown' }); return true; }
@@ -1204,7 +1216,7 @@ async function handleExpenseInput(msg: any, chatId: number): Promise<boolean> {
       // Raqamsiz matn yoki buyruq — bu boshqa menyu tugmasi: chiqim kiritishni
       // bekor qilib, xabarni asosiy handlerga qaytaramiz.
       if (text.startsWith('/') || !/\d/.test(text)) { pendingExpenseEntry.delete(chatId); return false; }
-      const parsed = parseExpenseText(text);
+      const parsed = parseExpenseText(text, todayInTashkent());
       if (!parsed) { await bot.sendMessage(chatId, T.parseHint, { parse_mode: 'Markdown' }); return true; }
       await sendExpenseDraft(chatId, user, parsed, { rawText: text });
       return true;
@@ -1245,11 +1257,14 @@ async function handleExpenseCallback(query: any, data: string, user: any, chatId
   try {
     const admin = isAdmin(user.role);
     const txData: any = {
-      type: draft.category, status: admin ? 'confirmed' : 'pending', date: todayInTashkent(),
+      type: draft.category, status: admin ? 'confirmed' : 'pending', date: draft.date || todayInTashkent(),
       amount: draft.amount, description: draft.description, createdById: String(user._id), companyId: user.companyId,
     };
     if (draft.projectId) txData.projectId = draft.projectId;
     txData.source = 'bot';
+    txData.currency = draft.currency; txData.originalAmount = draft.originalAmount; txData.uzsAmount = draft.amount;
+    if (draft.rate) { if (draft.currency === 'USD') txData.usdRate = draft.rate; else txData.eurRate = draft.rate; txData.rateDate = todayInTashkent(); }
+    if (draft.cleanText) txData.botCleanText = draft.cleanText;
     if (draft.recipientName) txData.recipientName = draft.recipientName;
     if (draft.objectLabel) txData.objectLabel = draft.objectLabel;
     if (draft.voiceFileId) { txData.botVoiceFileId = draft.voiceFileId; if (draft.transcript) txData.botTranscript = draft.transcript; }
@@ -1291,24 +1306,32 @@ async function sendExpenseHistory(chatId: number, user: any) {
   const projName = (id?: string) => projs.find(p => String(p._id) === String(id))?.name;
   await bot.sendMessage(chatId, T.historyTitle);
   for (const t of txs.reverse()) {
+    const cur = t.currency || 'UZS';
+    const orig = cur !== 'UZS' && t.originalAmount ? t.originalAmount : (t.amount || 0);
     const lines = [
-      `${T.amountLine(t.amount || 0)}  ·  ${T.statusLabels[t.status] || t.status}`,
+      `${T.moneyLine(fmtMoney(orig, cur), cur !== 'UZS' ? (t.amount || 0).toLocaleString('ru-RU') : undefined)}  ·  ${T.statusLabels[t.status] || t.status}`,
       `📅 ${t.date || '—'}  ·  🏷 ${T.cats[t.type] || t.type}`,
       T.descLine(t.description || '—'),
     ];
     const obj = projName(t.projectId) || t.objectLabel;
     if (obj) lines.push(T.projLine(obj));
     if (t.recipientName) lines.push(T.recipientLine(t.recipientName));
-    try {
-      if (t.botVoiceFileId) {
-        const caption = [...lines, t.botTranscript ? `\n${T.heard(t.botTranscript)}` : ''].join('\n').slice(0, 1024);
-        await bot.sendVoice(chatId, t.botVoiceFileId, { caption });
-      } else {
-        const body = t.botText ? [...lines, '', `✍️ ${t.botText}`] : lines;
-        await bot.sendMessage(chatId, body.join('\n').slice(0, 4000));
+    const full = t.botCleanText || t.botTranscript || t.botText;
+    if (full) lines.push('', T.fullTextLine(full));
+    const text = lines.join('\n').slice(0, 4000);
+    if (t.botVoiceFileId) {
+      // Ovozli xabarning O'ZI (voice → audio → hujjat, qaysi turda yuborilgan bo'lsa) va ostida to'liq matn
+      let sentVoice: any = null;
+      for (const send of [
+        () => bot.sendVoice(chatId, t.botVoiceFileId),
+        () => bot.sendAudio(chatId, t.botVoiceFileId),
+        () => bot.sendDocument(chatId, t.botVoiceFileId),
+      ]) {
+        try { sentVoice = await send(); break; } catch (e) { console.error('[expense history voice]', (e as Error).message); }
       }
-    } catch (e) {
-      await bot.sendMessage(chatId, lines.join('\n')).catch(() => {});
+      await bot.sendMessage(chatId, text, sentVoice?.message_id ? { reply_to_message_id: sentVoice.message_id } : undefined).catch(() => {});
+    } else {
+      await bot.sendMessage(chatId, text).catch(() => {});
     }
     await new Promise(r => setTimeout(r, 60));
   }

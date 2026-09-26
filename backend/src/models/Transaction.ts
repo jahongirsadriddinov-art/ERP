@@ -57,6 +57,7 @@ export interface ITransaction extends Document {
   source?: 'site' | 'bot';
   botVoiceFileId?: string;
   botTranscript?: string;
+  botCleanText?: string;
   botText?: string;
   // Kimga / qaysi obyekt — ro'yxatdagi odam/obyektga mos kelmasa ham aytilgan nom saqlanadi
   recipientName?: string;
@@ -104,6 +105,7 @@ const TransactionSchema: Schema = new Schema({
   source: { type: String, enum: ['site', 'bot'] },
   botVoiceFileId: { type: String },
   botTranscript: { type: String },
+  botCleanText: { type: String },
   botText: { type: String },
   recipientName: { type: String },
   objectLabel: { type: String },

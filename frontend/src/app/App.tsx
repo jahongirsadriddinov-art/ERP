@@ -200,7 +200,8 @@ export interface Expense {
   // Xodim chiqim yaratganda ANIQ kim tasdiqlashini tanlaydi (direktor/orinbosarlardan
   // biri) — belgilansa, FAQAT o'sha odam tasdiqlay/rad eta oladi.
   approverId?: string;
-  recipientName?: string; objectLabel?: string; source?: 'site' | 'bot'; // botdan: aytilgan "kimga"/obyekt
+  recipientName?: string; objectLabel?: string; source?: 'site' | 'bot';
+  currency?: 'UZS' | 'USD' | 'EUR'; originalAmount?: number; // aytilgan valyuta (amount — doim so'mda) // botdan: aytilgan "kimga"/obyekt
 }
 export interface Msg {
   id: string; fromUserId: string; toUserId: string; groupId?: string;
@@ -3420,6 +3421,8 @@ function ExpenseDetailModal({ expense, users, projects, onClose }: { expense: Ex
   const confirmer = users.find(u => u.id === expense.confirmedById);
   const approver = expense.approverId ? users.find(u => u.id === expense.approverId) : undefined;
   const rows: [string, string][] = [
+    ...(expense.currency && expense.currency !== 'UZS' && expense.originalAmount
+      ? [[t('finance.originalAmount', { defaultValue: 'Asl summa' }), `${expense.originalAmount.toLocaleString('ru-RU')} ${expense.currency === 'USD' ? '$' : '€'}`] as [string, string]] : []),
     [t('reports.table.date'), expense.date],
     [t('reports.table.type'), expLabel(t, expense.type)],
     [t('finance.to'), to?.name || expense.recipientName || "—"],

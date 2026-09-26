@@ -34,6 +34,18 @@ async function fetchCBURates(): Promise<void> {
   }
 }
 
+// Bot/serverda boshqa valyutadagi summani so'mga o'girish uchun (firma kursi ustuvor)
+export async function getRatesForCompany(companyId?: string): Promise<{ USD: number; EUR: number }> {
+  if (Date.now() - lastFetch > 3600_000) await fetchCBURates();
+  let usd = cachedRates.USD, eur = cachedRates.EUR;
+  if (companyId) {
+    const company: any = await Company.findById(companyId).select('customUsdRate customEurRate').lean().catch(() => null);
+    if (company?.customUsdRate) usd = company.customUsdRate;
+    if (company?.customEurRate) eur = company.customEurRate;
+  }
+  return { USD: usd, EUR: eur };
+}
+
 // GET /api/currency/rates — firma o'z kursini belgilagan bo'lsa O'SHANI, aks
 // holda CBU (yoki standart) kursini qaytaradi. Firma konteksti bo'lmasa
 // (masalan dasturchi yoki auth'siz so'rov) doim CBU/standart qaytadi.

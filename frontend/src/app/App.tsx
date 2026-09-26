@@ -5664,7 +5664,8 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
         {/* Ilovani yuklab olish — hali CI birorta ham APK/exe chiqarmagan
             bo'lsa (yoki hali yuklanmoqda) komponent o'zi HECH NARSA
             render qilmaydi (loadingFallback=false) — bo'sh joy qolmasin. */}
-        <AppDownloadCards compact title={t('profile.appDownloadTitle')} loadingFallback={false} />
+        {/* Ilovaning o'zida "ilovani yuklab oling" ma'nosiz — faqat veb saytda */}
+        {!isNative() && <AppDownloadCards compact title={t('profile.appDownloadTitle')} loadingFallback={false} />}
 
         </div>
       </div>
@@ -5940,7 +5941,7 @@ function LoginScreen({ onLogin, onRegister, onBack }: { onLogin: (u: any, compan
       <div className="absolute bottom-[-8%] right-[-12%] w-[45%] h-[45%] bg-accent/15 rounded-full blur-[120px] blob-anim-slow pointer-events-none" />
       <div className="absolute top-[40%] right-[-5%] w-[25%] h-[25%] bg-primary/10 rounded-full blur-[80px] blob-anim pointer-events-none" style={{ animationDelay: '4s' }} />
 
-      {onBack && (
+      {onBack && !isNative() && !isTelegramMiniApp() && (
         <button type="button" onClick={onBack}
           className="absolute left-4 z-10 flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground liquid-transition"
           style={{ top: "max(1.25rem, env(safe-area-inset-top))" }}>

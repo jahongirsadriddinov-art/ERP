@@ -9,7 +9,7 @@ export const expLang = (lang?: string): ExpLang => (lang === 'ru' ? 'ru' : 'uz')
 
 export type ExpCategory = 'oylik' | 'material' | 'jihozlar' | 'transport' | 'boshqa';
 export const EXP_CATEGORIES: ExpCategory[] = ['oylik', 'material', 'jihozlar', 'transport', 'boshqa'];
-export interface ParsedExpense { amount: number; description: string; projectName?: string; transcript?: string; category?: ExpCategory }
+export interface ParsedExpense { amount: number; description: string; projectName?: string; recipientName?: string; transcript?: string; category?: ExpCategory }
 
 // Saytdagi chiqim turlari (oylik/material/jihozlar/transport/boshqa) bilan BIR XIL bo'lishi shart —
 // aks holda sayt noma'lum turni xom kalit matni ("finance.types.expense") sifatida ko'rsatadi.
@@ -39,9 +39,9 @@ function parseAmount(raw: string): number | null {
 export function parseExpenseText(text: string): ParsedExpense | null {
   const t = text.trim();
   if (t.includes(';')) {
-    const [a, b, c] = t.split(';').map(x => x.trim());
+    const [a, b, c, d] = t.split(';').map(x => x.trim());
     const amount = parseAmount(a || '');
-    if (amount && b) return { amount, description: b.slice(0, 300), projectName: c || undefined, category: guessExpenseCategory(b) };
+    if (amount && b) return { amount, description: b.slice(0, 300), projectName: c || undefined, recipientName: d || undefined, category: guessExpenseCategory(b) };
     return null;
   }
   const m = t.match(/(\d[\d\s.,]*\d|\d)/);
@@ -58,9 +58,10 @@ const VOICE_PROMPT = `Bu qurilish firmasi xodimining XARAJAT (chiqim) haqidagi O
 2) Maydonlarni ajrat:
    - "amount": summa, FAQAT butun son so'mda (yuz ellik ming = 150000, ikki million = 2000000, 1.5 mln = 1500000, "полторы тысячи" = 1500). Aniqlab bo'lmasa 0.
    - "description": xarajat sababi/tavsifi, qisqa va aniq.
-   - "projectName": agar obyekt/loyiha nomi aytilgan bo'lsa shu nom, aks holda "".
+   - "projectName": obyekt/loyiha/bino nomi (masalan "12-maktab", "Yunusobod turar joy") aytilgan bo'lsa AYNAN shu nom, aks holda "".
+   - "recipientName": pul/material KIMGA berilgani (odam ismi yoki tashkilot, masalan "Aziz aka", "prorab Botir") aytilgan bo'lsa shu nom, aks holda "".
    - "category": FAQAT shulardan biri: "oylik" (ish haqi/avans), "material" (qurilish materiallari), "jihozlar" (asbob-uskuna, ijara), "transport" (yoqilg'i, yuk/yo'l xarajati), "boshqa" (qolgan hammasi).
-Javob FAQAT JSON: {"transcript":"","amount":0,"description":"","projectName":"","category":"boshqa"}`;
+Javob FAQAT JSON: {"transcript":"","amount":0,"description":"","projectName":"","recipientName":"","category":"boshqa"}`;
 
 export async function voiceToExpense(audio: Buffer, mimeType: string): Promise<ParsedExpense | null> {
   if (!geminiConfigured()) throw new Error('NO_GEMINI');
@@ -71,6 +72,7 @@ export async function voiceToExpense(audio: Buffer, mimeType: string): Promise<P
   return {
     amount, description: description.slice(0, 300),
     projectName: String(r?.projectName || '').trim() || undefined,
+    recipientName: String(r?.recipientName || '').trim().slice(0, 120) || undefined,
     category: asCategory(r?.category) ?? guessExpenseCategory(description),
     transcript: String(r?.transcript || '').trim() || undefined,
   };
@@ -80,7 +82,7 @@ const fmtSum = (n: number) => n.toLocaleString('ru-RU');
 
 export const EXP_T = {
   uz: {
-    prompt: "💸 *Chiqim qo'shish*\n\nMatn bilan shu tartibda yozing:\n`Summa; Tavsif; Obyekt (ixtiyoriy)`\n\nMasalan: `150000; Sement uchun; Yunusobod`\nYoki oddiy: `150000 sement uchun`\n\n🎙 Yoki *ovozli xabar* yuboring — men uni matnga aylantirib, tekshirish uchun ko'rsataman.",
+    prompt: "💸 *Chiqim qo'shish*\n\nMatn bilan shu tartibda yozing:\n`Summa; Tavsif; Obyekt; Kimga` (oxirgi ikkisi ixtiyoriy)\n\nMasalan: `150000; Sement uchun; 12-maktab; Aziz aka`\nYoki oddiy: `150000 sement uchun`\n\n🎙 Yoki *ovozli xabar* yuboring — men uni matnga aylantirib, tekshirish uchun ko'rsataman.",
     cancelBtn: '❌ Bekor qilish', okBtn: '✅ Tasdiqlash', retryBtn: '🔄 Qayta yuborish',
     cancelled: "❌ Bekor qilindi.",
     processing: "🎙 Ovoz matnga aylantirilmoqda...",
@@ -95,6 +97,10 @@ export const EXP_T = {
     projLine: (s?: string) => `🏗 Obyekt: ${s || '—'}`,
     approverLine: (s: string) => `👤 Tasdiqlovchi: ${s}`,
     catLine: (s: string) => `🏷 Turi: ${s}`,
+    recipientLine: (s: string) => `👤 Kimga: ${s}`,
+    historyTitle: "🧾 Oxirgi chiqimlaringiz:",
+    historyEmpty: "Hali chiqim yo'q.",
+    statusLabels: { pending: '⏳ kutilmoqda', confirmed: '✅ tasdiqlangan', rejected: '❌ rad etilgan' } as Record<string, string>,
     catBtn: '🏷 Turini o\'zgartirish',
     cats: { oylik: 'Oylik', material: 'Material', jihozlar: 'Jihozlar', transport: 'Transport', boshqa: 'Boshqa' } as Record<string, string>,
     ask: "To'g'rimi?",
@@ -104,7 +110,7 @@ export const EXP_T = {
     error: "⚠️ Xatolik yuz berdi, keyinroq urinib ko'ring.",
   },
   ru: {
-    prompt: "💸 *Добавить расход*\n\nНапишите текстом в таком порядке:\n`Сумма; Описание; Объект (необязательно)`\n\nНапример: `150000; Цемент; Юнусабад`\nИли просто: `150000 цемент`\n\n🎙 Или отправьте *голосовое сообщение* — я переведу его в текст и покажу для проверки.",
+    prompt: "💸 *Добавить расход*\n\nНапишите текстом в таком порядке:\n`Сумма; Описание; Объект; Кому` (последние два необязательны)\n\nНапример: `150000; Цемент; Школа 12; Азиз`\nИли просто: `150000 цемент`\n\n🎙 Или отправьте *голосовое сообщение* — я переведу его в текст и покажу для проверки.",
     cancelBtn: '❌ Отмена', okBtn: '✅ Подтвердить', retryBtn: '🔄 Отправить заново',
     cancelled: "❌ Отменено.",
     processing: "🎙 Распознаю голос...",
@@ -119,6 +125,10 @@ export const EXP_T = {
     projLine: (s?: string) => `🏗 Объект: ${s || '—'}`,
     approverLine: (s: string) => `👤 Утверждающий: ${s}`,
     catLine: (s: string) => `🏷 Тип: ${s}`,
+    recipientLine: (s: string) => `👤 Кому: ${s}`,
+    historyTitle: "🧾 Ваши последние расходы:",
+    historyEmpty: "Расходов пока нет.",
+    statusLabels: { pending: '⏳ ожидает', confirmed: '✅ подтверждён', rejected: '❌ отклонён' } as Record<string, string>,
     catBtn: '🏷 Сменить тип',
     cats: { oylik: 'Зарплата', material: 'Материал', jihozlar: 'Оборудование', transport: 'Транспорт', boshqa: 'Прочее' } as Record<string, string>,
     ask: "Всё верно?",

@@ -87,11 +87,12 @@ import { isTelegramMiniApp, getTelegramInitData, markManualLogout, clearManualLo
 import { installAndroidBackHandler, saveOrShareBlob, openExternalUrl, isNative, isTabletOrLarger } from "./platform";
 import QrLoginPanel from "./QrLoginPanel";
 import { AppDownloadCards } from "./AppDownload";
+import { openMediaViewer } from "./MediaViewer";
 import LanguageSwitcher from "./i18n/LanguageSwitcher";
 import { Skeleton, SkeletonList, SkeletonPage, SkeletonMessage, SkeletonTable, SkeletonProfile } from "./Skeleton";
 import { useGeoTracker, accuracyQuality, QUALITY_COLOR, type GpsStatus } from "./useGeoTracker";
 import PullToRefresh from "./PullToRefresh";
-import { isPinSet, useAppLock, markActiveNow, clearPin, PinSetupScreen, PinLockScreen, ChangePinModal, isBiometricEnabled, setBiometricEnabled, biometricAvailable, biometricSupported, tryBiometricUnlock, nativeBiometricSupported, registerWebAuthnBiometric, getLockTimeoutMin, setLockTimeoutMin, LOCK_TIMEOUT_OPTIONS } from "./AppLock";
+import { isPinSet, useAppLock, markActiveNow, clearPin, PinSetupScreen, PinLockScreen, ChangePinModal, ForgotPinScreen, syncPinFromServer, isBiometricEnabled, setBiometricEnabled, biometricAvailable, biometricSupported, tryBiometricUnlock, nativeBiometricSupported, registerWebAuthnBiometric, getLockTimeoutMin, setLockTimeoutMin, LOCK_TIMEOUT_OPTIONS } from "./AppLock";
 
 // recharts og'ir kutubxona — faqat "Hisobotlar" bo'limiga kirilganda yuklanadi
 // (boshlang'ich bundle hajmini kamaytiradi, sayt tezroq ochiladi).
@@ -199,6 +200,7 @@ export interface Expense {
   // Xodim chiqim yaratganda ANIQ kim tasdiqlashini tanlaydi (direktor/orinbosarlardan
   // biri) — belgilansa, FAQAT o'sha odam tasdiqlay/rad eta oladi.
   approverId?: string;
+  recipientName?: string; objectLabel?: string; source?: 'site' | 'bot'; // botdan: aytilgan "kimga"/obyekt
 }
 export interface Msg {
   id: string; fromUserId: string; toUserId: string; groupId?: string;
@@ -3031,7 +3033,7 @@ function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSe
                     {m.type === 'video' ? (
                       <video src={m.url} className="w-full h-full object-cover" controls playsInline />
                     ) : (
-                      <SafeImg src={m.url} className="w-full h-full object-cover cursor-pointer" onClick={() => window.open(m.url, '_blank')} />
+                      <SafeImg src={m.url} className="w-full h-full object-cover cursor-pointer" onClick={() => openMediaViewer(m.url, 'image')} />
                     )}
                     <div className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[9px] px-1.5 py-1 flex items-center justify-between">
                       <span className="truncate">{m.uploadedBy?.name || '—'}</span>
@@ -3378,7 +3380,7 @@ function FinancePage({ currentUser, users, projects, expenses, onAddExpense, onC
                         {e.requiresAdminApproval&&e.status==="pending"&&<span className="text-[9px] px-1.5 py-0.5 rounded font-semibold bg-accent/15 text-accent">{t('approvalChain.needsApproval')}</span>}
                       </div>
                       <p className="font-semibold text-foreground">{e.description || expLabel(t, e.type as ExpType)}</p>
-                      <p className="text-sm md:text-xs text-muted-foreground mt-0.5">{proj?.name || "—"} • {e.date}</p>
+                      <p className="text-sm md:text-xs text-muted-foreground mt-0.5">{proj?.name || e.objectLabel || "—"}{e.recipientName ? ` • 👤 ${e.recipientName}` : ""} • {e.date}</p>
                       {to&&<p className="text-sm md:text-xs text-muted-foreground">{t('finance.to')} <span className="font-medium">{to.name}</span></p>}
                       {creator&&<p className="text-sm md:text-xs text-muted-foreground">{t('finance.createdBy')} {creator.name}</p>}
                       {approver&&e.status==="pending"&&<p className="text-sm md:text-xs text-muted-foreground">{t('approvalChain.approver')} <span className="font-medium">{approver.name}</span></p>}
@@ -3420,8 +3422,8 @@ function ExpenseDetailModal({ expense, users, projects, onClose }: { expense: Ex
   const rows: [string, string][] = [
     [t('reports.table.date'), expense.date],
     [t('reports.table.type'), expLabel(t, expense.type)],
-    [t('finance.to'), to?.name || "—"],
-    [t('reports.table.project'), proj?.name || "—"],
+    [t('finance.to'), to?.name || expense.recipientName || "—"],
+    [t('reports.table.project'), proj?.name || expense.objectLabel || "—"],
     [t('finance.createdBy'), creator?.name || "—"],
     ...(approver && expense.status === 'pending' ? [[t('approvalChain.approver'), approver.name] as [string, string]] : []),
     ...(confirmer ? [[t('finance.confirmedBy'), confirmer.name] as [string, string]] : []),
@@ -3779,10 +3781,14 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
           </div>
         )}
         {m.type==='image' && m.mediaUrl && (
-          <SafeImg src={m.mediaUrl as string} alt={tChat('chat.imageAlt')} className="rounded-xl max-w-full max-h-52 object-cover mb-1 cursor-pointer" fallbackClassName="w-40 h-28" onClick={()=>window.open(m.mediaUrl,'_blank')}/>
+          <SafeImg src={m.mediaUrl as string} alt={tChat('chat.imageAlt')} className="rounded-xl max-w-full max-h-52 object-cover mb-1 cursor-pointer" fallbackClassName="w-40 h-28" onClick={()=>openMediaViewer(m.mediaUrl as string, 'image')}/>
         )}
         {m.type==='video' && m.mediaUrl && (
-          <video src={m.mediaUrl} controls preload="metadata" className="rounded-xl max-w-full max-h-52 mb-1"/>
+          <div className="relative mb-1">
+            <video src={m.mediaUrl} controls preload="metadata" className="rounded-xl max-w-full max-h-52"/>
+            <button type="button" onClick={e => { e.stopPropagation(); openMediaViewer(m.mediaUrl as string, 'video'); }} aria-label="Fullscreen"
+              className="absolute top-1.5 right-1.5 w-7 h-7 rounded-full bg-black/55 text-white text-xs flex items-center justify-center">⤢</button>
+          </div>
         )}
         {m.type==='audio' && m.mediaUrl && (
           <VoicePlayer src={m.mediaUrl} mine={mine}/>
@@ -5084,8 +5090,8 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
     return (
       <motion.div key={activePanel} initial={{ opacity: 0, x: 28 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 28 }}
         transition={{ type: "spring", stiffness: 380, damping: 34 }}
-        className="max-w-lg md:max-w-4xl lg:max-w-6xl 2xl:max-w-7xl mx-auto w-full pb-10">
-        <div className="flex items-center gap-3 px-4 md:px-6 py-4 sticky top-0 bg-background/80 backdrop-blur-xl z-10">
+        className="max-w-lg md:max-w-4xl lg:max-w-6xl 2xl:max-w-7xl mx-auto w-full pb-10 lg:pb-0 lg:flex-1 lg:min-h-0 lg:flex lg:flex-col">
+        <div className="flex items-center gap-3 px-4 md:px-6 py-4 sticky top-0 lg:static bg-background/80 backdrop-blur-xl z-10 flex-shrink-0">
           <button onClick={() => setActivePanel(null)} aria-label={t('common.back')} className="btn btn-ghost w-10 h-10 p-0 rounded-full flex-shrink-0"><MorphIcon icon={ChevronLeft} className="w-5 h-5" /></button>
           {activeRow && (activeRow.swatch
             ? <div className="w-10 h-10 rounded-xl flex-shrink-0 hidden md:block" style={activeRow.swatch}/>
@@ -5095,10 +5101,10 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
             {activeRow?.hint && <p className="text-xs text-muted-foreground truncate">{activeRow.hint}</p>}
           </div>
         </div>
-        <div className="px-4 md:px-6 lg:grid lg:grid-cols-12 lg:gap-6 lg:items-start">
+        <div className="px-4 md:px-6 lg:grid lg:grid-cols-12 lg:gap-6 lg:flex-1 lg:min-h-0 lg:pb-4">
           {/* Chap: boshqa bo'limlarga tez o'tish (faqat kompyuterda) */}
-          <aside className="hidden lg:block lg:col-span-4 xl:col-span-3 sticky top-20 max-h-[calc(100dvh-11rem)] overflow-y-auto scrollbar-hide">
-            <div className="surface border border-border overflow-hidden p-2 space-y-0.5">
+          <aside className="hidden lg:flex lg:flex-col lg:col-span-4 xl:col-span-3 min-h-0 gap-3">
+            <div className="surface border border-border rounded-2xl p-2 space-y-0.5 flex-1 min-h-0 overflow-y-auto overscroll-contain [scrollbar-width:thin]">
               {menuRows.map(row => (
                 <button key={row.key} onClick={() => setActivePanel(row.key)}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left border liquid-transition ${row.key === activePanel ? "bg-primary/10 text-primary font-semibold border-primary/30" : "border-transparent hover:bg-muted/40 hover:border-border text-foreground"}`}>
@@ -5110,8 +5116,18 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
                 </button>
               ))}
             </div>
+            {/* Bloklash / chiqish — menyu bilan birga, kesilmasdan pastda */}
+            <div className="grid grid-cols-2 gap-2 flex-shrink-0">
+              <button onClick={onLockNow} className="flex items-center justify-center gap-1.5 text-xs font-semibold border border-border rounded-xl py-2.5 hover:bg-primary/5 hover:border-primary/30 liquid-transition">
+                <MorphIcon icon={Lock} className="w-3.5 h-3.5" />{t('profile.lockNowBtn')}
+              </button>
+              <button onClick={() => { markManualLogout(); localStorage.removeItem("currentUser"); localStorage.removeItem("token"); onLogout(); }}
+                className="flex items-center justify-center gap-1.5 text-xs font-semibold border border-border rounded-xl py-2.5 text-muted-foreground hover:bg-red-500/10 hover:text-red-600 hover:border-red-500/30 liquid-transition">
+                <MorphIcon icon={LogOut} className="w-3.5 h-3.5" />{t('profile.logout')}
+              </button>
+            </div>
           </aside>
-          <div className="space-y-4 lg:col-span-8 xl:col-span-9 min-w-0">
+          <div className="space-y-4 lg:col-span-8 xl:col-span-9 min-w-0 lg:min-h-0 overflow-y-auto overscroll-contain [scrollbar-width:thin] lg:pr-1">
           {activePanel === "bg" && (
             <div className="surface border border-border overflow-hidden">
               <div className="px-4 py-3 border-b border-border flex items-center gap-2">
@@ -5148,9 +5164,9 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
                 <div className="grid grid-cols-3 gap-2">
                   {([["light",t('profile.themeLight'),Sun],["dark",t('profile.themeDark'),Moon],["system",t('profile.themeSystem'),Monitor]] as [ "light"|"dark"|"system", string, IconNode ][]).map(([m,label,Icon]) => (
                     <button key={m} onClick={() => onThemeModeChange(m)}
-                      className={`btn flex flex-col items-center gap-1.5 py-3 rounded-xl border ${themeMode===m ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-muted"}`}>
-                      <MorphIcon icon={Icon} className="w-5 h-5" />
-                      <span className="text-[11px] font-semibold">{label}</span>
+                      className={`flex flex-col items-center gap-2 py-5 rounded-2xl border-2 liquid-transition ${themeMode===m ? "border-primary bg-primary/10 text-primary shadow-lg shadow-primary/10" : "border-border text-muted-foreground hover:border-primary/40 hover:bg-muted/40"}`}>
+                      <MorphIcon icon={Icon} className="w-6 h-6" />
+                      <span className="text-sm font-semibold">{label}</span>
                     </button>
                   ))}
                 </div>
@@ -5160,14 +5176,14 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
           {activePanel === "color" && (
             <div className="surface border border-border overflow-hidden">
               <div className="px-3 py-3">
-                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-6 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3">
                   {COLOR_THEMES.map(ct => {
                     const ctName = t(`profile.colorThemeNames.${ct.id}`, { defaultValue: ct.name });
                     return (
                     <button key={ct.id} onClick={() => onColorThemeChange(ct.id)} title={ctName}
-                      className="flex flex-col items-center gap-1.5 group">
+                      className={`flex items-center gap-3 p-3 rounded-2xl border-2 text-left liquid-transition group ${colorTheme === ct.id ? "border-primary bg-primary/5" : "border-border hover:border-primary/40 hover:bg-muted/30"}`}>
                       <div
-                        className="w-14 h-14 sm:w-12 sm:h-12 rounded-2xl liquid-transition group-hover:scale-105 active:scale-95 relative"
+                        className="w-11 h-11 rounded-xl liquid-transition group-hover:scale-105 active:scale-95 relative flex-shrink-0"
                         style={{
                           background: `linear-gradient(135deg, ${ct.primary} 0%, ${ct.accent} 100%)`,
                           boxShadow: colorTheme === ct.id
@@ -5177,7 +5193,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
                         }}>
                         {colorTheme === ct.id && <MorphIcon icon={Check} className="w-5 h-5 text-white absolute inset-0 m-auto drop-shadow" />}
                       </div>
-                      <span className="text-[11px] text-muted-foreground font-medium leading-none text-center">{ctName}</span>
+                      <span className="text-sm font-semibold truncate">{ctName}</span>
                     </button>
                     );
                   })}
@@ -5242,9 +5258,9 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
                 <div className="grid grid-cols-2 gap-2">
                   {([[true, t('profile.soundOn'), Volume2], [false, t('profile.soundOff'), VolumeX]] as [boolean, string, IconNode][]).map(([val, label, Icon]) => (
                     <button key={String(val)} onClick={() => handleSoundToggle(val)}
-                      className={`btn flex flex-col items-center gap-1.5 py-3 rounded-xl border ${soundOn===val ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-muted"}`}>
-                      <MorphIcon icon={Icon} className="w-5 h-5" />
-                      <span className="text-[11px] font-semibold">{label}</span>
+                      className={`flex flex-col items-center gap-2 py-5 rounded-2xl border-2 liquid-transition ${soundOn===val ? "border-primary bg-primary/10 text-primary shadow-lg shadow-primary/10" : "border-border text-muted-foreground hover:border-primary/40 hover:bg-muted/40"}`}>
+                      <MorphIcon icon={Icon} className="w-6 h-6" />
+                      <span className="text-sm font-semibold">{label}</span>
                     </button>
                   ))}
                 </div>
@@ -5400,11 +5416,11 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
   }
 
   return (
-    <div className="max-w-lg md:max-w-4xl lg:max-w-6xl 2xl:max-w-7xl mx-auto w-full pb-10">
+    <div className="max-w-lg md:max-w-4xl lg:max-w-6xl 2xl:max-w-7xl mx-auto w-full pb-10 lg:pb-0 lg:flex-1 lg:min-h-0 lg:flex lg:flex-col">
 
       {/* ── Company Banner ─────────────────────────── */}
       <motion.div initial={{ opacity: 0, scale: 1.04 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-        className="relative overflow-hidden h-[140px] md:h-[150px] lg:h-[160px] md:mx-6 md:mt-4 md:rounded-3xl border border-border/60" style={{ ...bannerStyle }}>
+        className="relative overflow-hidden flex-shrink-0 h-[140px] md:h-[150px] lg:h-[160px] md:mx-6 md:mt-4 md:rounded-3xl border border-border/60" style={{ ...bannerStyle }}>
         <div className="absolute inset-0" style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.12) 0%, rgba(0,0,0,0.58) 100%)" }}/>
         {canEditCompany && (
           <button onClick={() => bgRef.current?.click()}
@@ -5451,10 +5467,10 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
         </div>
       </motion.div>
 
-      <div className="px-4 md:px-6 mt-4 grid grid-cols-1 lg:grid-cols-12 gap-4 lg:items-start">
+      <div className="px-4 md:px-6 mt-4 grid grid-cols-1 lg:grid-cols-12 gap-4 lg:flex-1 lg:min-h-0 lg:pb-4">
 
         {/* Chap ustun: shaxsiy karta, davomat, bloklash/chiqish */}
-        <div className="lg:col-span-4 xl:col-span-3 space-y-4 md:space-y-0 md:grid md:grid-cols-2 md:gap-4 lg:block lg:space-y-4 lg:sticky lg:top-2 min-w-0">
+        <div className="lg:col-span-4 xl:col-span-3 space-y-4 md:space-y-0 md:grid md:grid-cols-2 md:gap-4 lg:block lg:space-y-4 min-w-0 lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain lg:[scrollbar-width:thin] lg:pr-1">
         {/* ── Profile Card ──────────────────────────── */}
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28, delay: 0.02 }}
           className={`surface border border-border p-5 text-center relative ${hasAttendanceCard ? "" : "md:col-span-2 lg:col-span-1"}`}>
@@ -5616,7 +5632,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
         </div>
 
         {/* O'ng ustun: sozlamalar katakchalari, audit, xavfsizlik, ilova yuklash */}
-        <div className="lg:col-span-8 xl:col-span-9 space-y-4 min-w-0">
+        <div className="lg:col-span-8 xl:col-span-9 space-y-4 min-w-0 lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain lg:[scrollbar-width:thin] lg:pr-1">
         {/* ── Sozlamalar menyusi: telefonda ro'yxat, planshet/noutbukda katakchalar ── */}
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28, delay: 0.06 }}>
           <div className="surface border border-border overflow-hidden md:hidden">
@@ -6482,6 +6498,17 @@ export default function App() {
   // ko'ra aniqroq.
   const [, setPinRefresh] = useState(0);
   const pinIsSet = isPinSet();
+  // Yangi qurilmada login: hisobda PIN allaqachon bo'lsa — serverdan tiklanadi, qayta so'ralmaydi.
+  const [pinSyncing, setPinSyncing] = useState(false);
+  const [forgotPin, setForgotPin] = useState(false);
+  const pinSyncedFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!liveUser || pinIsSet || pinSyncedFor.current === liveUser.id) return;
+    pinSyncedFor.current = liveUser.id;
+    setPinSyncing(true);
+    syncPinFromServer().then(found => { if (found) { markActiveNow(); setPinRefresh(v => v + 1); } }).finally(() => setPinSyncing(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveUser?.id, pinIsSet]);
   const { locked: appLocked, unlock: unlockApp, lock: lockAppNow } = useAppLock(!!liveUser && pinIsSet);
   const isWorkerRole = liveUser ? ['ishchi', 'prorab', 'brigadir'].includes(liveUser.role) : false;
 
@@ -7084,22 +7111,30 @@ export default function App() {
   // Ilova qulfi — login'dan keyin BIR MARTA PIN o'rnatiladi (majburiy), keyin
   // ilova >1 daq. fondan qaytganda shu PIN (yoki yoqilgan bo'lsa biometrik)
   // so'raladi. Dasturchi panelidan HAM oldin — barcha rollarga bir xil.
+  if (!pinIsSet && pinSyncing) return <div className="min-h-[100dvh] bg-background flex items-center justify-center"><MorphIcon icon={Loader2} className="w-8 h-8 animate-spin text-primary" /></div>;
   if (!pinIsSet) return (
     <>
       <PinSetupScreen onDone={() => { markActiveNow(); setPinRefresh(v => v + 1); }} />
       <Toaster position="top-center" richColors closeButton/>
     </>
   );
+  if (appLocked && forgotPin) return (
+    <>
+      <ForgotPinScreen
+        onDone={() => { setForgotPin(false); playSound("unlock"); unlockApp(); setPinRefresh(v => v + 1); toast.success(tApp('pinLock.resetDone')); }}
+        onCancel={() => setForgotPin(false)}
+        onLogout={() => {
+          setForgotPin(false); clearPin();
+          localStorage.removeItem("currentUser"); localStorage.removeItem("token");
+          setCurrentUser(null); setAuthView("login");
+        }} />
+      <Toaster position="top-center" richColors closeButton/>
+    </>
+  );
   if (appLocked) return (
     <>
       <PinLockScreen onUnlock={()=>{playSound("unlock");unlockApp();}}
-        onForgot={() => {
-          if (confirm("Hisobdan chiqib, qaytadan kirasizmi? PIN kod tozalanadi.")) {
-            clearPin();
-            localStorage.removeItem("currentUser"); localStorage.removeItem("token");
-            setCurrentUser(null); setAuthView("login");
-          }
-        }}
+        onForgot={() => setForgotPin(true)}
         onLockedOut={() => {
           toast.error("Ko'p marta noto'g'ri PIN kiritildi — xavfsizlik uchun qayta kirishingiz kerak.");
           localStorage.removeItem("currentUser"); localStorage.removeItem("token");
@@ -7642,7 +7677,7 @@ export default function App() {
             onRemoveGroupMember={handleRemoveGroupMember} onLeaveGroup={handleLeaveGroup} onDeleteGroup={handleDeleteGroup}/>
         )}
         {page==="profile" && (
-          <div className="flex-1 overflow-y-auto scrollbar-hide">
+          <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide lg:overflow-hidden lg:flex lg:flex-col">
             <ProfilePage currentUser={liveUser} projects={projects} onUpdateAvatar={handleUpdateAvatar} onUpdateUser={handleUpdateUser}
               onLogout={()=>{playSound("lock");setCurrentUser(null);setSelProject(null);setPage("dashboard");}}
               onCompanyNameChange={name => setCompanyName(name)}

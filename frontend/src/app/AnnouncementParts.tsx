@@ -10,6 +10,7 @@ import Loader2 from "@hugeicons/core-free-icons/Loading03Icon";
 import Trash from "@hugeicons/core-free-icons/Delete02Icon";
 import { API_BASE, uploadChatMedia } from "./api";
 import { getSocket } from "./socket";
+import { openMediaViewer } from "./MediaViewer";
 
 const LocationPicker = lazy(() => import("./LocationPicker"));
 
@@ -27,7 +28,7 @@ export function AnnouncementContent({ a }: { a: AnnouncementData }) {
   return (
     <div className="min-w-0">
       {a.mediaUrl && a.mediaType === 'image' && (
-        <img src={a.mediaUrl} alt="" className="w-full max-h-64 object-contain rounded-xl bg-black/5 mb-2" />
+        <img src={a.mediaUrl} alt="" onClick={() => openMediaViewer(a.mediaUrl!, 'image')} className="w-full max-h-64 object-contain rounded-xl bg-black/5 mb-2 cursor-zoom-in" />
       )}
       {a.mediaUrl && a.mediaType === 'video' && (
         <video src={a.mediaUrl} controls playsInline preload="metadata" className="w-full max-h-64 rounded-xl bg-black mb-2" />

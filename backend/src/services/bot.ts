@@ -10,6 +10,7 @@ import Group from '../models/Group';
 import Attendance from '../models/Attendance';
 import ObjectModel from '../models/Object';
 import { EXP_T, expLang, parseExpenseText, voiceToExpense, ParsedExpense, ExpCategory, EXP_CATEGORIES, guessExpenseCategory } from './botExpense';
+import TransactionModel from '../models/Transaction';
 import GpsLocation from '../models/GpsLocation';
 import AppRelease from '../models/AppRelease';
 import AppSettings from '../models/AppSettings';
@@ -178,7 +179,7 @@ const ADMIN_KEYBOARD = async (lang?: BotLang) => {
         [{ text: L('kb_financeStatus') }, { text: L('kb_objects') }],
         [{ text: L('kb_staffList') }, { text: L('kb_report') }],
         [{ text: L('kb_subscriptionStatus') }],
-        [{ text: L('kb_addExpense') }],
+        [{ text: L('kb_addExpense') }, { text: L('kb_expenseHistory') }],
       ];
   return {
     keyboard: [[openSiteBtn(lang)], ...rows, [{ text: tb(lang, 'kb_language') }]],
@@ -197,7 +198,7 @@ const USER_KEYBOARD = async (lang?: BotLang) => {
         [{ text: L('kb_incomingTransfers') }],
         [{ text: L('kb_sentTransfers') }],
         [{ text: L('kb_incomingPayments') }],
-        [{ text: L('kb_addExpense') }],
+        [{ text: L('kb_addExpense') }, { text: L('kb_expenseHistory') }],
       ];
   return {
     keyboard: [[openSiteBtn(lang)], ...rows, [{ text: tb(lang, 'kb_language') }]],
@@ -545,8 +546,8 @@ const DEV_LABEL_KEYS = ['kb_broadcast', 'kb_disableSite', 'kb_enableSite', 'kb_d
 const DEFAULT_DEV_ORDER = ['kb_broadcast', 'siteToggle', 'botToggle', 'kb_firmsList', 'kb_allUsers', 'kb_allSubscriptions', 'kb_generalStats', 'kb_chatHistory', 'kb_devSettings'];
 // Admin (direktor/orinbosar) va ishchi (worker) menyulari — bularda
 // "toggle atom" yo'q, har biri oddiy statik kalit.
-const ADMIN_LABEL_KEYS = ['kb_chat', 'kb_pendingApprovals', 'kb_financeStatus', 'kb_objects', 'kb_staffList', 'kb_report', 'kb_subscriptionStatus', 'kb_addExpense'] as const;
-const USER_LABEL_KEYS = ['kb_chat', 'kb_incomingTransfers', 'kb_sentTransfers', 'kb_incomingPayments', 'kb_addExpense'] as const;
+const ADMIN_LABEL_KEYS = ['kb_chat', 'kb_pendingApprovals', 'kb_financeStatus', 'kb_objects', 'kb_staffList', 'kb_report', 'kb_subscriptionStatus', 'kb_addExpense', 'kb_expenseHistory'] as const;
+const USER_LABEL_KEYS = ['kb_chat', 'kb_incomingTransfers', 'kb_sentTransfers', 'kb_incomingPayments', 'kb_addExpense', 'kb_expenseHistory'] as const;
 const ORDER_BY_SCOPE: Record<KbScope, readonly string[]> = { dev: DEFAULT_DEV_ORDER, admin: ADMIN_LABEL_KEYS, user: USER_LABEL_KEYS };
 const LABEL_KEYS_BY_SCOPE: Record<KbScope, readonly string[]> = { dev: DEV_LABEL_KEYS, admin: ADMIN_LABEL_KEYS, user: USER_LABEL_KEYS };
 const SCOPE_TITLE_KEY: Record<KbScope, 'kb_devSettingsScopeDev' | 'kb_devSettingsScopeAdmin' | 'kb_devSettingsScopeUser'> = {
@@ -1067,6 +1068,7 @@ interface ExpenseDraft {
   projectId?: string; projectName?: string; transcript?: string;
   approverId?: string; approverName?: string; createdAt: number;
   category: ExpCategory; projLabel?: string;
+  recipientName?: string; objectLabel?: string; voiceFileId?: string; rawText?: string;
 }
 const pendingExpenseDrafts = new Map<string, ExpenseDraft>();
 
@@ -1090,14 +1092,44 @@ async function findExpenseApprover(user: any) {
     || (await User.findOne(base).catch(() => null));
 }
 
+// Nomni solishtirish uchun: kichik harf, apostrof/tire/raqam oldidagi belgilarsiz, kirill->lotin
+const normName = (x: string) => x.toLowerCase()
+  .replace(/[ʻʼ'’`‘]/g, '').replace(/[-–—_.,№#]/g, ' ')
+  .replace(/maktab|школа|shkola/g, 'maktab').replace(/\s+/g, ' ').trim();
 async function matchExpenseProject(user: any, name?: string) {
-  const q = (name || '').toLowerCase().trim();
+  const q = normName(name || '');
   if (q.length < 2) return null;
   const objs = await ObjectModel.find(user.companyId ? { companyId: user.companyId } : {}).select('name').lean();
-  return objs.find((o: any) => { const n = String(o.name).toLowerCase(); return n.includes(q) || (n.length >= 3 && q.includes(n)); }) || null;
+  const qTokens = q.split(' ').filter(Boolean);
+  let best: any = null, bestScore = 0;
+  for (const o of objs as any[]) {
+    const n = normName(String(o.name));
+    if (!n) continue;
+    if (n === q) return o;
+    let score = 0;
+    if (n.includes(q) || q.includes(n)) score += 5;
+    for (const tk of qTokens) if (n.split(' ').includes(tk)) score += /\d/.test(tk) ? 3 : 1; // raqam ("12") muhimroq
+    if (score > bestScore) { bestScore = score; best = o; }
+  }
+  return bestScore >= 3 ? best : null;
 }
 
-async function sendExpenseDraft(chatId: number, user: any, parsed: ParsedExpense) {
+// "Kimga" — firmadagi xodimga mos kelsa uning to'liq ismi, aks holda aytilgan nom o'zi
+async function matchExpenseRecipient(user: any, name?: string): Promise<string | undefined> {
+  const q = normName(name || '');
+  if (q.length < 2) return undefined;
+  const people = await User.find(user.companyId ? { companyId: user.companyId } : {}).select('firstName lastName').lean();
+  for (const p of people as any[]) {
+    const full = normName(`${p.firstName || ''} ${p.lastName || ''}`);
+    const first = normName(p.firstName || '');
+    if (full && (full === q || full.includes(q) || (first.length >= 3 && q.split(' ').includes(first)))) {
+      return `${p.firstName || ''} ${p.lastName || ''}`.trim();
+    }
+  }
+  return (name || '').trim().slice(0, 120);
+}
+
+async function sendExpenseDraft(chatId: number, user: any, parsed: ParsedExpense, extra?: { voiceFileId?: string; rawText?: string }) {
   const T = EXP_T[expLang(user.language)];
   const proj: any = await matchExpenseProject(user, parsed.projectName);
   const approver: any = await findExpenseApprover(user);
@@ -1113,6 +1145,9 @@ async function sendExpenseDraft(chatId: number, user: any, parsed: ParsedExpense
     projectId: proj ? String(proj._id) : undefined, projectName: proj?.name, transcript: parsed.transcript,
     approverId: approver ? String(approver._id) : undefined, approverName, createdAt: now,
     category: parsed.category ?? guessExpenseCategory(parsed.description),
+    recipientName: await matchExpenseRecipient(user, parsed.recipientName),
+    objectLabel: proj ? undefined : (parsed.projectName || undefined),
+    voiceFileId: extra?.voiceFileId, rawText: extra?.rawText,
   });
   const draft = pendingExpenseDrafts.get(id)!;
   draft.projLabel = proj?.name ?? (parsed.projectName ? `${parsed.projectName} ❓` : undefined);
@@ -1123,6 +1158,7 @@ function expenseDraftText(T: any, d: ExpenseDraft): string {
   const lines = [T.confirmTitle, ''];
   if (d.transcript) lines.push(T.heard(d.transcript), '');
   lines.push(T.amountLine(d.amount), T.descLine(d.description), T.catLine(T.cats[d.category]), T.projLine(d.projLabel));
+  if (d.recipientName) lines.push(T.recipientLine(d.recipientName));
   if (d.approverName) lines.push(T.approverLine(d.approverName));
   lines.push('', T.ask);
   return lines.join('\n');
@@ -1160,7 +1196,7 @@ async function handleExpenseInput(msg: any, chatId: number): Promise<boolean> {
       }
       bot.deleteMessage(chatId, notice.message_id).catch(() => {});
       if (!parsed) { await bot.sendMessage(chatId, T.voiceFail); return true; }
-      await sendExpenseDraft(chatId, user, parsed);
+      await sendExpenseDraft(chatId, user, parsed, { voiceFileId: media.file_id });
       return true;
     }
     if (msg.text) {
@@ -1170,7 +1206,7 @@ async function handleExpenseInput(msg: any, chatId: number): Promise<boolean> {
       if (text.startsWith('/') || !/\d/.test(text)) { pendingExpenseEntry.delete(chatId); return false; }
       const parsed = parseExpenseText(text);
       if (!parsed) { await bot.sendMessage(chatId, T.parseHint, { parse_mode: 'Markdown' }); return true; }
-      await sendExpenseDraft(chatId, user, parsed);
+      await sendExpenseDraft(chatId, user, parsed, { rawText: text });
       return true;
     }
   } catch (e) {
@@ -1213,6 +1249,11 @@ async function handleExpenseCallback(query: any, data: string, user: any, chatId
       amount: draft.amount, description: draft.description, createdById: String(user._id), companyId: user.companyId,
     };
     if (draft.projectId) txData.projectId = draft.projectId;
+    txData.source = 'bot';
+    if (draft.recipientName) txData.recipientName = draft.recipientName;
+    if (draft.objectLabel) txData.objectLabel = draft.objectLabel;
+    if (draft.voiceFileId) { txData.botVoiceFileId = draft.voiceFileId; if (draft.transcript) txData.botTranscript = draft.transcript; }
+    else if (draft.rawText) txData.botText = draft.rawText.slice(0, 1000);
     if (!admin) { txData.requiresAdminApproval = true; txData.approverId = draft.approverId; }
     const tx: any = await Transaction.create(txData);
     const payload = { ...tx.toObject(), id: tx._id };
@@ -1235,6 +1276,41 @@ async function handleExpenseCallback(query: any, data: string, user: any, chatId
   } catch (e) {
     console.error('[bot expense create]', e);
     await edit(T.error);
+  }
+}
+
+// "🧾 Chiqim tarixi" — foydalanuvchining o'zi kiritgan oxirgi chiqimlar. Botdan ovoz bilan
+// kiritilganlari — o'sha ovozli xabar (ostida matni), matn bilan kiritilganlari — o'sha matn.
+async function sendExpenseHistory(chatId: number, user: any) {
+  const T = EXP_T[expLang(user.language)];
+  const txs: any[] = await TransactionModel.find({ createdById: String(user._id), type: { $nin: ['transfer', 'income'] } })
+    .sort({ createdAt: -1 }).limit(10).lean();
+  if (!txs.length) { await bot.sendMessage(chatId, T.historyEmpty); return; }
+  const projIds = txs.map(t => t.projectId).filter(Boolean);
+  const projs: any[] = projIds.length ? await ObjectModel.find({ _id: { $in: projIds } }).select('name').lean() : [];
+  const projName = (id?: string) => projs.find(p => String(p._id) === String(id))?.name;
+  await bot.sendMessage(chatId, T.historyTitle);
+  for (const t of txs.reverse()) {
+    const lines = [
+      `${T.amountLine(t.amount || 0)}  ·  ${T.statusLabels[t.status] || t.status}`,
+      `📅 ${t.date || '—'}  ·  🏷 ${T.cats[t.type] || t.type}`,
+      T.descLine(t.description || '—'),
+    ];
+    const obj = projName(t.projectId) || t.objectLabel;
+    if (obj) lines.push(T.projLine(obj));
+    if (t.recipientName) lines.push(T.recipientLine(t.recipientName));
+    try {
+      if (t.botVoiceFileId) {
+        const caption = [...lines, t.botTranscript ? `\n${T.heard(t.botTranscript)}` : ''].join('\n').slice(0, 1024);
+        await bot.sendVoice(chatId, t.botVoiceFileId, { caption });
+      } else {
+        const body = t.botText ? [...lines, '', `✍️ ${t.botText}`] : lines;
+        await bot.sendMessage(chatId, body.join('\n').slice(0, 4000));
+      }
+    } catch (e) {
+      await bot.sendMessage(chatId, lines.join('\n')).catch(() => {});
+    }
+    await new Promise(r => setTimeout(r, 60));
   }
 }
 
@@ -1582,6 +1658,10 @@ bot.on('message', async (msg: any) => {
   // ── Chiqim qo'shish (dasturchidan boshqa hamma rol) ───────────────────────
   if (!developer && text === SL(admin ? 'admin' : 'user', 'kb_addExpense')) {
     await startExpenseFlow(chatId, user);
+    return;
+  }
+  if (!developer && text === SL(admin ? 'admin' : 'user', 'kb_expenseHistory')) {
+    await sendExpenseHistory(chatId, user);
     return;
   }
 

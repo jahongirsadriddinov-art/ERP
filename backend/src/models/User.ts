@@ -8,6 +8,11 @@ export interface IUser extends Document {
   telegramChatId?: string;
   telegramVerificationCode?: string;
   telegramVerificationCodeExpires?: Date;
+  pinSalt?: string;           // ilova qulfi PIN — faqat salt + SHA-256 xesh (PIN'ning o'zi emas)
+  pinHash?: string;
+  pinResetCodeHash?: string;
+  pinResetExpires?: Date;
+  pinResetAttempts?: number;
   brigade?: string;
   projectIds?: string[];
   // v1.2 multi-tenant qo'shimchalari (hammasi nullable — eski yozuvlarni buzmaydi)
@@ -45,6 +50,12 @@ const UserSchema: Schema = new Schema({
   telegramChatId: { type: String },
   telegramVerificationCode: { type: String },
   telegramVerificationCodeExpires: { type: Date },
+  // select:false — hech qaysi ro'yxat/eksport (users, backup, payroll...) bularni qaytarmaydi
+  pinSalt: { type: String, select: false },
+  pinHash: { type: String, select: false },
+  pinResetCodeHash: { type: String, select: false },
+  pinResetExpires: { type: Date },
+  pinResetAttempts: { type: Number, default: 0 },
   brigade: { type: String },
   projectIds: [{ type: String }],
   // v1.2 multi-tenant (nullable)

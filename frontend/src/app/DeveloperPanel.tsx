@@ -293,7 +293,7 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
   const expiringSoonCount = subs.filter(s => s.status === "active" && typeof s.daysLeft === "number" && s.daysLeft <= 3).length;
 
   return (
-    <div className="h-[100dvh] flex flex-col overflow-hidden bg-background" style={{ paddingTop: "env(safe-area-inset-top)" }}>
+    <div className="h-[100dvh] flex flex-col overflow-y-auto md:overflow-hidden overscroll-contain bg-background" style={{ paddingTop: "env(safe-area-inset-top)" }}>
       <header className="glass sticky top-0 z-20 px-4 py-3 flex items-center justify-between gap-2 border-b border-border/50 flex-shrink-0">
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-slate-700 to-slate-900 text-white flex items-center justify-center text-sm font-bold shadow-sm shrink-0">🛠</div>
@@ -310,14 +310,14 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
 
       {/* Umumiy ko'rinish — statistika kartochkalari, barcha tab'larda ko'rinadi */}
       {!loading && (
-        <div className="mx-4 md:mx-6 xl:mx-auto xl:max-w-7xl xl:w-[calc(100%-3rem)] mt-3 grid grid-cols-2 md:grid-cols-4 gap-2.5 flex-shrink-0">
+        <div className="mx-4 md:mx-6 xl:mx-auto xl:max-w-7xl xl:w-[calc(100%-3rem)] mt-3 flex md:grid md:grid-cols-4 gap-2.5 flex-shrink-0 overflow-x-auto scrollbar-hide">
           {[
             { label: t('devPanel.stats.totalFirms'), value: companies.length, accent: "text-primary" },
             { label: t('devPanel.stats.activeSubs'), value: activeSubsCount, accent: "text-green-600 dark:text-green-400" },
             { label: t('devPanel.stats.pending'), value: pendingSubsCount, accent: pendingSubsCount > 0 ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground" },
             { label: t('devPanel.stats.totalUsers'), value: users.length, accent: "text-accent" },
           ].map(s => (
-            <div key={s.label} className="surface rounded-2xl px-3.5 py-3">
+            <div key={s.label} className="surface border border-border rounded-2xl px-3.5 py-3 min-w-[9.5rem] md:min-w-0 flex-shrink-0">
               <p className="text-[10px] text-muted-foreground font-semibold truncate">{s.label}</p>
               <p className={`text-xl font-bold font-mono mt-0.5 ${s.accent}`}>{s.value}</p>
             </div>
@@ -330,7 +330,7 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
         </div>
       )}
 
-      <div className="mx-4 md:mx-6 xl:mx-auto xl:max-w-7xl xl:w-[calc(100%-3rem)] mt-3 flex items-center gap-2 flex-shrink-0">
+      <div className="mx-4 md:mx-6 xl:mx-auto xl:max-w-7xl xl:w-[calc(100%-3rem)] mt-3 flex items-center gap-2 flex-shrink-0 sticky top-[3.75rem] md:static z-10 bg-background/90 backdrop-blur-xl py-1 md:py-0">
         <div className="flex-1 min-w-0 nav-pill-desktop flex gap-1 p-1 rounded-full overflow-x-auto scrollbar-hide">
           <button onClick={() => setTab("subscriptions")} className={`relative py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "subscriptions" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
             {t('devPanel.tabs.subscriptions')} {subs.filter(s => s.status === "pending").length > 0 && <span className="ml-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full badge-pulse">{subs.filter(s => s.status === "pending").length}</span>}
@@ -362,7 +362,7 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
 
       {err && <div className="mx-4 md:mx-6 xl:mx-auto xl:max-w-7xl xl:w-[calc(100%-3rem)] mt-3 bg-red-500/10 text-red-700 dark:text-red-400 text-sm p-3 rounded-lg border border-red-500/20 flex-shrink-0">{err}</div>}
 
-      <div className={`flex-1 overflow-y-auto p-4 md:px-[max(1.5rem,calc((100%-80rem)/2))] pb-24 ${["subscriptions", "firms", "users"].includes(tab) ? "grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-3 content-start [&>p]:col-span-full [&>*:only-child]:col-span-full" : "space-y-3"}`}>
+      <div className={`flex-1 md:min-h-0 md:overflow-y-auto p-4 md:px-[max(1.5rem,calc((100%-80rem)/2))] pb-24 ${["subscriptions", "firms", "users"].includes(tab) ? "grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-3 content-start [&>p]:col-span-full [&>*:only-child]:col-span-full" : "space-y-3"}`}>
         {loading ? (
           <SkeletonList items={5}/>
         ) : tab === "subscriptions" ? (
@@ -514,7 +514,7 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
             </div>
           ))
         ) : tab === "messages" ? (
-          <div className="flex flex-col md:flex-row gap-0 md:gap-2 md:h-[60vh] md:min-h-[320px]">
+          <div className="flex flex-col md:flex-row gap-0 md:gap-2 min-h-[60dvh] md:h-[60vh] md:min-h-[320px]">
             {/* Mobile: breadcrumb/back nav */}
             {devMobileStep !== 'firms' && (
               <div className="md:hidden flex items-center gap-2 mb-2 pb-2 border-b border-border/40">
@@ -699,7 +699,7 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
                     {p.active ? t('devPanel.plans.active') : t('devPanel.plans.inactive')}
                   </button>
                 </div>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <div>
                     <label className="text-[10px] text-muted-foreground block mb-1">{t('devPanel.plans.labelField')}</label>
                     <input value={p.label} onChange={e => setPlans(prev => prev.map(x => x.key === p.key ? { ...x, label: e.target.value } : x))}
@@ -716,7 +716,7 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
                       className="w-full text-xs border border-border/60 rounded-lg px-2 py-1.5 bg-transparent font-mono" />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <div>
                     <label className="text-[10px] text-muted-foreground block mb-1">{t('devPanel.plans.periodField')}</label>
                     <select value={p.period || ''} onChange={e => setPlans(prev => prev.map(x => x.key === p.key ? { ...x, period: e.target.value || undefined } : x))}
@@ -775,7 +775,7 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
             {newPlan ? (
               <div className="surface rounded-2xl p-4 space-y-3 ring-1 ring-primary/40">
                 <p className="text-xs font-bold text-primary">{t('devPanel.plans.newTitle')}</p>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <input placeholder={t('devPanel.plans.keyField')} value={newPlan.key} onChange={e => setNewPlan({ ...newPlan, key: e.target.value.replace(/[^a-z0-9_-]/gi, '') })}
                     className="text-xs border border-border/60 rounded-lg px-2 py-1.5 bg-transparent font-mono" />
                   <input placeholder={t('devPanel.plans.labelField')} value={newPlan.label} onChange={e => setNewPlan({ ...newPlan, label: e.target.value })}
@@ -851,7 +851,7 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
             {newPromo ? (
               <div className="surface rounded-2xl p-4 space-y-3 ring-1 ring-primary/40">
                 <p className="text-xs font-bold text-primary">{t('devPanel.promocodes.newTitle')}</p>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <input placeholder={t('devPanel.promocodes.codeField')} value={newPromo.code} onChange={e => setNewPromo({ ...newPromo, code: e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, '') })}
                     className="text-xs border border-border/60 rounded-lg px-2 py-1.5 bg-transparent font-mono" />
                   <select value={newPromo.type} onChange={e => setNewPromo({ ...newPromo, type: e.target.value as "percent"|"fixed" })}

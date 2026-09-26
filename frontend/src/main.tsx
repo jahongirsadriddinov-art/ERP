@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { MotionConfig } from "motion/react";
 import App, { ClientViewPage } from "./app/App.tsx";
 import UpdateChecker from "./app/UpdateChecker.tsx";
+import MediaViewer from "./app/MediaViewer.tsx";
 import { ErrorBoundary } from "./app/ErrorBoundary.tsx";
 import { API_BASE } from "./app/api.ts";
 import "./app/i18n";
@@ -42,6 +43,7 @@ createRoot(document.getElementById("root")!).render(
         <>
           <App />
           <UpdateChecker />
+          <MediaViewer />
         </>
       )}
     </MotionConfig>

@@ -10,6 +10,8 @@ import { MorphIcon } from "morphicons/react";
 import { motion, AnimatePresence } from "motion/react";
 import { useTranslation } from "react-i18next";
 import { isAndroid, isDesktopPointer } from "./platform";
+import { API_BASE } from "./api";
+import ArrowLeft from "@hugeicons/core-free-icons/ArrowLeft01Icon";
 
 // ─── Ilova qulfi (PIN kod + ixtiyoriy biometrik) ──────────────────────────
 // To'liq telefon+kod login har safar qayta so'ralmasin uchun — Telegram'dagi
@@ -76,10 +78,34 @@ function randomHex(bytes: number): string {
 export function isPinSet(): boolean {
   return !!localStorage.getItem(PIN_HASH_KEY);
 }
-export async function setPin(pin: string): Promise<void> {
+const authHeaders = (): Record<string, string> => {
+  const token = localStorage.getItem('token');
+  return token ? { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` } : { 'Content-Type': 'application/json' };
+};
+async function makePinPair(pin: string): Promise<{ salt: string; hash: string }> {
   const salt = randomHex(16);
+  return { salt, hash: await sha256Hex(salt + pin) };
+}
+function storePinLocally(salt: string, hash: string) {
   localStorage.setItem(PIN_SALT_KEY, salt);
-  localStorage.setItem(PIN_HASH_KEY, await sha256Hex(salt + pin));
+  localStorage.setItem(PIN_HASH_KEY, hash);
+}
+// PIN hisobga bog'lanadi: bu qurilmada saqlanadi VA serverga (faqat salt+xesh) yuboriladi —
+// boshqa qurilmada login qilinganda qayta so'ralmaydi.
+export async function setPin(pin: string): Promise<void> {
+  const { salt, hash } = await makePinPair(pin);
+  storePinLocally(salt, hash);
+  fetch(`${API_BASE}/api/pin`, { method: 'PUT', headers: authHeaders(), body: JSON.stringify({ salt, hash }) }).catch(() => {});
+}
+// Yangi qurilmada login'dan keyin: hisobda PIN bo'lsa shu yerga tiklanadi (true), bo'lmasa false.
+export async function syncPinFromServer(): Promise<boolean> {
+  try {
+    const r = await fetch(`${API_BASE}/api/pin`, { headers: authHeaders() });
+    if (!r.ok) return false;
+    const d = await r.json();
+    if (d?.set && d.salt && d.hash) { storePinLocally(d.salt, d.hash); return true; }
+  } catch {}
+  return false;
 }
 // Muvaffaqiyatli bo'lsa urinishlar hisobini nolga tushiradi; noto'g'ri bo'lsa
 // hisoblaydi va MAX_FAILED_ATTEMPTS'ga yetganda PIN'ning o'zini tozalaydi
@@ -305,6 +331,105 @@ export function useAppLock(pinIsSet: boolean) {
 }
 
 // ─── PIN kiritish klaviaturasi (umumiy — o'rnatish va qulf ochishda ham) ──
+// ─── "PIN kodni unutdingizmi?" — telefon raqami → botga kod → yangi PIN ──
+export function ForgotPinScreen({ onDone, onCancel, onLogout }: { onDone: () => void; onCancel: () => void; onLogout: () => void }) {
+  const { t } = useTranslation();
+  const [stage, setStage] = useState<"phone" | "code" | "new" | "confirm">("phone");
+  const [phone, setPhone] = useState("+998");
+  const [code, setCode] = useState("");
+  const [newPin, setNewPin] = useState("");
+  const [confirmPin, setConfirmPin] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const requestCode = async () => {
+    setBusy(true); setError("");
+    try {
+      const r = await fetch(`${API_BASE}/api/pin/reset/request`, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ phone }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) setError(d.error || t('pinLock.resetError'));
+      else setStage("code");
+    } catch { setError(t('pinLock.resetError')); }
+    setBusy(false);
+  };
+
+  const current = stage === "new" ? newPin : confirmPin;
+  const setCurrent = stage === "new" ? setNewPin : setConfirmPin;
+  const onDigit = async (dg: string) => {
+    if (current.length >= PIN_LEN || busy) return;
+    setError("");
+    const next = current + dg;
+    setCurrent(next);
+    if (next.length !== PIN_LEN) return;
+    if (stage === "new") { setTimeout(() => setStage("confirm"), 150); return; }
+    if (next !== newPin) {
+      setError(t('pinLock.newMismatch'));
+      setTimeout(() => { setNewPin(""); setConfirmPin(""); setStage("new"); }, 700);
+      return;
+    }
+    setBusy(true);
+    try {
+      const { salt, hash } = await makePinPair(next);
+      const r = await fetch(`${API_BASE}/api/pin/reset/confirm`, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ code, salt, hash }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setError(d.error || t('pinLock.resetError'));
+        setNewPin(""); setConfirmPin(""); setCode(""); setStage("code");
+      } else {
+        storePinLocally(salt, hash);
+        resetFailedAttempts();
+        onDone();
+      }
+    } catch { setError(t('pinLock.resetError')); }
+    setBusy(false);
+  };
+
+  const title = stage === "phone" ? t('pinLock.forgotTitle') : stage === "code" ? t('pinLock.codeTitle') : stage === "new" ? t('pinLock.changeTitleNew') : t('pinLock.changeTitleConfirm');
+  return (
+    <main className="fixed inset-0 z-[999] bg-background flex flex-col items-center justify-center p-6"
+      style={{ paddingTop: "max(2rem, env(safe-area-inset-top))", paddingBottom: "max(2rem, env(safe-area-inset-bottom))" }}>
+      <button onClick={onCancel} aria-label={t('common.back')} className="absolute left-4 p-2 rounded-full hover:bg-muted" style={{ top: "max(1rem, env(safe-area-inset-top))" }}>
+        <MorphIcon icon={ArrowLeft} className="w-5 h-5" />
+      </button>
+      <div className="w-16 h-16 rounded-3xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center mb-6 shadow-xl shadow-primary/20">
+        <MorphIcon icon={Lock} className="w-8 h-8 text-white" />
+      </div>
+      <h1 className="text-xl font-bold mb-1.5 text-center">{title}</h1>
+      {stage === "phone" && (
+        <div className="w-full max-w-xs space-y-3">
+          <p className="text-sm text-muted-foreground text-center">{t('pinLock.forgotSubtitle')}</p>
+          <input value={phone} onChange={e => setPhone(e.target.value.replace(/[^\d+]/g, "").slice(0, 13))} inputMode="tel" autoFocus
+            className="w-full text-center text-lg font-mono border border-border rounded-2xl px-4 py-3 bg-input-background focus:outline-none focus:ring-2 focus:ring-primary/50" />
+          {error && <p className="text-xs text-red-500 text-center">{error}</p>}
+          <button onClick={requestCode} disabled={busy || phone.length < 13}
+            className="w-full btn btn-primary py-3 rounded-2xl text-sm font-bold disabled:opacity-50">{busy ? t('pinLock.checking') : t('pinLock.sendCode')}</button>
+        </div>
+      )}
+      {stage === "code" && (
+        <div className="w-full max-w-xs space-y-3">
+          <p className="text-sm text-muted-foreground text-center">{t('pinLock.codeSubtitle')}</p>
+          <input value={code} onChange={e => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))} inputMode="numeric" autoFocus placeholder="••••••"
+            className="w-full text-center text-2xl tracking-[0.5em] font-mono border border-border rounded-2xl px-4 py-3 bg-input-background focus:outline-none focus:ring-2 focus:ring-primary/50" />
+          {error && <p className="text-xs text-red-500 text-center">{error}</p>}
+          <button onClick={() => { setError(""); setStage("new"); }} disabled={code.length !== 6}
+            className="w-full btn btn-primary py-3 rounded-2xl text-sm font-bold disabled:opacity-50">{t('pinLock.continue')}</button>
+          <button onClick={requestCode} disabled={busy} className="w-full text-xs text-muted-foreground hover:text-foreground">{t('pinLock.resendCode')}</button>
+        </div>
+      )}
+      {(stage === "new" || stage === "confirm") && (
+        <>
+          <div className="mt-6"><PinDots length={PIN_LEN} filled={current.length} /></div>
+          {error && <p className="text-xs text-red-500 mb-4 text-center">{error}</p>}
+          <PinPad value={current} onDigit={onDigit} onDelete={() => setCurrent(current.slice(0, -1))} />
+        </>
+      )}
+      <button onClick={onLogout} className="mt-6 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-red-500">
+        <MorphIcon icon={LogOut} className="w-3.5 h-3.5" /> {t('pinLock.logoutInstead')}
+      </button>
+    </main>
+  );
+}
+
 function PinDots({ length, filled }: { length: number; filled: number }) {
   return (
     <div className="flex items-center justify-center gap-3 mb-8">
@@ -568,8 +693,8 @@ export function PinLockScreen({ onUnlock, onForgot, onLockedOut }: { onUnlock: (
           <MorphIcon icon={Fingerprint} className="w-4 h-4"  /> {biometricBusy ? t('pinLock.checking') : t('pinLock.biometricBtn')}
         </button>
       )}
-      <button onClick={onForgot} className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground">
-        <MorphIcon icon={LogOut} className="w-3.5 h-3.5"  /> {t('pinLock.forgotPin')}
+      <button onClick={onForgot} className="mt-4 text-sm text-primary font-semibold hover:underline">
+        {t('pinLock.forgotPin')}
       </button>
     </main>
   );

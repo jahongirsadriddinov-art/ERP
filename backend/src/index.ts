@@ -53,6 +53,7 @@ import { bot, notifyDeveloper } from './services/bot';
 import { checkRate } from './utils/rateLimit';
 import { serveDurableUpload } from './services/durableFiles';
 import { cloudinaryEnabled } from './config/cloudinary';
+import pinRoutes from './routes/pin';
 
 dotenv.config();
 
@@ -210,6 +211,7 @@ app.use('/api/auth', optionalAuth, authRoutes); // ichida login/send-code kabi p
 // emas (hali login qilinmagan), /scan esa o'zining requireAuth'ini talab
 // qiladi (telefon ALLAQACHON login bo'lgan bo'lishi kerak).
 app.use('/api/auth/qrlogin', optionalAuth, qrloginRoutes);
+app.use('/api/pin', requireAuth, pinRoutes); // ilova qulfi PIN — hisobga bog'langan (qurilmalar orasida)
 app.use('/api/sessions', requireAuth, sessionsRoutes); // "Ulangan qurilmalar" (ProfilePage)
 app.use('/api/register', registerRoutes); // v1.2 self-signup (pre-auth, ochiq)
 // Firma ichki ma'lumotlari — dasturchi kira olmaydi (blockDeveloper).

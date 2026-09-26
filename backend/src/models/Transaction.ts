@@ -52,6 +52,16 @@ export interface ITransaction extends Document {
   // tasdiqlay oladi, eski xatti-harakat saqlanadi.
   approverId?: string;
 
+  // Botdan kiritilgan chiqim: ovozli xabar (Telegram file_id), uning matni, yoki yozilgan matn —
+  // "Chiqim tarixi"da aynan shu holicha qayta ko'rsatiladi.
+  source?: 'site' | 'bot';
+  botVoiceFileId?: string;
+  botTranscript?: string;
+  botText?: string;
+  // Kimga / qaysi obyekt — ro'yxatdagi odam/obyektga mos kelmasa ham aytilgan nom saqlanadi
+  recipientName?: string;
+  objectLabel?: string;
+
   companyId?: string; // v1.2 multi-tenant (nullable)
 }
 
@@ -91,6 +101,12 @@ const TransactionSchema: Schema = new Schema({
   approvalHistory: [{ userId: String, name: String, role: String, action: String, date: String, note: String }],
   requiresAdminApproval: { type: Boolean, default: false },
   approverId: { type: String },
+  source: { type: String, enum: ['site', 'bot'] },
+  botVoiceFileId: { type: String },
+  botTranscript: { type: String },
+  botText: { type: String },
+  recipientName: { type: String },
+  objectLabel: { type: String },
   companyId: { type: String, index: true } // v1.2 multi-tenant
 }, { timestamps: true });
 

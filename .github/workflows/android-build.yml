@@ -167,6 +167,13 @@ jobs:
 
       # Har build o'z versiyasiga ega bo'lsin — o'rnatuvchi (NSIS/MSI) eski o'rnatilgan
       # nusxani yangi deb tanib, ustiga yozadi.
+      # MUHIM: src-tauri/target keshlanadi — eski build'larning o'rnatuvchilari (bundle/nsis/*.exe)
+      # ham keshdan qaytib kelardi va keyingi qadam ulardan ESKISINI yuklab yuborardi (ilova
+      # "yangilanmasdi"). Har buildda eski o'rnatuvchilar o'chiriladi.
+      - name: Remove stale installers from cache
+        shell: bash
+        run: rm -rf src-tauri/target/release/bundle
+
       - name: Set unique app version
         shell: bash
         run: |
@@ -225,7 +232,8 @@ jobs:
           fi
 
           APK_PATH=$(find artifacts/apk -iname "*.apk" | head -1)
-          EXE_PATH=$(find artifacts/exe -iname "*setup*.exe" -o -iname "*.exe" | head -1)
+          EXE_PATH=$(ls -t $(find artifacts/exe -iname "*setup*.exe") 2>/dev/null | head -1)
+          echo "EXE fayl: $EXE_PATH"
 
           # kind=apk/exe -> backend O'ZGARMAS (stable, overwrite:true) URL bilan
           # yuklaydi — landing page/Profildagi "yuklab olish" tugmalari doim

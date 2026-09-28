@@ -4,6 +4,7 @@ import Download from "@hugeicons/core-free-icons/Download01Icon";
 import QrCode from "@hugeicons/core-free-icons/QrCodeIcon";
 import { MorphIcon } from "morphicons/react";
 import { useTranslation } from "react-i18next";
+import { saveOrShareBlob } from "./platform";
 
 interface Props {
   type: "material" | "object" | "transaction";
@@ -37,11 +38,7 @@ export default function QRGenerator({ type, id, name, onClose }: Props) {
   const download = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const url = canvas.toDataURL("image/png");
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `qr-${type}-${id}.png`;
-    a.click();
+    canvas.toBlob(blob => { if (blob) saveOrShareBlob(`qr-${type}-${id}.png`, blob); }, "image/png");
   };
 
   const label = type === "material" ? t('qrGenerator.typeMaterial') : type === "object" ? t('qrGenerator.typeObject') : t('qrGenerator.typeTransaction');

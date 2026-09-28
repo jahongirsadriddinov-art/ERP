@@ -131,59 +131,79 @@ function blobToBase64(blob: Blob): Promise<string> {
 // @capacitor/share orqali OS ulashish oynasini ochamiz — foydalanuvchi
 // "Fayllar"/istalgan ilovaga saqlashni tanlaydi. Bu saqlash RUXSATISIZ
 // (Cache papkasi ilova ichida) ishlaydigan eng ishonchli yo'l.
+const guessMime = (name: string, blob: Blob) => {
+  if (blob.type) return blob.type;
+  const ext = name.split('.').pop()?.toLowerCase();
+  return ({ csv: 'text/csv', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', json: 'application/json',
+    png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', pdf: 'application/pdf', mp4: 'video/mp4' } as Record<string, string>)[ext || ''] || 'application/octet-stream';
+};
+async function toastSaved(where: string, onOpen?: () => void) {
+  try {
+    const { toast } = await import('sonner');
+    toast.success(`Yuklab olindi: ${where}`, onOpen ? { action: { label: 'Ochish', onClick: onOpen } } : undefined);
+  } catch { /* toast ixtiyoriy */ }
+}
+
+// Mahalliy hosil qilingan faylni (Excel/CSV hisobot, backup, QR, rasm) saqlash.
+//  - Windows ilovasi (Tauri): WebView2'da <a download> ISHLAMAYDI → Rust buyrug'i faylni
+//    "Yuklanmalar" papkasiga yozadi, "Ochish" — Explorer'da ko'rsatadi.
+//  - Android ilovasi: WebView'da ham <a download> ishlamaydi → FileSaver plagini faylni
+//    "Download/QurilishERP" papkasiga yozadi (Android 10+), "Ochish" — mos ilovada ochadi.
+//    Eski Android'da — vaqtinchalik papka + "Ulashish" oynasi (avvalgi yo'l).
+//  - Veb brauzer: oddiy <a download>.
 export async function saveOrShareBlob(filename: string, blob: Blob): Promise<{ ok: boolean; shared?: boolean }> {
-  // isCapacitor() emas, aynan isAndroid() — bu yo'l FAQAT Android uchun
-  // (yuqoridagi izohga qarang), Windows/iOS/web'ning barchasi pastdagi
-  // oddiy <a download> yo'lidan o'tishi kerak.
-  if (!isAndroid()) {
-    // XATO TUZATILDI: bu blok avval try/catch'siz edi — "{ok:true}" har
-    // doim SO'ZSIZ qaytardi, hatto a.click() biror sababdan (masalan
-    // iOS Safari'ning tracking-prevention/pop-up cheklovlari) chindan
-    // ishlamay qolsa ham. Natijada muvaffaqiyatsizlik HECH QACHON
-    // ko'rinmasdi (na "Fayl saqlanmadi" xabari, na konsolda iz) — endi
-    // haqiqiy xato bo'lsa {ok:false} qaytadi VA sababi konsolga yoziladi.
+  if (isTauri()) {
     try {
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url; a.download = filename;
-      document.body.appendChild(a); a.click(); document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      const { invoke } = await import('@tauri-apps/api/core');
+      const path = await invoke<string>('save_to_downloads', { filename, dataB64: await blobToBase64(blob) });
+      toastSaved(path, () => { invoke('reveal_file', { path }).catch(() => {}); });
       return { ok: true };
     } catch (err) {
-      console.error('saveOrShareBlob (web) xatosi:', err);
+      console.error('saveOrShareBlob (tauri) xatosi:', err);
       return { ok: false };
     }
   }
-  const [{ Filesystem, Directory }, { Share }] = await Promise.all([
-    import('@capacitor/filesystem'),
-    import('@capacitor/share'),
-  ]);
-  let writtenUri: string;
-  try {
+  if (isAndroid()) {
     const base64 = await blobToBase64(blob);
-    const written = await Filesystem.writeFile({ path: filename, data: base64, directory: Directory.Cache });
-    writtenUri = written.uri;
-  } catch (err) {
-    // Fayl HAQIQATAN ham yozilmadi — bu haqiqiy "saqlanmadi" xatosi.
-    console.error('saveOrShareBlob (writeFile) xatosi:', err);
-    return { ok: false };
+    const mime = guessMime(filename, blob);
+    try {
+      const { registerPlugin } = await import('@capacitor/core');
+      const FileSaver = registerPlugin<any>('FileSaver');
+      const r = await FileSaver.saveToDownloads({ name: filename, data: base64, mime });
+      toastSaved(r.path, () => { FileSaver.openFile({ uri: r.uri, mime }).catch(() => {}); });
+      return { ok: true };
+    } catch (err) {
+      console.warn('FileSaver ishlamadi — ulashish yo\'liga o\'tiladi:', err);
+    }
+    const [{ Filesystem, Directory }, { Share }] = await Promise.all([
+      import('@capacitor/filesystem'),
+      import('@capacitor/share'),
+    ]);
+    let writtenUri: string;
+    try {
+      const written = await Filesystem.writeFile({ path: filename, data: base64, directory: Directory.Cache });
+      writtenUri = written.uri;
+    } catch (err) {
+      console.error('saveOrShareBlob (writeFile) xatosi:', err);
+      return { ok: false };
+    }
+    try {
+      await Share.share({ url: writtenUri, title: filename, dialogTitle: filename });
+      return { ok: true, shared: true };
+    } catch {
+      return { ok: true, shared: false }; // foydalanuvchi ulashishni bekor qildi — fayl baribir yozilgan
+    }
   }
-  // XATO TUZATILDI: fayl yozish (yuqorida) va ulashish (pastda) bitta
-  // try/catch'da edi — foydalanuvchi ulashish oynasini shunchaki BEKOR
-  // qilsa (masalan orqaga qaytsa yoki tashqariga bossa), Share.share()
-  // ko'pincha rad etilgan promise bilan tugaydi va bu "Fayl saqlanmadi"
-  // xatosi sifatida ko'rsatilardi — holbuki fayl YUQORIDA muvaffaqiyatli
-  // yozilgan edi, foydalanuvchi faqat keyingi ixtiyoriy "ulashish"
-  // qadamidan voz kechgan edi (aniq xabar qilingan holat: ulashish oynasi
-  // ochilgan BILAN BIRGA "Fayl saqlanmadi" xabari ham chiqqan). Endi bu
-  // ikkinchi bosqich muvaffaqiyatsiz bo'lsa ham, fayl saqlangani uchun
-  // xato emas, {ok:true, shared:false} qaytariladi.
   try {
-    await Share.share({ url: writtenUri, title: filename, dialogTitle: filename });
-    return { ok: true, shared: true };
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    return { ok: true };
   } catch (err) {
-    console.error('saveOrShareBlob (share, e\'tiborsiz — fayl saqlangan) xatosi:', err);
-    return { ok: true, shared: false };
+    console.error('saveOrShareBlob (web) xatosi:', err);
+    return { ok: false };
   }
 }
 
@@ -194,6 +214,16 @@ export async function saveOrShareBlob(filename: string, blob: Blob): Promise<{ o
 // oddiy window.open — brauzer/WebView2 o'zi to'g'ri saqlash oynasini
 // ko'rsatadi (bu yerda muammo yo'q, faqat Android WebView buzilgan edi).
 export async function openExternalUrl(url: string): Promise<void> {
+  // Windows ilovasi: window.open WebView2'da hech narsa qilmaydi — tizim brauzerida ochiladi
+  if (isTauri()) {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('open_external', { url });
+      return;
+    } catch (err) {
+      console.error('open_external xatosi:', err);
+    }
+  }
   if (isCapacitor()) {
     try {
       const { Browser } = await import('@capacitor/browser');

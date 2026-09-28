@@ -4,6 +4,7 @@ import { MorphIcon } from "morphicons/react";
 import X from "@hugeicons/core-free-icons/Cancel01Icon";
 import Download from "@hugeicons/core-free-icons/Download04Icon";
 import { saveOrShareBlob } from "./platform";
+import { VideoPlayer } from "./MediaPlayers";
 
 // Telegram'dagi kabi: rasm/video ilovaning O'ZIDA, to'liq ekranli oynada ochiladi
 // (avval yangi tab/sahifa ochilardi — ilovalarda (APK/exe) umuman ishlamasdi).
@@ -53,7 +54,7 @@ export default function MediaViewer() {
       </div>
       <div className={`w-full h-full flex items-center justify-center ${zoom ? "overflow-auto" : "overflow-hidden"}`} onClick={e => e.stopPropagation()}>
         {media.type === "video" ? (
-          <video src={media.url} controls autoPlay playsInline className="max-w-full max-h-full" />
+          <VideoPlayer src={media.url} autoPlay className="w-full h-full max-w-5xl max-h-full" />
         ) : (
           <img src={media.url} alt="" onClick={() => setZoom(z => !z)}
             className={zoom ? "max-w-none cursor-zoom-out" : "max-w-full max-h-full object-contain cursor-zoom-in"} />

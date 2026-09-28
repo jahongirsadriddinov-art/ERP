@@ -88,6 +88,7 @@ import { installAndroidBackHandler, saveOrShareBlob, openExternalUrl, isNative, 
 import QrLoginPanel from "./QrLoginPanel";
 import { AppDownloadCards } from "./AppDownload";
 import { openMediaViewer } from "./MediaViewer";
+import { VoicePlayer, VideoPlayer } from "./MediaPlayers";
 import LanguageSwitcher from "./i18n/LanguageSwitcher";
 import { Skeleton, SkeletonList, SkeletonPage, SkeletonMessage, SkeletonTable, SkeletonProfile } from "./Skeleton";
 import { useGeoTracker, accuracyQuality, QUALITY_COLOR, type GpsStatus } from "./useGeoTracker";
@@ -1671,13 +1672,8 @@ function useBackupActions() {
       });
       if (!r.ok) { toast.error(t('dashboard.backupError')); return; }
       const blob = await r.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `qurilish-erp-backup-${new Date().toISOString().split('T')[0]}.json`;
-      document.body.appendChild(a); a.click(); document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      toast.success(t('dashboard.backupSuccess'));
+      const saved = await saveOrShareBlob(`qurilish-erp-backup-${new Date().toISOString().split('T')[0]}.json`, blob);
+      if (saved.ok) toast.success(t('dashboard.backupSuccess')); else toast.error(t('dashboard.backupError'));
     } catch { toast.error(t('dashboard.backupError')); }
     finally { setBackupLoading(false); }
   };
@@ -1764,12 +1760,8 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
       const r = await fetch(`${API_BASE}/api/export1c/transactions`, { headers: { Authorization: `Bearer ${token}` } });
       if (!r.ok) { toast.error(t('dashboard.backupError')); return; }
       const blob = await r.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `1c-export-${new Date().toISOString().split('T')[0]}.xlsx`;
-      document.body.appendChild(a); a.click(); document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      const saved = await saveOrShareBlob(`1c-export-${new Date().toISOString().split('T')[0]}.xlsx`, blob);
+      if (!saved.ok) toast.error(t('dashboard.backupError'));
     } catch { toast.error(t('dashboard.backupError')); }
     finally { setExport1cLoading(false); }
   };
@@ -3032,7 +3024,7 @@ function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSe
                 {mediaItems.map(m => (
                   <div key={m.id} className="relative rounded-xl overflow-hidden bg-muted aspect-square group">
                     {m.type === 'video' ? (
-                      <video src={m.url} className="w-full h-full object-cover" controls playsInline />
+                      <VideoPlayer src={m.url} compact className="w-full h-full" onExpand={() => openMediaViewer(m.url, 'video')} />
                     ) : (
                       <SafeImg src={m.url} className="w-full h-full object-cover cursor-pointer" onClick={() => openMediaViewer(m.url, 'image')} />
                     )}
@@ -3475,87 +3467,8 @@ function ExpenseDetailModal({ expense, users, projects, onClose }: { expense: Ex
 }
 
 // ─── Voice Message Player ─────────────────────────────────────────────────────
-export function VoicePlayer({ src, mine }: { src: string; mine?: boolean }) {
-  const { t } = useTranslation();
-  const audioRef = useRef<HTMLAudioElement>(null);
-  const [playing, setPlaying] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [currentTime, setCurrentTime] = useState(0);
-
-  const toggle = () => {
-    const a = audioRef.current; if (!a) return;
-    if (playing) { a.pause(); } else { a.play().catch(() => {}); }
-    setPlaying(!playing);
-  };
-  const fmtTime = (s: number) => `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
-
-  // "Waveform" ko'rinishi — haqiqiy audio amplitudasi emas (bu client-side og'ir
-  // dekodlashni talab qiladi), balki src'ga bog'liq DETERMINISTIK naqsh — shu
-  // xabar uchun har safar bir xil chiqadi, faqat vizual jihatdan WhatsApp uslubiga
-  // yaqinlashtiradi.
-  const bars = useMemo(() => {
-    let seed = 0;
-    for (let i = 0; i < src.length; i++) seed = (seed * 31 + src.charCodeAt(i)) >>> 0;
-    return Array.from({ length: 28 }, () => {
-      seed = (seed * 1103515245 + 12345) >>> 0;
-      return 0.22 + ((seed >>> 8) / 0xFFFFFF) * 0.78;
-    });
-  }, [src]);
-
-  const seek = (e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const pct = (e.clientX - rect.left) / rect.width;
-    if (audioRef.current?.duration) audioRef.current.currentTime = pct * audioRef.current.duration;
-  };
-
-  return (
-    <div className={`flex items-center gap-2.5 min-w-[210px] max-w-[260px] py-0.5`}>
-      <audio ref={audioRef} src={src} preload="metadata"
-        onLoadedMetadata={e => setDuration((e.target as HTMLAudioElement).duration)}
-        onTimeUpdate={e => { const a = e.target as HTMLAudioElement; setCurrentTime(a.currentTime); setProgress(a.duration ? a.currentTime/a.duration*100 : 0); }}
-        onEnded={() => { setPlaying(false); setProgress(0); setCurrentTime(0); if (audioRef.current) audioRef.current.currentTime=0; }}
-      />
-      {/* Play/Pause button */}
-      <button onClick={toggle} aria-label={playing ? t('chat.pause') : t('chat.play')}
-        className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 active:scale-92 transition-all shadow-md
-          ${mine
-            ? "bg-white/20 text-white hover:bg-white/30 shadow-white/10"
-            : "bg-primary text-white hover:bg-primary/90 shadow-primary/30"
-          }`}>
-        {playing
-          ? <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
-          : <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 ml-0.5"><polygon points="5,3 20,12 5,21"/></svg>
-        }
-      </button>
-      {/* Waveform + time */}
-      <div className="flex-1 flex flex-col gap-1.5 min-w-0">
-        <div className="relative h-7 flex items-center gap-[2px] cursor-pointer rounded-lg px-0.5" onClick={seek}>
-          {bars.map((h, i) => {
-            const played = (i / bars.length) * 100 <= progress;
-            return (
-              <div key={i} className={`flex-1 rounded-full transition-all duration-150
-                ${played
-                  ? mine ? "bg-white/90" : "bg-primary"
-                  : mine ? "bg-white/25" : "bg-primary/20"
-                }`}
-                style={{ height: `${Math.max(18, Math.round(h * 80))}%` }}/>
-            );
-          })}
-          {/* Playhead indicator */}
-          {playing && progress > 0 && (
-            <div className={`absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full shadow-md transition-all ${mine?"bg-white":"bg-primary"}`}
-              style={{ left: `calc(${progress}% - 5px)` }}/>
-          )}
-        </div>
-        <div className={`flex justify-between text-[9px] font-mono px-0.5 ${mine ? "text-white/60" : "text-muted-foreground"}`}>
-          <span>{fmtTime(currentTime)}</span>
-          <span>{duration > 0 ? fmtTime(duration) : '—'}</span>
-        </div>
-      </div>
-    </div>
-  );
-}
+// Ovozli xabar pleyeri — MediaPlayers.tsx (Telegram uslubi: tezlik 1x/1.5x/2x/3x)
+export { VoicePlayer };
 
 // ─── Chat Page ─────────────────────────────────────────────────────────────────
 function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, onMarkRead, onEdit, onDelete, onPin, onChatOpen, onCreateGroup, onStartCall, onStartVideoChat, canModifyMessages, onGetDevSupport, onRenameGroup, onAddGroupMembers, onRemoveGroupMember, onLeaveGroup, onDeleteGroup }:
@@ -3787,10 +3700,8 @@ function ChatPage({ currentUser, users, messages, groups, onlineUsers, onSend, o
           <SafeImg src={m.mediaUrl as string} alt={tChat('chat.imageAlt')} className="rounded-xl max-w-full max-h-52 object-cover mb-1 cursor-pointer" fallbackClassName="w-40 h-28" onClick={()=>openMediaViewer(m.mediaUrl as string, 'image')}/>
         )}
         {m.type==='video' && m.mediaUrl && (
-          <div className="relative mb-1">
-            <video src={m.mediaUrl} controls preload="metadata" className="rounded-xl max-w-full max-h-52"/>
-            <button type="button" onClick={e => { e.stopPropagation(); openMediaViewer(m.mediaUrl as string, 'video'); }} aria-label="Fullscreen"
-              className="absolute top-1.5 right-1.5 w-7 h-7 rounded-full bg-black/55 text-white text-xs flex items-center justify-center">⤢</button>
+          <div className="mb-1 w-[260px] max-w-full" onClick={e => e.stopPropagation()}>
+            <VideoPlayer src={m.mediaUrl as string} compact className="aspect-video max-h-60" onExpand={() => openMediaViewer(m.mediaUrl as string, 'video')} />
           </div>
         )}
         {m.type==='audio' && m.mediaUrl && (
@@ -6207,7 +6118,7 @@ export function ClientViewPage({ token }: { token: string }) {
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {data.media.map((m, i) => (
                 <div key={i} className="relative rounded-xl overflow-hidden bg-muted aspect-square">
-                  {m.type === 'video' ? <video src={m.url} className="w-full h-full object-cover" controls playsInline /> : <SafeImg src={m.url} className="w-full h-full object-cover" />}
+                  {m.type === 'video' ? <VideoPlayer src={m.url} compact className="w-full h-full" onExpand={() => openMediaViewer(m.url, 'video')} /> : <SafeImg src={m.url} className="w-full h-full object-cover" />}
                 </div>
               ))}
             </div>

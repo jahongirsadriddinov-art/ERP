@@ -66,6 +66,50 @@ fn install_update(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+// Fayl yuklab olish (Excel/CSV, backup, QR, rasm...). WebView2'da <a download> ishlamaydi —
+// fayl to'g'ridan-to'g'ri foydalanuvchining "Yuklanmalar" (Downloads) papkasiga yoziladi.
+// Nom tozalanadi (papka ajratgichlari/maxsus belgilar) — boshqa joyga yozib bo'lmaydi.
+#[tauri::command]
+fn save_to_downloads(app: tauri::AppHandle, filename: String, data_b64: String) -> Result<String, String> {
+    use base64::Engine;
+    let bytes = base64::engine::general_purpose::STANDARD.decode(data_b64.as_bytes()).map_err(|e| e.to_string())?;
+    let dir = app.path().download_dir().map_err(|e| e.to_string())?;
+    let mut safe: String = filename.chars()
+        .map(|c| if r#"<>:"/\|?*"#.contains(c) || c.is_control() { '_' } else { c })
+        .collect::<String>().trim().trim_matches('.').to_string();
+    if safe.is_empty() { safe = "fayl".into(); }
+    let (stem, ext) = match safe.rfind('.') {
+        Some(i) if i > 0 => (safe[..i].to_string(), safe[i..].to_string()),
+        _ => (safe.clone(), String::new()),
+    };
+    let mut path = dir.join(&safe);
+    let mut n = 1;
+    while path.exists() {
+        path = dir.join(format!("{} ({}){}", stem, n, ext));
+        n += 1;
+    }
+    std::fs::write(&path, bytes).map_err(|e| e.to_string())?;
+    Ok(path.to_string_lossy().into_owned())
+}
+
+// Saqlangan faylni Explorer'da ko'rsatish ("Ochish" tugmasi)
+#[tauri::command]
+fn reveal_file(app: tauri::AppHandle, path: String) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    let dir = app.path().download_dir().map_err(|e| e.to_string())?;
+    let p = std::path::PathBuf::from(&path);
+    if !p.starts_with(&dir) { return Err("Ruxsat etilmagan yo'l".into()); }
+    app.opener().reveal_item_in_dir(p).map_err(|e| e.to_string())
+}
+
+// Tashqi havola (chatdagi fayl, sayt, xarita) — tizim brauzerida ochiladi; faqat http(s)
+#[tauri::command]
+fn open_external(app: tauri::AppHandle, url: String) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    if !(url.starts_with("https://") || url.starts_with("http://")) { return Err("Ruxsat etilmagan havola".into()); }
+    app.opener().open_url(url, None::<&str>).map_err(|e| e.to_string())
+}
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -80,7 +124,7 @@ pub fn run() {
             window.show().unwrap();
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![greet, download_update, install_update])
+        .invoke_handler(tauri::generate_handler![greet, download_update, install_update, save_to_downloads, reveal_file, open_external])
         .run(tauri::generate_context!())
         .expect("QurilishERP ishga tushmadi");
 }

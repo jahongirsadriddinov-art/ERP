@@ -11,6 +11,7 @@ import Trash from "@hugeicons/core-free-icons/Delete02Icon";
 import { API_BASE, uploadChatMedia } from "./api";
 import { getSocket } from "./socket";
 import { openMediaViewer } from "./MediaViewer";
+import { VideoPlayer } from "./MediaPlayers";
 
 const LocationPicker = lazy(() => import("./LocationPicker"));
 
@@ -31,7 +32,7 @@ export function AnnouncementContent({ a }: { a: AnnouncementData }) {
         <img src={a.mediaUrl} alt="" onClick={() => openMediaViewer(a.mediaUrl!, 'image')} className="w-full max-h-64 object-contain rounded-xl bg-black/5 mb-2 cursor-zoom-in" />
       )}
       {a.mediaUrl && a.mediaType === 'video' && (
-        <video src={a.mediaUrl} controls playsInline preload="metadata" className="w-full max-h-64 rounded-xl bg-black mb-2" />
+        <div className="mb-2"><VideoPlayer src={a.mediaUrl} className="w-full max-h-64 aspect-video" onExpand={() => openMediaViewer(a.mediaUrl!, 'video')} /></div>
       )}
       <p className="text-sm text-foreground/80 whitespace-pre-wrap break-words">{a.body}</p>
       {a.location && (

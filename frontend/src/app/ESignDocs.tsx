@@ -476,7 +476,7 @@ export function PublicSignPage({ token }: { token: string }) {
   };
   const customerSigned = doc?.signatures?.some(s => s.side === "customer");
   return (
-    <main className="min-h-[100dvh] bg-background px-4 py-6" style={{ paddingTop: "max(1.5rem, env(safe-area-inset-top))" }}>
+    <main className="h-[100dvh] overflow-y-auto overscroll-contain bg-background px-4 py-6" style={{ paddingTop: "max(1.5rem, env(safe-area-inset-top))" }}>
       <div className="max-w-3xl mx-auto space-y-4">
         <h1 className="text-xl font-bold">{doc ? `${doc.title} № ${doc.number}` : "Hujjat"}</h1>
         {err && <p className="text-sm text-red-500">{err}</p>}

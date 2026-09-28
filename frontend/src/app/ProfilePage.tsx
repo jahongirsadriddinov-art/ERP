@@ -26,7 +26,7 @@ import Wallet from "@hugeicons/core-free-icons/Wallet01Icon";
 import LogOut from "@hugeicons/core-free-icons/Logout01Icon";
 import Camera from "@hugeicons/core-free-icons/Camera01Icon";
 import TextFont from "@hugeicons/core-free-icons/TextFontIcon";
-import { FONTS, fontById, getAppFont, applyAppFont, ensureFont } from "./lib/fonts";
+import { FONTS, fontById, getAppFont, applyAppFont, ensureFont, FONT_SCALES, getFontScale, applyFontScale } from "./lib/fonts";
 import Home from "@hugeicons/core-free-icons/Home01Icon";
 import UserPlus from "@hugeicons/core-free-icons/UserAdd01Icon";
 import Edit from "@hugeicons/core-free-icons/Edit02Icon";
@@ -540,6 +540,8 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
 
   const activeTheme = COLOR_THEMES.find(t => t.id === colorTheme) || COLOR_THEMES[0];
   const [appFont, setAppFont] = useState(getAppFont);
+  const [fontScale, setFontScale] = useState(getFontScale);
+  const changeScale = (v: number) => { setFontScale(v); applyFontScale(v); };
   const [activePanel, setActivePanel] = useState<null | "font" | "bg" | "appearance" | "color" | "perms" | "projects" | "language" | "subscription" | "currency" | "sound" | "devices" | "backup">(null);
   const APPEARANCE_LABELS: Record<string, string> = { light: t('profile.themeLight'), dark: t('profile.themeDark'), system: t('profile.themeSystem') };
 
@@ -654,7 +656,7 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
               swatch: (bannerStyle as any).background ? { background: (bannerStyle as any).background } : { backgroundImage: (bannerStyle as any).backgroundImage, backgroundSize: 'cover' } },
             { key: "appearance" as const, icon: themeMode === "light" ? Sun : themeMode === "dark" ? Moon : Monitor, label: t('profile.appearanceMode'), hint: APPEARANCE_LABELS[themeMode], swatch: null },
             { key: "color" as const, icon: Palette, label: t('profile.colorTheme'), hint: t(`profile.colorThemeNames.${activeTheme.id}`, { defaultValue: activeTheme.name }), swatch: { background: `linear-gradient(135deg, ${activeTheme.primary}, ${activeTheme.accent})` } },
-            { key: "font" as const, icon: TextFont, label: t('profile.font', "Shrift"), hint: fontById(appFont).label, swatch: null },
+            { key: "font" as const, icon: TextFont, label: t('profile.font', "Shrift"), hint: `${fontById(appFont).label} · ${fontScale}%`, swatch: null },
             { key: "language" as const, icon: Languages, label: t('profile.language'), hint: langLabel(i18n.language as SiteLang), swatch: null },
             { key: "perms" as const, icon: CheckCircle, label: t('profile.permissions'), hint: `${perms.filter(([,has])=>has).length}/${perms.length}`, swatch: null },
             { key: "projects" as const, icon: Building2, label: t('profile.myObjects'), hint: String(myProjectCount), swatch: null },
@@ -761,7 +763,25 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
             </div>
           )}
           {activePanel === "font" && (
-            <div className="surface border border-border overflow-hidden p-3">
+            <div className="surface border border-border overflow-hidden p-4">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-bold mb-2">{t('profile.fontSize', "Matn o'lchami")}</p>
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={() => { const i = FONT_SCALES.indexOf(fontScale as any); if (i > 0) changeScale(FONT_SCALES[i - 1]); }}
+                  disabled={fontScale === FONT_SCALES[0]} aria-label={t('profile.fontSmaller', "Kichikroq")}
+                  className="w-12 h-12 rounded-2xl border-2 border-border flex items-center justify-center font-bold text-sm hover:border-primary/40 hover:bg-muted/40 disabled:opacity-35 liquid-transition">A−</button>
+                <div className="flex-1 grid grid-cols-6 gap-1 p-1 rounded-2xl bg-muted/50">
+                  {FONT_SCALES.map(v => (
+                    <button key={v} type="button" onClick={() => changeScale(v)}
+                      className={`h-10 rounded-xl text-[11px] sm:text-xs font-bold liquid-transition ${fontScale === v ? "bg-primary text-primary-foreground shadow-md" : "text-muted-foreground hover:text-foreground hover:bg-card"}`}>{v}%</button>
+                  ))}
+                </div>
+                <button type="button" onClick={() => { const i = FONT_SCALES.indexOf(fontScale as any); if (i < FONT_SCALES.length - 1) changeScale(FONT_SCALES[i + 1]); }}
+                  disabled={fontScale === FONT_SCALES[FONT_SCALES.length - 1]} aria-label={t('profile.fontBigger', "Kattaroq")}
+                  className="w-12 h-12 rounded-2xl border-2 border-border flex items-center justify-center font-bold text-lg hover:border-primary/40 hover:bg-muted/40 disabled:opacity-35 liquid-transition">A+</button>
+              </div>
+              <p className="text-sm mt-3 px-1 text-foreground/80">{t('profile.fontSizePreview', "Namuna: Bugun obyektga 120 qop sement keltirildi.")}</p>
+              <div className="h-px bg-border/60 my-4" />
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-bold mb-1">{t('profile.fontFamily', "Shrift turi")}</p>
               <p className="text-xs text-muted-foreground px-1 pb-3">{t('profile.fontHint', "Tanlangan shrift butun saytga (shu qurilmada) qo'llanadi. Hujjatlar shrifti hujjatlar bo'limida alohida tanlanadi.")}</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
                 {FONTS.map(f => {

@@ -59,3 +59,18 @@ export function applyAppFont(id?: string | null) {
   document.documentElement.setAttribute("data-app-font", f.id);
   style.textContent = `html[data-app-font] body, html[data-app-font] body *:not(.font-mono):not(code):not(pre):not(kbd):not(samp):not([data-font-preview]) { font-family: ${f.family} !important; }`;
 }
+
+// ─── Matn o'lchami ───────────────────────────────────────────────────────────
+// Ildiz (html) shrift o'lchami foizda — Tailwind o'lchamlari rem'da bo'lgani uchun matn ham, oraliqlar
+// ham mutanosib kattalashadi/kichrayadi. Qurilmada saqlanadi.
+export const FONT_SCALES = [85, 90, 100, 110, 120, 130] as const;
+const LS_SCALE = "erp_app_font_scale";
+export const getFontScale = (): number => {
+  try { const v = Number(localStorage.getItem(LS_SCALE)); return FONT_SCALES.includes(v as any) ? v : 100; } catch { return 100; }
+};
+export function applyFontScale(pct?: number) {
+  if (typeof document === "undefined") return;
+  const v = FONT_SCALES.includes(pct as any) ? (pct as number) : getFontScale();
+  try { localStorage.setItem(LS_SCALE, String(v)); } catch { /* */ }
+  document.documentElement.style.fontSize = v === 100 ? "" : `${v}%`;
+}

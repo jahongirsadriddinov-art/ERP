@@ -24,6 +24,7 @@ export default function UpdateChecker() {
   const [info, setInfo] = useState<{ version: string; notes?: string; url?: string } | null>(null);
   const [phase, setPhase] = useState<Phase>("downloading");
   const [percent, setPercent] = useState(0);
+  const [errMsg, setErrMsg] = useState("");
   // Oyna faqat yangilanish TAYYOR bo'lganda (yoki xato/ruxsat kerak bo'lganda) ochiladi;
   // "Keyinroq" bosilsa yopiladi, pastdagi kichik tugma orqali qayta ochiladi.
   const [open, setOpen] = useState(false);
@@ -53,8 +54,8 @@ export default function UpdateChecker() {
     setPercent(p.total > 0 ? Math.min(100, Math.round((p.downloaded * 100) / p.total)) : 0);
 
   // Yangi versiya topilishi bilan — ORQA FONDA yuklab olinadi (foydalanuvchi ishlashda davom etadi)
-  const download = async (url: string) => {
-    setPhase("downloading"); setPercent(0);
+  const download = async (url: string, attempt = 0): Promise<void> => {
+    setPhase("downloading"); setPercent(0); setErrMsg("");
     try {
       if (isTauri()) {
         const [{ invoke }, { listen }] = await Promise.all([import("@tauri-apps/api/core"), import("@tauri-apps/api/event")]);
@@ -70,6 +71,13 @@ export default function UpdateChecker() {
       setOpen(true);
     } catch (e) {
       console.error("[update download]", e);
+      // Reliz chiqqan paytda server ham yangilanib (qayta ishga tushib) turgan bo'ladi — oynani
+      // ko'rsatmasdan avval bir necha marta jim qayta urinamiz (20s, 40s, 60s).
+      if (attempt < 3) {
+        await new Promise(r => setTimeout(r, 20_000 * (attempt + 1)));
+        return download(url, attempt + 1);
+      }
+      setErrMsg(String((e as any)?.message || e || ""));
       setPhase("error");
       setOpen(true);
     }
@@ -97,7 +105,7 @@ export default function UpdateChecker() {
     } catch (e: any) {
       const msg = String(e?.message || e || "");
       if (msg.includes("PERMISSION")) setPhase("permission");
-      else { console.error("[update install]", e); setPhase("error"); }
+      else { console.error("[update install]", e); setErrMsg(msg); setPhase("error"); }
     }
   };
 
@@ -118,8 +126,8 @@ export default function UpdateChecker() {
             </div>
             <div className="p-5 space-y-4">
               <div>
-                <p className="font-semibold text-foreground">{t('update.readyText', { version: info.version })}</p>
-                <p className="text-sm text-muted-foreground mt-1">{t('update.readyQuestion')}</p>
+                <p className="font-semibold text-foreground">{phase === "error" ? t('update.errorText', { version: info.version, defaultValue: `Yangi versiya (${info.version}) yuklab olinmadi.` }) : phase === "downloading" ? t('update.downloadingText', { version: info.version, defaultValue: `Yangi versiya (${info.version}) yuklanmoqda...` }) : t('update.readyText', { version: info.version })}</p>
+                <p className="text-sm text-muted-foreground mt-1">{phase === "error" ? t('update.errorHint', "Internet yoki server vaqtincha javob bermadi. \"Qayta urinish\"ni bosing yoki o'rnatuvchini qo'lda yuklab oling.") : phase === "downloading" ? "" : t('update.readyQuestion')}</p>
               </div>
               {info.notes && (
                 <div className="bg-muted/50 rounded-2xl p-3.5 max-h-40 overflow-y-auto">
@@ -138,15 +146,22 @@ export default function UpdateChecker() {
                 <p className="text-xs text-red-600 dark:text-red-400 leading-relaxed">
                   {t('update.failed')}{" "}
                   <button className="underline font-semibold" onClick={() => openExternalUrl(info.url!)}>{t('update.openManually')}</button>
+                  {errMsg && <span className="block mt-1 text-[10px] opacity-70 break-words">{errMsg.slice(0, 160)}</span>}
                 </p>
+              )}
+              {phase === "downloading" && (
+                <div className="space-y-2">
+                  <div className="h-2 rounded-full bg-muted overflow-hidden"><div className="h-full rounded-full transition-[width] duration-300" style={{ ...btnStyle, width: `${Math.max(4, percent)}%` }} /></div>
+                  <p className="text-xs text-center text-muted-foreground">{t('update.downloading', { percent })}</p>
+                </div>
               )}
               {phase !== "installing" && (
                 <div className="space-y-2">
-                  <button onClick={phase === "error" ? () => download(info.url!) : install}
+                  {phase !== "downloading" && <button onClick={phase === "error" ? () => download(info.url!, 2) : install}
                     className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold text-white shadow-lg shadow-primary/25" style={btnStyle}>
                     <MorphIcon icon={Download} className="w-4 h-4" />
                     {phase === "error" ? t('update.retry') : t('update.installRestart')}
-                  </button>
+                  </button>}
                   <button onClick={() => setOpen(false)}
                     className="w-full py-3 rounded-xl text-sm font-semibold border border-border text-muted-foreground hover:bg-muted">
                     {t('update.later')}

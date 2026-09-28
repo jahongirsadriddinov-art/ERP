@@ -4062,7 +4062,7 @@ export function ClientViewPage({ token }: { token: string }) {
   );
 
   return (
-    <main className="min-h-[100dvh] bg-background">
+    <main className="h-[100dvh] overflow-y-auto overscroll-contain bg-background">
       <div className="glass border-b border-border px-5 py-4 flex items-center gap-3">
         <div className="w-10 h-10 rounded-2xl bg-primary/15 text-primary flex items-center justify-center flex-shrink-0"><MorphIcon icon={Building2} className="w-5 h-5" /></div>
         <div className="min-w-0">

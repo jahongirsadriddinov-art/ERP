@@ -5130,7 +5130,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
               </button>
             </div>
           </aside>
-          <div className="space-y-4 lg:col-span-8 xl:col-span-9 min-w-0 lg:min-h-0 overflow-y-auto overscroll-contain [scrollbar-width:thin] lg:pr-1">
+          <div className="space-y-4 lg:col-span-8 xl:col-span-9 min-w-0 lg:min-h-0 overflow-y-auto overscroll-contain [scrollbar-width:thin] lg:px-1.5 lg:py-1.5">
           {activePanel === "bg" && (
             <div className="surface border border-border overflow-hidden">
               <div className="px-4 py-3 border-b border-border flex items-center gap-2">
@@ -5473,7 +5473,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
       <div className="px-4 md:px-6 mt-4 grid grid-cols-1 lg:grid-cols-12 gap-4 lg:flex-1 lg:min-h-0 lg:pb-4">
 
         {/* Chap ustun: shaxsiy karta, davomat, bloklash/chiqish */}
-        <div className="lg:col-span-4 xl:col-span-3 space-y-4 md:space-y-0 md:grid md:grid-cols-2 md:gap-4 lg:block lg:space-y-4 min-w-0 lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain lg:[scrollbar-width:thin] lg:pr-1">
+        <div className="lg:col-span-4 xl:col-span-3 space-y-4 md:space-y-0 md:grid md:grid-cols-2 md:gap-4 lg:block lg:space-y-4 min-w-0 lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain lg:[scrollbar-width:thin] lg:px-1.5 lg:py-1.5">
         {/* ── Profile Card ──────────────────────────── */}
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28, delay: 0.02 }}
           className={`surface border border-border p-5 text-center relative ${hasAttendanceCard ? "" : "md:col-span-2 lg:col-span-1"}`}>
@@ -5635,7 +5635,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
         </div>
 
         {/* O'ng ustun: sozlamalar katakchalari, audit, xavfsizlik, ilova yuklash */}
-        <div className="lg:col-span-8 xl:col-span-9 space-y-4 min-w-0 lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain lg:[scrollbar-width:thin] lg:pr-1">
+        <div className="lg:col-span-8 xl:col-span-9 space-y-4 min-w-0 lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain lg:[scrollbar-width:thin] lg:px-1.5 lg:py-1.5">
         {/* ── Sozlamalar menyusi: telefonda ro'yxat, planshet/noutbukda katakchalar ── */}
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28, delay: 0.06 }}>
           <div className="surface border border-border overflow-hidden md:hidden">
@@ -5654,7 +5654,7 @@ function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdate
           <div className="hidden md:grid md:grid-cols-2 xl:grid-cols-3 gap-3">
             {menuRows.map(row => (
               <button key={row.key} onClick={() => setActivePanel(row.key)}
-                className="surface border border-border rounded-2xl p-4 flex items-center gap-3 text-left hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-lg liquid-transition min-w-0">
+                className="surface border border-border rounded-2xl p-4 flex items-center gap-3 text-left hover:border-primary/50 hover:bg-primary/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 liquid-transition min-w-0">
                 {row.swatch
                   ? <div className="w-11 h-11 rounded-xl flex-shrink-0" style={row.swatch}/>
                   : <div className="icon-chip w-11 h-11"><MorphIcon icon={row.icon} className="w-5 h-5" /></div>}

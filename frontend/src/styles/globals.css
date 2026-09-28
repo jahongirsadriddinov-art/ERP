@@ -561,7 +561,8 @@ textarea {
 /* ── Safe padding for content above mobile nav ──────────────────────── */
 /* ios-bottom-bar: ~72px height, bottom≈24px → ~100px total */
 .main-pb-safe { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 100px); }
-@media (min-width: 640px) { .main-pb-safe { padding-bottom: 0; } }
+/* Pastki nav bar lg (1024px) dan KICHIK hamma ekranda ko'rinadi — padding ham shu chegaragacha */
+@media (min-width: 1024px) { .main-pb-safe { padding-bottom: 0; } }
 
 /* ── card-hover alias ───────────────────────────────────────────────── */
 .card-hover {

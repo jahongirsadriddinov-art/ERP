@@ -8,11 +8,15 @@ fn greet(name: &str) -> String {
 }
 
 
-// Ilova ichidan yangilash: o'rnatuvchini (NSIS .exe) o'zimizning backend'dan yuklab olib,
-// "passive" rejimda (faqat progress oynasi, hech narsa so'ramaydi) ishga tushiradi va
-// ilovadan chiqadi — o'rnatuvchi tugagach yangi versiyani o'zi ochadi (/UPDATE).
+fn update_path() -> std::path::PathBuf {
+    std::env::temp_dir().join("QurilishERP-update.exe")
+}
+
+// Ilova ichidan yangilash (1-bosqich): o'rnatuvchini (NSIS .exe) o'zimizning backend'dan ORQA FONDA
+// yuklab oladi. Ilova ishlashda davom etadi; tayyor bo'lgach frontend "O'rnatish va qayta ishga
+// tushirish / Keyinroq" deb so'raydi.
 #[tauri::command]
-async fn download_and_install_update(app: tauri::AppHandle, url: String) -> Result<(), String> {
+async fn download_update(app: tauri::AppHandle, url: String) -> Result<(), String> {
     // Faqat o'zimizning backend'dan (HTTPS) — boshqa manzildan fayl yuklab ishga tushirmaydi.
     const ALLOWED: &str = "https://qurilisherp-backend.onrender.com/uploads/";
     if !url.starts_with(ALLOWED) {
@@ -23,7 +27,7 @@ async fn download_and_install_update(app: tauri::AppHandle, url: String) -> Resu
         return Err(format!("HTTP {}", resp.status()));
     }
     let total = resp.content_length().unwrap_or(0);
-    let path = std::env::temp_dir().join("QurilishERP-update.exe");
+    let path = update_path();
     let mut file = std::fs::File::create(&path).map_err(|e| e.to_string())?;
     let mut downloaded: u64 = 0;
     let mut last_emit: u64 = 0;
@@ -43,6 +47,17 @@ async fn download_and_install_update(app: tauri::AppHandle, url: String) -> Resu
         return Err("Yuklangan fayl noto'g'ri".into());
     }
     let _ = app.emit("update-progress", serde_json::json!({ "downloaded": downloaded, "total": downloaded }));
+    Ok(())
+}
+
+// 2-bosqich: yuklangan o'rnatuvchini "passive" rejimda (faqat progress oynasi) ishga tushiradi va
+// ilovadan chiqadi — o'rnatuvchi tugagach yangi versiyani o'zi ochadi (/UPDATE).
+#[tauri::command]
+fn install_update(app: tauri::AppHandle) -> Result<(), String> {
+    let path = update_path();
+    if !path.exists() {
+        return Err("Yangilanish fayli topilmadi".into());
+    }
     std::process::Command::new(&path)
         .args(["/P", "/UPDATE"])
         .spawn()
@@ -65,7 +80,7 @@ pub fn run() {
             window.show().unwrap();
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![greet, download_and_install_update])
+        .invoke_handler(tauri::generate_handler![greet, download_update, install_update])
         .run(tauri::generate_context!())
         .expect("QurilishERP ishga tushmadi");
 }

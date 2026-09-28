@@ -7,7 +7,8 @@ import { canvasesToPdf } from "./lib/pdf";
 import { TEMPLATES, DocType, SignDoc, Row, renderDoc, rowsTotal, money, docLayout, docNumberOf } from "./docTemplates";
 import { FONTS, fontById, ensureFont } from "./lib/fonts";
 import { beautifySignature, BeautifyResult, Stroke } from "./lib/signatureBeautify";
-import { scanInk } from "./lib/scanInk";
+import { scanInk, CropBox } from "./lib/scanInk";
+import { EscClose } from "./App";
 
 // ─── Imzo maydoni (barmoq / sichqoncha / stilus) ─────────────────────────────
 // Chizilgan har bir harakat (nuqtalar) saqlanadi — "✨ Tekislash" shu asosida imzoni qayta, tekis va toza
@@ -147,6 +148,51 @@ function StampPlacer({ image, stamp, pos, onChange }: { image: string | null; st
   );
 }
 
+// Skaner hududini qo'lda belgilash: rasm ustida ramkani sudrash / burchaklardan o'lchamini o'zgartirish
+function CropEditor({ src, initial, title, onDone, onCancel }: { src: string; initial: CropBox; title: string; onDone: (b: CropBox) => void; onCancel: () => void }) {
+  const [b, setB] = useState<CropBox>(initial);
+  const wrap = useRef<HTMLDivElement>(null);
+  const drag = useRef<{ mode: "move" | "nw" | "ne" | "sw" | "se"; sx: number; sy: number; start: CropBox } | null>(null);
+  const clamp = (v: number, a: number, z: number) => Math.min(z, Math.max(a, v));
+  const onMove = (e: React.PointerEvent) => {
+    const d = drag.current; if (!d || !wrap.current) return;
+    const r = wrap.current.getBoundingClientRect();
+    const dx = (e.clientX - d.sx) / r.width, dy = (e.clientY - d.sy) / r.height, s = d.start, MIN = 0.04;
+    if (d.mode === "move") { setB({ ...s, x: clamp(s.x + dx, 0, 1 - s.w), y: clamp(s.y + dy, 0, 1 - s.h) }); return; }
+    let x0 = s.x, y0 = s.y, x1 = s.x + s.w, y1 = s.y + s.h;
+    if (d.mode.includes("w")) x0 = clamp(x0 + dx, 0, x1 - MIN); else x1 = clamp(x1 + dx, x0 + MIN, 1);
+    if (d.mode.includes("n")) y0 = clamp(y0 + dy, 0, y1 - MIN); else y1 = clamp(y1 + dy, y0 + MIN, 1);
+    setB({ x: x0, y: y0, w: x1 - x0, h: y1 - y0 });
+  };
+  const start = (mode: "move" | "nw" | "ne" | "sw" | "se") => (e: React.PointerEvent) => {
+    e.stopPropagation();
+    drag.current = { mode, sx: e.clientX, sy: e.clientY, start: b };
+    wrap.current?.setPointerCapture(e.pointerId);
+  };
+  const handle = (m: "nw" | "ne" | "sw" | "se", pos: React.CSSProperties) => (
+    <span onPointerDown={start(m)} className="absolute w-6 h-6 -m-3 rounded-full bg-white border-2 border-sky-500 shadow touch-none" style={pos} />
+  );
+  return createPortal(
+    <div className="fixed inset-0 z-[400] bg-black/85 flex flex-col items-center justify-center p-3 gap-3" style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top))", paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}>
+      <EscClose onClose={onCancel} />
+      <p className="text-white text-sm font-semibold text-center">{title}</p>
+      <div ref={wrap} className="relative max-w-full touch-none select-none" style={{ maxHeight: "70vh" }}
+        onPointerMove={onMove} onPointerUp={() => { drag.current = null; }} onPointerCancel={() => { drag.current = null; }}>
+        <img src={src} alt="" draggable={false} className="block max-w-full max-h-[70vh] object-contain pointer-events-none" />
+        <div onPointerDown={start("move")} className="absolute border-2 border-sky-400 cursor-move touch-none"
+          style={{ left: `${b.x * 100}%`, top: `${b.y * 100}%`, width: `${b.w * 100}%`, height: `${b.h * 100}%`, boxShadow: "0 0 0 9999px rgba(0,0,0,0.55)" }}>
+          {handle("nw", { left: 0, top: 0 })}{handle("ne", { right: 0, top: 0 })}{handle("sw", { left: 0, bottom: 0 })}{handle("se", { right: 0, bottom: 0 })}
+        </div>
+      </div>
+      <div className="flex gap-2 w-full max-w-sm">
+        <button type="button" onClick={onCancel} className="flex-1 h-11 rounded-xl bg-white/10 text-white text-sm font-semibold">Bekor qilish</button>
+        <button type="button" onClick={() => onDone(b)} className="flex-1 h-11 rounded-xl bg-sky-500 text-white text-sm font-bold">✂️ Shu hududdan olish</button>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 // Imzo: chizish (tekislash bilan) YOKI qog'ozdagi imzoni skanerlash (kamera/rasm — faqat imzoning o'zi
 // avtomatik ajratib olinadi); ixtiyoriy — pechat (skaner bilan avtomatik ajratiladi, joyi/o'lchami sozlanadi).
 // Ikkala tomon (firma va mijoz) uchun bir xil.
@@ -158,6 +204,9 @@ export function SignatureInput({ onChange }: { onChange: (v: { image: string | n
   const [stamp, setStamp] = useState<string | null>(null);
   const [stampPos, setStampPos] = useState<StampPos>(DEFAULT_STAMP_POS);
   const [busy, setBusy] = useState<"" | "sig" | "stamp">("");
+  // Oxirgi skaner (qo'lda hudud belgilash uchun): manba surat va aniqlangan hudud
+  const [lastScan, setLastScan] = useState<{ sig?: { preview: string; box: CropBox }; stamp?: { preview: string; box: CropBox } }>({});
+  const [cropFor, setCropFor] = useState<"" | "sig" | "stamp">("");
   const sigCam = useRef<HTMLInputElement>(null), sigFile = useRef<HTMLInputElement>(null);
   const stCam = useRef<HTMLInputElement>(null), stFile = useRef<HTMLInputElement>(null);
   const image = mode === "draw" ? drawn : scanned;
@@ -166,10 +215,14 @@ export function SignatureInput({ onChange }: { onChange: (v: { image: string | n
     const file = e.target.files?.[0]; e.target.value = "";
     if (!file) return;
     if (!file.type.startsWith("image/")) { toast.error("Faqat rasm (PNG/JPG) yuklang"); return; }
+    await runScan(file, kind);
+  };
+  const runScan = async (src: File | string, kind: "sig" | "stamp", crop?: CropBox) => {
     setBusy(kind);
     try {
-      const png = await scanInk(file, kind === "sig" ? "signature" : "stamp");
-      if (kind === "sig") setScanned(png); else { setStamp(png); setStampPos(DEFAULT_STAMP_POS); }
+      const r = await scanInk(src, kind === "sig" ? "signature" : "stamp", crop);
+      if (kind === "sig") setScanned(r.dataUrl); else { setStamp(r.dataUrl); if (!crop) setStampPos(DEFAULT_STAMP_POS); }
+      setLastScan(prev => ({ ...prev, [kind]: { preview: r.preview, box: r.box } }));
       toast.success(kind === "sig" ? "Imzo aniqlandi va ajratib olindi" : "Pechat aniqlandi va ajratib olindi");
     } catch (err) {
       toast.error((err as Error)?.message === "NOT_FOUND" ? (kind === "sig" ? "Suratda imzo topilmadi — yaqinroqdan, yorug' joyda oling" : "Suratda pechat topilmadi — yaqinroqdan, yorug' joyda oling") : "Rasm juda katta yoki o'qilmadi");
@@ -196,6 +249,7 @@ export function SignatureInput({ onChange }: { onChange: (v: { image: string | n
             <button type="button" disabled={!!busy} onClick={() => sigCam.current?.click()} className={btn}>📷 Kamera bilan</button>
             <button type="button" disabled={!!busy} onClick={() => sigFile.current?.click()} className={btn}>🖼️ Rasmdan</button>
           </div>
+          {lastScan.sig && <button type="button" onClick={() => setCropFor("sig")} className="w-full text-[11px] font-bold text-primary hover:underline">✂️ Aniq olinmadimi? Imzo turgan joyni o'zingiz belgilang</button>}
         </div>
       )}
       <label className="flex items-center justify-between gap-3 rounded-xl border border-border px-3 py-2">
@@ -215,11 +269,19 @@ export function SignatureInput({ onChange }: { onChange: (v: { image: string | n
             <input ref={stFile} type="file" accept="image/*" className="hidden" onChange={e => pick(e, "stamp")} />
             <button type="button" disabled={!!busy} onClick={() => stCam.current?.click()} className="text-[11px] font-bold text-primary hover:underline">📷 Skanerlash</button>
             <button type="button" disabled={!!busy} onClick={() => stFile.current?.click()} className="text-[11px] font-bold text-primary hover:underline">🖼️ Rasmdan</button>
+            {lastScan.stamp && <button type="button" onClick={() => setCropFor("stamp")} className="text-[11px] font-bold text-primary hover:underline">✂️ Qo'lda belgilash</button>}
             {stamp && <button type="button" onClick={() => setStamp(null)} className="text-[11px] font-bold text-red-500 hover:underline">Olib tashlash</button>}
           </div>
         </div>
       </div>
       {stamp && <StampPlacer image={image} stamp={stamp} pos={stampPos} onChange={setStampPos} />}
+      {cropFor && lastScan[cropFor] && (() => {
+        const ls = lastScan[cropFor]!;
+        const g = 0.04, b = ls.box;
+        const init = { x: Math.max(0, b.x - g), y: Math.max(0, b.y - g), w: Math.min(1 - Math.max(0, b.x - g), b.w + 2 * g), h: Math.min(1 - Math.max(0, b.y - g), b.h + 2 * g) };
+        return <CropEditor src={ls.preview} initial={init} title={cropFor === "sig" ? "Ramkani faqat imzo atrofiga qo'ying" : "Ramkani faqat pechat atrofiga qo'ying"}
+          onCancel={() => setCropFor("")} onDone={box => { const k = cropFor; setCropFor(""); runScan(ls.preview, k, box); }} />;
+      })()}
     </div>
   );
 }

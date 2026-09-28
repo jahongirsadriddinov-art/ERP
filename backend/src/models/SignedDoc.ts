@@ -11,6 +11,7 @@ export interface ISignature {
   name: string;
   image: string;       // PNG data URL (imzo rasmi)
   stamp?: string;      // PNG data URL (pechat/muhr rasmi) — ixtiyoriy
+  signDate?: string;   // imzolovchi o'zi tanlagan sana (YYYY-MM-DD)
   signedAt: Date;
   userId?: string;     // tizim foydalanuvchisi imzolagan bo'lsa
   ip?: string;
@@ -28,6 +29,7 @@ export interface ISignedDoc extends Document {
   status: 'draft' | 'partially_signed' | 'signed';
   signatures: ISignature[];
   shareToken?: string;
+  pdfSentAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -37,6 +39,7 @@ const SignatureSchema = new Schema({
   name: { type: String, required: true },
   image: { type: String, required: true },
   stamp: { type: String },
+  signDate: { type: String },
   signedAt: { type: Date, default: Date.now },
   userId: { type: String },
   ip: { type: String },
@@ -54,6 +57,7 @@ const SignedDocSchema = new Schema({
   status: { type: String, enum: ['draft', 'partially_signed', 'signed'], default: 'draft' },
   signatures: { type: [SignatureSchema], default: [] },
   shareToken: { type: String, index: true, sparse: true },
+  pdfSentAt: { type: Date },
 }, { timestamps: true });
 
 SignedDocSchema.index({ companyId: 1, createdAt: -1 });

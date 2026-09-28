@@ -578,6 +578,27 @@ export function fmtVideoDuration(sec: number): string {
   return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
 }
 
+// Forma oynalari (yangi obyekt/xodim/chiqim, hujjat...) — tashqariga ADASHIB bosilganda yopilmaydi
+// (kiritilgan ma'lumot yo'qolmasin). Faqat X / "Bekor qilish" tugmasi yoki Esc bilan yopiladi.
+export function EscClose({ onClose }: { onClose: () => void }) {
+  const ref = useRef(onClose);
+  ref.current = onClose;
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      // Faqat ENG USTDAGI oyna yopilsin (ichma-ich oynalar bo'lsa)
+      const all = document.querySelectorAll("[data-esc-modal]");
+      const mine = document.querySelector(`[data-esc-id="${id}"]`);
+      if (all.length && all[all.length - 1] !== mine) return;
+      ref.current();
+    };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, []);
+  const id = useRef(Math.random().toString(36).slice(2)).current;
+  return <span hidden data-esc-modal data-esc-id={id} />;
+}
+
 // ─── Add User Modal ────────────────────────────────────────────────────────────
 function AddUserModal({ currentUser, users, projects, onClose, onAdd }:
   { currentUser: AppUser; users: AppUser[]; projects: Project[]; onClose: () => void; onAdd: (u: AppUser) => Promise<{ ok: boolean; error?: string }> }) {
@@ -624,7 +645,8 @@ function AddUserModal({ currentUser, users, projects, onClose, onAdd }:
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" >
+      <EscClose onClose={onClose} />
       <div className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-sm animate-slide-up-fade" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-4 py-3.5 border-b border-border" style={{ background: "linear-gradient(to right, rgba(27,58,107,0.06), transparent)" }}>
           <h3 className="font-bold text-sm flex items-center gap-2"><MorphIcon icon={UserPlus} className="w-4 h-4 text-primary" />{t('addUser.title')}</h3>
@@ -889,7 +911,8 @@ function AddObjectModal({ users, onClose, onAdd }:
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" >
+      <EscClose onClose={onClose} />
       <div className="bg-card rounded-2xl shadow-2xl w-full max-w-sm animate-slide-up-fade" onClick={e=>e.stopPropagation()}>
         <div className="flex items-center justify-between px-4 py-3.5 border-b border-border" style={{ background: "linear-gradient(to right, rgba(217,70,15,0.06), transparent)" }}>
           <h3 className="font-bold text-sm flex items-center gap-2"><MorphIcon icon={Package} className="w-4 h-4 text-accent" />{t('addObject.title')}</h3>
@@ -990,6 +1013,7 @@ function SendTransferModal({ currentUser, projects, allUsers, onClose, onSend, i
 
   return (
     <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
+      <EscClose onClose={onClose} />
       <div className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-sm max-h-[88vh] overflow-hidden animate-slide-up-fade flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-4 py-3.5 border-b border-border flex-shrink-0" style={{ background: "linear-gradient(to right, rgba(27,58,107,0.06), transparent)" }}>
           <h3 className="font-bold text-sm flex items-center gap-2"><MorphIcon icon={Send} className="w-4 h-4 text-primary" />{t('sendTransfer.title')}</h3>
@@ -1268,7 +1292,8 @@ function AddExpenseModal({ currentUser, projects, allUsers, onClose, onAdd }:
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" >
+      <EscClose onClose={onClose} />
       <div className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-sm max-h-[88vh] overflow-y-auto scrollbar-hide animate-slide-up-fade" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-4 py-3.5 border-b border-border" style={{ background: "linear-gradient(to right, rgba(217,70,15,0.06), transparent)" }}>
           <h3 className="font-bold text-sm flex items-center gap-2"><MorphIcon icon={TrendingDown} className="w-4 h-4 text-accent" />{t('addExpense.title')}</h3>
@@ -1522,7 +1547,8 @@ function EditUserModal({ user, currentUser, onClose, onUpdate }: { user: AppUser
     ? (Object.keys(ROLE_LABELS) as Role[])
     : (["orinbosar", "prorab", "brigadir", "ishchi"] as Role[]);
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" >
+      <EscClose onClose={onClose} />
       <div className="bg-card rounded-lg border border-border shadow-xl w-full max-w-sm" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between p-4 border-b border-border">
           <h3 className="font-semibold text-sm flex items-center gap-2"><MorphIcon icon={Edit} className="w-4 h-4 text-primary" />{t('editUser.title')}</h3>
@@ -2125,7 +2151,8 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
 function ManagementModalShell({ icon, title, onClose, children }: { icon: any; title: string; onClose: () => void; children: React.ReactNode }) {
   useModalPresence();
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 modal-backdrop animate-fade-in p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 modal-backdrop animate-fade-in p-4" >
+      <EscClose onClose={onClose} />
       <div className="glass-modal rounded-2xl w-full max-w-lg p-5 animate-slide-up-fade max-h-[85vh] overflow-y-auto scrollbar-hide" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-bold text-sm flex items-center gap-2"><MorphIcon icon={icon} className="w-4 h-4 text-primary" />{title}</h3>
@@ -3084,7 +3111,8 @@ function ProjectEditModal({ project, users, onClose, onSave }:
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 modal-backdrop animate-fade-in p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 modal-backdrop animate-fade-in p-4" >
+      <EscClose onClose={onClose} />
       <div className="glass-modal rounded-2xl w-full max-w-sm p-5 animate-slide-up-fade" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-bold text-sm flex items-center gap-2"><MorphIcon icon={Edit} className="w-4 h-4 text-primary" />{t('objectDetail.editProject')}</h3>
@@ -5692,7 +5720,9 @@ export default function App() {
           null`) boshqariladi, shu bilan ham chat tarixi saqlanadi, ham
           yopilganda ovoz/tinglash to'g'ri to'xtaydi. */}
       {(liveUser.role === 'direktor' || liveUser.role === 'orinbosar') && (
-        <Suspense fallback={
+        // MUHIM: AIAssistant doim montaj qilinadi (yopiq holda ham) — shu sabab chunk yuklanayotganda bu
+        // skelet HAR sahifa ochilishida/yangilanishida ekranda chiqib qolardi. Endi faqat oyna ochiq bo'lsa.
+        <Suspense fallback={!aiOpen ? null :
           <div className="fixed inset-0 bg-black/50 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4">
             <div className="bg-card w-full sm:max-w-md sm:rounded-2xl rounded-t-3xl overflow-hidden" style={{ height: 'min(600px, 85vh)' }}>
               <div className="flex items-center gap-2.5 px-4 py-3.5 border-b border-border">

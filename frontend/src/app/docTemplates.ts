@@ -2,7 +2,7 @@
 import { ensureFont } from "./lib/fonts";
 export type DocType = "shartnoma" | "akt" | "nakladnoy";
 export type Row = { name: string; unit: string; qty: string; price: string };
-export type Sig = { side: "executor" | "customer"; name: string; image: string; stamp?: string; signedAt: string };
+export type Sig = { side: "executor" | "customer"; name: string; image: string; stamp?: string; signDate?: string; signedAt: string };
 export type DocData = Record<string, any> & { rows?: Row[] };
 export interface SignDoc { id?: string; type: DocType; number: string; title: string; data: DocData; status?: string; signatures?: Sig[]; createdAt?: string }
 
@@ -163,7 +163,7 @@ function drawSignatures(p: Pager, sides: [string, string], names: [string, strin
     }
     ctx.strokeStyle = "#0f172a"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x, y0 + 165); ctx.lineTo(x + colW, y0 + 165); ctx.stroke();
     ctx.font = `400 18px ${FONT}`; ctx.fillStyle = "#64748b";
-    ctx.fillText(sig ? `Imzolandi: ${sig.name}, ${new Date(sig.signedAt).toLocaleString("ru-RU")}` : "(imzo)", x, y0 + 192);
+    ctx.fillText(sig ? `Imzolandi: ${sig.name}, ${sig.signDate ? d(sig.signDate) : new Date(sig.signedAt).toLocaleDateString("ru-RU")}` : "(imzo)", x, y0 + 192);
   });
   p.y += SIG_BLOCK_H - 10;
 }
@@ -178,6 +178,14 @@ export type LayoutItem =
   | { kind: "sigs"; sides: [string, string]; names: [string, string] };
 
 const clean = (s: string) => s.split("\n").filter((l, i, a) => l.trim() || (i > 0 && a[i - 1].trim())).join("\n").trim();
+
+/** Hujjat raqami: sarlavhada qo'lda o'zgartirilgan bo'lsa ("... № 2") — o'sha, aks holda server bergan raqam.
+ *  Sahifa pastidagi yozuv va sarlavha doim bir xil raqamni ko'rsatadi. */
+export function docNumberOf(doc: SignDoc): string {
+  const t = doc.data?.texts?.title;
+  if (typeof t === "string") { const m = t.match(/№\s*(.+)$/); if (m && m[1].trim()) return m[1].trim(); }
+  return doc.number;
+}
 
 export function docLayout(doc: SignDoc): LayoutItem[] {
   const tpl = TEMPLATES[doc.type];
@@ -241,7 +249,7 @@ export async function renderDoc(doc: SignDoc): Promise<HTMLCanvasElement[]> {
     try { images[s.side] = await loadImg(s.image); } catch { /* */ }
     if (s.stamp) { try { stamps[s.side] = await loadImg(s.stamp); } catch { /* */ } }
   }
-  const p = new Pager(`${tpl.title} № ${doc.number}`);
+  const p = new Pager(`${tpl.title} № ${docNumberOf(doc)}`);
   let lastLineH = 0;
   for (const it of docLayout(doc)) {
     if (it.kind === "text") {

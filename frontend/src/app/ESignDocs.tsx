@@ -4,39 +4,76 @@ import { toast } from "sonner";
 import { API_BASE } from "./api";
 import { saveOrShareBlob } from "./platform";
 import { canvasesToPdf } from "./lib/pdf";
-import { TEMPLATES, DocType, SignDoc, Row, renderDoc, rowsTotal, money, docLayout } from "./docTemplates";
+import { TEMPLATES, DocType, SignDoc, Row, renderDoc, rowsTotal, money, docLayout, docNumberOf } from "./docTemplates";
 import { FONTS, fontById, ensureFont } from "./lib/fonts";
+import { beautifySignature, BeautifyResult, Stroke } from "./lib/signatureBeautify";
 
 // ─── Imzo maydoni (barmoq / sichqoncha / stilus) ─────────────────────────────
+// Chizilgan har bir harakat (nuqtalar) saqlanadi — "✨ Tekislash" shu asosida imzoni qayta, tekis va toza
+// chizadi. Foydalanuvchi o'zi tanlaydi: tekislangan variant yoki o'zi chizgani (qanday bo'lsa shunday).
 export function SignaturePad({ onChange }: { onChange: (dataUrl: string | null) => void }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const drawing = useRef(false);
-  const empty = useRef(true);
+  const strokes = useRef<Stroke[]>([]);
+  const [raw, setRaw] = useState<string | null>(null);
+  const [fixed, setFixed] = useState<BeautifyResult | null>(null);
+  const [choice, setChoice] = useState<"fixed" | "raw">("fixed");
   useEffect(() => {
     const c = ref.current!; const dpr = window.devicePixelRatio || 1;
     c.width = c.clientWidth * dpr; c.height = c.clientHeight * dpr;
     const ctx = c.getContext("2d")!; ctx.scale(dpr, dpr);
     ctx.lineWidth = 2.6; ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.strokeStyle = "#0b3d91";
   }, []);
+  // Tanlangan variant tashqariga beriladi
+  useEffect(() => {
+    onChange(!raw ? null : choice === "fixed" && fixed?.needsFix ? fixed.dataUrl : raw);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [raw, fixed, choice]);
   const pos = (e: React.PointerEvent) => { const r = ref.current!.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
   const down = (e: React.PointerEvent) => {
     e.currentTarget.setPointerCapture(e.pointerId); drawing.current = true;
     const [x, y] = pos(e); const ctx = ref.current!.getContext("2d")!; ctx.beginPath(); ctx.moveTo(x, y);
+    strokes.current.push([{ x, y }]);
   };
   const move = (e: React.PointerEvent) => {
     if (!drawing.current) return;
-    const [x, y] = pos(e); const ctx = ref.current!.getContext("2d")!; ctx.lineTo(x, y); ctx.stroke(); empty.current = false;
+    const [x, y] = pos(e); const ctx = ref.current!.getContext("2d")!; ctx.lineTo(x, y); ctx.stroke();
+    strokes.current[strokes.current.length - 1]?.push({ x, y });
   };
-  const up = () => { if (!drawing.current) return; drawing.current = false; onChange(empty.current ? null : ref.current!.toDataURL("image/png")); };
-  const clear = () => { const c = ref.current!; c.getContext("2d")!.clearRect(0, 0, c.width, c.height); empty.current = true; onChange(null); };
+  const up = () => {
+    if (!drawing.current) return; drawing.current = false;
+    const hasInk = strokes.current.some(s => s.length > 1);
+    if (!hasInk) return;
+    setRaw(ref.current!.toDataURL("image/png"));
+    try { setFixed(beautifySignature(strokes.current)); } catch { setFixed(null); }
+  };
+  const clear = () => {
+    const c = ref.current!; c.getContext("2d")!.clearRect(0, 0, c.width, c.height);
+    strokes.current = []; setRaw(null); setFixed(null); setChoice("fixed");
+  };
+  const opt = (key: "fixed" | "raw", title: string, src: string) => (
+    <button type="button" onClick={() => setChoice(key)}
+      className={`flex-1 min-w-0 rounded-xl border-2 p-1.5 text-left liquid-transition ${choice === key ? "border-primary bg-primary/[0.06]" : "border-border hover:border-primary/40"}`}>
+      <span className="block h-14 bg-white rounded-lg overflow-hidden"><img src={src} alt="" className="w-full h-full object-contain" /></span>
+      <span className="block text-[11px] font-bold mt-1 truncate">{choice === key ? "● " : "○ "}{title}</span>
+    </button>
+  );
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-2">
       <canvas ref={ref} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}
         className="w-full h-40 rounded-xl border-2 border-dashed border-border bg-white touch-none cursor-crosshair" />
       <div className="flex justify-between text-[11px] text-muted-foreground">
         <span>Barmoq yoki sichqoncha bilan imzo chizing</span>
         <button type="button" onClick={clear} className="font-semibold text-primary hover:underline">Tozalash</button>
       </div>
+      {raw && fixed && (fixed.needsFix ? (
+        <div className="rounded-xl border border-primary/25 bg-primary/[0.04] p-2.5 space-y-2">
+          <p className="text-[11px] font-semibold">✨ Imzo tekislandi {Math.abs(fixed.angleDeg) >= 3 ? `(qiyshiqlik ${Math.abs(fixed.angleDeg)}° to'g'rilandi)` : "(titroq silliqlandi)"} — qaysi biri qo'yilsin?</p>
+          <div className="flex gap-2">{opt("fixed", "✨ Tekislangan", fixed.dataUrl)}{opt("raw", "✍️ O'zim chizganim", raw)}</div>
+        </div>
+      ) : (
+        <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold">✓ Imzo tekis va aniq — o'zgartirish shart emas</p>
+      ))}
     </div>
   );
 }
@@ -69,7 +106,8 @@ async function fileToPng(file: File, max: number, removeWhite: boolean): Promise
 }
 
 // Imzo: chizish YOKI tayyor imzo rasmini yuklash; ixtiyoriy — pechat (muhr) rasmi.
-export function SignatureInput({ onChange }: { onChange: (v: { image: string | null; stamp: string | null }) => void }) {
+export function SignatureInput({ onChange }: { onChange: (v: { image: string | null; stamp: string | null; date: string }) => void }) {
+  const [date, setDate] = useState(() => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10));
   const [mode, setMode] = useState<"draw" | "upload">("draw");
   const [drawn, setDrawn] = useState<string | null>(null);
   const [uploaded, setUploaded] = useState<string | null>(null);
@@ -77,7 +115,7 @@ export function SignatureInput({ onChange }: { onChange: (v: { image: string | n
   const sigRef = useRef<HTMLInputElement>(null);
   const stampRef = useRef<HTMLInputElement>(null);
   const image = mode === "draw" ? drawn : uploaded;
-  useEffect(() => { onChange({ image, stamp }); /* eslint-disable-next-line */ }, [image, stamp]);
+  useEffect(() => { onChange({ image, stamp, date }); /* eslint-disable-next-line */ }, [image, stamp, date]);
   const pick = async (e: React.ChangeEvent<HTMLInputElement>, kind: "sig" | "stamp") => {
     const file = e.target.files?.[0]; e.target.value = "";
     if (!file) return;
@@ -104,6 +142,11 @@ export function SignatureInput({ onChange }: { onChange: (v: { image: string | n
           {uploaded && <button type="button" onClick={() => setUploaded(null)} className="mt-1 text-[11px] font-semibold text-primary hover:underline">Boshqa rasm</button>}
         </div>
       )}
+      <label className="flex items-center justify-between gap-3 rounded-xl border border-border px-3 py-2">
+        <span className="text-xs font-semibold">📅 Imzo sanasi</span>
+        <input type="date" value={date} onChange={e => e.target.value && setDate(e.target.value)}
+          className="text-sm bg-transparent border border-border rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-primary/40" />
+      </label>
       <div className="flex items-center gap-3 rounded-xl border border-border p-2.5">
         <div className="w-16 h-16 rounded-lg bg-white border border-border flex items-center justify-center overflow-hidden flex-shrink-0">
           {stamp ? <img src={stamp} alt="" className="max-w-full max-h-full object-contain" /> : <span className="text-2xl opacity-40">🔵</span>}
@@ -248,7 +291,7 @@ function DocPaperEditor({ doc, onText }: { doc: SignDoc; onText: (id: string, v:
   return (
     <div className="rounded-2xl bg-white shadow-xl ring-1 ring-black/10 overflow-hidden" style={{ containerType: "inline-size" } as React.CSSProperties}>
       <div style={{ padding: `${PX(110)} ${PX(110)} ${PX(90)}` }}>{items}</div>
-      <p data-font-preview className="text-center" style={{ ...base, fontSize: PX(20), color: "#94a3b8", paddingBottom: PX(30) }}>{tpl.title} № {doc.number}</p>
+      <p data-font-preview className="text-center" style={{ ...base, fontSize: PX(20), color: "#94a3b8", paddingBottom: PX(30) }}>{tpl.title} № {docNumberOf(doc)}</p>
     </div>
   );
 }
@@ -269,9 +312,20 @@ function DocPreview({ doc }: { doc: SignDoc }) {
   );
 }
 
+// To'liq imzolangan hujjat PDF'i serverga yuboriladi — server uni Telegram botga (rahbarlarga) jo'natadi.
+async function sendSignedPdf(doc: SignDoc, url: string) {
+  try {
+    const pages = await renderDoc(doc);
+    const blob = canvasesToPdf(pages);
+    const buf = new Uint8Array(await blob.arrayBuffer());
+    let bin = ""; for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+    await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pdf: btoa(bin) }) });
+  } catch { /* bot'ga yuborilmasa ham imzo saqlangan */ }
+}
+
 async function downloadPdf(doc: SignDoc) {
   const pages = await renderDoc(doc);
-  const saved = await saveOrShareBlob(`${doc.number}.pdf`, canvasesToPdf(pages));
+  const saved = await saveOrShareBlob(`${docNumberOf(doc).replace(/[\/:*?"<>|]/g, "-")}.pdf`, canvasesToPdf(pages));
   if (!saved.ok) toast.error("PDF saqlanmadi");
 }
 
@@ -297,6 +351,7 @@ export default function ESignDocs({ onClose, companyName, currentUserName, proje
   const [sigName, setSigName] = useState(currentUserName);
   const [sigImg, setSigImg] = useState<string | null>(null);
   const [sigStamp, setSigStamp] = useState<string | null>(null);
+  const [sigDate, setSigDate] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [paperTab, setPaperTab] = useState<"edit" | "preview">("edit");
   const setText = (id: string, v: string | null) => setDraft(d => { const t = { ...(d.texts || {}) }; if (v === null) delete t[id]; else t[id] = v; return { ...d, texts: t }; });
@@ -356,10 +411,11 @@ export default function ESignDocs({ onClose, companyName, currentUserName, proje
     if (!open || !sigImg || !sigName.trim()) return;
     setSigning(true);
     try {
-      const r = await fetch(`${API_BASE}/api/sign-docs/${open.id}/sign`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: sigName.trim(), image: sigImg, stamp: sigStamp || undefined }) });
+      const r = await fetch(`${API_BASE}/api/sign-docs/${open.id}/sign`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: sigName.trim(), image: sigImg, stamp: sigStamp || undefined, date: sigDate || undefined }) });
       const d = await r.json();
       if (!r.ok) { toast.error(d.error || "Xatolik"); return; }
-      toast.success("Imzolandi"); setOpen({ ...open, ...d, id: open.id }); setSigImg(null); setSigStamp(null); load();
+      toast.success("Imzolandi"); const merged = { ...open, ...d, id: open.id }; setOpen(merged); setSigImg(null); setSigStamp(null); load();
+      if (merged.status === "signed") sendSignedPdf(merged, `${API_BASE}/api/sign-docs/${open.id}/pdf`);
     } finally { setSigning(false); }
   };
   const share = async () => {
@@ -381,7 +437,7 @@ export default function ESignDocs({ onClose, companyName, currentUserName, proje
   const executorSigned = open?.signatures?.some((s: any) => s.side === "executor");
 
   return createPortal(
-    <div className="fixed inset-0 z-[120] bg-black/55 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[120] bg-black/55 flex items-end sm:items-center justify-center p-0 sm:p-4">
       <div className="bg-card border border-border w-full sm:max-w-5xl h-[94dvh] sm:h-[90vh] rounded-t-3xl sm:rounded-3xl flex flex-col overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="flex items-center gap-3 px-5 py-4 border-b border-border flex-shrink-0">
           {view !== "list" && <button onClick={() => setView("list")} className="w-9 h-9 rounded-full hover:bg-muted flex items-center justify-center text-lg" aria-label="Orqaga">‹</button>}
@@ -501,7 +557,7 @@ export default function ESignDocs({ onClose, companyName, currentUserName, proje
                   <div className="rounded-2xl border border-border p-4 space-y-3">
                     <p className="font-semibold text-sm">{TEMPLATES[open.type as DocType].sides[0]} sifatida imzolash</p>
                     <input className={input} value={sigName} onChange={e => setSigName(e.target.value)} placeholder="F.I.O." />
-                    <SignatureInput onChange={v => { setSigImg(v.image); setSigStamp(v.stamp); }} />
+                    <SignatureInput onChange={v => { setSigImg(v.image); setSigStamp(v.stamp); setSigDate(v.date); }} />
                     <button onClick={sign} disabled={!sigImg || !sigName.trim() || signing} className="w-full btn btn-primary py-2.5 rounded-xl text-sm font-bold disabled:opacity-50">
                       {signing ? "..." : "✍️ Imzolash"}
                     </button>
@@ -532,17 +588,19 @@ export function PublicSignPage({ token }: { token: string }) {
   const [name, setName] = useState("");
   const [img, setImg] = useState<string | null>(null);
   const [stamp, setStamp] = useState<string | null>(null);
+  const [date, setDate] = useState("");
   const [busy, setBusy] = useState(false);
-  const load = () => fetch(`${API_BASE}/api/public/sign/${token}`).then(async r => { if (!r.ok) throw new Error(); setDoc(await r.json()); }).catch(() => setErr("Hujjat topilmadi yoki havola eskirgan"));
+  const load = (): Promise<SignDoc | null> => fetch(`${API_BASE}/api/public/sign/${token}`).then(async r => { if (!r.ok) throw new Error(); const d = await r.json(); setDoc(d); return d; }).catch(() => { setErr("Hujjat topilmadi yoki havola eskirgan"); return null; });
   useEffect(() => { load(); }, [token]);
   const submit = async () => {
     if (!img || name.trim().length < 2) return;
     setBusy(true);
     try {
-      const r = await fetch(`${API_BASE}/api/public/sign/${token}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: name.trim(), image: img, stamp: stamp || undefined }) });
+      const r = await fetch(`${API_BASE}/api/public/sign/${token}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: name.trim(), image: img, stamp: stamp || undefined, date: date || undefined }) });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) { setErr(d.error || "Xatolik"); return; }
-      await load();
+      const fresh = await load();
+      if (fresh?.status === "signed") sendSignedPdf(fresh, `${API_BASE}/api/public/sign/${token}/pdf`);
     } finally { setBusy(false); }
   };
   const customerSigned = doc?.signatures?.some(s => s.side === "customer");
@@ -556,7 +614,7 @@ export function PublicSignPage({ token }: { token: string }) {
           <div className="rounded-2xl border border-border p-4 space-y-3 bg-card">
             <p className="font-semibold">{TEMPLATES[doc.type].sides[1]} sifatida imzolash</p>
             <input className="w-full text-sm border border-border rounded-xl px-3 py-2 bg-input-background" placeholder="F.I.O." value={name} onChange={e => setName(e.target.value)} />
-            <SignatureInput onChange={v => { setImg(v.image); setStamp(v.stamp); }} />
+            <SignatureInput onChange={v => { setImg(v.image); setStamp(v.stamp); setDate(v.date); }} />
             <p className="text-[11px] text-muted-foreground">Imzolash orqali hujjat mazmuniga roziligingizni tasdiqlaysiz.</p>
             <button onClick={submit} disabled={!img || name.trim().length < 2 || busy} className="w-full btn btn-primary py-3 rounded-xl font-bold disabled:opacity-50">{busy ? "..." : "✍️ Imzolash"}</button>
           </div>

@@ -28,6 +28,39 @@ const validSignature = (image: unknown) =>
 // Pechat ixtiyoriy: berilmagan bo'lsa undefined, berilgan-u noto'g'ri bo'lsa false
 const parseStamp = (stamp: unknown): string | undefined | false =>
   stamp === undefined || stamp === null || stamp === '' ? undefined : validSignature(stamp) ? String(stamp) : false;
+const parseSignDate = (v: unknown): string | undefined => {
+  if (typeof v !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return undefined;
+  const t = Date.parse(v);
+  return Number.isFinite(t) ? v : undefined;
+};
+const MAX_PDF_BYTES = 12 * 1024 * 1024;
+
+// To'liq imzolangan hujjat PDF'i (qurilmada chizilgan) — Telegram bot orqali firma rahbarlariga va hujjat
+// muallifiga yuboriladi. Faqat status 'signed' bo'lsa va faqat BIR MARTA (pdfSentAt).
+async function forwardSignedPdf(doc: any, pdfB64: unknown): Promise<{ ok: boolean; error?: string; status?: number }> {
+  if (doc.status !== 'signed') return { ok: false, status: 409, error: "Hujjat hali to'liq imzolanmagan" };
+  if (doc.pdfSentAt) return { ok: true };
+  if (typeof pdfB64 !== 'string' || pdfB64.length > MAX_PDF_BYTES * 1.37) return { ok: false, status: 400, error: 'PDF noto\'g\'ri yoki juda katta' };
+  const buf = Buffer.from(pdfB64, 'base64');
+  if (buf.length < 500 || buf.subarray(0, 5).toString('latin1') !== '%PDF-') return { ok: false, status: 400, error: "PDF noto'g'ri" };
+  const claimed = await SignedDoc.updateOne({ _id: doc._id, pdfSentAt: { $exists: false } }, { $set: { pdfSentAt: new Date() } });
+  if (!claimed.modifiedCount) return { ok: true };
+  const { bot } = await import('../services/bot');
+  const recipients: any[] = await User.find({
+    companyId: doc.companyId, telegramChatId: { $exists: true, $ne: '' },
+    $or: [{ role: { $in: ['direktor', 'orinbosar'] } }, { _id: doc.createdBy }],
+  }).select('telegramChatId').lean();
+  const names = (doc.signatures || []).map((s: any) => `• ${s.side === 'executor' ? 'Ijrochi' : 'Buyurtmachi'}: ${s.name}`).join('\n');
+  const caption = `✅ Hujjat to'liq imzolandi\n📄 ${doc.title} № ${doc.number}\n${names}`;
+  const sent = new Set<string>();
+  for (const r of recipients) {
+    if (sent.has(String(r.telegramChatId))) continue;
+    sent.add(String(r.telegramChatId));
+    bot.sendDocument(r.telegramChatId, buf, { caption }, { filename: `${doc.number}.pdf`, contentType: 'application/pdf' } as any).catch((e: any) => console.error('[signdoc pdf]', e?.message));
+  }
+  return { ok: true };
+}
+
 // Faqat oddiy JSON (satr/son/massiv/obyekt) — hajmi cheklangan
 const cleanData = (d: unknown) => {
   if (!d || typeof d !== 'object') return {};
@@ -104,10 +137,21 @@ router.post('/:id/sign', async (req, res) => {
   const doc: any = await SignedDoc.findOne(scoped({ _id: req.params.id }));
   if (!doc) return res.status(404).json({ error: 'Topilmadi' });
   if (doc.signatures.some((s: any) => s.side === 'executor')) return res.status(409).json({ error: 'Bu tomon allaqachon imzolagan' });
-  doc.signatures.push({ side: 'executor', name: name.trim().slice(0, 120), image, stamp, signedAt: new Date(), userId: getTenant()!.userId, ip: req.ip });
+  doc.signatures.push({ side: 'executor', name: name.trim().slice(0, 120), image, stamp, signDate: parseSignDate(req.body?.date), signedAt: new Date(), userId: getTenant()!.userId, ip: req.ip });
   doc.status = recomputeStatus(doc.signatures);
   await doc.save();
   res.json({ ...doc.toObject(), id: doc._id });
+});
+
+// To'liq imzolangan hujjat PDF'i → bot
+router.post('/:id/pdf', async (req, res) => {
+  const { ok } = await canManage();
+  if (!ok) return res.status(403).json({ error: "Ruxsat yo'q" });
+  const doc: any = await SignedDoc.findOne(scoped({ _id: req.params.id })).lean();
+  if (!doc) return res.status(404).json({ error: 'Topilmadi' });
+  const r = await forwardSignedPdf(doc, req.body?.pdf);
+  if (!r.ok) return res.status(r.status || 400).json({ error: r.error });
+  res.json({ ok: true });
 });
 
 // Mijoz uchun imzolash havolasi
@@ -138,7 +182,7 @@ publicSignRouter.get('/sign/:token', async (req, res) => {
   const d: any = await SignedDoc.findOne({ shareToken: req.params.token }).select('type number title data status signatures createdAt').lean();
   if (!d) return res.status(404).json({ error: 'Topilmadi' });
   res.json({ type: d.type, number: d.number, title: d.title, data: d.data, status: d.status, createdAt: d.createdAt,
-    signatures: (d.signatures || []).map((s: any) => ({ side: s.side, name: s.name, image: s.image, stamp: s.stamp, signedAt: s.signedAt })) });
+    signatures: (d.signatures || []).map((s: any) => ({ side: s.side, name: s.name, image: s.image, stamp: s.stamp, signDate: s.signDate, signedAt: s.signedAt })) });
 });
 publicSignRouter.post('/sign/:token', async (req, res) => {
   if (!checkRate(`pubsign-post:${req.ip}`, 10, 10 * 60 * 1000).allowed) return res.status(429).json({ error: "Juda ko'p urinish" });
@@ -150,7 +194,7 @@ publicSignRouter.post('/sign/:token', async (req, res) => {
   const doc: any = await SignedDoc.findOne({ shareToken: req.params.token });
   if (!doc) return res.status(404).json({ error: 'Topilmadi' });
   if (doc.signatures.some((s: any) => s.side === 'customer')) return res.status(409).json({ error: 'Hujjat allaqachon imzolangan' });
-  doc.signatures.push({ side: 'customer', name: name.trim().slice(0, 120), image, stamp, signedAt: new Date(), ip: req.ip });
+  doc.signatures.push({ side: 'customer', name: name.trim().slice(0, 120), image, stamp, signDate: parseSignDate(req.body?.date), signedAt: new Date(), ip: req.ip });
   doc.status = recomputeStatus(doc.signatures);
   await doc.save();
   // Firma rahbarlariga xabar
@@ -159,6 +203,16 @@ publicSignRouter.post('/sign/:token', async (req, res) => {
     for (const b of bosses) bot.sendMessage(b.telegramChatId, `✍️ Mijoz hujjatni imzoladi\n📄 ${doc.title} № ${doc.number}\n👤 ${name.trim()}`).catch(() => {});
   }).catch(() => {});
   res.json({ ok: true, status: doc.status });
+});
+
+publicSignRouter.post('/sign/:token/pdf', async (req, res) => {
+  if (!checkRate(`pubsign-pdf:${req.ip}`, 5, 10 * 60 * 1000).allowed) return res.status(429).json({ error: "Juda ko'p urinish" });
+  if (!TOKEN_RE.test(req.params.token)) return res.status(404).json({ error: 'Topilmadi' });
+  const doc: any = await SignedDoc.findOne({ shareToken: req.params.token }).lean();
+  if (!doc) return res.status(404).json({ error: 'Topilmadi' });
+  const r = await forwardSignedPdf(doc, req.body?.pdf);
+  if (!r.ok) return res.status(r.status || 400).json({ error: r.error });
+  res.json({ ok: true });
 });
 
 export default router;

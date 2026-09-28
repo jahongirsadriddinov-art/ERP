@@ -96,7 +96,7 @@ import { useGeoTracker, accuracyQuality, QUALITY_COLOR, type GpsStatus } from ".
 import PullToRefresh from "./PullToRefresh";
 import { isPinSet, useAppLock, markActiveNow, clearPin, PinSetupScreen, PinLockScreen, ChangePinModal, ForgotPinScreen, syncPinFromServer, isBiometricEnabled, setBiometricEnabled, biometricAvailable, biometricSupported, tryBiometricUnlock, nativeBiometricSupported, registerWebAuthnBiometric, getLockTimeoutMin, setLockTimeoutMin, LOCK_TIMEOUT_OPTIONS } from "./AppLock";
 import type { LandingFocus } from "./LandingPage";
-import { Avatar, RoleBadge, SafeImg, fmtVideoDuration, msgReplyPreview, msgTypePreview, roleLabel, useModalPresence } from "./App";
+import { Avatar, RoleBadge, SafeImg, fmtVideoDuration, msgReplyPreview, msgTypePreview, roleLabel, useModalPresence, EscClose } from "./App";
 import type { AppUser, Group, Msg } from "./App";
 
 // App.tsx'dan ajratilgan — faqat shu sahifa ochilganda yuklanadi (boshlang'ich yuklanish tezroq).
@@ -855,7 +855,8 @@ function GroupSettingsModal({ group, users, currentUser, contacts, onClose, onRe
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 modal-backdrop animate-fade-in p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 modal-backdrop animate-fade-in p-4" >
+      <EscClose onClose={onClose} />
       <div className="glass-modal rounded-2xl w-full max-w-sm p-5 animate-slide-up-fade max-h-[80vh] overflow-y-auto scrollbar-hide" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-bold text-sm flex items-center gap-2"><MorphIcon icon={Users2} className="w-4 h-4 text-primary" />{t('groupSettings.title')}</h3>
@@ -949,7 +950,8 @@ function GroupCreateModal({ contacts, onClose, onCreate }:
   const toggle = (id: string) => setSel(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
   const filtered = contacts.filter(u => u.name.toLowerCase().includes(q.trim().toLowerCase()));
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 modal-backdrop animate-fade-in p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 modal-backdrop animate-fade-in p-4" >
+      <EscClose onClose={onClose} />
       <div className="glass-modal rounded-2xl w-full max-w-sm p-5 animate-slide-up-fade" onClick={e=>e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-bold text-sm flex items-center gap-2"><MorphIcon icon={Users2} className="w-4 h-4 text-primary" />{t('groupCreate.title')}</h3>

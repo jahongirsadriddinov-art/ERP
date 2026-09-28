@@ -175,15 +175,76 @@ export default function UpdateChecker() {
           </motion.div>
         </motion.div>
       ) : (
-        // Pastdagi nav bar'ga to'sqinlik qilmasligi uchun — tepada, o'ng burchakda
-        <motion.button key="badge" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}
-          onClick={() => { if (phase !== "downloading") setOpen(true); }}
-          className="fixed right-4 z-[90] flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-bold text-white shadow-lg"
-          style={{ ...btnStyle, top: "calc(env(safe-area-inset-top, 0px) + 5rem)" }}>
-          <MorphIcon icon={Sparkles} className={`w-3.5 h-3.5 ${phase === "downloading" ? "animate-pulse" : ""}`} />
-          {phase === "downloading" ? t('update.downloading', { percent }) : t('update.badge')}
-        </motion.button>
+        <UpdateBubble key="badge" phase={phase} percent={percent} label={phase === "downloading" ? t('update.downloading', { percent }) : t('update.badge')}
+          onOpen={() => { if (phase !== "downloading") setOpen(true); }} btnStyle={btnStyle} />
       )}
     </AnimatePresence>
+  );
+}
+
+// ─── Suzuvchi yangilanish tugmasi ───────────────────────────────────────────
+// Istalgan joyga sudrab qo'yiladi (joyi eslab qolinadi). Oddiy holatda — kichik dumaloq, faqat progress
+// halqasi; ustiga kelinganda / bosilganda — "Yuklab olinmoqda... N%" yozuvi bilan kengayadi.
+const POS_KEY = "erp_update_bubble_pos";
+function UpdateBubble({ phase, percent, label, onOpen, btnStyle }: { phase: Phase; percent: number; label: string; onOpen: () => void; btnStyle: React.CSSProperties }) {
+  const [pos, setPos] = useState<{ x: number; y: number }>(() => {
+    try { const p = JSON.parse(localStorage.getItem(POS_KEY) || ""); if (typeof p.x === "number" && typeof p.y === "number") return p; } catch { /* */ }
+    return { x: 0.92, y: 0.16 };
+  });
+  const [expanded, setExpanded] = useState(false);
+  const [vw, setVw] = useState(() => window.innerWidth), [vh, setVh] = useState(() => window.innerHeight);
+  useEffect(() => { const r = () => { setVw(window.innerWidth); setVh(window.innerHeight); }; window.addEventListener("resize", r); return () => window.removeEventListener("resize", r); }, []);
+  const drag = useRef<{ sx: number; sy: number; px: number; py: number; moved: boolean } | null>(null);
+  const collapseT = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const R = 22; // dumaloq radiusi (px)
+  const cx = Math.min(vw - R - 6, Math.max(R + 6, pos.x * vw)), cy = Math.min(vh - R - 6, Math.max(R + 6, pos.y * vh));
+  const side = cx < vw / 3 ? "left" : cx > (vw * 2) / 3 ? "right" : "center";
+  const tx = side === "left" ? `-${R}px` : side === "right" ? `calc(-100% + ${R}px)` : "-50%";
+  const pct = phase === "downloading" ? Math.max(0, Math.min(100, percent)) : 100;
+  const C = 2 * Math.PI * 17;
+  const expand = (ms = 2500) => { setExpanded(true); if (collapseT.current) clearTimeout(collapseT.current); collapseT.current = setTimeout(() => setExpanded(false), ms); };
+  useEffect(() => () => { if (collapseT.current) clearTimeout(collapseT.current); }, []);
+  return (
+    // Tashqi qatlam — joylashuv (transform shu yerda); ichki motion — faqat ko'rinish animatsiyasi
+    <div role="button" tabIndex={0} aria-label={label}
+      onPointerDown={e => { drag.current = { sx: e.clientX, sy: e.clientY, px: cx, py: cy, moved: false }; (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); }}
+      onPointerMove={e => {
+        const d = drag.current; if (!d) return;
+        const dx = e.clientX - d.sx, dy = e.clientY - d.sy;
+        if (!d.moved && Math.hypot(dx, dy) < 6) return;
+        d.moved = true; setExpanded(false);
+        setPos({ x: (d.px + dx) / vw, y: (d.py + dy) / vh });
+      }}
+      onPointerUp={() => {
+        const d = drag.current; drag.current = null;
+        if (d?.moved) { try { localStorage.setItem(POS_KEY, JSON.stringify(pos)); } catch { /* */ } return; }
+        if (phase === "downloading") { if (expanded) setExpanded(false); else expand(3500); } else onOpen();
+      }}
+      onMouseEnter={() => { if (!drag.current) { setExpanded(true); if (collapseT.current) clearTimeout(collapseT.current); } }}
+      onMouseLeave={() => { if (!drag.current) expand(600); }}
+      onFocus={() => expand(4000)} onBlur={() => setExpanded(false)}
+      onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); if (phase !== "downloading") onOpen(); } }}
+      className="fixed z-[90] touch-none select-none cursor-grab active:cursor-grabbing"
+      style={{ left: cx, top: cy, transform: `translate(${tx}, -50%)` }}>
+      <motion.div layout initial={{ opacity: 0, scale: 0.6 }} animate={{ opacity: 1, scale: 1 }} transition={{ type: "spring", stiffness: 420, damping: 32 }}
+        className={`flex items-center text-white shadow-xl shadow-black/30 ring-1 ring-white/20 ${expanded ? "rounded-full pl-1 pr-4 gap-2" : "rounded-full"} ${side === "right" && expanded ? "flex-row-reverse pl-4 pr-1" : ""}`}
+        style={btnStyle}>
+        <span className="relative w-11 h-11 flex items-center justify-center flex-shrink-0">
+          <svg viewBox="0 0 40 40" className="absolute inset-0 w-11 h-11 -rotate-90">
+            <circle cx="20" cy="20" r="17" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="3" />
+            <circle cx="20" cy="20" r="17" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round"
+              strokeDasharray={C} strokeDashoffset={C * (1 - pct / 100)} style={{ transition: "stroke-dashoffset .4s ease" }} />
+          </svg>
+          {phase === "downloading"
+            ? <span className="relative text-[10px] font-extrabold tabular-nums">{pct}%</span>
+            : <MorphIcon icon={Sparkles} className="relative w-4 h-4" />}
+        </span>
+        {expanded && (
+          <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-xs font-bold whitespace-nowrap py-2">
+            {label}
+          </motion.span>
+        )}
+      </motion.div>
+    </div>
   );
 }

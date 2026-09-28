@@ -1,9 +1,12 @@
 // Platform detection + Capacitor/Tauri bridge
 // Web, Android (Capacitor), Windows (Tauri) — barcha platformalar uchun bir xil API.
 
-// Tauri — window.__TAURI__ window ob'ektida mavjud bo'ladi
+// Tauri v2 — `window.__TAURI__` FAQAT `withGlobalTauri: true` bo'lsa paydo bo'ladi (bizda o'chiq),
+// shuning uchun avval Windows ilovasi o'zini "oddiy brauzer" deb hisoblardi: avtomatik yangilanish,
+// fayl yuklash va landing'ni yashirish exe ichida ISHLAMASDI. `__TAURI_INTERNALS__` esa Tauri v2
+// har doim o'rnatadigan ichki ko'prik (invoke shu orqali ishlaydi).
 export const isTauri = (): boolean =>
-  typeof window !== 'undefined' && '__TAURI__' in window;
+  typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
 
 // Capacitor — HAQIQIY native qobiq (Android/iOS) ichida ekanini tekshiradi.
 // XATO TUZATILDI: avval faqat `'Capacitor' in window` tekshirilardi — lekin

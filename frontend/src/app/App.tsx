@@ -5494,10 +5494,10 @@ export default function App() {
       {/* Offline banner */}
       {(isOffline || syncPending > 0 || syncStatus === 'synced') && (
         <div className="flex justify-center px-3 pt-1.5 flex-shrink-0 pointer-events-none">
-        <div role="status" className={`sync-pill pointer-events-auto inline-flex items-center gap-2 max-w-full px-3.5 py-1.5 rounded-full text-[11px] sm:text-xs font-semibold border backdrop-blur-xl shadow-lg transition-colors
-          ${isOffline ? 'bg-red-500/15 text-red-600 dark:text-red-300 border-red-500/30' :
-            syncStatus === 'synced' ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30' :
-            'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30'}`}>
+        <div role="status" className={`sync-pill pointer-events-auto inline-flex items-center gap-2 max-w-full px-4 py-2 rounded-full text-xs sm:text-[13px] font-bold border shadow-xl transition-colors
+          ${isOffline ? 'bg-red-600 text-white border-white/25 shadow-red-900/40' :
+            syncStatus === 'synced' ? 'bg-emerald-600 text-white border-white/25 shadow-emerald-900/40' :
+            'bg-amber-500 text-black border-black/10 shadow-amber-900/30'}`}>
           {isOffline ? (
             <><MorphIcon icon={WifiOff} className="w-3.5 h-3.5 flex-shrink-0" /><span className="truncate">{tApp('sync.offline')}</span></>
           ) : syncStatus === 'syncing' ? (

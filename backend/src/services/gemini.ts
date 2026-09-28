@@ -22,7 +22,7 @@ const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 //  2) Kalitlardan biri uchun model "404 no longer available" qaytarsa (yoki kvota tugab keyIdx shunday kalitga
 //     o'tib qolsa) — BARCHA keyingi so'rovlar yiqilardi. Endi har kalit × model kombinatsiyasi sinab ko'riladi.
 //  3) "503 high demand" tez-tez bo'lmoqda — har modelga 3 tagacha urinish, keyin keyingi modelga o'tiladi.
-const MODELS = (process.env.GEMINI_AUDIO_MODELS || 'gemini-2.5-flash,gemini-flash-latest,gemini-3-flash-preview')
+const MODELS = (process.env.GEMINI_AUDIO_MODELS || 'gemini-2.5-flash,gemini-flash-latest,gemini-3-flash-preview,gemini-flash-lite-latest')
   .split(',').map(m => m.trim()).filter(Boolean);
 
 function parseJsonLoose(text: string): any {

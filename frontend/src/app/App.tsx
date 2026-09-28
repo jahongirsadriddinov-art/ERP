@@ -2615,11 +2615,7 @@ function SmetaResultView({ smeta }: { smeta: SmetaResult }) {
     s.works.push(w);
   }
 
-  // touch-pan-y BU YERGA QO'YILMAYDI — ichkaridagi jadval o'ralari o'zlarining
-  // touch-pan-x'iga ega (pastda); agar bu yerga ham touch-pan-y qo'yilsa,
-  // ichki jadval ustida ikkalasining kesishmasi BO'SH bo'lib, hech qanday
-  // yo'nalishda scroll ishlamay qoladi (Talab jadvalida xuddi shu xato
-  // tuzatilgan, batafsil izoh o'sha yerda).
+  // Jadvallarda touch-action cheklovi yo'q — vertikal va gorizontal surish ikkalasi ishlaydi.
   return (
     <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide space-y-3 p-4 pb-24 animate-slide-up-fade">
       {/* Meta + byudjet (parser natijasidan) */}
@@ -2652,7 +2648,7 @@ function SmetaResultView({ smeta }: { smeta: SmetaResult }) {
                 ("smeta bo'limida chapga qimirlatib bo'lmayapti"). Talab
                 jadvalidagi bilan bir xil touch-action izolyatsiyasi. */}
             {open && (
-              <div className="overflow-x-auto border-t border-border touch-pan-x" onWheel={hwheel}>
+              <div className="overflow-x-auto border-t border-border" onWheel={hwheel}>
                 <table className="w-full text-left text-xs">
                   <thead className="bg-muted/40 text-muted-foreground"><tr>
                     <th className="px-2 py-1.5">№</th><th className="px-2 py-1.5">Шифр</th><th className="px-2 py-1.5">Наименование</th>
@@ -2702,7 +2698,7 @@ function SmetaResultView({ smeta }: { smeta: SmetaResult }) {
                     <span className="flex items-center gap-1 shrink-0"><span className="text-[10px] text-muted-foreground whitespace-nowrap">{w.norms.length} n.</span><MorphIcon icon={wo ? ChevronUp : ChevronDown} className="w-3.5 h-3.5" /></span>
                   </button>
                   {wo && w.norms.length > 0 && (
-                    <div className="overflow-x-auto px-4 pb-2 touch-pan-x" onWheel={hwheel}>
+                    <div className="overflow-x-auto px-4 pb-2" onWheel={hwheel}>
                       <table className="w-full text-left text-[11px]">
                         <thead className="text-muted-foreground"><tr><th className="py-1 pr-2">№</th><th className="pr-2">Шифр</th><th className="pr-2">Наименование</th><th className="pr-2">Ед.</th><th className="text-right pr-2">На ед.</th><th className="text-right">По проекту</th></tr></thead>
                         <tbody>
@@ -2967,21 +2963,11 @@ function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSe
                 yuqoriga-pastga suriladi), ICHKI faqat gorizontal (qator
                 matni chapga-o'ngga suriladi) — ikki yo'nalish endi bir-biriga
                 xalaqit bermaydi. */}
-            {/* XATO TUZATILDI (2-marta): oldingi urinishda TASHQI konteynerga
-                touch-pan-y VA ICHKI konteynerga touch-pan-x BIRGA qo'yilgan
-                edi — bu yanada YOMONROQ xato edi: CSS spetsifikatsiyasiga
-                ko'ra, ICHKI elementning amaldagi touch-action'i BARCHA ota-
-                elementlar bilan KESISHMA (intersection) sifatida hisoblanadi,
-                pan-y va pan-x kesishmasi esa BO'SH — natijada aynan jadval
-                ustida hech qanday yo'nalishda (na tepaga-pastga, na
-                chapga-o'ngga) scroll ISHLAMAY qoldi ("umuman ishlamayapdi").
-                TO'G'RI yechim: TASHQIga HECH NARSA qo'yilmaydi (standart
-                avtomatik xulq — sahifa har joyidan vertikal suriladi), FAQAT
-                ICHKI (jadvalning o'zi)ga touch-pan-x — shunda aynan jadval
-                ustida gorizontal imo-ishora ustuvor bo'ladi, sahifa esa
-                jadvaldan TASHQARIDA odatdagidek vertikal suriladi. */}
+            {/* touch-action CHEKLOVSIZ (auto): brauzer barmoq yo'nalishini o'zi aniqlaydi — gorizontal
+                surish jadvalni, vertikal surish sahifani suradi. Avval jadvalda touch-pan-x bor edi va
+                u telefonda jadval ustidan PASTGA surishni butunlay to'sib qo'yardi. */}
             <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden scrollbar-hide pb-20 sm:pb-2">
-              <div className="overflow-x-auto touch-pan-x" onWheel={hwheel}>
+              <div className="overflow-x-auto" onWheel={hwheel}>
                 <table className="w-full xl:w-auto xl:min-w-[760px] min-w-[560px] text-left border-collapse text-[11px] leading-tight">
                   <thead className="sticky top-0 z-10 bg-card">
                     <tr className="border-b border-border">

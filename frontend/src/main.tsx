@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 
 import { createRoot } from "react-dom/client";
 import { MotionConfig } from "motion/react";
@@ -38,11 +39,14 @@ window.addEventListener('unhandledrejection', (event) => {
 // render qilinadi. React Router yo'q (butun ilova bitta SPA holat
 // mashinasi) — shu sabab bu yerda oddiy pathname tekshiruvi kifoya.
 const clientViewMatch = window.location.pathname.match(/^\/client\/([0-9a-f]{48})$/);
+// Mijoz hujjatni login'siz imzolaydigan sahifa — /sign/:token
+const signMatch = window.location.pathname.match(/^\/sign\/([0-9a-f]{48})$/);
+const PublicSignPage = lazy(() => import("./app/ESignDocs").then(m => ({ default: m.PublicSignPage })));
 
 createRoot(document.getElementById("root")!).render(
   <ErrorBoundary>
     <MotionConfig reducedMotion="user">
-      {clientViewMatch ? <ClientViewPage token={clientViewMatch[1]} /> : (
+      {signMatch ? <Suspense fallback={null}><PublicSignPage token={signMatch[1]} /></Suspense> : clientViewMatch ? <ClientViewPage token={clientViewMatch[1]} /> : (
         <>
           <App />
           <UpdateChecker />

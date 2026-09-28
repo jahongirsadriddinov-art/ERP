@@ -55,6 +55,7 @@ import { serveDurableUpload } from './services/durableFiles';
 import { cloudinaryEnabled } from './config/cloudinary';
 import pinRoutes from './routes/pin';
 import { startMonthlySummaryLoop } from './services/expenseInsights';
+import signDocsRoutes, { publicSignRouter } from './routes/signDocs';
 
 dotenv.config();
 
@@ -265,6 +266,8 @@ app.use('/api/dev-announcements', requireAuth, requireDeveloper, devAnnouncement
 // publicClientRoutes — mijoz portali, ATAYLAB auth shart emas (mijoz tizim
 // foydalanuvchisi emas) — o'zining ichida taxmin qilib bo'lmaydigan token bilan himoyalangan.
 app.use('/api/public',          publicClientRoutes);
+app.use('/api/public',          publicSignRouter); // mijoz hujjatni login'siz imzolaydi (/api/public/sign/:token)
+app.use('/api/sign-docs', requireAuth, blockDeveloper, signDocsRoutes); // elektron hujjatlar va imzo
 app.use('/api/dashboard',       requireAuth, blockDeveloper, dashboardRoutes);
 app.use('/api/errors',          optionalAuth, clientErrorRoutes); // login ekranidan oldingi xatolar ham yozilishi kerak
 app.use('/api/admin',           requireAuth, backupRoutes);

@@ -108,6 +108,7 @@ const AIAssistant = lazy(() => import("./AIAssistant"));
 const QRScanner = lazy(() => import("./QRScanner"));
 const LandingPage = lazy(() => import("./LandingPage"));
 const LocationPicker = lazy(() => import("./LocationPicker"));
+const ESignDocs = lazy(() => import("./ESignDocs"));
 const QRGenerator = lazy(() => import("./QRGenerator"));
 const GpsTrackingPage = lazy(() => import("./GpsTrackingPage"));
 import type { LandingFocus } from "./LandingPage";
@@ -1761,6 +1762,7 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
   const [showEquipment, setShowEquipment] = useState(false);
   const [showSafety, setShowSafety] = useState(false);
   const [showDocuments, setShowDocuments] = useState(false);
+  const [showESign, setShowESign] = useState(false);
   const [showPayroll, setShowPayroll] = useState(false);
   const [export1cLoading, setExport1cLoading] = useState(false);
   const handleExport1c = async () => {
@@ -1862,6 +1864,9 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
       </button>
       <button onClick={() => setShowSafety(true)} className="flex items-center gap-1.5 text-xs border border-border rounded-lg px-3 py-1.5 hover:bg-muted active:scale-95 liquid-transition flex-shrink-0 whitespace-nowrap">
         <MorphIcon icon={AlertTriangle} className="w-3.5 h-3.5 text-amber-500" />{t('management.safety')}
+      </button>
+      <button onClick={() => setShowESign(true)} className="flex items-center gap-1.5 text-xs border border-primary/40 bg-primary/5 text-primary rounded-lg px-3 py-1.5 hover:bg-primary/10 active:scale-95 liquid-transition flex-shrink-0 whitespace-nowrap font-semibold">
+        ✍️ {t('management.esign', { defaultValue: "E-hujjat va imzo" })}
       </button>
       <button onClick={() => setShowDocuments(true)} className="flex items-center gap-1.5 text-xs border border-border rounded-lg px-3 py-1.5 hover:bg-muted active:scale-95 liquid-transition flex-shrink-0 whitespace-nowrap">
         <MorphIcon icon={FileText} className="w-3.5 h-3.5 text-blue-500" />{t('management.documents')}
@@ -2195,6 +2200,13 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
       {showEquipment && <EquipmentModal projects={projects} onClose={()=>setShowEquipment(false)}/>}
       {showSafety && <SafetyModal projects={projects} onClose={()=>setShowSafety(false)}/>}
       {showDocuments && <DocumentsModal projects={projects} currentUser={currentUser} onClose={()=>setShowDocuments(false)}/>}
+      {showESign && (
+        <Suspense fallback={null}>
+          <ESignDocs onClose={() => setShowESign(false)} currentUserName={currentUser.name}
+            companyName={localStorage.getItem("erp_companyName") || ""}
+            projects={projects.map(p => ({ id: p.id, name: p.name, location: p.location }))} />
+        </Suspense>
+      )}
       {showPayroll && <PayrollModal users={users} onClose={()=>setShowPayroll(false)}/>}
     </>
   );

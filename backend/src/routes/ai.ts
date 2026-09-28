@@ -64,7 +64,7 @@ async function requireBoss(req: Request, res: Response, next: NextFunction) {
   return res.status(403).json({ error: 'Faqat rahbar va o\'rinbosar uchun' });
 }
 
-const SYSTEM_TEMPLATE = (callerRole: string, usersText: string, projectsText: string) =>
+const SYSTEM_TEMPLATE = (callerRole: string, usersText: string, projectsText: string, financeText = '') =>
   `Siz QurilishERP tizimining aqlli AI yordamchisisiz. ${callerRole} bilan ishlayapsiz.
 
 🔒 ASOSIY QOIDALAR (ALBATTA BAJARING):
@@ -109,10 +109,57 @@ ${projectsText}
 - "Obyektlar holati", "Loyihalar" → barcha loyihalar holatin ko'rsat
 - Xabar yuborishda — to'liq, grammatik jihatdan to'g'ri va professional matn yoz
 
+💰 MOLIYA MA'LUMOTLARI (oxirgi 90 kun, tasdiqlangan chiqim/kirim — hisob-kitoblar uchun FAQAT shulardan foydalan, o'zingdan raqam o'ylab topma):
+${financeText || "(ma'lumot yo'q)"}
+
+📊 MOLIYAVIY TAHLIL (type="query"):
+- "Oylik xulosa", "bu oy qancha sarfladik" → turlar, obyektlar, eng katta chiqimlar bilan qisqa xulosa, o'tgan davr bilan solishtirish.
+- "G'ayrioddiy chiqimlar" → ⚠ belgili chiqimlarni sanab, nega shubhali ekanini tushuntir.
+- "Byudjet holati" → har obyekt: sarflangan / byudjet / foiz; 80% dan oshganlarini alohida ta'kidla.
+- "Qayerda tejash mumkin" → eng katta turlar/obyektlar bo'yicha aniq tavsiyalar ber.
+- Summalarni "12 500 000 so'm" ko'rinishida yoz. Jadval kerak bo'lsa markdown jadval ishlat.
+
 🔍 AGAR MA'LUMOT YETARLI BO'LMASA:
 Kerakli ma'lumotni tabiiy tilda so'rang:
 {"type":"query","response":"Aniqlashtiring: [savol]"}`;
 
+
+
+// AI uchun moliyaviy kontekst: oxirgi 90 kun — turlar, obyektlar (byudjet bilan), oylar kesimi,
+// eng katta va g'ayrioddiy chiqimlar. Faqat shu firma ma'lumoti (scoped).
+const TYPE_UZ: Record<string, string> = { oylik: 'Oylik', material: 'Material', jihozlar: 'Jihozlar', transport: 'Transport', boshqa: 'Boshqa', expense: 'Chiqim', income: 'Kirim' };
+async function buildFinanceContext(objects: any[]): Promise<string> {
+  const since = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10);
+  const txs: any[] = await Transaction.find(scoped({ type: { $ne: 'transfer' }, status: 'confirmed', date: { $gte: since } }) as any)
+    .select('type amount date description projectId anomaly recipientName objectLabel').lean();
+  if (!txs.length) return '';
+  const m = (n: number) => `${Math.round(n).toLocaleString('ru-RU')} so'm`;
+  const exp = txs.filter(t => t.type !== 'income');
+  const inc = txs.filter(t => t.type === 'income');
+  const sum = (a: any[]) => a.reduce((x, t) => x + (t.amount || 0), 0);
+  const objName = (id?: string) => objects.find(o => String(o._id) === String(id))?.name;
+  const lines: string[] = [`Jami chiqim: ${m(sum(exp))}; jami kirim: ${m(sum(inc))}; amallar soni: ${txs.length}`];
+  const byMonth = new Map<string, number>();
+  for (const t of exp) byMonth.set(t.date.slice(0, 7), (byMonth.get(t.date.slice(0, 7)) || 0) + t.amount);
+  lines.push('Oylar bo\'yicha chiqim: ' + [...byMonth.entries()].sort().map(([k, v]) => `${k}: ${m(v)}`).join('; '));
+  const byType = new Map<string, number>();
+  for (const t of exp) byType.set(t.type, (byType.get(t.type) || 0) + t.amount);
+  lines.push('Turlar bo\'yicha: ' + [...byType.entries()].sort((a, b) => b[1] - a[1]).map(([k, v]) => `${TYPE_UZ[k] || k}: ${m(v)}`).join('; '));
+  const allSpent = await Transaction.aggregate([
+    { $match: scoped({ type: { $nin: ['transfer', 'income'] }, status: 'confirmed', projectId: { $exists: true, $ne: null } }) as any },
+    { $group: { _id: '$projectId', s: { $sum: '$amount' } } },
+  ]);
+  const objLines = objects.map(o => {
+    const spent = allSpent.find((r: any) => String(r._id) === String(o._id))?.s || 0;
+    return spent || o.budget ? `${o.name}: sarflangan ${m(spent)}${o.budget ? ` / byudjet ${m(o.budget)} (${Math.round((spent / o.budget) * 100)}%)` : ' (byudjet kiritilmagan)'}` : '';
+  }).filter(Boolean);
+  if (objLines.length) lines.push('Obyektlar (butun davr): ' + objLines.join('; '));
+  const top = [...exp].sort((a, b) => b.amount - a.amount).slice(0, 8);
+  lines.push('Eng katta chiqimlar: ' + top.map(t => `${t.date} ${TYPE_UZ[t.type] || t.type} ${m(t.amount)} "${(t.description || '').slice(0, 50)}" ${objName(t.projectId) || t.objectLabel || ''}${t.anomaly ? ' ⚠G\'AYRIODDIY' : ''}`).join(' | '));
+  const anomalies = exp.filter(t => t.anomaly);
+  if (anomalies.length) lines.push(`G'ayrioddiy (⚠) chiqimlar soni: ${anomalies.length}`);
+  return lines.join('\n');
+}
 
 // POST /api/ai/chat
 router.post('/chat', requireAuth, requireBoss, requireFeature('ai_assistant'), async (req, res) => {
@@ -137,7 +184,7 @@ router.post('/chat', requireAuth, requireBoss, requireFeature('ai_assistant'), a
       ? (objects as any[]).map(o => `- ${o.name} (${statusMap[o.status]||o.status})${o.location ? ', joy: '+o.location : ''}${o.budget ? ', byudjet: '+Number(o.budget).toLocaleString('uz-UZ')+' so\'m' : ''} | id:${o._id}`).join('\n')
       : '(loyihalar yo\'q)';
 
-    const SYSTEM = SYSTEM_TEMPLATE(callerRole, usersText, projectsText);
+    const SYSTEM = SYSTEM_TEMPLATE(callerRole, usersText, projectsText, await buildFinanceContext(objects as any[]));
 
     const messages = [
       ...(history as any[]).slice(-8).map((h: any) => ({

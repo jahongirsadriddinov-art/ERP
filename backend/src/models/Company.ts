@@ -40,7 +40,8 @@ const CompanySchema: Schema = new Schema({
   ownerUserId: { type: String, index: true },
   status: { type: String, enum: ['PENDING', 'ACTIVE', 'SUSPENDED'], default: 'ACTIVE' },
   plan: { type: String, enum: ['FREE', 'PRO', 'ENTERPRISE'], default: 'FREE' },
-  trialEndsAt: { type: Date }
+  trialEndsAt: { type: Date },
+  lastMonthlySummary: { type: String }, // 'YYYY-MM' — oylik xulosa yuborilgan oxirgi oy
 }, { timestamps: true });
 
 export default mongoose.model<ICompany>('Company', CompanySchema);

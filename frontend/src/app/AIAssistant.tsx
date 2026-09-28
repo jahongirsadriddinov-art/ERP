@@ -518,6 +518,22 @@ export default function AIAssistant({ currentUser, users, token, open, onClose, 
 
         {/* Input — suzuvchi "pill" panel + ovozli kiritish tugmasi */}
         <div className="px-3 pb-3 pt-2 flex-shrink-0">
+          {/* Moliyaviy tahlil — bir bosishda (AI firma chiqimlari/byudjetlarini ko'radi) */}
+          {!loading && !pending && (
+            <div className="flex gap-1.5 overflow-x-auto scrollbar-hide mb-2 -mx-1 px-1">
+              {[
+                t('ai.qMonthly', { defaultValue: "📊 Oylik xulosa" }),
+                t('ai.qAnomalies', { defaultValue: "⚠️ G'ayrioddiy chiqimlar" }),
+                t('ai.qBudget', { defaultValue: "💰 Byudjet holati" }),
+                t('ai.qSave', { defaultValue: "💡 Qayerda tejash mumkin?" }),
+              ].map(q => (
+                <button key={q} onClick={() => send(q)}
+                  className="flex-shrink-0 text-[12px] font-medium px-3 py-1.5 rounded-full border border-border bg-card/70 hover:border-primary/50 hover:text-primary liquid-transition whitespace-nowrap">
+                  {q}
+                </button>
+              ))}
+            </div>
+          )}
           {listening && (
             <div className="flex items-center justify-center gap-1 mb-2">
               {[0,1,2,3,4].map(i => (

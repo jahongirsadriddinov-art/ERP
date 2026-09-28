@@ -58,6 +58,7 @@ export interface ITransaction extends Document {
   botVoiceFileId?: string;
   botTranscript?: string;
   botCleanText?: string;
+  anomaly?: boolean; // odatdagidan ancha katta (services/expenseInsights)
   botText?: string;
   // Kimga / qaysi obyekt — ro'yxatdagi odam/obyektga mos kelmasa ham aytilgan nom saqlanadi
   recipientName?: string;
@@ -106,6 +107,7 @@ const TransactionSchema: Schema = new Schema({
   botVoiceFileId: { type: String },
   botTranscript: { type: String },
   botCleanText: { type: String },
+  anomaly: { type: Boolean },
   botText: { type: String },
   recipientName: { type: String },
   objectLabel: { type: String },
@@ -117,5 +119,13 @@ const TransactionSchema: Schema = new Schema({
 // xotirada saralashga majbur qiladi (katta firmalarda sekinlashadi). Qo'sh
 // indeks ikkalasini ham bitta amalda, saralashsiz beradi.
 TransactionSchema.index({ companyId: 1, createdAt: -1 });
+
+// Byudjet nazorati / g'ayrioddiy chiqim — har qanday yo'l bilan saqlanganda (sayt, bot, AI).
+// Dinamik import: model <-> servis <-> bot o'rtasida aylanma bog'liqlik bo'lmasin.
+TransactionSchema.pre('save', function () { (this as any).$locals.wasNew = this.isNew; });
+TransactionSchema.post('save', function (doc: any) {
+  const wasNew = !!doc.$locals?.wasNew;
+  import('../services/expenseInsights').then(m => m.onExpenseSaved(doc.toObject(), wasNew)).catch(() => {});
+});
 
 export default mongoose.model<ITransaction>('Transaction', TransactionSchema);

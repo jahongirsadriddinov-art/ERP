@@ -202,7 +202,8 @@ export interface Expense {
   // biri) — belgilansa, FAQAT o'sha odam tasdiqlay/rad eta oladi.
   approverId?: string;
   recipientName?: string; objectLabel?: string; source?: 'site' | 'bot';
-  currency?: 'UZS' | 'USD' | 'EUR'; originalAmount?: number; // aytilgan valyuta (amount — doim so'mda) // botdan: aytilgan "kimga"/obyekt
+  currency?: 'UZS' | 'USD' | 'EUR'; originalAmount?: number; // aytilgan valyuta (amount — doim so'mda)
+  anomaly?: boolean; // odatdagidan ancha katta chiqim (server belgilaydi) // botdan: aytilgan "kimga"/obyekt
 }
 export interface Msg {
   id: string; fromUserId: string; toUserId: string; groupId?: string;
@@ -1300,6 +1301,19 @@ function SendTransferModal({ currentUser, projects, allUsers, onClose, onSend, i
 }
 
 // ─── Add Expense Modal ─────────────────────────────────────────────────────────
+// Tavsifdan chiqim turini taxmin qilish (backend/src/services/botExpense.ts bilan bir xil kalit so'zlar)
+const EXP_TYPE_KEYWORDS: [ExpType, RegExp][] = [
+  ['oylik', /oylik|maosh|ish haqi|avans|premiya|mukofot|зарплат|оклад|аванс|премия/i],
+  ['transport', /transport|benzin|dizel|yoqilg|solyarka|taksi|kamaz|yuk tashish|mashina|бензин|топлив|дизел|такси|доставк|перевозк|транспорт/i],
+  ['jihozlar', /jihoz|asbob|uskuna|instrument|drel|kompressor|nasos|perforator|generator|arenda|ijara|оборудован|инструмент|аренд/i],
+  ['material', /material|sement|g['’`ʻ]?isht|qum|shag['’`ʻ]?al|armatura|beton|taxta|bo['’`ʻ]?yoq|shifer|profil|gips|penoplast|kabel|quvur|цемент|кирпич|песок|щебень|арматур|бетон|доск|краск|гипс|кабел|труб|материал/i],
+];
+export function guessExpType(desc: string): ExpType | null {
+  if (!desc || desc.trim().length < 3) return null;
+  for (const [k, re] of EXP_TYPE_KEYWORDS) if (re.test(desc)) return k;
+  return null;
+}
+
 function AddExpenseModal({ currentUser, projects, allUsers, onClose, onAdd }:
   { currentUser: AppUser; projects: Project[]; allUsers: AppUser[]; onClose: () => void; onAdd: (e: Expense) => void }) {
   const { t } = useTranslation();
@@ -1431,6 +1445,15 @@ function AddExpenseModal({ currentUser, projects, allUsers, onClose, onAdd }:
                 </label>
                 <input className="w-full text-sm border border-border rounded-lg px-2.5 py-2.5 bg-input-background focus:outline-none"
                   placeholder={t('addExpense.descPlaceholder')} value={form.description} onChange={e => { setErr(""); setForm({...form, description: e.target.value}); }}/>
+                {(() => {
+                  const g = guessExpType(form.description);
+                  return g && g !== form.type && g !== "boshqa" ? (
+                    <button type="button" onClick={() => setForm({ ...form, type: g })}
+                      className="mt-1.5 inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-full bg-primary/10 text-primary hover:bg-primary/15">
+                      🤖 {t('addExpense.aiSuggest', { defaultValue: "Tavsif bo'yicha tur" })}: <b>{expLabel(t, g)}</b> — {t('addExpense.apply', { defaultValue: "qo'llash" })}
+                    </button>
+                  ) : null;
+                })()}
               </div>
             </>
           )}
@@ -3372,7 +3395,7 @@ function FinancePage({ currentUser, users, projects, expenses, onAddExpense, onC
                         <span className={`text-[9px] px-1.5 py-0.5 rounded font-semibold ${typeClr[e.type] || "bg-muted text-muted-foreground"}`}>{expLabel(t, e.type as ExpType) || e.type}</span>
                         {e.requiresAdminApproval&&e.status==="pending"&&<span className="text-[9px] px-1.5 py-0.5 rounded font-semibold bg-accent/15 text-accent">{t('approvalChain.needsApproval')}</span>}
                       </div>
-                      <p className="font-semibold text-foreground">{e.description || expLabel(t, e.type as ExpType)}</p>
+                      <p className="font-semibold text-foreground">{e.anomaly && <span className="mr-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600 dark:text-amber-400">⚠ {t('finance.anomaly', { defaultValue: "G'ayrioddiy" })}</span>}{e.description || expLabel(t, e.type as ExpType)}</p>
                       <p className="text-sm md:text-xs text-muted-foreground mt-0.5">{proj?.name || e.objectLabel || "—"}{e.recipientName ? ` • 👤 ${e.recipientName}` : ""} • {e.date}</p>
                       {to&&<p className="text-sm md:text-xs text-muted-foreground">{t('finance.to')} <span className="font-medium">{to.name}</span></p>}
                       {creator&&<p className="text-sm md:text-xs text-muted-foreground">{t('finance.createdBy')} {creator.name}</p>}

@@ -54,6 +54,7 @@ import { checkRate } from './utils/rateLimit';
 import { serveDurableUpload } from './services/durableFiles';
 import { cloudinaryEnabled } from './config/cloudinary';
 import pinRoutes from './routes/pin';
+import { startMonthlySummaryLoop } from './services/expenseInsights';
 
 dotenv.config();
 
@@ -335,6 +336,7 @@ httpServer.listen(PORT, () => {
 mongoose.connect(MONGODB_URI)
   .then(async () => {
     console.log('Connected to MongoDB');
+    startMonthlySummaryLoop();
     // Obuna tariflari (narx/muddat/funksiyalar) endi admin panelidan
     // boshqariladi (models/Plan.ts) — birinchi ishga tushishda urug'lantiriladi,
     // so'ng har safar sinxron PLAN_CONFIG keshiga yuklanadi.

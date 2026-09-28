@@ -6,6 +6,7 @@ export interface IObject extends Document {
   foremanId?: string;
   status: 'active' | 'paused' | 'completed';
   budget?: number;
+  budgetAlertLevel?: number; // 0 | 80 | 100 — oxirgi yuborilgan byudjet ogohlantirishi
   smetaFileUrl?: string;
   smeta?: any; // to'liq deterministik parser natijasi (ParseResult) — qurilmalar orasida sinxron bo'lishi uchun
   companyId?: string; // v1.2 multi-tenant (nullable)
@@ -20,6 +21,7 @@ const ObjectSchema: Schema = new Schema({
   foremanId: { type: String },
   status: { type: String, enum: ['active', 'paused', 'completed'], default: 'active' },
   budget: { type: Number },
+  budgetAlertLevel: { type: Number, default: 0 },
   smetaFileUrl: { type: String },
   smeta: { type: Schema.Types.Mixed },
   companyId: { type: String, index: true }, // v1.2 multi-tenant

@@ -17,6 +17,7 @@ export interface IUser extends Document {
   twoFactorExpires?: Date;
   twoFactorAttempts?: number;
   brigade?: string;
+  avatar?: string;          // profil rasmi (Cloudinary/backend URL)
   projectIds?: string[];
   // v1.2 multi-tenant qo'shimchalari (hammasi nullable — eski yozuvlarni buzmaydi)
   companyId?: string;      // qaysi firmaga tegishli (Company._id string ko'rinishida)
@@ -63,6 +64,7 @@ const UserSchema: Schema = new Schema({
   twoFactorExpires: { type: Date },
   twoFactorAttempts: { type: Number, default: 0 },
   brigade: { type: String },
+  avatar: { type: String },
   projectIds: [{ type: String }],
   // v1.2 multi-tenant (nullable)
   companyId: { type: String, index: true },

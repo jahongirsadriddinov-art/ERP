@@ -10,6 +10,7 @@ export interface ISignature {
   side: SignSide;
   name: string;
   image: string;       // PNG data URL (imzo rasmi)
+  stamp?: string;      // PNG data URL (pechat/muhr rasmi) — ixtiyoriy
   signedAt: Date;
   userId?: string;     // tizim foydalanuvchisi imzolagan bo'lsa
   ip?: string;
@@ -35,6 +36,7 @@ const SignatureSchema = new Schema({
   side: { type: String, enum: ['executor', 'customer'], required: true },
   name: { type: String, required: true },
   image: { type: String, required: true },
+  stamp: { type: String },
   signedAt: { type: Date, default: Date.now },
   userId: { type: String },
   ip: { type: String },

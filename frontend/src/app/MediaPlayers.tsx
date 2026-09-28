@@ -82,7 +82,25 @@ export function VoicePlayer({ src, mine }: { src: string; mine?: boolean }) {
     a.currentTime = pct * duration;
     setCurrent(a.currentTime);
   };
-  const progress = duration ? Math.min(100, (current / duration) * 100) : 0;
+  // Silliq progress: timeupdate soniyasiga ~4 marta keladi (sakrab-sakrab o'tardi) — o'ynayotganda
+  // har kadrda (requestAnimationFrame) to'lqin ustidagi rangli qatlam to'g'ridan-to'g'ri DOM'da suriladi.
+  const fillRef = useRef<HTMLDivElement>(null);
+  const paint = () => {
+    const a = audioRef.current, el = fillRef.current;
+    if (!a || !el) return;
+    const d = duration || (Number.isFinite(a.duration) ? a.duration : 0);
+    const p = d ? Math.min(1, Math.max(0, a.currentTime / d)) : 0;
+    el.style.clipPath = `inset(0 ${((1 - p) * 100).toFixed(3)}% 0 0)`;
+  };
+  useEffect(() => {
+    paint();
+    if (!playing) return;
+    let id = 0;
+    const loop = () => { paint(); id = requestAnimationFrame(loop); };
+    id = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playing, duration, current]);
   const shownTime = playing || current > 0 ? fmt(Math.max(0, duration - current)) : fmt(duration);
 
   const accent = mine ? "bg-white" : "bg-primary";
@@ -103,11 +121,16 @@ export function VoicePlayer({ src, mine }: { src: string; mine?: boolean }) {
           onPointerDown={e => { dragging.current = true; e.currentTarget.setPointerCapture(e.pointerId); seekTo(e.clientX); }}
           onPointerMove={e => { if (dragging.current) seekTo(e.clientX); }}
           onPointerUp={e => { dragging.current = false; e.currentTarget.releasePointerCapture(e.pointerId); }}>
-          {bars.map((h, i) => {
-            const played = ((i + 1) / bars.length) * 100 <= progress + 100 / bars.length / 2;
-            return <div key={i} className={`flex-1 rounded-full transition-colors duration-100 ${played ? accent : mine ? "bg-white/30" : "bg-primary/25"}`}
-              style={{ height: `${Math.max(14, Math.round(h * 100))}%` }} />;
-          })}
+          {bars.map((h, i) => (
+            <div key={i} className={`flex-1 rounded-full ${mine ? "bg-white/30" : "bg-primary/25"}`}
+              style={{ height: `${Math.max(14, Math.round(h * 100))}%` }} />
+          ))}
+          <div ref={fillRef} aria-hidden className="absolute inset-0 flex items-center gap-[2px] pointer-events-none will-change-[clip-path]"
+            style={{ clipPath: "inset(0 100% 0 0)" }}>
+            {bars.map((h, i) => (
+              <div key={i} className={`flex-1 rounded-full ${accent}`} style={{ height: `${Math.max(14, Math.round(h * 100))}%` }} />
+            ))}
+          </div>
         </div>
         <div className={`flex items-center gap-2 mt-0.5 text-[11px] font-medium tabular-nums ${mine ? "text-white/80" : "text-muted-foreground"}`}>
           <span>{duration > 0 ? shownTime : "0:00"}</span>
@@ -139,6 +162,14 @@ export function VideoPlayer({ src, className = "", compact, onExpand, autoPlay }
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dragging = useRef(false);
   usePauseOthers(ref);
+  // Silliq progress chizig'i — o'ynayotganda har kadrda yangilanadi (timeupdate ~4 Hz sakraydi)
+  useEffect(() => {
+    if (!playing) return;
+    let id = 0;
+    const loop = () => { const v = ref.current; if (v && !dragging.current) setCurrent(v.currentTime); id = requestAnimationFrame(loop); };
+    id = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(id);
+  }, [playing]);
 
   useEffect(() => { if (ref.current) ref.current.playbackRate = speed; }, [speed]);
   const poke = () => {

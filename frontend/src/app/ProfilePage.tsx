@@ -25,6 +25,8 @@ import TrendingDown from "@hugeicons/core-free-icons/TradeDownIcon";
 import Wallet from "@hugeicons/core-free-icons/Wallet01Icon";
 import LogOut from "@hugeicons/core-free-icons/Logout01Icon";
 import Camera from "@hugeicons/core-free-icons/Camera01Icon";
+import TextFont from "@hugeicons/core-free-icons/TextFontIcon";
+import { FONTS, fontById, getAppFont, applyAppFont, ensureFont } from "./lib/fonts";
 import Home from "@hugeicons/core-free-icons/Home01Icon";
 import UserPlus from "@hugeicons/core-free-icons/UserAdd01Icon";
 import Edit from "@hugeicons/core-free-icons/Edit02Icon";
@@ -424,9 +426,26 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return;
     try {
-      const url = await resizeImageFile(file, 500, 0.85);
-      onUpdateAvatar(url);
-    } catch { toast.error(t('profile.imageUploadError')); }
+      const dataUrl = await resizeImageFile(file, 500, 0.85);
+      onUpdateAvatar(dataUrl); // darhol ko'rinsin
+      // MUHIM: avval rasm faqat xotirada (state) turardi — sahifa yangilansa o'chib ketardi.
+      // Endi fayl sifatida yuklanadi va URL foydalanuvchi profiliga (serverga) saqlanadi.
+      const blob = await (await fetch(dataUrl)).blob();
+      const fd = new FormData();
+      fd.append('file', blob, `avatar-${Date.now()}.jpg`);
+      const token = localStorage.getItem('token') || '';
+      const upRes = await fetch(`${API_BASE}/api/messages/upload`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd });
+      const upData = await upRes.json().catch(() => ({}));
+      if (!upRes.ok || !upData.url) throw new Error(upData.error || t('profile.uploadFailed'));
+      const res = await fetch(`${API_BASE}/api/users/${currentUser.id}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ avatar: upData.url }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || t('profile.serverError'));
+      onUpdateAvatar(upData.url);
+      toast.success(t('profile.photoSaved', "Profil rasmi saqlandi"));
+    } catch (err) { toast.error(err instanceof Error && err.message ? err.message : t('profile.imageUploadError')); }
     finally { e.target.value = ""; }
   };
   const handleLogoFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -520,7 +539,8 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
   ];
 
   const activeTheme = COLOR_THEMES.find(t => t.id === colorTheme) || COLOR_THEMES[0];
-  const [activePanel, setActivePanel] = useState<null | "bg" | "appearance" | "color" | "perms" | "projects" | "language" | "subscription" | "currency" | "sound" | "devices" | "backup">(null);
+  const [appFont, setAppFont] = useState(getAppFont);
+  const [activePanel, setActivePanel] = useState<null | "font" | "bg" | "appearance" | "color" | "perms" | "projects" | "language" | "subscription" | "currency" | "sound" | "devices" | "backup">(null);
   const APPEARANCE_LABELS: Record<string, string> = { light: t('profile.themeLight'), dark: t('profile.themeDark'), system: t('profile.themeSystem') };
 
   // ── Ovoz effektlari (uisfx, "zen" pack) — yoqilgan/o'chirilgan va balandlik
@@ -553,6 +573,7 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
       .finally(() => setDevicesLoading(false));
   };
   useEffect(() => { if (activePanel === "devices") loadDevices(); }, [activePanel]);
+  useEffect(() => { if (activePanel === "font") FONTS.forEach(f => ensureFont(f.id)); }, [activePanel]);
   const revokeDevice = async (id: string) => {
     setRevokingDevice(id);
     try {
@@ -633,6 +654,7 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
               swatch: (bannerStyle as any).background ? { background: (bannerStyle as any).background } : { backgroundImage: (bannerStyle as any).backgroundImage, backgroundSize: 'cover' } },
             { key: "appearance" as const, icon: themeMode === "light" ? Sun : themeMode === "dark" ? Moon : Monitor, label: t('profile.appearanceMode'), hint: APPEARANCE_LABELS[themeMode], swatch: null },
             { key: "color" as const, icon: Palette, label: t('profile.colorTheme'), hint: t(`profile.colorThemeNames.${activeTheme.id}`, { defaultValue: activeTheme.name }), swatch: { background: `linear-gradient(135deg, ${activeTheme.primary}, ${activeTheme.accent})` } },
+            { key: "font" as const, icon: TextFont, label: t('profile.font', "Shrift"), hint: fontById(appFont).label, swatch: null },
             { key: "language" as const, icon: Languages, label: t('profile.language'), hint: langLabel(i18n.language as SiteLang), swatch: null },
             { key: "perms" as const, icon: CheckCircle, label: t('profile.permissions'), hint: `${perms.filter(([,has])=>has).length}/${perms.length}`, swatch: null },
             { key: "projects" as const, icon: Building2, label: t('profile.myObjects'), hint: String(myProjectCount), swatch: null },
@@ -659,7 +681,7 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
   // ── Har bo'lim uchun alohida ekran (rasmdagi "Personal/General/..." kabi) ──
   if (activePanel) {
     const panelTitle = {
-      bg: t('profile.bgThemes'), appearance: t('profile.appearanceMode'), color: t('profile.colorTheme'),
+      font: t('profile.font', "Shrift"), bg: t('profile.bgThemes'), appearance: t('profile.appearanceMode'), color: t('profile.colorTheme'),
       perms: t('profile.permissions'), projects: t('profile.myObjects'), language: t('profile.language'),
       subscription: t('profile.subscriptionStatus'), currency: t('profile.currencyRate'), sound: t('profile.sound'),
       devices: t('profile.connectedDevices'), backup: t('profile.backupTitle'),
@@ -681,31 +703,33 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
         </div>
         <div className="px-4 md:px-6 lg:grid lg:grid-cols-12 lg:gap-6 lg:flex-1 lg:min-h-0 lg:pb-4">
           {/* Chap: boshqa bo'limlarga tez o'tish (faqat kompyuterda) */}
-          <aside className="hidden lg:flex lg:flex-col lg:col-span-4 xl:col-span-3 min-h-0 gap-3">
+          <aside className="hidden lg:flex lg:flex-col lg:col-span-4 xl:col-span-3 min-h-0 min-w-0 gap-3">
             <div className="surface border border-border rounded-2xl p-2 space-y-0.5 flex-1 min-h-0 overflow-y-auto overscroll-contain [scrollbar-width:thin]">
               {menuRows.map(row => (
                 <button key={row.key} onClick={() => setActivePanel(row.key)}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left border liquid-transition ${row.key === activePanel ? "bg-primary/10 text-primary font-semibold border-primary/30" : "border-transparent hover:bg-muted/40 hover:border-border text-foreground"}`}>
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left border liquid-transition ${row.key === activePanel ? "bg-primary/10 text-primary font-semibold border-primary/30" : "border-transparent hover:bg-muted/40 hover:border-border text-foreground"}`}>
                   {row.swatch
                     ? <div className="w-8 h-8 rounded-lg flex-shrink-0" style={row.swatch}/>
                     : <div className="icon-chip w-8 h-8"><MorphIcon icon={row.icon} className="w-4 h-4" /></div>}
                   <span className="text-sm flex-1 truncate">{row.label}</span>
-                  {row.hint && <span className="text-[11px] text-muted-foreground truncate max-w-[6rem]">{row.hint}</span>}
+                  {row.hint && <span className="text-[11px] text-foreground/60 truncate max-w-[7rem] flex-shrink-0">{row.hint}</span>}
                 </button>
               ))}
             </div>
             {/* Bloklash / chiqish — menyu bilan birga, kesilmasdan pastda */}
-            <div className="grid grid-cols-2 gap-2 flex-shrink-0">
-              <button onClick={onLockNow} className="flex items-center justify-center gap-1.5 text-xs font-semibold border border-border rounded-xl py-2.5 hover:bg-primary/5 hover:border-primary/30 liquid-transition">
-                <MorphIcon icon={Lock} className="w-3.5 h-3.5" />{t('profile.lockNowBtn')}
+            <div className="space-y-2 flex-shrink-0">
+              <button onClick={onLockNow} className="group w-full flex items-center gap-3 rounded-2xl border border-border bg-card/60 px-3.5 py-3 text-left hover:border-primary/40 hover:bg-primary/[0.05] liquid-transition">
+                <span className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center flex-shrink-0"><MorphIcon icon={Lock} className="w-4 h-4" /></span>
+                <span className="text-sm font-semibold whitespace-nowrap truncate">{t('profile.lockNowBtn')}</span>
               </button>
               <button onClick={() => { markManualLogout(); localStorage.removeItem("currentUser"); localStorage.removeItem("token"); onLogout(); }}
-                className="flex items-center justify-center gap-1.5 text-xs font-semibold border border-border rounded-xl py-2.5 text-muted-foreground hover:bg-red-500/10 hover:text-red-600 hover:border-red-500/30 liquid-transition">
-                <MorphIcon icon={LogOut} className="w-3.5 h-3.5" />{t('profile.logout')}
+                className="group w-full flex items-center gap-3 rounded-2xl border border-red-500/20 bg-red-500/[0.04] px-3.5 py-3 text-left hover:border-red-500/45 hover:bg-red-500/10 liquid-transition">
+                <span className="w-9 h-9 rounded-xl bg-red-500/10 text-red-500 flex items-center justify-center flex-shrink-0"><MorphIcon icon={LogOut} className="w-4 h-4" /></span>
+                <span className="text-sm font-semibold text-red-600 dark:text-red-400 whitespace-nowrap truncate">{t('profile.logout')}</span>
               </button>
             </div>
           </aside>
-          <div className="space-y-4 lg:col-span-8 xl:col-span-9 min-w-0 lg:min-h-0 overflow-y-auto overscroll-contain [scrollbar-width:thin] lg:px-1.5 lg:py-1.5">
+          <div className="space-y-4 lg:col-span-8 xl:col-span-9 min-w-0 lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain [scrollbar-width:thin] px-0.5 py-0.5 lg:px-2 lg:py-2 lg:pr-3">
           {activePanel === "bg" && (
             <div className="surface border border-border overflow-hidden">
               <div className="px-4 py-3 border-b border-border flex items-center gap-2">
@@ -733,6 +757,28 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
                     <p className="text-[7px] sm:text-[8px] text-muted-foreground font-semibold">{t('profile.uploadPhotoShort')}</p>
                   </button>
                 </div>
+              </div>
+            </div>
+          )}
+          {activePanel === "font" && (
+            <div className="surface border border-border overflow-hidden p-3">
+              <p className="text-xs text-muted-foreground px-1 pb-3">{t('profile.fontHint', "Tanlangan shrift butun saytga (shu qurilmada) qo'llanadi. Hujjatlar shrifti hujjatlar bo'limida alohida tanlanadi.")}</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
+                {FONTS.map(f => {
+                  const active = appFont === f.id;
+                  return (
+                    <button key={f.id} onMouseEnter={() => ensureFont(f.id)} onFocus={() => ensureFont(f.id)}
+                      onClick={() => { setAppFont(f.id); applyAppFont(f.id); toast.success(`${t('profile.font', "Shrift")}: ${f.label}`); }}
+                      className={`text-left rounded-2xl border-2 px-4 py-3 liquid-transition ${active ? "border-primary bg-primary/10 shadow-lg shadow-primary/10" : "border-border hover:border-primary/40 hover:bg-muted/40"}`}>
+                      <span className="flex items-center justify-between gap-2">
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{f.label}</span>
+                        {active && <MorphIcon icon={Check} className="w-4 h-4 text-primary" />}
+                      </span>
+                      <span data-font-preview className="block text-xl mt-1 truncate" style={{ fontFamily: f.family }}>Qurilish ERP — Аа 123</span>
+                      <span data-font-preview className="block text-xs text-muted-foreground mt-0.5 truncate" style={{ fontFamily: f.family }}>Oʻzbekcha matn · Русский текст</span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -1010,12 +1056,12 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
         <input ref={bgRef} type="file" accept="image/*" className="hidden" onChange={handleBgFile}/>
         <div className="absolute bottom-0 left-0 right-0 px-5 pb-4 md:px-8 md:pb-5 flex items-end gap-4">
           <div className="relative flex-shrink-0">
-            <div className="w-14 h-14 md:w-16 md:h-16 rounded-2xl border-2 border-white/80 shadow-2xl overflow-hidden bg-white flex items-center justify-center">
-              <CompanyLogo src={companyLogo} imgClass="w-full h-full object-contain p-1" iconClass="w-8 h-8 text-primary" />
+            <div className="w-14 h-14 md:w-16 md:h-16 rounded-full border-2 border-white/80 shadow-2xl overflow-hidden bg-white flex items-center justify-center ring-4 ring-black/10">
+              <CompanyLogo src={companyLogo} imgClass="w-full h-full object-cover rounded-full" iconClass="w-8 h-8 text-primary" />
             </div>
             {canEditCompany && (
               <button onClick={() => logoRef.current?.click()} aria-label={t('profile.changeLogoAria')}
-                className="absolute -bottom-1.5 -right-1.5 w-6 h-6 bg-white text-primary rounded-full flex items-center justify-center border border-border shadow-lg hover:bg-primary hover:text-white liquid-transition">
+                className="absolute -bottom-0.5 -right-0.5 w-6 h-6 bg-white text-primary rounded-full flex items-center justify-center border border-border shadow-lg hover:bg-primary hover:text-white liquid-transition">
                 <MorphIcon icon={Camera} className="w-3 h-3" />
               </button>
             )}
@@ -1196,21 +1242,22 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
           {/* Qo'lda bloklash — 1 daqiqa kutmasdan, darhol PIN ekraniga o'tadi.
             Barcha qurilmalarda (veb/APK/exe) ko'rinadi — biometrikdan farqli,
             bunga maxsus native imkoniyat kerak emas. */}
-        <button onClick={onLockNow}
-          className="w-full flex items-center justify-center gap-2.5 text-sm border-2 border-border rounded-2xl px-4 py-3.5 text-foreground hover:bg-primary/5 hover:border-primary/30 liquid-transition font-semibold">
-          <MorphIcon icon={Lock} className="w-4 h-4" />{t('profile.lockNowBtn')}
+        <button onClick={onLockNow} className="group w-full flex items-center gap-3 rounded-2xl border border-border bg-card/60 px-3.5 py-3 text-left hover:border-primary/40 hover:bg-primary/[0.05] liquid-transition">
+                <span className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center flex-shrink-0"><MorphIcon icon={Lock} className="w-4 h-4" /></span>
+                <span className="text-sm font-semibold whitespace-nowrap truncate">{t('profile.lockNowBtn')}</span>
         </button>
 
         <motion.button initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28, delay: 0.26 }}
           onClick={() => { markManualLogout(); localStorage.removeItem("currentUser"); localStorage.removeItem("token"); onLogout(); }}
-          className="w-full flex items-center justify-center gap-2.5 text-sm border-2 border-border rounded-2xl px-4 py-3.5 text-muted-foreground hover:bg-red-500/10 hover:text-red-600 hover:border-red-500/30 liquid-transition font-semibold">
-          <MorphIcon icon={LogOut} className="w-4 h-4" />{t('profile.logout')}
+          className="group w-full flex items-center gap-3 rounded-2xl border border-red-500/20 bg-red-500/[0.04] px-3.5 py-3 text-left hover:border-red-500/45 hover:bg-red-500/10 liquid-transition">
+                <span className="w-9 h-9 rounded-xl bg-red-500/10 text-red-500 flex items-center justify-center flex-shrink-0"><MorphIcon icon={LogOut} className="w-4 h-4" /></span>
+                <span className="text-sm font-semibold text-red-600 dark:text-red-400 whitespace-nowrap truncate">{t('profile.logout')}</span>
         </motion.button>
           </div>
         </div>
 
         {/* O'ng ustun: sozlamalar katakchalari, audit, xavfsizlik, ilova yuklash */}
-        <div className="lg:col-span-8 xl:col-span-9 space-y-4 min-w-0 lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain lg:[scrollbar-width:thin] lg:px-1.5 lg:py-1.5">
+        <div className="lg:col-span-8 xl:col-span-9 space-y-4 min-w-0 lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain lg:[scrollbar-width:thin] lg:px-2 lg:py-2 lg:pr-3">
         {/* ── Sozlamalar menyusi: telefonda ro'yxat, planshet/noutbukda katakchalar ── */}
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28, delay: 0.06 }}>
           <div className="surface border border-border overflow-hidden md:hidden">

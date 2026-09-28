@@ -79,6 +79,7 @@ import { isSoundEnabled, setSoundEnabled, getSoundVolume, setSoundVolume, playSo
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { API_BASE, parseSmetaFile, uploadChatMedia, offlineQueueCount } from "./api";
+import NotificationCenter from "./NotificationCenter";
 import { AnnouncementComposer, AnnouncementContent, AnnouncementPopup, type AnnouncementData } from "./AnnouncementParts";
 import { connectSocket, getSocket, disconnectSocket } from "./socket";
 import { motion, AnimatePresence } from "motion/react";
@@ -523,6 +524,15 @@ const SEED_MSGS: Msg[] = [
   { id: "msg4", fromUserId: "u4", toUserId: "u2", text: "O'rinbosar, Sergeli obyektida oyna kerak", timestamp: "2026-06-22T08:00:00", read: false },
 ];
 
+// index.html'dagi boshlang'ich loader bilan AYNAN bir xil — yuklanish bitta uzluksiz loader bo'lib ko'rinadi
+// Yangi "shisha" (shaffof, blur) bildirishnoma dizayni — eski richColors (to'q yashil/qizil
+// to'rtburchak) o'rniga. Ko'rinishi globals.css'dagi .erp-toast bloki orqali.
+export const AppToaster = () => (
+  <Toaster position="top-center" closeButton gap={10} visibleToasts={4} offset={14}
+    toastOptions={{ className: "erp-toast", duration: 3800 }} />
+);
+export const BootLoader = () => <div className="boot-loader"><div className="logo-wrap"><div className="spinner" /></div></div>;
+
 // ─── Small Components ─────────────────────────────────────────────────────────
 // Rasm yuklanmasa (fayl o'chgan/tarmoq xatosi) — "singan rasm" belgisi o'rniga tartibli belgi.
 export function SafeImg({ src, alt, className, onClick, fallbackClassName }: { src: string; alt?: string; className?: string; onClick?: () => void; fallbackClassName?: string }) {
@@ -566,110 +576,6 @@ export function fmtVideoDuration(sec: number): string {
   const pad = (n: number) => String(n).padStart(2, '0');
   const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
   return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
-}
-
-function timeAgoShort(iso: string | undefined, t: (key: string) => string): string {
-  if (!iso) return "";
-  const diffMs = Date.now() - new Date(iso).getTime();
-  const min = Math.floor(diffMs / 60000);
-  if (min < 1) return t('chat.justNow');
-  if (min < 60) return `${min}${t('chat.minAbbr')}`;
-  const h = Math.floor(min / 60);
-  if (h < 24) return `${h}${t('chat.hourAbbr')}`;
-  return `${Math.floor(h / 24)}${t('chat.dayAbbr')}`;
-}
-
-function NotificationBell({ messages, transfers, expenses, users, currentUser, onOpenChat, onOpenDashboard }:
-  { messages: Msg[]; transfers: Transfer[]; expenses: Expense[]; users: AppUser[]; currentUser: AppUser;
-    onOpenChat: () => void; onOpenDashboard: () => void; }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  const { t: tN } = useTranslation();
-
-  useEffect(() => {
-    if (!open) return;
-    const onDoc = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, [open]);
-
-  const unread = messages.filter(m => m.toUserId === currentUser.id && !m.read && !m.deleted);
-  const bySender = Object.values(unread.reduce((acc: Record<string, { userId: string; count: number; last: Msg }>, m) => {
-    const cur = acc[m.fromUserId];
-    if (!cur) acc[m.fromUserId] = { userId: m.fromUserId, count: 1, last: m };
-    else { cur.count++; if (new Date(m.timestamp) > new Date(cur.last.timestamp)) cur.last = m; }
-    return acc;
-  }, {}));
-  const pendingTransfers = transfers.filter(t => t.toUserId === currentUser.id && t.status === "pending");
-  const pendingExpenses = expenses.filter((e: any) => e.toUserId === currentUser.id && e.status === "pending");
-  const badgeCount = unread.length + pendingTransfers.length + pendingExpenses.length;
-  const hasAny = bySender.length + pendingTransfers.length + pendingExpenses.length > 0;
-
-  return (
-    <div className="relative" ref={ref}>
-      <button onClick={() => setOpen(o => !o)} title={tN('chat.notifTitle')}
-        className="btn btn-ghost w-9 h-9 p-0 rounded-full relative">
-        <MorphIcon icon={Bell} className="w-[18px] h-[18px]" />
-        {badgeCount > 0 && (
-          <span className="badge-pulse absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 bg-accent text-accent-foreground rounded-full text-[9px] flex items-center justify-center font-bold shadow-sm">{badgeCount}</span>
-        )}
-      </button>
-      {open && (
-        <>
-          {/* Mobil'da orqa fon — tashqarisiga bosib yopish uchun (touch'da
-              mousedown-listener'ga tayanish tayinsiz — scroll'dan keyingi
-              qo'yib yuborish tashqi bosish sifatida noto'g'ri ishlab ketishi
-              mumkin). Desktop'da kerak emas — sm:hidden. */}
-          <div className="fixed inset-0 z-40 sm:hidden" onClick={() => setOpen(false)} />
-          <motion.div initial={{ opacity: 0, y: -8, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={{ type: "spring", stiffness: 420, damping: 32 }}
-            // MUHIM: qo'ng'iroq (bell) tugmasi ekranning o'ng chetiga tegib
-            // turmasligi mumkin (mas. tema/avatar tugmalari o'ng tomonda,
-            // undan keyin ham bor) — shu holda absolute+right-0 panelni
-            // O'ZINING kichik konteynerига nisbatan joylashtiradi, ekran
-            // chetidan tashqariga chiqib ketadi. Kichik ekranda (< sm)
-            // fixed+left-4/right-4 bilan har doim ekran ichida, xavfsiz
-            // qoladi; sm dan boshlab avvalgidek bellga yopishib turadi.
-            // top-16 avval qattiq (hardcoded) 4rem edi — notch/status-bar
-            // maydonini (env(safe-area-inset-top)) hisobga olmas edi, PWA
-            // standalone rejimda panel status-bar ostiga kirib qolardi —
-            // App.tsx'dagi asosiy header/QRScanner'da ishlatilgan xuddi shu
-            // max() naqshiga o'tkazildi.
-            className="fixed left-4 right-4 top-[max(4rem,env(safe-area-inset-top))] sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2 sm:w-80 sm:max-w-[calc(100vw-2rem)] rounded-2xl overflow-hidden z-50 liquid-glass">
-          <div className="px-4 py-3 border-b border-white/10"><p className="text-sm font-bold text-white">{tN('chat.notifTitle')}</p></div>
-          <div className="max-h-[min(20rem,60dvh)] overflow-y-auto scrollbar-hide divide-y divide-white/5">
-            {!hasAny && <p className="text-center text-xs text-white/50 py-8">{tN('chat.notifEmpty')}</p>}
-            {bySender.map(u => {
-              const sender = users.find(x => x.id === u.userId);
-              return (
-                <button key={u.userId} onClick={() => { onOpenChat(); setOpen(false); }}
-                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/5 text-left transition-colors">
-                  <div className="w-9 h-9 rounded-full bg-primary/25 text-primary flex items-center justify-center flex-shrink-0"><MorphIcon icon={MessageCircle} className="w-4 h-4" /></div>
-                  <div className="flex-1 min-w-0"><p className="text-xs font-semibold text-white truncate">{sender?.name || tN('chat.notifFrom')}</p><p className="text-[11px] text-white/60 truncate">{u.count > 1 ? tN('chat.notifNewMessages', { count: u.count }) : (u.last.type && u.last.type !== "text" ? tN('chat.notifMediaMessage') : (u.last.text || tN('chat.notifNewMessage')))}</p></div>
-                  <span className="text-[10px] text-white/40 flex-shrink-0">{timeAgoShort(u.last.timestamp, tN)}</span>
-                </button>
-              );
-            })}
-            {pendingTransfers.map(tr => (
-              <button key={tr.id} onClick={() => { onOpenDashboard(); setOpen(false); }}
-                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/5 text-left transition-colors">
-                <div className="w-9 h-9 rounded-full bg-amber-500/25 text-amber-300 flex items-center justify-center flex-shrink-0"><MorphIcon icon={Package} className="w-4 h-4" /></div>
-                <div className="flex-1 min-w-0"><p className="text-xs font-semibold text-white">{tN('chat.notifNewTransfer')}</p><p className="text-[11px] text-white/60 truncate">{tr.fromUserName || tN('chat.notifFrom')}{tN('chat.notifPendingApproval')}</p></div>
-              </button>
-            ))}
-            {pendingExpenses.map((e: any) => (
-              <button key={e.id} onClick={() => { onOpenDashboard(); setOpen(false); }}
-                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/5 text-left transition-colors">
-                <div className="w-9 h-9 rounded-full bg-green-500/25 text-green-300 flex items-center justify-center flex-shrink-0"><MorphIcon icon={Wallet} className="w-4 h-4" /></div>
-                <div className="flex-1 min-w-0"><p className="text-xs font-semibold text-white">{tN('chat.notifExpenseApproval')}</p><p className="text-[11px] text-white/60 truncate">{tN('chat.notifNeedApproval')}</p></div>
-              </button>
-            ))}
-          </div>
-          </motion.div>
-        </>
-      )}
-    </div>
-  );
 }
 
 // ─── Add User Modal ────────────────────────────────────────────────────────────
@@ -2752,22 +2658,43 @@ function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSe
     setMediaLoading(false);
   };
   useEffect(() => { loadMedia(); /* eslint-disable-next-line */ }, [project.id]);
-  const handleMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Fayl tanlangach darhol yuklanmaydi — avval ko'rinish + izoh (matn) yozish oynasi chiqadi.
+  const [pendingMedia, setPendingMedia] = useState<{ file: File; preview: string; type: 'image'|'video' } | null>(null);
+  const [pendingCaption, setPendingCaption] = useState("");
+  const [editingCaption, setEditingCaption] = useState<{ id: string; text: string } | null>(null);
+  useEffect(() => () => { if (pendingMedia) URL.revokeObjectURL(pendingMedia.preview); }, [pendingMedia]);
+  const handleMediaUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
+    setPendingCaption("");
+    setPendingMedia({ file, preview: URL.createObjectURL(file), type: file.type.startsWith('video') ? 'video' : 'image' });
+  };
+  const submitPendingMedia = async () => {
+    if (!pendingMedia) return;
     setUploadingMedia(true);
     try {
-      const { url } = await uploadChatMedia(file, file.name);
-      const type = file.type.startsWith('video') ? 'video' : 'image';
+      const { url } = await uploadChatMedia(pendingMedia.file, pendingMedia.file.name);
       const res = await fetch(`${API_BASE}/api/objects/${project.id}/media`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url, type }),
+        body: JSON.stringify({ url, type: pendingMedia.type, caption: pendingCaption.trim() || undefined }),
       });
-      if (res.ok) { const m = await res.json(); setMediaItems(prev => [m, ...prev]); toast.success(t('objectDetail.mediaUploaded')); }
+      if (res.ok) { const m = await res.json(); setMediaItems(prev => [m, ...prev]); toast.success(t('objectDetail.mediaUploaded')); setPendingMedia(null); }
       else toast.error(t('objectDetail.mediaUploadError'));
     } catch { toast.error(t('objectDetail.mediaUploadError')); }
     setUploadingMedia(false);
-    e.target.value = '';
+  };
+  const saveCaption = async () => {
+    if (!editingCaption) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/objects/${project.id}/media/${editingCaption.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ caption: editingCaption.text }),
+      });
+      if (!res.ok) throw new Error();
+      const m = await res.json();
+      setMediaItems(prev => prev.map(x => x.id === m.id ? { ...x, caption: m.caption } : x));
+      setEditingCaption(null);
+    } catch { toast.error(t('common.error')); }
   };
   const handleMediaDelete = async (mediaId: string) => {
     if (!window.confirm(t('objectDetail.confirmMediaDelete'))) return;
@@ -3023,32 +2950,88 @@ function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSe
             <input ref={mediaFileRef} type="file" accept="image/*,video/*" capture="environment" className="hidden" onChange={handleMediaUpload} />
             <button onClick={() => mediaFileRef.current?.click()} disabled={uploadingMedia}
               className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-bold border-2 border-dashed border-border/60 text-muted-foreground hover:border-primary/40 hover:text-primary liquid-transition disabled:opacity-50">
-              {uploadingMedia ? <MorphIcon icon={Loader2} className="w-4 h-4 animate-spin" /> : <MorphIcon icon={Camera} className="w-4 h-4" />}
-              {uploadingMedia ? t('objectDetail.mediaUploading') : t('objectDetail.mediaAddBtn')}
+              <MorphIcon icon={Camera} className="w-4 h-4" />{t('objectDetail.mediaAddBtn')}
             </button>
+            {pendingMedia && (
+              <div className="surface border border-primary/25 rounded-2xl p-3 flex flex-col sm:flex-row gap-3 animate-slide-up-fade">
+                <div className="w-full sm:w-40 h-40 sm:h-32 rounded-xl overflow-hidden bg-black/80 flex-shrink-0">
+                  {pendingMedia.type === 'video'
+                    ? <video src={pendingMedia.preview} className="w-full h-full object-contain" controls playsInline />
+                    : <img src={pendingMedia.preview} alt="" className="w-full h-full object-cover" />}
+                </div>
+                <div className="flex-1 min-w-0 flex flex-col gap-2">
+                  <textarea value={pendingCaption} onChange={e => setPendingCaption(e.target.value.slice(0, 300))} rows={3} autoFocus
+                    placeholder={t('objectDetail.mediaCaptionPh', "Izoh yozing (ixtiyoriy) — nima qilindi, qayerda...")}
+                    className="w-full flex-1 text-sm rounded-xl border border-border bg-background/60 px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-primary/40" />
+                  <div className="flex gap-2">
+                    <button onClick={() => setPendingMedia(null)} disabled={uploadingMedia}
+                      className="flex-1 sm:flex-none h-10 px-4 rounded-xl text-sm font-semibold border border-border hover:bg-muted liquid-transition disabled:opacity-50">{t('common.cancel')}</button>
+                    <button onClick={submitPendingMedia} disabled={uploadingMedia}
+                      className="flex-1 sm:flex-none h-10 px-5 rounded-xl text-sm font-bold bg-primary text-primary-foreground flex items-center justify-center gap-2 hover:opacity-90 liquid-transition disabled:opacity-60">
+                      {uploadingMedia ? <MorphIcon icon={Loader2} className="w-4 h-4 animate-spin" /> : <MorphIcon icon={Send} className="w-4 h-4" />}
+                      {uploadingMedia ? t('objectDetail.mediaUploading') : t('objectDetail.mediaPublish', "Joylash")}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
             {mediaLoading ? (
               <SkeletonList items={3} withAvatar={false} />
             ) : mediaItems.length === 0 ? (
               <div className="text-center py-10 text-muted-foreground animate-pop-in"><MorphIcon icon={Camera} className="w-10 h-10 mx-auto mb-2 opacity-30" /><p className="text-sm md:text-xs">{t('objectDetail.mediaEmpty')}</p></div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {mediaItems.map(m => (
-                  <div key={m.id} className="relative rounded-xl overflow-hidden bg-muted aspect-square group">
-                    {m.type === 'video' ? (
-                      <VideoPlayer src={m.url} compact className="w-full h-full" onExpand={() => openMediaViewer(m.url, 'video')} />
-                    ) : (
-                      <SafeImg src={m.url} className="w-full h-full object-cover cursor-pointer" onClick={() => openMediaViewer(m.url, 'image')} />
-                    )}
-                    <div className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[9px] px-1.5 py-1 flex items-center justify-between">
-                      <span className="truncate">{m.uploadedBy?.name || '—'}</span>
-                      {(m.uploadedBy?.userId === currentUser.id || isAdmin(currentUser.role)) && (
-                        <button onClick={() => handleMediaDelete(m.id)} aria-label={t('common.delete')} className="ml-1 flex-shrink-0 opacity-80 hover:opacity-100">
-                          <MorphIcon icon={Trash2} className="w-3 h-3" />
-                        </button>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+                {mediaItems.map(m => {
+                  const canManage = m.uploadedBy?.userId === currentUser.id || isAdmin(currentUser.role);
+                  const editing = editingCaption?.id === m.id;
+                  return (
+                  <div key={m.id} className="surface border border-border/70 rounded-2xl overflow-hidden flex flex-col">
+                    <button type="button" onClick={() => openMediaViewer(m.url, m.type)} className="relative block w-full aspect-[4/3] bg-muted overflow-hidden group">
+                      {m.type === 'video' ? (
+                        <>
+                          <video src={`${m.url}#t=0.1`} preload="metadata" muted playsInline className="w-full h-full object-cover pointer-events-none" />
+                          <span className="absolute inset-0 flex items-center justify-center bg-black/15">
+                            <span className="w-11 h-11 rounded-full bg-black/55 backdrop-blur-md flex items-center justify-center text-white shadow-lg group-hover:scale-110 liquid-transition">
+                              <svg viewBox="0 0 24 24" className="w-5 h-5 ml-0.5" fill="currentColor"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l11-6.5a1 1 0 0 0 0-1.72l-11-6.5A1 1 0 0 0 8 5.5z"/></svg>
+                            </span>
+                          </span>
+                        </>
+                      ) : (
+                        <SafeImg src={m.url} className="w-full h-full object-cover group-hover:scale-[1.03] liquid-transition" />
                       )}
+                    </button>
+                    <div className="p-2.5 flex-1 flex flex-col gap-1.5 min-w-0">
+                      {editing ? (
+                        <textarea value={editingCaption!.text} autoFocus rows={3}
+                          onChange={e => setEditingCaption({ id: m.id, text: e.target.value.slice(0, 300) })}
+                          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveCaption(); } if (e.key === 'Escape') setEditingCaption(null); }}
+                          className="w-full text-xs rounded-lg border border-border bg-background/60 px-2 py-1.5 resize-none focus:outline-none focus:ring-2 focus:ring-primary/40" />
+                      ) : m.caption ? (
+                        <p className="text-xs text-foreground/85 leading-snug line-clamp-3 break-words whitespace-pre-wrap">{m.caption}</p>
+                      ) : null}
+                      <div className="mt-auto flex items-center gap-1.5 min-w-0">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[11px] font-semibold truncate">{m.uploadedBy?.name || '—'}</p>
+                          <p className="text-[10px] text-muted-foreground">{m.createdAt ? new Date(m.createdAt).toLocaleDateString() : ''}</p>
+                        </div>
+                        {canManage && (editing ? (
+                          <>
+                            <button onClick={() => setEditingCaption(null)} aria-label={t('common.cancel')} className="w-9 h-9 rounded-xl flex items-center justify-center text-muted-foreground hover:bg-muted liquid-transition"><MorphIcon icon={X} className="w-4 h-4" /></button>
+                            <button onClick={saveCaption} aria-label={t('common.save')} className="w-9 h-9 rounded-xl flex items-center justify-center bg-primary text-primary-foreground hover:opacity-90 liquid-transition"><MorphIcon icon={Check} className="w-4 h-4" /></button>
+                          </>
+                        ) : (
+                          <>
+                            <button onClick={() => setEditingCaption({ id: m.id, text: m.caption || '' })} aria-label={t('common.edit')} title={t('common.edit')}
+                              className="w-9 h-9 rounded-xl flex items-center justify-center bg-primary/10 text-primary hover:bg-primary/20 liquid-transition"><MorphIcon icon={Edit} className="w-4 h-4" /></button>
+                            <button onClick={() => handleMediaDelete(m.id)} aria-label={t('common.delete')} title={t('common.delete')}
+                              className="w-9 h-9 rounded-xl flex items-center justify-center bg-red-500/10 text-red-500 hover:bg-red-500/20 liquid-transition"><MorphIcon icon={Trash2} className="w-4 h-4" /></button>
+                          </>
+                        ))}
+                      </div>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -4988,7 +4971,7 @@ export default function App() {
             </button>
           </div>
         </div>
-        <Toaster position="top-center" richColors closeButton/>
+        <AppToaster/>
       </>
     );
   }
@@ -4999,11 +4982,11 @@ export default function App() {
     // shu yerdan chiqarilgan toast() chaqiruvlari (masalan SMS OTP test-rejim
     // kodini ko'rsatish) hech qayerda ko'rinmasdi. Har bir "erta return"
     // filialida o'zining Toaster'i bo'lishi shart.
-    if (tgAutoBusy) return <div className="min-h-screen bg-background flex items-center justify-center"><MorphIcon icon={Loader2} className="w-8 h-8 animate-spin text-primary" /></div>;
+    if (tgAutoBusy) return <BootLoader />;
     return (
       <>
         {(authView === "landing" && !isNative() && !isTelegramMiniApp())
-          ? <Suspense fallback={<div className="min-h-screen bg-background"/>}>
+          ? <Suspense fallback={<BootLoader />}>
               <LandingPage onLogin={()=>setAuthView("login")} onRegister={()=>setAuthView("register")}
                 focus={typeof window !== "undefined" ? SECTION_PATH_TO_FOCUS[window.location.pathname] : undefined}/>
             </Suspense>
@@ -5012,18 +4995,18 @@ export default function App() {
               <RegisterWizard onBack={()=>setAuthView("login")} onDone={(u,company)=>{playSound("success");setCurrentUser(u);setPage("dashboard");setAuthView("login");applyCompany(company);}}/>
             </Suspense>
           : <LoginScreen onLogin={(u,company)=>{playSound("unlock");clearManualLogout();setCurrentUser(u);setPage("dashboard");applyCompany(company);}} onRegister={()=>setAuthView("register")} onBack={(isTelegramMiniApp() || isNative()) ? undefined : ()=>setAuthView("landing")}/>}
-        <Toaster position="top-center" richColors closeButton/>
+        <AppToaster/>
       </>
     );
   }
   // Ilova qulfi — login'dan keyin BIR MARTA PIN o'rnatiladi (majburiy), keyin
   // ilova >1 daq. fondan qaytganda shu PIN (yoki yoqilgan bo'lsa biometrik)
   // so'raladi. Dasturchi panelidan HAM oldin — barcha rollarga bir xil.
-  if (!pinIsSet && pinSyncing) return <div className="min-h-[100dvh] bg-background flex items-center justify-center"><MorphIcon icon={Loader2} className="w-8 h-8 animate-spin text-primary" /></div>;
+  if (!pinIsSet && pinSyncing) return <BootLoader />;
   if (!pinIsSet) return (
     <>
       <PinSetupScreen onDone={() => { markActiveNow(); setPinRefresh(v => v + 1); }} />
-      <Toaster position="top-center" richColors closeButton/>
+      <AppToaster/>
     </>
   );
   if (appLocked && forgotPin) return (
@@ -5036,7 +5019,7 @@ export default function App() {
           localStorage.removeItem("currentUser"); localStorage.removeItem("token");
           setCurrentUser(null); setAuthView("login");
         }} />
-      <Toaster position="top-center" richColors closeButton/>
+      <AppToaster/>
     </>
   );
   if (appLocked) return (
@@ -5048,7 +5031,7 @@ export default function App() {
           localStorage.removeItem("currentUser"); localStorage.removeItem("token");
           setCurrentUser(null); setAuthView("login");
         }} />
-      <Toaster position="top-center" richColors closeButton/>
+      <AppToaster/>
     </>
   );
   // Dasturchi (super-admin) — alohida panel: barcha firmalar va foydalanuvchilar
@@ -5057,7 +5040,7 @@ export default function App() {
       <Suspense fallback={<div className="min-h-screen bg-background"><SkeletonPage variant="dashboard" /></div>}>
         <DeveloperPanel currentUser={liveUser} onLogout={()=>{playSound("lock");setCurrentUser(null);setAuthView("login");}}/>
       </Suspense>
-      <Toaster position="top-center" richColors closeButton/>
+      <AppToaster/>
     </>
   );
   // MUHIM: bular avval initialLoading gate'idan KEYIN hisoblanardi — ya'ni
@@ -5140,7 +5123,7 @@ export default function App() {
           className="btn btn-ghost w-9 h-9 p-0 rounded-full">
           <MorphIcon icon={Lock} className="w-[18px] h-[18px]" />
         </button>
-        <NotificationBell messages={messages} transfers={transfers} expenses={expenses} users={users} currentUser={liveUser}
+        <NotificationCenter messages={messages} transfers={transfers} expenses={expenses} users={users} currentUser={liveUser}
           onOpenChat={()=>{setPage("chat");setSelProject(null);}} onOpenDashboard={()=>{setPage("dashboard");setSelProject(null);}}/>
         <button onClick={cycleThemeMode} title={themeMode==="light"?"Yorug'":themeMode==="dark"?"Qorong'i":"Tizim bo'yicha"}
           aria-label={themeMode==="light"?"Yorug'":themeMode==="dark"?"Qorong'i":"Tizim bo'yicha"}
@@ -5164,7 +5147,7 @@ export default function App() {
         {headerEl}
         <SkeletonPage variant="dashboard" />
       </div>
-      <Toaster position="top-center" richColors closeButton/>
+      <AppToaster/>
     </>
   );
 
@@ -5199,7 +5182,7 @@ export default function App() {
         </motion.div>
       </main>
       <AnnouncementPopup />
-      <Toaster position="top-center" richColors closeButton/>
+      <AppToaster/>
     </>
   );
 
@@ -5510,12 +5493,13 @@ export default function App() {
 
       {/* Offline banner */}
       {(isOffline || syncPending > 0 || syncStatus === 'synced') && (
-        <div className={`flex items-center justify-center gap-2 px-4 py-1.5 text-xs font-medium flex-shrink-0 transition-colors
-          ${isOffline ? 'bg-destructive/90 text-white' :
-            syncStatus === 'synced' ? 'bg-green-600/90 text-white' :
-            'bg-amber-500/90 text-white'}`}>
+        <div className="flex justify-center px-3 pt-1.5 flex-shrink-0 pointer-events-none">
+        <div role="status" className={`sync-pill pointer-events-auto inline-flex items-center gap-2 max-w-full px-3.5 py-1.5 rounded-full text-[11px] sm:text-xs font-semibold border backdrop-blur-xl shadow-lg transition-colors
+          ${isOffline ? 'bg-red-500/15 text-red-600 dark:text-red-300 border-red-500/30' :
+            syncStatus === 'synced' ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30' :
+            'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30'}`}>
           {isOffline ? (
-            <><MorphIcon icon={WifiOff} className="w-3.5 h-3.5" /><span>{tApp('sync.offline')}</span></>
+            <><MorphIcon icon={WifiOff} className="w-3.5 h-3.5 flex-shrink-0" /><span className="truncate">{tApp('sync.offline')}</span></>
           ) : syncStatus === 'syncing' ? (
             <><MorphIcon icon={Loader2} className="w-3.5 h-3.5 animate-spin" /><span>{tApp('sync.syncing')}</span></>
           ) : syncStatus === 'synced' ? (
@@ -5523,6 +5507,7 @@ export default function App() {
           ) : (
             <><MorphIcon icon={AlertCircle} className="w-3.5 h-3.5" /><span>{tApp('sync.pending', { count: syncPending })}</span></>
           )}
+        </div>
         </div>
       )}
 
@@ -5849,7 +5834,7 @@ export default function App() {
       <AnnouncementPopup />
 
       {/* Bildirishnoma toast'lari */}
-      <Toaster position="top-center" richColors closeButton/>
+      <AppToaster/>
     </div>
   );
 }

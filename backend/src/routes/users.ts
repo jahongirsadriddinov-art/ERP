@@ -4,6 +4,17 @@ import { scoped } from '../middleware/scope';
 import { getTenant } from '../middleware/tenantContext';
 import { emitToUser } from '../services/socket';
 import { logAudit } from '../services/audit';
+import { getBackendUrl } from '../utils/backendUrl';
+
+// Profil rasmi faqat o'zimizning yuklash yo'li (/api/messages/upload) qaytargan manzil bo'lishi shart —
+// Cloudinary yoki shu backend'ning /uploads/ papkasi. Tashqi ixtiyoriy havola qabul qilinmaydi.
+function isAllowedAvatarUrl(url: string): boolean {
+  try {
+    const u = new URL(url);
+    if (u.protocol !== 'https:' && u.protocol !== 'http:') return false;
+    return u.hostname === 'res.cloudinary.com' || u.hostname === new URL(getBackendUrl()).hostname;
+  } catch { return false; }
+}
 
 const router = Router();
 
@@ -21,6 +32,7 @@ router.get('/', async (req, res) => {
       phone: u.phone,
       role: u.role,
       brigade: u.brigade,
+      avatar: u.avatar || undefined,
       projectIds: u.projectIds || [],
       companyId: u.companyId || null, // dasturchi qaysi firma ekanini ko'rishi uchun
       isOwner: u.isOwner || false,
@@ -46,7 +58,7 @@ router.put('/:id', async (req, res) => {
         tenant?.role !== 'direktor' && tenant?.role !== 'orinbosar') {
       return res.status(403).json({ error: 'Ruxsat yo\'q' });
     }
-    const { firstName, lastName, companyId, language } = req.body;
+    const { firstName, lastName, companyId, language, avatar } = req.body;
     const user = await User.findOne(scoped({ _id: req.params.id }));
     if (!user) return res.status(404).json({ error: 'Foydalanuvchi topilmadi' });
 
@@ -57,6 +69,11 @@ router.put('/:id', async (req, res) => {
     // Oddiy tenant o'zini boshqa firmaga "ko'chira olmaydi" (privilege escalation yo'q).
     if (companyId !== undefined && getTenant()?.isDeveloper) {
       user.companyId = companyId || undefined;
+    }
+    if (avatar !== undefined) {
+      if (avatar === '' || avatar === null) user.avatar = undefined;
+      else if (typeof avatar === 'string' && avatar.length <= 1000 && isAllowedAvatarUrl(avatar)) user.avatar = avatar;
+      else return res.status(400).json({ error: "Rasm manzili noto'g'ri" });
     }
     let languageChanged = false;
     if (language && ['uz', 'uz-cyrl', 'ru'].includes(language) && language !== user.language) {
@@ -74,6 +91,7 @@ router.put('/:id', async (req, res) => {
       phone: user.phone,
       role: user.role,
       brigade: user.brigade,
+      avatar: user.avatar || undefined,
       companyId: user.companyId || null,
       language: user.language || 'uz'
     });

@@ -6,8 +6,15 @@ import App, { ClientViewPage } from "./app/App.tsx";
 import UpdateChecker from "./app/UpdateChecker.tsx";
 import MediaViewer from "./app/MediaViewer.tsx";
 import { installErrorReporting } from "./app/lib/monitoring";
+import { installLegacyColorFallback, installDvhFallback } from "./app/lib/legacyCss";
+import { applyAppFont } from "./app/lib/fonts";
 
 installErrorReporting();
+// Eski Android WebView (Chrome < 111): ranglar va ekran balandligi uchun moslik
+installDvhFallback();
+installLegacyColorFallback();
+// Profilda tanlangan shrift (qurilmada saqlanadi) — birinchi chizishdan oldin
+applyAppFont();
 import { ErrorBoundary } from "./app/ErrorBoundary.tsx";
 import { API_BASE } from "./app/api.ts";
 import "./app/i18n";
@@ -68,6 +75,8 @@ if ('serviceWorker' in navigator) {
       const setupPush = async () => {
         const token = localStorage.getItem('token');
         if (!token) return;
+        // Android WebView (APK) va ba'zi brauzerlarda Web Notification / Push API umuman yo'q
+        if (!('Notification' in window) || !('PushManager' in window)) return;
 
         // Permission already denied — skip
         if (Notification.permission === 'denied') return;

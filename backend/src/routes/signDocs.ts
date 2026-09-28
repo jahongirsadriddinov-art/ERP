@@ -14,7 +14,7 @@ export const publicSignRouter = Router();
 const TYPES = ['shartnoma', 'akt', 'nakladnoy'] as const;
 const TITLES: Record<string, string> = { shartnoma: 'Pudrat shartnomasi', akt: 'Bajarilgan ishlar dalolatnomasi', nakladnoy: 'Yuk xati (nakladnoy)' };
 const PREFIX: Record<string, string> = { shartnoma: 'SH', akt: 'AKT', nakladnoy: 'YX' };
-const MAX_SIG_BYTES = 250_000;
+const MAX_SIG_BYTES = 400_000; // chizilgan yoki yuklangan (kichraytirilgan) imzo/pechat rasmi
 const MAX_DATA_BYTES = 200_000;
 
 async function canManage(): Promise<{ ok: boolean; user?: any }> {
@@ -24,7 +24,10 @@ async function canManage(): Promise<{ ok: boolean; user?: any }> {
   return { ok: !!u && (u.isOwner || ['direktor', 'orinbosar', 'prorab'].includes(u.role)), user: u };
 }
 const validSignature = (image: unknown) =>
-  typeof image === 'string' && /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(image) && image.length <= MAX_SIG_BYTES;
+  typeof image === 'string' && /^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(image) && image.length <= MAX_SIG_BYTES;
+// Pechat ixtiyoriy: berilmagan bo'lsa undefined, berilgan-u noto'g'ri bo'lsa false
+const parseStamp = (stamp: unknown): string | undefined | false =>
+  stamp === undefined || stamp === null || stamp === '' ? undefined : validSignature(stamp) ? String(stamp) : false;
 // Faqat oddiy JSON (satr/son/massiv/obyekt) — hajmi cheklangan
 const cleanData = (d: unknown) => {
   if (!d || typeof d !== 'object') return {};
@@ -96,10 +99,12 @@ router.post('/:id/sign', async (req, res) => {
   if (!ok) return res.status(403).json({ error: "Ruxsat yo'q" });
   const { name, image } = req.body || {};
   if (!name || typeof name !== 'string' || !validSignature(image)) return res.status(400).json({ error: "Ism va imzo kerak" });
+  const stamp = parseStamp(req.body?.stamp);
+  if (stamp === false) return res.status(400).json({ error: "Pechat rasmi noto'g'ri yoki juda katta" });
   const doc: any = await SignedDoc.findOne(scoped({ _id: req.params.id }));
   if (!doc) return res.status(404).json({ error: 'Topilmadi' });
   if (doc.signatures.some((s: any) => s.side === 'executor')) return res.status(409).json({ error: 'Bu tomon allaqachon imzolagan' });
-  doc.signatures.push({ side: 'executor', name: name.trim().slice(0, 120), image, signedAt: new Date(), userId: getTenant()!.userId, ip: req.ip });
+  doc.signatures.push({ side: 'executor', name: name.trim().slice(0, 120), image, stamp, signedAt: new Date(), userId: getTenant()!.userId, ip: req.ip });
   doc.status = recomputeStatus(doc.signatures);
   await doc.save();
   res.json({ ...doc.toObject(), id: doc._id });
@@ -133,17 +138,19 @@ publicSignRouter.get('/sign/:token', async (req, res) => {
   const d: any = await SignedDoc.findOne({ shareToken: req.params.token }).select('type number title data status signatures createdAt').lean();
   if (!d) return res.status(404).json({ error: 'Topilmadi' });
   res.json({ type: d.type, number: d.number, title: d.title, data: d.data, status: d.status, createdAt: d.createdAt,
-    signatures: (d.signatures || []).map((s: any) => ({ side: s.side, name: s.name, image: s.image, signedAt: s.signedAt })) });
+    signatures: (d.signatures || []).map((s: any) => ({ side: s.side, name: s.name, image: s.image, stamp: s.stamp, signedAt: s.signedAt })) });
 });
 publicSignRouter.post('/sign/:token', async (req, res) => {
   if (!checkRate(`pubsign-post:${req.ip}`, 10, 10 * 60 * 1000).allowed) return res.status(429).json({ error: "Juda ko'p urinish" });
   if (!TOKEN_RE.test(req.params.token)) return res.status(404).json({ error: 'Topilmadi' });
   const { name, image } = req.body || {};
   if (!name || typeof name !== 'string' || name.trim().length < 2 || !validSignature(image)) return res.status(400).json({ error: "Ism va imzo kerak" });
+  const stamp = parseStamp(req.body?.stamp);
+  if (stamp === false) return res.status(400).json({ error: "Pechat rasmi noto'g'ri yoki juda katta" });
   const doc: any = await SignedDoc.findOne({ shareToken: req.params.token });
   if (!doc) return res.status(404).json({ error: 'Topilmadi' });
   if (doc.signatures.some((s: any) => s.side === 'customer')) return res.status(409).json({ error: 'Hujjat allaqachon imzolangan' });
-  doc.signatures.push({ side: 'customer', name: name.trim().slice(0, 120), image, signedAt: new Date(), ip: req.ip });
+  doc.signatures.push({ side: 'customer', name: name.trim().slice(0, 120), image, stamp, signedAt: new Date(), ip: req.ip });
   doc.status = recomputeStatus(doc.signatures);
   await doc.save();
   // Firma rahbarlariga xabar

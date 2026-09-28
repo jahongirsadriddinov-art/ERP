@@ -13,9 +13,32 @@ import { createUISFX, type CueName, type PlayOptions, type UISFXPlayer } from "u
 
 const PREFERENCES_KEY = "qurilisherp:sound";
 
+// "zen" paketi juda past eshitilardi (ayniqsa telefon karnayida). Kutubxona barcha ovozlarni
+// `ctx.destination`ga ulaydi — o'z kontekstimizni beramiz va uning `destination`ini
+// KUCHAYTIRGICH (gain) + SIQGICH (compressor, xirillamasligi uchun) zanjiriga almashtiramiz.
+function createBoostedContext(): AudioContext | undefined {
+  try {
+    if (typeof window === "undefined") return undefined;
+    const AC: typeof AudioContext | undefined = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AC) return undefined;
+    const ctx = new AC({ latencyHint: "interactive" });
+    const comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -14; comp.knee.value = 8; comp.ratio.value = 10; comp.attack.value = 0.002; comp.release.value = 0.12;
+    const boost = ctx.createGain();
+    boost.gain.value = 3.2;
+    boost.connect(comp);
+    comp.connect(ctx.destination);
+    Object.defineProperty(ctx, "destination", { value: boost, configurable: true });
+    return ctx;
+  } catch {
+    return undefined;
+  }
+}
+
 export const sfx: UISFXPlayer = createUISFX({
   pack: "zen",
-  volume: 0.55,
+  volume: 0.8,
+  context: createBoostedContext(),
   // pack/volume/enabled — localStorage'da saqlanadi, foydalanuvchi
   // tanlovi sahifa yangilansa ham, qurilma qayta ochilsa ham saqlanadi.
   preferences: { key: PREFERENCES_KEY },

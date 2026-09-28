@@ -15,10 +15,13 @@
     "cap:run:android": "cap run android"
   },
   "dependencies": {
+    "@capacitor/app": "^7.1.2",
     "@capacitor/browser": "^7.0.5",
     "@capacitor/filesystem": "^7.1.8",
+    "@capacitor/haptics": "^7.0.5",
     "@capacitor/ios": "^7.6.8",
     "@capacitor/share": "^7.0.4",
+    "@capacitor/status-bar": "^7.0.6",
     "@emotion/react": "11.14.0",
     "@emotion/styled": "11.14.1",
     "@hugeicons/core-free-icons": "^4.3.4",
@@ -96,15 +99,12 @@
   },
   "optionalDependencies": {
     "@capacitor/android": "^7.6.8",
-    "@capacitor/app": "^7.1.2",
     "@capacitor/camera": "^7.0.5",
     "@capacitor/cli": "^7.6.8",
     "@capacitor/core": "^7.6.8",
     "@capacitor/geolocation": "^7.1.8",
-    "@capacitor/haptics": "^7.0.5",
     "@capacitor/local-notifications": "^7.0.7",
     "@capacitor/push-notifications": "^7.0.7",
-    "@capacitor/status-bar": "^7.0.6",
     "@tauri-apps/api": "^2.0.0",
     "@tauri-apps/plugin-notification": "^2.0.0"
   },

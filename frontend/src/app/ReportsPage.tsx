@@ -360,10 +360,12 @@ export default function ReportsPage({ projects, expenses, incomes, users }:
         </div>
 
         {/* Batafsil jadval */}
-        <Card title={t('reports.detailedTable')} delay={0.18} className="!p-0 overflow-hidden"
-          right={undefined}>
-          <div className="flex items-center justify-between px-4 pb-2 -mt-1">
-            <span className="text-xs text-muted-foreground">{tableRows.length} {t('reports.ops', { defaultValue: "ta amal" })}</span>
+        <Card delay={0.18} className="!p-0 overflow-hidden">
+          <div className="flex items-center justify-between gap-3 px-4 pt-4 pb-3">
+            <div>
+              <p className="text-sm font-semibold font-['Roboto_Slab',serif]">{t('reports.detailedTable')}</p>
+              <span className="text-xs text-muted-foreground">{tableRows.length} {t('reports.ops', { defaultValue: "ta amal" })}</span>
+            </div>
             <div className="flex gap-1">
               {(["date", "amount"] as const).map(k => (
                 <button key={k} onClick={() => setSortBy(k)} className={`text-[11px] px-2.5 py-1 rounded-full border ${sortBy === k ? "bg-primary/10 border-primary/40 text-primary" : "border-border text-muted-foreground"}`}>

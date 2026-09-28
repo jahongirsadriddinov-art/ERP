@@ -52,12 +52,16 @@ export default function MediaViewer() {
           <MorphIcon icon={X} className="w-5 h-5" />
         </button>
       </div>
-      <div className={`w-full h-full flex items-center justify-center ${zoom ? "overflow-auto" : "overflow-hidden"}`} onClick={e => e.stopPropagation()}>
+      {/* Rasm/video atrofidagi bo'sh joyga bosilsa — ko'ruvchi yopiladi (X shart emas) */}
+      <div className={`w-full h-full flex items-center justify-center p-3 sm:p-8 ${zoom ? "overflow-auto" : "overflow-hidden"}`}
+        onClick={e => { if (e.target === e.currentTarget) setMedia(null); else e.stopPropagation(); }}>
         {media.type === "video" ? (
-          <VideoPlayer src={media.url} autoPlay className="w-full h-full max-w-5xl max-h-full" />
+          <div className="w-[94vw] max-w-5xl aspect-video max-h-[85vh]" onClick={e => e.stopPropagation()}>
+            <VideoPlayer src={media.url} autoPlay className="w-full h-full" />
+          </div>
         ) : (
-          <img src={media.url} alt="" onClick={() => setZoom(z => !z)}
-            className={zoom ? "max-w-none cursor-zoom-out" : "max-w-full max-h-full object-contain cursor-zoom-in"} />
+          <img src={media.url} alt="" onClick={e => { e.stopPropagation(); setZoom(z => !z); }}
+            className={zoom ? "max-w-none cursor-zoom-out" : "max-w-full max-h-full object-contain cursor-zoom-in rounded-lg shadow-2xl"} />
         )}
       </div>
     </div>,

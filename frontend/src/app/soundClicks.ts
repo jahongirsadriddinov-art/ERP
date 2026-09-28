@@ -37,6 +37,11 @@ const CLICKABLE_SELECTOR = [
   '[role="switch"]',
   'input[type="checkbox"]',
   'input[type="radio"]',
+  // Bosiladigan kartalar/qatorlar (div onClick) va boshqa boshqaruv elementlari ham
+  "summary",
+  "select",
+  "label[for]",
+  ".cursor-pointer",
 ].join(", ");
 
 function isDisabled(el: HTMLElement): boolean {

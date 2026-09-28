@@ -114,12 +114,29 @@ function bestVoiceOf(candidates: SpeechSynthesisVoice[]): SpeechSynthesisVoice |
   };
   return [...candidates].sort((a, b) => score(b) - score(a))[0];
 }
+// O'zbek lotin imlosini turkcha ovoz to'g'ri talaffuz qiladigan ko'rinishga o'tkazish:
+// sh→ş, ch→ç, oʻ/gʻ → o/g (tutuq belgisi olib tashlanadi), q→k, x→h, j→c (turkcha c = oʻzbekcha j).
+export function uzForTurkishVoice(text: string): string {
+  const map: [RegExp, string][] = [
+    [/SH/g, 'Ş'], [/Sh/g, 'Ş'], [/sh/g, 'ş'],
+    [/CH/g, 'Ç'], [/Ch/g, 'Ç'], [/ch/g, 'ç'],
+    [/q/g, 'k'], [/Q/g, 'K'],
+    [/x/g, 'h'], [/X/g, 'H'],
+    [/j/g, 'c'], [/J/g, 'C'],
+    [/[\u2018\u2019'`ʻʼ]/g, ''],
+  ];
+  let out = text;
+  for (const [re, rep] of map) out = out.replace(re, rep as any);
+  return out;
+}
 function pickVoice(target: 'uz' | 'ru'): SpeechSynthesisVoice | undefined {
   const voices = loadVoices();
   if (!voices.length) return undefined;
   const byPrefix = (p: string) => bestVoiceOf(voices.filter(v => v.lang.toLowerCase().startsWith(p)));
   if (target === 'ru') return byPrefix('ru') || byPrefix('uz') || byPrefix('tr');
-  return byPrefix('uz') || byPrefix('ru') || byPrefix('tr');
+  // "aksenti g'alati" — ruscha/inglizcha ovoz o'zbekcha lotin matnni buzib o'qiydi. O'zbekcha ovoz
+  // bo'lmasa TURKCHA ovoz olinadi: lotin yozuvi va talaffuzi o'zbekchaga eng yaqin (sh, ch, q, o', g').
+  return byPrefix('uz') || byPrefix('tr') || byPrefix('az') || byPrefix('kk');
 }
 
 export default function AIAssistant({ currentUser, users, token, open, onClose, onUserAdded, onUserDeleted, onUserUpdated }:
@@ -192,15 +209,17 @@ export default function AIAssistant({ currentUser, users, token, open, onClose, 
     if (!speechSynthesisSupported) return;
     window.speechSynthesis.cancel();
     if (speakingIdx === idx) { setSpeakingIdx(null); return; }
-    const utter = new SpeechSynthesisUtterance(text.replace(/[✅⚠️❌]/g, ''));
     const target = i18n.language?.startsWith('ru') ? 'ru' : 'uz';
     const voice = pickVoice(target);
+    const clean = text.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu, '').replace(/[*_#`>|]/g, ' ');
+    const spoken = target === 'uz' && voice && !voice.lang.toLowerCase().startsWith('uz') ? uzForTurkishVoice(clean) : clean;
+    const utter = new SpeechSynthesisUtterance(spoken);
     if (voice) { utter.voice = voice; utter.lang = voice.lang; } else { utter.lang = speechLang; }
     // "ovozi juda past" — volume standart bo'yicha 1.0 bo'lishi kerak, lekin
     // ba'zi WebView/qurilmalarda aniq ko'rsatilmasa pastroq chiqadi, shu
     // sabab MAKSIMAL qiymatni majburan belgilaymiz.
     utter.volume = 1;
-    utter.rate = 1;
+    utter.rate = target === 'uz' ? 0.95 : 1;
     utter.pitch = 1;
     utter.onend = () => setSpeakingIdx(null);
     utter.onerror = () => setSpeakingIdx(null);
@@ -423,20 +442,24 @@ export default function AIAssistant({ currentUser, users, token, open, onClose, 
               </div>
               <p className="text-sm font-semibold text-foreground mb-1">{t('ai.title')}</p>
               <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-line mb-4">{greeting}</p>
-              <div className="flex flex-col gap-2 max-w-[260px] mx-auto">
-                {[
-                  { icon: UserGroup, label: t('ai.hints.employeeList') },
-                  { icon: UserPlus, label: t('ai.hints.addEmployee') },
-                  { icon: MessageIcon, label: t('ai.hints.sendMessage') },
-                  { icon: CalendarIcon, label: t('ai.hints.todayTasks') },
-                ].map(({ icon, label }) => (
-                  <button key={label} onClick={() => { setInput(label); inputRef.current?.focus(); }}
-                    className="ai-glass-bubble flex items-center gap-2.5 text-[12px] px-3.5 py-2.5 rounded-2xl hover:bg-muted/40 transition-colors font-medium text-left">
-                    <span className="w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0"
-                      style={{ background: 'color-mix(in srgb, var(--primary) 14%, transparent)' }}>
-                      <MorphIcon icon={icon} className="w-3.5 h-3.5" style={{ color: 'var(--primary)' }} />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-[520px] mx-auto text-left">
+                {([
+                  { emoji: "👥", grad: "from-sky-400/25 to-blue-500/25", label: t('ai.hints.employeeList'), q: t('ai.hints.employeeList'), fill: true },
+                  { emoji: "🧑‍💼", grad: "from-emerald-400/25 to-teal-500/25", label: t('ai.hints.addEmployee'), q: t('ai.hints.addEmployee'), fill: true },
+                  { emoji: "💬", grad: "from-violet-400/25 to-fuchsia-500/25", label: t('ai.hints.sendMessage'), q: t('ai.hints.sendMessage'), fill: true },
+                  { emoji: "🗓️", grad: "from-amber-400/25 to-orange-500/25", label: t('ai.hints.todayTasks'), q: t('ai.hints.todayTasks'), fill: true },
+                  { emoji: "📊", grad: "from-indigo-400/25 to-purple-500/25", label: t('ai.qMonthlyL', { defaultValue: "Oylik xulosa" }), q: t('ai.qMonthly', { defaultValue: "📊 Oylik xulosa" }) },
+                  { emoji: "🚨", grad: "from-rose-400/25 to-red-500/25", label: t('ai.qAnomaliesL', { defaultValue: "G'ayrioddiy chiqimlar" }), q: t('ai.qAnomalies', { defaultValue: "⚠️ G'ayrioddiy chiqimlar" }) },
+                  { emoji: "💰", grad: "from-yellow-300/30 to-amber-500/25", label: t('ai.qBudgetL', { defaultValue: "Byudjet holati" }), q: t('ai.qBudget', { defaultValue: "💰 Byudjet holati" }) },
+                  { emoji: "💡", grad: "from-lime-300/30 to-green-500/25", label: t('ai.qSaveL', { defaultValue: "Qayerda tejash mumkin?" }), q: t('ai.qSave', { defaultValue: "💡 Qayerda tejash mumkin?" }) },
+                ] as { emoji: string; grad: string; label: string; q: string; fill?: boolean }[]).map(({ emoji, grad, label, q, fill }) => (
+                  <button key={label} onClick={() => { if (fill) { setInput(q); inputRef.current?.focus(); } else send(q); }}
+                    className="ai-glass-bubble group flex items-center gap-3 text-[13px] px-3 py-2.5 rounded-2xl hover:bg-muted/40 hover:-translate-y-0.5 liquid-transition font-medium">
+                    <span className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 bg-gradient-to-br ${grad} ring-1 ring-white/20 shadow-sm text-[19px] leading-none group-hover:scale-110 liquid-transition`}
+                      style={{ fontFamily: '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif' }} aria-hidden>
+                      {emoji}
                     </span>
-                    {label}
+                    <span className="min-w-0 truncate">{label}</span>
                   </button>
                 ))}
               </div>
@@ -518,22 +541,6 @@ export default function AIAssistant({ currentUser, users, token, open, onClose, 
 
         {/* Input — suzuvchi "pill" panel + ovozli kiritish tugmasi */}
         <div className="px-3 pb-3 pt-2 flex-shrink-0">
-          {/* Moliyaviy tahlil — bir bosishda (AI firma chiqimlari/byudjetlarini ko'radi) */}
-          {!loading && !pending && (
-            <div className="flex gap-1.5 overflow-x-auto scrollbar-hide mb-2 -mx-1 px-1">
-              {[
-                t('ai.qMonthly', { defaultValue: "📊 Oylik xulosa" }),
-                t('ai.qAnomalies', { defaultValue: "⚠️ G'ayrioddiy chiqimlar" }),
-                t('ai.qBudget', { defaultValue: "💰 Byudjet holati" }),
-                t('ai.qSave', { defaultValue: "💡 Qayerda tejash mumkin?" }),
-              ].map(q => (
-                <button key={q} onClick={() => send(q)}
-                  className="flex-shrink-0 text-[12px] font-medium px-3 py-1.5 rounded-full border border-border bg-card/70 hover:border-primary/50 hover:text-primary liquid-transition whitespace-nowrap">
-                  {q}
-                </button>
-              ))}
-            </div>
-          )}
           {listening && (
             <div className="flex items-center justify-center gap-1 mb-2">
               {[0,1,2,3,4].map(i => (

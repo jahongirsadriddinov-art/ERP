@@ -384,6 +384,26 @@ router.post('/:id/media', async (req, res) => {
   }
 });
 
+// PATCH /api/objects/:id/media/:mediaId — rasm/video ostidagi izohni tahrirlash
+// (yuklagan xodimning o'zi yoki direktor/o'rinbosar).
+router.patch('/:id/media/:mediaId', async (req, res) => {
+  try {
+    const t = getTenant();
+    if (!t?.userId) return res.status(401).json({ error: 'Autentifikatsiya talab etiladi' });
+    const media = await ProjectMedia.findOne(scoped({ _id: req.params.mediaId, objectId: req.params.id }));
+    if (!media) return res.status(404).json({ error: 'Topilmadi' });
+    const isOwner = String(media.uploadedBy?.userId) === String(t.userId);
+    const isBoss = t.role === 'direktor' || t.role === 'orinbosar';
+    if (!isOwner && !isBoss) return res.status(403).json({ error: 'Faqat yuklagan xodim yoki admin tahrirlay oladi' });
+    const caption = typeof req.body?.caption === 'string' ? req.body.caption.trim().slice(0, 300) : '';
+    media.caption = caption || undefined;
+    await media.save();
+    res.json({ id: media._id, type: media.type, url: media.url, caption: media.caption, uploadedBy: media.uploadedBy, createdAt: media.createdAt });
+  } catch (err) {
+    res.status(500).json({ error: 'Server xatoligi' });
+  }
+});
+
 // DELETE /api/objects/:id/media/:mediaId — faqat yuklagan xodimning o'zi
 // yoki direktor/orinbosar o'chira oladi.
 router.delete('/:id/media/:mediaId', async (req, res) => {

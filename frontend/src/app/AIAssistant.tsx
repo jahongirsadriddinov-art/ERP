@@ -16,6 +16,7 @@ import MicOff from "@hugeicons/core-free-icons/MicOff01Icon";
 import VolumeHigh from "@hugeicons/core-free-icons/VolumeHighIcon";
 import HistoryIcon from "@hugeicons/core-free-icons/Clock01Icon";
 import PlusIcon from "@hugeicons/core-free-icons/Add01Icon";
+import { PremiumEmoji } from "./components/PremiumEmoji";
 import { MorphIcon } from "morphicons/react";
 import { useTranslation } from "react-i18next";
 import { API_BASE } from "./api";
@@ -154,6 +155,7 @@ export default function AIAssistant({ currentUser, users, token, open, onClose, 
   const [pending, setPending] = useState<{ action: AiAction; response: string } | null>(null);
   const [listening, setListening] = useState(false);
   const [speakingIdx, setSpeakingIdx] = useState<number | null>(null);
+  const [hoverChip, setHoverChip] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<any>(null);
@@ -444,22 +446,22 @@ export default function AIAssistant({ currentUser, users, token, open, onClose, 
               <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-line mb-4">{greeting}</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-[520px] mx-auto text-left">
                 {([
-                  { emoji: "👥", grad: "from-sky-400/25 to-blue-500/25", label: t('ai.hints.employeeList'), q: t('ai.hints.employeeList'), fill: true },
-                  { emoji: "🧑‍💼", grad: "from-emerald-400/25 to-teal-500/25", label: t('ai.hints.addEmployee'), q: t('ai.hints.addEmployee'), fill: true },
-                  { emoji: "💬", grad: "from-violet-400/25 to-fuchsia-500/25", label: t('ai.hints.sendMessage'), q: t('ai.hints.sendMessage'), fill: true },
-                  { emoji: "🗓️", grad: "from-amber-400/25 to-orange-500/25", label: t('ai.hints.todayTasks'), q: t('ai.hints.todayTasks'), fill: true },
-                  { emoji: "📊", grad: "from-indigo-400/25 to-purple-500/25", label: t('ai.qMonthlyL', { defaultValue: "Oylik xulosa" }), q: t('ai.qMonthly', { defaultValue: "📊 Oylik xulosa" }) },
-                  { emoji: "🚨", grad: "from-rose-400/25 to-red-500/25", label: t('ai.qAnomaliesL', { defaultValue: "G'ayrioddiy chiqimlar" }), q: t('ai.qAnomalies', { defaultValue: "⚠️ G'ayrioddiy chiqimlar" }) },
-                  { emoji: "💰", grad: "from-yellow-300/30 to-amber-500/25", label: t('ai.qBudgetL', { defaultValue: "Byudjet holati" }), q: t('ai.qBudget', { defaultValue: "💰 Byudjet holati" }) },
-                  { emoji: "💡", grad: "from-lime-300/30 to-green-500/25", label: t('ai.qSaveL', { defaultValue: "Qayerda tejash mumkin?" }), q: t('ai.qSave', { defaultValue: "💡 Qayerda tejash mumkin?" }) },
-                ] as { emoji: string; grad: string; label: string; q: string; fill?: boolean }[]).map(({ emoji, grad, label, q, fill }) => (
+                  { emoji: "👥", code: "1f465", anim: false, grad: "from-sky-400/50 to-blue-500/40", label: t('ai.hints.employeeList'), q: t('ai.hints.employeeList'), fill: true },
+                  { emoji: "👋", code: "1f44b", anim: true, grad: "from-emerald-400/50 to-teal-500/40", label: t('ai.hints.addEmployee'), q: t('ai.hints.addEmployee'), fill: true },
+                  { emoji: "💬", code: "1f4ac", anim: true, grad: "from-violet-400/50 to-fuchsia-500/40", label: t('ai.hints.sendMessage'), q: t('ai.hints.sendMessage'), fill: true },
+                  { emoji: "🗓️", code: "1f4c5", anim: false, grad: "from-amber-400/50 to-orange-500/40", label: t('ai.hints.todayTasks'), q: t('ai.hints.todayTasks'), fill: true },
+                  { emoji: "📊", code: "1f4ca", anim: true, grad: "from-indigo-400/50 to-purple-500/40", label: t('ai.qMonthlyL', { defaultValue: "Oylik xulosa" }), q: t('ai.qMonthly', { defaultValue: "📊 Oylik xulosa" }) },
+                  { emoji: "🚨", code: "1f6a8", anim: true, grad: "from-rose-400/50 to-red-500/40", label: t('ai.qAnomaliesL', { defaultValue: "G'ayrioddiy chiqimlar" }), q: t('ai.qAnomalies', { defaultValue: "⚠️ G'ayrioddiy chiqimlar" }) },
+                  { emoji: "💰", code: "1f4b0", anim: false, grad: "from-yellow-300/50 to-amber-500/40", label: t('ai.qBudgetL', { defaultValue: "Byudjet holati" }), q: t('ai.qBudget', { defaultValue: "💰 Byudjet holati" }) },
+                  { emoji: "💡", code: "1f4a1", anim: true, grad: "from-lime-300/50 to-green-500/40", label: t('ai.qSaveL', { defaultValue: "Qayerda tejash mumkin?" }), q: t('ai.qSave', { defaultValue: "💡 Qayerda tejash mumkin?" }) },
+                ] as { emoji: string; code: string; anim: boolean; grad: string; label: string; q: string; fill?: boolean }[]).map(({ emoji, code, anim, grad, label, q, fill }) => (
                   <button key={label} onClick={() => { if (fill) { setInput(q); inputRef.current?.focus(); } else send(q); }}
-                    className="ai-glass-bubble group flex items-center gap-3 text-[13px] px-3 py-2.5 rounded-2xl hover:bg-muted/40 hover:-translate-y-0.5 liquid-transition font-medium">
-                    <span className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 bg-gradient-to-br ${grad} ring-1 ring-white/20 shadow-sm text-[19px] leading-none group-hover:scale-110 liquid-transition`}
-                      style={{ fontFamily: '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif' }} aria-hidden>
-                      {emoji}
+                    onPointerEnter={() => setHoverChip(label)} onPointerLeave={() => setHoverChip(null)} onFocus={() => setHoverChip(label)} onBlur={() => setHoverChip(null)}
+                    className="ai-glass-bubble group flex items-center gap-3 text-[13px] pl-2 pr-3 py-2 rounded-2xl hover:bg-muted/40 hover:-translate-y-0.5 liquid-transition font-semibold text-left">
+                    <span className={`ai-emoji-tile relative w-11 h-11 rounded-[14px] flex items-center justify-center flex-shrink-0 bg-gradient-to-br ${grad} group-hover:scale-105 liquid-transition`}>
+                      <PremiumEmoji code={code} char={emoji} animated={anim} active={hoverChip === label} className="w-7 h-7 relative z-[1]" />
                     </span>
-                    <span className="min-w-0 truncate">{label}</span>
+                    <span className="min-w-0 line-clamp-2 leading-snug">{label}</span>
                   </button>
                 ))}
               </div>

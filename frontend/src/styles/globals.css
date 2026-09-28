@@ -657,3 +657,14 @@ textarea {
 }
 /* Sinxron holati (offline) — kichik shaffof pill */
 .sync-pill { -webkit-backdrop-filter: blur(16px) saturate(1.6); backdrop-filter: blur(16px) saturate(1.6); }
+
+/* AI yordamchi — premium emoji plitkasi (shisha, ichki yorug'lik) */
+.ai-emoji-tile {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), inset 0 -8px 16px rgba(0, 0, 0, 0.12), 0 6px 16px -6px rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+.ai-emoji-tile::before {
+  content: ""; position: absolute; inset: 1px; border-radius: 13px;
+  background: radial-gradient(120% 80% at 30% 0%, rgba(255, 255, 255, 0.35), transparent 55%);
+  pointer-events: none;
+}

@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { API_BASE } from "./api";
 import { saveOrShareBlob } from "./platform";
 import { canvasesToPdf } from "./lib/pdf";
-import { TEMPLATES, DocType, SignDoc, Row, renderDoc, rowsTotal, money, docTextBlocks, TextBlock } from "./docTemplates";
+import { TEMPLATES, DocType, SignDoc, Row, renderDoc, rowsTotal, money, docLayout } from "./docTemplates";
 import { FONTS, fontById, ensureFont } from "./lib/fonts";
 
 // ─── Imzo maydoni (barmoq / sichqoncha / stilus) ─────────────────────────────
@@ -144,48 +144,111 @@ function DocFontPicker({ value, onChange }: { value?: string; onChange: (id: str
   );
 }
 
-// Hujjatdagi BARCHA matnni qo'lda tahrirlash — har bir blok alohida; o'zgartirilgani "↺" bilan asliga qaytadi
-function DocTextEditor({ doc, texts, onChange }: { doc: SignDoc; texts: Record<string, string>; onChange: (t: Record<string, string>) => void }) {
-  const [blocks, setBlocks] = useState<TextBlock[]>([]);
-  const [open, setOpen] = useState(false);
-  const key = JSON.stringify({ ...doc, data: { ...doc.data, texts: undefined } });
+// ─── Sahifaning O'ZIDA tahrirlash (WYSIWYG) ──────────────────────────────────
+// Hujjat oq qog'oz ko'rinishida chiziladi (PDF bilan bir xil tuzilish/shrift); istalgan matnga bosib,
+// shu joyning o'zida yozish mumkin. O'zgartirilgan blok "↺" bilan asliga qaytadi.
+const PX = (px: number) => `${(px / 12.4).toFixed(3)}cqw`; // 1240px kenglikdagi A4 → konteyner kengligiga mutanosib
+
+function EditableText({ value, def, placeholder, style, onCommit }:
+  { value: string; def: string; placeholder?: string; style: React.CSSProperties; onCommit: (v: string | null) => void }) {
+  const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (!open) return;
-    let alive = true;
-    const tmr = setTimeout(() => { docTextBlocks({ ...doc, data: { ...doc.data, texts: {} } }).then(b => { if (alive) setBlocks(b); }).catch(() => {}); }, 250);
-    return () => { alive = false; clearTimeout(tmr); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, open]);
-  const edited = Object.keys(texts).length;
+    const el = ref.current;
+    if (el && document.activeElement !== el && el.innerText !== value) el.innerText = value;
+  }, [value]);
+  const changed = value !== def;
   return (
-    <div className="rounded-2xl border border-border overflow-hidden">
-      <button type="button" onClick={() => setOpen(o => !o)} className="w-full flex items-center justify-between gap-2 px-4 py-3 text-left hover:bg-muted/40 liquid-transition">
-        <span>
-          <span className="block text-sm font-bold">✏️ Hujjat matnini tahrirlash</span>
-          <span className="block text-[11px] text-muted-foreground">Sarlavha, bandlar, tomonlar — hammasini o'zingiz yozing{edited ? ` · ${edited} ta o'zgartirilgan` : ""}</span>
-        </span>
-        <span className={`text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`}>▾</span>
-      </button>
-      {open && (
-        <div className="p-3 pt-0 space-y-2.5">
-          {blocks.length === 0 && <div className="h-20 rounded-xl bg-muted/40 animate-pulse" />}
-          {blocks.map(b => {
-            const val = typeof texts[b.id] === "string" ? texts[b.id] : b.def;
-            const changed = typeof texts[b.id] === "string";
+    <div className="group/et relative">
+      <div ref={ref} data-font-preview contentEditable suppressContentEditableWarning spellCheck={false} data-ph={placeholder || ""}
+        onBlur={e => { const v = e.currentTarget.innerText.replace(/\n+$/, ""); onCommit(v === def ? null : v); }}
+        onKeyDown={e => { if (e.key === "Escape") { e.stopPropagation(); e.nativeEvent.stopPropagation(); (e.currentTarget as HTMLElement).blur(); } }}
+        className={`doc-editable outline-none rounded-[3px] whitespace-pre-wrap break-words cursor-text transition-colors ${changed ? "bg-amber-300/15" : ""}`}
+        style={style} />
+      {changed && (
+        <button type="button" title="Asliga qaytarish" onMouseDown={e => e.preventDefault()} onClick={() => onCommit(null)}
+          className="absolute -right-1 -top-2 translate-x-full w-6 h-6 rounded-full bg-white border border-slate-300 text-slate-500 text-xs shadow opacity-100 sm:opacity-0 sm:group-hover/et:opacity-100 hover:text-sky-600 transition-opacity">↺</button>
+      )}
+    </div>
+  );
+}
+
+function DocPaperEditor({ doc, onText }: { doc: SignDoc; onText: (id: string, v: string | null) => void }) {
+  const font = fontById(doc.data?.font);
+  useEffect(() => { ensureFont(doc.data?.font); }, [doc.data?.font]);
+  const layout = docLayout(doc);
+  const tpl = TEMPLATES[doc.type];
+  const texts: Record<string, string> = doc.data?.texts || {};
+  const base: React.CSSProperties = { fontFamily: font.family, color: "#0f172a" };
+  const items: React.ReactNode[] = [];
+  for (let i = 0; i < layout.length; i++) {
+    const it = layout[i];
+    if (it.kind === "text") {
+      const st = (o: typeof it.opts): React.CSSProperties => ({
+        ...base, fontSize: PX(o.size ?? 26), lineHeight: 1.45, fontWeight: o.bold ? 700 : 400,
+        textAlign: o.align || "left", color: o.color || "#0f172a", marginBottom: PX(o.gap ?? 6),
+      });
+      const next = layout[i + 1];
+      if (next && next.kind === "text" && next.opts.sameLine) {
+        items.push(
+          <div key={it.id} className="flex items-start justify-between gap-4">
+            <div className="flex-1"><EditableText value={it.value} def={it.def} style={st(it.opts)} onCommit={v => onText(it.id, v)} /></div>
+            <div className="flex-1"><EditableText value={next.value} def={next.def} style={st(next.opts)} onCommit={v => onText(next.id, v)} /></div>
+          </div>
+        );
+        i++;
+        continue;
+      }
+      items.push(<EditableText key={it.id} value={it.value} def={it.def} placeholder={it.id === "note" ? "+ Qo'shimcha izoh yozish uchun bosing" : ""}
+        style={st(it.opts)} onCommit={v => onText(it.id, v)} />);
+    } else if (it.kind === "table") {
+      const rows = it.rows.filter(r => r.name?.trim());
+      const cell: React.CSSProperties = { ...base, fontSize: PX(22), border: "1px solid #94a3b8", padding: `${PX(8)} ${PX(10)}` };
+      items.push(
+        <div key="table" style={{ marginBottom: PX(12) }}>
+          <table className="w-full border-collapse" data-font-preview style={base}>
+            <thead><tr style={{ background: "#f1f5f9" }}>
+              {["№", "Nomi", "O'lchov", "Miqdori", "Narxi", "Summasi"].map(h => <th key={h} data-font-preview style={{ ...cell, fontWeight: 700, textAlign: "left" }}>{h}</th>)}
+            </tr></thead>
+            <tbody>
+              {rows.length === 0 && <tr><td data-font-preview colSpan={6} style={{ ...cell, color: "#94a3b8", textAlign: "center" }}>Qatorlarni yuqoridagi "Ishlar / materiallar" bo'limida qo'shing</td></tr>}
+              {rows.map((r, k) => {
+                const q = Number(String(r.qty).replace(",", ".")) || 0, pr = Number(String(r.price).replace(/\s/g, "").replace(",", ".")) || 0;
+                return (
+                  <tr key={k}>
+                    {[String(k + 1), r.name, r.unit, r.qty, pr.toLocaleString("ru-RU"), (q * pr).toLocaleString("ru-RU")].map((c, j) =>
+                      <td key={j} data-font-preview style={{ ...cell, textAlign: j >= 3 ? "right" : "left" }}>{c}</td>)}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <p data-font-preview style={{ ...base, fontSize: PX(26), fontWeight: 700, textAlign: "right", marginTop: PX(10) }}>Jami: {money(rowsTotal(it.rows))}</p>
+        </div>
+      );
+    } else {
+      items.push(
+        <div key="sigs" className="grid grid-cols-2" style={{ gap: PX(60), marginTop: PX(24) }}>
+          {[0, 1].map(k => {
+            const id = k === 0 ? "side1" : "side2";
             return (
-              <label key={b.id} className="block">
-                <span className="flex items-center justify-between text-[11px] font-semibold text-muted-foreground mb-1">
-                  <span className={changed ? "text-primary" : ""}>{b.label}{changed ? " •" : ""}</span>
-                  {changed && <button type="button" onClick={() => { const n = { ...texts }; delete n[b.id]; onChange(n); }} className="text-primary hover:underline">↺ Asliga qaytarish</button>}
-                </span>
-                <textarea value={val} rows={Math.min(8, Math.max(1, Math.ceil(val.length / 60) + (val.match(/\n/g)?.length || 0)))}
-                  onChange={e => { const v = e.target.value; const n = { ...texts }; if (v === b.def) delete n[b.id]; else n[b.id] = v; onChange(n); }}
-                  className="w-full text-sm border border-border rounded-xl px-3 py-2 bg-input-background resize-y focus:outline-none focus:ring-2 focus:ring-primary/40" />
-              </label>
+              <div key={k}>
+                <EditableText value={typeof texts[id] === "string" ? texts[id] : tpl.sides[k]} def={tpl.sides[k]} onCommit={v => onText(id, v)}
+                  style={{ ...base, fontSize: PX(24), fontWeight: 700 }} />
+                <p data-font-preview style={{ ...base, fontSize: PX(22), color: "#334155" }}>{it.names[k] || " "}</p>
+                <div style={{ height: PX(100) }} />
+                <div style={{ borderTop: "1.5px solid #0f172a" }} />
+                <p data-font-preview style={{ ...base, fontSize: PX(18), color: "#64748b", marginTop: PX(6) }}>(imzo)</p>
+              </div>
             );
           })}
         </div>
-      )}
+      );
+    }
+  }
+  return (
+    <div className="rounded-2xl bg-white shadow-xl ring-1 ring-black/10 overflow-hidden" style={{ containerType: "inline-size" } as React.CSSProperties}>
+      <div style={{ padding: `${PX(110)} ${PX(110)} ${PX(90)}` }}>{items}</div>
+      <p data-font-preview className="text-center" style={{ ...base, fontSize: PX(20), color: "#94a3b8", paddingBottom: PX(30) }}>{tpl.title} № {doc.number}</p>
     </div>
   );
 }
@@ -235,6 +298,8 @@ export default function ESignDocs({ onClose, companyName, currentUserName, proje
   const [sigImg, setSigImg] = useState<string | null>(null);
   const [sigStamp, setSigStamp] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [paperTab, setPaperTab] = useState<"edit" | "preview">("edit");
+  const setText = (id: string, v: string | null) => setDraft(d => { const t = { ...(d.texts || {}) }; if (v === null) delete t[id]; else t[id] = v; return { ...d, texts: t }; });
   const [signing, setSigning] = useState(false);
 
   const load = async () => {
@@ -363,8 +428,8 @@ export default function ESignDocs({ onClose, companyName, currentUserName, proje
           )}
 
           {view === "new" && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-              <div className="space-y-3">
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
+              <div className="space-y-3 lg:col-span-2 min-w-0">
                 {projects.length > 0 && (
                   <label className="block text-xs text-muted-foreground">Obyekt (ixtiyoriy — nomi avtomatik to'ladi)
                     <select className={`${input} mt-1`} value={projectId} onChange={e => pickProject(e.target.value)}>
@@ -401,15 +466,21 @@ export default function ESignDocs({ onClose, companyName, currentUserName, proje
                   </div>
                 )}
                 <DocFontPicker value={draft.font} onChange={id => setDraft({ ...draft, font: id })} />
-                <DocTextEditor doc={{ type: draftType, number: editingId ? (open?.number || "—") : "—", title: tpl.title, data: { ...draft, rows }, signatures: [] }}
-                  texts={draft.texts || {}} onChange={texts => setDraft({ ...draft, texts })} />
                 <button onClick={create} disabled={saving} className="w-full btn btn-primary py-3 rounded-2xl text-sm font-bold disabled:opacity-60">
                   {saving ? "Saqlanmoqda..." : editingId ? "💾 O'zgarishlarni saqlash" : "Hujjatni yaratish"}
                 </button>
               </div>
-              <div className="hidden lg:block">
-                <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">Ko'rinishi</p>
-                <DocPreview doc={{ type: draftType, number: editingId ? (open?.number || "—") : "—", title: tpl.title, data: { ...draft, rows }, signatures: [] }} />
+              <div className="min-w-0 lg:col-span-3">
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <div className="flex gap-1 p-1 rounded-xl bg-muted/60">
+                    <button type="button" onClick={() => setPaperTab("edit")} className={`px-3 py-1.5 rounded-lg text-xs font-bold ${paperTab === "edit" ? "bg-card shadow-sm" : "text-muted-foreground"}`}>✏️ Hujjatda tahrirlash</button>
+                    <button type="button" onClick={() => setPaperTab("preview")} className={`px-3 py-1.5 rounded-lg text-xs font-bold ${paperTab === "preview" ? "bg-card shadow-sm" : "text-muted-foreground"}`}>📄 Sahifalar (PDF)</button>
+                  </div>
+                  {paperTab === "edit" && <span className="text-[11px] text-muted-foreground hidden sm:inline">Istalgan matnga bosib yozing</span>}
+                </div>
+                {paperTab === "edit"
+                  ? <DocPaperEditor doc={{ type: draftType, number: editingId ? (open?.number || "—") : "—", title: tpl.title, data: { ...draft, rows }, signatures: [] }} onText={setText} />
+                  : <DocPreview doc={{ type: draftType, number: editingId ? (open?.number || "—") : "—", title: tpl.title, data: { ...draft, rows }, signatures: [] }} />}
               </div>
             </div>
           )}

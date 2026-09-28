@@ -3,8 +3,6 @@ import { ensureFont } from "./lib/fonts";
 export type DocType = "shartnoma" | "akt" | "nakladnoy";
 export type Row = { name: string; unit: string; qty: string; price: string };
 export type Sig = { side: "executor" | "customer"; name: string; image: string; stamp?: string; signedAt: string };
-/** Tahrirlanadigan matn bloki (hujjatdagi har bir yozuv) */
-export type TextBlock = { id: string; label: string; def: string };
 export type DocData = Record<string, any> & { rows?: Row[] };
 export interface SignDoc { id?: string; type: DocType; number: string; title: string; data: DocData; status?: string; signatures?: Sig[]; createdAt?: string }
 
@@ -76,7 +74,7 @@ class Pager {
     ctx.textAlign = "left"; ctx.fillStyle = "#0f172a";
     this.pages.push(c); this.ctx = ctx; this.y = M;
   }
-  ensure(h: number) { if (this.y + h > H - 120) this.newPage(); }
+  ensure(h: number) { if (this.y + h > H - 95) this.newPage(); }
   text(s: string, opts: { size?: number; bold?: boolean; align?: "left" | "center" | "right"; x?: number; width?: number; color?: string; gap?: number } = {}) {
     const size = opts.size ?? 26, x = opts.x ?? M, width = opts.width ?? W - 2 * M;
     const ctx = this.ctx;
@@ -138,38 +136,101 @@ function drawTable(p: Pager, rows: Row[]) {
   p.text(`Jami: ${money(rowsTotal(rows))}`, { bold: true, align: "right", size: 26 });
 }
 
+// Imzolar bloki ixcham (≈210px) — matndan keyin SHU sahifaga sig'sa shu yerda, sig'masa yangi sahifada.
+const SIG_BLOCK_H = 215;
 function drawSignatures(p: Pager, sides: [string, string], names: [string, string], sigs: Sig[], images: Record<string, HTMLImageElement>, stamps: Record<string, HTMLImageElement>) {
-  p.ensure(300); p.y += 30;
+  p.y += 16;
+  p.ensure(SIG_BLOCK_H);
   const colW = (W - 2 * M - 60) / 2;
   (["executor", "customer"] as const).forEach((side, i) => {
     const x = M + i * (colW + 60), y0 = p.y;
     const ctx = p.ctx;
     ctx.fillStyle = "#0f172a"; ctx.font = `700 24px ${FONT}`; ctx.fillText(sides[i], x, y0 + 24);
-    ctx.font = `400 22px ${FONT}`; ctx.fillStyle = "#334155"; ctx.fillText(names[i] || "", x, y0 + 56);
+    ctx.font = `400 22px ${FONT}`; ctx.fillStyle = "#334155"; ctx.fillText(names[i] || "", x, y0 + 52);
     const sig = sigs.find(s => s.side === side);
-    // Pechat — imzo ostida, biroz shaffof (haqiqiy muhr kabi imzo ustiga tushadi)
+    // Pechat — imzo yonida, biroz shaffof (haqiqiy muhr kabi imzo ustiga tushadi)
     const st = sig ? stamps[side] : undefined;
     if (st) {
-      const r = Math.min(170 / st.width, 170 / st.height);
+      const r = Math.min(150 / st.width, 150 / st.height);
       ctx.save(); ctx.globalAlpha = 0.9;
-      ctx.drawImage(st, x + colW - st.width * r - 6, y0 + 50, st.width * r, st.height * r);
+      ctx.drawImage(st, x + colW - st.width * r - 6, y0 + 30, st.width * r, st.height * r);
       ctx.restore();
     }
     const img = sig ? images[side] : undefined;
     if (img) {
-      const ratio = Math.min(colW * 0.75 / img.width, 130 / img.height);
-      ctx.drawImage(img, x, y0 + 70, img.width * ratio, img.height * ratio);
+      const ratio = Math.min(colW * 0.7 / img.width, 95 / img.height);
+      ctx.drawImage(img, x, y0 + 62, img.width * ratio, img.height * ratio);
     }
-    ctx.strokeStyle = "#0f172a"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x, y0 + 210); ctx.lineTo(x + colW, y0 + 210); ctx.stroke();
-    ctx.font = `400 19px ${FONT}`; ctx.fillStyle = "#64748b";
-    ctx.fillText(sig ? `Imzolandi: ${sig.name}, ${new Date(sig.signedAt).toLocaleString("ru-RU")}` : "(imzo)", x, y0 + 240);
+    ctx.strokeStyle = "#0f172a"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x, y0 + 165); ctx.lineTo(x + colW, y0 + 165); ctx.stroke();
+    ctx.font = `400 18px ${FONT}`; ctx.fillStyle = "#64748b";
+    ctx.fillText(sig ? `Imzolandi: ${sig.name}, ${new Date(sig.signedAt).toLocaleString("ru-RU")}` : "(imzo)", x, y0 + 192);
   });
-  p.y += 270;
+  p.y += SIG_BLOCK_H - 10;
 }
 
 const loadImg = (src: string) => new Promise<HTMLImageElement>((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
 
-export async function renderDoc(doc: SignDoc, collect?: TextBlock[]): Promise<HTMLCanvasElement[]> {
+// ── Hujjat tuzilishi (layout) — PDF (canvas) ham, sahifa ichidagi tahrirlash oynasi ham shundan quriladi ──
+export type TextOpts = { size?: number; bold?: boolean; align?: "left" | "center" | "right"; color?: string; gap?: number; sameLine?: boolean };
+export type LayoutItem =
+  | { kind: "text"; id: string; label: string; def: string; value: string; opts: TextOpts }
+  | { kind: "table"; rows: Row[] }
+  | { kind: "sigs"; sides: [string, string]; names: [string, string] };
+
+const clean = (s: string) => s.split("\n").filter((l, i, a) => l.trim() || (i > 0 && a[i - 1].trim())).join("\n").trim();
+
+export function docLayout(doc: SignDoc): LayoutItem[] {
+  const tpl = TEMPLATES[doc.type];
+  const f = doc.data || {};
+  const texts: Record<string, string> = (f.texts && typeof f.texts === "object") ? f.texts : {};
+  const out: LayoutItem[] = [];
+  // Har bir yozuv — tahrirlanadigan blok: foydalanuvchi o'zgartirgan matn (data.texts[id]) bo'lsa o'sha, aks holda shablon matni
+  const T = (id: string, label: string, def: string, opts: TextOpts = {}) => {
+    out.push({ kind: "text", id, label, def, value: typeof texts[id] === "string" ? texts[id] : def, opts });
+  };
+  const val = (id: string, def: string) => (typeof texts[id] === "string" ? texts[id] : def);
+  T("title", "Sarlavha", `${tpl.title.toUpperCase()} № ${doc.number}`, { size: 36, bold: true, align: "center", gap: 14 });
+  const sides: [string, string] = [val("side1", tpl.sides[0]), val("side2", tpl.sides[1])];
+
+  if (doc.type === "shartnoma") {
+    T("city", "Shahar", `${f.city || "Toshkent"} sh.`, { size: 24 });
+    T("date", "Sana", d(f.date), { size: 24, align: "right", gap: 24, sameLine: true });
+    T("intro", "Kirish qismi", `${f.customerName || "________________"} (keyingi o'rinlarda «Buyurtmachi») bir tomondan va ${f.contractorName || "________________"} (keyingi o'rinlarda «Pudratchi») ikkinchi tomondan ushbu shartnomani quyidagilar haqida tuzdilar:`, { gap: 18 });
+    const sec = (id: string, t: string, body: string) => {
+      T(`${id}.h`, `${t} — sarlavha`, t, { bold: true, size: 26, gap: 4 });
+      T(`${id}.b`, `${t} — matn`, body, { gap: 14 });
+    };
+    sec("s1", "1. Shartnoma predmeti", `1.1. Pudratchi Buyurtmachining topshirig'iga ko'ra quyidagi obyektda ishlarni bajarish majburiyatini oladi: ${f.objectName || "________________"}.\n1.2. Bajariladigan ishlar: ${f.workDescription || "________________"}.`);
+    const amount = num(f.amount), adv = num(f.advancePercent);
+    sec("s2", "2. Shartnoma summasi va to'lov tartibi", `2.1. Shartnomaning umumiy summasi: ${money(amount)}.\n2.2. Buyurtmachi ${adv ? `${adv}% (${money(amount * adv / 100)})` : "kelishilgan miqdorda"} avans to'laydi, qolgan qismi bajarilgan ishlar dalolatnomasi imzolangandan so'ng 10 bank kuni ichida to'lanadi.`);
+    sec("s3", "3. Ishlarni bajarish muddati", `3.1. Ishlarni boshlash: ${d(f.startDate)}. Tugatish: ${d(f.endDate)}.`);
+    sec("s4", "4. Tomonlarning majburiyatlari", "4.1. Pudratchi ishlarni qurilish me'yorlari (ShNQ) va xavfsizlik texnikasi talablariga muvofiq, sifatli va o'z vaqtida bajaradi.\n4.2. Buyurtmachi obyektga kirishni ta'minlaydi, bajarilgan ishlarni qabul qiladi va o'z vaqtida to'lovni amalga oshiradi.");
+    sec("s5", "5. Javobgarlik", "5.1. Majburiyatlarni bajarmaganlik yoki lozim darajada bajarmaganlik uchun tomonlar O'zbekiston Respublikasi qonunchiligiga muvofiq javobgar bo'ladilar.\n5.2. Nizolar muzokaralar yo'li bilan, kelishilmagan taqdirda — sud tartibida hal etiladi.");
+    if (f.extra || texts["s6.b"]) sec("s6", "6. Qo'shimcha shartlar", String(f.extra || ""));
+    sec("req", "Tomonlarning rekvizitlari", clean(`Buyurtmachi: ${f.customerName || ""}\n${f.customerDetails || ""}\n\nPudratchi: ${f.contractorName || ""}\n${f.contractorDetails || ""}`));
+    out.push({ kind: "sigs", sides, names: [f.contractorName, f.customerName] });
+  } else if (doc.type === "akt") {
+    T("date", "Sana qatori", `Sana: ${d(f.date)}${f.contractRef ? `     Shartnoma: ${f.contractRef}` : ""}`, { size: 24, gap: 10 });
+    T("parties", "Tomonlar", `Buyurtmachi: ${f.customerName || "—"}\nPudratchi: ${f.contractorName || "—"}\nObyekt: ${f.objectName || "—"}\nHisobot davri: ${f.period || "—"}`, { gap: 18 });
+    T("intro", "Kirish matni", "Biz, quyida imzo chekuvchilar, ushbu dalolatnomani quyidagi ishlar to'liq hajmda va sifatli bajarilgani haqida tuzdik:", { gap: 14 });
+    out.push({ kind: "table", rows: f.rows || [] });
+    T("outro", "Yakuniy matn", "Ishlar belgilangan muddatda, to'liq hajmda bajarildi. Buyurtmachining ishlar hajmi, sifati va muddatlari bo'yicha e'tirozlari yo'q.", { gap: 10 });
+    out.push({ kind: "sigs", sides, names: [f.contractorName, f.customerName] });
+  } else {
+    T("date", "Sana qatori", `Sana: ${d(f.date)}`, { size: 24, gap: 10 });
+    T("parties", "Tomonlar", `Yuboruvchi: ${f.senderName || "—"}\nQabul qiluvchi: ${f.receiverName || "—"}\nManzil: ${f.objectName || "—"}${f.vehicle ? `\nTransport: ${f.vehicle}` : ""}${f.basis ? `\nAsos: ${f.basis}` : ""}`, { gap: 18 });
+    out.push({ kind: "table", rows: f.rows || [] });
+    T("outro", "Yakuniy matn", "Yuk to'liq miqdorda, shikastlanmagan holda topshirildi va qabul qilindi.", { gap: 10 });
+    out.push({ kind: "sigs", sides, names: [f.senderName, f.receiverName] });
+  }
+  // Qo'shimcha izoh — imzolardan OLDIN (bo'sh bo'lsa chizilmaydi)
+  const sigIdx = out.findIndex(i => i.kind === "sigs");
+  const note: LayoutItem = { kind: "text", id: "note", label: "Qo'shimcha izoh", def: "", value: val("note", ""), opts: { size: 22, color: "#334155", gap: 8 } };
+  out.splice(sigIdx, 0, note);
+  return out;
+}
+
+export async function renderDoc(doc: SignDoc): Promise<HTMLCanvasElement[]> {
   const f = doc.data || {};
   FONT = (await ensureFont(f.font)).family;
   try { await (document as any).fonts?.ready; } catch { /* */ }
@@ -180,55 +241,16 @@ export async function renderDoc(doc: SignDoc, collect?: TextBlock[]): Promise<HT
     try { images[s.side] = await loadImg(s.image); } catch { /* */ }
     if (s.stamp) { try { stamps[s.side] = await loadImg(s.stamp); } catch { /* */ } }
   }
-  // Har bir yozuv — tahrirlanadigan blok: foydalanuvchi o'zgartirgan matn (data.texts[id]) bo'lsa o'sha, aks holda shablon matni
-  const texts: Record<string, string> = (f.texts && typeof f.texts === "object") ? f.texts : {};
-  const tx = (id: string, label: string, def: string) => {
-    collect?.push({ id, label, def });
-    return typeof texts[id] === "string" ? texts[id] : def;
-  };
   const p = new Pager(`${tpl.title} № ${doc.number}`);
-  p.text(tx("title", "Sarlavha", `${tpl.title.toUpperCase()} № ${doc.number}`), { size: 36, bold: true, align: "center", gap: 14 });
-  const sides: [string, string] = [tx("side1", "1-tomon nomi", tpl.sides[0]), tx("side2", "2-tomon nomi", tpl.sides[1])];
-
-  if (doc.type === "shartnoma") {
-    p.text(tx("city", "Shahar", `${f.city || "Toshkent"} sh.`), { size: 24 });
-    p.y -= 34; p.text(tx("date", "Sana", d(f.date)), { size: 24, align: "right", gap: 24 });
-    p.text(tx("intro", "Kirish qismi", `${f.customerName || "________________"} (keyingi o'rinlarda «Buyurtmachi») bir tomondan va ${f.contractorName || "________________"} (keyingi o'rinlarda «Pudratchi») ikkinchi tomondan ushbu shartnomani quyidagilar haqida tuzdilar:`), { gap: 18 });
-    const sec = (id: string, t: string, body: string) => {
-      p.text(tx(`${id}.h`, `${t} — sarlavha`, t), { bold: true, size: 26, gap: 4 });
-      p.text(tx(`${id}.b`, `${t} — matn`, body), { gap: 14 });
-    };
-    sec("s1", "1. Shartnoma predmeti", `1.1. Pudratchi Buyurtmachining topshirig'iga ko'ra quyidagi obyektda ishlarni bajarish majburiyatini oladi: ${f.objectName || "________________"}.\n1.2. Bajariladigan ishlar: ${f.workDescription || "________________"}.`);
-    const amount = num(f.amount), adv = num(f.advancePercent);
-    sec("s2", "2. Shartnoma summasi va to'lov tartibi", `2.1. Shartnomaning umumiy summasi: ${money(amount)}.\n2.2. Buyurtmachi ${adv ? `${adv}% (${money(amount * adv / 100)})` : "kelishilgan miqdorda"} avans to'laydi, qolgan qismi bajarilgan ishlar dalolatnomasi imzolangandan so'ng 10 bank kuni ichida to'lanadi.`);
-    sec("s3", "3. Ishlarni bajarish muddati", `3.1. Ishlarni boshlash: ${d(f.startDate)}. Tugatish: ${d(f.endDate)}.`);
-    sec("s4", "4. Tomonlarning majburiyatlari", "4.1. Pudratchi ishlarni qurilish me'yorlari (ShNQ) va xavfsizlik texnikasi talablariga muvofiq, sifatli va o'z vaqtida bajaradi.\n4.2. Buyurtmachi obyektga kirishni ta'minlaydi, bajarilgan ishlarni qabul qiladi va o'z vaqtida to'lovni amalga oshiradi.");
-    sec("s5", "5. Javobgarlik", "5.1. Majburiyatlarni bajarmaganlik yoki lozim darajada bajarmaganlik uchun tomonlar O'zbekiston Respublikasi qonunchiligiga muvofiq javobgar bo'ladilar.\n5.2. Nizolar muzokaralar yo'li bilan, kelishilmagan taqdirda — sud tartibida hal etiladi.");
-    if (f.extra || texts["s6.b"]) sec("s6", "6. Qo'shimcha shartlar", String(f.extra || ""));
-    sec("req", "Tomonlarning rekvizitlari", `Buyurtmachi: ${f.customerName || ""}\n${f.customerDetails || ""}\n\nPudratchi: ${f.contractorName || ""}\n${f.contractorDetails || ""}`);
-    drawSignatures(p, sides, [f.contractorName, f.customerName], doc.signatures || [], images, stamps);
-  } else if (doc.type === "akt") {
-    p.text(tx("date", "Sana qatori", `Sana: ${d(f.date)}${f.contractRef ? `     Shartnoma: ${f.contractRef}` : ""}`), { size: 24, gap: 10 });
-    p.text(tx("parties", "Tomonlar", `Buyurtmachi: ${f.customerName || "—"}\nPudratchi: ${f.contractorName || "—"}\nObyekt: ${f.objectName || "—"}\nHisobot davri: ${f.period || "—"}`), { gap: 18 });
-    p.text(tx("intro", "Kirish matni", "Biz, quyida imzo chekuvchilar, ushbu dalolatnomani quyidagi ishlar to'liq hajmda va sifatli bajarilgani haqida tuzdik:"), { gap: 14 });
-    drawTable(p, f.rows || []);
-    p.text(tx("outro", "Yakuniy matn", "Ishlar belgilangan muddatda, to'liq hajmda bajarildi. Buyurtmachining ishlar hajmi, sifati va muddatlari bo'yicha e'tirozlari yo'q."), { gap: 10 });
-    drawSignatures(p, sides, [f.contractorName, f.customerName], doc.signatures || [], images, stamps);
-  } else {
-    p.text(tx("date", "Sana qatori", `Sana: ${d(f.date)}`), { size: 24, gap: 10 });
-    p.text(tx("parties", "Tomonlar", `Yuboruvchi: ${f.senderName || "—"}\nQabul qiluvchi: ${f.receiverName || "—"}\nManzil: ${f.objectName || "—"}${f.vehicle ? `\nTransport: ${f.vehicle}` : ""}${f.basis ? `\nAsos: ${f.basis}` : ""}`), { gap: 18 });
-    drawTable(p, f.rows || []);
-    p.text(tx("outro", "Yakuniy matn", "Yuk to'liq miqdorda, shikastlanmagan holda topshirildi va qabul qilindi."), { gap: 10 });
-    drawSignatures(p, sides, [f.senderName, f.receiverName], doc.signatures || [], images, stamps);
+  let lastLineH = 0;
+  for (const it of docLayout(doc)) {
+    if (it.kind === "text") {
+      if (!it.value.trim() && it.id === "note") continue;
+      if (it.opts.sameLine) p.y -= lastLineH + 6;
+      p.text(it.value, it.opts);
+      lastLineH = (it.opts.size ?? 26) * 1.45;
+    } else if (it.kind === "table") drawTable(p, it.rows);
+    else drawSignatures(p, it.sides, it.names, doc.signatures || [], images, stamps);
   }
-  const extraNote = tx("note", "Qo'shimcha izoh (hujjat oxirida)", "");
-  if (extraNote.trim()) p.text(extraNote, { size: 22, color: "#334155", gap: 8 });
   return p.pages;
-}
-
-/** Hujjatdagi barcha tahrirlanadigan matnlar (joriy maydonlar asosidagi standart matni bilan). */
-export async function docTextBlocks(doc: SignDoc): Promise<TextBlock[]> {
-  const out: TextBlock[] = [];
-  await renderDoc(doc, out);
-  return out;
 }

@@ -1195,19 +1195,24 @@ async function handleExpenseInput(msg: any, chatId: number): Promise<boolean> {
       const media = msg.voice || msg.audio;
       const notice = await bot.sendMessage(chatId, T.processing);
       let parsed: ParsedExpense | null = null;
+      const heardOut: { heard?: string } = {};
       try {
         const link = await bot.getFileLink(media.file_id);
         const buf = Buffer.from(await (await fetch(link)).arrayBuffer());
-        parsed = await voiceToExpense(buf, media.mime_type || 'audio/ogg', todayInTashkent());
+        parsed = await voiceToExpense(buf, media.mime_type || 'audio/ogg', todayInTashkent(), heardOut);
       } catch (e: any) {
         bot.deleteMessage(chatId, notice.message_id).catch(() => {});
         if (e?.message === 'NO_GEMINI') { await bot.sendMessage(chatId, T.noGemini, { parse_mode: 'Markdown' }); return true; }
         console.error('[bot expense voice]', e);
-        await bot.sendMessage(chatId, T.voiceFail);
+        await bot.sendMessage(chatId, T.voiceError, { parse_mode: 'Markdown' }).catch(() => bot.sendMessage(chatId, T.voiceFail));
         return true;
       }
       bot.deleteMessage(chatId, notice.message_id).catch(() => {});
-      if (!parsed) { await bot.sendMessage(chatId, T.voiceFail); return true; }
+      if (!parsed) {
+        const heard = (heardOut.heard || '').slice(0, 500);
+        await bot.sendMessage(chatId, heard ? T.voiceHeard.replace('{text}', heard) : T.voiceFail);
+        return true;
+      }
       await sendExpenseDraft(chatId, user, parsed, { voiceFileId: media.file_id });
       return true;
     }

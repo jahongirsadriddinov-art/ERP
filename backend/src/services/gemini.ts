@@ -13,27 +13,54 @@ let keyIdx = 0;
 export const geminiConfigured = () => KEYS.length > 0;
 
 const isQuota = (e: any) => /RESOURCE_EXHAUSTED|429|quota|rate limit/i.test(String(e?.message || e));
-const isTransient = (e: any) => /503|502|high demand|overloaded|unavailable/i.test(String(e?.message || e));
+const isTransient = (e: any) => /503|502|500|high demand|overloaded|unavailable|fetch failed|ECONNRESET|ETIMEDOUT/i.test(String(e?.message || e));
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+
+// XATO TUZATILDI ("ovozli chiqimni bot tushunmadim deyapti"):
+//  1) gemini-2.5-flash "o'ylash" (thinking) tokenlarini ham maxOutputTokens hisobidan sarflaydi — 1024 limitda
+//     javob JSON'i ba'zan kesilib/bo'sh qolardi (JSON.parse xatosi → "tushunmadim"). Endi thinking o'chirilgan.
+//  2) Kalitlardan biri uchun model "404 no longer available" qaytarsa (yoki kvota tugab keyIdx shunday kalitga
+//     o'tib qolsa) — BARCHA keyingi so'rovlar yiqilardi. Endi har kalit × model kombinatsiyasi sinab ko'riladi.
+//  3) "503 high demand" tez-tez bo'lmoqda — har modelga 3 tagacha urinish, keyin keyingi modelga o'tiladi.
+const MODELS = (process.env.GEMINI_AUDIO_MODELS || 'gemini-2.5-flash,gemini-flash-latest,gemini-3-flash-preview')
+  .split(',').map(m => m.trim()).filter(Boolean);
+
+function parseJsonLoose(text: string): any {
+  const t = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '');
+  try { return JSON.parse(t); } catch { /* */ }
+  const a = t.indexOf('{'), b = t.lastIndexOf('}');
+  if (a >= 0 && b > a) return JSON.parse(t.slice(a, b + 1));
+  throw new Error('BAD_JSON');
+}
 
 export async function geminiAudioToJson(audio: Buffer, mimeType: string, prompt: string): Promise<any> {
   if (!KEYS.length) throw new Error('GEMINI_API_KEY sozlanmagan');
-  const tried = new Set<number>();
-  let transient = 0;
-  while (true) {
-    if (tried.has(keyIdx)) throw new Error("Barcha Gemini kalitlari limitga to'ldi");
-    tried.add(keyIdx);
-    try {
-      const model = new GoogleGenerativeAI(KEYS[keyIdx]).getGenerativeModel({
-        model: 'gemini-2.5-flash',
-        generationConfig: { maxOutputTokens: 1024, temperature: 0, responseMimeType: 'application/json' },
-      });
-      const res = await model.generateContent([prompt, { inlineData: { mimeType, data: audio.toString('base64') } }]);
-      return JSON.parse(res.response.text().trim());
-    } catch (err: any) {
-      if (isQuota(err) && KEYS.length > 1) { keyIdx = (keyIdx + 1) % KEYS.length; continue; }
-      if (isTransient(err) && transient < 2) { transient++; tried.delete(keyIdx); await sleep(transient * 2000); continue; }
-      throw err;
+  let lastErr: any = null;
+  for (let k = 0; k < KEYS.length; k++) {
+    const ki = (keyIdx + k) % KEYS.length;
+    for (const modelName of MODELS) {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const model = new GoogleGenerativeAI(KEYS[ki]).getGenerativeModel({
+            model: modelName,
+            generationConfig: {
+              maxOutputTokens: 2048, temperature: 0, responseMimeType: 'application/json',
+              ...(modelName.includes('2.5') ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
+            } as any,
+          });
+          const res = await model.generateContent([prompt, { inlineData: { mimeType, data: audio.toString('base64') } }]);
+          const out = parseJsonLoose(res.response.text());
+          keyIdx = ki; // ishlagan kalitda qolamiz
+          return out;
+        } catch (err: any) {
+          lastErr = err;
+          console.warn(`[gemini audio] key#${ki} ${modelName} try${attempt + 1}:`, String(err?.message || err).slice(0, 160));
+          if (isTransient(err) || (err as Error)?.message === 'BAD_JSON') { if (attempt < 2) { await sleep(1500 * (attempt + 1)); continue; } }
+          break; // kvota / 404 / ruxsat — keyingi modelga (yoki kalitga)
+        }
+      }
+      if (lastErr && isQuota(lastErr)) break; // bu kalitning kvotasi tugagan — keyingi kalit
     }
   }
+  throw lastErr || new Error('Gemini javob bermadi');
 }

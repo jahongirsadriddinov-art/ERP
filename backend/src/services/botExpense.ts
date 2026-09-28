@@ -129,11 +129,20 @@ const voicePrompt = (today: string) => `Bu qurilish firmasi xodimining XARAJAT (
    - "category": FAQAT shulardan biri: "oylik" (ish haqi/avans), "material" (qurilish materiallari), "jihozlar" (asbob-uskuna, ijara), "transport" (yoqilg'i, yuk/yo'l xarajati), "boshqa" (qolgan hammasi).
 Javob FAQAT JSON: {"transcript":"","cleanText":"","amount":0,"currency":"UZS","date":"","description":"","projectName":"","recipientName":"","category":"boshqa"}`;
 
-export async function voiceToExpense(audio: Buffer, mimeType: string, today: string): Promise<ParsedExpense | null> {
+export async function voiceToExpense(audio: Buffer, mimeType: string, today: string, out?: { heard?: string }): Promise<ParsedExpense | null> {
   if (!geminiConfigured()) throw new Error('NO_GEMINI');
   const r = await geminiAudioToJson(audio, mimeType || 'audio/ogg', voicePrompt(today));
-  const amount = Math.round((Number(r?.amount) || 0) * 100) / 100;
-  const description = String(r?.description || '').trim();
+  const heard = String(r?.cleanText || r?.transcript || '').trim();
+  if (out) out.heard = heard;
+  let amount = Math.round((Number(r?.amount) || 0) * 100) / 100;
+  let description = String(r?.description || '').trim();
+  // Model summani/tavsifni ajrata olmasa — eshitilgan matnning o'zini oddiy matn tahlilchisidan o'tkazamiz
+  // ("150 ming sement" kabi raqam bilan aytilgan holatlar), tavsif bo'lmasa eshitilgan gapning o'zi olinadi.
+  if (!(amount > 0 && amount < MAX_AMOUNT) && heard) {
+    const p = parseExpenseText(heard, today);
+    if (p) { amount = p.amount; if (!description) description = p.description; }
+  }
+  if (!description && amount > 0 && heard) description = heard.slice(0, 300);
   if (!(amount > 0 && amount < MAX_AMOUNT) || !description) return null;
   const currency: ExpCurrency = ['USD', 'EUR'].includes(String(r?.currency).toUpperCase()) ? String(r.currency).toUpperCase() as ExpCurrency : 'UZS';
   const dRaw = String(r?.date || '').trim();
@@ -158,6 +167,8 @@ export const EXP_T = {
     cancelled: "❌ Bekor qilindi.",
     processing: "🎙 Ovoz matnga aylantirilmoqda...",
     voiceFail: "⚠️ Ovozli xabardan summa va tavsifni aniq ajrata olmadim. Iltimos, qayta ayting (masalan: «yuz ellik ming so'm sement uchun») yoki matn bilan yozing.",
+    voiceHeard: "🎧 Eshitganim: «{text}»\n\n⚠️ Bundan summani aniq ajrata olmadim. Summani ham ayting (masalan: «yuz ellik ming so'm sement uchun») yoki matn bilan yozing.",
+    voiceError: "⚠️ Ovozni hozir qayta ishlab bo'lmadi (AI xizmati band). Bir daqiqadan so'ng qayta yuboring yoki matn bilan yozing: `150000 sement uchun`",
     noGemini: "⚠️ Ovozni matnga aylantirish hozir sozlanmagan. Iltimos, matn bilan yozing:\n`Summa; Tavsif; Obyekt`",
     parseHint: "⚠️ Tushunmadim. Shu tartibda yozing:\n`Summa; Tavsif; Obyekt (ixtiyoriy)`\nMasalan: `150000; Sement uchun`",
     expired: "Bu so'rov eskirgan. Qaytadan boshlang.",
@@ -189,6 +200,8 @@ export const EXP_T = {
     cancelled: "❌ Отменено.",
     processing: "🎙 Распознаю голос...",
     voiceFail: "⚠️ Не удалось точно определить сумму и описание из голосового. Повторите (например: «сто пятьдесят тысяч сум на цемент») или напишите текстом.",
+    voiceHeard: "🎧 Я услышал: «{text}»\n\n⚠️ Не удалось определить сумму. Назовите и сумму (например: «сто пятьдесят тысяч сум на цемент») или напишите текстом.",
+    voiceError: "⚠️ Сейчас не удалось обработать голос (сервис ИИ занят). Отправьте ещё раз через минуту или напишите текстом: `150000 цемент`",
     noGemini: "⚠️ Распознавание голоса сейчас не настроено. Напишите текстом:\n`Сумма; Описание; Объект`",
     parseHint: "⚠️ Не понял. Напишите так:\n`Сумма; Описание; Объект (необязательно)`\nНапример: `150000; Цемент`",
     expired: "Запрос устарел. Начните заново.",

@@ -124,7 +124,7 @@ export default function UpdateChecker() {
             className="bg-card border border-border rounded-3xl w-full max-w-md overflow-hidden shadow-2xl">
             <div className="flex items-center gap-3 px-5 py-4 text-white" style={btnStyle}>
               <MorphIcon icon={Sparkles} className="w-5 h-5" />
-              <p className="font-bold flex-1">{phase === "error" ? t('update.failed') : t('update.readyTitle')}</p>
+              <p className="font-bold flex-1">{phase === "error" ? t('update.failed') : phase === "downloading" ? t('update.downloadingTitle', "Yangi versiya yuklanmoqda") : t('update.readyTitle')}</p>
             </div>
             <div className="p-5 space-y-4">
               <div>

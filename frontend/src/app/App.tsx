@@ -78,7 +78,7 @@ import { toast, Toaster } from "sonner";
 import { isSoundEnabled, setSoundEnabled, getSoundVolume, setSoundVolume, playSound, sfx } from "./sound";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
-import { API_BASE, parseSmetaFile, uploadChatMedia } from "./api";
+import { API_BASE, parseSmetaFile, uploadChatMedia, offlineQueueCount } from "./api";
 import { AnnouncementComposer, AnnouncementContent, AnnouncementPopup, type AnnouncementData } from "./AnnouncementParts";
 import { connectSocket, getSocket, disconnectSocket } from "./socket";
 import { motion, AnimatePresence } from "motion/react";
@@ -6353,6 +6353,10 @@ export default function App() {
       }
     };
     navigator.serviceWorker?.addEventListener?.('message', handleSWMsg);
+    // Ilovalardagi (SW'siz) oflayn navbat — api.ts
+    const onAppQueue = (e: Event) => handleSWMsg({ data: { type: 'SYNC_STATUS', ...(e as CustomEvent).detail } } as MessageEvent);
+    window.addEventListener('erp:offline-queue', onAppQueue);
+    if (offlineQueueCount() > 0) { setSyncPending(offlineQueueCount()); setSyncStatus('pending'); }
 
     // Dastlabki pending count + agar hozir online bo'lsak, eskirgan
     // (stuck) navbatni ham darhol tozalashga urinamiz.
@@ -6375,6 +6379,7 @@ export default function App() {
       window.removeEventListener('online', onOnline);
       window.removeEventListener('offline', onOffline);
       navigator.serviceWorker?.removeEventListener?.('message', handleSWMsg);
+      window.removeEventListener('erp:offline-queue', onAppQueue);
       document.removeEventListener('visibilitychange', onVisible);
       clearInterval(retryTimer);
     };

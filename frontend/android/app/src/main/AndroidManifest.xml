@@ -24,6 +24,16 @@
 
         </activity>
 
+        <!-- Orqa fonda ishlash: joylashuv + bildirishnomalar (ilova yopilgan bo'lsa ham) -->
+        <service
+            android:name=".BackgroundService"
+            android:exported="false"
+            android:foregroundServiceType="location|specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Xodim ish vaqtidagi joylashuvi va firma bildirishnomalarini qabul qilish" />
+        </service>
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -57,6 +67,9 @@
     <!-- Android 13+ (API 33) — shu e'lon qilinmasa HECH QANDAY bildirishnoma
          (hatto oddiy, serverga bog'liq bo'lmagan) umuman ko'rsatilmaydi. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <!-- required="false" — kamera/GPS'siz qurilmalarda ham Play Store'da
          ilova ko'rinishi/o'rnatilishi uchun (ular ixtiyoriy xususiyat,

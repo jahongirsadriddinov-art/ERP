@@ -64,6 +64,17 @@ async function requireBoss(req: Request, res: Response, next: NextFunction) {
   return res.status(403).json({ error: 'Faqat rahbar va o\'rinbosar uchun' });
 }
 
+// Model ba'zan turkcha harflar (ş, ğ, ı...) yoki turli tutuq belgilari (ʻ ʼ ‘ ’ `) bilan yozadi — o'zbek lotin
+// imlosiga keltiramiz ("harflarni g'alati yozyapti" shikoyati).
+export function normalizeUz(t: string): string {
+  return t
+    .replace(/[ʻʼ‘’`´]/g, "'")
+    .replace(/Ş/g, 'Sh').replace(/ş/g, 'sh').replace(/Ç/g, 'Ch').replace(/ç/g, 'ch')
+    .replace(/Ğ/g, "G'").replace(/ğ/g, "g'").replace(/ı/g, 'i').replace(/İ/g, 'I')
+    .replace(/Ö/g, "O'").replace(/ö/g, "o'").replace(/Ü/g, 'U').replace(/ü/g, 'u')
+    .replace(/ /g, ' ').replace(/[ 	]{2,}/g, ' ');
+}
+
 const SYSTEM_TEMPLATE = (callerRole: string, usersText: string, projectsText: string, financeText = '') =>
   `Siz QurilishERP tizimining aqlli AI yordamchisisiz. ${callerRole} bilan ishlayapsiz.
 
@@ -74,6 +85,14 @@ const SYSTEM_TEMPLATE = (callerRole: string, usersText: string, projectsText: st
 - Ism yozishda xatosiz, to'g'ri yozing.
 - Agar so'rov noaniq bo'lsa — aniqlashtiruvchi savol bering (type="query").
 - Kontekstni yaxshi tushuning: qisqartmalar, xalq tili va noaniq gaplarni ham to'g'ri tushunib javob bering.
+
+✂️ JAVOB USLUBI (JUDA MUHIM):
+- QISQA va ANIQ: odatda 1–4 gap. Faqat foydalanuvchi ro'yxat/hisobot/jadval so'rasa uzunroq yoz (lekin ortiqcha izohsiz).
+- Kirish so'zlari, takrorlash, "Albatta!", "Mana sizga..." kabi to'ldiruvchi gaplarsiz — to'g'ridan-to'g'ri javob.
+- Oddiy, hammaga tushunarli so'zlar; murakkab atamalarsiz.
+- IMLO: faqat o'zbek LOTIN alifbosi: a b d e f g h i j k l m n o p q r s t u v x y z, o', g', sh, ch, ng. Tutuq belgisi FAQAT oddiy ' (o', g', ma'lumot).
+- TAQIQLANGAN harflar: turkcha/boshqa (ş ç ğ ı ö ü ä), kirill harflari (foydalanuvchi ruscha yozmagan bo'lsa), g'alati belgilar.
+- Foydalanuvchi ruscha yozsa — ruscha, qisqa javob ber.
 
 📋 XODIMLAR RO'YXATI (FAQAT SIZ UCHUN — FOYDALANUVCHIGA KO'RSATMANG):
 ${usersText}
@@ -205,6 +224,8 @@ router.post('/chat', requireAuth, requireBoss, requireFeature('ai_assistant'), a
     }
     if (!parsed.type) parsed.type = 'query';
     if (!parsed.response) parsed.response = 'Kechirasiz, tushunmadim.';
+    parsed.response = normalizeUz(String(parsed.response));
+    if (parsed.action?.text) parsed.action.text = normalizeUz(String(parsed.action.text));
 
     res.json(parsed);
   } catch (err: any) {

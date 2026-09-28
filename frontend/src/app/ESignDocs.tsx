@@ -7,6 +7,7 @@ import { canvasesToPdf } from "./lib/pdf";
 import { TEMPLATES, DocType, SignDoc, Row, renderDoc, rowsTotal, money, docLayout, docNumberOf } from "./docTemplates";
 import { FONTS, fontById, ensureFont } from "./lib/fonts";
 import { beautifySignature, BeautifyResult, Stroke } from "./lib/signatureBeautify";
+import { scanInk } from "./lib/scanInk";
 
 // ─── Imzo maydoni (barmoq / sichqoncha / stilus) ─────────────────────────────
 // Chizilgan har bir harakat (nuqtalar) saqlanadi — "✨ Tekislash" shu asosida imzoni qayta, tekis va toza
@@ -68,7 +69,7 @@ export function SignaturePad({ onChange }: { onChange: (dataUrl: string | null) 
       </div>
       {raw && fixed && (fixed.needsFix ? (
         <div className="rounded-xl border border-primary/25 bg-primary/[0.04] p-2.5 space-y-2">
-          <p className="text-[11px] font-semibold">✨ Imzo tekislandi {Math.abs(fixed.angleDeg) >= 3 ? `(qiyshiqlik ${Math.abs(fixed.angleDeg)}° to'g'rilandi)` : "(titroq silliqlandi)"} — qaysi biri qo'yilsin?</p>
+          <p className="text-[11px] font-semibold">✨ Imzo tekislandi {Math.abs(fixed.angleDeg) >= 3 ? `(qiyshiqlik ${Math.abs(fixed.angleDeg)}° to'g'rilandi)` : "(xusnixat bo'yicha chiroyli, bir tekis qiyalikda qayta yozildi)"} — qaysi biri qo'yilsin?</p>
           <div className="flex gap-2">{opt("fixed", "✨ Tekislangan", fixed.dataUrl)}{opt("raw", "✍️ O'zim chizganim", raw)}</div>
         </div>
       ) : (
@@ -105,41 +106,96 @@ async function fileToPng(file: File, max: number, removeWhite: boolean): Promise
   } finally { URL.revokeObjectURL(url); }
 }
 
-// Imzo: chizish YOKI tayyor imzo rasmini yuklash; ixtiyoriy — pechat (muhr) rasmi.
-export function SignatureInput({ onChange }: { onChange: (v: { image: string | null; stamp: string | null; date: string }) => void }) {
+export type StampPos = { x: number; y: number; size: number }; // imzo blokiga nisbatan: markaz (0..1) va kenglik (blok kengligiga nisbatan)
+export const DEFAULT_STAMP_POS: StampPos = { x: 0.83, y: 0.49, size: 0.31 };
+
+// Pechatni imzo bloki ustida sudrab joylashtirish va o'lchamini o'zgartirish (PDF'dagi ko'rinish bilan bir xil nisbatda)
+function StampPlacer({ image, stamp, pos, onChange }: { image: string | null; stamp: string; pos: StampPos; onChange: (p: StampPos) => void }) {
+  const box = useRef<HTMLDivElement>(null);
+  const drag = useRef<{ dx: number; dy: number } | null>(null);
+  const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
+  const move = (e: React.PointerEvent) => {
+    if (!drag.current || !box.current) return;
+    const r = box.current.getBoundingClientRect();
+    onChange({ ...pos, x: clamp((e.clientX - r.left - drag.current.dx) / r.width, 0, 1), y: clamp((e.clientY - r.top - drag.current.dy) / r.height, 0, 1) });
+  };
+  return (
+    <div className="rounded-xl border border-border p-2.5 space-y-2">
+      <p className="text-xs font-semibold">🔵 Pechat joyi va o'lchami <span className="font-normal text-muted-foreground">— sudrab joylang</span></p>
+      {/* Blok nisbati: 480 × 215 (PDF'dagi imzo ustuni) */}
+      <div ref={box} className="relative w-full bg-white rounded-lg ring-1 ring-black/10 overflow-hidden touch-none select-none" style={{ aspectRatio: "480 / 215" }}
+        onPointerMove={move} onPointerUp={() => { drag.current = null; }} onPointerCancel={() => { drag.current = null; }}>
+        <span className="absolute left-0 top-[4%] text-[10px] font-bold text-slate-700 px-1">Imzo</span>
+        {image && <img src={image} alt="" className="absolute left-0 object-contain object-left pointer-events-none" style={{ top: "29%", height: "44%", maxWidth: "70%" }} />}
+        <div className="absolute left-0 right-0 border-t border-slate-800" style={{ top: "77%" }} />
+        <img src={stamp} alt="" draggable={false}
+          onPointerDown={e => {
+            const r = box.current!.getBoundingClientRect();
+            drag.current = { dx: e.clientX - r.left - pos.x * r.width, dy: e.clientY - r.top - pos.y * r.height };
+            (e.currentTarget.parentElement as HTMLElement).setPointerCapture(e.pointerId);
+          }}
+          className="absolute cursor-grab active:cursor-grabbing opacity-90 hover:ring-2 hover:ring-sky-400/60 rounded-full"
+          style={{ width: `${pos.size * 100}%`, left: `${pos.x * 100}%`, top: `${pos.y * 100}%`, transform: "translate(-50%, -50%)" }} />
+      </div>
+      <div className="flex items-center gap-2">
+        <span className="text-[11px] text-muted-foreground">Kichik</span>
+        <input type="range" min={15} max={70} value={Math.round(pos.size * 100)} onChange={e => onChange({ ...pos, size: Number(e.target.value) / 100 })} className="flex-1 accent-primary" aria-label="Pechat o'lchami" />
+        <span className="text-[11px] text-muted-foreground">Katta</span>
+        <button type="button" onClick={() => onChange(DEFAULT_STAMP_POS)} className="text-[11px] font-semibold text-primary hover:underline">↺</button>
+      </div>
+    </div>
+  );
+}
+
+// Imzo: chizish (tekislash bilan) YOKI qog'ozdagi imzoni skanerlash (kamera/rasm — faqat imzoning o'zi
+// avtomatik ajratib olinadi); ixtiyoriy — pechat (skaner bilan avtomatik ajratiladi, joyi/o'lchami sozlanadi).
+// Ikkala tomon (firma va mijoz) uchun bir xil.
+export function SignatureInput({ onChange }: { onChange: (v: { image: string | null; stamp: string | null; date: string; stampPos: StampPos }) => void }) {
   const [date, setDate] = useState(() => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10));
-  const [mode, setMode] = useState<"draw" | "upload">("draw");
+  const [mode, setMode] = useState<"draw" | "scan">("draw");
   const [drawn, setDrawn] = useState<string | null>(null);
-  const [uploaded, setUploaded] = useState<string | null>(null);
+  const [scanned, setScanned] = useState<string | null>(null);
   const [stamp, setStamp] = useState<string | null>(null);
-  const sigRef = useRef<HTMLInputElement>(null);
-  const stampRef = useRef<HTMLInputElement>(null);
-  const image = mode === "draw" ? drawn : uploaded;
-  useEffect(() => { onChange({ image, stamp, date }); /* eslint-disable-next-line */ }, [image, stamp, date]);
+  const [stampPos, setStampPos] = useState<StampPos>(DEFAULT_STAMP_POS);
+  const [busy, setBusy] = useState<"" | "sig" | "stamp">("");
+  const sigCam = useRef<HTMLInputElement>(null), sigFile = useRef<HTMLInputElement>(null);
+  const stCam = useRef<HTMLInputElement>(null), stFile = useRef<HTMLInputElement>(null);
+  const image = mode === "draw" ? drawn : scanned;
+  useEffect(() => { onChange({ image, stamp, date, stampPos }); /* eslint-disable-next-line */ }, [image, stamp, date, stampPos]);
   const pick = async (e: React.ChangeEvent<HTMLInputElement>, kind: "sig" | "stamp") => {
     const file = e.target.files?.[0]; e.target.value = "";
     if (!file) return;
     if (!file.type.startsWith("image/")) { toast.error("Faqat rasm (PNG/JPG) yuklang"); return; }
+    setBusy(kind);
     try {
-      const png = await fileToPng(file, kind === "sig" ? 700 : 420, true);
-      if (kind === "sig") setUploaded(png); else setStamp(png);
-    } catch { toast.error("Rasm juda katta yoki o'qilmadi"); }
+      const png = await scanInk(file, kind === "sig" ? "signature" : "stamp");
+      if (kind === "sig") setScanned(png); else { setStamp(png); setStampPos(DEFAULT_STAMP_POS); }
+      toast.success(kind === "sig" ? "Imzo aniqlandi va ajratib olindi" : "Pechat aniqlandi va ajratib olindi");
+    } catch (err) {
+      toast.error((err as Error)?.message === "NOT_FOUND" ? (kind === "sig" ? "Suratda imzo topilmadi — yaqinroqdan, yorug' joyda oling" : "Suratda pechat topilmadi — yaqinroqdan, yorug' joyda oling") : "Rasm juda katta yoki o'qilmadi");
+    } finally { setBusy(""); }
   };
-  const tab = (m: "draw" | "upload", label: string) => (
+  const tab = (m: "draw" | "scan", label: string) => (
     <button type="button" onClick={() => setMode(m)}
       className={`flex-1 py-2 rounded-lg text-xs font-bold liquid-transition ${mode === m ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}>{label}</button>
   );
+  const btn = "flex-1 h-10 rounded-xl border border-border text-xs font-bold hover:border-primary/50 hover:bg-primary/[0.05] liquid-transition disabled:opacity-50";
   return (
     <div className="space-y-3">
-      <div className="flex gap-1 p-1 rounded-xl bg-muted/60">{tab("draw", "✍️ Chizish")}{tab("upload", "🖼️ Imzo rasmini yuklash")}</div>
+      <div className="flex gap-1 p-1 rounded-xl bg-muted/60">{tab("draw", "✍️ Chizish")}{tab("scan", "📷 Skaner (qog'ozdan)")}</div>
       {mode === "draw" ? <SignaturePad onChange={setDrawn} /> : (
-        <div>
-          <input ref={sigRef} type="file" accept="image/*" className="hidden" onChange={e => pick(e, "sig")} />
-          <button type="button" onClick={() => sigRef.current?.click()}
-            className="w-full h-40 rounded-xl border-2 border-dashed border-border bg-white flex items-center justify-center overflow-hidden hover:border-primary/50 liquid-transition">
-            {uploaded ? <img src={uploaded} alt="" className="max-h-full max-w-full object-contain" /> : <span className="text-xs text-slate-500 px-6 text-center">Oq qog'ozdagi imzo suratini tanlang — fon avtomatik olib tashlanadi</span>}
-          </button>
-          {uploaded && <button type="button" onClick={() => setUploaded(null)} className="mt-1 text-[11px] font-semibold text-primary hover:underline">Boshqa rasm</button>}
+        <div className="space-y-2">
+          <input ref={sigCam} type="file" accept="image/*" capture="environment" className="hidden" onChange={e => pick(e, "sig")} />
+          <input ref={sigFile} type="file" accept="image/*" className="hidden" onChange={e => pick(e, "sig")} />
+          <div className="w-full h-40 rounded-xl border-2 border-dashed border-border bg-white flex items-center justify-center overflow-hidden">
+            {busy === "sig" ? <span className="text-xs text-slate-500">Imzo aniqlanmoqda...</span>
+              : scanned ? <img src={scanned} alt="" className="max-h-full max-w-full object-contain" />
+              : <span className="text-xs text-slate-500 px-6 text-center">Qog'ozdagi imzoni suratga oling — imzoning o'zi avtomatik topilib, fon olib tashlanadi</span>}
+          </div>
+          <div className="flex gap-2">
+            <button type="button" disabled={!!busy} onClick={() => sigCam.current?.click()} className={btn}>📷 Kamera bilan</button>
+            <button type="button" disabled={!!busy} onClick={() => sigFile.current?.click()} className={btn}>🖼️ Rasmdan</button>
+          </div>
         </div>
       )}
       <label className="flex items-center justify-between gap-3 rounded-xl border border-border px-3 py-2">
@@ -149,18 +205,21 @@ export function SignatureInput({ onChange }: { onChange: (v: { image: string | n
       </label>
       <div className="flex items-center gap-3 rounded-xl border border-border p-2.5">
         <div className="w-16 h-16 rounded-lg bg-white border border-border flex items-center justify-center overflow-hidden flex-shrink-0">
-          {stamp ? <img src={stamp} alt="" className="max-w-full max-h-full object-contain" /> : <span className="text-2xl opacity-40">🔵</span>}
+          {busy === "stamp" ? <span className="text-[10px] text-slate-500">...</span> : stamp ? <img src={stamp} alt="" className="max-w-full max-h-full object-contain" /> : <span className="text-2xl opacity-40">🔵</span>}
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-xs font-semibold">Pechat (muhr) — ixtiyoriy</p>
-          <p className="text-[11px] text-muted-foreground">Muhr suratini yuklang, imzo yoniga qo'yiladi</p>
-          <div className="flex gap-3 mt-1">
-            <input ref={stampRef} type="file" accept="image/*" className="hidden" onChange={e => pick(e, "stamp")} />
-            <button type="button" onClick={() => stampRef.current?.click()} className="text-[11px] font-bold text-primary hover:underline">{stamp ? "Almashtirish" : "Yuklash"}</button>
+          <p className="text-[11px] text-muted-foreground">Muhrni suratga oling — o'zi aniqlab, kesib oladi</p>
+          <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1">
+            <input ref={stCam} type="file" accept="image/*" capture="environment" className="hidden" onChange={e => pick(e, "stamp")} />
+            <input ref={stFile} type="file" accept="image/*" className="hidden" onChange={e => pick(e, "stamp")} />
+            <button type="button" disabled={!!busy} onClick={() => stCam.current?.click()} className="text-[11px] font-bold text-primary hover:underline">📷 Skanerlash</button>
+            <button type="button" disabled={!!busy} onClick={() => stFile.current?.click()} className="text-[11px] font-bold text-primary hover:underline">🖼️ Rasmdan</button>
             {stamp && <button type="button" onClick={() => setStamp(null)} className="text-[11px] font-bold text-red-500 hover:underline">Olib tashlash</button>}
           </div>
         </div>
       </div>
+      {stamp && <StampPlacer image={image} stamp={stamp} pos={stampPos} onChange={setStampPos} />}
     </div>
   );
 }
@@ -352,6 +411,7 @@ export default function ESignDocs({ onClose, companyName, currentUserName, proje
   const [sigImg, setSigImg] = useState<string | null>(null);
   const [sigStamp, setSigStamp] = useState<string | null>(null);
   const [sigDate, setSigDate] = useState("");
+  const [sigStampPos, setSigStampPos] = useState<StampPos>(DEFAULT_STAMP_POS);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [paperTab, setPaperTab] = useState<"edit" | "preview">("edit");
   const setText = (id: string, v: string | null) => setDraft(d => { const t = { ...(d.texts || {}) }; if (v === null) delete t[id]; else t[id] = v; return { ...d, texts: t }; });
@@ -411,7 +471,7 @@ export default function ESignDocs({ onClose, companyName, currentUserName, proje
     if (!open || !sigImg || !sigName.trim()) return;
     setSigning(true);
     try {
-      const r = await fetch(`${API_BASE}/api/sign-docs/${open.id}/sign`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: sigName.trim(), image: sigImg, stamp: sigStamp || undefined, date: sigDate || undefined }) });
+      const r = await fetch(`${API_BASE}/api/sign-docs/${open.id}/sign`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: sigName.trim(), image: sigImg, stamp: sigStamp || undefined, stampPos: sigStamp ? sigStampPos : undefined, date: sigDate || undefined }) });
       const d = await r.json();
       if (!r.ok) { toast.error(d.error || "Xatolik"); return; }
       toast.success("Imzolandi"); const merged = { ...open, ...d, id: open.id }; setOpen(merged); setSigImg(null); setSigStamp(null); load();
@@ -557,7 +617,7 @@ export default function ESignDocs({ onClose, companyName, currentUserName, proje
                   <div className="rounded-2xl border border-border p-4 space-y-3">
                     <p className="font-semibold text-sm">{TEMPLATES[open.type as DocType].sides[0]} sifatida imzolash</p>
                     <input className={input} value={sigName} onChange={e => setSigName(e.target.value)} placeholder="F.I.O." />
-                    <SignatureInput onChange={v => { setSigImg(v.image); setSigStamp(v.stamp); setSigDate(v.date); }} />
+                    <SignatureInput onChange={v => { setSigImg(v.image); setSigStamp(v.stamp); setSigDate(v.date); setSigStampPos(v.stampPos); }} />
                     <button onClick={sign} disabled={!sigImg || !sigName.trim() || signing} className="w-full btn btn-primary py-2.5 rounded-xl text-sm font-bold disabled:opacity-50">
                       {signing ? "..." : "✍️ Imzolash"}
                     </button>
@@ -589,6 +649,7 @@ export function PublicSignPage({ token }: { token: string }) {
   const [img, setImg] = useState<string | null>(null);
   const [stamp, setStamp] = useState<string | null>(null);
   const [date, setDate] = useState("");
+  const [stampPos, setStampPos] = useState<StampPos>(DEFAULT_STAMP_POS);
   const [busy, setBusy] = useState(false);
   const load = (): Promise<SignDoc | null> => fetch(`${API_BASE}/api/public/sign/${token}`).then(async r => { if (!r.ok) throw new Error(); const d = await r.json(); setDoc(d); return d; }).catch(() => { setErr("Hujjat topilmadi yoki havola eskirgan"); return null; });
   useEffect(() => { load(); }, [token]);
@@ -596,7 +657,7 @@ export function PublicSignPage({ token }: { token: string }) {
     if (!img || name.trim().length < 2) return;
     setBusy(true);
     try {
-      const r = await fetch(`${API_BASE}/api/public/sign/${token}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: name.trim(), image: img, stamp: stamp || undefined, date: date || undefined }) });
+      const r = await fetch(`${API_BASE}/api/public/sign/${token}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: name.trim(), image: img, stamp: stamp || undefined, stampPos: stamp ? stampPos : undefined, date: date || undefined }) });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) { setErr(d.error || "Xatolik"); return; }
       const fresh = await load();
@@ -614,7 +675,7 @@ export function PublicSignPage({ token }: { token: string }) {
           <div className="rounded-2xl border border-border p-4 space-y-3 bg-card">
             <p className="font-semibold">{TEMPLATES[doc.type].sides[1]} sifatida imzolash</p>
             <input className="w-full text-sm border border-border rounded-xl px-3 py-2 bg-input-background" placeholder="F.I.O." value={name} onChange={e => setName(e.target.value)} />
-            <SignatureInput onChange={v => { setImg(v.image); setStamp(v.stamp); setDate(v.date); }} />
+            <SignatureInput onChange={v => { setImg(v.image); setStamp(v.stamp); setDate(v.date); setStampPos(v.stampPos); }} />
             <p className="text-[11px] text-muted-foreground">Imzolash orqali hujjat mazmuniga roziligingizni tasdiqlaysiz.</p>
             <button onClick={submit} disabled={!img || name.trim().length < 2 || busy} className="w-full btn btn-primary py-3 rounded-xl font-bold disabled:opacity-50">{busy ? "..." : "✍️ Imzolash"}</button>
           </div>

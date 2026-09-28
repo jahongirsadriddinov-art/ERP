@@ -51,8 +51,38 @@ function jitter(raw: Stroke[], sm: Stroke[]): number {
   return n ? sum / n : 0;
 }
 
-export interface BeautifyResult { dataUrl: string; angleDeg: number; jitterPx: number; needsFix: boolean }
+// Chaikin — burchaklarni yumaloqlash (qo'lda yozuvga xos silliq egri chiziqlar)
+function chaikin(s: Stroke, iters: number): Stroke {
+  let pts = s;
+  for (let k = 0; k < iters && pts.length > 2; k++) {
+    const out: Stroke = [pts[0]];
+    for (let i = 0; i < pts.length - 1; i++) {
+      const a = pts[i], b = pts[i + 1];
+      out.push({ x: a.x * 0.75 + b.x * 0.25, y: a.y * 0.75 + b.y * 0.25 }, { x: a.x * 0.25 + b.x * 0.75, y: a.y * 0.25 + b.y * 0.75 });
+    }
+    out.push(pts[pts.length - 1]);
+    pts = out;
+  }
+  return pts;
+}
 
+/** Yozuv og'ishi (slant): tik segmentlarning vertikaldan o'rtacha og'ishi, radian (+ = o'ngga). */
+function estimateSlant(strokes: Stroke[]): number {
+  let sum = 0, w = 0;
+  for (const s of strokes) for (let i = 1; i < s.length; i++) {
+    let dx = s[i].x - s[i - 1].x, dy = s[i].y - s[i - 1].y;
+    if (Math.abs(dy) < Math.abs(dx) * 1.2) continue;
+    if (dy > 0) { dx = -dx; dy = -dy; }
+    const len = Math.hypot(dx, dy);
+    sum += Math.atan2(dx, -dy) * len; w += len;
+  }
+  return w ? sum / w : 0;
+}
+
+export interface BeautifyResult { dataUrl: string; angleDeg: number; jitterPx: number; slantDeg: number; needsFix: boolean }
+
+// Xusnixat: bir xil o'ngga og'ish (~11°), keng uchli ruchka effekti (pastga-yuqoriga chiziqlar qalinroq,
+// yon chiziqlar ingichka), uchlari ingichkalashgan — chiroyli, "yozuvchi" imzo ko'rinishi.
 export function beautifySignature(strokes: Stroke[], outW = 900, outH = 300, color = "#0b3d91"): BeautifyResult | null {
   const valid = strokes.filter(s => s.length > 1);
   if (!valid.length) return null;
@@ -65,33 +95,39 @@ export function beautifySignature(strokes: Stroke[], outW = 900, outH = 300, col
   let angle = 0.5 * Math.atan2(2 * sxy, sxx - syy); // radian
   if (Math.abs(angle) > Math.PI / 6) angle = 0;      // juda katta burchak — ehtimol ataylab (tik imzo), tegmaymiz
   const cos = Math.cos(-angle), sin = Math.sin(-angle);
-  const rotated = smoothed.map(s => s.map(p => ({ x: cx + (p.x - cx) * cos - (p.y - cy) * sin, y: cy + (p.x - cx) * sin + (p.y - cy) * cos })));
+  let rotated = smoothed.map(s => s.map(p => ({ x: cx + (p.x - cx) * cos - (p.y - cy) * sin, y: cy + (p.x - cx) * sin + (p.y - cy) * cos })));
+  // Og'ishni bir xil qilish (shear)
+  const slant = estimateSlant(rotated);
+  const target = 0.19;
+  const k = Math.max(-0.45, Math.min(0.45, Math.tan(target) - Math.tan(slant)));
+  rotated = rotated.map(s => chaikin(s.map(p => ({ x: p.x + k * (cy - p.y), y: p.y })), 2));
   // Kesish va joylash
   const xs = rotated.flat().map(p => p.x), ys = rotated.flat().map(p => p.y);
   const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
   const bw = Math.max(1, maxX - minX), bh = Math.max(1, maxY - minY);
-  const pad = 24;
+  const pad = 28;
   const scale = Math.min((outW - 2 * pad) / bw, (outH - 2 * pad) / bh, 4);
   const ox = (outW - bw * scale) / 2 - minX * scale, oy = (outH - bh * scale) / 2 - minY * scale;
   const c = document.createElement("canvas"); c.width = outW; c.height = outH;
   const ctx = c.getContext("2d")!;
   ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.strokeStyle = color;
-  const baseW = Math.max(2.4, Math.min(5, 3.2 * Math.sqrt(scale)));
+  const baseW = Math.max(3, Math.min(6.5, 4.2 * Math.sqrt(scale)));
+  const nib = -Math.PI / 4; // keng uchli ruchka burchagi
   for (const s of rotated) {
     const pts = s.map(p => ({ x: p.x * scale + ox, y: p.y * scale + oy }));
-    if (pts.length < 2) continue;
-    // Segmentlab chizamiz — tez joylarda biroz ingichka (haqiqiy ruchka kabi)
-    for (let i = 1; i < pts.length - 1; i++) {
-      const a = { x: (pts[i - 1].x + pts[i].x) / 2, y: (pts[i - 1].y + pts[i].y) / 2 };
-      const b = { x: (pts[i].x + pts[i + 1].x) / 2, y: (pts[i].y + pts[i + 1].y) / 2 };
-      const seg = dist(pts[i - 1], pts[i + 1]);
-      ctx.lineWidth = baseW * Math.max(0.65, Math.min(1.15, 1.25 - seg / (60 * scale)));
-      ctx.beginPath(); ctx.moveTo(i === 1 ? pts[0].x : a.x, i === 1 ? pts[0].y : a.y);
-      ctx.quadraticCurveTo(pts[i].x, pts[i].y, i === pts.length - 2 ? pts[pts.length - 1].x : b.x, i === pts.length - 2 ? pts[pts.length - 1].y : b.y);
-      ctx.stroke();
+    const n = pts.length;
+    if (n < 2) continue;
+    for (let i = 1; i < n; i++) {
+      const a = pts[i - 1], b = pts[i];
+      const theta = Math.atan2(b.y - a.y, b.x - a.x);
+      const nibF = 0.38 + 0.9 * Math.abs(Math.sin(theta - nib));
+      const taper = 0.35 + 0.65 * Math.min(1, i / 8, (n - i) / 8);
+      ctx.lineWidth = baseW * nibF * taper;
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
     }
   }
   const angleDeg = Math.round((angle * 180) / Math.PI * 10) / 10;
+  const slantDeg = Math.round((slant * 180) / Math.PI);
   const jitterPx = Math.round(jitter(valid, smoothed) * 10) / 10;
-  return { dataUrl: c.toDataURL("image/png"), angleDeg, jitterPx, needsFix: Math.abs(angleDeg) >= 3 || jitterPx >= 1.2 };
+  return { dataUrl: c.toDataURL("image/png"), angleDeg, jitterPx, slantDeg, needsFix: true };
 }

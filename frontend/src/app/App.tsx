@@ -1,3 +1,4 @@
+import { startBackground, stopBackground } from "./lib/background";
 import { useState, useRef, useEffect, useMemo, lazy, Suspense } from "react";
 import Building2 from "@hugeicons/core-free-icons/Building02Icon";
 import Users from "@hugeicons/core-free-icons/UserMultipleIcon";
@@ -4459,6 +4460,12 @@ export default function App() {
   // (texnik ishlar rejimi) bo'lsa ham darhol to'xtaydi — foydalanuvchi aniq
   // talabi: "sayt ochirilgan bolsa ham joylashuv uzatip turishi ochmasin".
   const { gpsTracking, gpsStatus } = useGeoTracker(liveUser?.id, liveUser?.role, isWorking, siteEnabled);
+  // Android: orqa fonda ishlash (ilova yopilsa ham GPS + bildirishnomalar) — tizimga kirilganda yoqiladi,
+  // chiqilganda to'xtatiladi.
+  useEffect(() => {
+    if (liveUser?.id) startBackground({ trackLocation: !!gpsTracking, intervalSec: 60 });
+    else stopBackground();
+  }, [liveUser?.id, gpsTracking]);
 
   // Push bildirishnoma ro'yxatdan o'tkazish — XATO TUZATILDI: avval bu
   // faqat main.tsx'dagi 'storage' hodisasiga bog'liq edi, u esa FAQAT

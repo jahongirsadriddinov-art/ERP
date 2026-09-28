@@ -161,8 +161,18 @@ fn open_external(app: tauri::AppHandle, url: String) -> Result<(), String> {
     app.opener().open_url(url, None::<&str>).map_err(|e| e.to_string())
 }
 
+fn show_main(app: &tauri::AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.show();
+        let _ = w.unminimize();
+        let _ = w.set_focus();
+    }
+}
+
 pub fn run() {
     tauri::Builder::default()
+        // Ilova allaqachon (tepsida) ishlayotgan bo'lsa — ikkinchi nusxa ochilmaydi, mavjud oyna ko'rsatiladi
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| show_main(app)))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_fs::init())
@@ -173,7 +183,39 @@ pub fn run() {
             // Asosiy oyna oldingi holatini tiklash (o'lchov, pozitsiya)
             let window = app.get_webview_window("main").unwrap();
             window.show().unwrap();
+
+            // Orqa fonda ishlash: oyna yopilsa ilova to'xtamaydi — tizim tepsisida (soat yonida) qoladi,
+            // bildirishnomalar va joylashuv ishlashda davom etadi. To'liq chiqish — tepsidagi "Chiqish".
+            use tauri::menu::{Menu, MenuItem};
+            use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+            let open_i = MenuItem::with_id(app, "open", "Ochish", true, None::<&str>)?;
+            let quit_i = MenuItem::with_id(app, "quit", "Chiqish", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&open_i, &quit_i])?;
+            let mut tray = TrayIconBuilder::with_id("main-tray")
+                .tooltip("QurilishERP — orqa fonda ishlayapti")
+                .menu(&menu)
+                .show_menu_on_left_click(false)
+                .on_menu_event(|app, event| match event.id.as_ref() {
+                    "open" => show_main(app),
+                    "quit" => app.exit(0),
+                    _ => {}
+                })
+                .on_tray_icon_event(|tray, event| {
+                    if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = event {
+                        show_main(tray.app_handle());
+                    }
+                });
+            if let Some(icon) = app.default_window_icon() { tray = tray.icon(icon.clone()); }
+            tray.build(app)?;
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if window.label() == "main" {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
         })
         .invoke_handler(tauri::generate_handler![greet, download_update, install_update, save_to_downloads, reveal_file, open_external])
         .run(tauri::generate_context!())

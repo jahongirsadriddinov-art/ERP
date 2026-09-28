@@ -33,6 +33,13 @@ const parseSignDate = (v: unknown): string | undefined => {
   const t = Date.parse(v);
   return Number.isFinite(t) ? v : undefined;
 };
+const parseStampPos = (v: any): { x: number; y: number; size: number } | undefined => {
+  if (!v || typeof v !== 'object') return undefined;
+  const x = Number(v.x), y = Number(v.y), size = Number(v.size);
+  if (![x, y, size].every(Number.isFinite)) return undefined;
+  const c = (n: number, a: number, b: number) => Math.min(b, Math.max(a, n));
+  return { x: c(x, 0, 1), y: c(y, 0, 1), size: c(size, 0.1, 0.8) };
+};
 const MAX_PDF_BYTES = 12 * 1024 * 1024;
 
 // To'liq imzolangan hujjat PDF'i (qurilmada chizilgan) — Telegram bot orqali firma rahbarlariga va hujjat
@@ -137,7 +144,7 @@ router.post('/:id/sign', async (req, res) => {
   const doc: any = await SignedDoc.findOne(scoped({ _id: req.params.id }));
   if (!doc) return res.status(404).json({ error: 'Topilmadi' });
   if (doc.signatures.some((s: any) => s.side === 'executor')) return res.status(409).json({ error: 'Bu tomon allaqachon imzolagan' });
-  doc.signatures.push({ side: 'executor', name: name.trim().slice(0, 120), image, stamp, signDate: parseSignDate(req.body?.date), signedAt: new Date(), userId: getTenant()!.userId, ip: req.ip });
+  doc.signatures.push({ side: 'executor', name: name.trim().slice(0, 120), image, stamp, stampPos: stamp ? parseStampPos(req.body?.stampPos) : undefined, signDate: parseSignDate(req.body?.date), signedAt: new Date(), userId: getTenant()!.userId, ip: req.ip });
   doc.status = recomputeStatus(doc.signatures);
   await doc.save();
   res.json({ ...doc.toObject(), id: doc._id });
@@ -182,7 +189,7 @@ publicSignRouter.get('/sign/:token', async (req, res) => {
   const d: any = await SignedDoc.findOne({ shareToken: req.params.token }).select('type number title data status signatures createdAt').lean();
   if (!d) return res.status(404).json({ error: 'Topilmadi' });
   res.json({ type: d.type, number: d.number, title: d.title, data: d.data, status: d.status, createdAt: d.createdAt,
-    signatures: (d.signatures || []).map((s: any) => ({ side: s.side, name: s.name, image: s.image, stamp: s.stamp, signDate: s.signDate, signedAt: s.signedAt })) });
+    signatures: (d.signatures || []).map((s: any) => ({ side: s.side, name: s.name, image: s.image, stamp: s.stamp, stampPos: s.stampPos, signDate: s.signDate, signedAt: s.signedAt })) });
 });
 publicSignRouter.post('/sign/:token', async (req, res) => {
   if (!checkRate(`pubsign-post:${req.ip}`, 10, 10 * 60 * 1000).allowed) return res.status(429).json({ error: "Juda ko'p urinish" });
@@ -194,7 +201,7 @@ publicSignRouter.post('/sign/:token', async (req, res) => {
   const doc: any = await SignedDoc.findOne({ shareToken: req.params.token });
   if (!doc) return res.status(404).json({ error: 'Topilmadi' });
   if (doc.signatures.some((s: any) => s.side === 'customer')) return res.status(409).json({ error: 'Hujjat allaqachon imzolangan' });
-  doc.signatures.push({ side: 'customer', name: name.trim().slice(0, 120), image, stamp, signDate: parseSignDate(req.body?.date), signedAt: new Date(), ip: req.ip });
+  doc.signatures.push({ side: 'customer', name: name.trim().slice(0, 120), image, stamp, stampPos: stamp ? parseStampPos(req.body?.stampPos) : undefined, signDate: parseSignDate(req.body?.date), signedAt: new Date(), ip: req.ip });
   doc.status = recomputeStatus(doc.signatures);
   await doc.save();
   // Firma rahbarlariga xabar

@@ -29,12 +29,21 @@ public class MainActivity extends BridgeActivity {
     private static final int MEDIA_PERMISSION_REQUEST_CODE = 9001;
     private static final int NOTIFICATION_PERMISSION_REQUEST_CODE = 9002;
     private PermissionRequest pendingWebRequest;
+    // Orqa fon xizmati ilova ochiqligini biladi (bildirishnoma/GPS takrorlanmasin)
+    public static volatile boolean inForeground = false;
+
+    @Override
+    public void onResume() { super.onResume(); inForeground = true; }
+
+    @Override
+    public void onPause() { inForeground = false; super.onPause(); }
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
         // Ilova ichidan yangilash plagini — super.onCreate'dan OLDIN ro'yxatdan o'tishi shart.
         registerPlugin(AppUpdaterPlugin.class);
         registerPlugin(FileSaverPlugin.class);
+        registerPlugin(BackgroundPlugin.class);
         super.onCreate(savedInstanceState);
 
         // Android 13+ (API 33) — bildirishnoma ko'rsatish uchun runtime

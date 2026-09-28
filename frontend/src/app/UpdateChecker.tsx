@@ -59,8 +59,10 @@ export default function UpdateChecker() {
     try {
       if (isTauri()) {
         const [{ invoke }, { listen }] = await Promise.all([import("@tauri-apps/api/core"), import("@tauri-apps/api/event")]);
-        const unlisten = await listen<{ downloaded: number; total: number }>("update-progress", e => onProgress(e.payload));
-        try { await invoke("download_update", { url }); } finally { unlisten(); }
+        // Progress — ixtiyoriy: ruxsat bo'lmasa ham yuklash to'xtamasin (avval shu yerda yiqilardi)
+        let unlisten: (() => void) | null = null;
+        try { unlisten = await listen<{ downloaded: number; total: number }>("update-progress", e => onProgress(e.payload)); } catch { /* */ }
+        try { await invoke("download_update", { url }); } finally { unlisten?.(); }
       } else if (isAndroid()) {
         const { registerPlugin } = await import("@capacitor/core");
         const AppUpdater = registerPlugin<any>("AppUpdater");

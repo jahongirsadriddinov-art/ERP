@@ -2,7 +2,7 @@
 import { ensureFont } from "./lib/fonts";
 export type DocType = "shartnoma" | "akt" | "nakladnoy";
 export type Row = { name: string; unit: string; qty: string; price: string };
-export type Sig = { side: "executor" | "customer"; name: string; image: string; stamp?: string; signDate?: string; signedAt: string };
+export type Sig = { side: "executor" | "customer"; name: string; image: string; stamp?: string; stampPos?: { x: number; y: number; size: number }; signDate?: string; signedAt: string };
 export type DocData = Record<string, any> & { rows?: Row[] };
 export interface SignDoc { id?: string; type: DocType; number: string; title: string; data: DocData; status?: string; signatures?: Sig[]; createdAt?: string }
 
@@ -151,9 +151,11 @@ function drawSignatures(p: Pager, sides: [string, string], names: [string, strin
     // Pechat — imzo yonida, biroz shaffof (haqiqiy muhr kabi imzo ustiga tushadi)
     const st = sig ? stamps[side] : undefined;
     if (st) {
-      const r = Math.min(150 / st.width, 150 / st.height);
+      // Joyi/o'lchami imzolovchi tanlagan (blok: colW × SIG_BLOCK_H; markaz nisbatlari va kenglik ulushi)
+      const sp = sig?.stampPos || { x: 0.83, y: 0.49, size: 0.31 };
+      const sw = colW * Math.min(0.8, Math.max(0.1, sp.size)), sh = sw * st.height / st.width;
       ctx.save(); ctx.globalAlpha = 0.9;
-      ctx.drawImage(st, x + colW - st.width * r - 6, y0 + 30, st.width * r, st.height * r);
+      ctx.drawImage(st, x + colW * sp.x - sw / 2, y0 + SIG_BLOCK_H * sp.y - sh / 2, sw, sh);
       ctx.restore();
     }
     const img = sig ? images[side] : undefined;

@@ -1,0 +1,17 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Asosiy oyna ruxsatlari. MUHIM: bu fayl bo'lmasa Tauri v2 veb-kodga hech qanday API bermaydi — ilova ichidan yangilash (event listen), bildirishnomalar va oyna boshqaruvi ishlamay qolardi.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-show",
+    "core:window:allow-hide",
+    "core:window:allow-set-focus",
+    "core:window:allow-unminimize",
+    "core:window:allow-request-user-attention",
+    "notification:default",
+    "opener:default",
+    "dialog:default"
+  ]
+}

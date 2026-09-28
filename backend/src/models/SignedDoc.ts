@@ -12,6 +12,7 @@ export interface ISignature {
   image: string;       // PNG data URL (imzo rasmi)
   stamp?: string;      // PNG data URL (pechat/muhr rasmi) — ixtiyoriy
   signDate?: string;   // imzolovchi o'zi tanlagan sana (YYYY-MM-DD)
+  stampPos?: { x: number; y: number; size: number }; // pechat joyi/o'lchami (imzo blokiga nisbatan)
   signedAt: Date;
   userId?: string;     // tizim foydalanuvchisi imzolagan bo'lsa
   ip?: string;
@@ -40,6 +41,7 @@ const SignatureSchema = new Schema({
   image: { type: String, required: true },
   stamp: { type: String },
   signDate: { type: String },
+  stampPos: { x: Number, y: Number, size: Number },
   signedAt: { type: Date, default: Date.now },
   userId: { type: String },
   ip: { type: String },

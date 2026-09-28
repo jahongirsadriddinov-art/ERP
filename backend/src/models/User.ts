@@ -13,6 +13,9 @@ export interface IUser extends Document {
   pinResetCodeHash?: string;
   pinResetExpires?: Date;
   pinResetAttempts?: number;
+  twoFactorCodeHash?: string;
+  twoFactorExpires?: Date;
+  twoFactorAttempts?: number;
   brigade?: string;
   projectIds?: string[];
   // v1.2 multi-tenant qo'shimchalari (hammasi nullable — eski yozuvlarni buzmaydi)
@@ -56,6 +59,9 @@ const UserSchema: Schema = new Schema({
   pinResetCodeHash: { type: String, select: false },
   pinResetExpires: { type: Date },
   pinResetAttempts: { type: Number, default: 0 },
+  twoFactorCodeHash: { type: String, select: false },
+  twoFactorExpires: { type: Date },
+  twoFactorAttempts: { type: Number, default: 0 },
   brigade: { type: String },
   projectIds: [{ type: String }],
   // v1.2 multi-tenant (nullable)

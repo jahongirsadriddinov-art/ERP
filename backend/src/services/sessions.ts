@@ -27,6 +27,16 @@ function deviceLabelFromUA(ua: string): string {
   return `${browser} · ${os}`;
 }
 
+async function notifyNewDevice(userId: string, device: string, ip: string, method: string) {
+  const { default: User } = await import('../models/User');
+  const u: any = await User.findById(userId).select('telegramChatId').lean();
+  if (!u?.telegramChatId) return;
+  const { bot } = await import('./bot');
+  const when = new Date().toLocaleString('ru-RU', { timeZone: 'Asia/Tashkent' });
+  await bot.sendMessage(u.telegramChatId,
+    `🔔 Hisobingizga yangi qurilmadan kirildi\n📱 ${device}\n🌐 IP: ${ip || '—'}\n🔑 Usul: ${method}\n🕒 ${when}\n\nBu siz bo'lmasangiz — saytda Profil → "Ulangan qurilmalar" dan uni darhol chiqarib yuboring.`);
+}
+
 export async function issueTokenWithSession(
   payload: SessionTokenPayload,
   req: { headers: any; ip?: string },
@@ -35,10 +45,14 @@ export async function issueTokenWithSession(
 ): Promise<string> {
   const jti = randomBytes(16).toString('hex');
   const ua = (req.headers?.['user-agent'] || '').toString();
+  const deviceLabel = deviceLabelFromUA(ua);
+  // Xavfsizlik: shu qurilma turidan (brauzer · OS) avval kirilmagan bo'lsa — egasiga botda xabar
+  const seenBefore = await Session.exists({ userId: String(payload.userId), deviceLabel }).catch(() => null);
+  if (!seenBefore) notifyNewDevice(String(payload.userId), deviceLabel, (req.ip || '').trim(), loginMethod).catch(() => {});
   await Session.create({
     userId: String(payload.userId),
     jti,
-    deviceLabel: deviceLabelFromUA(ua),
+    deviceLabel,
     userAgent: ua,
     ip: (req.ip || '').trim(),
     loginMethod,

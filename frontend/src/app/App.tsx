@@ -2980,11 +2980,11 @@ function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSe
                 jadvaldan TASHQARIDA odatdagidek vertikal suriladi. */}
             <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden scrollbar-hide pb-20 sm:pb-2">
               <div className="overflow-x-auto touch-pan-x" onWheel={hwheel}>
-                <table className="w-full min-w-max text-left border-collapse text-[11px] leading-tight">
+                <table className="w-full xl:w-auto xl:min-w-[760px] min-w-[560px] text-left border-collapse text-[11px] leading-tight">
                   <thead className="sticky top-0 z-10 bg-card">
                     <tr className="border-b border-border">
                       <th className="px-2.5 py-2 font-semibold text-[10px] uppercase tracking-wide text-muted-foreground">{t('objectDetail.colName')}</th>
-                      <th className="px-2.5 py-2 font-semibold text-[10px] uppercase tracking-wide text-muted-foreground whitespace-nowrap">{t('objectDetail.colUnit')}</th>
+                      <th className="px-4 py-2 font-semibold text-[10px] uppercase tracking-wide text-muted-foreground whitespace-nowrap">{t('objectDetail.colUnit')}</th>
                       <th className="px-2.5 py-2 font-semibold text-[10px] uppercase tracking-wide text-muted-foreground text-right whitespace-nowrap">{t('objectDetail.colQty')}</th>
                       <th className="px-2.5 py-2 font-semibold text-[10px] uppercase tracking-wide text-muted-foreground text-right whitespace-nowrap">{t('objectDetail.colPrice')}</th>
                       <th className="px-2.5 py-2 font-semibold text-[10px] uppercase tracking-wide text-muted-foreground text-right whitespace-nowrap">{t('objectDetail.colAmount')}</th>
@@ -2996,8 +2996,8 @@ function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSe
                       return (
                         <tr key={m.id} onClick={() => setSelectedMat(m)}
                           className={`cursor-pointer hover:bg-primary/5 border-b border-border/25 liquid-transition ${i % 2 === 1 ? "bg-muted/15" : ""}`}>
-                          <td className="px-2.5 py-1.5 font-semibold text-primary whitespace-nowrap leading-tight" title={m.name}>{m.name}</td>
-                          <td className="px-2.5 py-1.5 text-muted-foreground whitespace-nowrap">{m.unit}</td>
+                          <td className="px-2.5 py-1.5 font-semibold text-primary leading-snug" title={m.name}><div className="min-w-[220px] max-w-[480px] line-clamp-2">{m.name}</div></td>
+                          <td className="px-4 py-1.5 text-muted-foreground whitespace-nowrap">{m.unit}</td>
                           <td className="px-2.5 py-1.5 font-mono text-right whitespace-nowrap">{fmtNum(m.quantity)}</td>
                           <td className="px-2.5 py-1.5 font-mono text-right whitespace-nowrap text-muted-foreground">{m.price != null ? fmtNum(m.price) : "—"}</td>
                           <td className="px-2.5 py-1.5 font-mono text-right font-semibold whitespace-nowrap">{total != null ? fmtNum(total) : "—"}</td>
@@ -4510,6 +4510,18 @@ function AuditLogSection({ token }: { token: string }) {
       </button>
       {open && (
         <div className="border-t border-border px-4 pb-4 pt-2">
+          <div className="flex justify-end mb-2">
+            <button onClick={async () => {
+                try {
+                  const r = await fetch(`${API_BASE}/api/audit-logs/export.csv`, { headers: { Authorization: `Bearer ${token}` } });
+                  if (!r.ok) throw new Error();
+                  await saveOrShareBlob(`audit-${new Date().toISOString().slice(0, 10)}.csv`, await r.blob());
+                } catch { toast.error(t('common.error')); }
+              }}
+              className="flex items-center gap-1.5 text-xs font-semibold border border-border rounded-full px-3 py-1.5 hover:bg-muted liquid-transition">
+              <MorphIcon icon={Download} className="w-3.5 h-3.5" />{t('profile.auditExport', { defaultValue: "Excel/CSV yuklab olish" })}
+            </button>
+          </div>
           {loading && <SkeletonList items={4} withAvatar={false} />}
           {!loading && logs.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">{t('profile.auditEmpty')}</p>}
           <div className="space-y-2 max-h-80 overflow-y-auto scrollbar-hide">
@@ -5852,7 +5864,9 @@ function LoginScreen({ onLogin, onRegister, onBack }: { onLogin: (u: any, compan
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code, step]);
 
-  // Dasturchi login: raqam + parol
+  // Dasturchi login: raqam + parol + (2FA) botga kelgan kod
+  const [devNeedCode, setDevNeedCode] = useState(false);
+  const [devCode, setDevCode] = useState("");
   const handleDevLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (submitting) return;
@@ -5862,10 +5876,11 @@ function LoginScreen({ onLogin, onRegister, onBack }: { onLogin: (u: any, compan
       const res = await fetch(API_BASE + "/api/auth/dev-login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: cleanPhone, password })
+        body: JSON.stringify({ phone: cleanPhone, password, ...(devNeedCode && devCode ? { code: devCode } : {}) })
       });
       const data = await res.json();
-      if (!res.ok) { setError(data.error || t('login.genericError')); return; }
+      if (!res.ok) { setError(data.error || t('login.genericError')); if (data.twoFactor && !devNeedCode) setDevNeedCode(true); return; }
+      if (data.twoFactor && !data.token) { setDevNeedCode(true); setDevCode(""); setError(""); return; }
       const u = {
         id: data.user.id || data.user._id,
         name: data.user.firstName + (data.user.lastName ? " " + data.user.lastName : ""),
@@ -6005,6 +6020,14 @@ function LoginScreen({ onLogin, onRegister, onBack }: { onLogin: (u: any, compan
               <input type="password" className="w-full text-base text-center border border-border/50 rounded-xl px-4 py-3 bg-white/50 dark:bg-black/20 focus:bg-white dark:focus:bg-black/40 focus:outline-none focus:ring-2 focus:ring-primary/50 liquid-transition shadow-inner"
                 placeholder="••••••••" value={password} onChange={e => { setError(""); setPassword(e.target.value); }} autoFocus/>
             </div>
+            {devNeedCode && (
+              <div className="bg-primary/5 border border-primary/15 rounded-xl p-3 space-y-2">
+                <p className="text-xs text-muted-foreground text-center">🔐 {t('login.dev2faHint', { defaultValue: "Telegram botga 6 xonali kirish kodi yuborildi" })}</p>
+                <input type="text" inputMode="numeric" autoFocus placeholder="••••••" value={devCode}
+                  onChange={e => { setError(""); setDevCode(e.target.value.replace(/\D/g, "").slice(0, 6)); }}
+                  className="w-full text-xl tracking-[0.4em] text-center font-mono border border-border/50 rounded-xl px-4 py-2.5 bg-white/50 dark:bg-black/20 focus:outline-none focus:ring-2 focus:ring-primary/50" />
+              </div>
+            )}
             <button type="submit" disabled={submitting} className="w-full bg-gradient-to-r from-primary via-primary to-blue-700 text-white text-sm font-bold py-3.5 rounded-full shadow-lg shadow-primary/30 hover:shadow-xl hover:shadow-primary/35 hover:-translate-y-0.5 active:scale-[0.98] liquid-transition disabled:opacity-60 disabled:pointer-events-none">
               {t('login.signIn')}
             </button>

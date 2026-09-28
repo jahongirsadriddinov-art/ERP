@@ -481,6 +481,35 @@ router.post('/dev-login', async (req, res) => {
       return res.status(401).json({ error: 'Telefon yoki parol noto\'g\'ri' });
     }
 
+    // IKKI BOSQICHLI KIRISH (2FA): parol to'g'ri bo'lsa ham, dasturchining Telegram botiga
+    // 6 xonali kod yuboriladi va u kiritilmaguncha sessiya berilmaydi. Parol sizib chiqsa ham
+    // (super-admin — barcha firmalar!) botga kirish imkoni bo'lmasa hisobga kirib bo'lmaydi.
+    if (dev.telegramChatId) {
+      const code = typeof req.body?.code === 'string' ? req.body.code.trim() : '';
+      const devFull: any = await User.findById(dev._id).select('+twoFactorCodeHash');
+      if (!code) {
+        const otp = String(crypto.randomInt(100000, 1000000));
+        devFull.twoFactorCodeHash = crypto.createHash('sha256').update(`${dev._id}:${otp}`).digest('hex');
+        devFull.twoFactorExpires = new Date(Date.now() + 3 * 60 * 1000);
+        devFull.twoFactorAttempts = 0;
+        await devFull.save();
+        await bot.sendMessage(dev.telegramChatId, `🔐 Dasturchi paneliga kirish kodi: <code>${otp}</code>\nKod 3 daqiqa amal qiladi. Siz kirmayotgan bo'lsangiz — parolingizni darhol almashtiring!`, { parse_mode: 'HTML' }).catch(() => {});
+        return res.json({ twoFactor: true });
+      }
+      if (!devFull?.twoFactorCodeHash || !devFull.twoFactorExpires || devFull.twoFactorExpires < new Date() || (devFull.twoFactorAttempts || 0) >= 5) {
+        return res.status(400).json({ error: "Kod muddati tugagan — qaytadan kiring", twoFactor: true });
+      }
+      const expected = Buffer.from(devFull.twoFactorCodeHash, 'hex');
+      const given = Buffer.from(crypto.createHash('sha256').update(`${dev._id}:${code}`).digest('hex'), 'hex');
+      if (expected.length !== given.length || !crypto.timingSafeEqual(expected, given)) {
+        devFull.twoFactorAttempts = (devFull.twoFactorAttempts || 0) + 1;
+        await devFull.save();
+        return res.status(400).json({ error: "Kod noto'g'ri", twoFactor: true });
+      }
+      devFull.twoFactorCodeHash = undefined; devFull.twoFactorExpires = undefined; devFull.twoFactorAttempts = 0;
+      await devFull.save();
+    }
+
     const token = await issueTokenWithSession(
       { userId: String(dev._id), role: 'dasturchi', isDeveloper: true },
       req, 'dev', '365d'

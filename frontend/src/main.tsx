@@ -4,6 +4,9 @@ import { MotionConfig } from "motion/react";
 import App, { ClientViewPage } from "./app/App.tsx";
 import UpdateChecker from "./app/UpdateChecker.tsx";
 import MediaViewer from "./app/MediaViewer.tsx";
+import { installErrorReporting } from "./app/lib/monitoring";
+
+installErrorReporting();
 import { ErrorBoundary } from "./app/ErrorBoundary.tsx";
 import { API_BASE } from "./app/api.ts";
 import "./app/i18n";

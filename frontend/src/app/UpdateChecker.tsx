@@ -5,6 +5,7 @@ import { MorphIcon } from "morphicons/react";
 import { motion, AnimatePresence } from "motion/react";
 import { useTranslation } from "react-i18next";
 import { API_BASE } from "./api";
+import { compareVersions } from "./lib/version";
 import { isNative, isAndroid, isTauri, openExternalUrl } from "./platform";
 
 type Phase = "downloading" | "ready" | "installing" | "permission" | "error";
@@ -17,15 +18,6 @@ type Phase = "downloading" | "ready" | "installing" | "permission" | "error";
 //     rejimda o'rnatadi va ilovani o'zi qayta ochadi.
 //   - Android (Capacitor): AppUpdaterPlugin.java — APK'ni yuklaydi va tizim o'rnatuvchisini
 //     ochadi (Android sukut ostida o'rnatishga ruxsat bermaydi — bitta "O'rnatish" bosiladi).
-function compareVersions(a: string, b: string): number {
-  const pa = a.split('.').map(n => parseInt(n, 10) || 0);
-  const pb = b.split('.').map(n => parseInt(n, 10) || 0);
-  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-    const diff = (pa[i] || 0) - (pb[i] || 0);
-    if (diff !== 0) return diff;
-  }
-  return 0;
-}
 
 export default function UpdateChecker() {
   const { t } = useTranslation();

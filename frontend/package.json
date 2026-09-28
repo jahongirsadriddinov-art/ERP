@@ -6,6 +6,7 @@
   "scripts": {
     "build": "vite build",
     "dev": "vite",
+    "test": "vitest run",
     "tauri": "tauri",
     "build:windows": "vite build && tauri build",
     "dev:windows": "tauri dev",
@@ -90,7 +91,8 @@
     "@vitejs/plugin-react": "4.7.0",
     "tailwindcss": "4.1.12",
     "typescript": "^6.0.3",
-    "vite": "6.3.5"
+    "vite": "6.3.5",
+    "vitest": "^3.2.7"
   },
   "optionalDependencies": {
     "@capacitor/android": "^7.6.8",

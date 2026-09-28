@@ -1,4 +1,5 @@
 import { Component, ReactNode } from "react";
+import { reportError } from "./lib/monitoring";
 
 interface Props { children: ReactNode; }
 interface State { error: Error | null; }
@@ -12,20 +13,8 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: { componentStack: string }) {
     console.error("[ErrorBoundary]", error, info.componentStack);
-    try {
-      const API_BASE = import.meta.env.VITE_API_BASE || "https://qurilisherp-backend.onrender.com";
-      fetch(`${API_BASE}/api/errors/log`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: error.message,
-          stack: error.stack,
-          url: window.location.href,
-          userAgent: navigator.userAgent,
-          timestamp: new Date().toISOString(),
-        }),
-      }).catch(() => {});
-    } catch {}
+    // Eski kod mavjud bo'lmagan VITE_API_BASE'ga qarardi — umumiy reporter (to'g'ri manzil, versiya, platforma)
+    reportError(error.message, error.stack, { componentStack: info.componentStack?.slice(0, 2000), kind: "react" });
   }
 
   render() {

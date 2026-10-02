@@ -15,7 +15,7 @@ import FlipHorizontal from "@hugeicons/core-free-icons/FlipHorizontalIcon";
 import { MorphIcon } from "morphicons/react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
-import { getSocket } from "./socket";
+import { getSocket, takeEarlyIce } from "./socket";
 import { AppUser, ActiveCall, Msg } from "./App";
 import { playSound } from "./sound";
 import { API_BASE } from "./api";
@@ -42,6 +42,29 @@ import { API_BASE } from "./api";
 // VITE_TURN_USERNAME/VITE_TURN_CREDENTIAL muhit o'zgaruvchilari qo'shildi —
 // build vaqtida shular o'rnatilgan bo'lsa O'SHA ishlatiladi, aks holda bepul
 // (ishonchsiz) standart TURN'ga qaytiladi.
+// Kamera/mikrofonni olish — bosqichma-bosqich zaxira bilan. Avval qo'ng'iroq butunlay yopilardi, masalan
+// "Device in use" (kamera boshqa dastur/oynada band — bir kompyuterda ikki akkaunt bilan sinaganda ham shunday).
+// Endi: video+ovoz → (kamera bo'lmasa) faqat ovoz → (mikrofon ham bo'lmasa) bo'sh oqim (faqat eshitadi/ko'radi).
+async function acquireMedia(video: boolean, facingMode: string, warn: (m: string) => void): Promise<MediaStream> {
+  const md = navigator.mediaDevices;
+  if (!md?.getUserMedia) { warn("Bu qurilmada kamera/mikrofon yo'q — faqat eshitasiz"); return new MediaStream(); }
+  if (video) {
+    try { return await md.getUserMedia({ audio: true, video: { facingMode } }); }
+    catch (e: any) {
+      if (e?.name === 'NotAllowedError') throw e;
+      warn(e?.name === 'NotReadableError' || /in use/i.test(e?.message || '')
+        ? "Kamera band (boshqa dastur yoki oynada ishlatilmoqda) — qo'ng'iroq kamerasiz davom etadi"
+        : "Kamera topilmadi — qo'ng'iroq kamerasiz davom etadi");
+    }
+  }
+  try { return await md.getUserMedia({ audio: true, video: false }); }
+  catch (e: any) {
+    if (e?.name === 'NotAllowedError') throw e;
+    warn("Mikrofon band yoki topilmadi — siz eshitasiz, lekin sizni eshitishmaydi");
+    return new MediaStream();
+  }
+}
+
 function buildIceConfig(): RTCConfiguration {
   const stunServers: RTCIceServer[] = [
     { urls: 'stun:stun.l.google.com:19302' },
@@ -72,9 +95,14 @@ function buildIceConfig(): RTCConfiguration {
 async function resolveIceConfig(): Promise<RTCConfiguration> {
   try {
     const token = localStorage.getItem('token');
+    // MUHIM: avval timeout yo'q edi — server sekin javob bersa (Render uyg'onishi, TURN xizmati javob
+    // bermasa) kamera tayyor bo'lsa ham qo'ng'iroq boshlanmay "Ulanmoqda..."da qolib ketardi.
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 4000);
     const res = await fetch(`${API_BASE}/api/calls/ice-config`, {
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    });
+      signal: ctrl.signal,
+    }).finally(() => clearTimeout(timer));
     if (res.ok) {
       const data = await res.json();
       if (data.configured && Array.isArray(data.iceServers) && data.iceServers.length) {
@@ -173,6 +201,12 @@ export default function CallOverlay({ currentUser, users, call, onClose, onSendM
     if (pcs.current[peerId]) return pcs.current[peerId];
     const pc = new RTCPeerConnection(iceConfigRef.current);
     localStream.current?.getTracks().forEach(t => pc.addTrack(t, localStream.current!));
+    // Kamera/mikrofon olinmagan bo'lsa (band yoki ruxsat yo'q) — baribir qarshi tomonning ovozi/videosini
+    // qabul qilamiz (offer'da recvonly m-line bo'lmasa, suhbatdosh hech narsa yubora olmasdi).
+    if (call.direction === 'out' || call.videoChat) {
+      if (!localStream.current?.getAudioTracks().length) try { pc.addTransceiver('audio', { direction: 'recvonly' }); } catch {}
+      if (call.mode === 'video' && !localStream.current?.getVideoTracks().length) try { pc.addTransceiver('video', { direction: 'recvonly' }); } catch {}
+    }
     pc.onicecandidate = e => { if (e.candidate) socket?.emit('call:ice', { to: peerId, from: currentUser.id, candidate: e.candidate }); };
     pc.ontrack = e => { setRemote(prev => ({ ...prev, [peerId]: e.streams[0] })); setStatus('connected'); watchMediaFlow(peerId, pc); };
     pc.oniceconnectionstatechange = () => {
@@ -188,6 +222,7 @@ export default function CallOverlay({ currentUser, users, call, onClose, onSendM
       }
     };
     pc.onconnectionstatechange = () => {
+      if (pc.connectionState === 'connected') setStatus('connected');
       if (call.videoChat && (pc.connectionState === 'failed' || pc.connectionState === 'closed')) closePeerRef.current?.(peerId);
     };
     pcs.current[peerId] = pc;
@@ -210,6 +245,8 @@ export default function CallOverlay({ currentUser, users, call, onClose, onSendM
   };
 
   const flushIce = async (peerId: string) => {
+    const early = takeEarlyIce(peerId);
+    if (early.length) (pendingIce.current[peerId] ||= []).unshift(...early);
     const pc = pcs.current[peerId]; const list = pendingIce.current[peerId];
     if (pc && list) { for (const c of list) { try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch {} } pendingIce.current[peerId] = []; }
   };
@@ -225,9 +262,11 @@ export default function CallOverlay({ currentUser, users, call, onClose, onSendM
         // bo'ladi — TURN konfiguratsiyasi ESKIRIB QOLGAN holda emas, TO'G'RI
         // (Metered'dan) holatda ishlatiladi.
         const [stream] = await Promise.all([
-          navigator.mediaDevices.getUserMedia({ audio: true, video: call.mode === 'video' ? { facingMode } : false }),
+          acquireMedia(call.mode === 'video', facingMode, msg => toast.warning(msg)),
           resolveIceConfig().then(cfg => { iceConfigRef.current = cfg; }),
         ]);
+        if (call.mode === 'video' && !stream.getVideoTracks().length) { camOffRef.current = true; setCamOff(true); }
+        if (!stream.getAudioTracks().length) { mutedRef.current = true; setMuted(true); }
         if (cancelled) { stream.getTracks().forEach(t => t.stop()); return; }
         localStream.current = stream;
         setLocalStreamState(stream);
@@ -240,6 +279,15 @@ export default function CallOverlay({ currentUser, users, call, onClose, onSendM
         // accept() shu promise'ni kutib turib stream tayyor bo'lgandan keyin createAnswer qiladi
         streamReadyResolve.current?.(stream);
       } catch (e: any) { toast.error(t('call.permissionRequired', { message: e?.message || '' })); onClose(); return; }
+      // 35 soniyada ulanish bo'lmasa — jim "Ulanmoqda..." o'rniga sababini aytamiz
+      setTimeout(() => {
+        if (cancelled) return;
+        const anyConnected = Object.values(pcs.current).some(pc => pc.connectionState === 'connected');
+        const anyAnswered = Object.values(pcs.current).some(pc => !!pc.remoteDescription);
+        if (anyConnected || call.videoChat) return;
+        if (call.direction === 'out' && !anyAnswered) toast.message(t('call.noAnswer', "Javob bo'lmayapti — suhbatdosh ilovasi yopiq yoki internetsiz bo'lishi mumkin"));
+        else if (anyAnswered) toast.error(t('call.networkBlocked', "Ulanib bo'lmadi: tarmoq to'g'ridan-to'g'ri ulanishga ruxsat bermayapti (TURN server ishlamayapti). Wi-Fi/mobil internetni almashtirib ko'ring."));
+      }, 35_000);
       if (call.videoChat && call.groupId) {
         // Telegram-ga o'xshash guruh video chat — hech kim CHAQIRILMAYDI.
         // "Boshlash yoki qo'shilish" — bitta hodisa; server javobida hozirgi

@@ -25,10 +25,14 @@ function baseUrl() {
   return `https://${APP_NAME}.metered.live/api/v1/turn`;
 }
 
+// Metered javob bermasa so'rov abadiy osilib qolmasin (qo'ng'iroq shu javobni kutadi)
+const withTimeout = (ms: number): AbortSignal => { const c = new AbortController(); setTimeout(() => c.abort(), ms).unref?.(); return c.signal; };
+
 async function mintAndCache(): Promise<void> {
   if (!configured) return;
   const createRes = await fetch(`${baseUrl()}/credential?secretKey=${encodeURIComponent(SECRET_KEY!)}`, {
     method: 'POST',
+    signal: withTimeout(8000),
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       expiryInSeconds: CREDENTIAL_TTL_SECONDS,
@@ -38,7 +42,7 @@ async function mintAndCache(): Promise<void> {
   if (!createRes.ok) throw new Error(`Metered credential yaratish muvaffaqiyatsiz: ${createRes.status}`);
   const cred = await createRes.json() as { username: string; password: string; apiKey: string };
 
-  const listRes = await fetch(`${baseUrl()}/credentials?apiKey=${encodeURIComponent(cred.apiKey)}`);
+  const listRes = await fetch(`${baseUrl()}/credentials?apiKey=${encodeURIComponent(cred.apiKey)}`, { signal: withTimeout(8000) });
   if (!listRes.ok) throw new Error(`Metered ICE server ro'yxatini olish muvaffaqiyatsiz: ${listRes.status}`);
   const iceServers = await listRes.json() as IceServer[];
 

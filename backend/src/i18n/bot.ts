@@ -31,6 +31,8 @@ interface BotDict {
   kb_broadcast: string;
   kb_disableSite: string;
   kb_enableSite: string;
+  kb_disableApp: string;
+  kb_enableApp: string;
   kb_disableBot: string;
   kb_enableBot: string;
   exitChat: string;
@@ -65,6 +67,8 @@ interface BotDict {
   broadcastUnsupportedType: string;
   siteEnabledMsg: (p: { time: string }) => string;
   siteDisabledMsg: (p: { time: string }) => string;
+  appEnabledMsg: (p: { time: string }) => string;
+  appDisabledMsg: (p: { time: string }) => string;
   botEnabledMsg: (p: { time: string }) => string;
   botDisabledMsg: (p: { time: string }) => string;
   botMaintenanceMsg: string;
@@ -229,6 +233,8 @@ const uz: BotDict = {
   kb_broadcast: '📢 Xabar yuborish',
   kb_disableSite: '🔴 Saytni o\'chirish',
   kb_enableSite: '🟢 Saytni yoqish',
+  kb_disableApp: '🔴 Ilovani o\'chirish',
+  kb_enableApp: '🟢 Ilovani yoqish',
   kb_disableBot: '🔴 Botni o\'chirish',
   kb_enableBot: '🟢 Botni yoqish',
   exitChat: '🔚 Chatni tugatish',
@@ -263,6 +269,8 @@ const uz: BotDict = {
   broadcastUnsupportedType: "⚠️ Bu turdagi xabar qo'llab-quvvatlanmaydi — faqat matn yoki APK/EXE fayl yuboring, yoki \"⏹ Yakunlash\"ni bosing.",
   siteEnabledMsg: (p) => `✅ Sayt hozir FAOL ishlamoqda\n🕐 Yoqilgan vaqt: ${p.time}\n\nBarcha foydalanuvchilar kira oladi.`,
   siteDisabledMsg: (p) => `🔴 Sayt hozir O'CHIRILGAN (texnik ishlar rejimi)\n🕐 O'chirilgan vaqt: ${p.time}\n\nSizdan boshqa hech kim kira olmaydi — qayta yoqishni unutmang.`,
+  appEnabledMsg: (p) => `✅ Ilova (Windows / Android) hozir FAOL ishlamoqda\n🕐 Yoqilgan vaqt: ${p.time}\n\nBarcha foydalanuvchilar ilovadan kira oladi.`,
+  appDisabledMsg: (p) => `🔴 Ilova (Windows / Android) hozir O'CHIRILGAN (texnik ishlar rejimi)\n🕐 O'chirilgan vaqt: ${p.time}\n\nSayt bunga bog'liq emas — u alohida boshqariladi. Ilovani qayta yoqishni unutmang.`,
   botEnabledMsg: (p) => `✅ Bot hozir FAOL ishlamoqda\n🕐 Yoqilgan vaqt: ${p.time}\n\nBarcha foydalanuvchilar foydalana oladi.`,
   botDisabledMsg: (p) => `🔴 Bot hozir O'CHIRILGAN (texnik ishlar rejimi)\n🕐 O'chirilgan vaqt: ${p.time}\n\nSizdan boshqa hech kim bot bilan ishlay olmaydi — qayta yoqishni unutmang.`,
   botMaintenanceMsg: "🛠 Bot hozir texnik ishlar tufayli faol emas.\n\nPastdagi \"🔄 Yangilash\" tugmasini bosib, istalgan payt holatni qayta tekshirishingiz mumkin.",
@@ -435,6 +443,8 @@ const ru: BotDict = {
   kb_broadcast: '📢 Отправить сообщение',
   kb_disableSite: '🔴 Отключить сайт',
   kb_enableSite: '🟢 Включить сайт',
+  kb_disableApp: '🔴 Отключить приложение',
+  kb_enableApp: '🟢 Включить приложение',
   kb_disableBot: '🔴 Отключить бота',
   kb_enableBot: '🟢 Включить бота',
   exitChat: '🔚 Завершить чат',
@@ -469,6 +479,8 @@ const ru: BotDict = {
   broadcastUnsupportedType: "⚠️ Этот тип сообщения не поддерживается — отправьте только текст или APK/EXE файл, либо нажмите \"⏹ Завершить\".",
   siteEnabledMsg: (p) => `✅ Сайт сейчас АКТИВЕН\n🕐 Время включения: ${p.time}\n\nВсе пользователи могут войти.`,
   siteDisabledMsg: (p) => `🔴 Сайт сейчас ОТКЛЮЧЁН (режим техобслуживания)\n🕐 Время отключения: ${p.time}\n\nКроме вас никто не сможет войти — не забудьте включить обратно.`,
+  appEnabledMsg: (p) => `✅ Приложение (Windows / Android) сейчас АКТИВНО\n🕐 Время включения: ${p.time}\n\nВсе пользователи могут войти через приложение.`,
+  appDisabledMsg: (p) => `🔴 Приложение (Windows / Android) сейчас ОТКЛЮЧЕНО (режим техобслуживания)\n🕐 Время отключения: ${p.time}\n\nСайт управляется отдельно. Не забудьте включить приложение обратно.`,
   botEnabledMsg: (p) => `✅ Бот сейчас АКТИВЕН\n🕐 Время включения: ${p.time}\n\nВсе пользователи могут пользоваться.`,
   botDisabledMsg: (p) => `🔴 Бот сейчас ОТКЛЮЧЁН (режим техобслуживания)\n🕐 Время отключения: ${p.time}\n\nКроме вас никто не сможет пользоваться ботом — не забудьте включить обратно.`,
   botMaintenanceMsg: "🛠 Бот сейчас не работает из-за технических работ.\n\nНажмите \"🔄 Обновить\" ниже, чтобы в любой момент проверить статус.",

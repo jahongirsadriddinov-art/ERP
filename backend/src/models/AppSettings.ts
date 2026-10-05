@@ -6,6 +6,8 @@ import mongoose, { Schema, Document } from 'mongoose';
 export interface IAppSettings extends Document {
   key: string; // doim 'global'
   siteEnabled: boolean;
+  // Ilovalar (Windows exe / Android APK) — saytdan ALOHIDA yoqiladi/o'chiriladi
+  appEnabled: boolean;
   botEnabled: boolean;
   // Dasturchi bot-menyusidagi tugma matnlarini o'zi o'zgartirishi uchun —
   // { 'kb_broadcast': '📣 Elon yuborish', ... }. Bo'sh/mavjud bo'lmagan
@@ -59,6 +61,7 @@ export interface IAppSettings extends Document {
 const AppSettingsSchema = new Schema<IAppSettings>({
   key: { type: String, required: true, unique: true, default: 'global' },
   siteEnabled: { type: Boolean, default: true },
+  appEnabled: { type: Boolean, default: true },
   botEnabled: { type: Boolean, default: true },
   devButtonLabels: { type: Schema.Types.Mixed, default: {} },
   devButtonOrder: { type: [String], default: [] },

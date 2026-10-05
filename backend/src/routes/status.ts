@@ -12,13 +12,14 @@ router.get('/', async (_req, res) => {
     const settings = await AppSettings.findOne({ key: 'global' }).lean();
     res.json({
       siteEnabled: settings?.siteEnabled !== false,
+      appEnabled: (settings as any)?.appEnabled !== false,
       botEnabled: settings?.botEnabled !== false,
     });
   } catch (err) {
     console.error('[status]', err);
     // Xatolik holatida ham sayt ISHLASHDA DAVOM ETSIN — status tekshiruvi
     // o'zi hech qachon saytni "yolg'on" o'chirib qo'ymasligi kerak.
-    res.json({ siteEnabled: true, botEnabled: true });
+    res.json({ siteEnabled: true, appEnabled: true, botEnabled: true });
   }
 });
 

@@ -4401,11 +4401,17 @@ export default function App() {
     setStatusChecking(true);
     return fetch(`${API_BASE}/api/status`)
       .then(r => r.json())
-      .then(d => setSiteEnabled(d?.siteEnabled !== false))
+      // Ilova (exe/APK) va sayt alohida yoqiladi/o'chiriladi
+      .then(d => setSiteEnabled(isNative() ? d?.appEnabled !== false : d?.siteEnabled !== false))
       .catch(() => {})
       .finally(() => setStatusChecking(false));
   };
   useEffect(() => { checkSiteStatus();
+    // Ish jarayonida o'chirilsa (API 503 maintenance) — darhol tekshiramiz; har daqiqada ham
+    const onMaint = () => checkSiteStatus();
+    window.addEventListener('erp:maintenance', onMaint);
+    const iv = setInterval(checkSiteStatus, 60_000);
+    return () => { window.removeEventListener('erp:maintenance', onMaint); clearInterval(iv); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

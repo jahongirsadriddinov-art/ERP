@@ -12,6 +12,9 @@
     "core:window:allow-request-user-attention",
     "notification:default",
     "opener:default",
-    "dialog:default"
+    "dialog:default",
+    "dialog:allow-ask",
+    "dialog:allow-confirm",
+    "dialog:allow-message"
   ]
 }

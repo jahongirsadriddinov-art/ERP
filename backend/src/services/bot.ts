@@ -540,11 +540,11 @@ function devLabel(settings: any, key: string, lang?: BotLang): string {
 // alohida pinlangan qator) va kb_language (BARCHA rollar uchun umumiy global
 // handler bilan solishtiriladi — shu yerda o'zgartirilsa o'sha handler
 // buzilardi) hech qaysi scope'ga kiritilmagan.
-const DEV_LABEL_KEYS = ['kb_broadcast', 'kb_disableSite', 'kb_enableSite', 'kb_disableBot', 'kb_enableBot', 'kb_firmsList', 'kb_allUsers', 'kb_allSubscriptions', 'kb_generalStats', 'kb_chatHistory', 'kb_devSettings'] as const;
+const DEV_LABEL_KEYS = ['kb_broadcast', 'kb_disableSite', 'kb_enableSite', 'kb_disableApp', 'kb_enableApp', 'kb_disableBot', 'kb_enableBot', 'kb_firmsList', 'kb_allUsers', 'kb_allSubscriptions', 'kb_generalStats', 'kb_chatHistory', 'kb_devSettings'] as const;
 // Tartibini o'zgartirib bo'ladigan "atom"lar — siteToggle/botToggle holatga
 // qarab ikki xil matndan (yoqilgan/o'chirilgan) birini ko'rsatadi, lekin
 // POZITSIYA sifatida bitta joy egallaydi.
-const DEFAULT_DEV_ORDER = ['kb_broadcast', 'siteToggle', 'botToggle', 'kb_firmsList', 'kb_allUsers', 'kb_allSubscriptions', 'kb_generalStats', 'kb_chatHistory', 'kb_devSettings'];
+const DEFAULT_DEV_ORDER = ['kb_broadcast', 'siteToggle', 'appToggle', 'botToggle', 'kb_firmsList', 'kb_allUsers', 'kb_allSubscriptions', 'kb_generalStats', 'kb_chatHistory', 'kb_devSettings'];
 // Admin (direktor/orinbosar) va ishchi (worker) menyulari — bularda
 // "toggle atom" yo'q, har biri oddiy statik kalit.
 const ADMIN_LABEL_KEYS = ['kb_chat', 'kb_pendingApprovals', 'kb_financeStatus', 'kb_objects', 'kb_staffList', 'kb_report', 'kb_subscriptionStatus', 'kb_addExpense', 'kb_expenseHistory'] as const;
@@ -559,6 +559,7 @@ const SCOPE_TITLE_KEY: Record<KbScope, 'kb_devSettingsScopeDev' | 'kb_devSetting
 function scopeAtomLabel(settings: any, scope: KbScope, atom: string, lang?: BotLang): string {
   if (scope === 'dev') {
     if (atom === 'siteToggle') return settings?.siteEnabled !== false ? scopedLabel(settings, 'dev', 'kb_disableSite', lang) : scopedLabel(settings, 'dev', 'kb_enableSite', lang);
+    if (atom === 'appToggle') return settings?.appEnabled !== false ? scopedLabel(settings, 'dev', 'kb_disableApp', lang) : scopedLabel(settings, 'dev', 'kb_enableApp', lang);
     if (atom === 'botToggle') return settings?.botEnabled !== false ? scopedLabel(settings, 'dev', 'kb_disableBot', lang) : scopedLabel(settings, 'dev', 'kb_enableBot', lang);
   }
   return scopedLabel(settings, scope, atom, lang);
@@ -574,7 +575,7 @@ function effectiveOrder(settings: any, scope: KbScope): string[] {
 // Sayt/bot yoqilganda-o'chirilganda va bot texnik ishlar rejimida ko'rinadigan
 // XABAR matnlari — bular ham dasturchi tomonidan qo'lda tahrirlanishi mumkin
 // (aniq talab: "boradigan xabarni ham ozim qolda tahrirlaydigan bolsin").
-const DEV_MSG_KEYS = ['siteEnabledMsg', 'siteDisabledMsg', 'botEnabledMsg', 'botDisabledMsg', 'botMaintenanceMsg', 'botStillDisabledMsg', 'botNowEnabledMsg'] as const;
+const DEV_MSG_KEYS = ['siteEnabledMsg', 'siteDisabledMsg', 'appEnabledMsg', 'appDisabledMsg', 'botEnabledMsg', 'botDisabledMsg', 'botMaintenanceMsg', 'botStillDisabledMsg', 'botNowEnabledMsg'] as const;
 // {time}ni HAQIQIY vaqt bilan almashtiradi — o'rniga qo'yilgan matn
 // uzunligi farqi bo'lsa, undan KEYIN keladigan entity (masalan premium
 // emoji) offsetlarini ham mos ravishda suradi (aks holda emoji matnning
@@ -806,9 +807,11 @@ const CHECKIN_ONLY_KEYBOARD = (lang?: BotLang) => ({
 // DEVELOPER_KEYBOARD VA devReorderMenu ikkalasida ham bir xil ishlatiladi.
 function buildAtomLabel(settings: any, lang?: BotLang) {
   const siteOn = settings?.siteEnabled !== false;
+  const appOn = settings?.appEnabled !== false;
   const botOn = settings?.botEnabled !== false;
   return (atom: string): string => {
     if (atom === 'siteToggle') return siteOn ? devLabel(settings, 'kb_disableSite', lang) : devLabel(settings, 'kb_enableSite', lang);
+    if (atom === 'appToggle') return appOn ? devLabel(settings, 'kb_disableApp', lang) : devLabel(settings, 'kb_enableApp', lang);
     if (atom === 'botToggle') return botOn ? devLabel(settings, 'kb_disableBot', lang) : devLabel(settings, 'kb_enableBot', lang);
     return devLabel(settings, atom, lang);
   };
@@ -827,7 +830,8 @@ const DEVELOPER_KEYBOARD = async (lang?: BotLang) => {
     ? order.map(atom => [{ text: atomLabel(atom) }])
     : [
         [{ text: atomLabel('kb_broadcast') }],
-        [{ text: atomLabel('siteToggle') }, { text: atomLabel('botToggle') }],
+        [{ text: atomLabel('siteToggle') }, { text: atomLabel('appToggle') }],
+        [{ text: atomLabel('botToggle') }],
         [{ text: atomLabel('kb_firmsList') }, { text: atomLabel('kb_allUsers') }],
         [{ text: atomLabel('kb_allSubscriptions') }, { text: atomLabel('kb_generalStats') }],
         [{ text: atomLabel('kb_chatHistory') }],
@@ -1912,6 +1916,14 @@ bot.on('message', async (msg: any) => {
       await AppSettings.findOneAndUpdate({ key: 'global' }, { $set: { key: 'global', siteEnabled: enable, updatedAt: new Date() } }, { upsert: true });
       cachedAppSettings = null;
       { const m = devEffectiveMsgFull(devSettings, enable ? 'siteEnabledMsg' : 'siteDisabledMsg', user.language as BotLang | undefined, true);
+        bot.sendMessage(chatId, m.text, { entities: m.entities, reply_markup: await keyboardForUser(user, user.language) }); }
+      return;
+    }
+    if (text === L('kb_disableApp') || text === L('kb_enableApp')) {
+      const enable = text === L('kb_enableApp');
+      await AppSettings.findOneAndUpdate({ key: 'global' }, { $set: { key: 'global', appEnabled: enable, updatedAt: new Date() } }, { upsert: true });
+      cachedAppSettings = null;
+      { const m = devEffectiveMsgFull(devSettings, enable ? 'appEnabledMsg' : 'appDisabledMsg', user.language as BotLang | undefined, true);
         bot.sendMessage(chatId, m.text, { entities: m.entities, reply_markup: await keyboardForUser(user, user.language) }); }
       return;
     }

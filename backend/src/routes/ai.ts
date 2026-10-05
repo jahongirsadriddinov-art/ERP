@@ -93,6 +93,8 @@ const SYSTEM_TEMPLATE = (callerRole: string, usersText: string, projectsText: st
 - IMLO: faqat o'zbek LOTIN alifbosi: a b d e f g h i j k l m n o p q r s t u v x y z, o', g', sh, ch, ng. Tutuq belgisi FAQAT oddiy ' (o', g', ma'lumot).
 - TAQIQLANGAN harflar: turkcha/boshqa (ş ç ğ ı ö ü ä), kirill harflari (foydalanuvchi ruscha yozmagan bo'lsa), g'alati belgilar.
 - Foydalanuvchi ruscha yozsa — ruscha, qisqa javob ber.
+- Belgilarni so'z bilan tushun: "+", "+lari", "plyuslari" = AFZALLIKLARI; "-", "-lari", "minuslari" = KAMCHILIKLARI. Javobda HECH QACHON "-lari", "+lari", "-lar" deb yozma — to'liq so'z ishlat ("kamchiliklari", "afzalliklari").
+- Qisqa xabar ("-", "+", "?", "yana") oldingi mavzuning davomi deb tushun; aniqlashtirish so'rama.
 
 📋 XODIMLAR RO'YXATI (FAQAT SIZ UCHUN — FOYDALANUVCHIGA KO'RSATMANG):
 ${usersText}
@@ -225,6 +227,9 @@ router.post('/chat', requireAuth, requireBoss, requireFeature('ai_assistant'), a
     if (!parsed.type) parsed.type = 'query';
     if (!parsed.response) parsed.response = 'Kechirasiz, tushunmadim.';
     parsed.response = normalizeUz(String(parsed.response));
+    parsed.response = parsed.response
+      .replace(/(^|[\s(])[-–]\s?lar(i)?(?![\p{L}'])/giu, (_: string, p: string, i: string) => `${p}kamchilik${i ? 'lari' : 'lar'}`)
+      .replace(/(^|[\s(])\+\s?lar(i)?(?![\p{L}'])/giu, (_: string, p: string, i: string) => `${p}afzallik${i ? 'lari' : 'lar'}`);
     if (parsed.action?.text) parsed.action.text = normalizeUz(String(parsed.action.text));
 
     res.json(parsed);

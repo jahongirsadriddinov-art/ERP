@@ -2,6 +2,16 @@
 // Production (hozir: erp-ebon-seven-91.vercel.app → qurilisherp-backend.onrender.com)
 // va local o'rtasida sozlanadigan baza. .env / .env.production dagi
 // VITE_API_URL orqali boshqariladi — domen hech qayerda qattiq yozilmagan.
+// Qaysi mijoz: Windows ilova (Tauri), Android ilova (Capacitor) yoki sayt
+export const CLIENT_KIND: string = (() => {
+  try {
+    const w = window as any;
+    if (w.__TAURI_INTERNALS__) return 'app-windows';
+    if (w.Capacitor?.isNativePlatform?.()) return `app-${w.Capacitor.getPlatform?.() || 'android'}`;
+  } catch { /* */ }
+  return 'web';
+})();
+
 export const API_BASE: string =
   (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') ||
   'http://localhost:5000';
@@ -95,7 +105,8 @@ function installAuthFetch() {
     }
     return authFetch(input, init);
   };
-  function authFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  async function authFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+    let isOwnApi = false;
     try {
       const url =
         typeof input === 'string' ? input :
@@ -103,21 +114,25 @@ function installAuthFetch() {
         (input as Request).url;
       // Faqat o'z API'imizga (API_BASE) yuborilgan so'rovlarga token qo'shamiz.
       if (url && url.indexOf(API_BASE) === 0) {
+        isOwnApi = true;
         const token = localStorage.getItem('token');
-        if (token) {
-          const headers = new Headers(
-            init?.headers || (input instanceof Request ? input.headers : undefined)
-          );
-          if (!headers.has('Authorization')) {
-            headers.set('Authorization', `Bearer ${token}`);
-            init = { ...init, headers };
-          }
-        }
+        const headers = new Headers(
+          init?.headers || (input instanceof Request ? input.headers : undefined)
+        );
+        if (token && !headers.has('Authorization')) headers.set('Authorization', `Bearer ${token}`);
+        // Sayt va ilova texnik ishlar rejimida ALOHIDA boshqariladi — backend qaysi biri ekanini shundan biladi
+        if (!headers.has('X-Client')) headers.set('X-Client', CLIENT_KIND);
+        init = { ...init, headers };
       }
     } catch {
       /* interceptor hech qachon asosiy fetch'ni sindirmasin */
     }
-    return orig(input as any, init);
+    const res = await orig(input as any, init);
+    // Ish jarayonida texnik ishlar yoqilsa — ilova/sayt darhol "texnik ishlar" ekraniga o'tsin
+    if (isOwnApi && res.status === 503) {
+      res.clone().json().then(d => { if (d?.maintenance) window.dispatchEvent(new CustomEvent('erp:maintenance')); }).catch(() => {});
+    }
+    return res;
   };
 }
 installAuthFetch();

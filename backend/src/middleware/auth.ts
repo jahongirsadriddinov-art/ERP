@@ -51,23 +51,46 @@ if (!process.env.JWT_SECRET) {
 // HAR so'rovda bazaga murojaat qilmaslik uchun qisqa (5s) keshlanadi —
 // texnik ishlar holati bir necha soniya kechikib tarqalishi qabul qilinadi,
 // buning evaziga oddiy ishlashda qo'shimcha DB yukini oldini oladi.
-let cachedSiteEnabled: boolean | null = null;
-let siteEnabledCachedAt = 0;
+// Sayt va ilovalar (exe/APK) ALOHIDA boshqariladi: so'rov qayerdan kelganiga qarab o'z bayrog'i tekshiriladi.
+let cachedFlags: { site: boolean; app: boolean } | null = null;
+let flagsCachedAt = 0;
 const SITE_STATUS_CACHE_MS = 5000;
-async function isSiteEnabled(): Promise<boolean> {
+async function getFlags(): Promise<{ site: boolean; app: boolean }> {
   const now = Date.now();
-  if (cachedSiteEnabled === null || now - siteEnabledCachedAt > SITE_STATUS_CACHE_MS) {
+  if (!cachedFlags || now - flagsCachedAt > SITE_STATUS_CACHE_MS) {
     try {
-      const s = await AppSettings.findOne({ key: 'global' }).select('siteEnabled').lean();
-      cachedSiteEnabled = s?.siteEnabled !== false;
-      siteEnabledCachedAt = now;
+      const s: any = await AppSettings.findOne({ key: 'global' }).select('siteEnabled appEnabled').lean();
+      cachedFlags = { site: s?.siteEnabled !== false, app: s?.appEnabled !== false };
+      flagsCachedAt = now;
     } catch {
-      return true; // xatolik saytni "yolg'on" yopib qo'ymasin
+      return { site: true, app: true }; // xatolik hech narsani "yolg'on" yopib qo'ymasin
     }
   }
-  return cachedSiteEnabled;
+  return cachedFlags;
 }
-const MAINTENANCE_RESPONSE = { error: "Sayt hozir texnik ishlar tufayli vaqtincha ishlamayapti. Birozdan so'ng qayta urinib ko'ring.", maintenance: true };
+/** So'rov o'rnatilgan ilovadanmi (Windows Tauri / Android Capacitor)? Yangi ilovalar X-Client yuboradi,
+ *  eskilari Origin'dan aniqlanadi: tauri.localhost, https://localhost (portsiz), capacitor:// / tauri:// */
+export function isAppRequest(req: Request): boolean {
+  const c = String(req.headers['x-client'] || '');
+  if (c.startsWith('app')) return true;
+  if (c === 'web') return false;
+  const origin = String(req.headers.origin || '');
+  if (/^(capacitor|tauri|ionic):\/\//.test(origin)) return true;
+  try {
+    const u = new URL(origin);
+    return u.hostname === 'tauri.localhost' || (u.hostname === 'localhost' && !u.port);
+  } catch { return false; }
+}
+async function surfaceEnabled(req: Request): Promise<boolean> {
+  const f = await getFlags();
+  return isAppRequest(req) ? f.app : f.site;
+}
+const maintenanceResponse = (req: Request) => ({
+  error: isAppRequest(req)
+    ? "Ilova hozir texnik ishlar tufayli vaqtincha ishlamayapti. Birozdan so'ng qayta urinib ko'ring."
+    : "Sayt hozir texnik ishlar tufayli vaqtincha ishlamayapti. Birozdan so'ng qayta urinib ko'ring.",
+  maintenance: true,
+});
 
 function readToken(req: Request): string | null {
   const header = req.headers.authorization;
@@ -153,8 +176,8 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     }
     // Texnik ishlar rejimi — dasturchidan boshqa hech kim (u qayta yoqishi
     // kerak bo'lgani uchun) o'tolmaydi.
-    if (!fresh.isDeveloper && !(await isSiteEnabled())) {
-      return res.status(503).json(MAINTENANCE_RESPONSE);
+    if (!fresh.isDeveloper && !(await surfaceEnabled(req))) {
+      return res.status(503).json(maintenanceResponse(req));
     }
     req.user = fresh;
     const ctx: TenantContext = {
@@ -185,8 +208,8 @@ export async function optionalAuth(req: Request, res: Response, next: NextFuncti
     const payload = jwt.verify(token, JWT_SECRET) as JwtPayload;
     const fresh = await loadFreshUser(payload);
     if (!fresh) return next(); // o'chirilgan hisob — mehmon sifatida davom
-    if (!fresh.isDeveloper && !(await isSiteEnabled())) {
-      return res.status(503).json(MAINTENANCE_RESPONSE);
+    if (!fresh.isDeveloper && !(await surfaceEnabled(req))) {
+      return res.status(503).json(maintenanceResponse(req));
     }
     req.user = fresh;
     const ctx: TenantContext = {

@@ -38,6 +38,10 @@ function RegField({ label, children, hint }: { label: string; children: any; hin
 export default function RegisterWizard({ onBack, onDone }: { onBack: () => void; onDone: (u: any, company?: any) => void }) {
   const { t, i18n } = useTranslation();
   const [step, setStep] = useState<RegStep>("warn");
+  // Xulosa sahifasidan "Tahrirlash" bosilganda — o'sha qadam tugagach to'g'ri XULOSAGA qaytamiz
+  // (avval keyingi barcha qadamlarni qaytadan bosib chiqish kerak edi).
+  const [editReturn, setEditReturn] = useState(false);
+  const nextStep = (normal: RegStep) => { if (editReturn) { setEditReturn(false); setStep("summary"); } else setStep(normal); };
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [regLanguage, setRegLanguage] = useState<SiteLang>((i18n.language as SiteLang) || 'uz');
@@ -216,7 +220,7 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
         if (stop) return;
         setBotStatus(d.step);
         if (d.step === "EXPIRED") { setError(t('register.sessionExpired')); clearReg(); setStep("phone"); return; }
-        if (d.consentGiven) { setStep("owner"); return; }
+        if (d.consentGiven) { nextStep("owner"); return; }
       } catch { /* tarmoq — keyingi urinishda */ }
     };
     poll();
@@ -322,6 +326,8 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
       warn: null, tarif: "warn", payment: "tarif", phone: "payment",
       bot: "phone", owner: "bot", company: "owner", brand: "company", summary: "brand", done: null
     };
+    // Tahrirlash rejimida orqaga — to'g'ri xulosaga
+    if (editReturn && step !== "payment" && step !== "bot") { setEditReturn(false); setStep("summary"); return; }
     const prev = map[step];
     if (prev) setStep(prev); else onBack();
   };
@@ -723,7 +729,7 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
               ].map((r, i) => (
                 <div key={i} className="flex items-center justify-between surface rounded-xl px-4 py-3">
                   <div><p className="text-[11px] text-muted-foreground">{r.t}</p><p className="text-sm font-medium">{r.v || "—"}</p></div>
-                  <button onClick={() => setStep(r.go)} className="text-xs text-primary font-semibold">{t('common.edit')}</button>
+                  <button onClick={() => { setEditReturn(true); setStep(r.go); }} className="text-xs text-primary font-semibold">{t('common.edit')}</button>
                 </div>
               ))}
             </div>
@@ -880,9 +886,9 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
             </button>
           )}
           {step === "payment" && (
-            <button onClick={() => setStep("phone")}
+            <button onClick={() => nextStep("phone")}
               className="w-full bg-primary text-white text-sm font-semibold py-3.5 rounded-xl min-h-[48px] active:scale-[0.98] transition-transform">
-              {t('register.continue')}
+              {editReturn ? t('register.saveBackToSummary', "Saqlash va xulosaga qaytish") : t('register.continue')}
             </button>
           )}
           {step === "phone" && (
@@ -896,18 +902,18 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
               if (!firstName.trim() || !lastName.trim()) { setError(t('register.nameRequired')); return; }
               if (password.length < 8) { setError(t('register.passwordTooShort')); return; }
               if (password !== password2) { setError(t('register.passwordMismatch')); return; }
-              setError(""); setStep("company");
-            }} className="w-full bg-primary text-white text-sm font-semibold py-3.5 rounded-xl min-h-[48px]">{t('register.continue')}</button>
+              setError(""); nextStep("company");
+            }} className="w-full bg-primary text-white text-sm font-semibold py-3.5 rounded-xl min-h-[48px]">{editReturn ? t('register.saveBackToSummary', "Saqlash va xulosaga qaytish") : t('register.continue')}</button>
           )}
           {step === "company" && (
             <button onClick={() => {
               if (!companyName.trim()) { setError(t('register.companyNameRequired')); return; }
               if (inn && !/^\d{9}$/.test(inn)) { setError(t('register.innInvalid')); return; }
-              setError(""); setStep("brand");
-            }} className="w-full bg-primary text-white text-sm font-semibold py-3.5 rounded-xl min-h-[48px]">{t('register.continue')}</button>
+              setError(""); nextStep("brand");
+            }} className="w-full bg-primary text-white text-sm font-semibold py-3.5 rounded-xl min-h-[48px]">{editReturn ? t('register.saveBackToSummary', "Saqlash va xulosaga qaytish") : t('register.continue')}</button>
           )}
           {step === "brand" && (
-            <button onClick={() => setStep("summary")} className="w-full bg-primary text-white text-sm font-semibold py-3.5 rounded-xl min-h-[48px]">{t('register.continue')}</button>
+            <button onClick={() => nextStep("summary")} className="w-full bg-primary text-white text-sm font-semibold py-3.5 rounded-xl min-h-[48px]">{editReturn ? t('register.saveBackToSummary', "Saqlash va xulosaga qaytish") : t('register.continue')}</button>
           )}
           {step === "summary" && (
             <button disabled={loading} onClick={complete}

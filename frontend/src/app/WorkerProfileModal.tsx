@@ -62,7 +62,7 @@ export default function WorkerProfileModal({ worker, transfers, expenses, onClos
     setSummary(null);
     fetch(`${API_BASE}/api/gps/user/${worker.id}/summary?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.ok ? r.json() : null).then(d => setSummary(d)).catch(() => setSummary(null));
-    fetch(`${API_BASE}/api/gps/user/${worker.id}?from=${from}&to=${to}`, { headers: { Authorization: `Bearer ${token}` } })
+    fetch(`${API_BASE}/api/gps/user/${worker.id}?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.ok ? r.json() : [])
       .then(d => setTrail(Array.isArray(d) ? d : []))
       .catch(() => setTrail([]))
@@ -83,10 +83,15 @@ export default function WorkerProfileModal({ worker, transfers, expenses, onClos
     layer.clearLayers();
     if (trail.length === 0) return;
     const pts = trail.map(p => [p.lat, p.lng] as [number, number]);
-    L.polyline(pts, { color: 'var(--primary)', weight: 3, opacity: 0.8 }).addTo(layer);
+    // Leaflet rangni SVG atributiga yozadi — u yerda CSS o'zgaruvchisi (var(--primary)) ishlamaydi, chiziq ko'rinmasdi
+    L.polyline(pts, { color: '#ffffff', weight: 7, opacity: 0.85 }).addTo(layer);
+    L.polyline(pts, { color: '#2563eb', weight: 4, opacity: 0.95 }).addTo(layer);
     L.circleMarker(pts[0], { radius: 6, color: '#22c55e', fillColor: '#22c55e', fillOpacity: 1 }).bindTooltip(t('gps.trailStart')).addTo(layer);
     if (pts.length > 1) L.circleMarker(pts[pts.length - 1], { radius: 6, color: '#ef4444', fillColor: '#ef4444', fillOpacity: 1 }).bindTooltip(t('gps.trailEnd')).addTo(layer);
+    // Xarita oyna ochilish animatsiyasi paytida 0 o'lchamda yaratilgan bo'lishi mumkin — o'lchamni qayta hisoblaymiz
+    map.invalidateSize();
     map.fitBounds(pts.length > 1 ? pts : [pts[0], pts[0]], { padding: [30, 30], maxZoom: 16 });
+    setTimeout(() => { map.invalidateSize(); map.fitBounds(pts.length > 1 ? pts : [pts[0], pts[0]], { padding: [30, 30], maxZoom: 16 }); }, 350);
   }, [trail, t]);
 
   useEffect(() => () => { mapRef.current?.remove(); mapRef.current = null; }, []);

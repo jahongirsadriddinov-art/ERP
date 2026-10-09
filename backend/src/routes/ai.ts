@@ -10,6 +10,7 @@ import Message from '../models/Message';
 import AiConversation from '../models/AiConversation';
 import { emitToUser } from '../services/socket';
 import { relayMessageToTelegram } from './messages';
+import { geminiAudioToJson, geminiConfigured } from '../services/gemini';
 
 const router = Router();
 
@@ -247,6 +248,28 @@ router.post('/chat', requireAuth, requireBoss, requireFeature('ai_assistant'), a
 
 // POST /api/ai/execute — tasdiqlashdan so'ng amal bajarish (send_message)
 // va bevosita bajarish (add_user, delete_user, update_user)
+// POST /api/ai/transcribe — ovozli buyruqni matnga aylantirish (Gemini). Brauzerning Web Speech API'si
+// Windows ilova (WebView2) va Android WebView'da ishlamaydi, o'zbekchani ham yomon taniydi — shu sabab
+// ovoz qurilmada yozib olinadi va shu yerda matnga aylantiriladi. Faqat qisqa (≤ ~2 daqiqa) yozuv.
+router.post('/transcribe', requireAuth, requireBoss, requireFeature('ai_assistant'), async (req, res) => {
+  try {
+    if (!geminiConfigured()) return res.status(503).json({ error: 'Ovozni tanish xizmati sozlanmagan' });
+    const { audio, mimeType, lang } = req.body || {};
+    if (typeof audio !== 'string' || audio.length < 200 || audio.length > 4_000_000) return res.status(400).json({ error: "Ovoz yozuvi noto'g'ri yoki juda uzun" });
+    const mt = typeof mimeType === 'string' && /^audio\/[\w.+-]+/.test(mimeType) ? mimeType.split(';')[0] : 'audio/webm';
+    const ru = String(lang || '').startsWith('ru');
+    const prompt = `Bu qurilish firmasi rahbarining AI yordamchiga OVOZLI buyrug'i. Til: ${ru ? 'ruscha' : "o'zbekcha (lotin) yoki ruscha"}.
+Ovozni AYNAN eshitilganidek, to'g'ri imlo bilan matnga aylantir. O'zbekcha bo'lsa — faqat o'zbek lotin alifbosi (o', g', sh, ch; tutuq belgisi oddiy ').
+Ismlar va raqamlarni aniq yoz. Hech narsa qo'shma, javob berma — faqat aytilgan gap. Hech narsa eshitilmasa — bo'sh matn.
+Javob FAQAT JSON: {"text":""}`;
+    const r = await geminiAudioToJson(Buffer.from(audio, 'base64'), mt, prompt);
+    res.json({ text: normalizeUz(String(r?.text || '').trim()).slice(0, 2000) });
+  } catch (err: any) {
+    console.error('[AI transcribe]', err?.message);
+    res.status(500).json({ error: "Ovozni matnga aylantirib bo'lmadi — qayta urinib ko'ring" });
+  }
+});
+
 router.post('/execute', requireAuth, requireBoss, requireFeature('ai_assistant'), async (req, res) => {
   try {
     const { action } = req.body;

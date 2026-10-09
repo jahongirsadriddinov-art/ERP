@@ -1203,7 +1203,15 @@ async function handleExpenseInput(msg: any, chatId: number): Promise<boolean> {
       try {
         const link = await bot.getFileLink(media.file_id);
         const buf = Buffer.from(await (await fetch(link)).arrayBuffer());
-        parsed = await voiceToExpense(buf, media.mime_type || 'audio/ogg', todayInTashkent(), heardOut);
+        const cq = user.companyId ? { companyId: user.companyId } : { _id: null };
+        const [hObjs, hUsers] = await Promise.all([
+          ObjectModel.find(cq).select('name').limit(60).lean().catch(() => []),
+          User.find(cq).select('firstName lastName').limit(80).lean().catch(() => []),
+        ]);
+        parsed = await voiceToExpense(buf, media.mime_type || 'audio/ogg', todayInTashkent(), heardOut, {
+          objects: (hObjs as any[]).map(o => String(o.name || '')),
+          people: (hUsers as any[]).map(u => `${u.firstName || ''} ${u.lastName || ''}`.trim()),
+        });
       } catch (e: any) {
         bot.deleteMessage(chatId, notice.message_id).catch(() => {});
         if (e?.message === 'NO_GEMINI') { await bot.sendMessage(chatId, T.noGemini, { parse_mode: 'Markdown' }); return true; }

@@ -1,3 +1,4 @@
+import { toast } from "sonner";
 import { useState, useRef, useEffect } from "react";
 import X from "@hugeicons/core-free-icons/Cancel01Icon";
 import Check from "@hugeicons/core-free-icons/Tick01Icon";
@@ -175,37 +176,50 @@ export default function AIAssistant({ currentUser, users, token, open, onClose, 
   useEffect(() => { scrollDown(); }, [msgs, pending, loading]);
   useEffect(() => { if (open) setTimeout(() => inputRef.current?.focus(), 120); }, [open]);
   // Modal yopilganda tinglash/gapirish davom etib qolmasin.
-  useEffect(() => { if (!open) { recognitionRef.current?.stop(); window.speechSynthesis?.cancel(); } }, [open]);
+  useEffect(() => { if (!open) { recognitionRef.current?.stop(); stopRecording(); window.speechSynthesis?.cancel(); } }, [open]);
 
-  // Ovozni matnga — natija KELGANDA to'g'ridan-to'g'ri yuboriladi (input
-  // state orqali emas, `send(transcript)` ga bevosita berib) — aks holda
-  // React'ning eskirgan (stale) `input` qiymati muammosi yuzaga kelardi.
-  const toggleListening = () => {
-    if (!speechRecognitionSupported) return;
-    if (listening) { recognitionRef.current?.stop(); return; }
-    const recognition = new SpeechRecognitionAPI();
-    recognition.lang = speechLang;
-    recognition.interimResults = true;
-    recognition.maxAlternatives = 1;
-    recognition.onstart = () => setListening(true);
-    recognition.onerror = () => setListening(false);
-    recognition.onend = () => setListening(false);
-    recognition.onresult = (e: any) => {
-      let transcript = '';
-      let isFinal = false;
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        transcript += e.results[i][0].transcript;
-        if (e.results[i].isFinal) isFinal = true;
-      }
-      setInput(transcript);
-      if (isFinal && transcript.trim()) {
-        recognition.stop();
-        send(transcript.trim());
-      }
+  // Ovozni matnga: ovoz QURILMADA yozib olinadi (MediaRecorder) va serverda (Gemini) matnga aylantiriladi.
+  // Brauzerning Web Speech API'si Windows ilova (WebView2) va Android'da umuman ishlamas, o'zbekchani ham
+  // yomon tanirdi — "Tinglanmoqda" deb turib hech narsa olmasdi. Ikkinchi bosish (yoki 60 s) — to'xtatib yuboradi.
+  const recRef = useRef<{ rec: MediaRecorder; stream: MediaStream; timer: ReturnType<typeof setTimeout> } | null>(null);
+  const [transcribing, setTranscribing] = useState(false);
+  const stopRecording = () => { const r = recRef.current; if (r && r.rec.state !== 'inactive') r.rec.stop(); };
+  const toggleListening = async () => {
+    if (listening) { stopRecording(); return; }
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') { toast.error(t('ai.micUnsupported', "Bu qurilmada ovoz yozib bo'lmaydi")); return; }
+    let stream: MediaStream;
+    try { stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }); }
+    catch { toast.error(t('ai.micDenied', "Mikrofonga ruxsat berilmadi — sozlamalardan ruxsat bering")); return; }
+    const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'].find(m => (MediaRecorder as any).isTypeSupported?.(m)) || '';
+    const rec = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+    const chunks: Blob[] = [];
+    rec.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
+    rec.onstop = async () => {
+      clearTimeout(recRef.current?.timer as any);
+      stream.getTracks().forEach(tr => tr.stop());
+      recRef.current = null;
+      setListening(false);
+      const blob = new Blob(chunks, { type: rec.mimeType || mime || 'audio/webm' });
+      if (blob.size < 1500) return; // juda qisqa — hech narsa aytilmagan
+      setTranscribing(true);
+      try {
+        const buf = new Uint8Array(await blob.arrayBuffer());
+        let bin = ''; for (let k = 0; k < buf.length; k += 0x8000) bin += String.fromCharCode(...buf.subarray(k, k + 0x8000));
+        const r = await fetch(`${API_BASE}/api/ai/transcribe`, { method: 'POST', headers: authHdr, body: JSON.stringify({ audio: btoa(bin), mimeType: blob.type, lang: i18n.language }) });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) { toast.error(d.error || t('ai.transcribeFail', "Ovozni tanib bo'lmadi")); return; }
+        const text = String(d.text || '').trim();
+        if (!text) { toast.message(t('ai.nothingHeard', "Hech narsa eshitilmadi — qayta gapiring")); return; }
+        setInput(text);
+        send(text);
+      } catch { toast.error(t('ai.transcribeFail', "Ovozni tanib bo'lmadi")); }
+      finally { setTranscribing(false); }
     };
-    recognitionRef.current = recognition;
-    recognition.start();
+    rec.start(250);
+    recRef.current = { rec, stream, timer: setTimeout(stopRecording, 60_000) };
+    setListening(true);
   };
+  useEffect(() => () => stopRecording(), []);
 
   const speak = (text: string, idx: number) => {
     if (!speechSynthesisSupported) return;
@@ -557,15 +571,15 @@ export default function AIAssistant({ currentUser, users, token, open, onClose, 
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && !e.shiftKey && send()}
-              placeholder={listening ? t('ai.listeningPlaceholder') as string : t('ai.placeholder')}
+              placeholder={transcribing ? t('ai.transcribing', 'Matnga aylantirilmoqda...') as string : listening ? t('ai.listeningPlaceholder') as string : t('ai.placeholder')}
               className="flex-1 min-w-0 text-[14px] bg-transparent focus:outline-none placeholder:text-muted-foreground/50"
               disabled={loading || !!pending}
             />
-            {speechRecognitionSupported && (
-              <button onClick={toggleListening} disabled={loading || !!pending} aria-label={listening ? t('ai.stopListening') : t('ai.startListening')}
+            {(
+              <button onClick={toggleListening} disabled={loading || !!pending || transcribing} aria-label={listening ? t('ai.stopListening') : t('ai.startListening')}
                 className={`w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-92 flex-shrink-0 disabled:opacity-35 ${listening ? 'text-white' : 'text-muted-foreground hover:text-foreground bg-muted/60'}`}
                 style={listening ? { background: 'linear-gradient(135deg, #ef4444, #f97316)' } : undefined}>
-                <MorphIcon icon={listening ? MicOff : Mic} className="w-4 h-4" />
+                {transcribing ? <MorphIcon icon={Loader2} className="w-4 h-4 animate-spin" /> : <MorphIcon icon={listening ? MicOff : Mic} className="w-4 h-4" />}
               </button>
             )}
             <button onClick={() => send()} disabled={loading || !input.trim() || !!pending} aria-label={t('ai.sendAriaLabel')}

@@ -147,6 +147,11 @@ router.get('/latest', requireFeature('gps_tracking'), async (req, res) => {
 // `from`/`to` (ISO sana-vaqt) — "Kuzatuv" sahifasidagi xodim profilida
 // tanlangan KUN uchun to'liq GPS izini (trail) olish uchun qo'shildi.
 // Berilmasa — eski xatti-harakat (oxirgi N nuqta) saqlanadi.
+export const parseQueryDate = (v?: string): Date | undefined => {
+  if (!v) return undefined;
+  const d = new Date(String(v).trim().replace(/ (\d{2}:\d{2})$/, '+$1'));
+  return isNaN(+d) ? undefined : d;
+};
 router.get('/user/:id', requireFeature('gps_tracking'), async (req, res) => {
   try {
     const tenant = getTenant();
@@ -155,10 +160,11 @@ router.get('/user/:id', requireFeature('gps_tracking'), async (req, res) => {
     if (!isSelf && !isBoss) return res.status(403).json({ error: 'Ruxsat yo\'q' });
     const { limit = '20', from, to } = req.query as Record<string, string>;
     const filter: any = { userId: req.params.id, ...scoped() };
-    if (from || to) {
+    const fromD = parseQueryDate(from), toD = parseQueryDate(to);
+    if (fromD || toD) {
       filter.timestamp = {};
-      if (from) filter.timestamp.$gte = new Date(from);
-      if (to) filter.timestamp.$lte = new Date(to);
+      if (fromD) filter.timestamp.$gte = fromD;
+      if (toD) filter.timestamp.$lte = toD;
     }
     // Sana oralig'i so'ralganda — butun kunni ko'rish uchun standart 20
     // yetarli emas (60s intervalda kuniga ~1440 nuqtagacha bo'lishi mumkin),
@@ -174,6 +180,8 @@ router.get('/user/:id', requireFeature('gps_tracking'), async (req, res) => {
 // soni, bosib o'tilgan masofa, o'rtacha/eng yaxshi aniqlik, batareya, tezlik.
 // (faqat rahbariyat yoki o'zi). Masofa hisobida aniqligi yomon (>200m) nuqtalar
 // va fizik jihatdan mumkin bo'lmagan sakrashlar (>150 km/soat) o'tkazib yuboriladi.
+// Sana parametri: "+05:00" kodlanmasdan yuborilsa so'rovda bo'shliqqa aylanadi ("...T00:00:00 05:00") —
+// yaroqsiz sana bilan iz umuman chiqmasdi. Bo'shliqni qayta "+" qilamiz; baribir yaroqsiz bo'lsa — e'tiborsiz.
 const haversineM = (a: any, b: any) => {
   const R = 6371000, rad = Math.PI / 180;
   const dLat = (b.lat - a.lat) * rad, dLng = (b.lng - a.lng) * rad;
@@ -188,10 +196,11 @@ router.get('/user/:id/summary', requireFeature('gps_tracking'), async (req, res)
     if (!isSelf && !isBoss) return res.status(403).json({ error: "Ruxsat yo'q" });
     const { from, to } = req.query as Record<string, string>;
     const filter: any = { userId: req.params.id, ...scoped() };
-    if (from || to) {
+    const fromD = parseQueryDate(from), toD = parseQueryDate(to);
+    if (fromD || toD) {
       filter.timestamp = {};
-      if (from) filter.timestamp.$gte = new Date(from);
-      if (to) filter.timestamp.$lte = new Date(to);
+      if (fromD) filter.timestamp.$gte = fromD;
+      if (toD) filter.timestamp.$lte = toD;
     }
     const pts: any[] = await GpsLocation.find(filter).sort({ timestamp: 1 }).limit(5000).lean();
     let distanceM = 0, prev: any = null, maxSpeed = 0, accSum = 0, accN = 0, bestAcc: number | undefined;

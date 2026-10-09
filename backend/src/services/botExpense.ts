@@ -116,7 +116,14 @@ export function parseExpenseText(text: string, today?: string): ParsedExpense | 
   return { amount, description: description.slice(0, 300), category: guessExpenseCategory(description), ...base };
 }
 
-const voicePrompt = (today: string) => `Bu qurilish firmasi xodimining XARAJAT (chiqim) haqidagi OVOZLI xabari. Til o'zbekcha yoki ruscha bo'lishi mumkin. Bugungi sana: ${today}.
+export type VoiceHints = { objects?: string[]; people?: string[] };
+const hintBlock = (h?: VoiceHints) => {
+  const o = (h?.objects || []).filter(Boolean).slice(0, 60), p = (h?.people || []).filter(Boolean).slice(0, 80);
+  return (o.length ? `\nFIRMA OBYEKTLARI (projectName shu ro'yxatdan eng mosini AYNAN shu yozuvda tanla, mos kelmasa — eshitilganini yoz): ${o.join(' | ')}` : '')
+    + (p.length ? `\nFIRMA XODIMLARI (recipientName uchun — mos kelsa AYNAN shu yozuvda): ${p.join(' | ')}` : '');
+};
+const voicePrompt = (today: string, hints?: VoiceHints) => `Bu qurilish firmasi xodimining XARAJAT (chiqim) haqidagi OVOZLI xabari. Til o'zbekcha (lotin) yoki ruscha bo'lishi mumkin, sheva va aralash (o'zbek-rus) gaplar ham bo'ladi. Bugungi sana: ${today}.${hintBlock(hints)}
+O'ZBEKCHA SONLAR: bir, ikki, uch, to'rt, besh, olti, yetti, sakkiz, to'qqiz, o'n, yigirma, o'ttiz, qirq, ellik, oltmish, yetmish, sakson, to'qson, yuz, ming, million (mln, "milyon"), milliard. Masalan: "bir yarim million" = 1500000, "ikki yuz ellik ming" = 250000, "o'n besh ming" = 15000, "yarim million" = 500000, "uch yuz" so'zidan keyin "ming" bo'lmasa ham kontekstdan so'm miqdorini aniqla ("uch yuz so'm" emas — qurilishda odatda "uch yuz ming"). Qurilish so'zlari: sement, armatura, g'isht, qum, shag'al, beton, taxta, kraska, profil, gipsokarton, elektrod, truba, kabel, benzin, solyarka, usta, ishchi, avans, oylik, ijara, kran, ekskavator.
 1) Ovozni AYNAN eshitilganidek yozib ol ("transcript"). Eshitilmagan/tushunarsiz narsani o'zing o'ylab topma.
 2) "cleanText": aytilgan BUTUN gapni to'liq, imlo va grammatik jihatdan tuzatilgan, o'qishga qulay ko'rinishda yoz (ma'nosini o'zgartirma, hech narsa qo'shma va qisqartirma).
 3) Maydonlarni ajrat:
@@ -129,9 +136,9 @@ const voicePrompt = (today: string) => `Bu qurilish firmasi xodimining XARAJAT (
    - "category": FAQAT shulardan biri: "oylik" (ish haqi/avans), "material" (qurilish materiallari), "jihozlar" (asbob-uskuna, ijara), "transport" (yoqilg'i, yuk/yo'l xarajati), "boshqa" (qolgan hammasi).
 Javob FAQAT JSON: {"transcript":"","cleanText":"","amount":0,"currency":"UZS","date":"","description":"","projectName":"","recipientName":"","category":"boshqa"}`;
 
-export async function voiceToExpense(audio: Buffer, mimeType: string, today: string, out?: { heard?: string }): Promise<ParsedExpense | null> {
+export async function voiceToExpense(audio: Buffer, mimeType: string, today: string, out?: { heard?: string }, hints?: VoiceHints): Promise<ParsedExpense | null> {
   if (!geminiConfigured()) throw new Error('NO_GEMINI');
-  const r = await geminiAudioToJson(audio, mimeType || 'audio/ogg', voicePrompt(today));
+  const r = await geminiAudioToJson(audio, mimeType || 'audio/ogg', voicePrompt(today, hints));
   const heard = String(r?.cleanText || r?.transcript || '').trim();
   if (out) out.heard = heard;
   let amount = Math.round((Number(r?.amount) || 0) * 100) / 100;

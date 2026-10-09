@@ -19,6 +19,7 @@ import { getSocket, takeEarlyIce } from "./socket";
 import { AppUser, ActiveCall, Msg } from "./App";
 import { playSound } from "./sound";
 import { API_BASE } from "./api";
+import { reportError } from "./lib/monitoring";
 
 // Qo'ng'iroq oynasi (WebRTC) — kamdan-kam ishlatiladi (faqat qo'ng'iroq
 // paytida), shuning uchun alohida faylga chiqarilib React.lazy orqali
@@ -52,6 +53,7 @@ async function acquireMedia(video: boolean, facingMode: string, warn: (m: string
     try { return await md.getUserMedia({ audio: true, video: { facingMode } }); }
     catch (e: any) {
       if (e?.name === 'NotAllowedError') throw e;
+      reportError(`call camera: ${e?.name || ''} ${e?.message || ''}`);
       warn(e?.name === 'NotReadableError' || /in use/i.test(e?.message || '')
         ? "Kamera band (boshqa dastur yoki oynada ishlatilmoqda) — qo'ng'iroq kamerasiz davom etadi"
         : "Kamera topilmadi — qo'ng'iroq kamerasiz davom etadi");
@@ -60,6 +62,7 @@ async function acquireMedia(video: boolean, facingMode: string, warn: (m: string
   try { return await md.getUserMedia({ audio: true, video: false }); }
   catch (e: any) {
     if (e?.name === 'NotAllowedError') throw e;
+    reportError(`call mic: ${e?.name || ''} ${e?.message || ''}`);
     warn("Mikrofon band yoki topilmadi — siz eshitasiz, lekin sizni eshitishmaydi");
     return new MediaStream();
   }
@@ -127,6 +130,9 @@ export default function CallOverlay({ currentUser, users, call, onClose, onSendM
   const pcs = useRef<Record<string, RTCPeerConnection>>({});
   const pendingIce = useRef<Record<string, RTCIceCandidateInit[]>>({});
   const [remote, setRemote] = useState<Record<string, MediaStream>>({});
+  const remoteAcc = useRef<Record<string, MediaStream>>({});
+  const [audioBlocked, setAudioBlocked] = useState(false);
+  useEffect(() => { const h = () => setAudioBlocked(true); window.addEventListener('erp:call-audio-blocked', h); return () => window.removeEventListener('erp:call-audio-blocked', h); }, []);
   const [status, setStatus] = useState<'incoming'|'ringing'|'connected'>(call.direction === 'in' ? 'incoming' : 'ringing');
   const [muted, setMuted] = useState(false);
   const [camOff, setCamOff] = useState(call.mode === 'voice');
@@ -208,7 +214,16 @@ export default function CallOverlay({ currentUser, users, call, onClose, onSendM
       if (call.mode === 'video' && !localStream.current?.getVideoTracks().length) try { pc.addTransceiver('video', { direction: 'recvonly' }); } catch {}
     }
     pc.onicecandidate = e => { if (e.candidate) socket?.emit('call:ice', { to: peerId, from: currentUser.id, candidate: e.candidate }); };
-    pc.ontrack = e => { setRemote(prev => ({ ...prev, [peerId]: e.streams[0] })); setStatus('connected'); watchMediaFlow(peerId, pc); };
+    pc.ontrack = e => {
+      // e.streams[0] ba'zan bo'sh keladi (trek oqimsiz qo'shilganda) — shunda ekran qora va ovozsiz qolardi.
+      // Har bir suhbatdosh uchun treklardan o'z oqimimizni yig'amiz.
+      const acc = (remoteAcc.current[peerId] ||= new MediaStream());
+      const src = e.streams[0]?.getTracks().length ? e.streams[0].getTracks() : [e.track];
+      src.forEach(tr => { if (!acc.getTracks().includes(tr)) acc.addTrack(tr); });
+      e.track.onunmute = () => setRemote(prev => ({ ...prev, [peerId]: new MediaStream(acc.getTracks()) }));
+      setRemote(prev => ({ ...prev, [peerId]: new MediaStream(acc.getTracks()) }));
+      setStatus('connected'); watchMediaFlow(peerId, pc);
+    };
     pc.oniceconnectionstatechange = () => {
       if (pc.iceConnectionState === 'failed') {
         // Avval ham TURN orqali urinib ko'rilmagan bo'lsa — ICE restart
@@ -278,7 +293,10 @@ export default function CallOverlay({ currentUser, users, call, onClose, onSendM
         });
         // accept() shu promise'ni kutib turib stream tayyor bo'lgandan keyin createAnswer qiladi
         streamReadyResolve.current?.(stream);
-      } catch (e: any) { toast.error(t('call.permissionRequired', { message: e?.message || '' })); onClose(); return; }
+      } catch (e: any) {
+        reportError(`call media: ${e?.name || ''} ${e?.message || ''}`, undefined, { mode: call.mode });
+        toast.error(t('call.permissionRequired', { message: e?.message || '' })); onClose(); return;
+      }
       // 35 soniyada ulanish bo'lmasa — jim "Ulanmoqda..." o'rniga sababini aytamiz
       setTimeout(() => {
         if (cancelled) return;
@@ -338,7 +356,7 @@ export default function CallOverlay({ currentUser, users, call, onClose, onSendM
     const closePeer = (peerId: string) => {
       pcs.current[peerId]?.close(); delete pcs.current[peerId];
       if (statsTimers.current[peerId]) { clearInterval(statsTimers.current[peerId]); delete statsTimers.current[peerId]; }
-      delete lastBytes.current[peerId]; delete restarted.current[peerId];
+      delete lastBytes.current[peerId]; delete restarted.current[peerId]; delete remoteAcc.current[peerId];
       setRemote(prev => { const c = { ...prev }; delete c[peerId]; return c; });
     };
     closePeerRef.current = closePeer;
@@ -609,6 +627,12 @@ export default function CallOverlay({ currentUser, users, call, onClose, onSendM
 
   return (
     <div className="fixed inset-0 z-[100] bg-[#0A0E1C] flex flex-col animate-fade-in">
+      {audioBlocked && (
+        <button onClick={() => { window.dispatchEvent(new CustomEvent('erp:call-audio-unlock')); setAudioBlocked(false); }}
+          className="absolute top-[max(1rem,env(safe-area-inset-top))] left-1/2 -translate-x-1/2 z-20 px-5 py-2.5 rounded-full bg-white text-black text-sm font-bold shadow-2xl animate-pulse">
+          🔊 {t('call.tapForSound', "Ovozni yoqish uchun bosing")}
+        </button>
+      )}
       {/* Video/masofaviy */}
       <div className="flex-1 relative overflow-hidden">
         {call.mode === 'video' && remoteEntries.length > 0 ? (
@@ -616,6 +640,8 @@ export default function CallOverlay({ currentUser, users, call, onClose, onSendM
             {remoteEntries.map(([pid, stream]) => (
               <RemoteVideo key={pid} id={pid} stream={stream} label={userById(pid)?.name || ''}/>
             ))}
+            {/* Ovoz — alohida (video jim, avtomatik ijro bloklanmasin) */}
+            {remoteEntries.map(([pid, stream]) => <RemoteAudio key={`a-${pid}`} stream={stream}/>)}
           </div>
         ) : (
           <div className="w-full h-full flex flex-col items-center justify-center gap-4 text-white">
@@ -736,7 +762,7 @@ function RemoteVideo({ id, stream, label }: { id: string; stream: MediaStream; l
   useEffect(() => { if (ref.current) { ref.current.srcObject = stream; ref.current.play().catch(()=>{}); } }, [stream]);
   return (
     <div className="relative w-full h-full bg-black">
-      <video ref={ref} autoPlay playsInline className="w-full h-full object-cover" style={flip ? { transform: 'scaleX(-1)' } : undefined}/>
+      <video ref={ref} autoPlay playsInline muted className="w-full h-full object-cover" style={flip ? { transform: 'scaleX(-1)' } : undefined}/>
       <button onClick={toggleFlip} aria-label="Flip" className="absolute top-3 right-3 w-9 h-9 rounded-full bg-black/50 text-white flex items-center justify-center active:scale-95">
         <MorphIcon icon={FlipHorizontal} className="w-4 h-4" />
       </button>
@@ -756,7 +782,18 @@ function RemoteVideo({ id, stream, label }: { id: string; stream: MediaStream; l
 // faqat audio eshitiladi, lekin karnay tanlash to'g'ri ishlaydi.
 function RemoteAudio({ stream }: { stream: MediaStream }) {
   const ref = useRef<HTMLVideoElement>(null);
-  useEffect(() => { if (ref.current) { ref.current.srcObject = stream; ref.current.play().catch(()=>{}); } }, [stream]);
+  useEffect(() => {
+    const el = ref.current; if (!el) return;
+    el.srcObject = stream;
+    const tryPlay = () => el.play().catch(err => {
+      // Brauzer/ilova ovozni avtomatik yoqishga ruxsat bermadi — foydalanuvchi bir marta bossin
+      if (err?.name === 'NotAllowedError') window.dispatchEvent(new CustomEvent('erp:call-audio-blocked'));
+    });
+    tryPlay();
+    const onTap = () => tryPlay();
+    window.addEventListener('erp:call-audio-unlock', onTap);
+    return () => window.removeEventListener('erp:call-audio-unlock', onTap);
+  }, [stream]);
   return <video ref={ref} autoPlay playsInline className="w-0 h-0 opacity-0 absolute pointer-events-none" />;
 }
 

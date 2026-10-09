@@ -44,8 +44,9 @@ export async function geminiAudioToJson(audio: Buffer, mimeType: string, prompt:
           const model = new GoogleGenerativeAI(KEYS[ki]).getGenerativeModel({
             model: modelName,
             generationConfig: {
-              maxOutputTokens: 2048, temperature: 0, responseMimeType: 'application/json',
-              ...(modelName.includes('2.5') ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
+              maxOutputTokens: 6144, temperature: 0, responseMimeType: 'application/json',
+              // Biroz "o'ylash" o'zbekcha nutqni (raqamlar, nomlar) aniqroq tushunishga yordam beradi; javob uchun joy yetarli qoldiriladi
+              ...(modelName.includes('2.5') ? { thinkingConfig: { thinkingBudget: 768 } } : {}),
             } as any,
           });
           const res = await model.generateContent([prompt, { inlineData: { mimeType, data: audio.toString('base64') } }]);

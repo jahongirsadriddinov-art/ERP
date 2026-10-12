@@ -747,3 +747,22 @@ button, [role="button"], a { touch-action: manipulation; }
 .qr-corner.tr { top: 6px; right: 6px; border-left: 0; border-bottom: 0; border-top-right-radius: 14px; }
 .qr-corner.bl { bottom: 6px; left: 6px; border-right: 0; border-top: 0; border-bottom-left-radius: 14px; }
 .qr-corner.br { bottom: 6px; right: 6px; border-left: 0; border-top: 0; border-bottom-right-radius: 14px; }
+
+/* Kontent aylantirilganda tepada/pastda qattiq chiziq bo'lib kesilmasin — chekkalari fonga yumshoq singib ketadi */
+.main-fade::before {
+  content: ""; position: absolute; left: 0; right: 0; top: 0; height: 14px; z-index: 5; pointer-events: none;
+  background: linear-gradient(180deg, var(--background), transparent);
+}
+@media (max-width: 1023.98px) {
+  .main-fade.main-pb-safe::after {
+    content: ""; position: absolute; left: 0; right: 0; z-index: 5; pointer-events: none;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 100px); height: 32px;
+    background: linear-gradient(180deg, transparent, var(--background));
+  }
+}
+@media (min-width: 1024px) {
+  .main-fade::after {
+    content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 22px; z-index: 5; pointer-events: none;
+    background: linear-gradient(180deg, transparent, var(--background));
+  }
+}

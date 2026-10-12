@@ -2010,11 +2010,11 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
     </div>
 
     {/* Mobile: Accordion */}
-    <div className="flex flex-col lg:hidden overflow-y-auto scrollbar-hide bg-background pb-4">
+    <div className="flex flex-col gap-2.5 lg:hidden overflow-y-auto scrollbar-hide px-3 pt-1 pb-4">
       {sections.map(section => {
         const isOpen = activeTab === section.key;
         return (
-          <div key={section.key} className="border-b border-border/50">
+          <div key={section.key} className={`rounded-2xl overflow-hidden border bg-card/80 backdrop-blur-sm shadow-sm transition-shadow ${isOpen ? "border-primary/40 shadow-lg shadow-primary/10" : "border-border"}`}>
             {/* Header — always visible */}
             <button
               onClick={() => toggle(section.key)}
@@ -3670,7 +3670,7 @@ function BottomFinanceBar({ expenses, projects }: { expenses: Expense[]; project
   const byProj = projects.map(p=>({name:p.name,amount:confirmed.filter(e=>e.projectId===p.id).reduce((a,e)=>a+e.amount,0)})).filter(d=>d.amount>0);
   const byType = (Object.keys(EXP_LABELS) as ExpType[]).map(k=>({name:expLabel(t, k),amount:confirmed.filter(e=>e.type===k).reduce((a,e)=>a+e.amount,0)})).filter(d=>d.amount>0);
   return (
-    <div className="flex-shrink-0 border-b border-white/10 bg-gradient-to-r from-primary to-primary/95 text-white z-20 shadow-md">
+    <div className="flex-shrink-0 mx-3 md:mx-4 my-2 rounded-2xl overflow-hidden border border-white/15 bg-gradient-to-r from-primary to-primary/90 text-white z-20 shadow-lg shadow-primary/20">
       {open&&(
         <div className="border-b border-white/10 px-4 py-3 grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div><p className="text-sm md:text-xs font-semibold text-white/50 uppercase tracking-wider mb-2">{t('finance.byProject')}</p>
@@ -5644,7 +5644,7 @@ export default function App() {
       </div>
 
       {/* Main */}
-      <main key={`${page}:${selProject?.id || ''}`} className={`page-enter bg-background flex-1 overflow-hidden flex flex-col relative ${(page === 'chat' && chatIsOpen) ? '' : 'main-pb-safe'}`}>
+      <main key={`${page}:${selProject?.id || ''}`} className={`page-enter main-fade bg-background flex-1 overflow-hidden flex flex-col relative ${(page === 'chat' && chatIsOpen) ? '' : 'main-pb-safe'}`}>
         {/* Admin dashboard */}
         {page==="dashboard" && admin && !selProject && (
           <AdminDashboard currentUser={liveUser} users={users} projects={projects} transfers={transfers}

@@ -11,7 +11,7 @@ import Message from '../models/Message';
 import Group from '../models/Group';
 import Attendance from '../models/Attendance';
 import ObjectModel from '../models/Object';
-import { EXP_T, expLang, parseExpenseText, voiceToExpense, ParsedExpense, ExpCategory, EXP_CATEGORIES, guessExpenseCategory, fmtMoney } from './botExpense';
+import { EXP_T, expLang, parseExpenseText, voiceToExpense, receiptToExpense, ParsedExpense, ExpCategory, EXP_CATEGORIES, guessExpenseCategory, fmtMoney } from './botExpense';
 import { getRatesForCompany } from '../routes/currency';
 import TransactionModel from '../models/Transaction';
 import GpsLocation from '../models/GpsLocation';
@@ -1206,6 +1206,29 @@ async function handleExpenseInput(msg: any, chatId: number): Promise<boolean> {
   if (!user) { pendingExpenseEntry.delete(chatId); return false; }
   const T = EXP_T[expLang(user.language)];
   try {
+    // Chek/nakladnoy surati — summa va tavsif suratdan o'qiladi
+    const photo = msg.photo?.length ? msg.photo[msg.photo.length - 1] : (msg.document && /^image\//.test(msg.document.mime_type || '') ? msg.document : null);
+    if (photo) {
+      const notice = await bot.sendMessage(chatId, T.receiptProcessing);
+      let parsed: ParsedExpense | null = null;
+      try {
+        const link = await bot.getFileLink(photo.file_id);
+        const buf = Buffer.from(await (await fetch(link)).arrayBuffer());
+        const cq = user.companyId ? { companyId: user.companyId } : { _id: null };
+        const hObjs: any[] = await ObjectModel.find(cq).select('name').limit(60).lean().catch(() => []);
+        parsed = await receiptToExpense(buf, photo.mime_type || 'image/jpeg', todayInTashkent(), { objects: hObjs.map(o => String(o.name || '')) });
+      } catch (e: any) {
+        bot.deleteMessage(chatId, notice.message_id).catch(() => {});
+        if (e?.message === 'NO_GEMINI') { await bot.sendMessage(chatId, T.noGemini, { parse_mode: 'Markdown' }); return true; }
+        console.error('[bot expense receipt]', e);
+        await bot.sendMessage(chatId, T.voiceError, { parse_mode: 'Markdown' }).catch(() => {});
+        return true;
+      }
+      bot.deleteMessage(chatId, notice.message_id).catch(() => {});
+      if (!parsed) { await bot.sendMessage(chatId, T.receiptFail); return true; }
+      await sendExpenseDraft(chatId, user, parsed, { rawText: '📷 chek' });
+      return true;
+    }
     if (msg.voice || msg.audio) {
       const media = msg.voice || msg.audio;
       const notice = await bot.sendMessage(chatId, T.processing);

@@ -164,17 +164,55 @@ export async function voiceToExpense(audio: Buffer, mimeType: string, today: str
   };
 }
 
+// ── Chek / nakladnoy / hisob-faktura surati → chiqim ─────────────────────────
+const receiptPrompt = (today: string, hints?: VoiceHints) => `Bu qurilish firmasi xodimi yuborgan XARAJAT hujjatining SURATI: kassa cheki, nakladnoy, hisob-faktura yoki qo'lda yozilgan kvitansiya. Til o'zbek yoki rus bo'lishi mumkin. Bugungi sana: ${today}.${hintBlock(hints)}
+Suratdan aniqla:
+- "amount": TO'LANGAN YAKUNIY summa (ИТОГО / Jami / К оплате), son bilan. Topilmasa 0.
+- "currency": "UZS" (so'm, yoki ko'rsatilmagan), "USD", "EUR".
+- "date": hujjat sanasi YYYY-MM-DD (bugundan keyin bo'lsa yoki topilmasa "").
+- "vendor": sotuvchi/do'kon nomi.
+- "items": asosiy mahsulotlar (eng ko'pi 8 ta): [{"name":"","qty":"","sum":0}].
+- "description": qisqa tavsif — nima sotib olingani (masalan "Sement 20 qop, armatura" ), sotuvchi nomi bilan.
+- "category": FAQAT: "material", "jihozlar", "transport", "oylik", "boshqa".
+- "readable": surat o'qiladimi (true/false).
+Javob FAQAT JSON: {"amount":0,"currency":"UZS","date":"","vendor":"","items":[],"description":"","category":"boshqa","readable":true}`;
+
+export interface ParsedReceipt extends ParsedExpense { vendor?: string; items?: { name: string; qty?: string; sum?: number }[] }
+
+export async function receiptToExpense(image: Buffer, mimeType: string, today: string, hints?: VoiceHints): Promise<ParsedReceipt | null> {
+  if (!geminiConfigured()) throw new Error('NO_GEMINI');
+  const r = await geminiAudioToJson(image, mimeType || 'image/jpeg', receiptPrompt(today, hints));
+  if (r?.readable === false) return null;
+  const amount = Math.round((Number(r?.amount) || 0) * 100) / 100;
+  const vendor = String(r?.vendor || '').trim().slice(0, 120);
+  let description = String(r?.description || '').trim();
+  if (!description && vendor) description = vendor;
+  if (!(amount > 0 && amount < MAX_AMOUNT) || !description) return null;
+  const currency: ExpCurrency = ['USD', 'EUR'].includes(String(r?.currency).toUpperCase()) ? String(r.currency).toUpperCase() as ExpCurrency : 'UZS';
+  const dRaw = String(r?.date || '').trim();
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(dRaw) && dRaw <= today ? dRaw : undefined;
+  const items = Array.isArray(r?.items) ? r.items.slice(0, 8).map((x: any) => ({ name: String(x?.name || '').slice(0, 80), qty: x?.qty ? String(x.qty).slice(0, 20) : undefined, sum: Number(x?.sum) || undefined })).filter((x: any) => x.name) : [];
+  return {
+    amount, currency, date, vendor: vendor || undefined, items,
+    description: description.slice(0, 300),
+    category: asCategory(r?.category) ?? guessExpenseCategory(description),
+    cleanText: [vendor && `🏪 ${vendor}`, ...items.map((x: any) => `• ${x.name}${x.qty ? ` × ${x.qty}` : ''}${x.sum ? ` — ${x.sum.toLocaleString('ru-RU')}` : ''}`)].filter(Boolean).join('\n') || undefined,
+  };
+}
+
 const fmtSum = (n: number) => n.toLocaleString('ru-RU');
 export const fmtMoney = (n: number, cur: string = 'UZS') => cur === 'USD' ? `${n.toLocaleString('ru-RU')} $` : cur === 'EUR' ? `${n.toLocaleString('ru-RU')} €` : `${n.toLocaleString('ru-RU')} so'm`;
 
 export const EXP_T = {
   uz: {
-    prompt: "💸 *Chiqim qo'shish*\n\nMatn bilan shu tartibda yozing:\n`Summa; Tavsif; Obyekt; Kimga` (oxirgi ikkisi ixtiyoriy)\n\nMasalan: `150000; Sement uchun; 12-maktab; Aziz aka`\nYoki oddiy: `150000 sement uchun`\n\n🎙 Yoki *ovozli xabar* yuboring — men uni matnga aylantirib, tekshirish uchun ko'rsataman.",
+    prompt: "💸 *Chiqim qo'shish*\n\nMatn bilan shu tartibda yozing:\n`Summa; Tavsif; Obyekt; Kimga` (oxirgi ikkisi ixtiyoriy)\n\nMasalan: `150000; Sement uchun; 12-maktab; Aziz aka`\nYoki oddiy: `150000 sement uchun`\n\n🎙 Yoki *ovozli xabar* yuboring, yoki 📷 *chek suratini* yuboring — summa va tavsifni o'zim o'qib, tekshirish uchun ko'rsataman.",
     cancelBtn: '❌ Bekor qilish', okBtn: '✅ Tasdiqlash', retryBtn: '🔄 Qayta yuborish',
     cancelled: "❌ Bekor qilindi.",
     processing: "🎙 Ovoz matnga aylantirilmoqda...",
     voiceFail: "⚠️ Ovozli xabardan summa va tavsifni aniq ajrata olmadim. Iltimos, qayta ayting (masalan: «yuz ellik ming so'm sement uchun») yoki matn bilan yozing.",
     voiceHeard: "🎧 Eshitganim: «{text}»\n\n⚠️ Bundan summani aniq ajrata olmadim. Summani ham ayting (masalan: «yuz ellik ming so'm sement uchun») yoki matn bilan yozing.",
+    receiptProcessing: "📷 Chek o'qilmoqda...",
+    receiptFail: "⚠️ Chekdan summani o'qib bo'lmadi. Chekni tekis, yorug' joyda, butunligicha suratga oling yoki summani matn bilan yozing.",
     voiceError: "⚠️ Ovozni hozir qayta ishlab bo'lmadi (AI xizmati band). Bir daqiqadan so'ng qayta yuboring yoki matn bilan yozing: `150000 sement uchun`",
     noGemini: "⚠️ Ovozni matnga aylantirish hozir sozlanmagan. Iltimos, matn bilan yozing:\n`Summa; Tavsif; Obyekt`",
     parseHint: "⚠️ Tushunmadim. Shu tartibda yozing:\n`Summa; Tavsif; Obyekt (ixtiyoriy)`\nMasalan: `150000; Sement uchun`",
@@ -208,6 +246,8 @@ export const EXP_T = {
     processing: "🎙 Распознаю голос...",
     voiceFail: "⚠️ Не удалось точно определить сумму и описание из голосового. Повторите (например: «сто пятьдесят тысяч сум на цемент») или напишите текстом.",
     voiceHeard: "🎧 Я услышал: «{text}»\n\n⚠️ Не удалось определить сумму. Назовите и сумму (например: «сто пятьдесят тысяч сум на цемент») или напишите текстом.",
+    receiptProcessing: "📷 Читаю чек...",
+    receiptFail: "⚠️ Не удалось прочитать сумму с чека. Сфотографируйте чек ровно, при хорошем свете и целиком, или напишите сумму текстом.",
     voiceError: "⚠️ Сейчас не удалось обработать голос (сервис ИИ занят). Отправьте ещё раз через минуту или напишите текстом: `150000 цемент`",
     noGemini: "⚠️ Распознавание голоса сейчас не настроено. Напишите текстом:\n`Сумма; Описание; Объект`",
     parseHint: "⚠️ Не понял. Напишите так:\n`Сумма; Описание; Объект (необязательно)`\nНапример: `150000; Цемент`",

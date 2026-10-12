@@ -1,4 +1,8 @@
 import { companyHasFeature } from '../middleware/requireFeature';
+import { receiptToExpense } from '../services/botExpense';
+import { todayInTashkent } from '../utils/tz';
+import { checkRate } from '../utils/rateLimit';
+import ObjectForHints from '../models/Object';
 import { Router } from 'express';
 import Transaction from '../models/Transaction';
 import Material from '../models/Material';
@@ -541,6 +545,27 @@ router.patch('/:id/reject', async (req, res) => {
 // o'chirishda yo'q qolib ketgan (aniq xatolik) — istalgan oddiy ishchi
 // firmaning istalgan moliyaviy yozuvini (o'zi yaratmagan bo'lsa ham)
 // butunlay o'chira olardi.
+// POST /api/transactions/scan-receipt — chek/nakladnoy suratidan chiqim maydonlarini o'qish (saqlamaydi —
+// foydalanuvchi tekshirib, keyin oddiy chiqim sifatida yuboradi).
+router.post('/scan-receipt', async (req, res) => {
+  try {
+    const t = getTenant();
+    if (!t?.userId) return res.status(401).json({ error: 'Autentifikatsiya talab etiladi' });
+    if (!checkRate(`receipt:${t.userId}`, 40, 60 * 60_000).allowed) return res.status(429).json({ error: "Juda ko'p urinish — birozdan keyin" });
+    const { image, mimeType } = req.body || {};
+    if (typeof image !== 'string' || image.length < 500 || image.length > 8_000_000) return res.status(400).json({ error: "Surat noto'g'ri yoki juda katta" });
+    const mt = typeof mimeType === 'string' && /^image\/(jpeg|png|webp|heic)$/.test(mimeType) ? mimeType : 'image/jpeg';
+    const objs: any[] = t.companyId ? await ObjectForHints.find({ companyId: t.companyId }).select('name').limit(60).lean() : [];
+    const r = await receiptToExpense(Buffer.from(image, 'base64'), mt, todayInTashkent(), { objects: objs.map(o => String(o.name)) });
+    if (!r) return res.status(422).json({ error: "Chekdan summani o'qib bo'lmadi — aniqroq, yorug' joyda suratga oling" });
+    res.json(r);
+  } catch (err: any) {
+    if (err?.message === 'NO_GEMINI') return res.status(503).json({ error: 'AI xizmati sozlanmagan' });
+    console.error('[scan-receipt]', err?.message);
+    res.status(500).json({ error: "Chekni o'qib bo'lmadi — qayta urinib ko'ring" });
+  }
+});
+
 router.delete('/:id', async (req, res) => {
   try {
     const actingUserId = getTenant()?.userId;

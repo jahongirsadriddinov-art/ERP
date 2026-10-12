@@ -1251,6 +1251,24 @@ function AddExpenseModal({ currentUser, projects, allUsers, onClose, onAdd, allo
   const [form, setForm] = useState({ type: "oylik" as ExpType, amount: "", projectId: projects[0]?.id || "", description: "", toUserId: "", approverId: "", date: new Date().toISOString().split("T")[0] });
   const [err, setErr] = useState("");
   const [boshqaRows, setBoshqaRows] = useState<{ name: string; price: string }[]>([{ name: "", price: "" }]);
+  // Chek/nakladnoy suratidan to'ldirish — AI summa, sana, tavsif va turni o'qiydi; foydalanuvchi tekshirib yuboradi
+  const receiptRef = useRef<HTMLInputElement>(null);
+  const [scanning, setScanning] = useState(false);
+  const scanReceipt = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]; e.target.value = "";
+    if (!file) return;
+    setScanning(true); setErr("");
+    try {
+      const dataUrl = await resizeImageFile(file, 1600, 0.85);
+      const r = await fetch(`${API_BASE}/api/transactions/scan-receipt`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ image: dataUrl.split(",")[1], mimeType: "image/jpeg" }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) { setErr(d.error || t('common.error')); return; }
+      const type = (["oylik", "material", "jihozlar", "transport", "boshqa"].includes(d.category) ? d.category : "material") as ExpType;
+      setForm(f => ({ ...f, type: type === "boshqa" ? "material" : type, amount: String(Math.round(d.amount)), description: d.description || f.description, date: d.date || f.date }));
+      toast.success(t('addExpense.receiptRead', "Chek o'qildi — tekshirib, yuboring"));
+    } catch { setErr(t('common.error')); }
+    finally { setScanning(false); }
+  };
 
   const boshqaTotal = boshqaRows.reduce((s, r) => s + (Number(r.price) || 0), 0);
   // Admin (direktor/orinbosar) o'zi chiqim yaratsa — tasdiqlash shart emas
@@ -1315,6 +1333,12 @@ function AddExpenseModal({ currentUser, projects, allUsers, onClose, onAdd, allo
           <button aria-label={t('addExpense.close')} onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted liquid-transition"><MorphIcon icon={X} className="w-4 h-4 text-muted-foreground" /></button>
         </div>
         <form onSubmit={submit} className="p-4 space-y-3">
+          <input ref={receiptRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={scanReceipt} />
+          <button type="button" onClick={() => receiptRef.current?.click()} disabled={scanning}
+            className="w-full h-11 rounded-xl border-2 border-dashed border-primary/40 bg-primary/[0.04] text-primary text-sm font-bold flex items-center justify-center gap-2 hover:bg-primary/10 liquid-transition disabled:opacity-60">
+            {scanning ? <MorphIcon icon={Loader2} className="w-4 h-4 animate-spin" /> : <span aria-hidden>📷</span>}
+            {scanning ? t('addExpense.receiptReading', "Chek o'qilmoqda...") : t('addExpense.receiptBtn', "Chek suratidan to'ldirish")}
+          </button>
           {err && (
             <div className="bg-red-500/10 border border-red-500/25 rounded-xl px-3 py-2.5 text-xs text-red-700 dark:text-red-400 flex items-center gap-2">
               <MorphIcon icon={AlertCircle} className="w-3.5 h-3.5 flex-shrink-0" />{err}

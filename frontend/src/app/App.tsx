@@ -3670,7 +3670,7 @@ function BottomFinanceBar({ expenses, projects }: { expenses: Expense[]; project
   const byProj = projects.map(p=>({name:p.name,amount:confirmed.filter(e=>e.projectId===p.id).reduce((a,e)=>a+e.amount,0)})).filter(d=>d.amount>0);
   const byType = (Object.keys(EXP_LABELS) as ExpType[]).map(k=>({name:expLabel(t, k),amount:confirmed.filter(e=>e.type===k).reduce((a,e)=>a+e.amount,0)})).filter(d=>d.amount>0);
   return (
-    <div className="flex-shrink-0 mx-3 md:mx-4 my-2 rounded-2xl overflow-hidden border border-white/15 bg-gradient-to-r from-primary to-primary/90 text-white z-20 shadow-lg shadow-primary/20">
+    <div className="expense-glass flex-shrink-0 mx-3 md:mx-4 my-2 rounded-2xl overflow-hidden text-white z-20">
       {open&&(
         <div className="border-b border-white/10 px-4 py-3 grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div><p className="text-sm md:text-xs font-semibold text-white/50 uppercase tracking-wider mb-2">{t('finance.byProject')}</p>
@@ -5767,8 +5767,6 @@ export default function App() {
           ko'rsatiladi — namunadagi aynan shu naqsh. */}
       {/* Pastki navigatsiya — teng kenglikdagi 6 ta tab, faol tabda belgi ortida sirg'aluvchi gradient "pill",
           yozuvlar har doim bir qatorda (qirqilmaydi, ikki qatorga tushmaydi) */}
-      {/* Pastki panel ortidagi yumshoq blur — kontent panel ostida qirrasiz, asta xiralashib ketadi */}
-      <div aria-hidden className={`nav-blur-bottom lg:hidden ${(page==='chat' && chatIsOpen) || anyBigModalOpen ? 'opacity-0' : ''}`} />
       <nav className={`ios-bottom-bar flex items-stretch ${(page==='chat' && chatIsOpen) || anyBigModalOpen ? 'ios-bottom-bar-hidden' : ''}`}>
         {NAV.map(n => {
           const active = page === n.key;

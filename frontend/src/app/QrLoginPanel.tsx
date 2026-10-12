@@ -66,7 +66,10 @@ export default function QrLoginPanel({ onLogin, onBack }: { onLogin: (u: any, co
     if (!code || !sessionId) return;
     const draw = (QRCode: any) => {
       const canvas = canvasRef.current;
-      if (canvas) QRCode.toCanvas(canvas, `qrlogin:${sessionId}:${code}`, { width: 232, margin: 1, errorCorrectionLevel: "M", color: { dark: "#0f172a", light: "#ffffff" } }, () => {});
+      if (canvas) QRCode.toCanvas(canvas, `qrlogin:${sessionId}:${code}`, { width: 420, margin: 0, errorCorrectionLevel: "M", color: { dark: "#0f172a", light: "#ffffff" } }, () => {
+        // Kutubxona canvas'ga o'z o'lchamini (420px) yozib qo'yadi — ramkaga sig'ishi uchun qaytaramiz (aniq chiqishi uchun 2x chiziladi)
+        canvas.style.width = "210px"; canvas.style.height = "210px";
+      });
     };
     if (qrLibRef.current) draw(qrLibRef.current);
     else import("qrcode").then(m => { qrLibRef.current = m; draw(m); });
@@ -117,9 +120,9 @@ export default function QrLoginPanel({ onLogin, onBack }: { onLogin: (u: any, co
       </div>
 
       {/* QR ramka: burchak chiziqlari + yumshoq porlash; skanerlangach QR xiralashib, ustida holat chiqadi */}
-      <div className="qr-frame relative mx-auto w-[260px] h-[260px] rounded-[28px] p-3">
+      <div className="qr-frame relative mx-auto w-[264px] h-[264px] rounded-[28px] p-4">
         <span className="qr-corner tl" /><span className="qr-corner tr" /><span className="qr-corner bl" /><span className="qr-corner br" />
-        <div className="relative w-full h-full rounded-[18px] overflow-hidden bg-white flex items-center justify-center">
+        <div className="relative w-full h-full rounded-[16px] overflow-hidden bg-white p-2.5 flex items-center justify-center">
           {error ? (
             <div className="p-4 space-y-2 text-center">
               <p className="text-xs text-red-600">{error}</p>
@@ -127,7 +130,7 @@ export default function QrLoginPanel({ onLogin, onBack }: { onLogin: (u: any, co
             </div>
           ) : (
             <>
-              <canvas ref={canvasRef} className={`transition-[filter,opacity] duration-300 ${stage !== "wait" ? "blur-[6px] opacity-40" : ""} ${!code ? "opacity-0" : ""}`} />
+              <canvas ref={canvasRef} style={{ width: 210, height: 210 }} className={`block transition-[filter,opacity] duration-300 ${stage !== "wait" ? "blur-[6px] opacity-40" : ""} ${!code ? "opacity-0" : ""}`} />
               {!code && <div className="absolute inset-6 rounded-xl bg-slate-100 animate-pulse" />}
               {stage !== "wait" && (
                 <motion.div initial={{ scale: 0.85, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}

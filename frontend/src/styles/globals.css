@@ -711,23 +711,17 @@ textarea {
   -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 55%, transparent 100%);
           mask-image: linear-gradient(180deg, #000 0%, #000 55%, transparent 100%);
 }
-.nav-blur-bottom {
-  position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; pointer-events: none;
-  height: calc(env(safe-area-inset-bottom, 0px) + 112px);
-  background: linear-gradient(0deg, color-mix(in srgb, var(--background) 60%, transparent) 0%, transparent 100%);
-  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
-  -webkit-mask-image: linear-gradient(0deg, #000 0%, #000 45%, transparent 100%);
-          mask-image: linear-gradient(0deg, #000 0%, #000 45%, transparent 100%);
-  transition: opacity .3s ease;
-}
 /* Ichki sahifa sarlavhasi (masalan "Xavfli zona") — telefonda yopishqoq blur, qirrasiz; kompyuterda fonsiz */
 
 .soft-sticky::before {
-  content: ""; position: absolute; inset: 0 0 -14px 0; z-index: -1; pointer-events: none;
-  background: color-mix(in srgb, var(--background) 55%, transparent);
+  /* Pastga ham, yon tomonlarga ham asta yo'qoladi — hech qayerda to'g'ri qirra ko'rinmaydi */
+  content: ""; position: absolute; inset: 0 0 -18px 0; z-index: -1; pointer-events: none;
+  background: color-mix(in srgb, var(--background) 35%, transparent);
   -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
-  -webkit-mask-image: linear-gradient(180deg, #000 60%, transparent 100%);
-          mask-image: linear-gradient(180deg, #000 60%, transparent 100%);
+  -webkit-mask-image: linear-gradient(180deg, #000 45%, transparent 100%), linear-gradient(90deg, transparent 0, #000 64px, #000 calc(100% - 64px), transparent 100%);
+  -webkit-mask-composite: source-in;
+          mask-image: linear-gradient(180deg, #000 45%, transparent 100%), linear-gradient(90deg, transparent 0, #000 64px, #000 calc(100% - 64px), transparent 100%);
+          mask-composite: intersect;
 }
 @media (min-width: 1024px) { .soft-sticky::before { display: none; } }
 
@@ -742,11 +736,11 @@ button, [role="button"], a { touch-action: manipulation; }
   border: 1px solid color-mix(in srgb, var(--primary) 22%, var(--border));
   box-shadow: 0 18px 40px -18px color-mix(in srgb, var(--primary) 55%, transparent), inset 0 1px 0 rgba(255,255,255,.35);
 }
-.qr-corner { position: absolute; width: 26px; height: 26px; border: 3px solid var(--primary); pointer-events: none; z-index: 2; }
-.qr-corner.tl { top: 6px; left: 6px; border-right: 0; border-bottom: 0; border-top-left-radius: 14px; }
-.qr-corner.tr { top: 6px; right: 6px; border-left: 0; border-bottom: 0; border-top-right-radius: 14px; }
-.qr-corner.bl { bottom: 6px; left: 6px; border-right: 0; border-top: 0; border-bottom-left-radius: 14px; }
-.qr-corner.br { bottom: 6px; right: 6px; border-left: 0; border-top: 0; border-bottom-right-radius: 14px; }
+.qr-corner { position: absolute; width: 22px; height: 22px; border: 3px solid var(--primary); pointer-events: none; z-index: 2; }
+.qr-corner.tl { top: 5px; left: 5px; border-right: 0; border-bottom: 0; border-top-left-radius: 14px; }
+.qr-corner.tr { top: 5px; right: 5px; border-left: 0; border-bottom: 0; border-top-right-radius: 14px; }
+.qr-corner.bl { bottom: 5px; left: 5px; border-right: 0; border-top: 0; border-bottom-left-radius: 14px; }
+.qr-corner.br { bottom: 5px; right: 5px; border-left: 0; border-top: 0; border-bottom-right-radius: 14px; }
 
 /* Kontent aylantirilganda tepada/pastda qattiq chiziq bo'lib kesilmasin — chekkalari fonga yumshoq singib ketadi */
 .main-fade::before {
@@ -765,4 +759,12 @@ button, [role="button"], a { touch-action: manipulation; }
     content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 22px; z-index: 5; pointer-events: none;
     background: linear-gradient(180deg, transparent, var(--background));
   }
+}
+
+/* "Jami chiqimlar" paneli — shaffof shisha: orqasidagi narsa xira ko'rinadi */
+.expense-glass {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--primary) 72%, transparent), color-mix(in srgb, var(--primary) 52%, transparent));
+  -webkit-backdrop-filter: blur(18px) saturate(1.5); backdrop-filter: blur(18px) saturate(1.5);
+  border: 1px solid rgba(255,255,255,0.22);
+  box-shadow: 0 10px 28px -12px color-mix(in srgb, var(--primary) 60%, transparent), inset 0 1px 0 rgba(255,255,255,0.28);
 }

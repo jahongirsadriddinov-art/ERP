@@ -1,5 +1,6 @@
 // Keyinroq qo'shilgan funksiyalar (shrift, ovozli buyruq, hisobotlar davri, yangilanish, qo'ng'iroq...) uchun
-// tarjimalar. index.ts'da asosiy lug'at bilan CHUQUR birlashtiriladi (mavjud bo'limlar o'chmaydi).
+// tarjimalar. index.ts'da asosiy lug'at bilan CHUQUR birlashtiriladi (mavjud bo'limlar o'chmaydi). DIQQAT: asosiy lug'atda
+// (translations.ts va boshqa ns fayllar) BOR kalit bu yerda almashtirilmaydi — uni o'sha faylning o'zida o'zgartiring.
 // 'uz-cyrl' avtomatik hosil qilinadi.
 export const uz = {
   ai: {
@@ -19,8 +20,6 @@ export const uz = {
   finance: { anomaly: "G'ayrioddiy", originalAmount: "Asl summa", incomeType: "Kirim (tushum)" },
   login: {
     dev2faHint: "Telegram botga 6 xonali kirish kodi yuborildi",
-    qrDesc: "Telefoningizda QurilishERP ilovasini oching va QR kodni bir marta skanerlang.",
-    qrHint: "Xavfsizlik uchun kod har 5 soniyada yangilanadi",
     qrStep1: "Telefonda ilovani oching",
     qrStep2: "Yuqoridagi QR belgisi → kamerani shu kodga qarating",
     qrStep3: "Telefonda «Ha, kirish»ni bosing",
@@ -29,7 +28,6 @@ export const uz = {
     qrSigningIn: "Kirilmoqda…",
   },
   qrScanner: {
-    loginScanHint: "Kompyuter ekranidagi QR kodga kamerani qarating",
     confirmTitle: "Kompyuterga kirilsinmi?",
     confirmDesc: "Shu qurilma hisobingiz bilan tizimga kiradi. Bu siz bo'lmasangiz, «Yo'q»ni bosing.",
     confirmYes: "Ha, kirish",
@@ -91,8 +89,6 @@ export const ru: typeof uz = {
   finance: { anomaly: "Необычно", originalAmount: "Исходная сумма", incomeType: "Доход (поступление)" },
   login: {
     dev2faHint: "6-значный код входа отправлен в Telegram-бот",
-    qrDesc: "Откройте приложение QurilishERP на телефоне и один раз отсканируйте QR-код.",
-    qrHint: "Для безопасности код обновляется каждые 5 секунд",
     qrStep1: "Откройте приложение на телефоне",
     qrStep2: "Значок QR вверху → наведите камеру на этот код",
     qrStep3: "Нажмите «Да, войти» на телефоне",
@@ -101,7 +97,6 @@ export const ru: typeof uz = {
     qrSigningIn: "Выполняется вход…",
   },
   qrScanner: {
-    loginScanHint: "Наведите камеру на QR-код на экране компьютера",
     confirmTitle: "Войти на компьютере?",
     confirmDesc: "Это устройство войдёт в систему под вашим аккаунтом. Если это не вы — нажмите «Нет».",
     confirmYes: "Да, войти",

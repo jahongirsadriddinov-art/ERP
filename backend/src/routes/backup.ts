@@ -10,6 +10,8 @@ import Company from '../models/Company';
 import { getTenant } from '../middleware/tenantContext';
 import { requireFeature } from '../middleware/requireFeature';
 import { logAudit } from '../services/audit';
+import { CompanySnapshot, takeSnapshot, restoreSnapshot, RESET_SCOPES } from '../services/companySnapshot';
+import { checkRate } from '../utils/rateLimit';
 
 const router = Router();
 
@@ -148,6 +150,66 @@ router.post('/backup/import', requireFeature('backup'), async (req, res) => {
     console.error('Backup import error:', err);
     res.status(500).json({ error: 'Server xatoligi' });
   }
+});
+
+// ── Shaxsiy nusxalar ro'yxati va "Xavfli zona" (faqat direktor / o'rinbosar) ─────────────────────────────
+async function bossActor(): Promise<{ actor: any; cid: string; by: any } | null> {
+  const t = getTenant();
+  if (!t?.userId) return null;
+  const actor: any = await User.findById(t.userId).lean().catch(() => null);
+  if (!actor || !(actor.isOwner || ['direktor', 'orinbosar'].includes(actor.role))) return null;
+  const cid = String(actor.companyId || t.companyId || '');
+  if (!cid) return null;
+  return { actor, cid, by: { userId: String(actor._id), name: `${actor.firstName} ${actor.lastName || ''}`.trim(), role: actor.role } };
+}
+const REASON_UZ: Record<string, string> = { auto_daily: 'Avtomatik (kunlik)', manual: "Qo'lda olingan", pre_reset: "Tozalashdan oldin", pre_restore: 'Tiklashdan oldin', pre_delete: "O'chirishdan oldin" };
+
+// GET /api/admin/snapshots — barcha nusxalar, eng yangisi tepada
+router.get('/snapshots', async (_req, res) => {
+  const b = await bossActor(); if (!b) return res.status(403).json({ error: "Faqat direktor yoki o'rinbosar" });
+  const list: any[] = await CompanySnapshot.find({ companyId: b.cid }).sort({ createdAt: -1 }).limit(200).select('-data').lean();
+  res.json(list.map(s => ({ id: s._id, reason: s.reason, reasonLabel: REASON_UZ[s.reason] || s.reason, note: s.note, by: s.by?.name, counts: s.counts, sizeBytes: s.sizeBytes, createdAt: s.createdAt })));
+});
+// POST /api/admin/snapshots — hozir nusxa olish
+router.post('/snapshots', async (req, res) => {
+  const b = await bossActor(); if (!b) return res.status(403).json({ error: "Faqat direktor yoki o'rinbosar" });
+  if (!checkRate(`snap:${b.cid}`, 10, 3600_000).allowed) return res.status(429).json({ error: "Juda ko'p nusxa — birozdan keyin" });
+  const s = await takeSnapshot(b.cid, 'manual', b.by, typeof req.body?.note === 'string' ? req.body.note.slice(0, 120) : undefined);
+  res.status(201).json({ id: s._id, createdAt: s.createdAt, counts: s.counts });
+});
+// POST /api/admin/snapshots/:id/restore — bir bosishda tiklash (oldin joriy holat ham saqlanadi)
+router.post('/snapshots/:id/restore', async (req, res) => {
+  const b = await bossActor(); if (!b) return res.status(403).json({ error: "Faqat direktor yoki o'rinbosar" });
+  if (req.body?.confirm !== true) return res.status(400).json({ error: 'Tasdiqlash kerak' });
+  try {
+    const r = await restoreSnapshot(String(req.params.id), b.cid, b.by, b.by.userId);
+    await logAudit({ userId: b.by.userId, userName: b.by.name, userRole: b.by.role, action: 'update', entity: 'company', entityId: b.cid,
+      description: `Ma'lumotlar nusxadan tiklandi (#${req.params.id}). Tiklashdan oldingi holat: #${r.safetyId}`, companyId: b.cid, req });
+    res.json({ ok: true, ...r });
+  } catch (e: any) {
+    if (e?.message === 'NOT_FOUND') return res.status(404).json({ error: 'Nusxa topilmadi' });
+    console.error('[snapshot restore]', e); res.status(500).json({ error: 'Server xatoligi' });
+  }
+});
+// GET /api/admin/reset-scopes — tozalash bo'limlari
+router.get('/reset-scopes', (_req, res) => res.json(Object.entries(RESET_SCOPES).map(([key, v]) => ({ key, label: v.label }))));
+// POST /api/admin/reset — "Xavfli zona": tanlangan bo'limlarni (yoki hammasini) butunlay o'chirish.
+// Har doim OLDIN avtomatik nusxa olinadi. Tasdiq uchun firma nomini aynan yozish shart.
+router.post('/reset', async (req, res) => {
+  const b = await bossActor(); if (!b) return res.status(403).json({ error: "Faqat direktor yoki o'rinbosar" });
+  const { scopes, confirmText } = req.body || {};
+  const company: any = await Company.findById(b.cid).select('name').lean();
+  if (!company || String(confirmText || '').trim().toLowerCase() !== String(company.name).trim().toLowerCase()) {
+    return res.status(400).json({ error: "Tasdiqlash uchun firma nomini aynan yozing" });
+  }
+  const keys: string[] = scopes === 'all' ? Object.keys(RESET_SCOPES) : (Array.isArray(scopes) ? scopes.filter((k: any) => typeof k === 'string' && RESET_SCOPES[k]) : []);
+  if (!keys.length) return res.status(400).json({ error: "Hech bo'lim tanlanmagan" });
+  const snap = await takeSnapshot(b.cid, 'pre_reset', b.by, `Tozalash: ${keys.map(k => RESET_SCOPES[k].label).join(', ')}`);
+  const deleted: Record<string, number> = {};
+  for (const k of keys) deleted[k] = await RESET_SCOPES[k].run(b.cid, [b.by.userId]);
+  await logAudit({ userId: b.by.userId, userName: b.by.name, userRole: b.by.role, action: 'delete', entity: 'company', entityId: b.cid,
+    description: `Xavfli zona: tozalandi — ${keys.map(k => RESET_SCOPES[k].label).join(', ')}. Oldingi holat nusxasi: #${snap._id}`, companyId: b.cid, req });
+  res.json({ ok: true, deleted, snapshotId: String(snap._id) });
 });
 
 export default router;

@@ -67,7 +67,14 @@ createRoot(document.getElementById("root")!).render(
 );
 
 // Service Worker — offline support + asset caching + push notifications
-if ('serviceWorker' in navigator) {
+// O'rnatilgan ilovalarda (Windows/Android) fayllar ilova ichida — Service Worker kerak emas va eski
+// keshlangan sahifa yangilanishdan keyin ilovani "yuklanmoqda"da qotirib qo'yishi mumkin edi. O'chiramiz.
+const IS_NATIVE_APP = !!((window as any).__TAURI_INTERNALS__ || (window as any).Capacitor?.isNativePlatform?.());
+if (IS_NATIVE_APP && 'serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister())).catch(() => {});
+  if ('caches' in window) caches.keys().then(ks => ks.forEach(k => caches.delete(k))).catch(() => {});
+}
+if ('serviceWorker' in navigator && !IS_NATIVE_APP) {
   window.addEventListener('load', async () => {
     try {
       const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });

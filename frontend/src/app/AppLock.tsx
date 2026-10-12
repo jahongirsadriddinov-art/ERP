@@ -100,7 +100,9 @@ export async function setPin(pin: string): Promise<void> {
 // Yangi qurilmada login'dan keyin: hisobda PIN bo'lsa shu yerga tiklanadi (true), bo'lmasa false.
 export async function syncPinFromServer(): Promise<boolean> {
   try {
-    const r = await fetch(`${API_BASE}/api/pin`, { headers: authHeaders() });
+    // Javob kelmasa (server uyg'onayotgan, ilova endi ochilgan) — 6 soniyadan keyin kutmaymiz, aks holda
+    // ekran cheksiz "yuklanmoqda" bo'lib qolardi
+    const r = await fetch(`${API_BASE}/api/pin`, { headers: authHeaders(), signal: AbortSignal.timeout ? AbortSignal.timeout(6000) : undefined });
     if (!r.ok) return false;
     const d = await r.json();
     if (d?.set && d.salt && d.hash) { storePinLocally(d.salt, d.hash); return true; }

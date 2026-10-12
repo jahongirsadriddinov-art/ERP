@@ -1,3 +1,4 @@
+import { startAutoSnapshots } from './services/companySnapshot';
 import express from 'express';
 import http from 'http';
 import mongoose from 'mongoose';
@@ -369,6 +370,8 @@ mongoose.connect(MONGODB_URI)
     await ensurePlansSeeded();
     await ensureTieredPlansSeeded();
     await reloadPlanCache();
+    // Kunlik avtomatik zaxira nusxalar (har firma uchun)
+    startAutoSnapshots();
     console.log('✅ Tarif keshi yuklandi');
   })
   .catch((err) => console.error('MongoDB connection error:', err?.message || err));

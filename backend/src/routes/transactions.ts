@@ -559,8 +559,9 @@ router.delete('/:id', async (req, res) => {
     // O'CHIRIB bo'lmaydi (faqat pending/rejected) — moliyaviy tuzatish
     // kerak bo'lsa, yangi (masalan manfiy) tranzaksiya yaratish orqali
     // qilinishi kerak, tarixni yo'q qilish orqali emas.
-    if (tx.status === 'confirmed') {
-      return res.status(409).json({ error: "Tasdiqlangan tranzaksiyani o'chirib bo'lmaydi" });
+    // Tasdiqlangan yozuvni faqat direktor/o'rinbosar o'chira oladi (audit jurnalida eski qiymati qoladi)
+    if (tx.status === 'confirmed' && !isBoss) {
+      return res.status(409).json({ error: "Tasdiqlangan yozuvni faqat direktor yoki o'rinbosar o'chira oladi" });
     }
     const snapshot = tx.toObject();
     await tx.deleteOne();

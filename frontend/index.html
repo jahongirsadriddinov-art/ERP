@@ -191,6 +191,31 @@
     <body>
 
       <div id="root"><div id="initial-loader"><div class="logo-wrap"><div class="spinner"></div></div></div></div>
+      <script>
+        // Ishga tushish nazoratchisi: yangi o'rnatilgan/yangilangan ilova birinchi ochilishda ba'zan
+        // yuklash ekranida qotib qolardi (Ctrl+R bilan ochilardi). 20 soniyada ilova ochilmasa — bir marta
+        // o'zi qayta yuklaydi.
+        (function () {
+          try {
+            var KEY = 'erp_boot_reload_at';
+            setTimeout(function () {
+              var stuck = document.getElementById('initial-loader') || (document.querySelector('#root > .boot-loader') && !document.querySelector('#root > .boot-loader ~ *'));
+              if (!stuck) return;
+              var last = +(sessionStorage.getItem(KEY) || 0);
+              if (Date.now() - last < 60000) return;
+              sessionStorage.setItem(KEY, String(Date.now()));
+              location.reload();
+            }, 20000);
+            // Eski versiyaning bo'laklari topilmasa (yangilanishdan keyin) — bir marta qayta yuklash
+            window.addEventListener('vite:preloadError', function () {
+              var last = +(sessionStorage.getItem(KEY) || 0);
+              if (Date.now() - last < 60000) return;
+              sessionStorage.setItem(KEY, String(Date.now()));
+              location.reload();
+            });
+          } catch (e) {}
+        })();
+      </script>
       <script type="module" src="/src/main.tsx"></script>
 
     </body>

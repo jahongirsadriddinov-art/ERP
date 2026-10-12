@@ -1,3 +1,4 @@
+import { SnapshotsPanel, DangerZone } from "./components/DataSafety";
 import CustomPlanBuilder from "./components/CustomPlanBuilder";
 import { useState, useRef, useEffect, useMemo, lazy, Suspense } from "react";
 import Building2 from "@hugeicons/core-free-icons/Building02Icon";
@@ -545,7 +546,7 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
   const changeScale = (v: number) => { setFontScale(v); applyFontScale(v); };
   const [fontWeight, setFontWeightState] = useState<FontWeightMode>(getFontWeight);
   const changeWeight = (w: FontWeightMode) => { setFontWeightState(w); applyFontWeight(w); };
-  const [activePanel, setActivePanel] = useState<null | "font" | "bg" | "appearance" | "color" | "perms" | "projects" | "language" | "subscription" | "currency" | "sound" | "devices" | "backup">(null);
+  const [activePanel, setActivePanel] = useState<null | "danger" | "font" | "bg" | "appearance" | "color" | "perms" | "projects" | "language" | "subscription" | "currency" | "sound" | "devices" | "backup">(null);
   const APPEARANCE_LABELS: Record<string, string> = { light: t('profile.themeLight'), dark: t('profile.themeDark'), system: t('profile.themeSystem') };
 
   // ── Ovoz effektlari (uisfx, "zen" pack) — yoqilgan/o'chirilgan va balandlik
@@ -680,7 +681,8 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
             // ko'rsatilmaydi (`hidden lg:flex`), shu sabab mobil foydalanuvchi
             // (direktor/o'rinbosar) uchun backup imkoni butunlay yo'qolgan
             // edi. Endi Profil bo'limida — barcha o'lchamda ko'rinadi.
-            ...(canBackup ? [{ key: "backup" as const, icon: Download, label: t('profile.backupTitle'), hint: null as string|null, swatch: null }] : []),
+            ...(isAdmin(currentUser.role) ? [{ key: "backup" as const, icon: Download, label: t('profile.backupTitle'), hint: null as string|null, swatch: null }] : []),
+            ...(isAdmin(currentUser.role) ? [{ key: "danger" as const, icon: AlertTriangle, label: t('safety.dangerMenu', "Xavfli zona"), hint: null as string|null, swatch: null }] : []),
   ];
 
   // ── Har bo'lim uchun alohida ekran (rasmdagi "Personal/General/..." kabi) ──
@@ -689,7 +691,7 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
       font: t('profile.font', "Shrift"), bg: t('profile.bgThemes'), appearance: t('profile.appearanceMode'), color: t('profile.colorTheme'),
       perms: t('profile.permissions'), projects: t('profile.myObjects'), language: t('profile.language'),
       subscription: t('profile.subscriptionStatus'), currency: t('profile.currencyRate'), sound: t('profile.sound'),
-      devices: t('profile.connectedDevices'), backup: t('profile.backupTitle'),
+      devices: t('profile.connectedDevices'), backup: t('profile.backupTitle'), danger: t('safety.dangerMenu', "Xavfli zona"),
     }[activePanel];
     const activeRow = menuRows.find(r => r.key === activePanel);
     return (
@@ -899,10 +901,18 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
           {activePanel === "currency" && (
             <CurrencyPanel canEdit={isAdmin(currentUser.role) || !!currentUser.isOwner}/>
           )}
+          {activePanel === "danger" && (
+            <div className="space-y-4">
+              <div className="surface border border-border p-4"><SnapshotsPanel /></div>
+              <DangerZone companyName={companyName} />
+            </div>
+          )}
           {activePanel === "backup" && (
             <div className="surface border border-border overflow-hidden p-4 space-y-3">
-              <p className="text-xs text-muted-foreground">{t('profile.backupHint')}</p>
-              <button onClick={onBackup} disabled={backupLoading}
+              <SnapshotsPanel />
+              {canBackup && <div className="h-px bg-border my-2" />}
+              {canBackup && <p className="text-xs text-muted-foreground">{t('profile.backupHint')}</p>}
+              {canBackup && <><button onClick={onBackup} disabled={backupLoading}
                 className="w-full flex items-center justify-center gap-2 btn btn-outline py-3 rounded-xl text-sm font-semibold disabled:opacity-60">
                 {backupLoading ? <MorphIcon icon={Loader2} className="w-4 h-4 animate-spin" /> : <MorphIcon icon={Download} className="w-4 h-4" />}
                 {t('dashboard.backup')}
@@ -913,7 +923,7 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
                 className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold border border-destructive/30 text-destructive hover:bg-destructive/10 liquid-transition disabled:opacity-60">
                 {importLoading ? <MorphIcon icon={Loader2} className="w-4 h-4 animate-spin" /> : <MorphIcon icon={Upload} className="w-4 h-4" />}
                 {t('dashboard.importBackup')}
-              </button>
+              </button></>}
             </div>
           )}
           {activePanel === "sound" && (

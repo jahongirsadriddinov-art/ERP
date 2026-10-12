@@ -4258,7 +4258,7 @@ export default function App() {
     (async () => {
       try {
         const res = await fetch(`${API_BASE}/api/auth/telegram-webapp`, {
-          method: "POST", headers: { "Content-Type": "application/json" },
+          method: "POST", headers: { "Content-Type": "application/json" }, signal: AbortSignal.timeout ? AbortSignal.timeout(8000) : undefined,
           body: JSON.stringify({ initData: getTelegramInitData() }),
         });
         if (!res.ok) return;

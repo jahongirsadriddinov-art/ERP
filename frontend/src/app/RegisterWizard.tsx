@@ -479,6 +479,8 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
                       <div className="mt-4 space-y-2.5">
                         {featureRegistry.map(f => {
                           const included = plan.features.includes(f.key);
+                          // Kirimlar (tushum) — alohida, faqat "O'zim tanlayman" tarifida qo'shiladigan funksiya: tarifda bo'lmasa umuman ko'rsatilmaydi
+                          if (!included && f.key === "income") return null;
                           return (
                             <div key={f.key} className={`flex items-center gap-2 text-sm ${included ? (featured ? "text-white/90" : "text-foreground/80") : (featured ? "text-white/40 line-through" : "text-muted-foreground/50 line-through")}`}>
                               <MorphIcon icon={CheckCircle} className={`w-4 h-4 flex-shrink-0 ${included ? "text-green-500" : "opacity-30"}`} />{f.label}

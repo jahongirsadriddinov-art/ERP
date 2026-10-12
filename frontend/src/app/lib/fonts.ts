@@ -6,17 +6,17 @@ export interface FontDef { id: string; label: string; family: string; google?: s
 
 const EMOJI = '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji"';
 export const FONTS: FontDef[] = [
-  { id: "inter", label: "Inter", family: `Inter, "Segoe UI", Roboto, Arial, sans-serif, ${EMOJI}`, google: "Inter:wght@400;500;600;700;800", kind: "sans" },
-  { id: "roboto", label: "Roboto", family: `Roboto, Arial, sans-serif, ${EMOJI}`, google: "Roboto:wght@400;500;700;900", kind: "sans" },
-  { id: "montserrat", label: "Montserrat", family: `Montserrat, Arial, sans-serif, ${EMOJI}`, google: "Montserrat:wght@400;500;600;700;800", kind: "sans" },
-  { id: "manrope", label: "Manrope", family: `Manrope, Arial, sans-serif, ${EMOJI}`, google: "Manrope:wght@400;500;600;700;800", kind: "sans" },
-  { id: "nunito", label: "Nunito", family: `Nunito, Arial, sans-serif, ${EMOJI}`, google: "Nunito:wght@400;600;700;800", kind: "round" },
-  { id: "comfortaa", label: "Comfortaa", family: `Comfortaa, Arial, sans-serif, ${EMOJI}`, google: "Comfortaa:wght@400;500;600;700", kind: "round" },
+  { id: "inter", label: "Inter", family: `Inter, "Segoe UI", Roboto, Arial, sans-serif, ${EMOJI}`, google: "Inter:wght@300..900", kind: "sans" },
+  { id: "roboto", label: "Roboto", family: `Roboto, Arial, sans-serif, ${EMOJI}`, google: "Roboto:wght@300;400;500;700;900", kind: "sans" },
+  { id: "montserrat", label: "Montserrat", family: `Montserrat, Arial, sans-serif, ${EMOJI}`, google: "Montserrat:wght@300..900", kind: "sans" },
+  { id: "manrope", label: "Manrope", family: `Manrope, Arial, sans-serif, ${EMOJI}`, google: "Manrope:wght@300..800", kind: "sans" },
+  { id: "nunito", label: "Nunito", family: `Nunito, Arial, sans-serif, ${EMOJI}`, google: "Nunito:wght@300..900", kind: "round" },
+  { id: "comfortaa", label: "Comfortaa", family: `Comfortaa, Arial, sans-serif, ${EMOJI}`, google: "Comfortaa:wght@300..700", kind: "round" },
   { id: "ptsans", label: "PT Sans", family: `"PT Sans", Arial, sans-serif, ${EMOJI}`, google: "PT+Sans:wght@400;700", kind: "sans" },
   { id: "ptserif", label: "PT Serif", family: `"PT Serif", Georgia, serif, ${EMOJI}`, google: "PT+Serif:wght@400;700", kind: "serif" },
-  { id: "playfair", label: "Playfair Display", family: `"Playfair Display", Georgia, serif, ${EMOJI}`, google: "Playfair+Display:wght@400;600;700;800", kind: "serif" },
+  { id: "playfair", label: "Playfair Display", family: `"Playfair Display", Georgia, serif, ${EMOJI}`, google: "Playfair+Display:wght@400..900", kind: "serif" },
   { id: "times", label: "Times New Roman", family: `"Times New Roman", Times, "PT Serif", serif, ${EMOJI}`, kind: "serif" },
-  { id: "jetbrains", label: "JetBrains Mono", family: `"JetBrains Mono", Consolas, monospace, ${EMOJI}`, google: "JetBrains+Mono:wght@400;500;700", kind: "mono" },
+  { id: "jetbrains", label: "JetBrains Mono", family: `"JetBrains Mono", Consolas, monospace, ${EMOJI}`, google: "JetBrains+Mono:wght@300..800", kind: "mono" },
 ];
 
 export const fontById = (id?: string | null): FontDef => FONTS.find(f => f.id === id) || FONTS[0];
@@ -85,10 +85,10 @@ export const getFontWeight = (): FontWeightMode => {
 };
 const WEIGHT_MAP: Record<FontWeightMode, [number, number, number, number, number]> = {
   // [oddiy matn, medium, semibold, bold, extrabold]
-  light: [300, 400, 500, 600, 700],
+  light: [300, 300, 400, 500, 600],
   normal: [400, 500, 600, 700, 800],
   medium: [500, 600, 700, 800, 900],
-  bold: [600, 700, 800, 900, 900],
+  bold: [700, 800, 900, 900, 900],
 };
 export function applyFontWeight(mode?: FontWeightMode) {
   if (typeof document === "undefined") return;
@@ -97,6 +97,7 @@ export function applyFontWeight(mode?: FontWeightMode) {
   let style = document.getElementById("app-weight-style") as HTMLStyleElement | null;
   if (m === "normal") { style?.remove(); return; }
   if (!style) { style = document.createElement("style"); style.id = "app-weight-style"; document.head.appendChild(style); }
+  ensureFont(getAppFont()); // to'liq qalinlik diapazoni yuklansin (aks holda 800/900 sezilmaydi)
   const [n, md, sb, b, xb] = WEIGHT_MAP[m];
   style.textContent = `body{font-weight:${n}}.font-normal,.font-light{font-weight:${n}!important}.font-medium{font-weight:${md}!important}.font-semibold{font-weight:${sb}!important}.font-bold,b,strong,h1,h2,h3{font-weight:${b}!important}.font-extrabold,.font-black{font-weight:${xb}!important}`;
 }

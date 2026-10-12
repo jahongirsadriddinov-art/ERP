@@ -693,3 +693,11 @@ textarea {
 .dark .border-white\/10 { border-color: rgba(255,255,255,0.16) !important; }
 .border-border\/40, .border-border\/50, .border-border\/60 { border-color: var(--border) !important; }
 .surface, .glass-card, .glass-modal { border-width: 1px; border-color: var(--border); }
+
+/* ── Pastki navigatsiya (telefon/planshet) — premium "indikator pill" ─────── */
+.ios-bottom-bar { padding: 6px 6px !important; gap: 2px; }
+.ios-bottom-bar::before { left: 30%; right: 30%; opacity: .45; }
+.nav-pill-indicator {
+  background: linear-gradient(135deg, var(--primary), var(--accent));
+  box-shadow: 0 6px 18px -4px var(--primary), inset 0 1px 0 rgba(255,255,255,0.35);
+}

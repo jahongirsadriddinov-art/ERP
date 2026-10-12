@@ -41,6 +41,7 @@ export const uz = {
     fontHint: "Tanlangan shrift butun saytga (shu qurilmada) qo'llanadi. Hujjatlar shrifti hujjatlar bo'limida alohida tanlanadi.",
   },
   register: { saveBackToSummary: "Saqlash va xulosaga qaytish" },
+  nav: { homeShort: "Asosiy" },
   checkinGate: { finishedInstruction: "Bugungi ishingiz tugatilgan. Qayta ishlash uchun \"Ishga keldim\"ni bosing — joylashuvingiz olinadi." },
   reports: {
     r7: "7 kun", r30: "30 kun", rMonth: "Bu oy", r90: "3 oy", rYear: "Bu yil", rAll: "Hammasi", rCustom: "Tanlash",
@@ -91,6 +92,7 @@ export const ru: typeof uz = {
     fontHint: "Выбранный шрифт применяется ко всему сайту (на этом устройстве). Шрифт документов выбирается отдельно в разделе документов.",
   },
   register: { saveBackToSummary: "Сохранить и вернуться к итогу" },
+  nav: { homeShort: "Главная" },
   checkinGate: { finishedInstruction: "Ваш рабочий день завершён. Чтобы снова работать, нажмите \"Я пришёл\" — будет получена ваша геолокация." },
   reports: {
     r7: "7 дней", r30: "30 дней", rMonth: "Этот месяц", r90: "3 месяца", rYear: "Этот год", rAll: "Всё", rCustom: "Выбрать",

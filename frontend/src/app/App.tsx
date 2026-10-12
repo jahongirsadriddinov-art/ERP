@@ -5130,8 +5130,8 @@ export default function App() {
   const admin = isAdmin(liveUser.role);
   const unreadMsgs = messages.filter(m=>m.toUserId===liveUser.id&&!m.read).length;
   const isGpsAdmin = liveUser?.role === 'direktor' || liveUser?.role === 'orinbosar';
-  const NAV: { key: NavPage; label: string; icon: IconNode; badge?: number }[] = [
-    { key: "dashboard", label: tApp('nav.dashboard'), icon: Home },
+  const NAV: { key: NavPage; label: string; shortLabel?: string; icon: IconNode; badge?: number }[] = [
+    { key: "dashboard", label: tApp('nav.dashboard'), shortLabel: tApp('nav.homeShort'), icon: Home },
     // Moliya endi HAMMAGA ko'rinadi — oddiy xodim o'z chiqimini kiritib,
     // faqat o'zinikini ko'radi (backend GET /api/transactions rolga qarab
     // filtrlaydi); direktor/orinbosar hammasini ko'radi va tasdiqlaydi.
@@ -5713,44 +5713,42 @@ export default function App() {
           faqat IKONA+YORLIQ RANGI (kulrang → primary) bilan va bar ustida
           suzuvchi ingichka "urg'u chizig'i" (accent stripe) bilan
           ko'rsatiladi — namunadagi aynan shu naqsh. */}
-      <nav className={`ios-bottom-bar flex items-center justify-around ${(page==='chat' && chatIsOpen) || anyBigModalOpen ? 'ios-bottom-bar-hidden' : ''}`}>
-        {NAV.map(n => (
+      {/* Pastki navigatsiya — teng kenglikdagi 6 ta tab, faol tabda belgi ortida sirg'aluvchi gradient "pill",
+          yozuvlar har doim bir qatorda (qirqilmaydi, ikki qatorga tushmaydi) */}
+      <nav className={`ios-bottom-bar flex items-stretch ${(page==='chat' && chatIsOpen) || anyBigModalOpen ? 'ios-bottom-bar-hidden' : ''}`}>
+        {NAV.map(n => {
+          const active = page === n.key;
+          return (
           <motion.button key={n.key} onClick={() => { setPage(n.key); setSelProject(null); }}
-            whileTap={{ scale: 0.90 }}
+            whileTap={{ scale: 0.92 }}
             transition={{ type: "spring", stiffness: 520, damping: 30 }}
             aria-label={n.label}
-            aria-current={page===n.key ? "page" : undefined}
-            className="flex flex-col items-center justify-center gap-[4px] px-3 py-2 min-w-[56px] h-[60px] relative z-10"
-            style={{ color: page===n.key ? 'var(--primary)' : 'rgba(255,255,255,0.42)' }}
+            aria-current={active ? "page" : undefined}
+            className="flex-1 min-w-0 flex flex-col items-center justify-center gap-1 h-[58px] relative z-10 select-none"
           >
-            {page === n.key && (
-              <>
-                <motion.div layoutId="mobileNavActivePill" className="nav-active-bg absolute inset-x-1 inset-y-1 rounded-[18px] -z-10"
-                  transition={{ type: "spring", stiffness: 500, damping: 34 }} />
-                <motion.div
-                  layoutId="mobileNavActiveStripe"
-                  className="nav-active-stripe absolute top-0 left-1/2 -translate-x-1/2"
-                  transition={{ type: "spring", stiffness: 480, damping: 30 }}
-                />
-              </>
-            )}
-            <motion.div className="relative flex items-center justify-center w-10 h-10"
-              animate={page === n.key ? { y: -1, scale: 1.12 } : { y: 0, scale: 1 }}
-              transition={{ type: "spring", stiffness: 520, damping: 22 }}>
-              <div className="relative z-[1] flex items-center justify-center w-[26px] h-[26px]">
-                {n.key === "profile"
-                  ? <div className={`rounded-full overflow-hidden transition-all duration-200 ${page===n.key?"ring-2 ring-current shadow-md":"opacity-70"}`}><Avatar user={liveUser} size="sm"/></div>
-                  : <MorphIcon icon={n.icon} className="w-[19px] h-[19px]" />}
-              </div>
-              {!!n.badge && n.badge>0 && (
-                <span className="badge-pulse absolute -top-1 -right-1 min-w-[16px] h-4 px-0.5 bg-red-500 text-white rounded-full text-[9px] flex items-center justify-center font-bold shadow border border-black/20 z-[2]">{n.badge > 9 ? '9+' : n.badge}</span>
+            <span className="relative flex items-center justify-center w-[52px] h-[30px]">
+              {active && (
+                <motion.span layoutId="mobileNavActivePill" className="nav-pill-indicator absolute inset-0 rounded-full"
+                  transition={{ type: "spring", stiffness: 520, damping: 36 }} />
               )}
-            </motion.div>
-            <span className={`text-[9px] leading-none tracking-wide transition-all duration-300 ${page === n.key ? "font-bold opacity-100" : "font-semibold opacity-75"}`}>
-              {n.label}
+              <motion.span className="relative z-[1] flex items-center justify-center"
+                animate={active ? { scale: 1.08 } : { scale: 1 }}
+                transition={{ type: "spring", stiffness: 520, damping: 22 }}
+                style={{ color: active ? '#fff' : 'rgba(255,255,255,0.55)' }}>
+                {n.key === "profile"
+                  ? <span className={`block rounded-full overflow-hidden w-6 h-6 [&>*]:!w-6 [&>*]:!h-6 [&>*]:!text-[9px] ${active ? "ring-2 ring-white/90" : "opacity-80"}`}><Avatar user={liveUser} size="sm"/></span>
+                  : <MorphIcon icon={n.icon} className="w-[19px] h-[19px]" />}
+              </motion.span>
+              {!!n.badge && n.badge>0 && (
+                <span className="badge-pulse absolute -top-1 right-1 min-w-[16px] h-4 px-0.5 bg-red-500 text-white rounded-full text-[9px] flex items-center justify-center font-bold shadow border border-black/20 z-[2]">{n.badge > 9 ? '9+' : n.badge}</span>
+              )}
+            </span>
+            <span className={`block max-w-full px-0.5 truncate whitespace-nowrap text-[10px] leading-none tracking-tight transition-colors duration-300 ${active ? "font-bold text-white" : "font-medium text-white/55"}`}>
+              {n.shortLabel || n.label}
             </span>
           </motion.button>
-        ))}
+          );
+        })}
       </nav>
 
       {/* Qo'ng'iroq (WebRTC) */}

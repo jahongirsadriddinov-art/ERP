@@ -699,7 +699,7 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
       <motion.div key={activePanel} initial={{ opacity: 0, x: 28 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 28 }}
         transition={{ type: "spring", stiffness: 380, damping: 34 }}
         className="max-w-lg md:max-w-4xl lg:max-w-6xl 2xl:max-w-7xl mx-auto w-full pb-10 lg:pb-0 lg:flex-1 lg:min-h-0 lg:flex lg:flex-col">
-        <div className="flex items-center gap-3 px-4 md:px-6 py-4 sticky top-0 lg:static bg-background/80 backdrop-blur-xl z-10 flex-shrink-0">
+        <div className="soft-sticky flex items-center gap-3 px-4 md:px-6 py-4 sticky top-0 lg:static z-10 flex-shrink-0">
           <button onClick={() => setActivePanel(null)} aria-label={t('common.back')} className="btn btn-ghost w-10 h-10 p-0 rounded-full flex-shrink-0"><MorphIcon icon={ChevronLeft} className="w-5 h-5" /></button>
           {activeRow && (activeRow.swatch
             ? <div className="w-10 h-10 rounded-xl flex-shrink-0 hidden md:block" style={activeRow.swatch}/>
@@ -773,11 +773,11 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
               <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-bold mb-2">{t('profile.fontSize', "Matn o'lchami")}</p>
               {/* Telefonda siqilmasin: tepada A− / qiymat / A+, ostida foizlar (telefonda 3 ta, kattada 6 ta qatorda) */}
               <div className="flex items-center gap-2">
-                <button type="button" onClick={() => { const i = FONT_SCALES.indexOf(fontScale as any); if (i > 0) changeScale(FONT_SCALES[i - 1]); }}
+                <button type="button" data-multi-tap onClick={() => { const i = FONT_SCALES.indexOf(fontScale as any); if (i > 0) changeScale(FONT_SCALES[i - 1]); }}
                   disabled={fontScale === FONT_SCALES[0]} aria-label={t('profile.fontSmaller', "Kichikroq")}
                   className="w-11 h-11 rounded-2xl border-2 border-border flex items-center justify-center font-bold text-sm hover:border-primary/40 hover:bg-muted/40 disabled:opacity-35 liquid-transition flex-shrink-0">A−</button>
                 <div className="flex-1 min-w-0 h-11 rounded-2xl bg-muted/50 flex items-center justify-center text-sm font-bold tabular-nums">{fontScale}%</div>
-                <button type="button" onClick={() => { const i = FONT_SCALES.indexOf(fontScale as any); if (i < FONT_SCALES.length - 1) changeScale(FONT_SCALES[i + 1]); }}
+                <button type="button" data-multi-tap onClick={() => { const i = FONT_SCALES.indexOf(fontScale as any); if (i < FONT_SCALES.length - 1) changeScale(FONT_SCALES[i + 1]); }}
                   disabled={fontScale === FONT_SCALES[FONT_SCALES.length - 1]} aria-label={t('profile.fontBigger', "Kattaroq")}
                   className="w-11 h-11 rounded-2xl border-2 border-border flex items-center justify-center font-bold text-lg hover:border-primary/40 hover:bg-muted/40 disabled:opacity-35 liquid-transition flex-shrink-0">A+</button>
               </div>

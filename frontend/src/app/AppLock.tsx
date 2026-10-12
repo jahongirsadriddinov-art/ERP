@@ -9,7 +9,7 @@ import X from "@hugeicons/core-free-icons/Cancel01Icon";
 import { MorphIcon } from "morphicons/react";
 import { motion, AnimatePresence } from "motion/react";
 import { useTranslation } from "react-i18next";
-import { isAndroid, isDesktopPointer } from "./platform";
+import { isAndroid, isDesktopPointer, haptic } from "./platform";
 import { API_BASE } from "./api";
 import ArrowLeft from "@hugeicons/core-free-icons/ArrowLeft01Icon";
 
@@ -466,6 +466,12 @@ function PinPad({ value, onDigit, onDelete }: { value: string; onDigit: (d: stri
     }
   };
 
+  const press = (k: string) => {
+    haptic();
+    if (useHiddenInput) hiddenRef.current?.focus();
+    if (k === "del") onDelete(); else onDigit(k);
+  };
+
   const keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "", "0", "del"];
   return (
     <div className="relative w-full max-w-[280px] mx-auto">
@@ -484,9 +490,12 @@ function PinPad({ value, onDigit, onDelete }: { value: string; onDigit: (d: stri
       )}
       <div className="grid grid-cols-3 gap-3">
         {keys.map((k, i) => k === "" ? <div key={i} /> : (
-          <button key={i} type="button"
-            onClick={() => { hiddenRef.current?.focus(); k === "del" ? onDelete() : onDigit(k); }}
-            className="h-16 rounded-2xl bg-muted/50 hover:bg-muted active:scale-95 flex items-center justify-center text-xl font-semibold liquid-transition">
+          // Barmoq tekkan ZAHOTI qabul qilinadi (qo'yib yuborishni kutmaydi) — tez terishda raqamlar yo'qolmaydi.
+          // data-multi-tap: bir xil raqamni ketma-ket bosish (masalan 1111) umumiy "ikki marta bosish" himoyasiga tushmaydi.
+          <button key={i} type="button" data-multi-tap
+            onPointerDown={e => { if (e.pointerType === "mouse" && e.button !== 0) return; e.preventDefault(); press(k); }}
+            onClick={e => { if (e.detail === 0) press(k); }}
+            className="h-16 rounded-2xl bg-muted/50 hover:bg-muted active:bg-primary/20 active:scale-95 flex items-center justify-center text-xl font-semibold transition-transform duration-75 touch-manipulation select-none">
             {k === "del" ? <MorphIcon icon={Delete} className="w-5 h-5"  /> : k}
           </button>
         ))}

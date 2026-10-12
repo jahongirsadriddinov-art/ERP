@@ -11,7 +11,8 @@ import mongoose, { Schema, Document } from 'mongoose';
 export interface IQrLoginSession extends Document {
   sessionId: string;   // 256-bit tasodifiy, QR'ga kodlanadi (public, lekin taxmin qilib bo'lmaydi)
   scannedSlots: number[]; // qaysi rotatsiya raqamlari muvaffaqiyatli skanerlangan
-  status: 'pending' | 'verified' | 'consumed';
+  status: 'pending' | 'scanned' | 'verified' | 'consumed';
+  device?: string;     // qaysi kompyuter/brauzer kirmoqchi (telefonda tasdiqlashda ko'rsatiladi)
   userId?: string;     // kim skanerladi (verified bo'lgach to'ldiriladi)
   createdAt: Date;
 }
@@ -19,8 +20,9 @@ export interface IQrLoginSession extends Document {
 const QrLoginSessionSchema: Schema = new Schema({
   sessionId: { type: String, required: true, unique: true, index: true },
   scannedSlots: { type: [Number], default: [] },
-  status: { type: String, enum: ['pending', 'verified', 'consumed'], default: 'pending' },
+  status: { type: String, enum: ['pending', 'scanned', 'verified', 'consumed'], default: 'pending' },
   userId: { type: String },
+  device: { type: String },
 }, { timestamps: true });
 
 // Yozuv o'zi 10 daqiqadan keyin bazadan o'chadi (resurs tozalash) — lekin

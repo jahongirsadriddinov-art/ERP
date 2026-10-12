@@ -23,6 +23,7 @@ import "./app/i18n";
 import "./styles/index.css";
 import { attachSoundUnlock } from "./app/sound.ts";
 import { attachGlobalClickSounds } from "./app/soundClicks.ts";
+import { installTapGuard } from "./app/lib/tapGuard";
 import "./app/soundToast.ts"; // sonner toast'lariga avtomatik ovoz ulaydi (butun sayt uchun)
 
 // UI ovoz effektlari (uisfx, "zen" pack) — birinchi bosishda audio
@@ -30,6 +31,7 @@ import "./app/soundToast.ts"; // sonner toast'lariga avtomatik ovoz ulaydi (butu
 // markazlashtirilgan tovush qo'shadi.
 attachSoundUnlock();
 attachGlobalClickSounds();
+installTapGuard();
 
 // Chrome-ning built-in Translator/Language Detection API (window.translation)
 // sahifada ishlamasa "Language detection is not supported for this page" xatosini

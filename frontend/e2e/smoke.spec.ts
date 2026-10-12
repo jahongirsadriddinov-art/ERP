@@ -57,3 +57,25 @@ test('ochiq imzolash sahifasi (/sign/...) skroll bo\'ladi va topilmasa xabar chi
   await expect(page.getByText(/topilmadi|eskirgan/i)).toBeVisible({ timeout: 15_000 });
   await noHorizontalOverflow(page);
 });
+
+test("bir bosish — bitta amal: tugmani ketma-ket tez bosish amalni takrorlamaydi, PIN kabi tugmalar esa takrorlanadi", async ({ page }) => {
+  await mockApi(page);
+  await page.goto('/');
+  await page.waitForLoadState('networkidle');
+  const r = await page.evaluate(async () => {
+    const mk = (multi: boolean) => {
+      const b = document.createElement('button');
+      if (multi) b.setAttribute('data-multi-tap', '');
+      let n = 0; b.addEventListener('click', () => { n++; });
+      document.body.append(b);
+      return { b, count: () => n };
+    };
+    const one = mk(false), many = mk(true);
+    for (let i = 0; i < 3; i++) { one.b.click(); many.b.click(); }
+    await new Promise(r => setTimeout(r, 450));
+    one.b.click(); // 0.4 s dan keyin — yangi bosish sifatida qabul qilinadi
+    return { one: one.count(), many: many.count() };
+  });
+  expect(r.one).toBe(2);
+  expect(r.many).toBe(3);
+});

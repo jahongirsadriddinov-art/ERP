@@ -242,7 +242,7 @@ export function VideoPlayer({ src, className = "", compact, onExpand, autoPlay }
             </button>
             <span className="text-[11px] text-white/90 font-medium tabular-nums">{fmt(current)} / {fmt(duration)}</span>
             <div className="ml-auto flex items-center gap-0.5">
-              <button onClick={e => { e.stopPropagation(); const n = SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length]; setSpeed(n); saveSpeed(n); }}
+              <button data-multi-tap onClick={e => { e.stopPropagation(); const n = SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length]; setSpeed(n); saveSpeed(n); }}
                 className="h-7 px-2 rounded-full text-[11px] font-bold text-white hover:bg-white/15">{speed}x</button>
               <button onClick={e => { e.stopPropagation(); const v = ref.current; if (v) { v.muted = !v.muted; setMuted(v.muted); } }} className={btn} aria-label="Mute">
                 {muted

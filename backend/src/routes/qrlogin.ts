@@ -8,7 +8,7 @@ import { issueSession } from './auth';
 
 const router = Router();
 
-const SLOT_MS = 2000;       // kod har 2 soniyada almashadi
+const SLOT_MS = 5000;       // kod har 5 soniyada almashadi
 const REQUIRED_SCANS = 3;   // jami 3 ta ALOHIDA rotatsiya skanerlanishi kerak
 // Bu ICHKI (business-logic) muddat — foydalanuvchi buni HECH QACHON
 // ko'rmaydi ("expired" degan xato chiqmaydi): shu vaqt yetganda frontend
@@ -39,6 +39,12 @@ function codeForWindow(sessionId: string, windowIdx: number): string {
 function isExpired(createdAt: Date): boolean {
   return Date.now() - createdAt.getTime() > SESSION_TIMEOUT_MS;
 }
+// Kompyuter/brauzer qisqa nomi — telefonda "Windows · Chrome kirmoqchi, tasdiqlaysizmi?" deb ko'rsatish uchun
+function deviceLabel(ua: string): string {
+  const os = /Windows/i.test(ua) ? 'Windows' : /Mac OS X|Macintosh/i.test(ua) ? 'Mac' : /Android/i.test(ua) ? 'Android' : /iPhone|iPad/i.test(ua) ? 'iOS' : /Linux/i.test(ua) ? 'Linux' : '';
+  const br = /Edg\//.test(ua) ? 'Edge' : /OPR\//.test(ua) ? 'Opera' : /YaBrowser/.test(ua) ? 'Yandex' : /Firefox\//.test(ua) ? 'Firefox' : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : /Tauri|tauri/.test(ua) ? 'QurilishERP' : '';
+  return [os, br].filter(Boolean).join(' · ') || 'Kompyuter';
+}
 function isValidSessionId(v: unknown): v is string {
   return typeof v === 'string' && /^[0-9a-f]{64}$/.test(v);
 }
@@ -52,7 +58,7 @@ router.post('/create', async (req, res) => {
     if (!rl.allowed) return res.status(429).json({ error: "Juda ko'p urinish. Birozdan so'ng qayta urinib ko'ring." });
 
     const sessionId = randomBytes(32).toString('hex');
-    await QrLoginSession.create({ sessionId, status: 'pending' });
+    await QrLoginSession.create({ sessionId, status: 'pending', device: deviceLabel(String(req.headers['user-agent'] || '')) });
     res.json({ sessionId, slotMs: SLOT_MS, slotCount: REQUIRED_SCANS });
   } catch (err) {
     res.status(500).json({ error: 'Server xatoligi' });
@@ -67,13 +73,14 @@ router.get('/code/:sessionId', async (req, res) => {
     if (!isValidSessionId(req.params.sessionId)) return res.status(400).json({ error: 'Yaroqsiz sessiya' });
     const session = await QrLoginSession.findOne({ sessionId: req.params.sessionId }).lean();
     if (!session) return res.json({ expired: true });
-    if (session.status !== 'pending' && session.status !== 'verified') return res.json({ expired: true });
+    if (session.status === 'consumed') return res.json({ expired: true });
     if (isExpired(session.createdAt as any)) return res.json({ expired: true });
 
     const windowIdx = currentWindow(session.createdAt as any);
     res.json({
       code: codeForWindow(session.sessionId, windowIdx),
       scannedCount: session.scannedSlots.length,
+      scanned: session.status === 'scanned',
       verified: session.status === 'verified',
     });
   } catch (err) {
@@ -103,6 +110,9 @@ router.post('/scan', requireAuth, async (req, res) => {
     if (session.status === 'verified') {
       return res.json({ ok: true, scannedCount: session.scannedSlots.length, verified: true });
     }
+    if (session.status === 'scanned' && req.body?.v !== 2) {
+      return res.status(409).json({ ok: false, error: 'Bu QR boshqa telefonda tasdiqlanmoqda' });
+    }
 
     // XAVFSIZLIK — MUHIM TUZATISH: avval sessiya "kim skanerlagani" FAQAT
     // OXIRGI (3-chi) muvaffaqiyatli skanda yozilardi — ya'ni 1- va 2-slotni
@@ -116,6 +126,25 @@ router.post('/scan', requireAuth, async (req, res) => {
     }
 
     const windowIdx = currentWindow(session.createdAt as any);
+
+    // Yangi oqim (v2): BITTA skan + telefonda "Ha, kiraman" tasdig'i (WhatsApp/Telegram kabi). Kod 5 soniyada
+    // almashadi; ekran so'rovi biroz kechiksa ham rad etilmasin deb oldingi kod ham qabul qilinadi. Suratga olingan
+    // QR'ni keyin ishlatib bo'lmaydi (10 soniyadan keyin eskiradi), begona QR'ni ko'rsatib aldashga esa telefondagi
+    // tasdiqlash oynasi (qaysi kompyuter kirmoqchi) to'sqinlik qiladi.
+    if (req.body?.v === 2) {
+      const okCode = codeForWindow(session.sessionId, windowIdx) === code || (windowIdx > 0 && codeForWindow(session.sessionId, windowIdx - 1) === code);
+      if (!okCode) return res.status(400).json({ ok: false, error: "QR eskirgan — kompyuterdagi yangi QR'ni skanerlang" });
+      if (session.status === 'pending') {
+        // atomar: bir vaqtda ikki telefon skanerlasa ham sessiya faqat BIRINCHISIGA biriktiriladi
+        const r = await QrLoginSession.updateOne({ _id: session._id, status: 'pending' }, { $set: { userId: scannerId, status: 'scanned' } });
+        if (!r.modifiedCount) {
+          const fresh: any = await QrLoginSession.findById(session._id).lean();
+          if (!fresh || fresh.userId !== scannerId) return res.status(403).json({ ok: false, error: "Bu QR boshqa hisob tomonidan skanerlanmoqda" });
+        }
+      }
+      return res.json({ ok: true, needsConfirm: true, device: session.device || 'Kompyuter' });
+    }
+
     if (codeForWindow(session.sessionId, windowIdx) !== code) {
       return res.status(400).json({ ok: false, error: "Kod eskirgan — yangi kod kutilmoqda" });
     }
@@ -132,6 +161,23 @@ router.post('/scan', requireAuth, async (req, res) => {
     }
     await session.save();
     res.json({ ok: true, scannedCount: session.scannedSlots.length, verified: session.status === 'verified' });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: 'Server xatoligi' });
+  }
+});
+
+// POST /api/auth/qrlogin/approve — telefonda "Ha, kiraman" (approve: true) yoki "Yo'q" (approve: false).
+// Faqat QR'ni skanerlagan o'sha hisob tasdiqlay oladi.
+router.post('/approve', requireAuth, async (req, res) => {
+  try {
+    const { sessionId, approve } = req.body || {};
+    if (!isValidSessionId(sessionId)) return res.status(400).json({ ok: false, error: 'Yaroqsiz sessiya' });
+    const me = (req as any).user.userId as string;
+    const session = await QrLoginSession.findOne({ sessionId, status: 'scanned', userId: me });
+    if (!session || isExpired(session.createdAt as any)) return res.status(410).json({ ok: false, error: "QR muddati tugagan — qayta skanerlang" });
+    session.status = approve === true ? 'verified' : 'consumed';
+    await session.save();
+    res.json({ ok: true, verified: session.status === 'verified' });
   } catch (err) {
     res.status(500).json({ ok: false, error: 'Server xatoligi' });
   }

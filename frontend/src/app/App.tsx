@@ -5196,7 +5196,7 @@ export default function App() {
   // nusxa yozib, ular vaqt o'tishi bilan bir-biridan farqlanib ketishining
   // (drift) oldini oladi.
   const headerEl = (
-    <header className="flex items-center gap-3 px-4 flex-shrink-0 z-50 sticky top-0"
+    <header className="nav-blur-top flex items-center gap-3 px-4 flex-shrink-0 z-50 sticky top-0"
       style={{ paddingTop: 'max(0.625rem, env(safe-area-inset-top))', paddingBottom: '0.625rem' }}>
       <div className="nav-pill-desktop flex items-center gap-2.5 px-3 py-2 rounded-full flex-shrink-0">
         <div className="w-7 h-7 rounded-full flex items-center justify-center overflow-hidden bg-gradient-to-br from-accent to-accent/75 shadow-sm flex-shrink-0">
@@ -5760,6 +5760,8 @@ export default function App() {
           ko'rsatiladi — namunadagi aynan shu naqsh. */}
       {/* Pastki navigatsiya — teng kenglikdagi 6 ta tab, faol tabda belgi ortida sirg'aluvchi gradient "pill",
           yozuvlar har doim bir qatorda (qirqilmaydi, ikki qatorga tushmaydi) */}
+      {/* Pastki panel ortidagi yumshoq blur — kontent panel ostida qirrasiz, asta xiralashib ketadi */}
+      <div aria-hidden className={`nav-blur-bottom lg:hidden ${(page==='chat' && chatIsOpen) || anyBigModalOpen ? 'opacity-0' : ''}`} />
       <nav className={`ios-bottom-bar flex items-stretch ${(page==='chat' && chatIsOpen) || anyBigModalOpen ? 'ios-bottom-bar-hidden' : ''}`}>
         {NAV.map(n => {
           const active = page === n.key;
@@ -5780,9 +5782,7 @@ export default function App() {
                 animate={active ? { scale: 1.08 } : { scale: 1 }}
                 transition={{ type: "spring", stiffness: 520, damping: 22 }}
                 style={{ color: active ? '#fff' : 'rgba(255,255,255,0.55)' }}>
-                {n.key === "profile"
-                  ? <span className={`block rounded-full overflow-hidden w-6 h-6 [&>*]:!w-6 [&>*]:!h-6 [&>*]:!text-[9px] ${active ? "ring-2 ring-white/90" : "opacity-80"}`}><Avatar user={liveUser} size="sm"/></span>
-                  : <MorphIcon icon={n.icon} className="w-[19px] h-[19px]" />}
+                <MorphIcon icon={n.icon} className="w-[19px] h-[19px]" />
               </motion.span>
               {!!n.badge && n.badge>0 && (
                 <span className="badge-pulse absolute -top-1 right-1 min-w-[16px] h-4 px-0.5 bg-red-500 text-white rounded-full text-[9px] flex items-center justify-center font-bold shadow border border-black/20 z-[2]">{n.badge > 9 ? '9+' : n.badge}</span>

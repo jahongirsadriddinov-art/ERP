@@ -35,6 +35,17 @@ export default function QRScanner({ onClose, onResult, onLoginQrVerified, token 
   const streamRef = useRef<MediaStream | null>(null);
   const animFrameRef = useRef<number>(0);
   const stallTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const detectorRef = useRef<any>(null);
+  const jsQRRef = useRef<any>(null);
+  useEffect(() => {
+    const BD = (window as any).BarcodeDetector;
+    if (BD) {
+      Promise.resolve(BD.getSupportedFormats?.() ?? ["qr_code"])
+        .then((f: string[]) => { if (f.includes("qr_code")) detectorRef.current = new BD({ formats: ["qr_code"] }); })
+        .catch(() => {});
+    }
+    import("jsqr").then(m => { jsQRRef.current = m.default; }).catch(() => {});
+  }, []);
 
   const [status, setStatus] = useState<"idle" | "scanning" | "processing" | "success" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
@@ -51,6 +62,9 @@ export default function QRScanner({ onClose, onResult, onLoginQrVerified, token 
   const [loginQrMode, setLoginQrMode] = useState(false);
   const [loginScanCount, setLoginScanCount] = useState(0);
   const [loginDone, setLoginDone] = useState(false);
+  // Bitta skandan keyin — "Qaysi kompyuter kirmoqchi, tasdiqlaysizmi?" oynasi
+  const [loginConfirm, setLoginConfirm] = useState<{ sessionId: string; device: string } | null>(null);
+  const [approving, setApproving] = useState(false);
   const lastLoginRawRef = useRef<string | null>(null);
 
   const stopCamera = useCallback(() => {
@@ -111,24 +125,28 @@ export default function QRScanner({ onClose, onResult, onLoginQrVerified, token 
       animFrameRef.current = requestAnimationFrame(scanLoop);
       return;
     }
+    const found = (data: string) => {
+      if (stallTimerRef.current) { clearTimeout(stallTimerRef.current); stallTimerRef.current = null; }
+      handleQRData(data);
+    };
+    const next = () => { animFrameRef.current = requestAnimationFrame(scanLoop); };
+    // Tezlik: (1) qurilmada o'rnatilgan QR o'quvchi (BarcodeDetector — Android Chrome/ilova) bo'lsa o'sha ishlatiladi;
+    // (2) bo'lmasa kadr 640px'gacha kichraytirilib jsQR'ga beriladi (to'liq 1280x720 kadr har safar juda sekin edi).
+    if (detectorRef.current) {
+      detectorRef.current.detect(video)
+        .then((codes: any[]) => { const v = codes?.[0]?.rawValue; if (v) found(v); else next(); })
+        .catch(() => { detectorRef.current = null; next(); });
+      return;
+    }
     const ctx = canvas.getContext("2d", { willReadFrequently: true });
-    if (!ctx) return;
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    ctx.drawImage(video, 0, 0);
+    if (!ctx || !jsQRRef.current) { next(); return; }
+    const k = Math.min(1, 640 / Math.max(video.videoWidth, video.videoHeight));
+    canvas.width = Math.round(video.videoWidth * k);
+    canvas.height = Math.round(video.videoHeight * k);
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-
-    import("jsqr").then(({ default: jsQR }) => {
-      const code = jsQR(imageData.data, imageData.width, imageData.height, {
-        inversionAttempts: "dontInvert",
-      });
-      if (code && code.data) {
-        if (stallTimerRef.current) { clearTimeout(stallTimerRef.current); stallTimerRef.current = null; }
-        handleQRData(code.data);
-      } else {
-        animFrameRef.current = requestAnimationFrame(scanLoop);
-      }
-    });
+    const code = jsQRRef.current(imageData.data, imageData.width, imageData.height, { inversionAttempts: "dontInvert" });
+    if (code && code.data) found(code.data); else next();
   }, []);
 
   // "qrlogin:<sessionId>:<code>" — laptop/planshet ekranida qadam-baqadam
@@ -152,9 +170,21 @@ export default function QRScanner({ onClose, onResult, onLoginQrVerified, token 
       const r = await fetch(`${API_BASE}/api/auth/qrlogin/scan`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({ sessionId, code }),
+        body: JSON.stringify({ sessionId, code, v: 2 }),
       });
       const d = await r.json().catch(() => ({}));
+      if (r.ok && d.ok && d.needsConfirm) {
+        stopCamera();
+        playSound("success");
+        setLoginConfirm({ sessionId, device: String(d.device || "") });
+        return;
+      }
+      if (!r.ok && (r.status === 403 || r.status === 410)) {
+        stopCamera();
+        setErrorMsg(d.error || t('qrScanner.qrError'));
+        setStatus("error");
+        return;
+      }
       if (r.ok && d.ok) {
         setLoginScanCount(d.scannedCount || 0);
         if (d.verified) {
@@ -220,6 +250,25 @@ export default function QRScanner({ onClose, onResult, onLoginQrVerified, token 
     else if (status === "error") playSound("error");
   }, [status]);
 
+  const answerLogin = async (approve: boolean) => {
+    if (!loginConfirm || approving) return;
+    setApproving(true);
+    try {
+      const r = await fetch(`${API_BASE}/api/auth/qrlogin/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ sessionId: loginConfirm.sessionId, approve }),
+      });
+      const d = await r.json().catch(() => ({}));
+      setLoginConfirm(null);
+      if (!approve) { onClose(); return; }
+      if (r.ok && d.verified) { setLoginDone(true); onLoginQrVerified?.(); }
+      else { setErrorMsg(d.error || t('qrScanner.qrError')); setStatus("error"); }
+    } catch {
+      setErrorMsg(t('qrScanner.serverError')); setStatus("error");
+    } finally { setApproving(false); }
+  };
+
   const reset = () => {
     setStatus("idle");
     setResult(null);
@@ -282,22 +331,32 @@ export default function QRScanner({ onClose, onResult, onLoginQrVerified, token 
               {loginQrMode ? t('qrScanner.loginScanHint') : stalled ? t('qrScanner.stalledHint') : t('qrScanner.scanHint')}
             </p>
 
-            {/* Login-QR progress — 3 bo'lakka bo'lingan chiziq, har bir
-                muvaffaqiyatli (yangi rotatsiyadagi) skan bittasini "to'ldiradi". */}
-            {loginQrMode && (
-              <div className="absolute bottom-14 left-1/2 -translate-x-1/2 flex items-center gap-2">
-                {[0, 1, 2].map(i => (
-                  <div key={i} className="w-14 h-1.5 rounded-full bg-white/20 overflow-hidden">
-                    <motion.div className="h-full bg-primary"
-                      initial={{ width: "0%" }}
-                      animate={{ width: loginScanCount > i ? "100%" : "0%" }}
-                      transition={{ duration: 0.35, ease: "easeOut" }} />
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
         )}
+
+        {/* Bitta skandan keyin: qaysi kompyuter kirmoqchi — "Ha, kirish" / "Yo'q" */}
+        <AnimatePresence>
+          {loginConfirm && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
+              <motion.div initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 40, opacity: 0 }}
+                transition={{ type: "spring", stiffness: 420, damping: 34 }}
+                className="w-full max-w-sm rounded-3xl border border-white/15 bg-card/95 p-5 text-center shadow-2xl">
+                <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl text-white shadow-lg"
+                  style={{ background: "linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%)" }}>
+                  <MorphIcon icon={QrCode} className="h-7 w-7" />
+                </div>
+                <p className="text-base font-bold text-foreground">{t('qrScanner.confirmTitle')}</p>
+                <p className="mt-1 text-sm text-muted-foreground">{t('qrScanner.confirmDesc')}</p>
+                <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-xs font-semibold text-foreground">💻 {loginConfirm.device || "Kompyuter"}</div>
+                <div className="mt-5 grid grid-cols-2 gap-2">
+                  <button type="button" disabled={approving} onClick={() => answerLogin(false)} className="btn btn-outline h-12 rounded-2xl">{t('qrScanner.confirmNo')}</button>
+                  <button type="button" disabled={approving} onClick={() => answerLogin(true)} className="btn btn-primary h-12 rounded-2xl">{approving ? "…" : t('qrScanner.confirmYes')}</button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Login-QR tasdiqlandi — kompyuter/planshet endi o'zi tizimga kiradi */}
         {loginQrMode && loginDone && (

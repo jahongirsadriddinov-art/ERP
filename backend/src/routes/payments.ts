@@ -156,6 +156,7 @@ router.get('/roxiy/webhook', async (req, res) => {
           userId: String(ownerUser._id),
           plan: 'PRO',
           selectedPlan: claimed.plan || pending.planKey,
+          ...(claimed.plan === 'custom' ? { customFeatures: (claimed as any).features || [] } : {}),
           amount: claimed.amount,
           status: 'active',
           requestedAt: pending.createdAt,
@@ -219,6 +220,8 @@ router.get('/roxiy/webhook', async (req, res) => {
         sub.status = 'active';
         sub.plan = 'PRO';
         sub.selectedPlan = claimed.plan ? claimed.plan : sub.selectedPlan;
+        if (claimed.plan === 'custom') sub.customFeatures = Array.isArray((claimed as any).features) ? (claimed as any).features : [];
+        else sub.customFeatures = undefined;
         sub.amount = claimed.amount;
         sub.approvedAt = now;
         sub.approvedBy = 'roxiy-auto'; // qo'lda tasdiqlash EMAS — auditda ajratish uchun

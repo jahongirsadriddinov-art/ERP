@@ -16,7 +16,7 @@ export const uz = {
   addExpense: { aiSuggest: "Tavsif bo'yicha tur", apply: "qo'llash" },
   management: { esign: "E-hujjat va imzo" },
   objectDetail: { mediaCaptionPh: "Izoh yozing (ixtiyoriy) — nima qilindi, qayerda...", mediaPublish: "Joylash" },
-  finance: { anomaly: "G'ayrioddiy", originalAmount: "Asl summa" },
+  finance: { anomaly: "G'ayrioddiy", originalAmount: "Asl summa", incomeType: "Kirim (tushum)" },
   login: { dev2faHint: "Telegram botga 6 xonali kirish kodi yuborildi" },
   call: {
     noAnswer: "Javob bo'lmayapti — suhbatdosh ilovasi yopiq yoki internetsiz bo'lishi mumkin",
@@ -42,13 +42,14 @@ export const uz = {
   },
   register: { saveBackToSummary: "Saqlash va xulosaga qaytish" },
   nav: { homeShort: "Asosiy" },
+  plan: { period: "Muddat", months: "oy", mo: "oy", features: "Funksiyalar", base: "Asosiy tizim: obyektlar, xodimlar, chiqimlar, chat, bot", payCustom: "Shu tarifni to'lash", customTitle: "O'zim tanlayman — kerakli funksiyalar bilan tarif", customShort: "O'zim tanlagan" },
   checkinGate: { finishedInstruction: "Bugungi ishingiz tugatilgan. Qayta ishlash uchun \"Ishga keldim\"ni bosing — joylashuvingiz olinadi." },
   reports: {
     r7: "7 kun", r30: "30 kun", rMonth: "Bu oy", r90: "3 oy", rYear: "Bu yil", rAll: "Hammasi", rCustom: "Tanlash",
     vsPrev: "oldingi davrga nisbatan", ops: "ta amal", perDay: "Kunlik o'rtacha",
     trend: "Dinamika: chiqim va kirim", byWeekday: "Hafta kunlari bo'yicha",
     compareObjects: "Obyektlarni solishtirish (turlar bo'yicha)", noBudget: "Obyektlarga byudjet kiritilmagan",
-    topExpenses: "Eng katta chiqimlar", anomaly: "G'ayrioddiy katta chiqim",
+    topExpenses: "Eng katta chiqimlar", anomaly: "G'ayrioddiy katta chiqim", trendExp: "Chiqimlar dinamikasi",
   },
 };
 
@@ -67,7 +68,7 @@ export const ru: typeof uz = {
   addExpense: { aiSuggest: "Категория по описанию", apply: "применить" },
   management: { esign: "Э-документы и подпись" },
   objectDetail: { mediaCaptionPh: "Напишите комментарий (необязательно) — что сделано, где...", mediaPublish: "Опубликовать" },
-  finance: { anomaly: "Необычно", originalAmount: "Исходная сумма" },
+  finance: { anomaly: "Необычно", originalAmount: "Исходная сумма", incomeType: "Доход (поступление)" },
   login: { dev2faHint: "6-значный код входа отправлен в Telegram-бот" },
   call: {
     noAnswer: "Нет ответа — у собеседника закрыто приложение или нет интернета",
@@ -93,12 +94,13 @@ export const ru: typeof uz = {
   },
   register: { saveBackToSummary: "Сохранить и вернуться к итогу" },
   nav: { homeShort: "Главная" },
+  plan: { period: "Срок", months: "мес.", mo: "мес.", features: "Функции", base: "Основная система: объекты, сотрудники, расходы, чат, бот", payCustom: "Оплатить этот тариф", customTitle: "Свой тариф — только нужные функции", customShort: "Свой тариф" },
   checkinGate: { finishedInstruction: "Ваш рабочий день завершён. Чтобы снова работать, нажмите \"Я пришёл\" — будет получена ваша геолокация." },
   reports: {
     r7: "7 дней", r30: "30 дней", rMonth: "Этот месяц", r90: "3 месяца", rYear: "Этот год", rAll: "Всё", rCustom: "Выбрать",
     vsPrev: "к предыдущему периоду", ops: "операций", perDay: "В среднем за день",
     trend: "Динамика: расходы и доходы", byWeekday: "По дням недели",
     compareObjects: "Сравнение объектов (по категориям)", noBudget: "Для объектов не указан бюджет",
-    topExpenses: "Самые крупные расходы", anomaly: "Необычно крупный расход",
+    topExpenses: "Самые крупные расходы", anomaly: "Необычно крупный расход", trendExp: "Динамика расходов",
   },
 };

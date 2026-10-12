@@ -1,6 +1,23 @@
 import { Request, Response, NextFunction } from 'express';
 import Subscription from '../models/Subscription';
 import { getPlanInfo } from '../config/plans';
+
+// Obunaning haqiqiy funksiyalari: "O'zim tanlayman" (custom) tarifda — tanlangan ro'yxat, aks holda tarif ro'yxati.
+// undefined — tarif aniqlanmadi (eski firma) → bloklanmaydi.
+export function subscriptionFeatures(sub: any): string[] | undefined {
+  if (!sub) return undefined;
+  if (sub.selectedPlan === 'custom' && Array.isArray(sub.customFeatures)) return sub.customFeatures;
+  return sub.selectedPlan ? getPlanInfo(sub.selectedPlan)?.features : undefined;
+}
+
+/** Joriy firma shu funksiyaga ega-mi (ixtiyoriy funksiyalar uchun — tarif aniqlanmasa YO'Q deb olinadi). */
+export async function companyHasFeature(featureKey: string): Promise<boolean> {
+  const t = getTenant();
+  if (t?.isDeveloper) return true;
+  if (!t?.companyId) return false;
+  const sub = await Subscription.findOne({ companyId: t.companyId }).sort({ createdAt: -1 }).lean();
+  return !!subscriptionFeatures(sub)?.includes(featureKey);
+}
 import { getTenant } from './tenantContext';
 
 // XAVFSIZLIK/BIZNES — TOPILMA (audit): tarif bo'yicha funksiyalar (AI
@@ -28,8 +45,7 @@ export function requireFeature(featureKey: string) {
     if (!t?.companyId) return next();
     try {
       const sub = await Subscription.findOne({ companyId: t.companyId }).sort({ createdAt: -1 }).lean();
-      const planInfo = sub?.selectedPlan ? getPlanInfo(sub.selectedPlan) : undefined;
-      const features = planInfo?.features;
+      const features = subscriptionFeatures(sub);
       // Tarif/obuna topilmasa — nima uchun ekanini bilolmaymiz (masalan hali
       // migratsiya qilinmagan eski firma) — xavfsiz tomonga xato qilmasdan
       // BLOKLAMASLIKNI tanladik (frontendda funksiya ko'rinmasa ham baribir

@@ -1,3 +1,4 @@
+import CustomPlanBuilder from "./components/CustomPlanBuilder";
 import { useState, useRef, useEffect, useMemo, lazy, Suspense } from "react";
 import Building2 from "@hugeicons/core-free-icons/Building02Icon";
 import Users from "@hugeicons/core-free-icons/UserMultipleIcon";
@@ -627,14 +628,14 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
   }, []);
   const [payingPlan, setPayingPlan] = useState<string | null>(null);
   const [renewPromoCode, setRenewPromoCode] = useState("");
-  const handlePay = async (planKey: string) => {
+  const handlePay = async (planKey: string, extra?: { months: number; features: string[] }) => {
     if (payingPlan) return;
     setPayingPlan(planKey);
     try {
       const r = await fetch(`${API_BASE}/api/admin/subscriptions/pay`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem("token")}` },
-        body: JSON.stringify({ selectedPlan: planKey, promoCode: renewPromoCode.trim() || undefined }),
+        body: JSON.stringify({ selectedPlan: planKey, promoCode: renewPromoCode.trim() || undefined, ...(extra || {}) }),
       });
       const d = await r.json().catch(() => ({}));
       if (!r.ok || !d.ok) { toast.error(d.error || t('profile.payError')); return; }
@@ -1015,7 +1016,7 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
                     {subData.selectedPlan && (
                       <div className="flex items-center justify-between px-5 py-4">
                         <span className="text-sm font-medium text-muted-foreground">{t('profile.tarifLabel')}</span>
-                        <span className="text-sm font-semibold capitalize">{subData.selectedPlan}</span>
+                        <span className="text-sm font-semibold capitalize">{subData.selectedPlan === 'custom' ? t('plan.customShort', "O'zim tanlagan") : subData.selectedPlan}</span>
                       </div>
                     )}
                     {subData.daysLeft !== null && subData.status === 'active' && (
@@ -1050,6 +1051,17 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
                         kutmasdan. "rejected"da ko'rsatilmaydi: backend baribir
                         rad etadi, foydalanuvchini bekorga xatolikka olib
                         bormaslik uchun — o'rniga yuqoridagi "bog'laning" xabari. */}
+                    {/* "O'zim tanlayman" — muddat va funksiyalarni o'zi tanlab, narxini ko'rib to'laydi (kirimlar hisobi ham shu yerda yoqiladi) */}
+                    <details className="px-5 py-4 group" open={subData.status === 'pending' || subData.status === 'expired' || undefined}>
+                      <summary className="cursor-pointer text-sm font-bold flex items-center justify-between gap-2 list-none">
+                        <span>🧩 {t('plan.customTitle', "O'zim tanlayman — kerakli funksiyalar bilan tarif")}</span>
+                        <span className="text-muted-foreground group-open:rotate-180 transition-transform">▾</span>
+                      </summary>
+                      <div className="mt-3">
+                        <CustomPlanBuilder busy={payingPlan === 'custom'} initial={subData.selectedPlan === 'custom' ? subData.features : undefined}
+                          onPay={(months, features) => handlePay('custom', { months, features })} />
+                      </div>
+                    </details>
                     {(subData.status === 'pending' || subData.status === 'expired') && (
                       <div className="px-5 py-4 space-y-2">
                         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('profile.payPrompt')}</p>

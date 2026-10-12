@@ -1,3 +1,5 @@
+import { subscriptionFeatures } from '../middleware/requireFeature';
+import { DEFAULT_FEATURE_KEYS } from '../config/plans';
 import { Router } from 'express';
 import Subscription from '../models/Subscription';
 import User from '../models/User';
@@ -41,8 +43,7 @@ router.get('/my', requireAuth, async (req, res) => {
     // Tarif topilmasa (eski/o'chirilgan kalit) — HAMMA funksiyani yoqilgan
     // deb hisoblaymiz (mavjud, to'lagan mijozni to'satdan cheklab
     // qo'ymaslik uchun), aks holda o'sha tarifda admin belgilagan ro'yxat.
-    const planInfo = getPlanInfo((sub as any).selectedPlan);
-    const features = planInfo ? planInfo.features : ALL_FEATURE_KEYS;
+    const features = subscriptionFeatures(sub) || DEFAULT_FEATURE_KEYS;
 
     return res.json({
       id: (sub as any)._id,
@@ -77,7 +78,8 @@ router.post('/pay', requireAuth, requireOwnerOrAdmin, async (req, res) => {
     // shu sabab ikkalasida ham bir xil tekshiruvlar (rad etilgan obuna,
     // noto'g'ri tarif) qo'llanadi. Promokod faqat shu (veb) yo'ldan
     // qo'llaniladi — botda matn kiritish qadami yo'q.
-    const result = await createSubscriptionPaymentOrder(String(t.companyId), (req as any).user?.userId, planKey, promoCode);
+    const custom = planKey === 'custom' ? { months: Number(req.body?.months), features: Array.isArray(req.body?.features) ? req.body.features.map(String) : [] } : undefined;
+    const result = await createSubscriptionPaymentOrder(String(t.companyId), (req as any).user?.userId, planKey, promoCode, custom);
     if (!result.ok) return res.status(result.httpStatus).json({ error: result.error });
 
     res.json({ ok: true, payUrl: result.order.pay_url, providers: result.order.providers, amount: result.amount });

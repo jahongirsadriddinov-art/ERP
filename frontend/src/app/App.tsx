@@ -1237,8 +1237,8 @@ function SendTransferModal({ currentUser, projects, allUsers, onClose, onSend, i
 }
 
 // ─── Add Expense Modal ─────────────────────────────────────────────────────────
-function AddExpenseModal({ currentUser, projects, allUsers, onClose, onAdd }:
-  { currentUser: AppUser; projects: Project[]; allUsers: AppUser[]; onClose: () => void; onAdd: (e: Expense) => void }) {
+function AddExpenseModal({ currentUser, projects, allUsers, onClose, onAdd, allowIncome }:
+  { currentUser: AppUser; projects: Project[]; allUsers: AppUser[]; onClose: () => void; onAdd: (e: Expense) => void; allowIncome?: boolean }) {
   const { t } = useTranslation();
   const [form, setForm] = useState({ type: "oylik" as ExpType, amount: "", projectId: projects[0]?.id || "", description: "", toUserId: "", approverId: "", date: new Date().toISOString().split("T")[0] });
   const [err, setErr] = useState("");
@@ -1278,6 +1278,11 @@ function AddExpenseModal({ currentUser, projects, allUsers, onClose, onAdd }:
 
     if (!form.amount || +form.amount <= 0) { setErr(t('addExpense.errAmountRequired')); return; }
     if (form.type === "oylik" && !form.toUserId) { setErr(t('addExpense.errSalaryRecipient')); return; }
+    if ((form.type as string) === "income") {
+      onAdd({ id: `i${Date.now()}`, type: "income" as any, amount: +form.amount, projectId: form.projectId, description: form.description, date: form.date, status: "confirmed", createdById: currentUser.id });
+      onClose();
+      return;
+    }
     onAdd({
       id: `e${Date.now()}`,
       type: form.type,
@@ -1314,6 +1319,7 @@ function AddExpenseModal({ currentUser, projects, allUsers, onClose, onAdd }:
               <select className="w-full text-sm border border-border rounded-lg px-2.5 py-2.5 bg-input-background focus:outline-none"
                 value={form.type} onChange={e => { setErr(""); setForm({...form, type: e.target.value as ExpType, toUserId: "", description: ""}); }}>
                 {(Object.keys(EXP_LABELS) as ExpType[]).map(k => <option key={k} value={k}>{expLabel(t, k)}</option>)}
+                {allowIncome && isAdmin(currentUser.role) && <option value="income">{t('finance.incomeType', "Kirim (tushum)")}</option>}
               </select>
             </div>
             <div>
@@ -3286,8 +3292,8 @@ function fmtUsd(uzs: number): string { return "$" + (uzs / LIVE_USD_RATE).toFixe
 function fmtEur(uzs: number): string { return "€" + (uzs / LIVE_EUR_RATE).toFixed(2); }
 
 // ─── Finance Page ──────────────────────────────────────────────────────────────
-export function FinancePage({ currentUser, users, projects, expenses, onAddExpense, onConfirm, onApprove, onReject }:
-  { currentUser: AppUser; users: AppUser[]; projects: Project[]; expenses: Expense[]; onAddExpense: (e: Expense) => void; onConfirm: (id: string) => void; onApprove?: (id: string, note?: string) => void; onReject?: (id: string) => void }) {
+export function FinancePage({ currentUser, users, projects, expenses, onAddExpense, onConfirm, onApprove, onReject, allowIncome }:
+  { currentUser: AppUser; users: AppUser[]; projects: Project[]; expenses: Expense[]; onAddExpense: (e: Expense) => void; onConfirm: (id: string) => void; onApprove?: (id: string, note?: string) => void; onReject?: (id: string) => void; allowIncome?: boolean }) {
   const { t } = useTranslation();
   const [showAdd, setShowAdd] = useState(false);
   const [filter, setFilter] = useState<"all"|ExpType>("all");
@@ -3423,7 +3429,7 @@ export function FinancePage({ currentUser, users, projects, expenses, onAddExpen
         }
       </div>
 
-      {showAdd&&<AddExpenseModal currentUser={currentUser} projects={projects} allUsers={users} onClose={()=>setShowAdd(false)} onAdd={onAddExpense}/>}
+      {showAdd&&<AddExpenseModal currentUser={currentUser} projects={projects} allUsers={users} onClose={()=>setShowAdd(false)} onAdd={onAddExpense} allowIncome={allowIncome}/>}
       {detailExp&&<ExpenseDetailModal expense={detailExp} users={users} projects={projects} onClose={()=>setDetailExp(null)}/>}
     </div>
   );
@@ -4472,7 +4478,9 @@ export default function App() {
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [liveUser?.companyId, liveUser?.role]);
-  const hasFeature = (key: string) => !companyFeatures || companyFeatures.includes(key);
+  // Ixtiyoriy funksiyalar (kirim hisobi) — faqat tarifda ANIQ yoqilgan bo'lsa
+  const OPTIONAL_FEATURES = ['income'];
+  const hasFeature = (key: string) => OPTIONAL_FEATURES.includes(key) ? !!companyFeatures?.includes(key) : (!companyFeatures || companyFeatures.includes(key));
   // GPS shu holatga BOG'LIQ: "Ishga keldim" bosilmaguncha ishlamaydi (foydalanuvchi
   // talabi). MUHIM: lekin "Ishni tugatdim" bosilgach GPS TO'XTAMAYDI — faqat
   // check-in mavjudligiga qaraladi, check-out'ga emas ("GPS har doim olinsin,
@@ -5298,7 +5306,7 @@ export default function App() {
         status: e.status
       };
       const res = await fetch(API_BASE + "/api/transactions", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify(payload) });
-      if (res.ok) { const data = await res.json(); setExpenses(p=>[...p, {...data, id: data._id || data.id}]); }
+      if (res.ok) { const data = await res.json(); const row = {...data, id: data._id || data.id}; if (data.type === 'income') setIncomes(p=>[...p, row]); else setExpenses(p=>[...p, row]); }
       else {
         const errData = await res.json();
         console.error('Expense error:', errData);
@@ -5625,13 +5633,13 @@ export default function App() {
           />
         )}
         {page==="finance" && (
-          <FinancePage currentUser={liveUser} users={users} projects={projects} expenses={expenses}
+          <FinancePage allowIncome={hasFeature('income')} currentUser={liveUser} users={users} projects={projects} expenses={expenses}
             onAddExpense={handleAddExpense} onConfirm={handleConfirmExpense}
             onApprove={handleApproveExpense} onReject={handleRejectExpense}/>
         )}
         {page==="reports" && admin && (
           <Suspense fallback={<SkeletonPage variant="dashboard" />}>
-            <ReportsPage projects={projects} expenses={expenses} incomes={incomes} users={users}/>
+            <ReportsPage projects={projects} expenses={expenses} incomes={hasFeature('income') ? incomes : []} showIncome={hasFeature('income')} users={users}/>
           </Suspense>
         )}
         {page==="chat" && (

@@ -52,8 +52,8 @@ function Card({ title, children, delay = 0, className = "", right }: { title?: s
   );
 }
 
-export default function ReportsPage({ projects, expenses, incomes, users }:
-  { projects: Project[]; expenses: Expense[]; incomes: Expense[]; users: AppUser[] }) {
+export default function ReportsPage({ projects, expenses, incomes, users, showIncome = false }:
+  { projects: Project[]; expenses: Expense[]; incomes: Expense[]; users: AppUser[]; showIncome?: boolean }) {
   const { t } = useTranslation();
   const [selProj, setSelProj] = useState("all");
   const [range, setRange] = useState<Range>("30");
@@ -167,8 +167,10 @@ export default function ReportsPage({ projects, expenses, incomes, users }:
   ];
   const kpis = [
     { label: t('reports.totalExpense'), value: fmt(total), sub: delta != null ? `${delta > 0 ? "▲" : delta < 0 ? "▼" : "•"} ${Math.abs(delta)}% ${t('reports.vsPrev', { defaultValue: "oldingi davrga nisbatan" })}` : "", tone: delta != null && delta > 0 ? "text-rose-500" : "text-emerald-500", grad: "from-orange-500/20 to-rose-500/10" },
-    { label: t('reports.pnlIncome'), value: fmt(totalIncome), sub: `${filtInc.length} ${t('reports.ops', { defaultValue: "ta amal" })}`, tone: "text-muted-foreground", grad: "from-emerald-500/20 to-cyan-500/10" },
-    { label: t('reports.pnlNet'), value: `${net >= 0 ? "+" : ""}${fmt(net)}`, sub: "", tone: "", grad: net >= 0 ? "from-emerald-500/20 to-emerald-500/5" : "from-rose-500/25 to-rose-500/5", valueTone: net >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400" },
+    ...(showIncome ? [
+      { label: t('reports.pnlIncome'), value: fmt(totalIncome), sub: `${filtInc.length} ${t('reports.ops', { defaultValue: "ta amal" })}`, tone: "text-muted-foreground", grad: "from-emerald-500/20 to-cyan-500/10" },
+      { label: t('reports.pnlNet'), value: `${net >= 0 ? "+" : ""}${fmt(net)}`, sub: "", tone: "", grad: net >= 0 ? "from-emerald-500/20 to-emerald-500/5" : "from-rose-500/25 to-rose-500/5", valueTone: net >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400" },
+    ] : []),
     { label: t('reports.perDay', { defaultValue: "Kunlik o'rtacha" }), value: fmt(Math.round(total / spanDays)), sub: `${filtExp.length} ${t('reports.ops', { defaultValue: "ta amal" })}`, tone: "text-muted-foreground", grad: "from-indigo-500/20 to-violet-500/10" },
   ];
 
@@ -216,7 +218,7 @@ export default function ReportsPage({ projects, expenses, incomes, users }:
         </div>
 
         {/* Trend */}
-        <Card title={t('reports.trend', { defaultValue: "Dinamika: chiqim va kirim" })} delay={0.05}>
+        <Card title={showIncome ? t('reports.trend', { defaultValue: "Dinamika: chiqim va kirim" }) : t('reports.trendExp', { defaultValue: "Chiqimlar dinamikasi" })} delay={0.05}>
           {trend.length === 0 ? <p className="text-sm text-muted-foreground py-10 text-center">{t('reports.exportEmpty')}</p> : (
             <ResponsiveContainer width="100%" height={240}>
               <AreaChart data={trend} margin={{ left: 0, right: 8, top: 8 }}>
@@ -230,7 +232,7 @@ export default function ReportsPage({ projects, expenses, incomes, users }:
                 <Tooltip content={<ChartTooltip />} />
                 <Legend wrapperStyle={{ fontSize: 11 }} iconType="circle" />
                 <Area type="monotone" dataKey="chiqim" name={t('reports.expense')} stroke="#F97316" strokeWidth={2.5} fill="url(#gExp)" dot={false} activeDot={{ r: 5 }} />
-                <Area type="monotone" dataKey="kirim" name={t('reports.pnlIncome')} stroke="#10B981" strokeWidth={2.5} fill="url(#gInc)" dot={false} activeDot={{ r: 5 }} />
+                {showIncome && <Area type="monotone" dataKey="kirim" name={t('reports.pnlIncome')} stroke="#10B981" strokeWidth={2.5} fill="url(#gInc)" dot={false} activeDot={{ r: 5 }} />}
               </AreaChart>
             </ResponsiveContainer>
           )}

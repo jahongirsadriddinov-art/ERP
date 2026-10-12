@@ -55,6 +55,7 @@ export interface IAppSettings extends Document {
   // mumkin (devMessageTexts bilan bir xil {text,entities} shakli, premium
   // emoji/formatlash saqlanishi uchun).
   subscribeGateMsg?: { text: string; entities?: any[] } | string;
+  customPlanPricing?: any; // "O'zim tanlayman" tarifi narxlari (config/customPlan.ts)
   updatedAt: Date;
 }
 
@@ -73,6 +74,7 @@ const AppSettingsSchema = new Schema<IAppSettings>({
   requiredChannels: { type: Schema.Types.Mixed, default: [] },
   discoveredChats: { type: Schema.Types.Mixed, default: [] },
   subscribeGateMsg: { type: Schema.Types.Mixed, default: undefined },
+  customPlanPricing: { type: Schema.Types.Mixed, default: undefined },
   updatedAt: { type: Date, default: Date.now },
 });
 

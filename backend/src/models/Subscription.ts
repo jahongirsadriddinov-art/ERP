@@ -5,6 +5,7 @@ export interface ISubscription extends Document {
   userId?: string;
   plan: 'FREE' | 'PRO' | 'ENTERPRISE';
   selectedPlan?: string;
+  customFeatures?: string[]; // "O'zim tanlayman" (custom) tarifida tanlangan funksiyalar
   amount?: number;
   status: 'active' | 'trialing' | 'past_due' | 'canceled' | 'pending' | 'expired' | 'rejected';
   currentPeriodStart?: Date;
@@ -23,6 +24,7 @@ const SubscriptionSchema: Schema = new Schema({
   userId: { type: String, index: true },
   plan: { type: String, enum: ['FREE', 'PRO', 'ENTERPRISE'], default: 'FREE' },
   selectedPlan: { type: String },
+  customFeatures: { type: [String], default: undefined },
   amount: { type: Number },
   status: {
     type: String,

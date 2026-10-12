@@ -1,3 +1,4 @@
+import { companyHasFeature } from '../middleware/requireFeature';
 import { Router } from 'express';
 import Transaction from '../models/Transaction';
 import Material from '../models/Material';
@@ -61,6 +62,9 @@ router.post('/', async (req, res) => {
 
     // Validate required fields
     const VALID_TYPES = ['transfer', 'expense', 'income', 'oylik', 'material', 'jihozlar', 'transport', 'boshqa'];
+    if (req.body?.type === 'income' && !(await companyHasFeature('income'))) {
+      return res.status(403).json({ error: "Kirimlar hisobi sizning tarifingizga kirmaydi", featureRequired: 'income' });
+    }
     if (!data.type) {
       return res.status(400).json({ success: false, errors: [{ field: 'type', message: 'Tur kiritilishi shart' }] });
     }

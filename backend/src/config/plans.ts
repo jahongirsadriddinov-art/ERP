@@ -38,9 +38,14 @@ export const FEATURE_REGISTRY = [
   { key: 'audit_log', label: 'Audit jurnali' },
   { key: 'multi_currency', label: 'Valyuta konvertori (USD/EUR)' },
   { key: 'qr_tools', label: 'QR skaner/generator' },
+  // Ixtiyoriy (standart tariflarga KIRMAYDI) — faqat "O'zim tanlayman" tarifida yoki admin qo'lda qo'shsa
+  { key: 'income', label: 'Kirimlar (tushum) hisobi va foyda/zarar' },
 ] as const;
 export type FeatureKey = typeof FEATURE_REGISTRY[number]['key'];
 export const ALL_FEATURE_KEYS: string[] = FEATURE_REGISTRY.map(f => f.key);
+// Faqat alohida tanlanadigan funksiyalar — tarif topilmaganda/Premium'da avtomatik YOQILMAYDI
+export const OPTIONAL_FEATURE_KEYS: string[] = ['income'];
+export const DEFAULT_FEATURE_KEYS: string[] = ALL_FEATURE_KEYS.filter(k => !OPTIONAL_FEATURE_KEYS.includes(k));
 
 // Birinchi marta ishga tushganda (Plan kolleksiyasi bo'sh bo'lsa) —
 // eskidan qattiq yozilgan qiymatlar bilan urug'lanadi, HAMMA funksiya
@@ -56,7 +61,7 @@ const SEED_PLANS: Array<{ key: string; label: string; days: number; amount: numb
 export async function ensurePlansSeeded(): Promise<void> {
   const count = await Plan.countDocuments();
   if (count > 0) return;
-  await Plan.insertMany(SEED_PLANS.map(p => ({ ...p, features: ALL_FEATURE_KEYS, active: true })));
+  await Plan.insertMany(SEED_PLANS.map(p => ({ ...p, features: DEFAULT_FEATURE_KEYS, active: true })));
   console.log('✅ Plan kolleksiyasi urug\'lantirildi (5 ta standart tarif, barcha funksiyalar yoqilgan)');
 }
 
@@ -66,7 +71,7 @@ export async function ensurePlansSeeded(): Promise<void> {
 // taxminiy qiymat — admin panel (Tariflar) orqali istalgan vaqt o'zgartiriladi.
 const TIER1_FEATURES = ['gps_tracking', 'reports', 'qr_tools'];
 const TIER2_FEATURES = ['gps_tracking', 'reports', 'audit_log', 'multi_currency', 'qr_tools'];
-const TIER3_FEATURES = ALL_FEATURE_KEYS;
+const TIER3_FEATURES = DEFAULT_FEATURE_KEYS;
 const SEED_TIERED_PLANS: Array<{ key: string; label: string; days: number; amount: number; order: number; period: '1month'|'3month'|'12month'; tier: 1|2|3; features: string[] }> = [
   { key: '1month_basic',    label: "1 oylik — Oddiy",    days: 30,  amount: 250_000,   order: 10, period: '1month',  tier: 1, features: TIER1_FEATURES },
   { key: '1month_standard', label: "1 oylik — Standart", days: 30,  amount: 400_000,   order: 11, period: '1month',  tier: 2, features: TIER2_FEATURES },

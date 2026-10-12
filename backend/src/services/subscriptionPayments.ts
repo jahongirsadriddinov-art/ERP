@@ -9,6 +9,7 @@ import Payment from '../models/Payment';
 import { createRoxiyOrder, RoxiyOrder } from './roxiy';
 import { getPlanInfo } from '../config/plans';
 import { checkPromoCode } from './promoCodes';
+import { getCustomPricing, priceCustomPlan } from '../config/customPlan';
 
 export type CreateSubscriptionPaymentResult =
   | { ok: true; order: RoxiyOrder; amount: number }
@@ -18,9 +19,18 @@ export async function createSubscriptionPaymentOrder(
   companyId: string,
   userId: string | undefined,
   planKey: string,
-  promoCode?: string
+  promoCode?: string,
+  custom?: { months: number; features: string[] }
 ): Promise<CreateSubscriptionPaymentResult> {
-  const planInfo = getPlanInfo(planKey);
+  // "O'zim tanlayman" — narx SERVERDA hisoblanadi (mijoz yuborgan summaga ishonilmaydi)
+  let customFeatures: string[] | undefined;
+  let planInfo = getPlanInfo(planKey);
+  if (planKey === 'custom') {
+    const priced = custom ? priceCustomPlan(await getCustomPricing(), Number(custom.months), Array.isArray(custom.features) ? custom.features : []) : null;
+    if (!priced) return { ok: false, error: "Muddat yoki funksiyalar noto'g'ri tanlangan", httpStatus: 400 };
+    customFeatures = priced.features;
+    planInfo = { label: `O'zim tanlagan tarif (${custom!.months} oy)`, days: priced.days, amount: priced.amount, features: priced.features };
+  }
   if (!planInfo || planInfo.amount <= 0) {
     return { ok: false, error: "Noto'g'ri yoki bepul tarif — to'lov shart emas", httpStatus: 400 };
   }
@@ -76,6 +86,7 @@ export async function createSubscriptionPaymentOrder(
     webhookToken,
     plan: planKey,
     days: planInfo.days,
+    features: customFeatures,
     promoCode: appliedPromo,
   });
 

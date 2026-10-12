@@ -10,6 +10,7 @@ export interface IPayment extends Document {
   pendingRegistrationId?: string; // PendingRegistration._id — webhook
                           // to'lovni 'paid'ga o'tkazgach shundan firma/user
                           // yaratadi (routes/payments.ts).
+  features?: string[];   // custom tarifda tanlangan funksiyalar
   promoCode?: string;     // qo'llangan promokod (bo'lsa) — webhook shu
                           // orqali PromoCode.usedCount'ni oshiradi.
   amount: number;
@@ -39,6 +40,7 @@ const PaymentSchema: Schema = new Schema({
   subscriptionId: { type: String, index: true },
   pendingRegistrationId: { type: String, index: true },
   promoCode: { type: String },
+  features: { type: [String], default: undefined },
   amount: { type: Number, required: true },
   currency: { type: String, enum: ['UZS', 'USD'], default: 'UZS' },
   status: { type: String, enum: ['pending', 'paid', 'failed', 'refunded'], default: 'pending' },

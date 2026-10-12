@@ -3,6 +3,8 @@ import Plan from '../models/Plan';
 import Subscription from '../models/Subscription';
 import { requireAuth, requireDeveloper } from '../middleware/auth';
 import { reloadPlanCache, FEATURE_REGISTRY, ALL_FEATURE_KEYS } from '../config/plans';
+import AppSettings from '../models/AppSettings';
+import { getCustomPricing, priceCustomPlan, CUSTOM_MONTHS } from '../config/customPlan';
 
 const router = Router();
 
@@ -25,8 +27,36 @@ router.get('/features', (req, res) => {
   res.json(FEATURE_REGISTRY);
 });
 
+// GET /api/plans/custom — "O'zim tanlayman" tarifi: narxlar, funksiyalar va muddatlar (hammaga ochiq)
+router.get('/custom', async (_req, res) => {
+  const p = await getCustomPricing();
+  res.json({
+    months: CUSTOM_MONTHS, baseMonthly: p.baseMonthly, discounts: p.discounts,
+    features: FEATURE_REGISTRY.map(f => ({ key: f.key, label: f.label, monthly: p.featureMonthly[f.key] || 0 })),
+  });
+});
+// POST /api/plans/custom/quote — tanlov bo'yicha aniq narx (server hisobi)
+router.post('/custom/quote', async (req, res) => {
+  const r = priceCustomPlan(await getCustomPricing(), Number(req.body?.months), Array.isArray(req.body?.features) ? req.body.features.map(String) : []);
+  if (!r) return res.status(400).json({ error: "Muddat noto'g'ri" });
+  res.json(r);
+});
+
 // Quyidagilar FAQAT dasturchi (super-admin) uchun.
 router.use(requireAuth, requireDeveloper);
+
+// PUT /api/plans/admin/custom-pricing — "O'zim tanlayman" narxlarini o'zgartirish
+router.put('/admin/custom-pricing', async (req, res) => {
+  const { baseMonthly, featureMonthly, discounts } = req.body || {};
+  const num = (v: any, max: number) => Number.isFinite(Number(v)) && Number(v) >= 0 && Number(v) <= max ? Math.round(Number(v)) : undefined;
+  const fm: Record<string, number> = {};
+  for (const k of ALL_FEATURE_KEYS) { const v = num(featureMonthly?.[k], 100_000_000); if (v !== undefined) fm[k] = v; }
+  const dc: Record<string, number> = {};
+  for (const m of ['1', '3', '12']) { const v = Number(discounts?.[m]); if (Number.isFinite(v) && v >= 0 && v <= 0.5) dc[m] = v; }
+  const pricing = { baseMonthly: num(baseMonthly, 100_000_000) ?? undefined, featureMonthly: fm, discounts: dc };
+  await AppSettings.findOneAndUpdate({ key: 'global' }, { $set: { key: 'global', customPlanPricing: pricing, updatedAt: new Date() } }, { upsert: true });
+  res.json({ ok: true, pricing: await getCustomPricing() });
+});
 
 // GET /api/admin/plans — barcha tariflar (nofaollar ham) — admin panel jadvali uchun.
 router.get('/admin', async (req, res) => {

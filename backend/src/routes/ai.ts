@@ -139,7 +139,7 @@ ${projectsText}
 - "Obyektlar holati", "Loyihalar" → barcha loyihalar holatin ko'rsat
 - Xabar yuborishda — to'liq, grammatik jihatdan to'g'ri va professional matn yoz
 
-💰 MOLIYA MA'LUMOTLARI (oxirgi 90 kun, tasdiqlangan chiqim/kirim — hisob-kitoblar uchun FAQAT shulardan foydalan, o'zingdan raqam o'ylab topma):
+💰 MOLIYA MA'LUMOTLARI (oxirgi 90 kun, tasdiqlangan chiqimlar — hisob-kitoblar uchun FAQAT shulardan foydalan, o'zingdan raqam o'ylab topma):
 ${financeText || "(ma'lumot yo'q)"}
 
 📊 MOLIYAVIY TAHLIL (type="query"):
@@ -168,7 +168,7 @@ async function buildFinanceContext(objects: any[]): Promise<string> {
   const inc = txs.filter(t => t.type === 'income');
   const sum = (a: any[]) => a.reduce((x, t) => x + (t.amount || 0), 0);
   const objName = (id?: string) => objects.find(o => String(o._id) === String(id))?.name;
-  const lines: string[] = [`Jami chiqim: ${m(sum(exp))}; jami kirim: ${m(sum(inc))}; amallar soni: ${txs.length}`];
+  const lines: string[] = [`Jami chiqim: ${m(sum(exp))}${inc.length ? `; jami kirim: ${m(sum(inc))}` : ''}; amallar soni: ${txs.length}`];
   const byMonth = new Map<string, number>();
   for (const t of exp) byMonth.set(t.date.slice(0, 7), (byMonth.get(t.date.slice(0, 7)) || 0) + t.amount);
   lines.push('Oylar bo\'yicha chiqim: ' + [...byMonth.entries()].sort().map(([k, v]) => `${k}: ${m(v)}`).join('; '));

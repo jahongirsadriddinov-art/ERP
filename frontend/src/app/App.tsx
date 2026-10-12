@@ -106,6 +106,13 @@ const ReportsPage = lazy(() => import("./ReportsPage"));
 // Kamdan-kam ishlatiladigan (rol/hodisaga bog'liq) og'ir sahifalar — faqat
 // chindan kerak bo'lganda yuklanadi (unused JS ni kamaytiradi).
 const CallOverlay = lazy(() => import("./CallOverlay"));
+// Qo'ng'iroq oynasi kutilmaganda (kiruvchi qo'ng'iroqda) ochiladi — uning bo'lagi oldindan, bo'sh vaqtda yuklab
+// qo'yiladi. Aks holda sahifa ochiq turganda yangi versiya chiqsa, eski bo'lak serverda qolmaydi va qo'ng'iroq ochilmasdi.
+if (typeof window !== "undefined" && localStorage.getItem("token")) {
+  const preloadCall = () => { import("./CallOverlay").catch(() => {}); };
+  const ric = (window as any).requestIdleCallback;
+  if (ric) ric(preloadCall, { timeout: 10000 }); else setTimeout(preloadCall, 6000);
+}
 const RegisterWizard = lazy(() => import("./RegisterWizard"));
 const DeveloperPanel = lazy(() => import("./DeveloperPanel"));
 const AIAssistant = lazy(() => import("./AIAssistant"));

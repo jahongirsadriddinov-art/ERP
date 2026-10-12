@@ -24,6 +24,7 @@ import "./styles/index.css";
 import { attachSoundUnlock } from "./app/sound.ts";
 import { attachGlobalClickSounds } from "./app/soundClicks.ts";
 import { installTapGuard } from "./app/lib/tapGuard";
+import { isChunkError, reloadForNewVersion } from "./app/lib/chunkReload";
 import "./app/soundToast.ts"; // sonner toast'lariga avtomatik ovoz ulaydi (butun sayt uchun)
 
 // UI ovoz effektlari (uisfx, "zen" pack) — birinchi bosishda audio
@@ -32,6 +33,8 @@ import "./app/soundToast.ts"; // sonner toast'lariga avtomatik ovoz ulaydi (butu
 attachSoundUnlock();
 attachGlobalClickSounds();
 installTapGuard();
+// Yangi versiyadan keyin eski bo'lak topilmasa (masalan tugma bosilganda yuklanadigan modul) — sahifa bir marta yangilanadi
+window.addEventListener("unhandledrejection", e => { if (isChunkError(e.reason)) { e.preventDefault(); reloadForNewVersion(); } });
 
 // Chrome-ning built-in Translator/Language Detection API (window.translation)
 // sahifada ishlamasa "Language detection is not supported for this page" xatosini

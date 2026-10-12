@@ -1,3 +1,4 @@
+import { confirmDialog } from "./lib/confirmDialog";
 import { useState, useRef, useEffect, lazy, Suspense } from "react";
 import { MorphIcon } from "morphicons/react";
 import { toast } from "sonner";
@@ -327,7 +328,7 @@ export function GlobalAnnouncementList({ reloadKey }: { reloadKey: number }) {
   };
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [reloadKey]);
   const remove = async (id: string) => {
-    if (!window.confirm(t('common.confirmDelete') as string)) return;
+    if (!await confirmDialog(t('common.confirmDelete') as string)) return;
     try { const r = await fetch(`${API_BASE}/api/dev-announcements/${id}`, { method: 'DELETE' }); if (r.ok) load(); } catch {}
   };
   if (list.length === 0) return <p className="text-sm text-muted-foreground text-center py-4">{t('announcements.empty')}</p>;

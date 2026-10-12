@@ -33,6 +33,7 @@ export default function WorkerProfileModal({ worker, transfers, expenses, onClos
   const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [trail, setTrail] = useState<GpsPoint[]>([]);
   const [trailLoading, setTrailLoading] = useState(false);
+  const [gaps, setGaps] = useState(0);
   const [summary, setSummary] = useState<any | null>(null);
 
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -81,17 +82,44 @@ export default function WorkerProfileModal({ worker, transfers, expenses, onClos
     const map = mapRef.current, layer = layerRef.current;
     if (!map || !layer) return;
     layer.clearLayers();
-    if (trail.length === 0) return;
-    const pts = trail.map(p => [p.lat, p.lng] as [number, number]);
-    // Leaflet rangni SVG atributiga yozadi — u yerda CSS o'zgaruvchisi (var(--primary)) ishlamaydi, chiziq ko'rinmasdi
-    L.polyline(pts, { color: '#ffffff', weight: 7, opacity: 0.85 }).addTo(layer);
-    L.polyline(pts, { color: '#2563eb', weight: 4, opacity: 0.95 }).addTo(layer);
-    L.circleMarker(pts[0], { radius: 6, color: '#22c55e', fillColor: '#22c55e', fillOpacity: 1 }).bindTooltip(t('gps.trailStart')).addTo(layer);
-    if (pts.length > 1) L.circleMarker(pts[pts.length - 1], { radius: 6, color: '#ef4444', fillColor: '#ef4444', fillOpacity: 1 }).bindTooltip(t('gps.trailEnd')).addTo(layer);
+    if (trail.length === 0) { setGaps(0); return; }
+    // Iz bo'laklarga bo'linadi: ikki nuqta orasida 6 daqiqadan ko'p uzilish bo'lsa — "aloqa uzildi" (internet yoki
+    // joylashuv o'chgan), keyingi nuqtada — "aloqa tiklandi". Har bo'lak alohida chiziq; uzilish joyi kulrang uzuq chiziq.
+    const GAP_MS = 6 * 60 * 1000;
+    const sorted = [...trail].sort((a, b) => +new Date(a.timestamp) - +new Date(b.timestamp));
+    const segs: GpsPoint[][] = [];
+    for (const p of sorted) {
+      const cur = segs[segs.length - 1];
+      const prev = cur?.[cur.length - 1];
+      if (!prev || +new Date(p.timestamp) - +new Date(prev.timestamp) > GAP_MS) segs.push([p]); else cur.push(p);
+    }
+    const hm = (iso: string) => new Date(iso).toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Tashkent' });
+    const ll = (p: GpsPoint) => [p.lat, p.lng] as [number, number];
+    const dot = (p: GpsPoint, color: string, label: string, r = 7) =>
+      L.circleMarker(ll(p), { radius: r, color: '#ffffff', weight: 2, fillColor: color, fillOpacity: 1 }).bindTooltip(label, { direction: 'top' }).addTo(layer);
+    segs.forEach((seg, k) => {
+      const pts = seg.map(ll);
+      if (pts.length > 1) {
+        L.polyline(pts, { color: '#ffffff', weight: 7, opacity: 0.85 }).addTo(layer);
+        L.polyline(pts, { color: '#2563eb', weight: 4, opacity: 0.95 }).addTo(layer);
+      }
+      if (k > 0) {
+        const before = segs[k - 1][segs[k - 1].length - 1];
+        // Uzilish oralig'i — kulrang uzuq chiziq
+        L.polyline([ll(before), ll(seg[0])], { color: '#9ca3af', weight: 3, dashArray: '6 8', opacity: 0.9 }).addTo(layer);
+        dot(before, '#f59e0b', `${t('gps.signalLost', 'Aloqa uzildi')} · ${hm(before.timestamp)}`, 6);
+        dot(seg[0], '#0ea5e9', `${t('gps.signalBack', 'Aloqa tiklandi')} · ${hm(seg[0].timestamp)}`, 6);
+      }
+    });
+    const first = sorted[0], last = sorted[sorted.length - 1];
+    dot(first, '#22c55e', `${t('gps.trailStart')} · ${hm(first.timestamp)}`, 8);
+    if (sorted.length > 1) dot(last, '#ef4444', `${t('gps.trailEnd')} · ${hm(last.timestamp)}`, 8);
+    setGaps(segs.length - 1);
+    const all = sorted.map(ll);
     // Xarita oyna ochilish animatsiyasi paytida 0 o'lchamda yaratilgan bo'lishi mumkin — o'lchamni qayta hisoblaymiz
     map.invalidateSize();
-    map.fitBounds(pts.length > 1 ? pts : [pts[0], pts[0]], { padding: [30, 30], maxZoom: 16 });
-    setTimeout(() => { map.invalidateSize(); map.fitBounds(pts.length > 1 ? pts : [pts[0], pts[0]], { padding: [30, 30], maxZoom: 16 }); }, 350);
+    map.fitBounds(all.length > 1 ? all : [all[0], all[0]], { padding: [30, 30], maxZoom: 16 });
+    setTimeout(() => { map.invalidateSize(); map.fitBounds(all.length > 1 ? all : [all[0], all[0]], { padding: [30, 30], maxZoom: 16 }); }, 350);
   }, [trail, t]);
 
   useEffect(() => () => { mapRef.current?.remove(); mapRef.current = null; }, []);
@@ -228,7 +256,14 @@ export default function WorkerProfileModal({ worker, transfers, expenses, onClos
                 </div>
               )}
             </div>
-            {trail.length > 0 && <p className="text-[10px] text-muted-foreground">{t('workerProfile.trailPoints', { count: trail.length })}</p>}
+            {trail.length > 0 && (
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-muted-foreground">
+                <span>{t('workerProfile.trailPoints', { count: trail.length })}</span>
+                <span className="flex items-center gap-1"><i className="w-2.5 h-2.5 rounded-full bg-green-500 inline-block" />{t('gps.trailStart')}</span>
+                <span className="flex items-center gap-1"><i className="w-2.5 h-2.5 rounded-full bg-red-500 inline-block" />{t('gps.trailEnd')}</span>
+                {gaps > 0 && <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400 font-semibold"><i className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block" />{t('gps.gapsCount', { count: gaps, defaultValue: `Aloqa ${gaps} marta uzilgan` })}</span>}
+              </div>
+            )}
             {summary && summary.points > 0 && (
               <div className="grid grid-cols-3 gap-1.5 pt-1">
                 {([

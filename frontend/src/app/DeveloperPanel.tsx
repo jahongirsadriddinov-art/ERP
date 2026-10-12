@@ -1,3 +1,4 @@
+import { confirmDialog } from "./lib/confirmDialog";
 import { useState, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import LogOut from "@hugeicons/core-free-icons/Logout01Icon";
@@ -152,7 +153,7 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
     setSubLoading(null);
   };
   const rejectSub = async (id: string) => {
-    if (!window.confirm(t('devPanel.confirm.rejectSub'))) return;
+    if (!await confirmDialog(t('devPanel.confirm.rejectSub'))) return;
     setSubLoading(id);
     const res = await fetch(`${API_BASE}/api/admin/subscriptions/${id}/reject`, { method: "POST", headers: authHdr });
     if (res.ok) { await load(); } else { setErr(t('devPanel.errors.reject')); }
@@ -186,7 +187,7 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
     setPlanSaving(null);
   };
   const deletePlan = async (key: string) => {
-    if (!window.confirm(t('devPanel.plans.confirmDelete'))) return;
+    if (!await confirmDialog(t('devPanel.plans.confirmDelete'))) return;
     const res = await fetch(`${API_BASE}/api/plans/admin/${key}`, { method: "DELETE", headers: authHdr });
     if (res.ok) load(); else { const d = await res.json().catch(() => ({})); toast.error(d.error || t('devPanel.plans.deleteError')); }
   };
@@ -218,7 +219,7 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
     setPromoSaving(null);
   };
   const deletePromo = async (id: string) => {
-    if (!window.confirm(t('devPanel.promocodes.confirmDelete'))) return;
+    if (!await confirmDialog(t('devPanel.promocodes.confirmDelete'))) return;
     const res = await fetch(`${API_BASE}/api/promocodes/${id}`, { method: "DELETE", headers: authHdr });
     if (res.ok) load(); else { const d = await res.json().catch(() => ({})); toast.error(d.error || t('devPanel.promocodes.deleteError')); }
   };
@@ -253,7 +254,7 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
   const planLabel = (key: string) => plans.find(p => p.key === key)?.label || key;
 
   const deleteCompany = async (c: any) => {
-    if (!window.confirm(t('devPanel.confirm.deleteCompany', { name: c.name, userCount: c.userCount, objectCount: c.objectCount }))) return;
+    if (!await confirmDialog(t('devPanel.confirm.deleteCompany', { name: c.name, userCount: c.userCount, objectCount: c.objectCount }))) return;
     const res = await fetch(`${API_BASE}/api/companies/${c.id}`, { method: "DELETE" });
     if (res.ok) load(); else setErr(t('devPanel.errors.delete'));
   };
@@ -264,13 +265,13 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
   };
   const deleteUser = async (u: any) => {
     if (u.id === currentUser.id) { setErr(t('devPanel.errors.selfDelete')); return; }
-    if (!window.confirm(t('devPanel.confirm.deleteUser', { name: u.name, phone: u.phone }))) return;
+    if (!await confirmDialog(t('devPanel.confirm.deleteUser', { name: u.name, phone: u.phone }))) return;
     const res = await fetch(`${API_BASE}/api/users/${u.id}`, { method: "DELETE", headers: authHdr });
     if (res.ok) load(); else setErr(t('devPanel.errors.delete'));
   };
   const toggleBlock = async (u: any) => {
     const action = u.isBlocked ? "unblock" : "block";
-    if (!u.isBlocked && !window.confirm(t('devPanel.confirm.blockUser', { name: u.name, phone: u.phone }))) return;
+    if (!u.isBlocked && !await confirmDialog(t('devPanel.confirm.blockUser', { name: u.name, phone: u.phone }))) return;
     const res = await fetch(`${API_BASE}/api/users/${u.id}/${action}`, { method: "PATCH", headers: authHdr });
     if (res.ok) { load(); toast.success(u.isBlocked ? t('devPanel.users.unblockedToast', { name: u.name }) : t('devPanel.users.blockedToast', { name: u.name })); }
     else { const d = await res.json().catch(() => ({})); setErr(d.error || t('devPanel.errors.block')); }

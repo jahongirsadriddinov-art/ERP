@@ -1,3 +1,4 @@
+import { confirmDialog } from "./lib/confirmDialog";
 import { startBackground, stopBackground } from "./lib/background";
 import { useState, useRef, useEffect, useMemo, lazy, Suspense } from "react";
 import Building2 from "@hugeicons/core-free-icons/Building02Icon";
@@ -1878,7 +1879,7 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
               <RoleBadge role={u.role}/>
               <div className="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button aria-label={t('common.edit')} onClick={() => setEditUser(u)} className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-primary"><MorphIcon icon={Edit} className="w-3 h-3" /></button>
-                <button aria-label={t('common.delete')} onClick={() => { if(confirm(t('common.confirmDeleteUser'))) onDeleteUser(u.id); }} className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-destructive"><MorphIcon icon={Trash} className="w-3 h-3" /></button>
+                <button aria-label={t('common.delete')} onClick={async () => { if (await confirmDialog(t('common.confirmDeleteUser'))) onDeleteUser(u.id); }} className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-destructive"><MorphIcon icon={Trash} className="w-3 h-3" /></button>
               </div>
             </div>
           ))}
@@ -1906,7 +1907,7 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
                   <RoleBadge role={m.role}/>
                   <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button aria-label={t('common.edit')} onClick={() => setEditUser(m)} className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-primary"><MorphIcon icon={Edit} className="w-3 h-3" /></button>
-                    <button aria-label={t('common.delete')} onClick={() => { if(confirm(t('common.confirmDeleteUser'))) onDeleteUser(m.id); }} className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-destructive"><MorphIcon icon={Trash} className="w-3 h-3" /></button>
+                    <button aria-label={t('common.delete')} onClick={async () => { if (await confirmDialog(t('common.confirmDeleteUser'))) onDeleteUser(m.id); }} className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-destructive"><MorphIcon icon={Trash} className="w-3 h-3" /></button>
                   </div>
                 </div>
               ))}
@@ -1929,7 +1930,7 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
                 <RoleBadge role={m.role}/>
                 <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button aria-label={t('common.edit')} onClick={() => setEditUser(m)} className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-primary"><MorphIcon icon={Edit} className="w-3 h-3" /></button>
-                  <button aria-label={t('common.delete')} onClick={() => { if(confirm(t('common.confirmDeleteUser'))) onDeleteUser(m.id); }} className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-destructive"><MorphIcon icon={Trash} className="w-3 h-3" /></button>
+                  <button aria-label={t('common.delete')} onClick={async () => { if (await confirmDialog(t('common.confirmDeleteUser'))) onDeleteUser(m.id); }} className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-destructive"><MorphIcon icon={Trash} className="w-3 h-3" /></button>
                 </div>
               </div>
             ))}
@@ -2044,7 +2045,7 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
                         <RoleBadge role={u.role}/>
                         <div className="flex gap-1">
                           <button aria-label={t('common.edit')} onClick={() => setEditUser(u)} className="p-2 hover:bg-muted rounded-lg text-muted-foreground hover:text-primary"><MorphIcon icon={Edit} className="w-4 h-4" /></button>
-                          <button aria-label={t('common.delete')} onClick={() => { if(confirm(t('common.confirmDeleteUser'))) onDeleteUser(u.id); }} className="p-2 hover:bg-muted rounded-lg text-muted-foreground hover:text-destructive"><MorphIcon icon={Trash} className="w-4 h-4" /></button>
+                          <button aria-label={t('common.delete')} onClick={async () => { if (await confirmDialog(t('common.confirmDeleteUser'))) onDeleteUser(u.id); }} className="p-2 hover:bg-muted rounded-lg text-muted-foreground hover:text-destructive"><MorphIcon icon={Trash} className="w-4 h-4" /></button>
                         </div>
                       </div>
                     ))}
@@ -2069,7 +2070,7 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
                             <RoleBadge role={m.role}/>
                             <div className="flex gap-1">
                               <button aria-label={t('common.edit')} onClick={() => setEditUser(m)} className="p-1.5 hover:bg-muted rounded-lg text-muted-foreground hover:text-primary"><MorphIcon icon={Edit} className="w-3.5 h-3.5" /></button>
-                              <button aria-label={t('common.delete')} onClick={() => { if(confirm(t('common.confirmDeleteUser'))) onDeleteUser(m.id); }} className="p-1.5 hover:bg-muted rounded-lg text-muted-foreground hover:text-destructive"><MorphIcon icon={Trash} className="w-3.5 h-3.5" /></button>
+                              <button aria-label={t('common.delete')} onClick={async () => { if (await confirmDialog(t('common.confirmDeleteUser'))) onDeleteUser(m.id); }} className="p-1.5 hover:bg-muted rounded-lg text-muted-foreground hover:text-destructive"><MorphIcon icon={Trash} className="w-3.5 h-3.5" /></button>
                             </div>
                           </div>
                         ))}
@@ -2084,7 +2085,7 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
                           <RoleBadge role={m.role}/>
                           <div className="flex gap-1">
                             <button aria-label={t('common.edit')} onClick={() => setEditUser(m)} className="p-1.5 hover:bg-muted rounded-lg text-muted-foreground hover:text-primary"><MorphIcon icon={Edit} className="w-3.5 h-3.5" /></button>
-                            <button aria-label={t('common.delete')} onClick={() => { if(confirm(t('common.confirmDeleteUser'))) onDeleteUser(m.id); }} className="p-1.5 hover:bg-muted rounded-lg text-muted-foreground hover:text-destructive"><MorphIcon icon={Trash} className="w-3.5 h-3.5" /></button>
+                            <button aria-label={t('common.delete')} onClick={async () => { if (await confirmDialog(t('common.confirmDeleteUser'))) onDeleteUser(m.id); }} className="p-1.5 hover:bg-muted rounded-lg text-muted-foreground hover:text-destructive"><MorphIcon icon={Trash} className="w-3.5 h-3.5" /></button>
                           </div>
                         </div>
                       ))}
@@ -2208,7 +2209,7 @@ function EquipmentModal({ projects, onClose }: { projects: Project[]; onClose: (
     try { await fetch(`${API_BASE}/api/equipment/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) }); load(); } catch {}
   };
   const remove = async (id: string) => {
-    if (!window.confirm(t('common.confirmDelete') as string)) return;
+    if (!await confirmDialog(t('common.confirmDelete') as string)) return;
     try { await fetch(`${API_BASE}/api/equipment/${id}`, { method: 'DELETE' }); load(); } catch {}
   };
   const statusColor: Record<string,string> = { available: 'text-green-600 bg-green-500/10', in_use: 'text-blue-600 bg-blue-500/10', maintenance: 'text-amber-600 bg-amber-500/10', broken: 'text-red-600 bg-red-500/10' };
@@ -2357,7 +2358,7 @@ function DocumentsModal({ projects, currentUser, onClose }: { projects: Project[
     setUploading(false);
   };
   const remove = async (id: string) => {
-    if (!window.confirm(t('common.confirmDelete') as string)) return;
+    if (!await confirmDialog(t('common.confirmDelete') as string)) return;
     try { await fetch(`${API_BASE}/api/documents/${id}`, { method: 'DELETE' }); load(); } catch {}
   };
   const catLabel: Record<string,string> = { contract: t('management.catContract'), permit: t('management.catPermit'), invoice: t('management.catInvoice'), other: t('management.catOther') };
@@ -2493,7 +2494,7 @@ function AnnouncementsModal({ currentUser, onClose }: { currentUser: AppUser; on
   useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
 
   const remove = async (id: string) => {
-    if (!window.confirm(t('common.confirmDelete') as string)) return;
+    if (!await confirmDialog(t('common.confirmDelete') as string)) return;
     try { const r = await fetch(`${API_BASE}/api/announcements/${id}`, { method: 'DELETE' }); if (r.ok) load(); } catch {}
   };
 
@@ -2739,7 +2740,7 @@ function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSe
     } catch { toast.error(t('common.error')); }
   };
   const handleMediaDelete = async (mediaId: string) => {
-    if (!window.confirm(t('objectDetail.confirmMediaDelete'))) return;
+    if (!await confirmDialog(t('objectDetail.confirmMediaDelete'))) return;
     try {
       const res = await fetch(`${API_BASE}/api/objects/${project.id}/media/${mediaId}`, { method: 'DELETE' });
       if (res.ok) setMediaItems(prev => prev.filter(m => m.id !== mediaId));
@@ -2804,7 +2805,7 @@ function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSe
             )}
             {isAdmin(currentUser.role) && (
               <button type="button" disabled={deletingProject} onClick={async () => {
-                if (!confirm(t('objectDetail.confirmDeleteProject', { name: project.name }))) return;
+                if (!await confirmDialog(t('objectDetail.confirmDeleteProject', { name: project.name }))) return;
                 setDeletingProject(true);
                 try {
                   const res = await fetch(`${API_BASE}/api/objects/${project.id}`, { method: 'DELETE' });
@@ -5267,7 +5268,7 @@ export default function App() {
             <p className="text-lg font-bold">{tApp('checkinGate.welcome', { name: liveUser.name.split(' ')[0] })}</p>
             <p className="text-sm text-muted-foreground mt-1">{todayAttendance?.checkOut ? tApp('checkinGate.finishedInstruction', "Bugungi ishingiz tugatilgan. Qayta ishlash uchun \"Ishga keldim\"ni bosing — joylashuvingiz olinadi.") : tApp('checkinGate.instruction')}</p>
           </div>
-          <button onClick={() => { if (confirm(tApp('checkinGate.confirmPrompt'))) handleCheckIn(); }} disabled={attendancePending}
+          <button onClick={async () => { if (await confirmDialog(tApp('checkinGate.confirmPrompt'))) handleCheckIn(); }} disabled={attendancePending}
             className="w-full btn btn-primary text-base py-4 rounded-2xl flex items-center justify-center gap-2 disabled:opacity-60">
             {attendancePending ? <MorphIcon icon={Loader2} className="w-5 h-5 animate-spin" /> : <MorphIcon icon={MapPin} className="w-5 h-5" />}
             {tApp('checkinGate.checkInBtn')}

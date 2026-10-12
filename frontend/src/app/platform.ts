@@ -1,3 +1,4 @@
+import { confirmDialog } from "./lib/confirmDialog";
 // Platform detection + Capacitor/Tauri bridge
 // Web, Android (Capacitor), Windows (Tauri) — barcha platformalar uchun bir xil API.
 
@@ -60,9 +61,7 @@ export function installAndroidBackHandler(onBack: () => boolean) {
         const handled = onBack();
         if (!handled && !canGoBack) {
           // Root sahifada — chiqish dialog
-          if (confirm('Ilovadan chiqmoqchimisiz?')) {
-            App.exitApp();
-          }
+          confirmDialog(document.documentElement.lang?.startsWith('ru') ? 'Выйти из приложения?' : 'Ilovadan chiqmoqchimisiz?').then(ok => { if (ok) App.exitApp(); });
         }
       });
     })

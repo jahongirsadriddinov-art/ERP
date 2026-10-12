@@ -1,3 +1,4 @@
+import GpsLocation from '../models/GpsLocation';
 import { checkGeofence, geofenceMessage } from '../services/geofence';
 import { invalidateShift, WORKER_ROLES } from '../middleware/workGate';
 import { Router } from 'express';
@@ -166,6 +167,8 @@ router.post('/checkin', async (req, res) => {
     const payload = { ...record.toObject(), id: record._id };
     invalidateShift(String(userId));
     res.json(payload);
+    // Iz aynan "Ishga keldim" nuqtasidan boshlansin
+    if (Number.isFinite(Number(lat)) && Number.isFinite(Number(lng))) GpsLocation.create({ userId, companyId: tenant?.companyId, lat: Number(lat), lng: Number(lng), timestamp: now, source: 'site' } as any).catch(() => {});
 
     // Bot klaviaturasini darhol yangilaymiz (sayt orqali qilingan bo'lsa ham) —
     // aks holda foydalanuvchi botni ochsa ESKI (masalan hali "Ishga keldim"gina

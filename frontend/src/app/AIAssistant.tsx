@@ -1,3 +1,4 @@
+import { confirmDialog } from "./lib/confirmDialog";
 import { toast } from "sonner";
 import { useState, useRef, useEffect } from "react";
 import X from "@hugeicons/core-free-icons/Cancel01Icon";
@@ -181,9 +182,20 @@ export default function AIAssistant({ currentUser, users, token, open, onClose, 
   // Ovozni matnga: ovoz QURILMADA yozib olinadi (MediaRecorder) va serverda (Gemini) matnga aylantiriladi.
   // Brauzerning Web Speech API'si Windows ilova (WebView2) va Android'da umuman ishlamas, o'zbekchani ham
   // yomon tanirdi — "Tinglanmoqda" deb turib hech narsa olmasdi. Ikkinchi bosish (yoki 60 s) — to'xtatib yuboradi.
-  const recRef = useRef<{ rec: MediaRecorder; stream: MediaStream; timer: ReturnType<typeof setTimeout> } | null>(null);
+  const recRef = useRef<{ rec: MediaRecorder; stream: MediaStream; timer: ReturnType<typeof setTimeout>; live: ReturnType<typeof setInterval> } | null>(null);
   const [transcribing, setTranscribing] = useState(false);
   const stopRecording = () => { const r = recRef.current; if (r && r.rec.state !== 'inactive') r.rec.stop(); };
+  // Yozuvni serverda matnga aylantirish (til avtomatik aniqlanadi)
+  const transcribeBlob = async (blob: Blob): Promise<string | null> => {
+    const buf = new Uint8Array(await blob.arrayBuffer());
+    let bin = ''; for (let k = 0; k < buf.length; k += 0x8000) bin += String.fromCharCode(...buf.subarray(k, k + 0x8000));
+    const r = await fetch(`${API_BASE}/api/ai/transcribe`, { method: 'POST', headers: authHdr, body: JSON.stringify({ audio: btoa(bin), mimeType: blob.type }) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || '');
+    return String(d.text || '').trim();
+  };
+  // Gapira boshlashingiz bilan matn darhol yozilib boradi: har ~2.5 s da shu paytgacha aytilgan qism matnga
+  // aylantirilib maydonga yoziladi; mikrofon qayta bosilganda (yoki 60 s) yakuniy matn yuboriladi.
   const toggleListening = async () => {
     if (listening) { stopRecording(); return; }
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') { toast.error(t('ai.micUnsupported', "Bu qurilmada ovoz yozib bo'lmaydi")); return; }
@@ -193,30 +205,38 @@ export default function AIAssistant({ currentUser, users, token, open, onClose, 
     const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'].find(m => (MediaRecorder as any).isTypeSupported?.(m)) || '';
     const rec = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
     const chunks: Blob[] = [];
+    let inflight = false, lastSize = 0, stopped = false;
+    const type = () => rec.mimeType || mime || 'audio/webm';
     rec.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
+    const live = setInterval(async () => {
+      if (inflight || stopped) return;
+      const blob = new Blob(chunks, { type: type() });
+      if (blob.size < 4000 || blob.size === lastSize) return;
+      inflight = true; lastSize = blob.size;
+      try { const text = await transcribeBlob(blob); if (!stopped && text) setInput(text); } catch { /* jonli qism — xato bo'lsa keyingisi */ }
+      finally { inflight = false; }
+    }, 2500);
     rec.onstop = async () => {
+      stopped = true;
+      clearInterval(live);
       clearTimeout(recRef.current?.timer as any);
       stream.getTracks().forEach(tr => tr.stop());
       recRef.current = null;
       setListening(false);
-      const blob = new Blob(chunks, { type: rec.mimeType || mime || 'audio/webm' });
+      const blob = new Blob(chunks, { type: type() });
       if (blob.size < 1500) return; // juda qisqa — hech narsa aytilmagan
       setTranscribing(true);
       try {
-        const buf = new Uint8Array(await blob.arrayBuffer());
-        let bin = ''; for (let k = 0; k < buf.length; k += 0x8000) bin += String.fromCharCode(...buf.subarray(k, k + 0x8000));
-        const r = await fetch(`${API_BASE}/api/ai/transcribe`, { method: 'POST', headers: authHdr, body: JSON.stringify({ audio: btoa(bin), mimeType: blob.type, lang: i18n.language }) });
-        const d = await r.json().catch(() => ({}));
-        if (!r.ok) { toast.error(d.error || t('ai.transcribeFail', "Ovozni tanib bo'lmadi")); return; }
-        const text = String(d.text || '').trim();
+        const text = await transcribeBlob(blob);
         if (!text) { toast.message(t('ai.nothingHeard', "Hech narsa eshitilmadi — qayta gapiring")); return; }
         setInput(text);
         send(text);
-      } catch { toast.error(t('ai.transcribeFail', "Ovozni tanib bo'lmadi")); }
+      } catch (e: any) { toast.error(e?.message || t('ai.transcribeFail', "Ovozni tanib bo'lmadi")); }
       finally { setTranscribing(false); }
     };
-    rec.start(250);
-    recRef.current = { rec, stream, timer: setTimeout(stopRecording, 60_000) };
+    rec.start(500);
+    recRef.current = { rec, stream, timer: setTimeout(stopRecording, 60_000), live };
+    setInput('');
     setListening(true);
   };
   useEffect(() => () => stopRecording(), []);
@@ -293,7 +313,7 @@ export default function AIAssistant({ currentUser, users, token, open, onClose, 
     } catch {}
   };
   const deleteConversation = async (id: string) => {
-    if (!window.confirm(t('ai.confirmDeleteConv') as string)) return;
+    if (!await confirmDialog(t('ai.confirmDeleteConv') as string)) return;
     try {
       const r = await fetch(`${API_BASE}/api/ai/conversations/${id}`, { method: 'DELETE', headers: authHdr });
       if (r.ok) {

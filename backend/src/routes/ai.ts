@@ -259,15 +259,16 @@ router.post('/chat', requireAuth, requireBoss, requireFeature('ai_assistant'), a
 // POST /api/ai/transcribe — ovozli buyruqni matnga aylantirish (Gemini). Brauzerning Web Speech API'si
 // Windows ilova (WebView2) va Android WebView'da ishlamaydi, o'zbekchani ham yomon taniydi — shu sabab
 // ovoz qurilmada yozib olinadi va shu yerda matnga aylantiriladi. Faqat qisqa (≤ ~2 daqiqa) yozuv.
-router.post('/transcribe', requireAuth, requireBoss, requireFeature('ai_assistant'), aiLimit('transcribe', 30, 10 * 60_000), async (req, res) => {
+router.post('/transcribe', requireAuth, requireBoss, requireFeature('ai_assistant'), aiLimit('transcribe', 240, 10 * 60_000), async (req, res) => {
   try {
     if (!geminiConfigured()) return res.status(503).json({ error: 'Ovozni tanish xizmati sozlanmagan' });
     const { audio, mimeType, lang } = req.body || {};
     if (typeof audio !== 'string' || audio.length < 200 || audio.length > 4_000_000) return res.status(400).json({ error: "Ovoz yozuvi noto'g'ri yoki juda uzun" });
     const mt = typeof mimeType === 'string' && /^audio\/[\w.+-]+/.test(mimeType) ? mimeType.split(';')[0] : 'audio/webm';
-    const ru = String(lang || '').startsWith('ru');
-    const prompt = `Bu qurilish firmasi rahbarining AI yordamchiga OVOZLI buyrug'i. Til: ${ru ? 'ruscha' : "o'zbekcha (lotin) yoki ruscha"}.
-Ovozni AYNAN eshitilganidek, to'g'ri imlo bilan matnga aylantir. O'zbekcha bo'lsa — faqat o'zbek lotin alifbosi (o', g', sh, ch; tutuq belgisi oddiy ').
+    void lang;
+    const prompt = `Bu qurilish firmasi rahbarining AI yordamchiga OVOZLI buyrug'i (yozuv hali davom etayotgan bo'lishi mumkin).
+Tilni O'ZING aniqla (o'zbek, rus, ingliz yoki aralash) va aynan aytilgan tilda yoz. O'zbekcha bo'lsa — faqat o'zbek lotin alifbosi (o', g', sh, ch; tutuq belgisi oddiy '); ruscha bo'lsa — kirillda.
+Ovozni AYNAN eshitilganidek, to'g'ri imlo bilan matnga aylantir. Oxiridagi chala so'zni taxmin qilma.
 Ismlar va raqamlarni aniq yoz. Hech narsa qo'shma, javob berma — faqat aytilgan gap. Hech narsa eshitilmasa — bo'sh matn.
 Javob FAQAT JSON: {"text":""}`;
     const r = await geminiAudioToJson(Buffer.from(audio, 'base64'), mt, prompt);

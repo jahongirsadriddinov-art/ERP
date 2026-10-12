@@ -76,11 +76,13 @@ export async function takeSnapshot(companyId: string, reason: SnapshotReason, by
 }
 
 async function readSnapshot(snap: ISnapshot): Promise<{ data: Record<string, any[]> }> {
+  // Mongoose Buffer — Node Buffer (uning .buffer'i butun xotira hovuzi, ishlatib bo'lmaydi); lean() — BSON Binary
+  const toBuf = (x: any): Buffer => Buffer.isBuffer(x) ? x : x?.buffer ? Buffer.from(x.buffer) : Buffer.from(x);
   let gz: Buffer;
   if (snap.chunks > 1 || !snap.data) {
     const parts: any[] = await SnapshotChunk.find({ snapshotId: String(snap._id) }).sort({ i: 1 }).lean();
-    gz = Buffer.concat(parts.map(p => Buffer.from(p.data.buffer || p.data)));
-  } else gz = Buffer.from((snap.data as any).buffer || snap.data);
+    gz = Buffer.concat(parts.map(p => toBuf(p.data)));
+  } else gz = toBuf(snap.data);
   return JSON.parse(zlib.gunzipSync(gz).toString('utf8'));
 }
 

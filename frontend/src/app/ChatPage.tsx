@@ -1,3 +1,4 @@
+import { confirmDialog } from "./lib/confirmDialog";
 import { useState, useRef, useEffect, useMemo, lazy, Suspense } from "react";
 import Building2 from "@hugeicons/core-free-icons/Building02Icon";
 import Users from "@hugeicons/core-free-icons/UserMultipleIcon";
@@ -911,7 +912,7 @@ function GroupSettingsModal({ group, users, currentUser, contacts, onClose, onRe
         <div className="space-y-2 pt-3 border-t border-border/50">
           <button onClick={onLeave} className="w-full text-sm font-semibold text-amber-600 hover:bg-amber-500/10 rounded-xl py-2.5">{t('groupSettings.leaveGroup')}</button>
           {isCreator && (
-            <button onClick={() => { if (window.confirm(t('groupSettings.confirmDelete') as string)) onDelete(); }}
+            <button onClick={async () => { if (await confirmDialog(t('groupSettings.confirmDelete') as string)) onDelete(); }}
               className="w-full text-sm font-semibold text-destructive hover:bg-destructive/10 rounded-xl py-2.5">{t('groupSettings.deleteGroup')}</button>
           )}
         </div>

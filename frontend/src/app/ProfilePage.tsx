@@ -1,3 +1,4 @@
+import { confirmDialog } from "./lib/confirmDialog";
 import { SnapshotsPanel, DangerZone } from "./components/DataSafety";
 import CustomPlanBuilder from "./components/CustomPlanBuilder";
 import { useState, useRef, useEffect, useMemo, lazy, Suspense } from "react";
@@ -591,7 +592,7 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
   };
   const [revokingAll, setRevokingAll] = useState(false);
   const revokeAllDevices = async () => {
-    if (!window.confirm(t('profile.confirmRevokeAll'))) return;
+    if (!await confirmDialog(t('profile.confirmRevokeAll'))) return;
     setRevokingAll(true);
     try {
       const r = await fetch(`${API_BASE}/api/sessions/all`, { method: "DELETE", headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } });
@@ -1276,7 +1277,7 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
               )}
               <div className="flex gap-2">
                 {!todayAttendance?.checkOut ? (
-                  <button onClick={() => { if (confirm(t('profile.confirmFinishWork'))) onCheckOut(); }} className="flex-1 btn btn-outline text-xs py-2.5 rounded-xl flex items-center justify-center gap-1.5 border-red-400/40 text-red-600 dark:text-red-400 hover:bg-red-500/10">
+                  <button onClick={async () => { if (await confirmDialog(t('profile.confirmFinishWork'))) onCheckOut(); }} className="flex-1 btn btn-outline text-xs py-2.5 rounded-xl flex items-center justify-center gap-1.5 border-red-400/40 text-red-600 dark:text-red-400 hover:bg-red-500/10">
                     <MorphIcon icon={X} className="w-3.5 h-3.5" />{t('profile.finishWorkBtn')}
                   </button>
                 ) : (
@@ -1289,7 +1290,7 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
                     <div className="text-center text-xs text-green-600 dark:text-green-400 font-medium">
                       ✓ {t('profile.todayWorkDone', { duration: fmtWorkDuration(todayAttendance.checkIn, todayAttendance.checkOut, t) || t('gps.minutesShort', { min: 0 }) })}
                     </div>
-                    <button onClick={() => { if (confirm(t('checkinGate.confirmPrompt'))) onCheckIn(); }} className="btn btn-primary text-xs py-2.5 rounded-xl flex items-center justify-center gap-1.5">
+                    <button onClick={async () => { if (await confirmDialog(t('checkinGate.confirmPrompt'))) onCheckIn(); }} className="btn btn-primary text-xs py-2.5 rounded-xl flex items-center justify-center gap-1.5">
                       <MorphIcon icon={Check} className="w-3.5 h-3.5" />{t('profile.resumeWorkBtn')}
                     </button>
                   </div>

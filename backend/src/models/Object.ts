@@ -3,6 +3,9 @@ import mongoose, { Schema, Document } from 'mongoose';
 export interface IObject extends Document {
   name: string;
   location?: string;
+  lat?: number;            // obyekt nuqtasi (geozona uchun)
+  lng?: number;
+  geofenceRadius?: number; // "Ishga keldim" ruxsat etilgan radius (m), standart 300
   foremanId?: string;
   status: 'active' | 'paused' | 'completed';
   budget?: number;
@@ -18,6 +21,9 @@ export interface IObject extends Document {
 const ObjectSchema: Schema = new Schema({
   name: { type: String, required: true },
   location: { type: String },
+  lat: { type: Number },
+  lng: { type: Number },
+  geofenceRadius: { type: Number },
   foremanId: { type: String },
   status: { type: String, enum: ['active', 'paused', 'completed'], default: 'active' },
   budget: { type: Number },

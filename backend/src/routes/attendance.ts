@@ -1,3 +1,4 @@
+import { checkGeofence, geofenceMessage } from '../services/geofence';
 import { invalidateShift, WORKER_ROLES } from '../middleware/workGate';
 import { Router } from 'express';
 import Attendance from '../models/Attendance';
@@ -126,6 +127,10 @@ router.post('/checkin', async (req, res) => {
       return res.status(400).json({ error: "Ishga kelish uchun joylashuvingiz kerak — joylashuvni yoqing", locationRequired: true });
     }
     invalidateShift(String(userId));
+    if (WORKER_ROLES.includes(String(tenant?.role))) {
+      const g = await checkGeofence(String(userId), tenant?.companyId, Number(lat), Number(lng));
+      if (!g.ok) return res.status(403).json({ error: geofenceMessage(g), outsideGeofence: true, distance: g.distance });
+    }
 
     const today = todayInTashkent();
     const now = new Date();

@@ -13,6 +13,15 @@ import User from '../models/User';
 import { getBackendUrl } from '../utils/backendUrl';
 import { randomBytes } from 'crypto';
 
+const coordsFromBody = (lat: any, lng: any, radius: any) => {
+  const out: any = {};
+  const la = Number(lat), lo = Number(lng);
+  if (lat != null && lng != null && Number.isFinite(la) && Number.isFinite(lo) && Math.abs(la) <= 90 && Math.abs(lo) <= 180) { out.lat = la; out.lng = lo; }
+  const r = Number(radius);
+  if (radius != null && Number.isFinite(r) && r >= 50 && r <= 5000) out.geofenceRadius = Math.round(r);
+  return out;
+};
+
 const router = Router();
 const upload = multer({ dest: 'uploads/', limits: { fileSize: 50 * 1024 * 1024 } });
 
@@ -41,7 +50,7 @@ function isOwnMediaUrl(url: string): boolean {
 // Create Object
 router.post('/', requireOwnerOrAdmin, async (req, res) => {
   try {
-    const { name, budget, location, foremanId } = req.body;
+    const { name, budget, location, foremanId, lat, lng, geofenceRadius } = req.body;
 
     // Validate required fields
     const errors: { field: string; message: string }[] = [];
@@ -63,6 +72,7 @@ router.post('/', requireOwnerOrAdmin, async (req, res) => {
       budget: budget ? Number(budget) : undefined,
       location: location?.trim() || undefined,
       foremanId: foremanId || undefined,
+      ...coordsFromBody(lat, lng, geofenceRadius),
     }));
     await obj.save();
 
@@ -220,7 +230,7 @@ router.get('/', async (req, res) => {
 // yo'l yo'q edi).
 router.patch('/:id', requireOwnerOrAdmin, async (req, res) => {
   try {
-    const { name, budget, location, foremanId } = req.body || {};
+    const { name, budget, location, foremanId, lat, lng, geofenceRadius } = req.body || {};
     const before = await ObjectModel.findOne(scoped({ _id: req.params.id })).lean();
     if (!before) return res.status(404).json({ error: 'Obyekt topilmadi' });
 
@@ -241,6 +251,9 @@ router.patch('/:id', requireOwnerOrAdmin, async (req, res) => {
     }
     if (location !== undefined) update.location = location ? String(location).trim() : undefined;
     if (foremanId !== undefined) update.foremanId = foremanId || undefined;
+    Object.assign(update, coordsFromBody(lat, lng, geofenceRadius));
+    // Manzil o'zgarib, yangi nuqta berilmasa — eski nuqta noto'g'ri bo'lib qoladi: tozalaymiz (keyin manzildan qayta aniqlanadi)
+    if (location !== undefined && lat === undefined && String(location || '').trim() !== String(before.location || '').trim()) { update.lat = undefined; update.lng = undefined; }
 
     const obj = await ObjectModel.findOneAndUpdate(scoped({ _id: req.params.id }), update, { new: true });
 

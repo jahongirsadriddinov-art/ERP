@@ -42,6 +42,7 @@ export const uz = {
   },
   register: { saveBackToSummary: "Saqlash va xulosaga qaytish" },
   nav: { homeShort: "Asosiy" },
+  addObject: { geofence: "\"Ishga keldim\" radiusi (metr)", geofenceOk: "✓ Obyekt nuqtasi tanlandi — ishchilar faqat shu radius ichida ishga kela oladi", geofenceHint: "Manzilni xaritadan tanlang — shunda ishchilar faqat obyektda \"Ishga keldim\" bosa oladi" },
   plan: { period: "Muddat", months: "oy", mo: "oy", features: "Funksiyalar", base: "Asosiy tizim: obyektlar, xodimlar, chiqimlar, chat, bot", payCustom: "Shu tarifni to'lash", customTitle: "O'zim tanlayman — kerakli funksiyalar bilan tarif", customShort: "O'zim tanlagan" },
   checkinGate: { finishedInstruction: "Bugungi ishingiz tugatilgan. Qayta ishlash uchun \"Ishga keldim\"ni bosing — joylashuvingiz olinadi." },
   reports: {
@@ -94,6 +95,7 @@ export const ru: typeof uz = {
   },
   register: { saveBackToSummary: "Сохранить и вернуться к итогу" },
   nav: { homeShort: "Главная" },
+  addObject: { geofence: "Радиус отметки «Я пришёл» (метры)", geofenceOk: "✓ Точка объекта выбрана — сотрудники смогут отметиться только в этом радиусе", geofenceHint: "Выберите адрес на карте — тогда отметиться можно будет только на объекте" },
   plan: { period: "Срок", months: "мес.", mo: "мес.", features: "Функции", base: "Основная система: объекты, сотрудники, расходы, чат, бот", payCustom: "Оплатить этот тариф", customTitle: "Свой тариф — только нужные функции", customShort: "Свой тариф" },
   checkinGate: { finishedInstruction: "Ваш рабочий день завершён. Чтобы снова работать, нажмите \"Я пришёл\" — будет получена ваша геолокация." },
   reports: {

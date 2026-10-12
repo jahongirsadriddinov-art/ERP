@@ -1,4 +1,5 @@
 const TelegramBot = require('node-telegram-bot-api');
+import { checkGeofence, geofenceMessage } from './geofence';
 import { invalidateShift } from '../middleware/workGate';
 import dotenv from 'dotenv';
 import fs from 'fs';
@@ -729,6 +730,12 @@ async function doCheckIn(user: any, lang?: BotLang): Promise<string> {
   // YANGI smena boshlanadi, o'sha kunning oldingi ishlangan vaqti
   // (workHours) YO'QOLMAYDI — yig'ilib boradi.
   if (record?.checkIn && !record.checkOut) return tb(lang, 'alreadyCheckedIn');
+  // Geozona — oxirgi (jonli) joylashuv obyekt hududida bo'lishi kerak
+  const lastLoc: any = await GpsLocation.findOne({ userId: String(user._id) }).sort({ timestamp: -1 }).select('lat lng timestamp').lean();
+  if (lastLoc && Date.now() - new Date(lastLoc.timestamp).getTime() < 10 * 60 * 1000) {
+    const g = await checkGeofence(String(user._id), user.companyId, lastLoc.lat, lastLoc.lng);
+    if (!g.ok) return geofenceMessage(g, lang === 'ru');
+  }
   const now = new Date();
   const resuming = !!record; // kun uchun yozuv allaqachon bor (avvalgi smena tugagan)
   if (!record) record = new Attendance({ userId: String(user._id), companyId: user.companyId, date: today });

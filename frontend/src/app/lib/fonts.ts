@@ -74,3 +74,29 @@ export function applyFontScale(pct?: number) {
   try { localStorage.setItem(LS_SCALE, String(v)); } catch { /* */ }
   document.documentElement.style.fontSize = v === 100 ? "" : `${v}%`;
 }
+
+// ─── Matn qalinligi (ingichka ↔ qalin) ──────────────────────────────────────
+// Butun saytdagi matn qalinligini bir pog'ona pasaytiradi/oshiradi (sarlavhalar ham mutanosib o'zgaradi).
+export type FontWeightMode = "light" | "normal" | "medium" | "bold";
+export const FONT_WEIGHTS: FontWeightMode[] = ["light", "normal", "medium", "bold"];
+const LS_WEIGHT = "erp_app_font_weight";
+export const getFontWeight = (): FontWeightMode => {
+  try { const v = localStorage.getItem(LS_WEIGHT) as FontWeightMode; return FONT_WEIGHTS.includes(v) ? v : "normal"; } catch { return "normal"; }
+};
+const WEIGHT_MAP: Record<FontWeightMode, [number, number, number, number, number]> = {
+  // [oddiy matn, medium, semibold, bold, extrabold]
+  light: [300, 400, 500, 600, 700],
+  normal: [400, 500, 600, 700, 800],
+  medium: [500, 600, 700, 800, 900],
+  bold: [600, 700, 800, 900, 900],
+};
+export function applyFontWeight(mode?: FontWeightMode) {
+  if (typeof document === "undefined") return;
+  const m = mode && FONT_WEIGHTS.includes(mode) ? mode : getFontWeight();
+  try { localStorage.setItem(LS_WEIGHT, m); } catch { /* */ }
+  let style = document.getElementById("app-weight-style") as HTMLStyleElement | null;
+  if (m === "normal") { style?.remove(); return; }
+  if (!style) { style = document.createElement("style"); style.id = "app-weight-style"; document.head.appendChild(style); }
+  const [n, md, sb, b, xb] = WEIGHT_MAP[m];
+  style.textContent = `body{font-weight:${n}}.font-normal,.font-light{font-weight:${n}!important}.font-medium{font-weight:${md}!important}.font-semibold{font-weight:${sb}!important}.font-bold,b,strong,h1,h2,h3{font-weight:${b}!important}.font-extrabold,.font-black{font-weight:${xb}!important}`;
+}

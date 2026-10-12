@@ -1,3 +1,5 @@
+import { isNative } from "./platform";
+import { compareVersions } from "./lib/version";
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
@@ -163,7 +165,10 @@ export default function NotificationCenter({ messages, transfers, expenses, user
         tone: a.isGlobal ? "bg-fuchsia-500/15 text-fuchsia-500" : "bg-orange-500/15 text-orange-500",
         title: a.title, body: a.body, at: a.createdAt, read: !!a.seen, ann: a });
     }
-    if (release?.version) {
+    // "Yangi versiya" — faqat O'RNATILGAN ilova eskirgan bo'lsa va hali ko'rilmagan bo'lsa. Sayt (har doim eng
+    // yangi) va allaqachon yangilangan ilovada umuman ko'rsatilmaydi; bir marta ko'rilgani qayta chiqmaydi.
+    const outdated = !!release?.version && isNative() && release.version !== __APP_VERSION__ && compareVersions(release.version, __APP_VERSION__) > 0;
+    if (release?.version && outdated && releaseSeen !== release.version) {
       out.push({ key: `rel:${release.version}`, cat: "system", icon: Rocket, tone: "bg-indigo-500/15 text-indigo-500",
         title: `${t("update.newVersion", "Yangi versiya")} ${release.version}`,
         body: release.notes || t("update.newVersionBody", "Ilova yangilandi — yangi imkoniyatlar va tuzatishlar"),

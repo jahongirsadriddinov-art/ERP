@@ -673,3 +673,23 @@ textarea {
 .doc-editable:hover { background-color: rgba(14, 165, 233, 0.06); box-shadow: 0 0 0 1px rgba(14, 165, 233, 0.25); }
 .doc-editable:focus { background-color: rgba(14, 165, 233, 0.08); box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.55); }
 .doc-editable:empty::before { content: attr(data-ph); color: #94a3b8; font-style: italic; }
+
+/* ── Navigatsiya: zamonaviy faol holat (sirg'aluvchi gradient pill) ───────── */
+.nav-active-pill {
+  background: linear-gradient(135deg, var(--primary), var(--accent));
+  box-shadow: 0 6px 18px -6px var(--primary), inset 0 1px 0 rgba(255,255,255,0.35);
+}
+.nav-item-desktop:not([aria-current]) { transition: transform .2s ease, color .2s ease, background-color .2s ease; }
+.nav-item-desktop:hover:not(:has(.nav-active-pill)) { background: rgba(127,127,127,0.10); }
+.nav-active-bg {
+  background: linear-gradient(180deg, rgba(255,255,255,0.14), rgba(255,255,255,0.05));
+  border: 1px solid rgba(255,255,255,0.16);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.22), 0 4px 14px -4px var(--primary);
+}
+.nav-pill-desktop { border-color: rgba(127,127,127,0.26) !important; }
+
+/* Chegaralar ko'proq ko'rinsin: shaffof (border-white/5, /10) chegaralar yorug'/qorong'i rejimda aniqroq */
+.dark .border-white\/5 { border-color: rgba(255,255,255,0.12) !important; }
+.dark .border-white\/10 { border-color: rgba(255,255,255,0.16) !important; }
+.border-border\/40, .border-border\/50, .border-border\/60 { border-color: var(--border) !important; }
+.surface, .glass-card, .glass-modal { border-width: 1px; border-color: var(--border); }

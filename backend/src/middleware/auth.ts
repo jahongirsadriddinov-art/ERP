@@ -4,6 +4,7 @@ import { runWithTenant, TenantContext } from './tenantContext';
 import User from '../models/User';
 import AppSettings from '../models/AppSettings';
 import Session from '../models/Session';
+import { isOnShift, workGateBlocks, CHECKIN_REQUIRED } from './workGate';
 
 // JWT payload — login vaqtida shu maydonlar imzolanadi.
 export interface JwtPayload {
@@ -178,6 +179,10 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     // kerak bo'lgani uchun) o'tolmaydi.
     if (!fresh.isDeveloper && !(await surfaceEnabled(req))) {
       return res.status(503).json(maintenanceResponse(req));
+    }
+    // Smena yopiq ishchi — faqat ruxsat etilgan yo'llar
+    if (!fresh.isDeveloper && workGateBlocks(req, fresh.role) && !(await isOnShift(String(fresh.userId)))) {
+      return res.status(423).json(CHECKIN_REQUIRED);
     }
     req.user = fresh;
     const ctx: TenantContext = {

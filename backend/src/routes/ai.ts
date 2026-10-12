@@ -11,6 +11,14 @@ import AiConversation from '../models/AiConversation';
 import { emitToUser } from '../services/socket';
 import { relayMessageToTelegram } from './messages';
 import { geminiAudioToJson, geminiConfigured } from '../services/gemini';
+import { checkRate } from '../utils/rateLimit';
+
+// Pullik AI xizmatlarini suiiste'moldan himoya — foydalanuvchi bo'yicha chegaralar
+const aiLimit = (name: string, max: number, windowMs: number) => (req: Request, res: Response, next: NextFunction) => {
+  const r = checkRate(`ai:${name}:${req.user?.userId || req.ip}`, max, windowMs);
+  if (!r.allowed) return res.status(429).json({ error: `AI so'rovlari juda ko'p — ${r.retryAfterSec} soniyadan keyin urinib ko'ring` });
+  next();
+};
 
 const router = Router();
 
@@ -184,7 +192,7 @@ async function buildFinanceContext(objects: any[]): Promise<string> {
 }
 
 // POST /api/ai/chat
-router.post('/chat', requireAuth, requireBoss, requireFeature('ai_assistant'), async (req, res) => {
+router.post('/chat', requireAuth, requireBoss, requireFeature('ai_assistant'), aiLimit('chat', 60, 10 * 60_000), async (req, res) => {
   try {
     const { message, history = [] } = req.body;
     if (!message?.trim()) return res.status(400).json({ error: 'Xabar kerak' });
@@ -251,7 +259,7 @@ router.post('/chat', requireAuth, requireBoss, requireFeature('ai_assistant'), a
 // POST /api/ai/transcribe — ovozli buyruqni matnga aylantirish (Gemini). Brauzerning Web Speech API'si
 // Windows ilova (WebView2) va Android WebView'da ishlamaydi, o'zbekchani ham yomon taniydi — shu sabab
 // ovoz qurilmada yozib olinadi va shu yerda matnga aylantiriladi. Faqat qisqa (≤ ~2 daqiqa) yozuv.
-router.post('/transcribe', requireAuth, requireBoss, requireFeature('ai_assistant'), async (req, res) => {
+router.post('/transcribe', requireAuth, requireBoss, requireFeature('ai_assistant'), aiLimit('transcribe', 30, 10 * 60_000), async (req, res) => {
   try {
     if (!geminiConfigured()) return res.status(503).json({ error: 'Ovozni tanish xizmati sozlanmagan' });
     const { audio, mimeType, lang } = req.body || {};

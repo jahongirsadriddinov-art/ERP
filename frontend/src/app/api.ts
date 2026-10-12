@@ -129,6 +129,7 @@ function installAuthFetch() {
     }
     const res = await orig(input as any, init);
     // Ish jarayonida texnik ishlar yoqilsa — ilova/sayt darhol "texnik ishlar" ekraniga o'tsin
+    if (isOwnApi && res.status === 423) window.dispatchEvent(new CustomEvent('erp:checkin-required'));
     if (isOwnApi && res.status === 503) {
       res.clone().json().then(d => { if (d?.maintenance) window.dispatchEvent(new CustomEvent('erp:maintenance')); }).catch(() => {});
     }

@@ -162,6 +162,28 @@ app.use(cors({
   credentials: true,
 }));
 app.use(express.json({ limit: '60mb' }));
+// ── Xavfsizlik: NoSQL-in'ektsiyadan himoya — so'rov tanasi/parametrlaridagi "$" bilan boshlanuvchi kalitlar
+// ($gt, $ne, $where ...) olib tashlanadi (masalan login'da {"phone":{"$ne":""}} kabi hiyla ishlamasin).
+// Nuqtali kalitlar (hujjat matni "s1.h" kabi) tegilmaydi.
+const stripMongoOps = (v: any, depth = 0): any => {
+  if (depth > 20 || !v || typeof v !== 'object') return v;
+  if (Array.isArray(v)) { for (let i = 0; i < v.length; i++) v[i] = stripMongoOps(v[i], depth + 1); return v; }
+  for (const k of Object.keys(v)) { if (k.startsWith('$')) delete v[k]; else v[k] = stripMongoOps(v[k], depth + 1); }
+  return v;
+};
+app.use((req, _res, next) => {
+  if (req.body && typeof req.body === 'object') stripMongoOps(req.body);
+  // req.query: Express 5'ning oddiy (simple) parseri ichma-ich obyekt yaratmaydi — u yerdan in'ektsiya bo'lmaydi
+  next();
+});
+// ── Xavfsizlik: umumiy so'rov chegarasi (IP bo'yicha) — skript bilan API'ni bombardimon qilishdan himoya.
+// Oddiy foydalanishda hech qachon yetib bo'lmaydigan (daqiqasiga 600) — faqat suiiste'molni to'xtatadi.
+app.use('/api', (req, res, next) => {
+  if (req.path === '/health' || req.path.startsWith('/deploy/latest') || req.path === '/status') return next();
+  const r = checkRate(`api:${req.ip}`, 600, 60_000);
+  if (!r.allowed) { res.setHeader('Retry-After', String(r.retryAfterSec)); return res.status(429).json({ error: "Juda ko'p so'rov — biroz kuting" }); }
+  next();
+});
 // Yuklangan fayllar (chat media, smeta, va h.k.) doim noyob nom bilan saqlanadi
 // (vaqt tamg'asi + tasodifiy raqam) — demak bir xil URL hech qachon boshqa
 // mazmunga o'zgarmaydi. Shuning uchun uzoq muddatli "immutable" keshni xavfsiz

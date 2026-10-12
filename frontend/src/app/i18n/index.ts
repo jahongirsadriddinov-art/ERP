@@ -7,6 +7,14 @@ import * as nsCall from './ns/call';
 import * as nsAi from './ns/ai';
 import * as nsDevPanel from './ns/devPanel';
 import * as nsChat from './ns/chat';
+import * as nsExtra from './ns/extra';
+
+// Chuqur birlashtirish — qo'shimcha kalitlar mavjud bo'limlarga qo'shiladi, ularni almashtirmaydi
+const deepMerge = (base: any, add: any): any => {
+  const out: any = { ...base };
+  for (const k of Object.keys(add)) out[k] = add[k] && typeof add[k] === 'object' && !Array.isArray(add[k]) && base?.[k] && typeof base[k] === 'object' ? deepMerge(base[k], add[k]) : (base?.[k] ?? add[k]);
+  return out;
+};
 
 export type SiteLang = 'uz' | 'uz-cyrl' | 'ru';
 
@@ -14,22 +22,22 @@ export type SiteLang = 'uz' | 'uz-cyrl' | 'ru';
 // nom-fazolar (namespace) — har biri o'z faylida, faqat shu yerda markaziy
 // resurslarga qo'shiladi (fayllarning o'zi bir-biriga bog'liq emas, mos
 // kelmaslik xavfisiz parallel ishlab chiqilgan).
-const uzMerged = {
+const uzMerged = deepMerge({
   ...RESOURCES.uz,
   ...nsReports.uz,
   ...nsCall.uz,
   ...nsDevPanel.uz,
   ai: nsAi.uz,
   chat: nsChat.uz,
-};
-const ruMerged = {
+}, nsExtra.uz);
+const ruMerged = deepMerge({
   ...RESOURCES.ru,
   ...nsReports.ru,
   ...nsCall.ru,
   ...nsDevPanel.ru,
   ai: nsAi.ru,
   chat: nsChat.ru,
-};
+}, nsExtra.ru);
 
 const uzCyrl = transliterateDict(uzMerged);
 

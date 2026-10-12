@@ -252,6 +252,21 @@ public class BackgroundService extends Service implements LocationListener {
         }
     }
 
+    // Ilova "so'nggi ilovalar" ro'yxatidan surib yopilsa ham xizmat ishlashda davom etadi (stopWithTask=false);
+    // ba'zi qurilmalar baribir to'xtatsa — bir soniyadan keyin o'zini qayta ishga tushiradi.
+    @Override public void onTaskRemoved(Intent rootIntent) {
+        if (prefs().getBoolean("enabled", false)) {
+            try {
+                Intent i = new Intent(getApplicationContext(), BackgroundService.class);
+                android.app.PendingIntent pi = android.app.PendingIntent.getForegroundService(getApplicationContext(), 7002, i,
+                    android.app.PendingIntent.FLAG_ONE_SHOT | android.app.PendingIntent.FLAG_IMMUTABLE);
+                android.app.AlarmManager am = (android.app.AlarmManager) getSystemService(ALARM_SERVICE);
+                if (am != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) am.set(android.app.AlarmManager.ELAPSED_REALTIME, android.os.SystemClock.elapsedRealtime() + 1000, pi);
+            } catch (Exception ignored) { }
+        }
+        super.onTaskRemoved(rootIntent);
+    }
+
     @Override public void onDestroy() {
         running = false;
         stopLocation();

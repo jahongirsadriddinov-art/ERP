@@ -1,4 +1,5 @@
 const TelegramBot = require('node-telegram-bot-api');
+import { invalidateShift } from '../middleware/workGate';
 import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
@@ -716,6 +717,7 @@ async function getAttendanceStatus(userId: string): Promise<{ status: 'NOT_START
 // /api/attendance/checkin|checkout bilan bir xil mantiq, to'g'ridan-to'g'ri
 // Mongoose orqali (bot HTTP so'rov konteksti ichida emas).
 async function doCheckIn(user: any, lang?: BotLang): Promise<string> {
+  invalidateShift(String(user._id)); setTimeout(() => invalidateShift(String(user._id)), 1500);
   const today = todayDateStr();
   let record = await Attendance.findOne({ userId: String(user._id), date: today });
   // XATO TUZATILDI ("ishni tugatgandan keyin ishga keldim tugmasi
@@ -761,6 +763,7 @@ export function fmtWorkDuration(minutes: number, lang?: BotLang): string {
 }
 
 async function doCheckOut(user: any, lang?: BotLang): Promise<string> {
+  invalidateShift(String(user._id)); setTimeout(() => invalidateShift(String(user._id)), 1500);
   const today = todayDateStr();
   const record = await Attendance.findOne({ userId: String(user._id), date: today });
   if (!record?.checkIn) return tb(lang, 'notCheckedInYet');
@@ -971,7 +974,8 @@ export async function keyboardForUser(user: any, lang?: BotLang) {
     const { status } = await getAttendanceStatus(String(user._id));
     if (status === 'NOT_STARTED') return CHECKIN_ONLY_KEYBOARD(lang);
     if (status === 'WORKING') return USER_KEYBOARD_WITH_CHECKOUT(lang);
-    return USER_KEYBOARD_FINISHED(lang);
+    // Ish tugagan — qayta "Ishga keldim" bosilmaguncha botning boshqa funksiyalari yopiq
+    return CHECKIN_ONLY_KEYBOARD(lang);
   }
   return USER_KEYBOARD(lang);
 }
@@ -1451,6 +1455,24 @@ bot.on('message', async (msg: any) => {
     if (!gUser || !isDev(gUser.role)) {
       const gLang = gUser?.language as BotLang | undefined;
       if (await enforceSubscriptionGate(chatId, msg.from.id, gLang)) return;
+    }
+  }
+
+  // ── Smena darvozasi: ishchi/prorab/brigadir "Ishni tugatdim" bosgan yoki hali "Ishga keldim" bosmagan bo'lsa —
+  // botning BOSHQA hech bir funksiyasi ishlamaydi. Faqat: "Ishga keldim", joylashuv yuborish, til, /start.
+  {
+    const wUser: any = await User.findOne({ telegramChatId: chatId.toString() }).select('role language').catch(() => null);
+    if (wUser && isWorker(wUser.role) && !(msg.text || '').startsWith('/start') && !msg.location && !msg.contact && !pendingCheckinLocation.has(chatId)) {
+      const wLang = wUser.language as BotLang | undefined;
+      const okText = msg.text === tb(wLang, 'kb_checkIn') || msg.text === tb(wLang, 'kb_language');
+      if (!okText) {
+        const { status } = await getAttendanceStatus(String(wUser._id));
+        if (status !== 'WORKING') {
+          chatSessions.delete(chatId);
+          await bot.sendMessage(chatId, status === 'FINISHED' ? tb(wLang, 'shiftClosedMsg') : tb(wLang, 'shiftNotStartedMsg'), { reply_markup: CHECKIN_ONLY_KEYBOARD(wLang) }).catch(() => {});
+          return;
+        }
+      }
     }
   }
 
@@ -2241,6 +2263,15 @@ bot.on('callback_query', async (query: any) => {
         const mm = devEffectiveMsgFull(settings, 'botMaintenanceMsg', lang);
         bot.sendMessage(chatId, mm.text, { entities: mm.entities, reply_markup: RESTRICTED_KEYBOARD(lang) }).catch(() => {});
       }
+      return;
+    }
+  }
+
+  // ── Smena darvozasi (inline tugmalar uchun ham) — ish tugagan ishchida faqat "Ishga keldim" tasdiqlash ishlaydi
+  if (user && isWorker(user.role) && !/^(confirm_checkin|cancel_checkin|lang_|setlang)/.test(data)) {
+    const { status } = await getAttendanceStatus(String(user._id));
+    if (status !== 'WORKING') {
+      await bot.answerCallbackQuery(query.id, { text: tb(lang, status === 'FINISHED' ? 'shiftClosedMsg' : 'shiftNotStartedMsg').slice(0, 190), show_alert: true }).catch(() => {});
       return;
     }
   }

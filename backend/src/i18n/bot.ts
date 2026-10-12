@@ -54,6 +54,8 @@ interface BotDict {
   confirmNo: string;
   actionCancelled: string;
   checkInNeedsLiveLocation: string;
+  shiftClosedMsg: string;
+  shiftNotStartedMsg: string;
   checkInStillNeedsLive: string;
   liveLocationExpiredReminder: string;
   morningCheckInReminder: string;
@@ -255,6 +257,8 @@ const uz: BotDict = {
   confirmYes: '✅ Ha',
   confirmNo: "❌ Yo'q",
   actionCancelled: 'Bekor qilindi.',
+  shiftClosedMsg: "🔒 Bugungi ishingiz tugatilgan. Boshqa funksiyalar yopiq.\n\nQayta ishlash uchun \"✅ Ishga keldim\" tugmasini bosing va jonli joylashuvingizni yuboring.",
+  shiftNotStartedMsg: "🔒 Avval \"✅ Ishga keldim\" tugmasini bosing va jonli joylashuvingizni yuboring — shundan keyin hamma funksiyalar ochiladi.",
   checkInNeedsLiveLocation: "📍 Ishga kelganingizni tasdiqlash uchun jonli joylashuvingizni ulashing:\n\n📎 (skrepka) → Location → Share Live Location\n\nOddiy (bir martalik) joylashuv YETARLI EMAS — aynan \"Jonli joylashuv\"ni tanlang. Muddat so'ralganda \"Until I turn it off\" (\"O'zim to'xtatmagunimcha\") variantini tanlang — aks holda muddat tugagach, keyingi safar qayta so'raladi. Ulashgandan so'ng ishga kelishingiz avtomatik tasdiqlanadi.",
   checkInStillNeedsLive: "Bu bir martalik joylashuv ekan. Ishga kelishni tasdiqlash uchun aynan \"Jonli joylashuv\" (Live Location) kerak: 📎 → Location → Share Live Location.",
   liveLocationExpiredReminder: "📍 Jonli joylashuvingizning muddati tugagan ko'rinadi (kuzatuv to'xtadi). Ishlashda davom etayotgan bo'lsangiz, iltimos qayta ulashing:\n\n📎 (skrepka) → Location → Share Live Location\n\nBu safar muddat sifatida \"Until I turn it off\" (\"O'zim to'xtatmagunimcha\") variantini tanlang — shunda smena davomida qayta so'ralmaydi.",
@@ -465,6 +469,8 @@ const ru: BotDict = {
   confirmYes: '✅ Да',
   confirmNo: '❌ Нет',
   actionCancelled: 'Отменено.',
+  shiftClosedMsg: "🔒 Ваш рабочий день завершён. Остальные функции закрыты.\n\nЧтобы снова работать, нажмите \"✅ Я пришёл\" и отправьте живую геолокацию.",
+  shiftNotStartedMsg: "🔒 Сначала нажмите \"✅ Я пришёл\" и отправьте живую геолокацию — после этого откроются все функции.",
   checkInNeedsLiveLocation: '📍 Чтобы подтвердить приход на работу, отправьте трансляцию геопозиции:\n\n📎 (скрепка) → Геопозиция → Транслировать геопозицию\n\nОбычной (разовой) геопозиции НЕДОСТАТОЧНО — выберите именно "Транслировать геопозицию". При выборе длительности укажите "Until I turn it off" ("Пока я не остановлю") — иначе после истечения срока запрос придёт снова. После отправки приход подтвердится автоматически.',
   checkInStillNeedsLive: 'Это разовая геопозиция. Для подтверждения прихода нужна именно трансляция геопозиции: 📎 → Геопозиция → Транслировать геопозицию.',
   liveLocationExpiredReminder: '📍 Похоже, срок трансляции геопозиции истёк (отслеживание остановилось). Если вы всё ещё работаете, пожалуйста, включите её снова:\n\n📎 (скрепка) → Геопозиция → Транслировать геопозицию\n\nНа этот раз выберите длительность "Until I turn it off" ("Пока я не остановлю") — тогда до конца смены запрос больше не повторится.',

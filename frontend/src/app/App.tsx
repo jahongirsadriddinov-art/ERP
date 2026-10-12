@@ -54,6 +54,7 @@ import Sun from "@hugeicons/core-free-icons/Sun01Icon";
 import Moon from "@hugeicons/core-free-icons/Moon02Icon";
 import Monitor from "@hugeicons/core-free-icons/ComputerIcon";
 import Smartphone from "@hugeicons/core-free-icons/SmartPhone01Icon";
+import TabletIcon from "@hugeicons/core-free-icons/Tablet01Icon";
 import LogOutDevice from "@hugeicons/core-free-icons/Logout03Icon";
 import PhoneOff from "@hugeicons/core-free-icons/PhoneOff01Icon";
 import MicOff from "@hugeicons/core-free-icons/MicOff01Icon";
@@ -3519,7 +3520,24 @@ type VarInput = {
   bg: string; card: string; fg: string; muted: string; mutedFg: string;
   border: string; input: string; ring: string;
 };
+// Chegaralar (border) aniqroq ko'rinsin — mavzudagi shaffof border alfasi kuchaytiriladi
+function boostBorder(c: string): string {
+  const m = c.match(/^rgba\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*\)$/);
+  if (!m) return c;
+  const a = Math.min(0.32, Math.max(0.16, +m[4] * 1.75));
+  return `rgba(${m[1]}, ${m[2]}, ${m[3]}, ${+a.toFixed(3)})`;
+}
+// Hozirgi qurilma turi — "tizim bo'yicha" rejim ikonkasi shu qurilmaga mos bo'ladi
+export function deviceKind(): "phone" | "tablet" | "desktop" {
+  if (typeof window === "undefined") return "desktop";
+  const w = Math.min(window.innerWidth, window.screen?.width || window.innerWidth);
+  const touch = window.matchMedia?.("(pointer: coarse)").matches;
+  if (w < 640) return "phone";
+  if (touch && w < 1280) return "tablet";
+  return "desktop";
+}
 function themeVars(p: VarInput): Record<string, string> {
+  p = { ...p, border: boostBorder(p.border) };
   return {
     "--primary": p.primary, "--primary-foreground": "#ffffff",
     "--accent": p.accent, "--accent-foreground": "#ffffff",
@@ -4281,6 +4299,8 @@ export default function App() {
   // gpsTracking holati endi useGeoTracker hook'idan keladi (pastda, liveUser
   // aniqlangandan keyin chaqiriladi).
   const [todayAttendance, setTodayAttendance] = useState<null | { status: string; checkIn?: string; checkOut?: string; workHours?: number }>(null);
+  // Smena qayta ochilganda (yopiq paytda server ma'lumot bermagan) — ma'lumotlarni qayta yuklash uchun
+  const [dataReloadKey, setDataReloadKey] = useState(0);
   // GPS admin ko'rinishi uchun
   const [gpsLocations, setGpsLocations] = useState<Array<{userId: string; lat: number; lng: number; accuracy?: number; timestamp: string; source?: 'site'|'bot_live'|'bot_once'; speed?: number; battery?: number; charging?: boolean; network?: string}>>([]);
   const [gpsRefreshing, setGpsRefreshing] = useState(false);
@@ -4504,7 +4524,7 @@ export default function App() {
   // holat serverdan kelguncha bir zumlik noto'g'ri (bo'sh) holatni ko'rsatib
   // qo'ymaslik uchun kerak.
   const [attendanceChecked, setAttendanceChecked] = useState(false);
-  useEffect(() => {
+  const loadTodayAttendance = () => {
     if (!liveUser) return;
     if (!isWorkerRole) { setAttendanceChecked(true); return; }
     const token = localStorage.getItem('token') || '';
@@ -4514,7 +4534,21 @@ export default function App() {
       .then(d => { if (d) setTodayAttendance(d); else setTodayAttendance(null); })
       .catch(()=>{})
       .finally(() => setAttendanceChecked(true));
+  };
+  useEffect(() => { loadTodayAttendance();
+    // Server "avval ishga keling" (423) desa — holatni darhol qayta tekshiramiz (masalan botdan ish tugatilgan)
+    const onGate = () => loadTodayAttendance();
+    window.addEventListener('erp:checkin-required', onGate);
+    return () => window.removeEventListener('erp:checkin-required', onGate);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [liveUser?.id]);
+  // Smena: ishchi "Ishga keldim" bosgan va hali "Ishni tugatdim" bosmagan bo'lsagina tizim ochiq
+  const shiftClosed = isWorkerRole && (!todayAttendance?.checkIn || !!todayAttendance?.checkOut);
+  const wasClosedRef = useRef(shiftClosed);
+  useEffect(() => {
+    if (wasClosedRef.current && !shiftClosed && attendanceChecked) setDataReloadKey(k => k + 1);
+    wasClosedRef.current = shiftClosed;
+  }, [shiftClosed, attendanceChecked]);
 
   // Ikkala tugma ham bitta umumiy "pending" bayrog'ini ishlatadi — ketma-ket
   // tez bosishda (double-submit) ikkinchi so'rov yubormaslik uchun.
@@ -4953,7 +4987,7 @@ export default function App() {
         socket.off("session:revoked", onSessionRevoked);
       };
     }
-  }, [liveUser?.id]);
+  }, [liveUser?.id, dataReloadKey]);
 
   // Guruh room'lariga qo'shilish (guruhlar yangilanganda)
   useEffect(() => {
@@ -5128,10 +5162,10 @@ export default function App() {
       <nav className="hidden lg:flex items-center gap-0.5 lg:gap-1 nav-pill-desktop px-1.5 py-1.5 rounded-full w-fit flex-shrink-0">
         {NAV.map(n=>(
           <button key={n.key} onClick={()=>{setPage(n.key);setSelProject(null);}}
-            title={n.label} aria-label={n.label} className={`relative flex items-center gap-1.5 lg:gap-2 text-sm md:text-[13px] lg:text-sm px-2.5 md:px-2.5 lg:px-4 py-2 lg:py-2.5 rounded-full z-10 liquid-transition whitespace-nowrap ${page===n.key?"text-primary font-semibold":"text-muted-foreground hover:text-foreground"}`}>
+            title={n.label} aria-label={n.label} className={`nav-item-desktop group relative flex items-center gap-1.5 lg:gap-2 text-sm md:text-[13px] lg:text-sm px-2.5 md:px-2.5 lg:px-4 py-2 lg:py-2.5 rounded-full z-10 liquid-transition whitespace-nowrap ${page===n.key?"text-white font-semibold":"text-muted-foreground hover:text-foreground hover:-translate-y-px"}`}>
             {page===n.key && (
-              <motion.div layoutId="desktopNavPill" className="absolute inset-0 rounded-full bg-primary/10 -z-10"
-                transition={{ type: "spring", stiffness: 480, damping: 34 }}  />
+              <motion.div layoutId="desktopNavPill" className="nav-active-pill absolute inset-0 rounded-full -z-10"
+                transition={{ type: "spring", stiffness: 520, damping: 36 }}  />
             )}
             <MorphIcon icon={n.icon} className="w-[18px] h-[18px] lg:w-5 lg:h-5 flex-shrink-0" /><span className={page===n.key ? "inline" : "hidden 2xl:inline"}>{n.label}</span>
             {!!n.badge && n.badge>0 && <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-accent text-accent-foreground rounded-full text-[10px] flex items-center justify-center font-bold shadow-sm">{n.badge}</span>}
@@ -5169,7 +5203,7 @@ export default function App() {
         <button onClick={cycleThemeMode} title={themeMode==="light"?"Yorug'":themeMode==="dark"?"Qorong'i":"Tizim bo'yicha"}
           aria-label={themeMode==="light"?"Yorug'":themeMode==="dark"?"Qorong'i":"Tizim bo'yicha"}
           className="btn btn-ghost w-9 h-9 p-0 rounded-full">
-          <MorphIcon icon={themeMode==="light"?Sun:themeMode==="dark"?Moon:Monitor} className="w-[18px] h-[18px]" />
+          <MorphIcon icon={themeMode==="light"?Sun:themeMode==="dark"?Moon:(deviceKind()==="phone"?Smartphone:deviceKind()==="tablet"?TabletIcon:Monitor)} className="w-[18px] h-[18px]" />
         </button>
         <button onClick={()=>{setPage("profile");setSelProject(null);}} className="flex items-center gap-2 hover:bg-white/5 pl-1 pr-1 sm:pr-3 py-1 rounded-full liquid-transition">
           <Avatar user={liveUser} size="sm"/>
@@ -5198,7 +5232,7 @@ export default function App() {
   // (WORKING yoki FINISHED holatida) oddiy ilova ochiladi. Bu qat'iy talab:
   // avvalgi (bu sessiyada) "GPS check-in'dan mustaqil" qarori endi
   // foydalanuvchining yangi, aniq so'rovi bilan bekor qilindi.
-  if (isWorkerRole && !todayAttendance?.checkIn) return (
+  if (shiftClosed) return (
     <>
       <main className="min-h-[100dvh] bg-background flex flex-col items-center justify-center p-4 py-8 liquid-transition relative overflow-y-auto scrollbar-hide"
         style={{ paddingTop: "max(2rem, env(safe-area-inset-top))", paddingBottom: "max(2rem, env(safe-area-inset-bottom))" }}>
@@ -5211,7 +5245,7 @@ export default function App() {
           </div>
           <div>
             <p className="text-lg font-bold">{tApp('checkinGate.welcome', { name: liveUser.name.split(' ')[0] })}</p>
-            <p className="text-sm text-muted-foreground mt-1">{tApp('checkinGate.instruction')}</p>
+            <p className="text-sm text-muted-foreground mt-1">{todayAttendance?.checkOut ? tApp('checkinGate.finishedInstruction', "Bugungi ishingiz tugatilgan. Qayta ishlash uchun \"Ishga keldim\"ni bosing — joylashuvingiz olinadi.") : tApp('checkinGate.instruction')}</p>
           </div>
           <button onClick={() => { if (confirm(tApp('checkinGate.confirmPrompt'))) handleCheckIn(); }} disabled={attendancePending}
             className="w-full btn btn-primary text-base py-4 rounded-2xl flex items-center justify-center gap-2 disabled:opacity-60">
@@ -5690,13 +5724,19 @@ export default function App() {
             style={{ color: page===n.key ? 'var(--primary)' : 'rgba(255,255,255,0.42)' }}
           >
             {page === n.key && (
-              <motion.div
-                layoutId="mobileNavActiveStripe"
-                className="nav-active-stripe absolute top-0 left-1/2 -translate-x-1/2"
-                transition={{ type: "spring", stiffness: 480, damping: 30 }}
-              />
+              <>
+                <motion.div layoutId="mobileNavActivePill" className="nav-active-bg absolute inset-x-1 inset-y-1 rounded-[18px] -z-10"
+                  transition={{ type: "spring", stiffness: 500, damping: 34 }} />
+                <motion.div
+                  layoutId="mobileNavActiveStripe"
+                  className="nav-active-stripe absolute top-0 left-1/2 -translate-x-1/2"
+                  transition={{ type: "spring", stiffness: 480, damping: 30 }}
+                />
+              </>
             )}
-            <div className="relative flex items-center justify-center w-10 h-10">
+            <motion.div className="relative flex items-center justify-center w-10 h-10"
+              animate={page === n.key ? { y: -1, scale: 1.12 } : { y: 0, scale: 1 }}
+              transition={{ type: "spring", stiffness: 520, damping: 22 }}>
               <div className="relative z-[1] flex items-center justify-center w-[26px] h-[26px]">
                 {n.key === "profile"
                   ? <div className={`rounded-full overflow-hidden transition-all duration-200 ${page===n.key?"ring-2 ring-current shadow-md":"opacity-70"}`}><Avatar user={liveUser} size="sm"/></div>
@@ -5705,8 +5745,8 @@ export default function App() {
               {!!n.badge && n.badge>0 && (
                 <span className="badge-pulse absolute -top-1 -right-1 min-w-[16px] h-4 px-0.5 bg-red-500 text-white rounded-full text-[9px] flex items-center justify-center font-bold shadow border border-black/20 z-[2]">{n.badge > 9 ? '9+' : n.badge}</span>
               )}
-            </div>
-            <span className="text-[9px] font-semibold leading-none tracking-wide">
+            </motion.div>
+            <span className={`text-[9px] leading-none tracking-wide transition-all duration-300 ${page === n.key ? "font-bold opacity-100" : "font-semibold opacity-75"}`}>
               {n.label}
             </span>
           </motion.button>

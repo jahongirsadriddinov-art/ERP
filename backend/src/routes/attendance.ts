@@ -1,3 +1,4 @@
+import { invalidateShift, WORKER_ROLES } from '../middleware/workGate';
 import { Router } from 'express';
 import Attendance from '../models/Attendance';
 import User from '../models/User';
@@ -120,6 +121,11 @@ router.post('/checkin', async (req, res) => {
     const { lat, lng, note, biometricVerified } = req.body;
     const userId = tenant?.userId;
     if (!userId) return res.status(401).json({ error: 'Autentifikatsiya talab etiladi' });
+    // Ishchi uchun ishga kelish FAQAT joylashuv bilan
+    if (WORKER_ROLES.includes(String(tenant?.role)) && !(Number.isFinite(Number(lat)) && Number.isFinite(Number(lng)) && lat !== null && lng !== null)) {
+      return res.status(400).json({ error: "Ishga kelish uchun joylashuvingiz kerak — joylashuvni yoqing", locationRequired: true });
+    }
+    invalidateShift(String(userId));
 
     const today = todayInTashkent();
     const now = new Date();
@@ -153,6 +159,7 @@ router.post('/checkin', async (req, res) => {
     await record.save();
 
     const payload = { ...record.toObject(), id: record._id };
+    invalidateShift(String(userId));
     res.json(payload);
 
     // Bot klaviaturasini darhol yangilaymiz (sayt orqali qilingan bo'lsa ham) —
@@ -173,6 +180,7 @@ router.post('/checkin', async (req, res) => {
 router.post('/checkout', async (req, res) => {
   try {
     const tenant = getTenant();
+    if (tenant?.userId) invalidateShift(String(tenant.userId));
     const { lat, lng, note } = req.body;
     const userId = tenant?.userId;
     if (!userId) return res.status(401).json({ error: 'Autentifikatsiya talab etiladi' });
@@ -200,6 +208,7 @@ router.post('/checkout', async (req, res) => {
       workedMinutes = Math.round(record.workHours * 60);
     }
     await record.save();
+    invalidateShift(String(record.userId));
     const payload = { ...record.toObject(), id: record._id };
     res.json(payload);
 

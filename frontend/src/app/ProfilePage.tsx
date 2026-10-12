@@ -26,7 +26,7 @@ import Wallet from "@hugeicons/core-free-icons/Wallet01Icon";
 import LogOut from "@hugeicons/core-free-icons/Logout01Icon";
 import Camera from "@hugeicons/core-free-icons/Camera01Icon";
 import TextFont from "@hugeicons/core-free-icons/TextFontIcon";
-import { FONTS, fontById, getAppFont, applyAppFont, ensureFont, FONT_SCALES, getFontScale, applyFontScale } from "./lib/fonts";
+import { FONTS, fontById, getAppFont, applyAppFont, ensureFont, FONT_SCALES, getFontScale, applyFontScale, FONT_WEIGHTS, getFontWeight, applyFontWeight, type FontWeightMode } from "./lib/fonts";
 import Home from "@hugeicons/core-free-icons/Home01Icon";
 import UserPlus from "@hugeicons/core-free-icons/UserAdd01Icon";
 import Edit from "@hugeicons/core-free-icons/Edit02Icon";
@@ -542,6 +542,8 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
   const [appFont, setAppFont] = useState(getAppFont);
   const [fontScale, setFontScale] = useState(getFontScale);
   const changeScale = (v: number) => { setFontScale(v); applyFontScale(v); };
+  const [fontWeight, setFontWeightState] = useState<FontWeightMode>(getFontWeight);
+  const changeWeight = (w: FontWeightMode) => { setFontWeightState(w); applyFontWeight(w); };
   const [activePanel, setActivePanel] = useState<null | "font" | "bg" | "appearance" | "color" | "perms" | "projects" | "language" | "subscription" | "currency" | "sound" | "devices" | "backup">(null);
   const APPEARANCE_LABELS: Record<string, string> = { light: t('profile.themeLight'), dark: t('profile.themeDark'), system: t('profile.themeSystem') };
 
@@ -765,36 +767,53 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
           {activePanel === "font" && (
             <div className="surface border border-border overflow-hidden p-4">
               <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-bold mb-2">{t('profile.fontSize', "Matn o'lchami")}</p>
+              {/* Telefonda siqilmasin: tepada A− / qiymat / A+, ostida foizlar (telefonda 3 ta, kattada 6 ta qatorda) */}
               <div className="flex items-center gap-2">
                 <button type="button" onClick={() => { const i = FONT_SCALES.indexOf(fontScale as any); if (i > 0) changeScale(FONT_SCALES[i - 1]); }}
                   disabled={fontScale === FONT_SCALES[0]} aria-label={t('profile.fontSmaller', "Kichikroq")}
-                  className="w-12 h-12 rounded-2xl border-2 border-border flex items-center justify-center font-bold text-sm hover:border-primary/40 hover:bg-muted/40 disabled:opacity-35 liquid-transition">A−</button>
-                <div className="flex-1 grid grid-cols-6 gap-1 p-1 rounded-2xl bg-muted/50">
-                  {FONT_SCALES.map(v => (
-                    <button key={v} type="button" onClick={() => changeScale(v)}
-                      className={`h-10 rounded-xl text-[11px] sm:text-xs font-bold liquid-transition ${fontScale === v ? "bg-primary text-primary-foreground shadow-md" : "text-muted-foreground hover:text-foreground hover:bg-card"}`}>{v}%</button>
-                  ))}
-                </div>
+                  className="w-11 h-11 rounded-2xl border-2 border-border flex items-center justify-center font-bold text-sm hover:border-primary/40 hover:bg-muted/40 disabled:opacity-35 liquid-transition flex-shrink-0">A−</button>
+                <div className="flex-1 min-w-0 h-11 rounded-2xl bg-muted/50 flex items-center justify-center text-sm font-bold tabular-nums">{fontScale}%</div>
                 <button type="button" onClick={() => { const i = FONT_SCALES.indexOf(fontScale as any); if (i < FONT_SCALES.length - 1) changeScale(FONT_SCALES[i + 1]); }}
                   disabled={fontScale === FONT_SCALES[FONT_SCALES.length - 1]} aria-label={t('profile.fontBigger', "Kattaroq")}
-                  className="w-12 h-12 rounded-2xl border-2 border-border flex items-center justify-center font-bold text-lg hover:border-primary/40 hover:bg-muted/40 disabled:opacity-35 liquid-transition">A+</button>
+                  className="w-11 h-11 rounded-2xl border-2 border-border flex items-center justify-center font-bold text-lg hover:border-primary/40 hover:bg-muted/40 disabled:opacity-35 liquid-transition flex-shrink-0">A+</button>
               </div>
-              <p className="text-sm mt-3 px-1 text-foreground/80">{t('profile.fontSizePreview', "Namuna: Bugun obyektga 120 qop sement keltirildi.")}</p>
+              <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 mt-2">
+                {FONT_SCALES.map(v => (
+                  <button key={v} type="button" onClick={() => changeScale(v)}
+                    className={`h-9 rounded-xl text-xs font-bold liquid-transition border ${fontScale === v ? "bg-primary text-primary-foreground border-primary shadow-md" : "border-border text-muted-foreground hover:text-foreground hover:bg-muted/40"}`}>{v}%</button>
+                ))}
+              </div>
+              <p className="text-sm mt-3 px-1 text-foreground/80 break-words">{t('profile.fontSizePreview', "Namuna: Bugun obyektga 120 qop sement keltirildi.")}</p>
+              <div className="h-px bg-border/60 my-4" />
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-bold mb-2">{t('profile.fontWeight', "Matn qalinligi")}</p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                {FONT_WEIGHTS.map(w => {
+                  const label = { light: t('profile.weightLight', "Ingichka"), normal: t('profile.weightNormal', "Oddiy"), medium: t('profile.weightMedium', "O'rtacha"), bold: t('profile.weightBold', "Qalin") }[w];
+                  const fw = { light: 300, normal: 400, medium: 600, bold: 800 }[w];
+                  return (
+                    <button key={w} type="button" onClick={() => changeWeight(w)}
+                      className={`h-12 rounded-xl border-2 px-2 liquid-transition ${fontWeight === w ? "border-primary bg-primary/10 text-primary" : "border-border text-foreground/80 hover:border-primary/40 hover:bg-muted/40"}`}>
+                      <span data-font-preview className="block text-base leading-none" style={{ fontWeight: fw }}>Aa</span>
+                      <span className="block text-[10px] mt-1 opacity-80">{label}</span>
+                    </button>
+                  );
+                })}
+              </div>
               <div className="h-px bg-border/60 my-4" />
               <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-bold mb-1">{t('profile.fontFamily', "Shrift turi")}</p>
               <p className="text-xs text-muted-foreground px-1 pb-3">{t('profile.fontHint', "Tanlangan shrift butun saytga (shu qurilmada) qo'llanadi. Hujjatlar shrifti hujjatlar bo'limida alohida tanlanadi.")}</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2 min-w-0">
                 {FONTS.map(f => {
                   const active = appFont === f.id;
                   return (
                     <button key={f.id} onMouseEnter={() => ensureFont(f.id)} onFocus={() => ensureFont(f.id)}
                       onClick={() => { setAppFont(f.id); applyAppFont(f.id); toast.success(`${t('profile.font', "Shrift")}: ${f.label}`); }}
-                      className={`text-left rounded-2xl border-2 px-4 py-3 liquid-transition ${active ? "border-primary bg-primary/10 shadow-lg shadow-primary/10" : "border-border hover:border-primary/40 hover:bg-muted/40"}`}>
+                      className={`text-left min-w-0 rounded-2xl border-2 px-3.5 py-3 liquid-transition ${active ? "border-primary bg-primary/10 shadow-lg shadow-primary/10" : "border-border hover:border-primary/40 hover:bg-muted/40"}`}>
                       <span className="flex items-center justify-between gap-2">
                         <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{f.label}</span>
                         {active && <MorphIcon icon={Check} className="w-4 h-4 text-primary" />}
                       </span>
-                      <span data-font-preview className="block text-xl mt-1 truncate" style={{ fontFamily: f.family }}>Qurilish ERP — Аа 123</span>
+                      <span data-font-preview className="block text-lg sm:text-xl mt-1 truncate" style={{ fontFamily: f.family }}>Qurilish ERP — Аа 123</span>
                       <span data-font-preview className="block text-xs text-muted-foreground mt-0.5 truncate" style={{ fontFamily: f.family }}>Oʻzbekcha matn · Русский текст</span>
                     </button>
                   );

@@ -1,3 +1,4 @@
+import { trialBlockedReason, markTrial } from '../services/trialGuard';
 import { Router } from 'express';
 import jwt from 'jsonwebtoken';
 import Registration from '../models/Registration';
@@ -197,6 +198,12 @@ router.get('/pay-status', async (req, res) => {
 });
 
 // ─── 5) Yakunlash: firma + egasi yaratiladi (JWT EMAS — obuna tasdiqini kutadi) ──
+// GET /api/register/trial-check — shu qurilmada bepul sinov olish mumkinmi (tarif tanlashda oldindan ko'rsatish uchun)
+router.get('/trial-check', async (req, res) => {
+  const reason = await trialBlockedReason(req, {}).catch(() => null);
+  res.json({ allowed: !reason, reason });
+});
+
 router.post('/complete', async (req, res) => {
   try {
     const { token, owner, company, logoUrl, selectedPlan, paymentMethod, promoCode } = req.body || {};
@@ -233,6 +240,11 @@ router.post('/complete', async (req, res) => {
     const planKey = (selectedPlan && PLAN_CONFIG[selectedPlan as string]) ? (selectedPlan as SelectedPlan) : '1month';
     const planInfo = PLAN_CONFIG[planKey];
     const isFreePlan = planInfo.amount <= 0;
+    // Bepul sinov — bitta qurilma / Telegram hisobi / raqam uchun faqat BIR MARTA
+    if (isFreePlan) {
+      const blocked = await trialBlockedReason(req, { tg: reg.telegramUserId, phone: reg.phone });
+      if (blocked) return res.status(403).json({ error: blocked, trialUsed: true });
+    }
     const wantsOnlinePay = !isFreePlan && paymentMethod !== 'admin';
 
     // ── Onlayn (avtomatik) to'lov — MUHIM XATTI-HARAKAT: firma/foydalanuvchi
@@ -377,6 +389,7 @@ router.post('/complete', async (req, res) => {
     createdCompany.ownerUserId = String(ownerUser._id);
     await createdCompany.save();
 
+    if (isFreePlan) markTrial(req, { tg: reg.telegramUserId, phone: reg.phone, companyId: String(createdCompany._id), userId: String(ownerUser._id) }).catch(() => {});
     const now = new Date();
     const sub = await Subscription.create({
       companyId: String(createdCompany._id),

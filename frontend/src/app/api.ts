@@ -12,6 +12,32 @@ export const CLIENT_KIND: string = (() => {
   return 'web';
 })();
 
+// Qurilma belgilari (bepul sinovni bitta qurilmaga bir marta berish uchun): doimiy ID va qurilma "barmoq izi"
+// (ekran, tizim, brauzer, grafik karta — xotira tozalansa ham o'zgarmaydi). Shaxsiy ma'lumot yig'ilmaydi — faqat xesh.
+export const DEVICE_ID: string = (() => {
+  try {
+    let id = localStorage.getItem('erp_device_id') || (document.cookie.match(/(?:^|; )erp_did=([^;]+)/) || [])[1] || '';
+    if (!/^[A-Za-z0-9_-]{16,}$/.test(id)) id = 'd_' + Array.from(crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2, '0')).join('');
+    localStorage.setItem('erp_device_id', id);
+    document.cookie = `erp_did=${id}; max-age=${5 * 365 * 86400}; path=/; SameSite=Lax`;
+    return id;
+  } catch { return ''; }
+})();
+let DEVICE_FP = '';
+(async () => {
+  try {
+    const n: any = navigator;
+    let gl = '';
+    try { const c = document.createElement('canvas').getContext('webgl') as any; const ext = c?.getExtension('WEBGL_debug_renderer_info'); gl = ext ? `${c.getParameter(ext.UNMASKED_VENDOR_WEBGL)}|${c.getParameter(ext.UNMASKED_RENDERER_WEBGL)}` : ''; } catch { /* */ }
+    let cv = '';
+    try { const c = document.createElement('canvas'); c.width = 220; c.height = 40; const x = c.getContext('2d')!; x.textBaseline = 'top'; x.font = "16px 'Arial'"; x.fillStyle = '#f60'; x.fillRect(10, 5, 90, 20); x.fillStyle = '#069'; x.fillText('QurilishERP ✓ 2026', 4, 12); cv = c.toDataURL(); } catch { /* */ }
+    const raw = [n.platform, n.hardwareConcurrency, n.deviceMemory, screen.width + 'x' + screen.height, screen.colorDepth, window.devicePixelRatio,
+      Intl.DateTimeFormat().resolvedOptions().timeZone, (n.languages || []).join(','), n.maxTouchPoints, gl, cv].join('§');
+    const h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(raw));
+    DEVICE_FP = 'f_' + Array.from(new Uint8Array(h), b => b.toString(16).padStart(2, '0')).join('').slice(0, 40);
+  } catch { /* */ }
+})();
+
 export const API_BASE: string =
   (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') ||
   'http://localhost:5000';
@@ -122,6 +148,8 @@ function installAuthFetch() {
         if (token && !headers.has('Authorization')) headers.set('Authorization', `Bearer ${token}`);
         // Sayt va ilova texnik ishlar rejimida ALOHIDA boshqariladi — backend qaysi biri ekanini shundan biladi
         if (!headers.has('X-Client')) headers.set('X-Client', CLIENT_KIND);
+        if (DEVICE_ID) headers.set('X-Device-Id', DEVICE_ID);
+        if (DEVICE_FP) headers.set('X-Device-Fp', DEVICE_FP);
         init = { ...init, headers };
       }
     } catch {

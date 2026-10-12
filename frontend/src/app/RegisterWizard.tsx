@@ -75,6 +75,9 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
   const tieredPlans = (period: string) => allPlans.filter(p => p.period === period).sort((a, b) => (a.tier || 0) - (b.tier || 0));
   const selectedPlanInfo = allPlans.find(p => p.key === selectedPlan);
   const isFreeSelected = !!selectedPlanInfo && selectedPlanInfo.amount <= 0;
+  // Bepul sinov shu qurilmada allaqachon ishlatilganmi (server qurilma belgilari bo'yicha aytadi)
+  const [trialBlocked, setTrialBlocked] = useState<string | null>(null);
+  useEffect(() => { fetch(`${API_BASE}/api/register/trial-check`).then(r => r.ok ? r.json() : null).then(d => { if (d && !d.allowed) { setTrialBlocked(d.reason || ''); setSelectedPlan(p => (p && allPlans.find(x => x.key === p)?.amount === 0) ? null : p); } }).catch(() => {}); }, []);
 
   // Qadam 3 — promokod (faqat onlayn to'lovda ishlatiladi). Tekshirish
   // limitni ISHLATIB QO'YMAYDI (backend/services/promoCodes.ts) — faqat
@@ -296,7 +299,7 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
         }),
       });
       const d = await res.json();
-      if (!res.ok) { setError(d.error || t('common.error')); setLoading(false); return; }
+      if (!res.ok) { setError(d.error || t('common.error')); setLoading(false); if (d.trialUsed) { setTrialBlocked(d.error); setEditReturn(false); setStep("tarif"); } return; }
       // Server endi JWT bermaydi — pending holatida admin tasdiqini kutamiz
       clearReg();
       setRegDoneInfo({
@@ -415,11 +418,12 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
 
               {/* Bepul sinov — alohida, sodda karta (har doim admin tasdig'ini kutadi) */}
               {freePlan && (
-                <button type="button" onClick={() => setSelectedPlan(freePlan.key)}
-                  className={`w-full rounded-2xl border-2 p-4 text-left flex items-center justify-between liquid-transition ${selectedPlan === freePlan.key ? "border-primary bg-primary/8 shadow-md shadow-primary/20" : "border-border/50 bg-white/40 dark:bg-black/20 hover:border-primary/40"}`}>
+                <button type="button" disabled={trialBlocked !== null} onClick={() => setSelectedPlan(freePlan.key)}
+                  className={`w-full rounded-2xl border-2 p-4 text-left flex items-center justify-between liquid-transition disabled:opacity-55 disabled:cursor-not-allowed ${selectedPlan === freePlan.key ? "border-primary bg-primary/8 shadow-md shadow-primary/20" : "border-border/50 bg-white/40 dark:bg-black/20 hover:border-primary/40"}`}>
                   <div>
                     <p className="text-sm font-bold">{t('register.freeTrialTitle')}</p>
                     <p className="text-[11px] text-muted-foreground mt-0.5">{t('register.daysCount', { count: freePlan.days })} · {t('register.freeTrialDesc')}</p>
+                    {trialBlocked !== null && <p className="text-[11px] text-red-600 dark:text-red-400 font-semibold mt-1">🔒 {trialBlocked || "Bu qurilmada bepul sinov allaqachon ishlatilgan"}</p>}
                   </div>
                   <p className="text-lg font-bold text-green-700 dark:text-green-400 flex-shrink-0 ml-3">{t('register.free')}</p>
                 </button>

@@ -58,5 +58,7 @@ export async function issueTokenWithSession(
     loginMethod,
     lastSeenAt: new Date(),
   });
+  // Shu qurilmada hisob ishlatilgan — undan keyin bu qurilmada bepul sinov olib bo'lmaydi
+  import('./trialGuard').then(m => m.markLoginDevice(req, String(payload.userId))).catch(() => {});
   return jwt.sign({ ...payload, jti }, JWT_SECRET, { expiresIn } as jwt.SignOptions);
 }

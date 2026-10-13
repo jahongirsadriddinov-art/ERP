@@ -1,10 +1,12 @@
 import { Server, Socket } from 'socket.io';
 import type { Server as HttpServer } from 'http';
 import jwt from 'jsonwebtoken';
+import mongoose from 'mongoose';
 import { JWT_SECRET, JwtPayload, loadFreshUser } from '../middleware/auth';
 import Group from '../models/Group';
 import User from '../models/User';
 import Message from '../models/Message';
+import Session from '../models/Session';
 import { sendPushToUser } from './push';
 
 let io: Server | null = null;
@@ -22,8 +24,72 @@ function removeUserSocket(userId: string, socketId: string) {
   set.delete(socketId);
   if (set.size === 0) userSockets.delete(userId);
 }
-function broadcastPresence() {
-  io?.emit('presence', { online: Array.from(userSockets.keys()) });
+// XAVFSIZLIK (audit): avval io.emit('presence') HAMMA firmaning HAMMA
+// socket'iga butun platformadagi onlayn userId'larni yuborardi (firmalararo
+// sizish + har ulanishda O(N) tarqatish). Endi: firma a'zolari faqat o'z
+// firmasi (+ dasturchi — support chat uchun) holatini oladi; dasturchi
+// socket'lari (DEV_ROOM) avvalgidek hammaning holatini oladi.
+const companyOnline = new Map<string, Map<string, number>>(); // companyId -> userId -> socketlar soni
+const devOnline = new Map<string, number>(); // dasturchi userId -> socketlar soni
+const DEV_ROOM = 'presence:dev';
+function inc(m: Map<string, number>, k: string) { m.set(k, (m.get(k) || 0) + 1); }
+function dec(m: Map<string, number>, k: string) { const n = (m.get(k) || 0) - 1; if (n > 0) m.set(k, n); else m.delete(k); }
+function trackPresence(companyId: string | undefined, userId: string, isDev: boolean, delta: 1 | -1) {
+  if (isDev) (delta > 0 ? inc : dec)(devOnline, userId);
+  if (!companyId) return;
+  let m = companyOnline.get(companyId);
+  if (!m) { if (delta < 0) return; m = new Map(); companyOnline.set(companyId, m); }
+  (delta > 0 ? inc : dec)(m, userId);
+  if (m.size === 0) companyOnline.delete(companyId);
+}
+function companyPresence(companyId: string): string[] {
+  const ids = new Set(companyOnline.get(companyId)?.keys() || []);
+  devOnline.forEach((_, id) => ids.add(id));
+  return Array.from(ids);
+}
+// companyId — holati o'zgargan foydalanuvchining firmasi; isDev — dasturchi
+// har firmaning support chatida bor, shu sabab uning holati hamma onlayn firmaga.
+function broadcastPresence(companyId: string | undefined, isDev: boolean) {
+  if (!io) return;
+  const targets = isDev ? Array.from(companyOnline.keys()) : companyId ? [companyId] : [];
+  for (const cid of targets) io.to(`company:${cid}`).emit('presence', { online: companyPresence(cid) });
+  io.to(DEV_ROOM).emit('presence', { online: Array.from(userSockets.keys()) });
+}
+
+// Qo'ng'iroq push'i (call:offer) — bir (from,to) juftligi uchun 60 s ichida
+// faqat BIR marta: ICE-restart qayta offer'lari qayta "sizga qo'ng'iroq" push
+// chiqarmasligi kerak (CallOverlay ularni alohida belgilamaydi).
+const CALL_PUSH_DEDUPE_MS = 60_000;
+const callPushAt = new Map<string, number>();
+function shouldPushCall(from: string, to: string): boolean {
+  const now = Date.now();
+  if (callPushAt.size > 5000) callPushAt.forEach((t, k) => { if (now - t >= CALL_PUSH_DEDUPE_MS) callPushAt.delete(k); });
+  const key = `${from}>${to}`;
+  const last = callPushAt.get(key);
+  if (last && now - last < CALL_PUSH_DEDUPE_MS) return false;
+  callPushAt.set(key, now);
+  return true;
+}
+
+// Bekor qilingan sessiya (middleware/auth.ts'dagi checkSessionNotRevoked
+// bilan bir xil qoida): jti'siz eski tokenlar o'tadi; jti bor-u, yozuv
+// yo'q yoki revoked — rad.
+async function sessionActive(jti: string | undefined): Promise<boolean> {
+  if (!jti) return true;
+  const s = await Session.findOne({ jti }).select('revoked').lean();
+  return !!s && !s.revoked;
+}
+
+// Signal (call:*) kimga yuborilishi mumkin: o'ziga, bir firma a'zosiga,
+// dasturchi bilan (har ikki tomondan) yoki umumiy devSupport guruhi a'zosiga.
+async function canReachUser(me: { userId: string; companyId?: string; role?: string }, target: string): Promise<boolean> {
+  if (!target || !mongoose.isValidObjectId(target)) return false;
+  if (target === me.userId) return true;
+  const t = await User.findById(target).select('companyId role').lean();
+  if (!t) return false;
+  if (me.role === 'dasturchi' || t.role === 'dasturchi') return true;
+  if (me.companyId && t.companyId && String(me.companyId) === String(t.companyId)) return true;
+  return !!(await Group.exists({ devSupport: true, memberIds: { $all: [me.userId, target] } }));
 }
 
 
@@ -87,6 +153,10 @@ export function initSocket(httpServer: HttpServer): Server {
       const payload = jwt.verify(token, JWT_SECRET) as JwtPayload;
       const fresh = await loadFreshUser(payload);
       if (!fresh) return next(new Error('unauthorized'));
+      // requireAuth bilan bir xil: bloklangan foydalanuvchi va "Ulangan
+      // qurilmalar"dan chiqarilgan sessiya real-vaqt kanalini ham ocholmaydi.
+      if (fresh.isBlocked) return next(new Error('unauthorized'));
+      if (!(await sessionActive(payload.jti))) return next(new Error('unauthorized'));
       socket.data.userId = fresh.userId;
       socket.data.companyId = fresh.companyId;
       socket.data.role = fresh.role;
@@ -107,13 +177,45 @@ export function initSocket(httpServer: HttpServer): Server {
     // (eski, jti'siz tokenlarda bu xona yo'q, o'sha holatda faqat keyingi
     // HTTP so'rov rad etiladi — middleware/auth.ts'dagi izohga qarang).
     if (jti) socket.join(`session:${jti}`);
-    addUserSocket(userId, socket.id);
-    broadcastPresence();
     // Firma xonasi — GPS kabi haqiqiy-vaqt hodisalarni FAQAT shu firma
     // foydalanuvchilariga yetkazish uchun (emitToCompany quyida). Endi
     // tekshirilgan (token'dan olingan) companyId — mijoz o'zi tanlagan
-    // ixtiyoriy qiymat emas.
-    if (companyId) socket.join(`company:${companyId}`);
+    // ixtiyoriy qiymat emas. Presence'dan OLDIN — yangi ulangan o'zi ham olsin.
+    const cid = companyId ? String(companyId) : undefined;
+    const isDev = socket.data.role === 'dasturchi';
+    if (cid) socket.join(`company:${cid}`);
+    if (isDev) socket.join(DEV_ROOM);
+    addUserSocket(userId, socket.id);
+    trackPresence(cid, userId, isDev, 1);
+    broadcastPresence(cid, isDev);
+    const me = { userId, companyId: cid, role: socket.data.role as string | undefined };
+
+    // Ruxsat tekshiruvlari kesh'i (ICE nomzodlari o'nlab marta keladi — har
+    // biriga DB so'rovi bo'lmasin). 30 s — a'zolikdan chiqarish tez kuchga kirsin.
+    const CHECK_TTL_MS = 30_000;
+    const checks = new Map<string, { at: number; p: Promise<boolean> }>();
+    const cachedCheck = (key: string, fn: () => Promise<boolean>): Promise<boolean> => {
+      const now = Date.now();
+      const c = checks.get(key);
+      if (c && now - c.at < CHECK_TTL_MS) return c.p;
+      if (checks.size > 500) checks.clear();
+      const p = fn().catch(() => false);
+      checks.set(key, { at: now, p });
+      return p;
+    };
+    const canReach = (target: string) => cachedCheck(`u:${target}`, () => canReachUser(me, target));
+    const isMember = (groupId: string) => cachedCheck(`g:${groupId}`, async () =>
+      mongoose.isValidObjectId(groupId) && !!(await Group.exists({ _id: groupId, memberIds: userId })));
+    // fromName — mijoz aytganidan emas, bazadan (frontend bilan bir xil format).
+    let myNameP: Promise<string> | null = null;
+    const myName = () => (myNameP ||= User.findById(userId).select('firstName lastName').lean()
+      .then((u: any) => (u ? `${u.firstName || ''}${u.lastName ? ' ' + u.lastName : ''}`.trim() : '') || 'Xodim')
+      .catch(() => 'Xodim'));
+    // Hodisalar tartibi saqlansin (offer → ice) — tekshiruvlar asinxron, shu sabab navbat.
+    let queue: Promise<unknown> = Promise.resolve();
+    const enqueue = (fn: () => Promise<unknown>) => {
+      queue = queue.then(fn).catch((e) => console.error('[socket relay]', (e as Error)?.message));
+    };
 
     // Guruh room'lariga qo'shilish — FAQAT haqiqatan ham o'sha guruh
     // a'zosi bo'lsa (aks holda istalgan kishi istalgan guruh ID'sini
@@ -128,19 +230,43 @@ export function initSocket(httpServer: HttpServer): Server {
 
     // Yozmoqda... — fromUserId endi tekshirilgan identifikatordan (mijoz
     // o'zi "men boshqa odamman" deb da'vo qila olmaydi).
+    // Qabul qiluvchi — signal bilan bir xil qoida (a'zolik / ruxsat etilgan odam).
     socket.on('typing', (data: { toUserId?: string; groupId?: string; fromName?: string }) => {
-      const payload = { ...data, fromUserId: userId };
-      if (data.groupId) socket.to(`group:${data.groupId}`).emit('typing', payload);
-      else if (data.toUserId) socket.to(`user:${data.toUserId}`).emit('typing', payload);
+      if (!data || typeof data !== 'object') return;
+      enqueue(async () => {
+        const payload = { ...data, fromUserId: userId, fromName: await myName() };
+        if (data.groupId) {
+          if (await isMember(String(data.groupId))) socket.to(`group:${data.groupId}`).emit('typing', payload);
+        } else if (data.toUserId && await canReach(String(data.toUserId))) {
+          socket.to(`user:${data.toUserId}`).emit('typing', payload);
+        }
+      });
     });
 
     // ── WebRTC signaling (1:1 va guruh qo'ng'iroqlari) ──────────────────────
-    const relay = (event: string) => (data: any) => {
-      if (!data) return;
-      if (Array.isArray(data.to)) data.to.forEach((uid: string) => io?.to(`user:${uid}`).emit(event, data));
-      else if (data.to) io?.to(`user:${data.to}`).emit(event, data);
-      else if (data.groupId) socket.to(`group:${data.groupId}`).emit(event, data);
+    // XAVFSIZLIK (audit): avval mijoz yuborgan payload O'ZGARISHSIZ istalgan
+    // userId'ga uzatilardi — `from`/`fromName` soxtalashtirilishi va boshqa
+    // firma odamiga qo'ng'iroq/push yuborilishi mumkin edi. Endi: from/fromName
+    // serverdan; `to` faqat ruxsat etilgan odam (canReachUser); groupId bo'lsa
+    // yuboruvchi o'sha guruh a'zosi bo'lishi shart. Payload shakli o'zgarmagan.
+    // Qaytaradi: haqiqatan yuborilgan userId'lar (push uchun).
+    const MAX_TARGETS = 64;
+    const relay = async (event: string, data: any): Promise<string[]> => {
+      if (!data || typeof data !== 'object') return [];
+      if (data.groupId && !(await isMember(String(data.groupId)))) return []; // bo'sh groupId — 1:1 (avvalgidek)
+      const out = { ...data, from: userId, fromName: await myName() };
+      if (data.to) {
+        const raw: unknown[] = Array.isArray(data.to) ? data.to : [data.to];
+        const list = Array.from(new Set(raw.map(String))).slice(0, MAX_TARGETS);
+        const ok = await Promise.all(list.map(canReach));
+        const allowed = list.filter((_, k) => ok[k]);
+        allowed.forEach((uid) => io?.to(`user:${uid}`).emit(event, out));
+        return allowed;
+      }
+      if (data.groupId) socket.to(`group:${data.groupId}`).emit(event, out);
+      return [];
     };
+    const relayOn = (event: string) => socket.on(event, (data: any) => enqueue(() => relay(event, data)));
     // XATO TUZATILDI ("qo'ng'iroq qilganda qabul qiluvchida hech qanday
     // ogohlantirish/ovoz chiqmayapti"): call:offer FAQAT socket.io orqali
     // ulangan (ilova ochiq, tab faol) tomonga yetib borardi — agar
@@ -149,24 +275,25 @@ export function initSocket(httpServer: HttpServer): Server {
     // na chiqib turuvchi bildirishnoma). Endi transactions.ts'dagi bilan
     // bir xil Web Push (sendPushToUser — bu chinakam qurilma
     // bildirishnomasi, ilova yopiq bo'lsa ham keladi) qo'shildi.
-    socket.on('call:offer', (data: any) => {
-      relay('call:offer')(data);
-      if (data?.to) {
-        const isVideo = data.mode === 'video';
-        sendPushToUser(String(data.to), {
-          title: isVideo ? "📹 Video qo'ng'iroq" : "📞 Qo'ng'iroq",
-          body: `${data.fromName || 'Xodim'} sizga qo'ng'iroq qilmoqda`,
-          tag: 'call',
-        }).catch(() => {});
-      }
-    });
-    socket.on('call:answer', relay('call:answer'));
-    socket.on('call:ice', relay('call:ice'));
-    socket.on('call:end', relay('call:end'));
-    socket.on('call:reject', relay('call:reject'));
-    socket.on('call:join', relay('call:join'));
+    // Push faqat ruxsat etilgan qabul qiluvchiga va (from,to) bo'yicha 60 s'da bir marta.
+    socket.on('call:offer', (data: any) => enqueue(async () => {
+      const allowed = await relay('call:offer', data);
+      const to = typeof data?.to === 'string' ? data.to : '';
+      if (!to || to === userId || !allowed.includes(to) || !shouldPushCall(userId, to)) return;
+      const isVideo = data.mode === 'video';
+      sendPushToUser(to, {
+        title: isVideo ? "📹 Video qo'ng'iroq" : "📞 Qo'ng'iroq",
+        body: `${await myName()} sizga qo'ng'iroq qilmoqda`,
+        tag: 'call',
+      }).catch(() => {});
+    }));
+    relayOn('call:answer');
+    relayOn('call:ice');
+    relayOn('call:end');
+    relayOn('call:reject');
+    relayOn('call:join');
     // Kamera/mikrofon holati (Telegram'dagi kabi plitkada avatar/ovoz belgisi uchun)
-    socket.on('call:state', relay('call:state'));
+    relayOn('call:state');
 
     // ── Guruh video chat (Telegram-ga o'xshash) ─────────────────────────────
     // Yuqoridagi call:* WebRTC signalizatsiyasidan FARQLI — bu yerda hech
@@ -281,7 +408,11 @@ export function initSocket(httpServer: HttpServer): Server {
     });
 
     socket.on('disconnect', () => {
-      if (userId) { removeUserSocket(userId, socket.id); broadcastPresence(); }
+      if (userId) {
+        removeUserSocket(userId, socket.id);
+        trackPresence(cid, userId, isDev, -1);
+        broadcastPresence(cid, isDev);
+      }
       // Video chatda turgan foydalanuvchining BARCHA ulanishi uzilsa (tab yopildi,
       // internet ketdi) — "arvoh" ishtirokchi bo'lib qolmasligi uchun chiqariladi.
       if (userId && !userSockets.has(userId)) {

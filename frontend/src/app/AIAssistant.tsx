@@ -323,6 +323,31 @@ export default function AIAssistant({ currentUser, users, token, open, onClose, 
     } catch {}
   };
 
+  // Tarjima: kalit bo'lmasa — joriy tilga mos standart matn
+  // (escapeValue: false — confirmDialog matnni textContent sifatida qo'yadi, HTML-escape kerak emas)
+  const tr = (key: string, uz: string, ru: string, vars: Record<string, any> = {}) =>
+    t(key, { ...vars, interpolation: { escapeValue: false }, defaultValue: i18n.language?.startsWith('ru') ? ru : uz }) as string;
+  // Tasdiqlash oynasi matni: kim, qanday o'zgarish — foydalanuvchi aniq ko'rib tasdiqlashi uchun
+  const describeDirectAction = (a: AiAction): string => {
+    const ru = i18n.language?.startsWith('ru');
+    const name = a.userName || users.find(u => u.id === String(a.userId))?.name || '';
+    if (a.type === 'delete_user') {
+      return tr('ai.confirmDeleteUser', "{{name}} tizimdan o'chirilsinmi? Bu amalni qaytarib bo'lmaydi.", "Удалить {{name}} из системы? Это действие необратимо.", { name });
+    }
+    if (a.type === 'add_user') {
+      const full = `${a.firstName || ''} ${a.lastName || ''}`.trim();
+      return tr('ai.confirmAddUser', "Yangi xodim qo'shilsinmi?\n{{name}} — {{role}}\nTel: {{phone}}", "Добавить сотрудника?\n{{name}} — {{role}}\nТел: {{phone}}",
+        { name: full, role: a.role || '', phone: a.phone || '' });
+    }
+    const label: Record<string, string> = ru
+      ? { firstName: 'Имя', lastName: 'Фамилия', role: 'Должность', brigade: 'Бригада', phone: 'Телефон' }
+      : { firstName: 'Ism', lastName: 'Familiya', role: 'Lavozim', brigade: 'Brigada', phone: 'Telefon' };
+    const changes = Object.entries(a.changes || {})
+      .filter(([, v]) => v !== undefined && v !== null)
+      .map(([k, v]) => `• ${label[k] || k}: ${String(v)}`).join('\n');
+    return tr('ai.confirmUpdateUser', "{{name}} ma'lumotlari o'zgartirilsinmi?\n{{changes}}", "Изменить данные {{name}}?\n{{changes}}", { name, changes });
+  };
+
   const executeAction = async (action: AiAction): Promise<string> => {
     try {
       const res = await fetch(`${API_BASE}/api/ai/execute`, {
@@ -366,9 +391,15 @@ export default function AIAssistant({ currentUser, users, token, open, onClose, 
       if (!res.ok) {
         setMsgs(p => [...p, { role: 'assistant', content: `⚠️ ${data.error || t('ai.errorGeneric')}` }]);
       } else if (data.type === 'direct_action' && data.action && DIRECT_ACTIONS.includes(data.action.type)) {
-        // Direct actions execute immediately — no confirmation dialog shown
+        // XAVFSIZLIK (P0): xodimni qo'shish/o'zgartirish/o'chirish endi FAQAT foydalanuvchi tasdiqlagach
+        // bajariladi — avval darhol bajarilardi, ovozdan keyingi avto-yuborish bilan noto'g'ri eshitilgan
+        // buyruq (yoki kontekstdagi "prompt injection") xodimni o'chirib yuborishi mumkin edi.
         setMsgs(p => [...p, { role: 'assistant', content: data.response || t('ai.thinking') }]);
-        const result = await executeAction(data.action);
+        const ok = await confirmDialog(describeDirectAction(data.action), {
+          danger: data.action.type === 'delete_user',
+          okText: tr('ai.directConfirmOk', "Ha, bajarish", "Да, выполнить"),
+        });
+        const result = ok ? await executeAction(data.action) : `❌ ${t('ai.cancelled')}`;
         setMsgs(p => [...p, { role: 'assistant', content: result }]);
       } else if (data.type === 'action' && data.action) {
         // send_message and similar — show confirmation

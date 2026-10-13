@@ -26,6 +26,7 @@ import { todayInTashkent, tashkentHour } from '../utils/tz';
 import { PLAN_CONFIG, getPayablePlanKeys } from '../config/plans';
 import { createSubscriptionPaymentOrder } from './subscriptionPayments';
 import { persistUploadedFile } from './durableFiles';
+import { deriveWebhookSecret, canDecideSubscription, sendToCompanyAdmins } from './botSecurity';
 
 dotenv.config();
 
@@ -38,6 +39,9 @@ if (!token) {
 // webhook ishlatiladi (polling o'chiriladi) — bu Render + local dev bir vaqtda
 // ishlaganda kelib chiqadigan 409 Conflict xatosini to'liq bartaraf etadi.
 const webhookUrl = process.env.TELEGRAM_WEBHOOK_URL;
+// setWebHook'dagi secret_token — Telegram uni har update'da X-Telegram-Bot-Api-Secret-Token sarlavhasida
+// qaytaradi, index.ts webhook route'i shu bilan solishtiradi (soxta update'lar 401).
+export const webhookSecret = deriveWebhookSecret(token);
 const useWebhook = !!webhookUrl;
 
 export const bot = new TelegramBot(token, useWebhook ? { polling: false } : {
@@ -101,8 +105,10 @@ if (useWebhook) {
   const cleanBase = webhookUrl!.replace(/\/+$/, '').replace(/\/api\/bot\/webhook$/, '');
   const fullWebhookUrl = `${cleanBase}/api/bot/webhook`;
 
+  // secret_token HAR chaqiruvda (5 daqiqalik qayta ro'yxatda ham) beriladi — aks holda u o'chib qolardi.
   const registerWebhook = () => bot.setWebHook(fullWebhookUrl, {
     max_connections: 40,
+    secret_token: webhookSecret,
     // MUHIM: allowed_updates ANIQ ko'rsatilmasa, Telegram shu webhook uchun
     // OLDINGI sozlamani ishlatadi — 'edited_message' aynan Telegram'ning
     // "Jonli joylashuv" (Live Location) davomiy yangilanishlari uchun zarur.
@@ -2621,6 +2627,11 @@ bot.on('callback_query', async (query: any) => {
 
   // ── Obuna tasdiqlash/rad etish (dasturchi inline keyboard) ───────────────────
   if (data.startsWith('sub_approve_') || data.startsWith('sub_reject_')) {
+    // XAVFSIZLIK: obunani faqat dasturchi tasdiqlaydi/rad etadi (aks holda istalgan kishi o'z firmasini faollashtirardi).
+    if (!canDecideSubscription(user, chatId)) {
+      await bot.answerCallbackQuery(query.id, { text: tb(lang, 'genericError') }).catch(() => {});
+      return;
+    }
     const isApprove = data.startsWith('sub_approve_');
     const subId = data.replace('sub_approve_', '').replace('sub_reject_', '');
     try {
@@ -2850,15 +2861,11 @@ export async function notifyDeveloper(message: string) {
   }
 }
 
-export async function notifyAdmins(message: string, inlineKeyboard?: any[][]) {
+// Firma rahbarlariga (direktor/o'rinbosar) xabar — FAQAT shu companyId ichida (majburiy parametr:
+// avval filtr yo'q edi va har bir so'rov BARCHA firmalar rahbarlariga ketardi).
+export async function notifyAdmins(message: string, inlineKeyboard: any[][] | undefined, companyId: string) {
   try {
-    const admins = await User.find({ role: { $in: ['direktor', 'orinbosar'] }, telegramChatId: { $exists: true, $ne: '' } });
-    for (const admin of admins) {
-      if (!admin.telegramChatId) continue;
-      const opts: any = { parse_mode: 'Markdown' };
-      if (inlineKeyboard) opts.reply_markup = { inline_keyboard: inlineKeyboard };
-      await bot.sendMessage(admin.telegramChatId, message, opts).catch(console.error);
-    }
+    await sendToCompanyAdmins((chatId, text, opts) => bot.sendMessage(chatId, text, opts), companyId, message, inlineKeyboard);
   } catch (err) {
     console.error('NotifyAdmins error:', err);
   }

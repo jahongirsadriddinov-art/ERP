@@ -324,6 +324,28 @@ router.post('/', async (req, res) => {
     if (!rl.allowed) {
       return res.status(429).json({ error: `Juda ko'p xabar. ${rl.retryAfterSec} soniyadan keyin urining.` });
     }
+    // XAVFSIZLIK (P0): avval groupId bo'yicha a'zolik ham, firma ham tekshirilmasdi — istalgan
+    // xodim id'sini bilgan istalgan guruhga (hatto boshqa firmanikiga) yoza olar, xabar o'sha
+    // firma companyId'si bilan muhrlanib, barcha a'zolarning Telegramiga ketardi. Endi: yuboruvchi
+    // guruh a'zosi (dasturchi — dev-support guruhida a'zo bo'lmasa ham) va o'sha firmadan bo'lishi shart.
+    const tenant = getTenant();
+    let targetGroup: { companyId?: string; devSupport?: boolean } | null = null;
+    if (groupId) {
+      targetGroup = await Group.findById(String(groupId)).select('memberIds companyId devSupport').lean().catch(() => null);
+      const isMember = !!targetGroup && (targetGroup as any).memberIds?.map(String).includes(String(fromUserId));
+      const devSupportAccess = !!targetGroup?.devSupport && !!tenant?.isDeveloper;
+      // Firmasiz (dasturchi yaratgan/eski) guruh — a'zo yozadi, companyId muhri yuboruvchinikicha qoladi
+      const sameTenant = !!tenant?.isDeveloper || !targetGroup?.companyId || String(targetGroup.companyId) === String(tenant?.companyId || '');
+      if (!targetGroup || !(isMember || devSupportAccess) || !sameTenant) {
+        return res.status(403).json({ error: "Siz bu guruh a'zosi emassiz" });
+      }
+    } else if (!tenant?.isDeveloper) {
+      // DM: qabul qiluvchi shu firmadan (yoki dasturchi — support) bo'lishi shart
+      const recipient = await User.findById(String(toUserId)).select('companyId role').lean().catch(() => null);
+      if (!recipient || (recipient.role !== 'dasturchi' && String(recipient.companyId || '') !== String(tenant?.companyId || ''))) {
+        return res.status(404).json({ error: 'Qabul qiluvchi topilmadi' });
+      }
+    }
     let msgData: any = stamped({
       fromUserId: String(fromUserId),
       toUserId: toUserId ? String(toUserId) : '',
@@ -339,13 +361,12 @@ router.post('/', async (req, res) => {
       ...(location && { location }),
       ...(replyToId && { replyToId }),
     });
-    if (groupId) {
+    if (targetGroup?.companyId) {
       // Guruh xabari uchun companyId GURUHning o'zidan olinishi kerak — masalan
       // dasturchi (o'z companyId'i yo'q) biror firmaning dev-support guruhiga
       // yozganda, stamped() hech narsa qo'shmaydi va xabar keyin scoped() bilan
-      // topilmay qoladi. Guruhning companyId'i har doim to'g'ri tenant.
-      const group = await Group.findById(String(groupId)).select('companyId').lean();
-      if (group?.companyId) msgData = { ...msgData, companyId: group.companyId };
+      // topilmay qoladi. Yuqorida firma mosligi tekshirilgan — begona firma muhrlanmaydi.
+      msgData = { ...msgData, companyId: targetGroup.companyId };
     }
     const msg = await Message.create(msgData);
     const payload = shape(msg);

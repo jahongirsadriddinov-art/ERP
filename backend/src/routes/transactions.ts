@@ -242,7 +242,7 @@ router.post('/', async (req, res) => {
         const adminMsg = tx.type === 'transfer'
           ? `📦 *Yangi yukxat*\n${tx.materialName} — ${tx.quantity} ${tx.unit}\nYuboruvchi: ${tx.fromUserName || '—'}\nQabul qiluvchi: ${tx.toUserName || '—'}`
           : `💰 *Yangi to'lov so'rovi*\n${tx.description || '—'} — ${(tx.amount || 0).toLocaleString()} so'm`;
-        await notifyAdmins(adminMsg).catch(console.error);
+        if (tx.companyId) await notifyAdmins(adminMsg, undefined, String(tx.companyId)).catch(console.error); // faqat shu firma rahbarlari
 
       } catch(notifErr) {
         console.error('Telegram notification error:', notifErr);

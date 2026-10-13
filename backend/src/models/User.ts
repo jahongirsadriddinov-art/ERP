@@ -86,6 +86,11 @@ const UserSchema: Schema = new Schema({
 
 // Global search uchun indekslar
 UserSchema.index({ companyId: 1, firstName: 1, lastName: 1 });
-UserSchema.index({ firstName: 'text', lastName: 'text', phone: 'text' });
+// Bot har update'da User.findOne({telegramChatId}) qiladi — indekssiz butun kolleksiya skanerlanardi
+UserSchema.index({ telegramChatId: 1 }, { sparse: true });
+// language_override: MongoDB text indeksi standart holda hujjatning `language` maydonini matn tili deb
+// o'qiydi — bizda u interfeys tili ('uz'/'uz-cyrl'), Mongo uni bilmaydi va indeks mavjud bo'lsa HAR BIR
+// User yozuvi "language override unsupported: uz" bilan rad etiladi. Mavjud bo'lmagan maydonga yo'naltiramiz.
+UserSchema.index({ firstName: 'text', lastName: 'text', phone: 'text' }, { language_override: 'textSearchLanguage' });
 
 export default mongoose.model<IUser>('User', UserSchema);

@@ -4,6 +4,7 @@ import { scoped } from '../middleware/scope';
 import { getTenant } from '../middleware/tenantContext';
 import { emitToUser } from '../services/socket';
 import { logAudit } from '../services/audit';
+import { checkTargetAccess } from '../utils/userGuards';
 import { getBackendUrl } from '../utils/backendUrl';
 
 // Profil rasmi faqat o'zimizning yuklash yo'li (/api/messages/upload) qaytargan manzil bo'lishi shart —
@@ -223,7 +224,16 @@ router.delete('/:id', async (req, res) => {
     const filter: any = tenant?.isDeveloper
       ? { _id: req.params.id, companyId: { $in: [null, undefined] }, isOwner: { $ne: true } }
       : scoped({ _id: req.params.id });
-    const user = await User.findOneAndDelete(filter);
+    const target = await User.findOne(filter);
+    if (!target) return res.status(404).json({ error: 'Foydalanuvchi topilmadi' });
+    // XAVFSIZLIK (P0): o'rinbosar firma egasini yoki direktorni o'chira olardi (setBlocked'da
+    // bu himoya bor edi, bu yerda yo'q edi) — endi utils/userGuards.ts qoidasi.
+    const accessErr = checkTargetAccess({
+      userId: String(tenant!.userId), role: tenant!.role, companyId: tenant!.companyId,
+      isOwner: tenant!.isOwner, isDeveloper: tenant!.isDeveloper,
+    }, target, 'delete');
+    if (accessErr) return res.status(accessErr.status).json({ error: accessErr.error });
+    const user = await User.findOneAndDelete({ _id: target._id });
     if (!user) return res.status(404).json({ error: 'Foydalanuvchi topilmadi' });
 
     if (tenant?.userId) {

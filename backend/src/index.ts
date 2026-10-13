@@ -50,7 +50,9 @@ import { startMeteredTurnRefreshLoop } from './services/meteredTurn';
 import { initSocket } from './services/socket';
 import { optionalAuth, requireAuth, blockDeveloper, requireDeveloper } from './middleware/auth';
 // Import bot to start it + get bot instance for webhook route
-import { bot, notifyDeveloper } from './services/bot';
+import { bot, notifyDeveloper, webhookSecret } from './services/bot';
+import { createBotWebhookHandler, BOT_WEBHOOK_PATH } from './services/botSecurity';
+import { createApiRateLimiter } from './middleware/apiRateLimit';
 import { checkRate } from './utils/rateLimit';
 import { serveDurableUpload } from './services/durableFiles';
 import { cloudinaryEnabled } from './config/cloudinary';
@@ -177,14 +179,9 @@ app.use((req, _res, next) => {
   // req.query: Express 5'ning oddiy (simple) parseri ichma-ich obyekt yaratmaydi — u yerdan in'ektsiya bo'lmaydi
   next();
 });
-// ── Xavfsizlik: umumiy so'rov chegarasi (IP bo'yicha) — skript bilan API'ni bombardimon qilishdan himoya.
-// Oddiy foydalanishda hech qachon yetib bo'lmaydigan (daqiqasiga 600) — faqat suiiste'molni to'xtatadi.
-app.use('/api', (req, res, next) => {
-  if (req.path === '/health' || req.path.startsWith('/deploy/latest') || req.path === '/status') return next();
-  const r = checkRate(`api:${req.ip}`, 600, 60_000);
-  if (!r.allowed) { res.setHeader('Retry-After', String(r.retryAfterSec)); return res.status(429).json({ error: "Juda ko'p so'rov — biroz kuting" }); }
-  next();
-});
+// ── Xavfsizlik: umumiy so'rov chegarasi (IP bo'yicha, daqiqasiga 600) — middleware/apiRateLimit.ts.
+// /api/bot/webhook bundan istisno (Telegram IP'lari umumiy; o'rniga maxfiy sarlavha tekshiriladi).
+app.use('/api', createApiRateLimiter());
 // Yuklangan fayllar (chat media, smeta, va h.k.) doim noyob nom bilan saqlanadi
 // (vaqt tamg'asi + tasodifiy raqam) — demak bir xil URL hech qachon boshqa
 // mazmunga o'zgarmaydi. Shuning uchun uzoq muddatli "immutable" keshni xavfsiz
@@ -309,14 +306,8 @@ app.use('/api/promocodes',      promocodesRoutes);
 // Telegram bot webhook — faqat TELEGRAM_WEBHOOK_URL o'rnatilgan bo'lsa faol bo'ladi.
 // Polling rejimida bu route hech qachon chaqirilmaydi.
 if (process.env.TELEGRAM_WEBHOOK_URL) {
-  app.post('/api/bot/webhook', express.json(), (req, res) => {
-    try {
-      bot.processUpdate(req.body);
-    } catch {
-      // Noto'g'ri payload — jim o'tkazib yuboramiz (bot handlerlari o'z xatolarini loglar)
-    }
-    res.sendStatus(200);
-  });
+  // Faqat to'g'ri X-Telegram-Bot-Api-Secret-Token sarlavhali so'rovlar (aks holda 401). express.json() global.
+  app.post(BOT_WEBHOOK_PATH, createBotWebhookHandler((u) => bot.processUpdate(u), webhookSecret));
 }
 
 // 404 handler — tanilmagan route lar uchun

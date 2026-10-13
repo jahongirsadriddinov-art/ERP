@@ -37,10 +37,11 @@ declare global {
 // pastdagi 'secret' zaxira qiymati ishlatiladi — bu OMMAVIY MA'LUM,
 // oldindan bashorat qilinadigan satr, shuning uchun shu holatda ISTALGAN
 // kishi haqiqiy (hatto "dasturchi"/super-admin) token yasab olishi mumkin.
-// Ataylab serverni O'CHIRIB QO'YMAYMIZ (production'da JWT_SECRET aslida
-// to'g'ri o'rnatilgan bo'lsa ham, shu tekshiruv xato bilan butun saytni
-// yiqitib qo'yishi mumkin edi) — lekin buni Render loglarida DARHOL
-// ko'rinadigan qilib ogohlantiramiz.
+// Render'da (RENDER=true — Render o'zi o'rnatadi) kalitsiz ishga tushish TAQIQLANADI: soxta token xavfi
+// sayt yiqilishidan yomonroq. Mahalliy dev'da zaxira qiymat qoladi (pastda baland ogohlantirish).
+if (!process.env.JWT_SECRET && process.env.RENDER === 'true') {
+  throw new Error('JWT_SECRET is not set (Render) — refusing to start with the public fallback secret');
+}
 export const JWT_SECRET = process.env.JWT_SECRET || 'secret';
 if (!process.env.JWT_SECRET) {
   console.error('⚠️⚠️⚠️ XAVFSIZLIK OGOHLANTIRISHI: JWT_SECRET muhit o\'zgaruvchisi o\'rnatilmagan! ' +

@@ -12,6 +12,7 @@ import { emitToUser } from '../services/socket';
 import { relayMessageToTelegram } from './messages';
 import { geminiAudioToJson, geminiConfigured } from '../services/gemini';
 import { checkRate } from '../utils/rateLimit';
+import { GuardCaller, checkRoleAssign, checkTargetAccess, formatPhone, phoneTaken, auditUserAction } from '../utils/userGuards';
 
 // Pullik AI xizmatlarini suiiste'moldan himoya — foydalanuvchi bo'yicha chegaralar
 const aiLimit = (name: string, max: number, windowMs: number) => (req: Request, res: Response, next: NextFunction) => {
@@ -89,7 +90,8 @@ const SYSTEM_TEMPLATE = (callerRole: string, usersText: string, projectsText: st
 
 🔒 ASOSIY QOIDALAR (ALBATTA BAJARING):
 - Faqat JSON formatda javob bering — boshqa hech qanday matn emas.
-- XODIMLAR/LOYIHALAR ro'yxatidagi texnik ma'lumotlarni (id:, tel:, | belgilari) foydalanuvchiga ko'rsatmang.
+- XODIMLAR/LOYIHALAR ro'yxatidagi texnik ma'lumotlarni (id:, | belgilari) foydalanuvchiga ko'rsatmang.
+- Xodimlarning telefon raqamlari sizga berilmaydi — so'ralsa, "Xodimlar" bo'limidan ko'rishni ayting, raqam o'ylab topmang.
 - Foydalanuvchiga doim tabiiy, samimiy va professional o'zbek tilida murojaat qiling.
 - Ism yozishda xatosiz, to'g'ri yozing.
 - Agar so'rov noaniq bo'lsa — aniqlashtiruvchi savol bering (type="query").
@@ -119,17 +121,17 @@ ${projectsText}
 2️⃣ Xabar yuborish (FAQAT bu holat tasdiqlashni talab qiladi):
 {"type":"action","response":"Tasdiqlash so'rovi: [kimga] [xabar]","action":{"type":"send_message","toUserId":"id","toUserName":"To'liq ism","text":"To'liq va grammatik jihatdan to'g'ri xabar matni","description":"Qisqa tavsif"}}
 
-3️⃣ Xodim qo'shish (darhol, tasdiqsiz):
-{"type":"direct_action","response":"[Ism Familiya] ([lavozim]) tizimga qo'shilmoqda...","action":{"type":"add_user","firstName":"Ism","lastName":"Familiya","phone":"+998XXXXXXXXX","role":"prorab|brigadir|ishchi|orinbosar","brigade":"Brigada nomi (agar bo'lsa)"}}
+3️⃣ Xodim qo'shish (foydalanuvchi tasdiqlagach bajariladi):
+{"type":"direct_action","response":"[Ism Familiya] ([lavozim]) qo'shilsinmi?","action":{"type":"add_user","firstName":"Ism","lastName":"Familiya","phone":"+998XXXXXXXXX","role":"prorab|brigadir|ishchi|orinbosar","brigade":"Brigada nomi (agar bo'lsa)"}}
 
-4️⃣ Xodimni o'chirish (darhol, tasdiqsiz):
-{"type":"direct_action","response":"[Ism Familiya] tizimdan o'chirilmoqda...","action":{"type":"delete_user","userId":"id","userName":"Ism Familiya"}}
+4️⃣ Xodimni o'chirish (foydalanuvchi tasdiqlagach bajariladi):
+{"type":"direct_action","response":"[Ism Familiya] tizimdan o'chirilsinmi?","action":{"type":"delete_user","userId":"id","userName":"Ism Familiya"}}
 
-5️⃣ Xodim ma'lumotlarini yangilash (darhol):
-{"type":"direct_action","response":"[Ism]ning ma'lumotlari yangilanmoqda...","action":{"type":"update_user","userId":"id","userName":"Ism","changes":{"firstName":"Yangi ism","lastName":"Familiya","role":"lavozim","brigade":"Brigada","phone":"+998XXXXXXXXX"}}}
+5️⃣ Xodim ma'lumotlarini yangilash (foydalanuvchi tasdiqlagach bajariladi):
+{"type":"direct_action","response":"[Ism]ning ma'lumotlari yangilansinmi?","action":{"type":"update_user","userId":"id","userName":"Ism","changes":{"firstName":"Yangi ism","lastName":"Familiya","role":"lavozim","brigade":"Brigada","phone":"+998XXXXXXXXX"}}}
 
 ✅ LAVOZIMLAR (faqat): prorab, brigadir, ishchi, orinbosar
-❌ direktor va dasturchi lavozimini AI orqali O'ZGARTIRISH MUMKIN EMAS
+❌ direktor va dasturchi lavozimini AI orqali O'ZGARTIRISH MUMKIN EMAS; firma egasini va suhbatdagi foydalanuvchining o'zini o'chirish yoki lavozimini o'zgartirish ham mumkin emas
 
 💡 AQLLI YORDAMCHI SIFATIDA:
 - "Barcha xodimlar", "Ro'yxat ko'rsat" → xodimlar ro'yxatini chiroyli formatda ko'rsat
@@ -198,7 +200,8 @@ router.post('/chat', requireAuth, requireBoss, requireFeature('ai_assistant'), a
     if (!message?.trim()) return res.status(400).json({ error: 'Xabar kerak' });
 
     const [users, objects] = await Promise.all([
-      User.find(scoped({})).select('firstName lastName role phone _id brigade projectIds').lean(),
+      // Shaxsiy ma'lumot (PII) tashqi LLM'ga ketmasin: telefon raqamlar yuborilmaydi — faqat ism/lavozim/brigada.
+      User.find(scoped({})).select('firstName lastName role _id brigade').lean(),
       ObjectModel.find(scoped({})).select('name status location budget _id').lean(),
     ]);
 
@@ -206,7 +209,7 @@ router.post('/chat', requireAuth, requireBoss, requireFeature('ai_assistant'), a
     const callerRole = roleMap[req.user!.role] || req.user!.role;
 
     const usersText = users.length
-      ? (users as any[]).map(u => `- ${u.firstName} ${u.lastName || ''} (${roleMap[u.role]||u.role})${u.brigade ? ', brigada: ' + u.brigade : ''} | tel:${u.phone} | id:${u._id}`).join('\n')
+      ? (users as any[]).map(u => `- ${u.firstName} ${u.lastName || ''} (${roleMap[u.role]||u.role})${u.brigade ? ', brigada: ' + u.brigade : ''} | id:${u._id}`).join('\n')
       : '(xodimlar yo\'q)';
 
     const statusMap: Record<string,string> = { active:'Faol', paused:"To'xtatilgan", completed:'Tugagan' };
@@ -254,8 +257,6 @@ router.post('/chat', requireAuth, requireBoss, requireFeature('ai_assistant'), a
   }
 });
 
-// POST /api/ai/execute — tasdiqlashdan so'ng amal bajarish (send_message)
-// va bevosita bajarish (add_user, delete_user, update_user)
 // POST /api/ai/transcribe — ovozli buyruqni matnga aylantirish (Gemini). Brauzerning Web Speech API'si
 // Windows ilova (WebView2) va Android WebView'da ishlamaydi, o'zbekchani ham yomon taniydi — shu sabab
 // ovoz qurilmada yozib olinadi va shu yerda matnga aylantiriladi. Faqat qisqa (≤ ~2 daqiqa) yozuv.
@@ -279,7 +280,9 @@ Javob FAQAT JSON: {"text":""}`;
   }
 });
 
-router.post('/execute', requireAuth, requireBoss, requireFeature('ai_assistant'), async (req, res) => {
+// POST /api/ai/execute — foydalanuvchi tasdiqlagandan so'ng amalni bajarish (send_message,
+// add_user, delete_user, update_user). Tasdiqlash kartasi frontendda (AIAssistant.tsx).
+router.post('/execute', requireAuth, requireBoss, requireFeature('ai_assistant'), aiLimit('execute', 60, 10 * 60_000), async (req, res) => {
   try {
     const { action } = req.body;
     if (!action?.type) return res.status(400).json({ error: 'Amal kerak' });
@@ -319,23 +322,25 @@ router.post('/execute', requireAuth, requireBoss, requireFeature('ai_assistant')
       return res.json({ ok: true, result: 'Xabar muvaffaqiyatli yuborildi' });
     }
 
-    // ── Xodim qo'shish (bevosita) ──────────────────────────────────────────────
+    // Xodimlar ustidagi amallar — routes/auth.ts bilan BIR XIL himoya (utils/userGuards.ts):
+    // egani/direktorni (o'rinbosar uchun) va o'zini o'chirish/pasaytirish yo'q, lavozimlar
+    // ro'yxati cheklangan, telefon bandligi oldindan tekshiriladi, har amal audit jurnaliga yoziladi.
+    const caller: GuardCaller = {
+      userId: String(req.user!.userId), role: req.user!.role, companyId: req.user!.companyId,
+      isOwner: req.user!.isOwner, isDeveloper: req.user!.isDeveloper,
+    };
+
+    // ── Xodim qo'shish (foydalanuvchi tasdiqlagandan keyin) ─────────────────────
     if (action.type === 'add_user') {
       const { firstName, lastName, phone, role, brigade } = action;
       if (!firstName || !phone || !role) {
         return res.status(400).json({ error: 'Ism, telefon raqam va lavozim kerak' });
       }
+      const roleErr = checkRoleAssign(caller, role);
+      if (roleErr) return res.status(roleErr.status).json({ error: roleErr.error });
 
-      // direktor/dasturchi lavozimini AI orqali qo'shib bo'lmaydi
-      if (['direktor', 'dasturchi'].includes(role)) {
-        return res.status(403).json({ error: "Direktor va dasturchi lavozimini faqat dasturchi paneli orqali qo'shish mumkin" });
-      }
-
-      let formattedPhone = String(phone).replace(/\s+/g, '');
-      if (!formattedPhone.startsWith('+')) formattedPhone = '+' + formattedPhone;
-
-      const existing = await User.findOne({ phone: formattedPhone });
-      if (existing) {
+      const formattedPhone = formatPhone(phone);
+      if (await phoneTaken(formattedPhone)) {
         return res.status(400).json({ error: `Bu telefon raqam (${formattedPhone}) allaqachon tizimda ro'yxatga olingan` });
       }
 
@@ -347,6 +352,11 @@ router.post('/execute', requireAuth, requireBoss, requireFeature('ai_assistant')
         ...(brigade ? { brigade: String(brigade).trim() } : {}),
         projectIds: [],
       }));
+      await auditUserAction(caller, req, {
+        action: 'create', entityId: String(newUser._id),
+        description: `AI orqali xodim qo'shildi: ${newUser.firstName} ${newUser.lastName || ''} (${role})`.trim(),
+        newValue: { firstName: newUser.firstName, lastName: newUser.lastName, phone: newUser.phone, role, via: 'ai' },
+      });
 
       return res.json({
         ok: true,
@@ -360,13 +370,23 @@ router.post('/execute', requireAuth, requireBoss, requireFeature('ai_assistant')
       });
     }
 
-    // ── Xodimni o'chirish (bevosita) ───────────────────────────────────────────
+    // ── Xodimni o'chirish ──────────────────────────────────────────────────────
     if (action.type === 'delete_user') {
       const { userId, userName } = action;
       if (!userId) return res.status(400).json({ error: 'Xodim ID kerak' });
 
-      const deleted = await User.findOneAndDelete(scoped({ _id: String(userId) }));
-      if (!deleted) return res.status(404).json({ error: 'Xodim topilmadi yoki uni o\'chirish huquqingiz yo\'q' });
+      const target = await User.findOne(scoped({ _id: String(userId) }));
+      if (!target) return res.status(404).json({ error: "Xodim topilmadi yoki uni o'chirish huquqingiz yo'q" });
+      const accessErr = checkTargetAccess(caller, target, 'delete');
+      if (accessErr) return res.status(accessErr.status).json({ error: accessErr.error });
+
+      const deleted = await User.findOneAndDelete({ _id: target._id });
+      if (!deleted) return res.status(404).json({ error: 'Xodim topilmadi' });
+      await auditUserAction(caller, req, {
+        action: 'delete', entityId: String(deleted._id),
+        description: `AI orqali xodim o'chirildi: ${deleted.firstName} ${deleted.lastName || ''}`.trim(),
+        oldValue: { firstName: deleted.firstName, lastName: deleted.lastName, phone: deleted.phone, role: deleted.role, via: 'ai' },
+      });
 
       return res.json({
         ok: true,
@@ -375,33 +395,40 @@ router.post('/execute', requireAuth, requireBoss, requireFeature('ai_assistant')
       });
     }
 
-    // ── Xodim ma'lumotlarini yangilash (bevosita) ──────────────────────────────
+    // ── Xodim ma'lumotlarini yangilash ─────────────────────────────────────────
     if (action.type === 'update_user') {
       const { userId, changes } = action;
-      if (!userId || !changes) return res.status(400).json({ error: 'Xodim ID va o\'zgartirish ma\'lumotlari kerak' });
+      if (!userId || !changes || typeof changes !== 'object') return res.status(400).json({ error: "Xodim ID va o'zgartirish ma'lumotlari kerak" });
 
       const user = await User.findOne(scoped({ _id: String(userId) }));
       if (!user) return res.status(404).json({ error: 'Xodim topilmadi' });
 
-      // direktor/dasturchi lavozimiga AI orqali ko'tarib bo'lmaydi
-      const requester = req.user;
-      const isDeveloperCaller = !!(requester?.isDeveloper || requester?.role === 'dasturchi');
-      if (changes.role && ['direktor', 'dasturchi'].includes(changes.role) && changes.role !== user.role && !isDeveloperCaller) {
-        return res.status(403).json({ error: "Bu lavozimni faqat dasturchi paneli orqali o'zgartirish mumkin" });
+      const roleChange = !!changes.role && changes.role !== user.role;
+      const accessErr = checkTargetAccess(caller, user, 'update', { roleChange });
+      if (accessErr) return res.status(accessErr.status).json({ error: accessErr.error });
+      const roleErr = checkRoleAssign(caller, changes.role, user.role);
+      if (roleErr) return res.status(roleErr.status).json({ error: roleErr.error });
+
+      const newPhone = changes.phone ? formatPhone(changes.phone) : '';
+      if (newPhone && newPhone !== user.phone && await phoneTaken(newPhone, String(user._id))) {
+        return res.status(400).json({ error: `Bu telefon raqam (${newPhone}) allaqachon tizimda ro'yxatga olingan` });
       }
 
+      const before = { firstName: user.firstName, lastName: user.lastName, role: user.role, brigade: user.brigade, phone: user.phone };
       if (changes.firstName) user.firstName = String(changes.firstName).trim();
       if (changes.lastName !== undefined) user.lastName = String(changes.lastName || '').trim();
       if (changes.role) user.role = changes.role;
       if (changes.brigade !== undefined) user.brigade = changes.brigade ? String(changes.brigade).trim() : '';
-      if (changes.phone) {
-        let fp = String(changes.phone).replace(/\s+/g, '');
-        if (!fp.startsWith('+')) fp = '+' + fp;
-        user.phone = fp;
-      }
+      if (newPhone) user.phone = newPhone;
       await user.save();
 
       const updatedName = `${user.firstName}${user.lastName ? ' ' + user.lastName : ''}`;
+      await auditUserAction(caller, req, {
+        action: 'update', entityId: String(user._id),
+        description: `AI orqali xodim ma'lumotlari o'zgartirildi: ${updatedName}${roleChange ? ` — ${before.role} → ${user.role}` : ''}`,
+        oldValue: before,
+        newValue: { firstName: user.firstName, lastName: user.lastName, role: user.role, brigade: user.brigade, phone: user.phone, via: 'ai' },
+      });
       return res.json({
         ok: true,
         result: `${updatedName} ma'lumotlari muvaffaqiyatli yangilandi`,

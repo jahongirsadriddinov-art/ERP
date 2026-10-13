@@ -11,7 +11,7 @@ import { requireAuth, requireOwnerOrAdmin } from '../middleware/auth';
 import { normalizePhone, isValidUzPhone, hashPassword, verifyPassword, isStrongPassword } from '../utils/tokens';
 import { checkRate } from '../utils/rateLimit';
 import { issueTokenWithSession } from '../services/sessions';
-import { logAudit } from '../services/audit';
+import { GuardCaller, checkRoleAssign, checkTargetAccess, formatPhone, phoneTaken, auditUserAction } from '../utils/userGuards';
 
 const router = Router();
 
@@ -618,6 +618,9 @@ router.post('/users', requireAuth, requireOwnerOrAdmin, async (req, res) => {
   if (!firstName || !phone || !role) {
     return res.status(400).json({ error: 'firstName, phone va role kiritilishi shart' });
   }
+  // XAVFSIZLIK (P0): avval rol tekshirilmasdi — o'rinbosar yangi "dasturchi" (super-admin) yoki direktor yarata olardi
+  const roleErr = checkRoleAssign({ userId: String(req.user!.userId), role: req.user!.role, isOwner: req.user!.isOwner, isDeveloper: req.user!.isDeveloper }, role);
+  if (roleErr) return res.status(roleErr.status).json({ error: roleErr.error });
 
   let formattedPhone = phone.replace(/\s+/g, '');
   if (!formattedPhone.startsWith('+')) {
@@ -659,50 +662,55 @@ router.post('/users', requireAuth, requireOwnerOrAdmin, async (req, res) => {
 });
 
 // Admin: Update user
+// XAVFSIZLIK (P0): o'rinbosar direktorni pasaytira, firma egasining telefonini o'zgartirib
+// (OTP orqali) hisobini egallay olardi; telefon bandligi tekshirilmasdi. Endi utils/userGuards.ts
+// qoidalari: ega/direktor himoyasi, o'z lavozimini o'zgartirish yo'q, lavozimlar ro'yxati,
+// bitta firma doirasi va telefon bandligi oldindan tekshiriladi. Dasturchi (super-admin) cheklanmaydi.
 router.put('/users/:id', requireAuth, requireOwnerOrAdmin, async (req, res) => {
   const { firstName, lastName, phone, role, brigade, projectIds, baseSalary } = req.body;
   try {
     const user = await User.findOne(scoped({ _id: req.params.id }));
     if (!user) return res.status(404).json({ error: 'Foydalanuvchi topilmadi' });
 
-    // "Direktor" va "dasturchi" lavozimini FAQAT dasturchi (super-admin) belgilay
-    // oladi — aks holda oddiy admin (direktor/o'rinbosar) o'zini yoki boshqa
-    // xodimni shu tahrirlash so'rovi orqali yuqori huquqqa ko'tarib olishi mumkin
-    // edi (imtiyoz eskalatsiyasi). Frontend allaqachon bu variantlarni yashiradi —
-    // bu yerdagi tekshiruv haqiqiy himoya, chunki API to'g'ridan-to'g'ri ham
-    // chaqirilishi mumkin.
-    const requester = req.user;
-    const isDeveloperCaller = !!(requester?.isDeveloper || requester?.role === 'dasturchi');
-    if (role && ['direktor', 'dasturchi'].includes(role) && role !== user.role && !isDeveloperCaller) {
-      return res.status(403).json({ error: "Bu lavozimni faqat dasturchi paneli orqali o'zgartirish mumkin" });
+    const requester = req.user!;
+    const caller: GuardCaller = {
+      userId: String(requester.userId), role: requester.role, companyId: requester.companyId,
+      isOwner: requester.isOwner, isDeveloper: requester.isDeveloper,
+    };
+    const roleChange = !!role && role !== user.role;
+    const accessErr = checkTargetAccess(caller, user, 'update', { roleChange });
+    if (accessErr) return res.status(accessErr.status).json({ error: accessErr.error });
+    // "Direktor" va "dasturchi" lavozimini FAQAT dasturchi (super-admin) belgilay oladi —
+    // aks holda admin o'zini yoki boshqani yuqori huquqqa ko'tarib olishi mumkin edi.
+    const roleErr = checkRoleAssign(caller, role, user.role);
+    if (roleErr) return res.status(roleErr.status).json({ error: roleErr.error });
+
+    const newPhone = phone ? formatPhone(phone) : '';
+    const phoneChange = !!newPhone && newPhone !== user.phone;
+    if (phoneChange && await phoneTaken(newPhone, String(user._id))) {
+      return res.status(400).json({ error: 'Bu raqam band' });
     }
 
     const oldRole = user.role;
+    const oldPhone = user.phone;
     if (firstName) user.firstName = firstName;
     if (lastName !== undefined) user.lastName = lastName;
     if (role) user.role = role;
     if (brigade !== undefined) user.brigade = brigade;
     if (baseSalary !== undefined) user.baseSalary = baseSalary === null || baseSalary === '' ? undefined : Number(baseSalary);
     if (Array.isArray(projectIds)) user.projectIds = projectIds;
-    if (phone) {
-      let formattedPhone = phone.replace(/\s+/g, '');
-      if (!formattedPhone.startsWith('+')) formattedPhone = '+' + formattedPhone;
-      user.phone = formattedPhone;
-    }
+    if (phoneChange) user.phone = newPhone;
     await user.save();
 
-    // XAVFSIZLIK — TOPILMA (audit): rol o'zgartirish (imtiyoz eskalatsiyasi
-    // uchun eng nozik amallardan biri) hech qayerda qayd etilmasdi.
-    if (role && oldRole !== role && requester?.userId) {
-      const actor = await User.findById(requester.userId).lean().catch(() => null);
-      if (actor) {
-        logAudit({
-          userId: requester.userId, userName: `${actor.firstName} ${actor.lastName || ''}`.trim(), userRole: actor.role,
-          action: 'update', entity: 'user', entityId: String(user._id),
-          description: `Foydalanuvchi lavozimi o'zgartirildi: ${user.firstName} ${user.lastName || ''} — ${oldRole} → ${role}`.trim(),
-          oldValue: { role: oldRole }, newValue: { role }, companyId: requester.companyId, req,
-        }).catch(() => {});
-      }
+    // Rol va telefon o'zgarishi — eng nozik amallar (imtiyoz eskalatsiyasi / hisobni egallash) —
+    // audit jurnaliga yoziladi.
+    if (roleChange || phoneChange) {
+      await auditUserAction(caller, req, {
+        action: 'update', entityId: String(user._id),
+        description: `Foydalanuvchi ${roleChange ? `lavozimi (${oldRole} → ${role})` : ''}${roleChange && phoneChange ? ' va ' : ''}${phoneChange ? 'telefoni' : ''} o'zgartirildi: ${user.firstName} ${user.lastName || ''}`.trim(),
+        oldValue: { ...(roleChange ? { role: oldRole } : {}), ...(phoneChange ? { phone: oldPhone } : {}) },
+        newValue: { ...(roleChange ? { role } : {}), ...(phoneChange ? { phone: newPhone } : {}) },
+      });
     }
 
     return res.json({
@@ -720,11 +728,30 @@ router.put('/users/:id', requireAuth, requireOwnerOrAdmin, async (req, res) => {
   }
 });
 
-// Admin: Delete user
+// Admin: Delete user — ega/direktor himoyasi va o'zini o'chirmaslik (utils/userGuards.ts),
+// routes/users.ts DELETE bilan bir xil: dasturchi faqat firmasiz (eski/test) hisoblarni o'chiradi.
 router.delete('/users/:id', requireAuth, requireOwnerOrAdmin, async (req, res) => {
   try {
-    const user = await User.findOneAndDelete(scoped({ _id: req.params.id }));
+    const requester = req.user!;
+    const caller: GuardCaller = {
+      userId: String(requester.userId), role: requester.role, companyId: requester.companyId,
+      isOwner: requester.isOwner, isDeveloper: requester.isDeveloper,
+    };
+    const filter: any = caller.isDeveloper
+      ? { _id: req.params.id, companyId: { $in: [null, undefined] }, isOwner: { $ne: true } }
+      : scoped({ _id: req.params.id });
+    const target = await User.findOne(filter);
+    if (!target) return res.status(404).json({ error: 'Foydalanuvchi topilmadi' });
+    const accessErr = checkTargetAccess(caller, target, 'delete');
+    if (accessErr) return res.status(accessErr.status).json({ error: accessErr.error });
+
+    const user = await User.findOneAndDelete({ _id: target._id });
     if (!user) return res.status(404).json({ error: 'Foydalanuvchi topilmadi' });
+    await auditUserAction(caller, req, {
+      action: 'delete', entityId: String(user._id),
+      description: `Foydalanuvchi o'chirildi: ${user.firstName} ${user.lastName || ''}`.trim(),
+      oldValue: { firstName: user.firstName, lastName: user.lastName, phone: user.phone, role: user.role },
+    });
     res.json({ message: "O'chirildi" });
   } catch (err) {
     console.error(err);

@@ -570,7 +570,7 @@ export function Avatar({ user, size = "md" }: { user: AppUser; size?: "sm"|"md"|
   const [avatarBad, setAvatarBad] = useState(false);
   useEffect(() => { setAvatarBad(false); }, [user.avatar]);
   if (user.avatar && !avatarBad) return <img src={user.avatar} alt={user.name} className={`${sz} rounded-full object-cover flex-shrink-0`} onError={() => setAvatarBad(true)}/>;
-  const initials = user.name.split(" ").map(w => w[0]).slice(0,2).join("");
+  const initials = (user.name || "").split(" ").filter(Boolean).map(w => w[0]).slice(0,2).join("") || "?";
   return (
     <div className={`${sz} rounded-full bg-primary/15 flex items-center justify-center font-bold text-primary dark:text-white flex-shrink-0 select-none`}>
       {initials}

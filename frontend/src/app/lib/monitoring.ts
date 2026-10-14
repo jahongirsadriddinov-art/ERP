@@ -15,6 +15,10 @@ export const platformName = () => (isTauri() ? "windows" : isAndroid() ? "androi
 export function reportError(message: string, stack?: string, extra?: Record<string, unknown>) {
   try {
     if (!message || IGNORE.some(re => re.test(message))) return;
+    // Lokal sinov/robot testlari (localhost) xatolarini haqiqiy dasturchi botiga yubormaymiz
+    // (Android ilova ham https://localhost'da ishlaydi — u native bo'lgani uchun xatolari yuboriladi)
+    const w = window as any;
+    if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname) && !w.Capacitor?.isNativePlatform?.() && !w.__TAURI_INTERNALS__) return;
     const key = message.slice(0, 200);
     if (sent.has(key) || count >= 15) return;
     sent.add(key); count++;

@@ -53,7 +53,8 @@ async function acquireMedia(video: boolean, facingMode: string, warn: (m: string
     try { return await md.getUserMedia({ audio: true, video: { facingMode } }); }
     catch (e: any) {
       if (e?.name === 'NotAllowedError') throw e;
-      reportError(`call camera: ${e?.name || ''} ${e?.message || ''}`);
+      // Kamera band/yo'q — kutilgan holat (qo'ng'iroq ovoz bilan davom etadi), dasturchiga xato sifatida yubormaymiz
+      if (e?.name !== 'NotReadableError' && e?.name !== 'NotFoundError' && !/in use/i.test(e?.message || '')) reportError(`call camera: ${e?.name || ''} ${e?.message || ''}`);
       warn(e?.name === 'NotReadableError' || /in use/i.test(e?.message || '')
         ? "Kamera band (boshqa dastur yoki oynada ishlatilmoqda) — qo'ng'iroq kamerasiz davom etadi"
         : "Kamera topilmadi — qo'ng'iroq kamerasiz davom etadi");

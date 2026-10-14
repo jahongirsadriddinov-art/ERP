@@ -75,7 +75,13 @@ export function attachSoundUnlock(): void {
  * bo'lmagan muhitda (masalan ba'zi WebView'lar) yoki mute holatida ham
  * ilova hech qachon bu sababdan buzilmaydi.
  */
+// Egasi qarori (2026-10-15): ilovada ovoz FAQAT qo'ng'iroq paytida (jiringlash, ulandi, tugadi).
+// Tugma, bildirishnoma, toast va boshqa barcha UI ovozlari o'chirilgan; ovoz sozlamasi ham olib tashlangan.
+const CALL_CUES = new Set<string>(["connecting", "connect", "disconnect"]);
+try { if (!sfx.isEnabled()) sfx.setEnabled(true); } catch { /* */ } // avval o'chirilgan bo'lsa ham qo'ng'iroq eshitilsin
+
 export function playSound(cue: CueName, options?: PlayOptions) {
+  if (!CALL_CUES.has(cue)) return null;
   try {
     return sfx.play(cue, options);
   } catch {

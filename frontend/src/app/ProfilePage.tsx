@@ -676,7 +676,6 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
             ...((!subData?.features || subData.features.includes('multi_currency')) ? [
               { key: "currency" as const, icon: DollarSign, label: t('profile.currencyRate'), hint: null as string|null, swatch: null },
             ] : []),
-            { key: "sound" as const, icon: soundOn ? Volume2 : VolumeX, label: t('profile.sound'), hint: soundOn ? t('profile.soundOn') : t('profile.soundOff'), swatch: null },
             { key: "devices" as const, icon: Smartphone, label: t('profile.connectedDevices'), hint: null as string|null, swatch: null },
             // AI ovozli yordamchi: firma sozlamalari — direktor / o'rinbosar / egasi (tarifda ai_assistant bo'lsa);
             // shaxsiy AI sozlamalari (rozilik, kanal, voz kechish) — har bir xodim uchun.
@@ -945,30 +944,6 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
                 {importLoading ? <MorphIcon icon={Loader2} className="w-4 h-4 animate-spin" /> : <MorphIcon icon={Upload} className="w-4 h-4" />}
                 {t('dashboard.importBackup')}
               </button></>}
-            </div>
-          )}
-          {activePanel === "sound" && (
-            <div className="surface border border-border overflow-hidden">
-              <div className="p-3">
-                <div className="grid grid-cols-2 gap-2">
-                  {([[true, t('profile.soundOn'), Volume2], [false, t('profile.soundOff'), VolumeX]] as [boolean, string, IconNode][]).map(([val, label, Icon]) => (
-                    <button key={String(val)} onClick={() => handleSoundToggle(val)}
-                      className={`flex flex-col items-center gap-2 py-5 rounded-2xl border-2 liquid-transition ${soundOn===val ? "border-primary bg-primary/10 text-primary shadow-lg shadow-primary/10" : "border-border text-muted-foreground hover:border-primary/40 hover:bg-muted/40"}`}>
-                      <MorphIcon icon={Icon} className="w-6 h-6" />
-                      <span className="text-sm font-semibold">{label}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-              {soundOn && (
-                <div className="px-4 pb-4 pt-1 border-t border-border/50">
-                  <label className="text-[10px] text-muted-foreground block mb-2 mt-3 uppercase tracking-wider font-bold">{t('profile.soundVolume')}</label>
-                  <input type="range" min={0} max={100} step={5} value={soundVol}
-                    onChange={e => handleSoundVolume(Number(e.target.value))}
-                    onMouseUp={() => playSound("select")} onTouchEnd={() => playSound("select")}
-                    className="w-full accent-primary" aria-label={t('profile.soundVolume')} />
-                </div>
-              )}
             </div>
           )}
           {activePanel === "devices" && (

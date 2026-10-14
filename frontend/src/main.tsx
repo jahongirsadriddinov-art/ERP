@@ -22,16 +22,15 @@ import { API_BASE } from "./app/api.ts";
 import "./app/i18n";
 import "./styles/index.css";
 import { attachSoundUnlock } from "./app/sound.ts";
-import { attachGlobalClickSounds } from "./app/soundClicks.ts";
+import { attachAppleHaptics } from "./app/lib/haptics";
 import { installTapGuard } from "./app/lib/tapGuard";
 import { isChunkError, reloadForNewVersion } from "./app/lib/chunkReload";
-import "./app/soundToast.ts"; // sonner toast'lariga avtomatik ovoz ulaydi (butun sayt uchun)
 
 // UI ovoz effektlari (uisfx, "zen" pack) — birinchi bosishda audio
 // kontekstni ochadi va butun sayt bo'ylab tugma/havola bosishlariga
 // markazlashtirilgan tovush qo'shadi.
 attachSoundUnlock();
-attachGlobalClickSounds();
+attachAppleHaptics(); // tugma ovozlari o'rniga — faqat Apple qurilmalarida yengil titrash
 installTapGuard();
 // Yangi versiyadan keyin eski bo'lak topilmasa (masalan tugma bosilganda yuklanadigan modul) — sahifa bir marta yangilanadi
 window.addEventListener("unhandledrejection", e => { if (isChunkError(e.reason)) { e.preventDefault(); reloadForNewVersion(); } });

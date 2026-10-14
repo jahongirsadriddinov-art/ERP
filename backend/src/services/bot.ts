@@ -1070,6 +1070,10 @@ bot.on('contact', async (msg: any) => {
       return;
     }
 
+    // Bitta Telegram chat — faqat BITTA xodimga. Avval bir chat ikki yozuvga bog'lanib qolishi mumkin edi
+    // (masalan xodim raqami vaqtincha boshqa odamniki bo'lganda) — natijada chiqim tasdiqlash xabari
+    // tanlangan odamga emas, o'sha chat egasiga borardi. Endi boshqa yozuvlardan uziladi.
+    await User.updateMany({ telegramChatId: chatId.toString(), _id: { $ne: user._id } }, { $unset: { telegramChatId: 1 } }).catch(() => {});
     user.telegramChatId = chatId.toString();
     await user.save();
 

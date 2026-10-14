@@ -329,6 +329,19 @@ export default function CallOverlay({ currentUser, users, call, onClose, onSendM
         const anyAnswered = Object.values(pcs.current).some(pc => !!pc.remoteDescription);
         if (anyConnected || call.videoChat) return;
         if (call.direction === 'out' && !anyAnswered) toast.message(t('call.noAnswer', "Javob bo'lmayapti — suhbatdosh ilovasi yopiq yoki internetsiz bo'lishi mumkin"));
+        // Diagnostika: qaysi nomzodlar yig'ildi (host/srflx/relay) va ICE qayerda to'xtadi — dasturchi botiga
+        if (anyAnswered) Object.entries(pcs.current).forEach(([pid, pc]) => {
+          pc.getStats().then(stats => {
+            const loc: Record<string, number> = {}, rem: Record<string, number> = {}; let pairs = 0, succeeded = 0;
+            stats.forEach((r: any) => {
+              if (r.type === 'local-candidate') loc[r.candidateType] = (loc[r.candidateType] || 0) + 1;
+              if (r.type === 'remote-candidate') rem[r.candidateType] = (rem[r.candidateType] || 0) + 1;
+              if (r.type === 'candidate-pair') { pairs++; if (r.state === 'succeeded') succeeded++; }
+            });
+            const servers = (iceConfigRef.current?.iceServers || []).map((x: any) => String(Array.isArray(x.urls) ? x.urls[0] : x.urls).split(':')[0]).join(',');
+            reportError(`call ice timeout: ice=${pc.iceConnectionState} conn=${pc.connectionState} gather=${pc.iceGatheringState} local=${JSON.stringify(loc)} remote=${JSON.stringify(rem)} pairs=${pairs}/${succeeded} servers=${servers}`, undefined, { peer: pid, mode: call.mode, dir: call.direction });
+          }).catch(() => {});
+        });
         else if (anyAnswered) toast.error(t('call.networkBlocked', "Ulanib bo'lmadi: tarmoq to'g'ridan-to'g'ri ulanishga ruxsat bermayapti (TURN server ishlamayapti). Wi-Fi/mobil internetni almashtirib ko'ring."));
       }, 35_000);
       if (call.videoChat && call.groupId) {

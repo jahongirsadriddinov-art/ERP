@@ -2016,7 +2016,7 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
       {sections.map(section => {
         const isOpen = activeTab === section.key;
         return (
-          <div key={section.key} className={`rounded-2xl overflow-hidden border bg-card/80 backdrop-blur-sm shadow-sm transition-shadow ${isOpen ? "border-primary/40 shadow-lg shadow-primary/10" : "border-border"}`}>
+          <div key={section.key} className={`shrink-0 rounded-2xl overflow-hidden border bg-card/80 backdrop-blur-sm shadow-sm transition-shadow ${isOpen ? "border-primary/40 shadow-lg shadow-primary/10" : "border-border"}`}>
             {/* Header — always visible */}
             <button
               onClick={() => toggle(section.key)}
@@ -2032,7 +2032,7 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
 
             {/* Content — only visible when open */}
             {isOpen && (
-              <div className="animate-slide-up-fade max-h-[52vh] overflow-y-auto scrollbar-hide">
+              <div className="animate-slide-up-fade">
                 {section.key === "rahbariyat" && (
                   <div className="p-4 space-y-3">
                     {users.filter(u => u.role === "direktor").map(u => (

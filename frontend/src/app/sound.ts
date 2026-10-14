@@ -83,6 +83,11 @@ export function playSound(cue: CueName, options?: PlayOptions) {
   }
 }
 
+/** Barcha chalinayotgan ovozlarni to'xtatadi (masalan qo'ng'iroq ulanganda qolib ketgan signal halqasi). */
+export function stopAllSounds(): void {
+  try { sfx.stopAll(); } catch { /* */ }
+}
+
 export function isSoundEnabled(): boolean {
   try {
     return sfx.isEnabled();

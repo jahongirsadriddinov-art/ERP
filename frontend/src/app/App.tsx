@@ -89,7 +89,7 @@ import { isAiCallActive, decideCallOffer } from "./aiVoice/bus";
 import { motion, AnimatePresence } from "motion/react";
 import { setSiteLanguage, SiteLang, langLabel } from "./i18n";
 import { isTelegramMiniApp, getTelegramInitData, markManualLogout, clearManualLogout, telegramAutoLoginAllowed } from "./telegramWebApp";
-import { installAndroidBackHandler, saveOrShareBlob, openExternalUrl, isNative, isTabletOrLarger } from "./platform";
+import { installAndroidBackHandler, saveOrShareBlob, openExternalUrl, isNative, isTabletOrLarger, notifyOS, ensureNotifyPermission, appInForeground } from "./platform";
 import QrLoginPanel from "./QrLoginPanel";
 import { AppDownloadCards } from "./AppDownload";
 import { openMediaViewer } from "./MediaViewer";
@@ -4825,10 +4825,8 @@ export default function App() {
       fetchMsgs();
       fetchGroups();
 
-      // Browser bildirishnoma ruxsati
-      if ("Notification" in window && Notification.permission === "default") {
-        Notification.requestPermission().catch(()=>{});
-      }
+      // Tizim bildirishnomasi ruxsati (Windows / Android / iOS / brauzer — platformaning o'zidan)
+      ensureNotifyPermission().catch(()=>{});
 
       // ── Real-time (Socket.io) ──────────────────────────────────────────────
       const socket = connectSocket(liveUser.id, liveUser.companyId);
@@ -4853,16 +4851,7 @@ export default function App() {
         // kelmaydi" degan shikoyat aynan shu qatordan kelib chiqqan —
         // service worker orqali chaqirilganda (sw.js'dagi push handleri
         // bilan bir xil parametrlar) haqiqiy tizim bildirishnomasi chiqadi.
-        if (typeof document !== "undefined" && document.hidden && "Notification" in window && Notification.permission === "granted" && "serviceWorker" in navigator) {
-          navigator.serviceWorker.ready.then(reg => reg.showNotification(name, {
-            body: preview,
-            icon: '/favicon-192.png',
-            badge: '/favicon-192.png',
-            tag: 'qurilish-chat-' + m.fromUserId,
-            data: { url: '/?page=chat' },
-            vibrate: [200, 100, 200],
-          } as NotificationOptions)).catch(() => {});
-        }
+        if (!viewingChat || !appInForeground()) notifyOS(name, preview, { tag: 'qurilish-chat-' + m.fromUserId, url: '/?page=chat' });
       };
       const onEdit = (payload: any) => setMessages(prev => prev.map(x => x.id===(payload.id||payload._id) ? {...x, ...withId(payload)} : x));
       const onDelete = (payload: any) => setMessages(prev => prev.map(x => x.id===payload.id ? {...x, deleted: true} : x));
@@ -4908,6 +4897,7 @@ export default function App() {
         sfx.unlock().catch(() => {});
         try { navigator.vibrate?.([400, 200, 400, 200, 400]); } catch {}
         setActiveCall({ direction: 'in', mode: d.mode || 'voice', peerId: d.from, groupId: d.groupId, offer: d.sdp, fromName: d.fromName });
+        notifyOS(d.mode === 'video' ? "📹 Video qo'ng'iroq" : "📞 Qo'ng'iroq", `${d.fromName || ''} qo'ng'iroq qilmoqda`.trim(), { tag: 'call' });
       };
 
       // Guruh video chat (Telegram-ga o'xshash) — bu HECH KIMNI chaqirmaydi,

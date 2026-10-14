@@ -24,6 +24,7 @@ import { MorphIcon } from "morphicons/react";
 import { motion, AnimatePresence } from "motion/react";
 import { API_BASE } from "./api";
 import { playSound } from "./sound";
+import { notifyOS } from "./platform";
 import { AnnouncementContent, type AnnouncementData } from "./AnnouncementParts";
 import type { AppUser, Msg, Transfer, Expense } from "./App";
 
@@ -185,7 +186,12 @@ export default function NotificationCenter({ messages, transfers, expenses, user
   // Yangi bildirishnoma kelganda (son oshganda) tovush — birinchi yuklanishda emas
   const prevRef = useRef<number | null>(null);
   useEffect(() => {
-    if (prevRef.current !== null && unreadTotal > prevRef.current) playSound("notification");
+    if (prevRef.current !== null && unreadTotal > prevRef.current) {
+      playSound("notification");
+      // Ilova orqada bo'lsa — eng yangi (chatdan tashqari: chat o'zi alohida bildiradi) bildirishnomani tizimdan ko'rsatamiz
+      const latest = items.find(i => !i.read && !i.key.startsWith("msg:"));
+      if (latest) notifyOS(latest.title, latest.body, { tag: latest.key });
+    }
     prevRef.current = unreadTotal;
   }, [unreadTotal]);
 

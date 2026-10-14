@@ -238,17 +238,73 @@ export async function openExternalUrl(url: string): Promise<void> {
   window.open(url, '_blank', 'noopener,noreferrer');
 }
 
-// Desktop notification (Tauri yoki Web Push)
-export async function sendNativeNotification(title: string, body: string) {
-  if (isTauri()) {
-    try {
+// ── Tizim bildirishnomasi (OS'ning o'zidan) ─────────────────────────────────
+// Avval ilovalarda bildirishnoma faqat ilova ichida (toast) chiqardi: Windows/Android ilovalarida service worker
+// o'chirilgan, sayt kodi esa faqat service worker orqali ko'rsatardi. Endi har platforma o'z tizimidan:
+//   Windows (Tauri) → Windows bildirishnomasi; Android/iOS (Capacitor) → telefon bildirishnomasi;
+//   sayt → brauzer (Chrome/Edge) bildirishnomasi (service worker bo'lsa u orqali — Android Chrome'da shart).
+// Ilova oldinda va fokusda bo'lsa chiqarilmaydi (u yerda ichki toast yetarli).
+let nativePermission: boolean | null = null;
+const ANDROID_CHANNEL = 'erp-main';
+
+export async function ensureNotifyPermission(): Promise<boolean> {
+  if (nativePermission !== null) return nativePermission;
+  try {
+    if (isTauri()) {
+      const n = await import('@tauri-apps/plugin-notification');
+      let ok = await n.isPermissionGranted();
+      if (!ok) ok = (await n.requestPermission()) === 'granted';
+      return (nativePermission = ok);
+    }
+    if (isCapacitor()) {
+      const { LocalNotifications } = await import('@capacitor/local-notifications');
+      let st = await LocalNotifications.checkPermissions();
+      if (st.display !== 'granted') st = await LocalNotifications.requestPermissions();
+      const ok = st.display === 'granted';
+      if (ok && isAndroid()) {
+        await LocalNotifications.createChannel({ id: ANDROID_CHANNEL, name: 'ERP', description: "Xabarlar va qo'ng'iroqlar", importance: 5, visibility: 1, vibration: true }).catch(() => {});
+      }
+      return (nativePermission = ok);
+    }
+    if ('Notification' in window) {
+      if (Notification.permission === 'default') await Notification.requestPermission().catch(() => {});
+      return (nativePermission = Notification.permission === 'granted');
+    }
+  } catch { /* plagin yo'q (eski ilova versiyasi) — jim */ }
+  return (nativePermission = false);
+}
+
+export function appInForeground(): boolean {
+  return typeof document !== 'undefined' && !document.hidden && document.hasFocus();
+}
+
+export async function notifyOS(title: string, body: string, opts: { tag?: string; url?: string; force?: boolean } = {}) {
+  if (!opts.force && appInForeground()) return;
+  if (!(await ensureNotifyPermission())) return;
+  try {
+    if (isTauri()) {
       const { sendNotification } = await import('@tauri-apps/plugin-notification');
-      await sendNotification({ title, body });
+      sendNotification({ title, body });
       return;
-    } catch {}
-  }
-  // Web fallback
-  if ('Notification' in window && Notification.permission === 'granted') {
-    new Notification(title, { body });
-  }
+    }
+    if (isCapacitor()) {
+      const { LocalNotifications } = await import('@capacitor/local-notifications');
+      await LocalNotifications.schedule({ notifications: [{
+        id: Math.floor(Math.random() * 2_000_000_000), title, body,
+        channelId: isAndroid() ? ANDROID_CHANNEL : undefined, extra: { url: opts.url || '/' },
+      }] });
+      return;
+    }
+    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+      const reg = await navigator.serviceWorker.ready;
+      await reg.showNotification(title, { body, icon: '/favicon-192.png', badge: '/favicon-192.png', tag: opts.tag, data: { url: opts.url || '/' }, vibrate: [200, 100, 200] } as NotificationOptions);
+      return;
+    }
+    if ('Notification' in window && Notification.permission === 'granted') new Notification(title, { body, tag: opts.tag, icon: '/favicon-192.png' });
+  } catch { /* bildirishnoma chiqmasa ham ilova ishlashda davom etadi */ }
+}
+
+// Eski nom (moslik uchun)
+export async function sendNativeNotification(title: string, body: string) {
+  return notifyOS(title, body, { force: true });
 }

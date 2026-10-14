@@ -17,7 +17,7 @@ import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import { getSocket, takeEarlyIce } from "./socket";
 import { AppUser, ActiveCall, Msg } from "./App";
-import { playSound } from "./sound";
+import { playSound, stopAllSounds } from "./sound";
 import { API_BASE } from "./api";
 import { reportError } from "./lib/monitoring";
 
@@ -46,21 +46,39 @@ import { reportError } from "./lib/monitoring";
 // Kamera/mikrofonni olish — bosqichma-bosqich zaxira bilan. Avval qo'ng'iroq butunlay yopilardi, masalan
 // "Device in use" (kamera boshqa dastur/oynada band — bir kompyuterda ikki akkaunt bilan sinaganda ham shunday).
 // Endi: video+ovoz → (kamera bo'lmasa) faqat ovoz → (mikrofon ham bo'lmasa) bo'sh oqim (faqat eshitadi/ko'radi).
+// Oldingi qo'ng'iroqdan qolib ketgan (to'xtatilmagan) kamera/mikrofon oqimlari — Windows'da kamera shu
+// sabab "band" bo'lib qolardi. Yangi qo'ng'iroq oldidan ularni yopamiz.
+const liveStreams = new Set<MediaStream>();
+export function releaseCallMedia(stream?: MediaStream | null) {
+  const list = stream ? [stream] : [...liveStreams];
+  list.forEach(st => { st.getTracks().forEach(t => { try { t.stop(); } catch {} }); liveStreams.delete(st); });
+}
+const isBusy = (e: any) => e?.name === 'NotReadableError' || e?.name === 'TrackStartError' || /in use|could not start/i.test(e?.message || '');
+
 async function acquireMedia(video: boolean, facingMode: string, warn: (m: string) => void): Promise<MediaStream> {
   const md = navigator.mediaDevices;
   if (!md?.getUserMedia) { warn("Bu qurilmada kamera/mikrofon yo'q — faqat eshitasiz"); return new MediaStream(); }
+  releaseCallMedia();
+  const keep = (st: MediaStream) => { liveStreams.add(st); return st; };
   if (video) {
-    try { return await md.getUserMedia({ audio: true, video: { facingMode } }); }
-    catch (e: any) {
-      if (e?.name === 'NotAllowedError') throw e;
-      // Kamera band/yo'q — kutilgan holat (qo'ng'iroq ovoz bilan davom etadi), dasturchiga xato sifatida yubormaymiz
-      if (e?.name !== 'NotReadableError' && e?.name !== 'NotFoundError' && !/in use/i.test(e?.message || '')) reportError(`call camera: ${e?.name || ''} ${e?.message || ''}`);
-      warn(e?.name === 'NotReadableError' || /in use/i.test(e?.message || '')
-        ? "Kamera band (boshqa dastur yoki oynada ishlatilmoqda) — qo'ng'iroq kamerasiz davom etadi"
-        : "Kamera topilmadi — qo'ng'iroq kamerasiz davom etadi");
+    let lastErr: any = null;
+    // Windows kamerani oldingi foydalanishdan keyin bir lahza kech bo'shatadi — "band" bo'lsa yana 2 marta urinamiz
+    for (let i = 0; i < 3; i++) {
+      try { return keep(await md.getUserMedia({ audio: true, video: i === 0 ? { facingMode } : true })); }
+      catch (e: any) {
+        if (e?.name === 'NotAllowedError') throw e;
+        lastErr = e;
+        if (!isBusy(e) || i === 2) break;
+        await new Promise(r => setTimeout(r, 600 * (i + 1)));
+      }
     }
+    // Kamera band/yo'q — kutilgan holat (qo'ng'iroq ovoz bilan davom etadi), dasturchiga xato sifatida yubormaymiz
+    if (!isBusy(lastErr) && lastErr?.name !== 'NotFoundError') reportError(`call camera: ${lastErr?.name || ''} ${lastErr?.message || ''}`);
+    warn(isBusy(lastErr)
+      ? "Kamera band (boshqa dastur yoki oynada ishlatilmoqda) — qo'ng'iroq kamerasiz davom etadi"
+      : "Kamera topilmadi — qo'ng'iroq kamerasiz davom etadi");
   }
-  try { return await md.getUserMedia({ audio: true, video: false }); }
+  try { return keep(await md.getUserMedia({ audio: true, video: false })); }
   catch (e: any) {
     if (e?.name === 'NotAllowedError') throw e;
     reportError(`call mic: ${e?.name || ''} ${e?.message || ''}`);
@@ -404,6 +422,8 @@ export default function CallOverlay({ currentUser, users, call, onClose, onSendM
       Object.values(pcs.current).forEach(pc => pc.close()); pcs.current = {};
       Object.values(statsTimers.current).forEach(clearInterval); statsTimers.current = {};
       localStream.current?.getTracks().forEach(t => t.stop());
+      releaseCallMedia(localStream.current); // Windows kamerani darhol bo'shatsin
+      stopAllSounds();
       if (call.videoChat && call.groupId) socket?.emit('videochat:leave', { groupId: call.groupId });
     };
   }, []);
@@ -550,6 +570,7 @@ export default function CallOverlay({ currentUser, users, call, onClose, onSendM
     if (status === 'connected') {
       ringRef.current?.stop();
       ringRef.current = null;
+      stopAllSounds(); // halqa ba'zan to'xtamay "qiq-qiq" chalib qolardi
       if (!connectedPlayedRef.current) { connectedPlayedRef.current = true; playSound('connect'); }
       return;
     }

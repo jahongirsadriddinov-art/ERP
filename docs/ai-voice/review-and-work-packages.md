@@ -641,3 +641,10 @@ P0 goes first and ships on its own. P1 follows. P2–P8 then run in parallel and
 - **Pilot:** company "Jondor Iris Stroy", test user (the owner's own Telegram, already linked to the bot). The owner has already DM'd the AI Telegram account and opened call privacy.
 - Worker hosting: Railway deferred; try Render first with the UDP probe.
 - **Text brain provider:** **Gemini primary → OpenRouter fallback** (`OPENROUTER_API_KEY`, `OPENROUTER_MODEL`) (owner has no Claude key yet); Claude Opus 5.5 kept as an optional adapter enabled only when `ANTHROPIC_API_KEY` is set and selected in settings. Realtime voice stays Gemini Live. See `docs/ai-voice/llm-provider.md` — P2 must follow it.
+- **Free mode for the pilot (2026-10-14):** the owner cannot pay yet. Backend stays on the Render FREE plan. The Python
+  `tgcall-worker` must ALSO run on the owner's **Windows PC** (no Docker required): provide `tgcall-worker/run-windows.bat`
+  (creates a venv, installs pinned requirements, runs the worker) and a `.env` file next to it (gitignored; template
+  `.env.example`) holding `TG_API_ID`, `TG_API_HASH`, `TG_SESSION_KEY`, `BACKEND_URL`, worker key paths. The worker only
+  makes OUTBOUND connections (backend socket + Telegram), so a home PC behind NAT works. The Dockerfile stays for later
+  server hosting. In-app voice on the free 0.1-CPU backend is pilot-only (1–2 concurrent sessions max; enforce via
+  `AI_LIVE_MAX_CONCURRENT=1` default on free plan). Owner already added `OPENROUTER_API_KEY` on Render.

@@ -19,6 +19,7 @@ import Rocket from "@hugeicons/core-free-icons/Rocket01Icon";
 import Building from "@hugeicons/core-free-icons/Building03Icon";
 import Computer from "@hugeicons/core-free-icons/ComputerIcon";
 import ArrowRight from "@hugeicons/core-free-icons/ArrowRight01Icon";
+import AiSparkles from "@hugeicons/core-free-icons/AiSparklesIcon";
 import { MorphIcon } from "morphicons/react";
 import { motion, AnimatePresence } from "motion/react";
 import { API_BASE } from "./api";
@@ -54,6 +55,7 @@ interface ServerNotif { _id: string; type: string; title: string; body: string; 
 const NOTIF_ICONS: Record<string, any> = {
   message: MessageCircle, transfer: Package, expense: Wallet, approval_request: Clock,
   approval_result: CheckCheck, qr_scan: QrCode, gps: MapPin, system: Info,
+  ai: AiSparkles, // AI ovozli yordamchi (davomat, eslatma, rahbarga xabar)
 };
 
 const LS_DISMISSED = "erp_notif_dismissed";

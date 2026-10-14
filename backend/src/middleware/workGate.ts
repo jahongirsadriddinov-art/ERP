@@ -24,7 +24,7 @@ export function invalidateShift(userId: string) { cache.delete(String(userId)); 
 
 // Smena yopiq bo'lsa ham ochiq qoladigan yo'llar (darvoza ekrani, qayta ishga kelish, joylashuv, sozlamalar)
 const ALLOW = [/^\/api\/attendance/, /^\/api\/auth/, /^\/api\/gps/, /^\/api\/pin/, /^\/api\/sessions/, /^\/api\/push/,
-  /^\/api\/errors/, /^\/api\/status/, /^\/api\/currency/];
+  /^\/api\/errors/, /^\/api\/status/, /^\/api\/currency/, /^\/api\/ai-voice\/me/];
 const ALLOW_GET = [/^\/api\/users\/?$/, /^\/api\/company/, /^\/api\/notifications\/unread-count/];
 
 export function workGateBlocks(req: Request, role: string): boolean {

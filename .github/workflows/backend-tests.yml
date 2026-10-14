@@ -26,8 +26,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
           cache-dependency-path: backend/package-lock.json
       - run: npm ci
+      # Tip tekshiruvi: asosiy kod (tsconfig.json testlarni chiqarib tashlaydi) va testlar alohida
+      - run: npx tsc --noEmit -p .
+      - run: npx tsc -p tsconfig.test.json
       - run: npm test

@@ -85,6 +85,7 @@ import { API_BASE, parseSmetaFile, uploadChatMedia, offlineQueueCount } from "./
 import NotificationCenter from "./NotificationCenter";
 import { AnnouncementComposer, AnnouncementContent, AnnouncementPopup, type AnnouncementData } from "./AnnouncementParts";
 import { connectSocket, getSocket, disconnectSocket } from "./socket";
+import { isAiCallActive, decideCallOffer } from "./aiVoice/bus";
 import { motion, AnimatePresence } from "motion/react";
 import { setSiteLanguage, SiteLang, langLabel } from "./i18n";
 import { isTelegramMiniApp, getTelegramInitData, markManualLogout, clearManualLogout, telegramAutoLoginAllowed } from "./telegramWebApp";
@@ -116,6 +117,7 @@ if (typeof window !== "undefined" && localStorage.getItem("token")) {
 const RegisterWizard = lazy(() => import("./RegisterWizard"));
 const DeveloperPanel = lazy(() => import("./DeveloperPanel"));
 const AIAssistant = lazy(() => import("./AIAssistant"));
+const AiVoiceRoot = lazy(() => import("./aiVoice/AiVoiceRoot"));
 const QRScanner = lazy(() => import("./QRScanner"));
 const LandingPage = lazy(() => import("./LandingPage"));
 const LocationPicker = lazy(() => import("./LocationPicker"));
@@ -4899,8 +4901,10 @@ export default function App() {
       // (vibratsiya) — bu HECH QANDAY oldingi foydalanuvchi harakatini talab
       // qilmaydi, shu sabab ovoz ishlamasa ham kamida FIZIK ogohlantirish beradi.
       const onCallOffer = (d: any) => {
-        if (activeCallRef.current) return; // allaqachon qo'ng'iroqda — CallOverlay mesh'ni boshqaradi
-        if (d.from === liveUser.id) return;
+        // allaqachon qo'ng'iroqda — CallOverlay mesh'ni boshqaradi; AI suhbat faol bo'lsa — "band" deb rad etamiz
+        const decision = decideCallOffer({ from: d?.from, selfId: liveUser.id, webrtcActive: !!activeCallRef.current, aiActive: isAiCallActive() });
+        if (decision === 'ignore') return;
+        if (decision === 'busy') { socket.emit('call:reject', { to: d.from, from: liveUser.id, reason: 'busy' }); return; }
         sfx.unlock().catch(() => {});
         try { navigator.vibrate?.([400, 200, 400, 200, 400]); } catch {}
         setActiveCall({ direction: 'in', mode: d.mode || 'voice', peerId: d.from, groupId: d.groupId, offer: d.sdp, fromName: d.fromName });
@@ -5850,6 +5854,13 @@ export default function App() {
           />
         </Suspense>
       )}
+
+      {/* AI ovozli yordamchi (kiruvchi AI qo'ng'iroq + ovozli suhbat) — barcha firma xodimlari uchun bir marta
+          (dasturchi bu yerga yetmaydi — u DeveloperPanel'da). busy: WebRTC qo'ng'iroq paytida AI qo'ng'iroq
+          avtomatik "band" deb rad etiladi. */}
+      <Suspense fallback={null}>
+        <AiVoiceRoot currentUser={liveUser} busy={!!activeCall} />
+      </Suspense>
 
       {/* E'lonlar taxtasi */}
       {showAnnouncements && (

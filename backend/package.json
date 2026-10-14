@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "vitest run",
+    "typecheck": "tsc --noEmit -p . && tsc -p tsconfig.test.json",
     "test:watch": "vitest",
     "dev": "nodemon --exec ts-node src/index.ts",
     "start": "ts-node src/index.ts",
@@ -15,6 +16,9 @@
   "author": "",
   "license": "ISC",
   "type": "commonjs",
+  "engines": {
+    "node": "24.x"
+  },
   "dependencies": {
     "@google/genai": "^2.28.0",
     "@google/generative-ai": "^0.24.1",

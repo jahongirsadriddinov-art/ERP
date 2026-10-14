@@ -103,6 +103,11 @@ import { isPinSet, useAppLock, markActiveNow, clearPin, PinSetupScreen, PinLockS
 import type { LandingFocus } from "./LandingPage";
 import { Avatar, BG_TEMPLATES, COLOR_THEMES, CompanyLogo, FinancePage, RoleBadge, fmtWorkDuration, isAdmin, resizeImageFile } from "./App";
 import type { AppUser, Project } from "./App";
+import AiPhone from "@hugeicons/core-free-icons/AiPhone01Icon";
+import AiVoiceIcon from "@hugeicons/core-free-icons/AiVoiceIcon";
+// AI ovozli yordamchi sozlamalari — alohida chunk (faqat panel ochilganda yuklanadi)
+const AiSettingsPanel = lazy(() => import("./aiVoice/settings/AiSettingsPanel"));
+const MyAiPrefsPanel = lazy(() => import("./aiVoice/settings/MyAiPrefsPanel"));
 
 // App.tsx'dan ajratilgan — faqat shu sahifa ochilganda yuklanadi (boshlang'ich yuklanish tezroq).
 // ─── Audit Log mini viewer (Admin only) ──────────────────────────────────────
@@ -547,7 +552,7 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
   const changeScale = (v: number) => { setFontScale(v); applyFontScale(v); };
   const [fontWeight, setFontWeightState] = useState<FontWeightMode>(getFontWeight);
   const changeWeight = (w: FontWeightMode) => { setFontWeightState(w); applyFontWeight(w); };
-  const [activePanel, setActivePanel] = useState<null | "danger" | "font" | "bg" | "appearance" | "color" | "perms" | "projects" | "language" | "subscription" | "currency" | "sound" | "devices" | "backup">(null);
+  const [activePanel, setActivePanel] = useState<null | "danger" | "font" | "bg" | "appearance" | "color" | "perms" | "projects" | "language" | "subscription" | "currency" | "sound" | "devices" | "backup" | "aiVoice" | "aiPrefs">(null);
   const APPEARANCE_LABELS: Record<string, string> = { light: t('profile.themeLight'), dark: t('profile.themeDark'), system: t('profile.themeSystem') };
 
   // ── Ovoz effektlari (uisfx, "zen" pack) — yoqilgan/o'chirilgan va balandlik
@@ -673,6 +678,14 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
             ] : []),
             { key: "sound" as const, icon: soundOn ? Volume2 : VolumeX, label: t('profile.sound'), hint: soundOn ? t('profile.soundOn') : t('profile.soundOff'), swatch: null },
             { key: "devices" as const, icon: Smartphone, label: t('profile.connectedDevices'), hint: null as string|null, swatch: null },
+            // AI ovozli yordamchi: firma sozlamalari — direktor / o'rinbosar / egasi (tarifda ai_assistant bo'lsa);
+            // shaxsiy AI sozlamalari (rozilik, kanal, voz kechish) — har bir xodim uchun.
+            ...((isAdmin(currentUser.role) || !!currentUser.isOwner) && (!subData?.features || subData.features.includes('ai_assistant')) ? [
+              { key: "aiVoice" as const, icon: AiPhone, label: t('aiVoice.menu.admin'), hint: t('aiVoice.menu.adminHint') as string|null, swatch: null },
+            ] : []),
+            ...(currentUser.role !== 'dasturchi' ? [
+              { key: "aiPrefs" as const, icon: AiVoiceIcon, label: t('aiVoice.menu.prefs'), hint: t('aiVoice.menu.prefsHint') as string|null, swatch: null },
+            ] : []),
             ...(isAdmin(currentUser.role) ? [{ key: "subscription" as const, icon: CreditCard, label: t('profile.subscriptionStatus'),
               hint: subData?.status === 'active' ? (subData.daysLeft !== null ? t('profile.daysLeftValue', { count: subData.daysLeft }) : t('profile.subStatusActive')) : subData?.status === 'pending' ? t('profile.subStatusPending') : subData?.status === 'expired' ? t('profile.subStatusExpired') : subData?.status === 'rejected' ? t('profile.subStatusRejected') : subLoading ? "..." : t('common.notFound'),
               swatch: null }] : []),
@@ -693,6 +706,7 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
       perms: t('profile.permissions'), projects: t('profile.myObjects'), language: t('profile.language'),
       subscription: t('profile.subscriptionStatus'), currency: t('profile.currencyRate'), sound: t('profile.sound'),
       devices: t('profile.connectedDevices'), backup: t('profile.backupTitle'), danger: t('safety.dangerMenu', "Xavfli zona"),
+      aiVoice: t('aiVoice.menu.admin'), aiPrefs: t('aiVoice.menu.prefs'),
     }[activePanel];
     const activeRow = menuRows.find(r => r.key === activePanel);
     return (
@@ -901,6 +915,12 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
           )}
           {activePanel === "currency" && (
             <CurrencyPanel canEdit={isAdmin(currentUser.role) || !!currentUser.isOwner}/>
+          )}
+          {activePanel === "aiVoice" && (
+            <Suspense fallback={<div className="h-40 rounded-2xl bg-muted/40 animate-pulse" />}><AiSettingsPanel /></Suspense>
+          )}
+          {activePanel === "aiPrefs" && (
+            <Suspense fallback={<div className="h-40 rounded-2xl bg-muted/40 animate-pulse" />}><MyAiPrefsPanel /></Suspense>
           )}
           {activePanel === "danger" && (
             <div className="space-y-4">

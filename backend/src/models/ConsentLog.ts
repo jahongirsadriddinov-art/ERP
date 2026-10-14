@@ -11,6 +11,9 @@ export interface IConsentLog extends Document {
   telegramUserId?: string;
   ip?: string;
   userAgent?: string;
+  // AI ovozli yordamchi (review B9): rozilik qiymati va manbasi — faqat xodimning o'zi (bot tugmasi / /me)
+  value?: 'granted' | 'revoked' | 'opt_out' | 'opt_in';
+  source?: 'bot' | 'me' | 'voice';
 }
 
 const ConsentLogSchema: Schema = new Schema({
@@ -22,7 +25,9 @@ const ConsentLogSchema: Schema = new Schema({
   acceptedAt: { type: Date, required: true, default: () => new Date() },
   telegramUserId: { type: String },
   ip: { type: String },
-  userAgent: { type: String }
+  userAgent: { type: String },
+  value: { type: String, enum: ['granted', 'revoked', 'opt_out', 'opt_in'] },
+  source: { type: String, enum: ['bot', 'me', 'voice'] },
 }, { timestamps: true });
 
 export default mongoose.model<IConsentLog>('ConsentLog', ConsentLogSchema);

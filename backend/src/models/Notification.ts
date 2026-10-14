@@ -2,7 +2,7 @@ import mongoose, { Schema, Document } from 'mongoose';
 
 export type NotificationType =
   | 'message' | 'transfer' | 'expense' | 'approval_request' | 'approval_result'
-  | 'system' | 'qr_scan' | 'document' | 'material' | 'gps' | 'shift';
+  | 'system' | 'qr_scan' | 'document' | 'material' | 'gps' | 'shift' | 'ai';
 
 export interface INotification extends Document {
   recipientId: string;

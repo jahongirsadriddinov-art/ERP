@@ -8,6 +8,8 @@ import User from '../models/User';
 import Message from '../models/Message';
 import Session from '../models/Session';
 import { sendPushToUser } from './push';
+import { registerAiWorkerNamespace } from '../aiVoice/telegram/workerNamespace';
+import { registerAiVoiceSocket } from '../aiVoice/socket/inAppSocket';
 
 let io: Server | null = null;
 
@@ -133,6 +135,9 @@ export function initSocket(httpServer: HttpServer): Server {
     cors: { origin: '*', methods: ['GET', 'POST'] },
     maxHttpBufferSize: 1e8, // 100MB (media)
   });
+  // AI Telegram worker'i uchun alohida "/aiv-worker" namespace (o'z Ed25519 autentifikatsiyasi bilan;
+  // pastdagi io.use faqat asosiy "/" namespace'ga tegishli). AI o'chiq bo'lsa — no-op.
+  registerAiWorkerNamespace(io);
 
   // XAVFSIZLIK — JIDDIY TOPILMA (audit): avval ulanish uchun userId/companyId
   // mijozning O'ZI yuborgan oddiy so'rov parametrlaridan (handshake query)
@@ -189,6 +194,8 @@ export function initSocket(httpServer: HttpServer): Server {
     trackPresence(cid, userId, isDev, 1);
     broadcastPresence(cid, isDev);
     const me = { userId, companyId: cid, role: socket.data.role as string | undefined };
+    // AI ovozli qo'ng'iroq hodisalari (aiv:*) — socket.data yuqorida tekshirilgan. AI o'chiq bo'lsa — no-op.
+    registerAiVoiceSocket(socket);
 
     // Ruxsat tekshiruvlari kesh'i (ICE nomzodlari o'nlab marta keladi — har
     // biriga DB so'rovi bo'lmasin). 30 s — a'zolikdan chiqarish tez kuchga kirsin.

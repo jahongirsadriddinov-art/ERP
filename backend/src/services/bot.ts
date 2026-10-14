@@ -27,6 +27,11 @@ import { PLAN_CONFIG, getPayablePlanKeys } from '../config/plans';
 import { createSubscriptionPaymentOrder } from './subscriptionPayments';
 import { persistUploadedFile } from './durableFiles';
 import { deriveWebhookSecret, canDecideSubscription, sendToCompanyAdmins } from './botSecurity';
+import {
+  registerBotInstance, dispatchAiCallback, dispatchAiMessage, aiBotResetChat, aiSuppressedMorningUserIds,
+  WORKER_OFFSHIFT_CALLBACK_RE, AI_BOT_COMMANDS,
+} from '../aiVoice/bot/botHooks';
+import { aiConfig } from '../aiVoice/config';
 
 dotenv.config();
 
@@ -1410,13 +1415,23 @@ async function sendExpenseHistory(chatId: number, user: any) {
 // /res — botni "yangilash": shu chatdagi barcha yarim qolgan holatlar (chiqim kiritish, chat
 // rejimi, xabar yuborish rejimi, tugma tahrirlash, joylashuv kutish) tozalanadi va asosiy menyu
 // qaytadan yuboriladi. Hech qanday ma'lumot o'chirilmaydi.
-async function resetChatState(chatId: number) {
+// Matn kutayotgan oqimlar (AI rejimi bular bo'sh bo'lgandagina xabarni oladi — review D10).
+function hasPendingChatState(chatId: number): boolean {
+  return chatSessions.has(chatId) || pendingCheckinLocation.has(chatId) || pendingBroadcastChoice.has(chatId)
+    || pendingLabelEdit.has(chatId) || pendingExpenseEntry.has(chatId) || isInRegistration(chatId);
+}
+function clearPendingChatState(chatId: number) {
   chatSessions.delete(chatId);
   pendingCheckinLocation.delete(chatId);
   pendingBroadcastChoice.delete(chatId);
   pendingLabelEdit.delete(chatId);
   pendingExpenseEntry.delete(chatId);
   for (const [k, d] of pendingExpenseDrafts) if (d.chatId === chatId) pendingExpenseDrafts.delete(k);
+}
+
+async function resetChatState(chatId: number) {
+  clearPendingChatState(chatId);
+  aiBotResetChat(chatId); // AI rejimi ham tugaydi (AI o'chiq bo'lsa no-op)
   const user: any = await User.findOne({ telegramChatId: chatId.toString() }).catch(() => null);
   const lang = user?.language as BotLang | undefined;
   const text = lang === 'ru' ? '🔄 Бот обновлён. Выберите действие в меню.' : "🔄 Bot yangilandi. Menyudan kerakli bo'limni tanlang.";
@@ -1434,6 +1449,8 @@ async function resetChatState(chatId: number) {
 bot.setMyCommands([
   { command: 'start', description: 'Botni boshlash / Запуск' },
   { command: 'res', description: 'Botni yangilash / Обновить бота' },
+  // /ai, /jadval — faqat AI ovozli yordamchi yoqilgan bo'lsa ko'rinadi (ro'yxat botHooks'da)
+  ...(aiConfig.enabled ? AI_BOT_COMMANDS.map(({ command, description }) => ({ command, description })) : []),
 ]).catch((e: Error) => console.error('[bot commands]', e.message));
 
 bot.on('message', async (msg: any) => {
@@ -1523,6 +1540,15 @@ bot.on('message', async (msg: any) => {
       }
     }
   }
+
+  // ── AI yordamchi (/ai rejimi) — faqat AI yoqilgan, chat AI rejimida va boshqa kutilayotgan oqim
+  // (chat, chiqim kiritish, joylashuv, xabar yuborish…) bo'lmasa. /ai o'zi boshqa holatlarni tozalaydi.
+  // AI o'chiq bo'lsa — no-op (DB so'rovi ham yo'q).
+  if (await dispatchAiMessage(msg, {
+    hasOtherPendingState: hasPendingChatState(chatId),
+    clearOtherStates: () => clearPendingChatState(chatId),
+    loadUser: () => User.findOne({ telegramChatId: chatId.toString() }).catch(() => null),
+  })) return;
 
   // ── Bot ichidan chat rejimi — matn, rasm/video/ovoz/fayl/lokatsiya bo'lishi mumkin ──
   const activeChat = chatSessions.get(chatId);
@@ -2316,7 +2342,8 @@ bot.on('callback_query', async (query: any) => {
   }
 
   // ── Smena darvozasi (inline tugmalar uchun ham) — ish tugagan ishchida faqat "Ishga keldim" tasdiqlash ishlaydi
-  if (user && isWorker(user.role) && !/^(confirm_checkin|cancel_checkin|lang_|setlang)/.test(data)) {
+  // (ai:a: davomat, ai:o: rozilik, ai:r: eslatma — ham ruxsat; ai:x: amal tasdig'i — yo'q)
+  if (user && isWorker(user.role) && !WORKER_OFFSHIFT_CALLBACK_RE.test(data)) {
     const { status } = await getAttendanceStatus(String(user._id));
     if (status !== 'WORKING') {
       await bot.answerCallbackQuery(query.id, { text: tb(lang, status === 'FINISHED' ? 'shiftClosedMsg' : 'shiftNotStartedMsg').slice(0, 190), show_alert: true }).catch(() => {});
@@ -2343,6 +2370,10 @@ bot.on('callback_query', async (query: any) => {
       return;
     }
   }
+
+  // ── AI tugmalari (ai:*) — obuna darvozasidan keyin. ai:* DOIM shu yerda tugaydi (pastdagi
+  // confirm_<txId> catch-all'iga hech qachon yetmaydi); AI o'chiq bo'lsa faqat javob beriladi.
+  if (await dispatchAiCallback(query, user, lang, (id) => bot.answerCallbackQuery(id))) return;
 
   // ── Majburiy obuna — "✅ Tekshirish" tugmasi. FORCE (keshsiz) qayta
   // tekshiradi — foydalanuvchi aynan shu tugmani "hozir obuna bo'ldim,
@@ -2932,9 +2963,13 @@ async function sendMorningReminders() {
   const workerIds = workers.map((w: any) => String(w._id));
   const already = await Attendance.find({ userId: { $in: workerIds }, date: today, checkIn: { $exists: true, $ne: null } }).select('userId').lean();
   const alreadyIn = new Set(already.map((a: any) => a.userId));
+  // AI davomat so'rovi bugun shu xodimga yuborilgan bo'lsa (firma sozlamasi bilan) — eski eslatma kerak emas.
+  // Bitta $in so'rov; AI o'chiq bo'lsa bo'sh to'plam (review C8).
+  const aiHandled = await aiSuppressedMorningUserIds(workerIds, today);
 
   for (const w of workers) {
     if (alreadyIn.has(String((w as any)._id))) continue;
+    if (aiHandled.has(String((w as any)._id))) continue;
     const chatId = w.telegramChatId;
     if (!chatId) continue; // query allaqachon filtrlagan, faqat TS uchun
     const lang = w.language as BotLang | undefined;
@@ -3247,5 +3282,8 @@ setInterval(() => {
 
 // v1.2 self-signup scene'ni ulaymiz (alohida fayl, eski handlerlar buzilmaydi)
 initRegistrationScene(bot);
+
+// AI ovozli yordamchi bot obyektini DI orqali oladi (botHooks bot.ts'ni import qilmaydi — sikl yo'q)
+registerBotInstance(bot);
 
 console.log('✅ Telegram bot ishga tushdi (rol asosida menyu)');

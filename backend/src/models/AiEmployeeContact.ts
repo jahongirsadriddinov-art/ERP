@@ -1,0 +1,70 @@
+import mongoose, { Schema, Document } from 'mongoose';
+
+// Xodimning AI kanallari bo'yicha sozlamasi/holati: kanal tartibi, Telegram identifikatori,
+// qo'ng'iroq roziligi va opt-out. Rozilik FAQAT xodimning o'zi (bot tugmasi yoki /me) orqali
+// o'rnatiladi (review B9); har o'zgarish ConsentLog'ga ham yoziladi.
+export interface IAiEmployeeContact extends Document {
+  companyId: string;
+  employeeId: string;
+  languageOverride?: 'uz' | 'ru';
+  channelPrefs: { order?: string[]; disabled: string[] };
+  telegram: {
+    tgUserId?: string;
+    username?: string;
+    resolveStatus: 'unknown' | 'resolved' | 'not_found' | 'privacy_restricted' | 'blocked';
+    resolvedAt?: Date;
+    callConsent: 'none' | 'requested' | 'granted' | 'revoked';
+    consentAt?: Date;
+    consentToken?: string;          // ai:o:<token> — 7 kun amal qiladi (B5)
+    consentTokenExpiresAt?: Date;
+    bindingCodeHash?: string;       // t.me/<akkaunt> ga yuboriladigan bir martalik kod (A2)
+    bindingCodeExpiresAt?: Date;
+  };
+  optOut: { calls: boolean; reminders: boolean; all: boolean; at?: Date; via?: string };
+  botAiModeUntil?: Date;
+  stats: { lastCallAt?: Date; failuresInRow: number };
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+const AiEmployeeContactSchema = new Schema<IAiEmployeeContact>({
+  companyId: { type: String, required: true },
+  employeeId: { type: String, required: true },
+  languageOverride: { type: String, enum: ['uz', 'ru'] },
+  channelPrefs: {
+    order: { type: [String], default: undefined },
+    disabled: { type: [String], default: [] },
+  },
+  telegram: {
+    tgUserId: String,
+    username: String,
+    resolveStatus: { type: String, enum: ['unknown', 'resolved', 'not_found', 'privacy_restricted', 'blocked'], default: 'unknown' },
+    resolvedAt: Date,
+    callConsent: { type: String, enum: ['none', 'requested', 'granted', 'revoked'], default: 'none' },
+    consentAt: Date,
+    consentToken: String,
+    consentTokenExpiresAt: Date,
+    bindingCodeHash: { type: String, select: false },
+    bindingCodeExpiresAt: Date,
+  },
+  optOut: {
+    calls: { type: Boolean, default: false },
+    reminders: { type: Boolean, default: false },
+    all: { type: Boolean, default: false },
+    at: Date,
+    via: String,
+  },
+  botAiModeUntil: Date,
+  stats: {
+    lastCallAt: Date,
+    failuresInRow: { type: Number, default: 0 },
+  },
+}, { timestamps: true });
+
+AiEmployeeContactSchema.index({ companyId: 1, employeeId: 1 }, { unique: true });
+// B10: sparse unique null'ni ham indekslaydi — partial {$type:'string'} ishlatamiz.
+// Bitta Telegram identifikatori ikki xodimga bog'lanmasin (unique).
+AiEmployeeContactSchema.index({ 'telegram.tgUserId': 1 }, { unique: true, partialFilterExpression: { 'telegram.tgUserId': { $type: 'string' } } });
+AiEmployeeContactSchema.index({ 'telegram.consentToken': 1 }, { unique: true, partialFilterExpression: { 'telegram.consentToken': { $type: 'string' } } });
+
+export default mongoose.model<IAiEmployeeContact>('AiEmployeeContact', AiEmployeeContactSchema);

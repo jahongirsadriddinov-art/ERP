@@ -5,6 +5,8 @@ import { getTenant } from '../middleware/tenantContext';
 import { emitToUser } from '../services/socket';
 import { logAudit } from '../services/audit';
 import { checkTargetAccess } from '../utils/userGuards';
+import { aiEndSessionsForUser } from '../aiVoice/sessions';
+import { aiConfig } from '../aiVoice/config';
 import { getBackendUrl } from '../utils/backendUrl';
 
 // Profil rasmi faqat o'zimizning yuklash yo'li (/api/messages/upload) qaytargan manzil bo'lishi shart —
@@ -125,6 +127,8 @@ async function setBlocked(req: any, res: any, blocked: boolean) {
     user.blockedAt = blocked ? new Date() : undefined;
     user.blockedBy = blocked ? String(tenant?.userId || '') : undefined;
     await user.save();
+    // Bloklanganning faol AI ovozli sessiyalari darhol tugaydi (review B2; AI o'chiq bo'lsa no-op)
+    if (blocked && aiConfig.enabled) void aiEndSessionsForUser(String(user._id), 'blocked');
 
     if (tenant?.userId) {
       const actor = await User.findById(tenant.userId).lean().catch(() => null);

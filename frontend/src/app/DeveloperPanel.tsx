@@ -1,5 +1,5 @@
 import { confirmDialog } from "./lib/confirmDialog";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, lazy, Suspense } from "react";
 import { useTranslation } from "react-i18next";
 import LogOut from "@hugeicons/core-free-icons/Logout01Icon";
 import Loader2 from "@hugeicons/core-free-icons/Loading03Icon";
@@ -21,11 +21,13 @@ import { ROLE_LABELS, VoicePlayer } from "./App";
 import { SkeletonList, SkeletonMessage } from "./Skeleton";
 import { openExternalUrl } from "./platform";
 import { AnnouncementComposer, GlobalAnnouncementList } from "./AnnouncementParts";
+// AI Telegram hisobi (AI ovozli yordamchi) — alohida chunk, faqat tab ochilganda
+const TelegramAccountPanel = lazy(() => import("./aiVoice/settings/TelegramAccountPanel"));
 
 // ─── Developer Panel ────────────────────────────────────────────────────────────
 export default function DeveloperPanel({ currentUser, onLogout }: { currentUser: AppUser; onLogout: () => void }) {
   const { t } = useTranslation();
-  const [tab, setTab] = useState<"firms" | "users" | "subscriptions" | "messages" | "plans" | "promocodes" | "announcements">("subscriptions");
+  const [tab, setTab] = useState<"firms" | "users" | "subscriptions" | "messages" | "plans" | "promocodes" | "announcements" | "aiVoice">("subscriptions");
   const [annReload, setAnnReload] = useState(0);
   const [companies, setCompanies] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
@@ -350,6 +352,9 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
           <button onClick={() => setTab("announcements")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "announcements" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
             {t('devPanel.tabs.announcements')}
           </button>
+          <button onClick={() => setTab("aiVoice")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "aiVoice" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
+            {t('aiVoice.telegram.tab')}
+          </button>
         </div>
         {/* Ma'lumotlar FAQAT panel birinchi ochilganda yuklanardi — keyin
             (masalan panel ochiq turgan payt boshqa joyda yangi to'lov/
@@ -659,6 +664,8 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
               </div>
             </div>
           ))
+        ) : tab === "aiVoice" ? (
+          <Suspense fallback={<div className="h-40 rounded-2xl bg-muted/40 animate-pulse" />}><TelegramAccountPanel /></Suspense>
         ) : tab === "announcements" ? (
           // ── Global e'lon — BARCHA firmalarning BARCHA xodimlariga (kirganda avtomatik oyna + push + Telegram) ──
           <div className="space-y-3">

@@ -13,7 +13,11 @@ services:
     buildCommand: npm install --include=dev && npm run build
     startCommand: npm run start:prod
     healthCheckPath: /health
+    # SIGTERM'dan keyin AI navbati/sessiyalarini drain qilish uchun (AI_SHUTDOWN_DRAIN_MS ≈ 25 s)
+    maxShutdownDelaySeconds: 30
     envVars:
+      - key: NODE_VERSION
+        value: "24"          # backend/package.json engines "24.x" bilan mos
       - key: MONGODB_URI
         sync: false          # MongoDB Atlas ulanish satri
       - key: TELEGRAM_BOT_TOKEN
@@ -33,4 +37,93 @@ services:
       - key: DEVELOPER_PASSWORD
         sync: false
       - key: DEVELOPER_CHAT_ID
+        sync: false
+      # ─── Mavjud kod ishlatadigan, lekin bu yerda yo'q edi (drift) ───
+      - key: TELEGRAM_WEBHOOK_URL
+        sync: false
+      - key: BACKEND_URL
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_MODEL
+        sync: false
+      - key: GEMINI_AUDIO_MODELS
+        sync: false
+      - key: METERED_APP_NAME
+        sync: false
+      - key: METERED_SECRET_KEY
+        sync: false
+      - key: EMAIL_HOST
+        sync: false
+      - key: EMAIL_PORT
+        sync: false
+      - key: EMAIL_USER
+        sync: false
+      - key: EMAIL_PASS
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: ESKIZ_EMAIL
+        sync: false
+      - key: ESKIZ_PASSWORD
+        sync: false
+      - key: ESKIZ_FROM
+        sync: false
+      - key: ESKIZ_TEST_MODE
+        sync: false
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: DEPLOY_BROADCAST_SECRET
+        sync: false
+      - key: ROXIY_API_KEY
+        sync: false
+      - key: ROXIY_API_URL
+        sync: false
+      - key: GPS_INTERVAL_MS
+        sync: false
+      # ─── AI ovozli yordamchi (docs/ai-voice) — hammasi ixtiyoriy; AI_VOICE_ENABLED bo'lmasa o'chiq ───
+      - key: AI_VOICE_ENABLED
+        sync: false
+      - key: AI_SECRETS_KEY
+        sync: false
+      - key: AI_SECRETS_KEY_PREV
+        sync: false
+      - key: AIV_WORKER_PUBKEY
+        sync: false
+      - key: INSTANCE_ID
+        sync: false
+      - key: AI_LIVE_MAX_CONCURRENT
+        sync: false
+      - key: AI_TG_MAX_CONCURRENT
+        sync: false
+      - key: AI_TG_DAILY_CAP
+        sync: false
+      - key: AI_SHUTDOWN_DRAIN_MS
+        sync: false
+      - key: AI_LIVE_MODEL
+        sync: false
+      - key: AI_TEXT_MODEL
+        sync: false
+      - key: AI_TTS_MODEL
+        sync: false
+      - key: AI_TRANSCRIBE_MODEL
+        sync: false
+      - key: AI_PRICING_JSON
+        sync: false
+      # Matn "miyasi" (llm-provider.md): Gemini asosiy → OpenRouter zaxira; Claude ixtiyoriy
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: OPENROUTER_MODEL
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: AI_CLAUDE_MODEL
         sync: false

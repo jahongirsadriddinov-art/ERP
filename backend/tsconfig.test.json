@@ -1,0 +1,11 @@
+{
+  // Testlarni ham tip-tekshiruvi (asosiy tsconfig.json ularni exclude qiladi, vitest esa tip tekshirmaydi — review A14).
+  // CI: npx tsc -p tsconfig.test.json
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node", "vitest/globals"]
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}

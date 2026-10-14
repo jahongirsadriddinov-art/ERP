@@ -18,6 +18,8 @@ import MicOff from "@hugeicons/core-free-icons/MicOff01Icon";
 import VolumeHigh from "@hugeicons/core-free-icons/VolumeHighIcon";
 import HistoryIcon from "@hugeicons/core-free-icons/Clock01Icon";
 import PlusIcon from "@hugeicons/core-free-icons/Add01Icon";
+import AiPhone from "@hugeicons/core-free-icons/AiPhone01Icon";
+import { openAiVoiceCall } from "./aiVoice/bus";
 import { PremiumEmoji } from "./components/PremiumEmoji";
 import { MorphIcon } from "morphicons/react";
 import { useTranslation } from "react-i18next";
@@ -461,6 +463,11 @@ export default function AIAssistant({ currentUser, users, token, open, onClose, 
             </p>
             <p className="text-[11px] text-muted-foreground mt-0.5 leading-none">{t('ai.subtitle')}</p>
           </div>
+          {/* AI bilan ovozli suhbat (aiVoice/AiVoiceRoot ochadi) */}
+          <button onClick={() => openAiVoiceCall('assistant')} aria-label={t('aiVoiceCall.open')} title={t('aiVoiceCall.open')}
+            className="w-8 h-8 rounded-xl flex items-center justify-center hover:bg-muted/60 text-muted-foreground transition-colors flex-shrink-0">
+            <MorphIcon icon={AiPhone} className="w-4 h-4" />
+          </button>
           <button onClick={newChat} disabled={msgs.length === 0 && !showHistory} aria-label={t('ai.newChat')} title={t('ai.newChat')}
             className="w-8 h-8 rounded-xl flex items-center justify-center hover:bg-muted/60 text-muted-foreground transition-colors flex-shrink-0 disabled:opacity-30">
             <MorphIcon icon={PlusIcon} className="w-4 h-4" />

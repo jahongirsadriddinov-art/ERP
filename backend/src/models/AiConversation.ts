@@ -8,6 +8,10 @@ export interface IAiConversation extends Document {
   companyId?: string;
   title: string;
   messages: { role: 'user' | 'assistant'; content: string }[];
+  // AI ovozli yordamchi: suhbat manbasi (eski yozuvlarda yo'q = 'chat')
+  source?: 'chat' | 'voice_inapp' | 'telegram_call' | 'bot';
+  sessionId?: string;
+  correlationId?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -20,6 +24,9 @@ const AiConversationSchema: Schema = new Schema({
     type: [new Schema({ role: { type: String, enum: ['user', 'assistant'], required: true }, content: { type: String, default: '' } }, { _id: false })],
     default: [],
   },
+  source: { type: String, enum: ['chat', 'voice_inapp', 'telegram_call', 'bot'] },
+  sessionId: { type: String },
+  correlationId: { type: String },
 }, { timestamps: true });
 
 AiConversationSchema.index({ userId: 1, updatedAt: -1 });

@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import Session from '../models/Session';
 import { kickSession } from '../services/socket';
+import { aiEndSessionsForUser } from '../aiVoice/sessions';
+import { aiConfig } from '../aiVoice/config';
 
 const router = Router();
 
@@ -43,6 +45,8 @@ router.delete('/all', async (req, res) => {
       kickSession(session.jti);
       count++;
     }
+    // Faol AI ovozli sessiyalar ham tugaydi (review B2; AI o'chiq bo'lsa no-op)
+    if (count && aiConfig.enabled) void aiEndSessionsForUser(String((req as any).user.userId), 'revoked');
     res.json({ ok: true, count });
   } catch (err) {
     res.status(500).json({ error: 'Server xatoligi' });
@@ -62,6 +66,7 @@ router.delete('/:id', async (req, res) => {
     session.revoked = true;
     await session.save();
     kickSession(session.jti);
+    if (aiConfig.enabled) void aiEndSessionsForUser(String((req as any).user.userId), 'revoked');
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: 'Server xatoligi' });

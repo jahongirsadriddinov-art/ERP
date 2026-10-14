@@ -60,6 +60,7 @@ import { cloudinaryEnabled } from './config/cloudinary';
 import pinRoutes from './routes/pin';
 import { startMonthlySummaryLoop } from './services/expenseInsights';
 import signDocsRoutes, { publicSignRouter } from './routes/signDocs';
+import { startAiVoice, mountAiVoiceRoutes } from './aiVoice/bootstrap';
 
 dotenv.config();
 
@@ -250,6 +251,9 @@ app.use('/api/company',      requireAuth, companySelfRoutes);  // firmaning O'ZI
 app.use('/api/admin/subscriptions', requireAuth, subscriptionRoutes); // obunalar boshqaruvi
 app.use('/api/smeta',        requireAuth, blockDeveloper, smetaRoutes);
 app.use('/api/ai',           requireAuth, blockDeveloper, aiRoutes);
+// AI ovozli yordamchi — alohida prefikslar: /platform (requireAuth+requireDeveloper),
+// /me va /admin (requireAuth+blockDeveloper). aiVoice/bootstrap.ts mountAiVoiceRoutes.
+mountAiVoiceRoutes(app);
 // XAVFSIZLIK — TOPILMA (audit): bu ikkalasida ILGARI blockDeveloper YO'Q edi —
 // yuqoridagi qoidaga (159-160 qatorlar: "dasturchi faqat companies/
 // subscriptions/messages/groups") zid ravishda, scoped() dasturchi uchun
@@ -364,6 +368,8 @@ mongoose.connect(MONGODB_URI)
     await reloadPlanCache();
     // Kunlik avtomatik zaxira nusxalar (har firma uchun)
     startAutoSnapshots();
+    // AI ovozli yordamchi (AI_VOICE_ENABLED o'chiq bo'lsa hech narsa qilmaydi)
+    startAiVoice();
     console.log('✅ Tarif keshi yuklandi');
   })
   .catch((err) => console.error('MongoDB connection error:', err?.message || err));

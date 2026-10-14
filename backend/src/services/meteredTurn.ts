@@ -8,7 +8,14 @@
 // o'rniga OLDINDAN, davriy tarzda (har 12 soatda, 24 soatlik amal qilish
 // muddati bilan) yangi credential olinib xotirada keshlanadi; so'rovlar
 // doim shu (allaqachon tarqalgan, ishlaydigan) keshdan xizmat qiladi.
-const APP_NAME = process.env.METERED_APP_NAME;
+// METERED_APP_NAME'ga ko'pincha to'liq manzil yoziladi ("erp-firma.metered.live" yoki "https://.../") — kod
+// oxiriga yana ".metered.live" qo'shib, "erp-firma.metered.live.metered.live" degan yo'q manzil hosil bo'lardi.
+// Shuning uchun faqat ilova nomini ajratib olamiz.
+export function normalizeMeteredAppName(raw: string | undefined): string | undefined {
+  const v = (raw || '').trim().replace(/^https?:\/\//i, '').replace(/\/.*$/, '').replace(/\.metered\.live$/i, '');
+  return v || undefined;
+}
+const APP_NAME = normalizeMeteredAppName(process.env.METERED_APP_NAME);
 const SECRET_KEY = process.env.METERED_SECRET_KEY;
 const configured = !!(APP_NAME && SECRET_KEY);
 

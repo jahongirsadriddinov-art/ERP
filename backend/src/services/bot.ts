@@ -115,38 +115,50 @@ if (useWebhook) {
     allowed_updates: ['message', 'edited_message', 'callback_query', 'my_chat_member'],
   });
 
-  registerWebhook()
-    .then(() => console.log(`✅ Telegram bot webhook ishga tushdi: ${fullWebhookUrl}`))
-    .catch((err: Error) => {
-      // XAVFSIZLIK ZAXIRASI: webhook o'rnatilmasa (noto'g'ri URL, Telegram
-      // rad etishi va h.k.) — bot polling'siz HAM, webhook'siz HAM (ya'ni
-      // BUTUNLAY o'lik) qolib ketmasin uchun pollingga qaytamiz. Bu holat
-      // avval sodir bo'lgan: "webhook qo'ysam bot ishlamay qoldi".
-      console.error('⚠️ Telegram webhook o\'rnatishda xato — pollingga qaytilmoqda:', err.message);
-      // MUHIM: TelegramBotPolling o'z sozlamalarini startPolling()ning
-      // argumentidan EMAS, balki bot.options.polling'dan o'qiydi (bu yerda
-      // konstruktorda { polling: false } qilib qo'yilgan edi) — shu sabab
-      // allowed_updates'ni ANIQ shu yerga, ishga tushirishdan OLDIN yozib
-      // qo'yamiz, aks holda 'edited_message' (jonli joylashuv) yana
-      // yo'qolib qolardi.
-      bot.options.polling = { params: { allowed_updates: ['message', 'edited_message', 'callback_query', 'my_chat_member'] } };
-      bot.startPolling()
-        .catch((pollErr: Error) => console.error('⚠️ Polling fallback ham muvaffaqiyatsiz:', pollErr.message));
-    });
+  const POLL_OPTS = { params: { allowed_updates: ['message', 'edited_message', 'callback_query', 'my_chat_member'] } };
+  // Zaxira: webhook umuman o'rnatilmasa bot o'lik qolmasin — pollingga o'tamiz.
+  // MUHIM: TelegramBotPolling sozlamani startPolling() argumentidan emas, bot.options.polling'dan o'qiydi —
+  // allowed_updates (jonli joylashuv uchun 'edited_message') shu yerda beriladi.
+  const fallbackToPolling = () => {
+    if (bot.isPolling()) return;
+    bot.options.polling = POLL_OPTS;
+    bot.startPolling()
+      .catch((pollErr: Error) => console.error('⚠️ Polling fallback ham muvaffaqiyatsiz:', pollErr.message));
+  };
 
-  // O'ZINI-O'ZI TUZATISH: agar BOSHQA bir joyda (masalan dasturchining
-  // mahalliy kompyuterida, TELEGRAM_WEBHOOK_URL sozlanmagan holda) shu bot
-  // tokeni bilan pollingga urinilsa — node-telegram-bot-api kutubxonasi
-  // (telegramPolling.js, _unsetWebHook) buni ANIQLAB, xatoni o'zi hal qilish
-  // uchun bizning webhook'imizni AVTOMATIK O'CHIRIB TASHLAYDI (bu bizning
-  // kodimiz emas — Telegram'ning "polling va webhook bir-birini istisno
-  // qiladi" qoidasiga kutubxonaning javobi). Natijada bot butunlay
-  // "o'lik" ko'rinar edi — aynan shu sodir bo'lgan holat. Buning oldini
-  // to'liq olib bo'lmaydi (boshqa joydagi pollingni bu yerdan
-  // to'xtatolmaymiz), lekin har 5 daqiqada webhook'ni QAYTA o'rnatib,
-  // uzilish oynasini bir necha soniyagacha qisqartiramiz.
-  setInterval(() => {
-    registerWebhook().catch((err: Error) => console.error('⚠️ Webhook qayta tasdiqlashda xato:', err.message));
+  // Ishga tushishda Telegram'ga ulanish bir lahza uzilishi mumkin (Render'da deploy paytida "EFATAL: AggregateError"
+  // ko'rilgan). Darhol pollingga o'tib ketmasdan, avval bir necha marta qayta urinamiz.
+  const BOOT_RETRY_MS = [0, 5_000, 20_000, 60_000];
+  const bootRegister = async () => {
+    for (let i = 0; i < BOOT_RETRY_MS.length; i++) {
+      if (BOOT_RETRY_MS[i]) await new Promise(r => setTimeout(r, BOOT_RETRY_MS[i]));
+      try {
+        await registerWebhook();
+        console.log(`✅ Telegram bot webhook ishga tushdi: ${fullWebhookUrl}`);
+        return;
+      } catch (err: any) {
+        console.error(`⚠️ Webhook o'rnatishda xato (urinish ${i + 1}/${BOOT_RETRY_MS.length}):`, err?.message);
+      }
+    }
+    console.error("⚠️ Webhook o'rnatilmadi — vaqtincha pollingga o'tildi, har 5 daqiqada webhook'ga qaytishga urinadi");
+    fallbackToPolling();
+  };
+  bootRegister();
+
+  // O'ZINI-O'ZI TUZATISH (har 5 daqiqa): boshqa joyda (masalan dasturchi kompyuterida) shu token bilan polling
+  // qilinsa, kutubxona webhook'imizni o'chirib qo'yadi — qayta o'rnatamiz. Agar biz o'zimiz zaxira pollingda
+  // bo'lsak, AVVAL pollingni to'xtatamiz: aks holda keyingi getUpdates 409 olib, yangi webhook'ni yana o'chirardi
+  // va bot har 5 daqiqada uzilib-ulanib turardi. Webhook o'rnatilmasa — pollingga qaytamiz.
+  setInterval(async () => {
+    const wasPolling = bot.isPolling();
+    try {
+      if (wasPolling) await bot.stopPolling({ cancel: true }).catch(() => {});
+      await registerWebhook();
+      if (wasPolling) console.log("✅ Webhook tiklandi — zaxira polling to'xtatildi");
+    } catch (err: any) {
+      console.error('⚠️ Webhook qayta tasdiqlashda xato:', err?.message);
+      if (wasPolling) fallbackToPolling();
+    }
   }, 5 * 60 * 1000);
 } else {
   // Polling rejimi — local dev uchun

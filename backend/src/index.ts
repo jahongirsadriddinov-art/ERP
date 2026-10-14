@@ -1,3 +1,4 @@
+import './bootstrap/net';
 import { startAutoSnapshots } from './services/companySnapshot';
 import express from 'express';
 import http from 'http';

@@ -3672,7 +3672,7 @@ function BottomFinanceBar({ expenses, projects }: { expenses: Expense[]; project
   const byProj = projects.map(p=>({name:p.name,amount:confirmed.filter(e=>e.projectId===p.id).reduce((a,e)=>a+e.amount,0)})).filter(d=>d.amount>0);
   const byType = (Object.keys(EXP_LABELS) as ExpType[]).map(k=>({name:expLabel(t, k),amount:confirmed.filter(e=>e.type===k).reduce((a,e)=>a+e.amount,0)})).filter(d=>d.amount>0);
   return (
-    <div className="expense-glass flex-shrink-0 mx-3 md:mx-4 my-2 rounded-2xl overflow-hidden text-white z-20">
+    <div className="expense-glass flex-shrink-0 overflow-hidden text-white z-20">
       {open&&(
         <div className="border-b border-white/10 px-4 py-3 grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div><p className="text-sm md:text-xs font-semibold text-white/50 uppercase tracking-wider mb-2">{t('finance.byProject')}</p>

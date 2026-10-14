@@ -110,7 +110,13 @@ async function resolveIceConfig(): Promise<RTCConfiguration> {
     if (res.ok) {
       const data = await res.json();
       if (data.configured && Array.isArray(data.iceServers) && data.iceServers.length) {
-        return { iceServers: data.iceServers };
+        // Metered + doim zaxira (STUN va bepul TURN): Metered limiti tugasa yoki credential ishlamasa ham
+        // qo'ng'iroq "Ulanmoqda"da qolib ketmasin — brauzer barcha serverlardan nomzod yig'ib, ishlaganini tanlaydi.
+        const seen = new Set<string>();
+        const merged = [...data.iceServers, ...(buildIceConfig().iceServers || [])].filter((sv: RTCIceServer) => {
+          const k = JSON.stringify(sv.urls); if (seen.has(k)) return false; seen.add(k); return true;
+        });
+        return { iceServers: merged };
       }
     }
   } catch {}

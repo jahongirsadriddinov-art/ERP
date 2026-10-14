@@ -23,9 +23,11 @@ function createBoostedContext(): AudioContext | undefined {
     if (!AC) return undefined;
     const ctx = new AC({ latencyHint: "interactive" });
     const comp = ctx.createDynamicsCompressor();
-    comp.threshold.value = -14; comp.knee.value = 8; comp.ratio.value = 10; comp.attack.value = 0.002; comp.release.value = 0.12;
+    // Avval 3.2x kuchaytirish + qattiq siqish (ratio 10) ovozlarning "dum"ini ham ko'tarib, xira va aks-sadoli
+    // qilardi. Endi yengil: 1.6x va faqat cho'qqilarni ushlab qoluvchi yumshoq siqgich.
+    comp.threshold.value = -6; comp.knee.value = 6; comp.ratio.value = 3; comp.attack.value = 0.003; comp.release.value = 0.08;
     const boost = ctx.createGain();
-    boost.gain.value = 3.2;
+    boost.gain.value = 1.6;
     boost.connect(comp);
     comp.connect(ctx.destination);
     Object.defineProperty(ctx, "destination", { value: boost, configurable: true });
@@ -35,14 +37,19 @@ function createBoostedContext(): AudioContext | undefined {
   }
 }
 
+// "zen" paketi (qo'ng'iroqchalar, yog'och) tabiatan aks-sadoli — telefon/noutbuk karnayida xira va aks-sadoli
+// eshitilardi. "soft" — qisqa, toza, yumshoq (mobil uchun mo'ljallangan).
+const SOUND_PACK = "soft" as const;
 export const sfx: UISFXPlayer = createUISFX({
-  pack: "zen",
+  pack: SOUND_PACK,
   volume: 0.8,
   context: createBoostedContext(),
   // pack/volume/enabled — localStorage'da saqlanadi, foydalanuvchi
   // tanlovi sahifa yangilansa ham, qurilma qayta ochilsa ham saqlanadi.
   preferences: { key: PREFERENCES_KEY },
 });
+// Avval saqlangan "zen" tanlovi bo'lsa — yangi toza paketga o'tkazamiz (ovoz balandligi/o'chirilgani saqlanadi)
+try { if (sfx.getPack() === "zen") sfx.setPack(SOUND_PACK); } catch { /* */ }
 
 // Brauzerning autoplay siyosati AudioContext'ni faqat ishonchli
 // foydalanuvchi harakati (pointer/keyboard/touch) bilan ochishga ruxsat

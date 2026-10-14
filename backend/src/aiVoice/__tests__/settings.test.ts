@@ -94,6 +94,7 @@ describe('validateSettingsUpdate', () => {
     expect(errs(shift({ workdays: [0, 1] })).join()).toMatch(/workdays/);
     expect(errs(shift({ workdays: [1, 1] })).join()).toMatch(/workdays/);
     expect(errs(shift({ workdays: [8] })).join()).toMatch(/workdays/);
+    expect(errs(shift({ workdays: [] })).join()).toMatch(/workdays/);   // kamida bitta (bot/sayt/ilova bir xil)
     expect(errs(shift({ workdays: [7] }))).toEqual([]);              // yakshanba ham tanlanishi mumkin
     expect(errs(shift({ skipDates: ['2026-02-30'] })).join()).toMatch(/skipDates/);
     expect(errs(shift({ extraWorkDates: ['13.10.2026'] })).join()).toMatch(/extraWorkDates/);

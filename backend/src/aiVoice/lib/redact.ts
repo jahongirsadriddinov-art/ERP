@@ -18,8 +18,13 @@ const MAX_DEPTH = 8;
 const MAX_ARRAY = 200;
 const MAX_STRING = 2000;
 
-// +998 90 123-45-67, 998901234567, (90) 123 45 67 ... — kamida 9 ta raqam
-const PHONE_RE = /\+?\d[\d\s\-().]{7,}\d/g;
+// Telefon nomzodi: +998 90 123-45-67, 998901234567, (90) 123 45 67 ... Harf/raqam/chiziqcha ichida
+// boshlanmaydi va harf/raqam bilan tugamaydi (ObjectId, UUID bo'laklari maskalanmaydi).
+const PHONE_RE = /(?<![A-Za-z0-9_-])\+?\d[\d \t\-().]{7,}\d(?![A-Za-z0-9_])/g;
+// Sana/vaqt (2026-10-15, 2026-10-15 09:00, 2026-10-15T04:00:00.000Z, 15.10.2026) — telefon emas, himoyalanadi
+const DATE_RE = /\b\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})?)?(?!\d)|\b\d{1,2}[./]\d{1,2}[./]\d{4}\b/g;
+// Minglik guruhli summa: 150 000 000, 1.500.000 (birinchi guruh 1–3, qolganlari aniq 3 raqam, bir xil ajratgich)
+const GROUPED_AMOUNT_RE = /^\d{1,3}(?:([ .])\d{3})(?:\1\d{3})*$/;
 
 export function maskPhone(phone: string): string {
   const digits = String(phone).replace(/\D/g, '');
@@ -27,9 +32,25 @@ export function maskPhone(phone: string): string {
   return `+${digits.slice(0, 5)}***${digits.slice(-2)}`;
 }
 
-/** Matndagi telefon raqamlarini maskalaydi. */
+/** Nomzod telefonmi: sana va summalar (minglik guruhli yoki ≥5 nol bilan tugaydigan yaxlit son) — yo'q. */
+function looksLikePhone(m: string): boolean {
+  const digits = m.replace(/\D/g, '');
+  if (digits.length < 9 || digits.length > 15) return false;
+  if (digits.length === 12 && digits.startsWith('998')) return true;   // +998 XX XXX XX XX
+  if (m.startsWith('+')) return true;
+  if (GROUPED_AMOUNT_RE.test(m.trim())) return false;                    // 150 000 000 so'm
+  if (/0{5}$/.test(digits)) return false;                                // 1500000000 so'm
+  return true;
+}
+
+/** Matndagi telefon raqamlarini maskalaydi (sana/vaqt va pul summalari tegilmaydi). */
 export function redactText(s: string): string {
-  return s.replace(PHONE_RE, (m) => (m.replace(/\D/g, '').length >= 9 ? `***${m.replace(/\D/g, '').slice(-2)}` : m));
+  if (!/\d/.test(s)) return s;
+  const saved: string[] = [];
+  // Sanalarni vaqtincha \u0000N\u0000 belgisiga almashtiramiz — telefon regexi ular orqali o'tmaydi
+  const guarded = s.replace(/\u0000/g, '').replace(DATE_RE, (d) => `\u0000${saved.push(d) - 1}\u0000`);
+  const masked = guarded.replace(PHONE_RE, (m) => (looksLikePhone(m) ? `***${m.replace(/\D/g, '').slice(-2)}` : m));
+  return saved.length ? masked.replace(/\u0000(\d+)\u0000/g, (_x, i) => saved[Number(i)] ?? '') : masked;
 }
 
 function capString(s: string, max = MAX_STRING): string {

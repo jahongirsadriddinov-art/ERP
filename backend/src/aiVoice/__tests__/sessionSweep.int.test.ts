@@ -119,12 +119,26 @@ describe('finishSession (P5/P6 oddiy yakun → P3 runner tinglovchisi, C1)', () 
       expect((a || b)).toMatchObject({ sessionId: id, status: 'completed', attemptKey: 'conf-f1:0:1' });
       const s: any = await AiCallSession.findById(id).lean();
       expect(s).toMatchObject({ isActive: false, status: 'completed', endReason: 'hangup' });
-      expect(s.usage.tokensIn).toBe(10);
-      expect(s.summary).not.toContain('901234567');
+      // Poygani qaysi chaqiruv yutishi tasodifiy: usage/summary faqat ularni bergan chaqiruv yutgan bo'lsa yoziladi
+      if (a) {
+        expect(s.usage.tokensIn).toBe(10);
+        expect(s.summary).toContain('***67');
+        expect(s.summary).not.toContain('901234567');
+      } else {
+        expect(s.usage?.tokensIn || 0).toBe(0);
+      }
       expect(events).toHaveLength(1);
       expect(await finishSession(id, 'failed', 'late_event')).toBeNull();
       expect(await finishSession('not-an-id', 'failed', 'x')).toBeNull();
     } finally { off(); }
+  });
+
+  it('usage va summary (telefon maskalangan, sana saqlanadi) yoziladi', async () => {
+    const id = await mkSession('f2', { updatedSecAgo: 1, answered: true });
+    expect(await finishSession(id, 'completed', 'hangup', { usage: { tokensIn: 7 }, summary: '2026-10-15 09:00 da keladi, tel 901234567' })).not.toBeNull();
+    const s: any = await AiCallSession.findById(id).lean();
+    expect(s.usage.tokensIn).toBe(7);
+    expect(s.summary).toBe('2026-10-15 09:00 da keladi, tel ***67');
   });
 });
 

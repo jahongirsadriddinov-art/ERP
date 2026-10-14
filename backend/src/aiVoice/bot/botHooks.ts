@@ -1,31 +1,29 @@
 import AiAttendanceConfirmation from '../../models/AiAttendanceConfirmation';
 import { aiConfig } from '../config';
 import { getSettings } from '../settings';
+import { getBotInstance, setBotInstance, onBotRegistered, type AiBotApi } from './instance';
+import { aiActiveFor, answer as answerCallback, callbackActor } from './guard';
+import { handleAttendanceCallback, handleConfirmCallback, handleReminderCallback } from './callbacks';
+import { handleConsentCallback } from './consentFlow';
+import { clearScheduleDraft, handleScheduleCallback, handleScheduleText, openScheduleMenu, scheduleAwaiting } from './scheduleMenu';
+import { clearAiMode, enterAiMode, handleAiModeCallback, handleAiModeMessage, inAiMode, scheduleAiModeWarmup } from './aiMode';
+import { ta } from './i18n';
 
 // Mavjud ERP botiga (services/bot.ts) AI ilgaklari. bot.ts bu faylni import qiladi, lekin bu fayl
 // bot.ts'ni HECH QACHON import qilmaydi (u tokensiz modul darajasida xato tashlaydi va sikl bo'lardi) —
-// bot obyekti registerBotInstance() orqali DI bilan beriladi.
+// bot obyekti registerBotInstance() orqali DI bilan beriladi (bot/instance.ts).
 //
-// P1: yakuniy imzolar + xavfsiz dispatch/guard funksiyalari (sof, test qilinadi).
-// P4: aiBotCallbackHook / aiBotMessageHook / aiBotInAiMode / aiBotResetChat ichini to'ldiradi.
 // AI o'chiq (AI_VOICE_ENABLED yoki firma sozlamasi) bo'lsa — barcha ilgaklar haqiqiy no-op,
-// botning mavjud xatti-harakati o'zgarmaydi.
+// botning mavjud xatti-harakati o'zgarmaydi. Callback prefikslari:
+//   ai:a (davomat) · ai:r (eslatma) · ai:o (rozilik) · ai:x (amal tasdig'i) · ai:s (ish jadvali menyusi,
+//   faqat rahbarlar — ular ishchi rollari emas, smena darvozasi ularga tegmaydi) · ai:m (AI rejimidan chiqish).
 
-/** bot.ts'dan kerak bo'ladigan minimal Bot API (node-telegram-bot-api). */
-export interface AiBotApi {
-  sendMessage(chatId: number | string, text: string, opts?: any): Promise<any>;
-  answerCallbackQuery(id: string, opts?: any): Promise<any>;
-  editMessageText?(text: string, opts?: any): Promise<any>;
-  editMessageReplyMarkup?(markup: any, opts?: any): Promise<any>;
-  deleteMessage?(chatId: number | string, messageId: number): Promise<any>;
-  getMe?(): Promise<any>;
-}
+export type { AiBotApi } from './instance';
 
-let botInstance: AiBotApi | null = null;
-
-/** bot.ts modul oxirida chaqiradi. */
-export function registerBotInstance(bot: AiBotApi): void { botInstance = bot; }
-export function getBotInstance(): AiBotApi | null { return botInstance; }
+/** bot.ts modul oxirida chaqiradi. AI yoqiq bo'lsa AI rejimi keshi DB'dan isitiladi. */
+export function registerBotInstance(bot: AiBotApi): void { setBotInstance(bot); }
+export { getBotInstance };
+onBotRegistered(() => scheduleAiModeWarmup());
 
 // ───────────── Sof guard'lar (bot.ts ishlatadi, botHooksWiring testi tekshiradi) ─────────────
 
@@ -66,7 +64,7 @@ export function isAiCommand(text: unknown): boolean {
   return aiBotCommandOf(text) === 'ai';
 }
 
-// ───────────── P4 to'ldiradigan ilgaklar (STUB) ─────────────
+// ───────────── Ilgaklar (P4) ─────────────
 
 export interface AiMessageEnv {
   /** /ai yoki /jadval'ga kirishda boshqa barcha kutilayotgan holatlarni (chat, chiqim, joylashuv…) tozalaydi. */
@@ -78,30 +76,79 @@ export interface AiMessageEnv {
 }
 
 /**
- * ai:* callback (attendance ai:a:, reminder ai:r:, confirm ai:x:, consent ai:o:). true — qayta ishlandi.
- * P4: chat.type==='private', from.id===chatId, yozuv shu xodim/firmaga bog'liq, token muddati, atomik o'tish.
+ * ai:* callback (ai:a, ai:r, ai:o, ai:x, ai:s, ai:m). true — qayta ishlandi (javob berildi).
+ * Xavfsizlik (B5): faqat shaxsiy chat, from.id === chat.id, foydalanuvchi bloklanmagan va firmasi bor;
+ * yozuv SHU xodim/firmaga bog'liq, token muddati, atomik o'tish — modullarda. Shartlar bajarilmasa
+ * false: dispatch jim javob beradi (nima noto'g'riligi oshkor qilinmaydi).
  */
-export async function aiBotCallbackHook(_query: any, _user: any, _lang: string | undefined): Promise<boolean> {
-  return false; // STUB (P4)
+export async function aiBotCallbackHook(query: any, user: any, _lang: string | undefined): Promise<boolean> {
+  const data = typeof query?.data === 'string' ? query.data : '';
+  const parts = data.split(':');
+  const kind = parts[1];
+  const a = callbackActor(query, user);
+  if (!a) return false;
+  // Jadval menyusi AI firmada o'chiq bo'lsa ham ishlaydi (AI'ni aynan shu yerdan yoqish mumkin)
+  if (kind === 's') return handleScheduleCallback(query, a, parts);
+  if (kind === 'm') return handleAiModeCallback(query, a, parts);
+  if (!['a', 'r', 'o', 'x'].includes(kind)) return false;
+  if (!(await aiActiveFor(a.companyId))) {
+    await answerCallback(getBotInstance(), query.id, ta(a.lang, 'aiOff'), true);
+    return true;
+  }
+  switch (kind) {
+    case 'a': return handleAttendanceCallback(query, a, parts);
+    case 'r': return handleReminderCallback(query, a, parts);
+    case 'o': return handleConsentCallback(query, a, parts);
+    case 'x': return handleConfirmCallback(query, a, parts);
+  }
+  return false;
 }
 
-/** AI rejimidagi xabar (matn/ovoz). true — qayta ishlandi. */
-export async function aiBotMessageHook(_msg: any, _user: any, _lang: string | undefined, _env: AiMessageEnv): Promise<boolean> {
-  return false; // STUB (P4)
+function editorOf(user: any) {
+  return {
+    userId: String(user._id), role: String(user.role || ''), isOwner: !!user.isOwner,
+    companyId: user.companyId ? String(user.companyId) : '', lang: user.language,
+  };
+}
+
+/** /ai, /jadval va AI rejimidagi (yoki jadval menyusi matn kutayotgan) xabar. true — qayta ishlandi. */
+export async function aiBotMessageHook(msg: any, user: any, _lang: string | undefined, env: AiMessageEnv): Promise<boolean> {
+  if (msg?.chat?.type !== 'private') return false;
+  const chatId = Number(msg.chat.id);
+  if (msg.from?.id === undefined || String(msg.from.id) !== String(chatId)) return false;
+  if (!user?._id || user.isBlocked || user.role === 'dasturchi') return false;
+  if (env.command === 'schedule') {
+    if (!user.companyId) return false;
+    const e = editorOf(user);
+    env.clearOtherStates();
+    clearAiMode(chatId);
+    clearScheduleDraft(chatId);
+    await openScheduleMenu(chatId, e);
+    return true;
+  }
+  if (env.command === 'ai') {
+    return enterAiMode(msg, user, env.clearOtherStates, (id) => clearScheduleDraft(id));
+  }
+  if (scheduleAwaiting(chatId)) {
+    if (typeof msg.text !== 'string') return false;
+    return handleScheduleText(msg, editorOf(user));
+  }
+  if (inAiMode(chatId)) return handleAiModeMessage(msg, user);
+  return false;
 }
 
 /**
- * Chat AI ilgagi qo'lidami: AI rejimi (botAiModeUntil > now) YOKI P4'ning o'z matn kutishi (masalan
- * jadval menyusida sana kiritish). SINXRON — har xabarda DB so'rovi bo'lmasin; P4 xotira keshini
- * yuritadi (ishga tushishda DB'dan isitadi).
+ * Chat AI ilgagi qo'lidami: AI rejimi (botAiModeUntil > now) YOKI jadval menyusi matn kutmoqda.
+ * SINXRON — faqat xotira (ishga tushishda DB'dan isitiladi).
  */
-export function aiBotInAiMode(_chatId: number): boolean {
-  return false; // STUB (P4)
+export function aiBotInAiMode(chatId: number): boolean {
+  return inAiMode(chatId) || scheduleAwaiting(chatId);
 }
 
-/** /res yoki boshqa oqimga o'tish — AI rejimi va AI kutish holatlari tozalanadi. */
-export function aiBotResetChat(_chatId: number): void {
-  // STUB (P4)
+/** /res yoki boshqa oqimga o'tish — AI rejimi va jadval qoralamasi tozalanadi. */
+export function aiBotResetChat(chatId: number): void {
+  clearAiMode(chatId);
+  clearScheduleDraft(chatId);
 }
 
 // ───────────── bot.ts chaqiradigan dispatch'lar ─────────────
@@ -113,7 +160,7 @@ export function aiBotResetChat(_chatId: number): void {
  */
 export async function dispatchAiCallback(
   query: any, user: any, lang: string | undefined,
-  answer: (queryId: string) => Promise<unknown> = (id) => botInstance?.answerCallbackQuery(id) ?? Promise.resolve(),
+  answer: (queryId: string) => Promise<unknown> = (id) => getBotInstance()?.answerCallbackQuery(id) ?? Promise.resolve(),
 ): Promise<boolean> {
   if (!isAiCallbackData(query?.data)) return false;
   let handled = false;

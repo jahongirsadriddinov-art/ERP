@@ -56,6 +56,18 @@ describe('redaksiya', () => {
     expect(maskPhone('+998901234567')).toBe('+99890***67');
   });
 
+  it('telefon maskalanadi, sana/vaqt, summa va ID tegilmaydi', () => {
+    for (const p of ['tel 998901234567', '901234567', '90-123-45-67', '+7 912 345 67 89', '998 901 234 567']) {
+      expect(redactText(p)).toMatch(/\*\*\*\d\d$/);
+    }
+    for (const keep of [
+      '2026-10-15 09:00', 'Sana: 2026-10-15T04:00:00.000Z', '15.10.2026', '2026-10-15 - 2026-10-20',
+      "150 000 000 so'm", "1500000000 so'm", '1.500.000.000', 'id 507f1f77bcf86cd799439011',
+      '123e4567-e89b-12d3-a456-426614174000',
+    ]) expect(redactText(keep)).toBe(keep);
+    expect(redactText("ertaga 2026-10-15 09:00 da 901234567 ga")).toBe('ertaga 2026-10-15 09:00 da ***67 ga');
+  });
+
   it('redact(): sirlar o\'chadi, telefon maskalanadi, Buffer qisqartiriladi', () => {
     const r: any = redact({ password: 'p', token: 't', phone: '+998901234567', nested: { apiKey: 'k', note: 'tel 998901234567' }, bin: Buffer.alloc(5) });
     expect(r.password).toBeUndefined();
@@ -233,14 +245,18 @@ describe('matn provayderlari navbati (Gemini → OpenRouter, Claude ixtiyoriy)',
 });
 
 describe("P2–P8 stub imzolari (P1 muzlatgan; to'ldirilguncha xavfsiz no-op)", () => {
-  it("scheduler/api: not_implemented; voice manager: disabled; registerErpTools idempotent", async () => {
+  it("scheduler/api (P3 to'ldirgan): yaroqsiz kirish DB'siz rad; AI o'chiq — disabled; voice manager: disabled; registerErpTools idempotent", async () => {
+    const prev = process.env.AI_VOICE_ENABLED;
+    delete process.env.AI_VOICE_ENABLED;
     const api = await import('../scheduler/api');
+    // Noto'g'ri token/ID formati — DB'ga murojaatsiz 'not_found'
     expect(await api.respondAttendance({ companyId: 'c', employeeId: 'e', buttonToken: 'x', answer: 'confirm', via: 'bot' }))
-      .toEqual({ ok: false, code: 'not_implemented' });
+      .toEqual({ ok: false, code: 'not_found' });
     expect(await api.reminderAction({ companyId: 'c', userId: 'u', reminderId: 'r', action: 'done', via: 'bot' }))
-      .toEqual({ ok: false, code: 'not_implemented' });
+      .toEqual({ ok: false, code: 'not_found' });
     expect(await api.runAttendancePlanNow({ companyId: 'c', shiftId: 'main', requestedBy: 'u' }))
-      .toEqual({ ok: false, code: 'not_implemented' });
+      .toEqual({ ok: false, code: 'disabled' });
+    if (prev !== undefined) process.env.AI_VOICE_ENABLED = prev;
     const vm = await import('../voice/sessionManager');
     expect(await vm.getVoiceSessionManager().start({} as any)).toEqual({ ok: false, reason: 'disabled' });
     await expect(vm.getVoiceSessionManager().drain(10)).resolves.toBeUndefined();

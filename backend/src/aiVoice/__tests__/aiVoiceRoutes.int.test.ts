@@ -51,14 +51,18 @@ describe("/api/ai-voice yo'llari", () => {
   it('bloklangan foydalanuvchi — 403', async () => {
     expect((await get('/api/ai-voice/me', 'blk')).status).toBe(403);
   });
-  it('/me — firma foydalanuvchisiga ochiq (stub 501), dasturchiga yopiq', async () => {
+  it('/me — firma foydalanuvchisiga ochiq (P3: AI holati bilan), dasturchiga yopiq', async () => {
     const r = await get('/api/ai-voice/me', 'dir');
-    expect(r.status).toBe(501);
-    expect(r.body.error).toBe('not_implemented');
+    expect(r.status).toBe(200);
+    expect(r.body.status.aiActive).toBe(false);
     expect((await get('/api/ai-voice/me', 'dev')).status).toBe(403);
   });
   it("/me — smenasi yopiq ishchiga ham ochiq (workGate ALLOW), /admin esa 423", async () => {
-    expect((await get('/api/ai-voice/me/reminders', 'ish')).status).toBe(501);
+    expect((await get('/api/ai-voice/me', 'ish')).status).toBe(200);
+    // workGate o'tkazdi (423 emas); AI o'chiq — /me ichidagi o'z javobi
+    const rem = await get('/api/ai-voice/me/reminders', 'ish');
+    expect(rem.status).toBe(403);
+    expect(rem.body.error).toBe('ai_disabled');
     expect((await get('/api/ai-voice/admin/settings', 'ish')).status).toBe(423);
   });
   it('/platform — faqat dasturchi, no-store', async () => {
@@ -67,9 +71,9 @@ describe("/api/ai-voice yo'llari", () => {
     expect(r.status).toBe(501);
     expect(r.headers['cache-control']).toBe('no-store');
   });
-  it('/admin — dasturchini bloklaydi, firma rahbariga ochiq (stub 501)', async () => {
+  it('/admin — dasturchini bloklaydi; firma/tarif topilmasa rahbarga ham yopiq (fail-closed, P8)', async () => {
     expect((await get('/api/ai-voice/admin/settings', 'dev')).status).toBe(403);
-    expect((await get('/api/ai-voice/admin/settings', 'dir')).status).toBe(501);
+    expect((await get('/api/ai-voice/admin/settings', 'dir')).body.error).toBe('feature');
   });
 });
 

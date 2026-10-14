@@ -246,7 +246,8 @@ function validateShift(s: AiShift, i: number, errors: string[]) {
   if (isHHmm(s.workStart) && isHHmm(s.absentCutoff) && parseHHmm(s.absentCutoff) <= parseHHmm(s.workStart)) {
     errors.push(`${p}.absentCutoff: workStart'dan keyin bo'lishi kerak`);
   }
-  if (!uniqueValid(s.workdays, (d) => intIn(d, 1, 7))) errors.push(`${p}.workdays: 1..7 (ISO), takrorsiz`);
+  // Kamida bitta hafta kuni (bot, ilova va sayt bir xil qoida): hammasini o'chirish tasodifan davomatni to'xtatmasin
+  if (!uniqueValid(s.workdays, (d) => intIn(d, 1, 7)) || !s.workdays.length) errors.push(`${p}.workdays: 1..7 (ISO), takrorsiz, kamida bittasi`);
   if (!intIn(s.lateAfterMin, 0, 240)) errors.push(`${p}.lateAfterMin: 0..240`);
   if (!intIn(s.buttonWaitMin, 1, 120)) errors.push(`${p}.buttonWaitMin: 1..120`);
   if (!intIn(s.maxLateMin, 0, 360)) errors.push(`${p}.maxLateMin: 0..360`);

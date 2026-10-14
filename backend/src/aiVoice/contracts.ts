@@ -459,6 +459,8 @@ export interface AiMePrefsDto {
   disabledChannels: ChannelName[];
   callConsent: 'none' | 'requested' | 'granted' | 'revoked';
   optOut: { calls: boolean; reminders: boolean; all: boolean };
+  /** Shaxsiy jim soatlar (P3 qo'shimchasi); null — o'rnatilmagan (faqat firma jim soatlari). */
+  quietHours?: { from: HHmm; to: HHmm } | null;
 }
 export interface AiEmployeeRowDto {
   userId: string; name: string; role: string;
@@ -502,6 +504,8 @@ export interface AiMePrefsPatchReq {
   disabledChannels?: ChannelName[];
   callConsent?: 'granted' | 'revoked';
   optOut?: Partial<{ calls: boolean; reminders: boolean; all: boolean }>;
+  /** null — shaxsiy jim soatlarni o'chirish (P3 qo'shimchasi). */
+  quietHours?: { from: HHmm; to: HHmm } | null;
 }
 export interface AiReminderDto {
   id: string; text: string; targetUserId: string; ownerId: string; dueAt: string; nextFireAt?: string;

@@ -253,7 +253,14 @@ export async function executeTool(ctx: ToolCtx, name: string, rawArgs: unknown, 
     const { channel, via } = confirmChannelFor(p.ctx.channel);
     const token = via === 'bot' ? newConfirmToken() : undefined;
     const expiresAt = new Date(Date.now() + LIMITS.pendingActionTtlMs);
-    const summary = (p.def.summarize?.(p.args as any, lang) || p.def.name).slice(0, 300);
+    let summary = p.def.summarize?.(p.args as any, lang) || p.def.name;
+    if (otherUser) {
+      // Tasdiqlovchi KIMGA ta'sir qilishini ko'rsin (ID emas, ism; faqat shu firma ichidan)
+      const tu: any = await User.findOne({ _id: target, companyId: p.ctx.companyId }).select('firstName lastName').lean().catch(() => null);
+      const tn = [tu?.firstName, tu?.lastName].filter(Boolean).join(' ').trim().slice(0, 60);
+      if (tn) summary = `${summary} → ${tn}`;
+    }
+    summary = summary.slice(0, 300);
     const auditId = await writeToolAudit({
       companyId: p.ctx.companyId, actorUserId: p.ctx.userId, actorRole: p.actor.role, actorName: p.actor.name,
       targetUserId: target, channel: p.ctx.channel, purpose: p.ctx.purpose, sessionId: p.ctx.sessionId,

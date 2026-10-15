@@ -116,7 +116,13 @@ export async function aiBotMessageHook(msg: any, user: any, _lang: string | unde
   if (msg?.chat?.type !== 'private') return false;
   const chatId = Number(msg.chat.id);
   if (msg.from?.id === undefined || String(msg.from.id) !== String(chatId)) return false;
-  if (!user?._id || user.isBlocked || user.role === 'dasturchi') return false;
+  if (!user?._id || user.isBlocked) return false;
+  // Dasturchi (yoki firmasiz) akkaunt — AI firma ichida ishlaydi. Avval jim qolardi ("buyruqlar ishlamayapti").
+  if (env.isCommand && (user.role === 'dasturchi' || !user.companyId)) {
+    await getBotInstance()?.sendMessage(chatId, ta(user.language, 'devNoCompany')).catch(() => undefined);
+    return true;
+  }
+  if (user.role === 'dasturchi') return false;
   if (env.command === 'schedule') {
     if (!user.companyId) return false;
     const e = editorOf(user);

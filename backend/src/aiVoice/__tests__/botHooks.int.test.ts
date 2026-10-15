@@ -451,7 +451,9 @@ describe('/ai rejimi', () => {
     expect(aiBotInAiMode(CHAT[A.prorabId])).toBe(false);
     expect(sent().at(-1)?.text).toContain("o'chirilgan");
     const g = { hasOtherPendingState: false, clearOtherStates: vi.fn(), loadUser: async () => ({ _id: '665f1c2e9b1e8a00000000ff', language: 'uz' }) };
-    expect(await dispatchAiMessage({ chat: { id: 1, type: 'private' }, from: { id: 1 }, text: '/ai' }, g)).toBe(false);
+    // Firmasiz (yoki dasturchi) — jim qolmaydi: tushuntirish beradi, AI rejimiga kirmaydi
+    expect(await dispatchAiMessage({ chat: { id: 1, type: 'private' }, from: { id: 1 }, text: '/ai' }, g)).toBe(true);
+    expect(sent().at(-1)?.text).toContain('dasturchi');
     expect(g.clearOtherStates).not.toHaveBeenCalled();
   });
 

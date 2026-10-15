@@ -99,6 +99,9 @@ import { isPinSet, useAppLock, markActiveNow, clearPin, PinSetupScreen, PinLockS
 import type { LandingFocus } from "./LandingPage";
 import { Avatar, RoleBadge, SafeImg, fmtVideoDuration, msgReplyPreview, msgTypePreview, roleLabel, useModalPresence, EscClose } from "./App";
 import type { AppUser, Group, Msg } from "./App";
+import { AiChatListItem, AiChatThread } from "./aiVoice/chat/AiChatContact";
+import AiGroupButton from "./aiVoice/chat/AiGroupButton";
+import { aiGroupAfterSend, aiSenderUser } from "./aiVoice/chat/aiGroup";
 
 // App.tsx'dan ajratilgan — faqat shu sahifa ochilganda yuklanadi (boshlang'ich yuklanish tezroq).
 // ─── Chat Page ─────────────────────────────────────────────────────────────────
@@ -125,6 +128,9 @@ export default function ChatPage({ currentUser, users, messages, groups, onlineU
 ) {
   const [selUser, setSelUser] = useState<AppUser|null>(null);
   const [selGroup, setSelGroup] = useState<Group|null>(null);
+  // Chatdagi AI yordamchi kontakti (aiVoice/chat) — boshqa suhbat tanlansa yopiladi
+  const [aiOpen, setAiOpen] = useState(false);
+  useEffect(() => { if (selUser || selGroup) setAiOpen(false); }, [selUser, selGroup]);
   const [showNewGroup, setShowNewGroup] = useState(false);
   const [showGroupSettings, setShowGroupSettings] = useState(false);
   const [text, setText] = useState("");
@@ -150,7 +156,7 @@ export default function ChatPage({ currentUser, users, messages, groups, onlineU
 
   const { t: tChat } = useTranslation();
   const contacts = users.filter(u => u.id !== currentUser.id);
-  const userById = (id: string) => users.find(u => u.id === id);
+  const userById = (id: string) => users.find(u => u.id === id) || (aiSenderUser(id) as AppUser | undefined);
   const isOnline = (id: string) => onlineUsers.includes(id);
 
   // Har bir guruh/kontakt uchun oxirgi xabar + o'qilmagan sonini BITTA o'tishda
@@ -193,7 +199,7 @@ export default function ChatPage({ currentUser, users, messages, groups, onlineU
 
   const closeChat = () => { setSelUser(null); setSelGroup(null); setSelectMode(false); setSelected(new Set()); };
 
-  useEffect(() => { onChatOpen(!!(selUser || selGroup)); }, [selUser, selGroup]);
+  useEffect(() => { onChatOpen(!!(selUser || selGroup || aiOpen)); }, [selUser, selGroup, aiOpen]);
   // Guruh ma'lumoti (a'zolar/nomi) yangilansa yoki guruh o'chirilsa/undan
   // chiqib ketilsa — ochiq suhbat oynasi eskirgan nusxani ko'rsatib
   // qolmasin (masalan boshqa qurilmada nomi o'zgartirilgan bo'lsa).
@@ -224,6 +230,7 @@ export default function ChatPage({ currentUser, users, messages, groups, onlineU
       ...extras,
     };
     onSend(msg);
+    if (selGroup) aiGroupAfterSend(selGroup.id, msg, replyTo); // guruhdagi AI (@AI / AI xabariga javob)
     playSound("send");
     setText(""); setReplyTo(null); setShowAttach(false);
   };
@@ -405,12 +412,14 @@ export default function ChatPage({ currentUser, users, messages, groups, onlineU
       <input ref={camRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFileChange}/>
 
       {/* Contacts List */}
-      <div className={`${(selUser||selGroup)?'hidden md:flex':'flex'} w-full md:w-64 flex-shrink-0 border-r border-border flex-col bg-card/60 backdrop-blur-xl`}>
+      <div className={`${(selUser||selGroup||aiOpen)?'hidden md:flex':'flex'} w-full md:w-64 flex-shrink-0 border-r border-border flex-col bg-card/60 backdrop-blur-xl`}>
         <div className="px-4 py-3 border-b border-border/50 flex items-center justify-between">
           <p className="text-base font-bold">{tChat("chat.messages")}</p>
           <button onClick={() => setShowNewGroup(true)} title={tChat('chat.newGroup')} aria-label={tChat('chat.newGroup')} className="btn btn-primary w-8 h-8 p-0 rounded-full"><MorphIcon icon={Users2} className="w-4 h-4" /></button>
         </div>
         <div className="flex-1 overflow-y-auto scrollbar-hide">
+          {/* AI yordamchi — qadalgan kontakt (AI firmada faol bo'lsa) */}
+          <AiChatListItem userId={currentUser.id} active={aiOpen} onOpen={() => { closeChat(); setAiOpen(true); }} />
           {/* Guruhlar */}
           {groups.filter(g => !g.devSupport).map(g => {
             const last = lastByGroup.get(g.id);
@@ -503,8 +512,10 @@ export default function ChatPage({ currentUser, users, messages, groups, onlineU
       </div>
 
       {/* Detail View */}
-      <div className={`${!(selUser||selGroup)?'hidden md:flex':'flex'} flex-1 flex-col overflow-hidden bg-background/50`} onClick={e=>e.stopPropagation()}>
-        {!(selUser||selGroup) ? (
+      <div className={`${!(selUser||selGroup||aiOpen)?'hidden md:flex':'flex'} flex-1 flex-col overflow-hidden bg-background/50`} onClick={e=>e.stopPropagation()}>
+        {aiOpen && !(selUser||selGroup) ? (
+          <AiChatThread userId={currentUser.id} onBack={() => setAiOpen(false)} />
+        ) : !(selUser||selGroup) ? (
           <div className="flex-1 flex items-center justify-center text-muted-foreground">
             <div className="text-center animate-pop-in"><MorphIcon icon={MessageCircle} className="w-12 h-12 mx-auto mb-3 opacity-20" /><p className="text-sm">{tChat("chat.selectConversation")}</p></div>
           </div>
@@ -551,6 +562,7 @@ export default function ChatPage({ currentUser, users, messages, groups, onlineU
                   ) : (
                     <button onClick={() => onStartCall('video', { peer: selUser || undefined })} title={tChat('chat.videoCall')} aria-label={tChat('chat.videoCall')} className="btn btn-ghost w-9 h-9 p-0 rounded-full text-primary"><MorphIcon icon={VideoIcon} className="w-[18px] h-[18px]" /></button>
                   )}
+                  {selGroup && <AiGroupButton groupId={selGroup.id} userId={currentUser.id} />}
                   {selGroup && <button onClick={() => setShowGroupSettings(true)} title={tChat('groupSettings.title')} aria-label={tChat('groupSettings.title')} className="btn btn-ghost w-9 h-9 p-0 rounded-full text-muted-foreground"><MorphIcon icon={Settings} className="w-[18px] h-[18px]" /></button>}
                 </div>
               )}

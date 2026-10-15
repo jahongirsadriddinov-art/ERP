@@ -4,7 +4,7 @@ import AiReminder from '../../../models/AiReminder';
 import AiAttendanceConfirmation from '../../../models/AiAttendanceConfirmation';
 import type { AiShift } from '../../contracts';
 import { type AiToolDef } from '../types';
-import { getSettings } from '../../settings';
+import { effectiveShift, getEmployeeOverride, getSettings } from '../../settings';
 import { isObjectIdString } from '../../lib/ids';
 import { addDays, endOfLocalDay, isoWeekdayOf, resolveWorkday, shiftHHmm, zonedToUtc } from '../../lib/zonedTime';
 import { cf, ALL_CHANNELS, ALL_ROLES, badArgs, FREE_TEXT_KEYS, L, loadMe, ok, today } from './common';
@@ -46,10 +46,11 @@ export const getMySchedule: AiToolDef<{ date?: string }> = {
     if (date < addDays(now, -MAX_DAYS) || date > addDays(now, MAX_DAYS)) {
       return badArgs(ctx, `Sana bugundan ±${MAX_DAYS} kun oralig'ida bo'lishi kerak.`, `Дата должна быть в пределах ±${MAX_DAYS} дней.`);
     }
-    const [me, settings] = await Promise.all([loadMe(ctx), getSettings(ctx.companyId)]);
+    const [me, settings, override] = await Promise.all([loadMe(ctx), getSettings(ctx.companyId), getEmployeeOverride(ctx.companyId, ctx.userId)]);
     const projectIds = ((me?.projectIds || []) as unknown[]).filter(isObjectIdString) as string[];
     const role = me?.role || ctx.role;
-    const shifts = shiftsFor(settings.attendance.shifts, role, projectIds);
+    // Shaxsiy ish jadvali (owner 2026-10-15, #5) bo'lsa — xodimning o'z kunlari va vaqti
+    const shifts = shiftsFor(settings.attendance.shifts, role, projectIds).map((s) => effectiveShift(s, override));
 
     const [objects, att, conf, rems] = await Promise.all([
       projectIds.length
@@ -78,6 +79,7 @@ export const getMySchedule: AiToolDef<{ date?: string }> = {
           lateAfter: shiftHHmm(s.workStart, s.lateAfterMin),
           absentCutoff: s.absentCutoff,
           workdays: s.workdays,
+          ...(override ? { personalSchedule: true } : {}),
           ...(settings.attendance.enabled ? { aiCheckTime: s.callTime } : {}),
         };
       }),

@@ -96,9 +96,9 @@ describe('attendanceRunner', () => {
     await drain(q);
     expect(fc.sent.filter((x) => x.channel !== 'bot_message')).toHaveLength(1);   // faqat bitta qo'ng'iroq
     // Tugma — confirmed (checked_in EMAS)
-    expect(await respondAttendance({ companyId: A.companyId, employeeId: A.workerId, buttonToken: c.buttonToken, answer: 'confirm', via: 'bot' }))
+    expect(await respondAttendance({ companyId: A.companyId, employeeId: A.workerId, buttonToken: c.buttonToken, answer: 'confirm', via: 'bot', at: clock.now() }))
       .toEqual({ ok: true, status: 'confirmed', already: false });
-    expect(await respondAttendance({ companyId: A.companyId, employeeId: A.workerId, buttonToken: c.buttonToken, answer: 'decline', via: 'bot' }))
+    expect(await respondAttendance({ companyId: A.companyId, employeeId: A.workerId, buttonToken: c.buttonToken, answer: 'decline', via: 'bot', at: clock.now() }))
       .toEqual({ ok: true, status: 'confirmed', already: true });
   });
 
@@ -246,11 +246,11 @@ describe('attendanceRunner', () => {
     setSharedQueue(q);
     const id = await planOne(clock, q);
     const c = await conf(id);
-    expect(await respondAttendance({ companyId: A.companyId, employeeId: A.workerId, confirmationId: id, answer: 'late', via: 'web' }))
+    expect(await respondAttendance({ companyId: A.companyId, employeeId: A.workerId, confirmationId: id, answer: 'late', via: 'web', at: clock.now() }))
       .toEqual({ ok: true, status: 'late', already: false });
     expect(await AiJob.countDocuments({ type: JOBS.step, refId: id, status: 'queued' })).toBe(0);
     // boshqa xodim/firma nomidan javob — topilmaydi
-    expect(await respondAttendance({ companyId: A.companyId, employeeId: A.worker2Id, buttonToken: c.buttonToken, answer: 'confirm', via: 'bot' }))
+    expect(await respondAttendance({ companyId: A.companyId, employeeId: A.worker2Id, buttonToken: c.buttonToken, answer: 'confirm', via: 'bot', at: clock.now() }))
       .toEqual({ ok: false, code: 'not_found' });
     clock.set(at('12:30'));
     await drain(q);

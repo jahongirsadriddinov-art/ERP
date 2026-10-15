@@ -1,6 +1,7 @@
 import type { AiSchedulePatch, AiSettingsData, AiShift, IsoDate } from '../contracts';
 import {
-  canEditSchedule, deriveCallTime, getSettingsFresh, saveSettings, updateSchedule, validateSettingsUpdate,
+  canEditSchedule, deriveCallTime, effectiveShift, getEmployeeOverride, getSettingsFresh, saveSettings, updateSchedule,
+  validateSettingsUpdate,
 } from '../settings';
 import { mirrorWriteToLegacyAudit, writeToolAudit } from '../audit';
 import { isObjectIdString, newCorrelationId } from '../lib/ids';
@@ -260,13 +261,39 @@ export async function openScheduleMenu(chatId: number, e: ScheduleEditor, messag
   const bot = getBotInstance();
   const chk = await checkScheduleEditor(e);
   if (!chk.ok) {
-    await bot?.sendMessage(chatId, ta(e.lang, chk.reason === 'feature' ? 'schNoFeature' : 'schNoAccess')).catch(() => undefined);
+    let text = ta(e.lang, chk.reason === 'feature' ? 'schNoFeature' : 'schNoAccess') as string;
+    if (chk.reason === 'forbidden') text += await ownScheduleNote(e).catch(() => '');
+    await bot?.sendMessage(chatId, text).catch(() => undefined);
     return false;
   }
   const d = newDraft(chatId, e, chk.settings);
   drafts.set(chatId, d);
   await show(chatId, messageId, render(d, 'main', e.lang));
   return true;
+}
+
+/**
+ * Rahbar bo'lmagan xodim /jadval yozsa — uning SHAXSIY ish jadvali (#5, bo'lsa) ko'rsatiladi: planner aynan
+ * shu kunlar va vaqtda so'raydi. Shaxsiy jadval yo'q bo'lsa — bo'sh (firma jadvali amal qiladi).
+ */
+async function ownScheduleNote(e: ScheduleEditor): Promise<string> {
+  if (!isObjectIdString(e.companyId) || e.role === 'dasturchi') return '';
+  const ov = await getEmployeeOverride(e.companyId, e.userId);
+  if (!ov) return '';
+  const s = await getSettingsFresh(e.companyId);
+  const sh = s.attendance.shifts[0];
+  if (!sh) return '';
+  const eff = effectiveShift(sh, ov);
+  const lang = e.lang;
+  const days = ta(lang, 'weekdays') as string[];
+  const ru = lang === 'ru';
+  return `
+
+${ru ? '👤 Ваш личный график:' : '👤 Sizning shaxsiy ish jadvalingiz:'}
+`
+    + `${ta(lang, 'schStart', { start: eff.workStart, call: eff.callTime })}
+`
+    + `${ta(lang, 'schDays', { days: eff.workdays.map((n) => days[n - 1]).join(' ') })}`;
 }
 
 function toEditor(a: CallbackActor): ScheduleEditor {

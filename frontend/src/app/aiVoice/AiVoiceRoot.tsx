@@ -1,57 +1,78 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import type { Socket } from "socket.io-client";
 import type { AppUser } from "../App";
-import { getSocket } from "../socket";
-import { subscribe, decideAiIncoming, setAiCallActive } from "./bus";
-import { AIV_CLIENT_EVENTS, AIV_SERVER_EVENTS, type AivDeclineReq, type AivIncoming } from "./protocol";
+import { subscribe } from "./bus";
+import { getAiStatus, useAiStatus } from "./aiStatus";
+import { useAiVoiceSession } from "./useAiVoiceSession";
+import AiIncomingCall from "./AiIncomingCall";
+import AiVoiceCallOverlay from "./AiVoiceCallOverlay";
+import { AiChatThread } from "./chat/AiChatContact";
 
-// AI ovozli yordamchi ildizi — App.tsx'da BIR marta montaj qilinadi (AIAssistant yonida).
-// STUB (P1): ilova ichidagi audio hali yo'q (P7), shu sabab:
-//  - aiv:incoming kelsa darhol rad etamiz: WebRTC qo'ng'iroqda bo'lsa 'busy', aks holda 'unsupported'
-//    (server kutib qolmasdan keyingi kanalga o'tadi);
-//  - "AI bilan gaplashish" tugmasi bosilsa — "tez orada" xabari.
-// P7 shu faylni useAiVoiceSession + AiIncomingCall + AiVoiceCallOverlay bilan to'ldiradi.
+// AI ovozli yordamchi ildizi — App.tsx'da BIR marta montaj qilinadi (lazy). Bitta AiVoiceController:
+//  - kiruvchi aiv:incoming → AiIncomingCall (WebRTC qo'ng'iroq paytida avtomatik 'busy' rad etiladi);
+//  - bus.openAiVoiceCall() (AIAssistant / chatdagi AI kontakti) → chiquvchi qo'ng'iroq;
+//  - qo'ng'iroq oynasi va xato bo'lsa "Yozib so'rash" — AI chat oynasi (pastdan chiquvchi panel).
+
 export default function AiVoiceRoot({ currentUser, busy }: { currentUser: AppUser; busy: boolean }) {
-  const { t } = useTranslation();
-  const busyRef = useRef(busy); busyRef.current = busy;
+  const { t, i18n } = useTranslation();
   const tRef = useRef(t); tRef.current = t;
+  const langRef = useRef<"uz" | "ru">("uz");
+  langRef.current = i18n.language === "ru" ? "ru" : "uz";
+  const [chatOpen, setChatOpen] = useState(false);
 
-  // Header tugmasi (AIAssistant/ChatPage) → bus.openAiVoiceCall()
-  useEffect(() => subscribe(e => {
-    if (e.type === 'open') toast.message(tRef.current('aiVoiceCall.comingSoon'));
-  }), []);
+  useAiStatus(currentUser.id);
 
-  // Socket App.tsx'da ulanadi va foydalanuvchi almashganda qayta yaratiladi — shu sabab
-  // getSocket()'ni vaqti-vaqti bilan tekshirib, tinglovchini joriy socket'ga ko'chiramiz.
+  const { state, controller } = useAiVoiceSession({
+    busy,
+    deps: {
+      lang: () => langRef.current,
+      onNotice: (k) => toast.message(tRef.current(k === "busyWebrtc" ? "aiVoiceCall.busyWebrtc" : "aiVoiceCall.unsupported")),
+      attentionText: () => ({ title: tRef.current("aiVoiceCall.incomingTitle"), body: tRef.current("aiVoiceCall.incomingBody") }),
+    },
+  });
+
+  // "AI bilan gaplashish" (bus) — sinxron: AudioContext foydalanuvchi bosishi ichida ochiladi
+  useEffect(() => subscribe((e) => {
+    if (e.type === "chat") { setChatOpen(true); return; }
+    if (e.type !== "open") return;
+    const s = getAiStatus();
+    if (s.loaded && !s.aiActive) { toast.message(tRef.current("aiVoiceCall.errServerDisabled")); return; }
+    setChatOpen(false);
+    controller.startOutgoing();
+  }), [controller]);
+
+  // Matnli chat paneli: Esc bilan yopiladi
   useEffect(() => {
-    let attached: Socket | null = null;
-    const onIncoming = (d: AivIncoming) => {
-      if (!d || typeof d.sessionId !== 'string' || !attached) return;
-      const decision = decideAiIncoming({ busy: busyRef.current, supported: false });
-      if (decision === 'ring') return; // P7: jiringlash UI
-      const req: AivDeclineReq = { sessionId: d.sessionId, reason: decision };
-      attached.emit(AIV_CLIENT_EVENTS.decline, req);
-    };
-    const sync = () => {
-      const s = getSocket();
-      if (s === attached) return;
-      attached?.off(AIV_SERVER_EVENTS.incoming, onIncoming);
-      attached = s;
-      attached?.on(AIV_SERVER_EVENTS.incoming, onIncoming);
-    };
-    sync();
-    const iv = window.setInterval(sync, 2000);
-    return () => {
-      window.clearInterval(iv);
-      attached?.off(AIV_SERVER_EVENTS.incoming, onIncoming);
-      attached = null;
-    };
-  }, [currentUser.id]);
+    if (!chatOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { e.stopPropagation(); setChatOpen(false); } };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [chatOpen]);
 
-  // Hech qachon "faol" holat osilib qolmasin (logout / unmount)
-  useEffect(() => () => setAiCallActive(false), []);
+  const st = state.status;
+  const showOverlay = st !== "idle" && st !== "incoming";
 
-  return null;
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <>
+      {st === "incoming" && <AiIncomingCall state={state} controller={controller} />}
+      {showOverlay && (
+        <AiVoiceCallOverlay
+          state={state}
+          controller={controller}
+          onWriteInstead={() => { controller.dismiss(); setChatOpen(true); }}
+        />
+      )}
+      {chatOpen && !showOverlay && (
+        <div className="fixed inset-0 z-[105] flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in" onClick={() => setChatOpen(false)}>
+          <div className="w-full sm:max-w-md h-[88dvh] sm:h-[min(680px,90vh)] rounded-t-3xl sm:rounded-3xl bg-background border border-border shadow-2xl overflow-hidden flex flex-col animate-slide-up-fade" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+            <AiChatThread userId={currentUser.id} onBack={() => setChatOpen(false)} backAlways />
+          </div>
+        </div>
+      )}
+    </>,
+    document.body,
+  );
 }

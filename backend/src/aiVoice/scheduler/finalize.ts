@@ -5,6 +5,7 @@ import { getChannel } from '../channels/registry';
 import type { JobQueue } from '../queue/jobQueue';
 import { getSettings, isAiActive } from '../settings';
 import { resolveManagers } from '../lib/managers';
+import { isHHmm, zonedToUtc } from '../lib/zonedTime';
 import { onFinalize } from './attendanceFlow';
 import { cancelSteps, enqueueJob, JOBS, keys } from './jobTypes';
 import { reconcileCheckIns } from './reconciler';
@@ -15,24 +16,38 @@ import { pickLang, tx } from './texts';
 // uchun alohida ish (dedupe att:sum:…:<rahbar>), rahbarlar FAQAT shu firmadan (lib/managers).
 // Keyinroq check-in bo'lsa reconciler baribir 'checked_in' qiladi (C6).
 
-export async function finalizeShift(q: JobQueue | null, p: { companyId: string; shiftId: string; date: string }, now: Date): Promise<{ finalized: number; absent: number }> {
+export async function finalizeShift(
+  q: JobQueue | null, p: { companyId: string; shiftId: string; date: string; cutoff?: string }, now: Date,
+): Promise<{ finalized: number; absent: number }> {
   if (!(await isAiActive(p.companyId))) return { finalized: 0, absent: 0 };
+  const settings = await getSettings(p.companyId);
+  const shiftCutoff = settings.attendance.shifts.find((sh) => sh.id === p.shiftId)?.absentCutoff;
+  // Shu ish qaysi yakunlash vaqti uchun (#5: shaxsiy jadvalli xodimlar o'z vaqtida yakunlanadi)
+  const cutoff = isHHmm(p.cutoff) ? p.cutoff : shiftCutoff;
+  const cutoffOf = (c: any): string | undefined => (isHHmm(c.absentCutoff) ? c.absentCutoff : shiftCutoff);
+  // Xodimning o'z yakunlash vaqti hali kelmagan bo'lsa — tegilmaydi (o'zining finalize ishi keladi)
+  const due = (c: any) => { const t = cutoffOf(c); return !t || now.getTime() >= zonedToUtc(p.date, t).getTime(); };
   await reconcileCheckIns(now, { companyId: p.companyId, date: p.date }, q);
   const confs: any[] = await AiAttendanceConfirmation.find({ companyId: p.companyId, date: p.date, shiftId: p.shiftId, finalizedAt: null })
-    .select('_id status employeeId').lean();
+    .select('_id status employeeId absentCutoff').lean();
   let finalized = 0;
+  const finalizedNow = new Set<string>();
   for (const c of confs) {
+    if (!due(c)) continue;
     const next = onFinalize(c);
     const r = await AiAttendanceConfirmation.updateOne(
       { _id: c._id, finalizedAt: null, status: c.status },               // reconciler bilan poyga — holat CAS
       { $set: { status: next, finalizedAt: now, nextActionAt: null } },
     );
-    if (r.modifiedCount === 1) { finalized++; await cancelSteps(q, String(c._id)); }
+    if (r.modifiedCount === 1) { finalized++; finalizedNow.add(String(c._id)); await cancelSteps(q, String(c._id)); }
   }
 
   // Yig'ma: kun yakunidagi holat bo'yicha (takroriy finalize ham bir xil ro'yxat beradi — dedupe kaliti bitta)
-  const rows: any[] = await AiAttendanceConfirmation.find({ companyId: p.companyId, date: p.date, shiftId: p.shiftId, status: { $in: ['absent', 'declined'] } })
-    .select('employeeId status').lean();
+  // Faqat shu yakunlash vaqtidagi xodimlar (yoki hozir yakunlanganlar) — boshqa vaqtdagilar o'z yig'masida
+  const rows: any[] = (await AiAttendanceConfirmation.find({ companyId: p.companyId, date: p.date, shiftId: p.shiftId, status: { $in: ['absent', 'declined'] } })
+    .select('employeeId status absentCutoff').lean() as any[])
+    .filter((r) => finalizedNow.has(String(r._id)) || cutoffOf(r) === cutoff);
+  const sumKey = cutoff && shiftCutoff && cutoff !== shiftCutoff ? `${p.shiftId}@${cutoff}` : p.shiftId;
   const byManager = new Map<string, { absent: string[]; declined: string[] }>();
   for (const r of rows) {
     const managers = await resolveManagers(p.companyId, String(r.employeeId));
@@ -45,7 +60,7 @@ export async function finalizeShift(q: JobQueue | null, p: { companyId: string; 
   for (const [managerId, list] of byManager) {
     await enqueueJob(q, {
       type: JOBS.summary, companyId: p.companyId, employeeId: managerId, runAt: now,
-      dedupeKey: keys.summary(p.companyId, p.date, p.shiftId, managerId),
+      dedupeKey: keys.summary(p.companyId, p.date, sumKey, managerId),
       payload: { managerId, date: p.date, absent: list.absent, declined: list.declined },
     });
   }

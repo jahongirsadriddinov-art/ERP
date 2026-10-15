@@ -68,7 +68,7 @@ describe("/api/ai-voice yo'llari", () => {
   it('/platform — faqat dasturchi, no-store', async () => {
     expect((await get('/api/ai-voice/platform/telegram-account', 'dir')).status).toBe(403);
     const r = await get('/api/ai-voice/platform/telegram-account', 'dev');
-    expect(r.status).toBe(501);
+    expect(r.status).toBe(200);   // P6: stub (501) o'rniga haqiqiy holat
     expect(r.headers['cache-control']).toBe('no-store');
   });
   it('/admin — dasturchini bloklaydi; firma/tarif topilmasa rahbarga ham yopiq (fail-closed, P8)', async () => {

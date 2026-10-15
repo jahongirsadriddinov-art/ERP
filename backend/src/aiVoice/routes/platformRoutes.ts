@@ -1,16 +1,307 @@
-import { Router } from 'express';
+import crypto from 'crypto';
+import { Router, type NextFunction, type Request, type Response } from 'express';
+import AiChannelConnection from '../../models/AiChannelConnection';
+import AiEmployeeContact from '../../models/AiEmployeeContact';
+import Company from '../../models/Company';
+import User from '../../models/User';
+import { logAudit } from '../../services/audit';
+import { telegramCallChannel } from '../channels/telegramCallChannel';
+import { aiConfig } from '../config';
+import { isObjectIdString, newCorrelationId } from '../lib/ids';
+import { hitRate } from '../lib/mongoRateLimit';
+import { ensurePlatformConnection } from '../lib/workerLease';
+import {
+  accountDto, maskPhone, setConnectedAccount, setFloodWait, setLoggedOut, setLoginState,
+} from '../telegram/accountService';
+import { callWorker, WorkerRpcFailure } from '../telegram/workerRpc';
+import { getActiveWorker } from '../telegram/workerNamespace';
 
-// Platforma: /api/ai-voice/platform (index.ts: requireAuth + requireDeveloper).
-// STUB (P1) — P6 to'ldiradi: telegram-account holati, login start|code|password (5/10 daq, kodlar
-// HECH QACHON saqlanmaydi/log qilinmaydi/audit qilinmaydi), logout, test-call (callConsent shart,
-// audit, 5/soat), worker holati.
+// Platforma: /api/ai-voice/platform (bootstrap: requireAuth + requireDeveloper — faqat dasturchi).
+// AI Telegram akkaunti: holat, login (telefon → kod → 2FA), chiqish, UDP tekshiruv, sinov qo'ng'irog'i.
+// XAVFSIZLIK (review B7/B8):
+//  • barcha javoblar Cache-Control: no-store;
+//  • telefon/kod/parol HECH QACHON saqlanmaydi, log/audit qilinmaydi, xato matniga qo'shilmaydi —
+//    to'g'ridan-to'g'ri worker RPC'ga uzatiladi; kutilayotgan login holati faqat worker xotirasida,
+//    backend faqat server bergan loginAttemptId'ni (sir emas) va uni boshlagan dasturchini biladi;
+//  • login qadamlari 5 ta / 10 daqiqa; sinov qo'ng'irog'i 5 ta / soat, faqat callConsent='granted'
+//    xodimga va firma bilan audit yozuvi;
+//  • StringSession bu yerda yo'q — u faqat worker diskida (TG_SESSION_KEY bilan shifrlangan).
+
 const router = Router();
 
-// B8: login relay javoblari hech qayerda keshlanmasin (stubda ham).
-router.use((_req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); });
+router.use((_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
 
-router.use((_req, res) => {
-  res.status(501).json({ error: 'not_implemented', message: 'AI Telegram akkaunti boshqaruvi hali tayyor emas' });
-});
+const wrap = (fn: (req: Request, res: Response) => Promise<unknown>) =>
+  (req: Request, res: Response, next: NextFunction) => {
+    // So'rov tanasi va xato tafsiloti hech qachon qaytarilmaydi yoki log qilinmaydi
+    fn(req, res).catch((e) => {
+      console.error('[aiVoice/platform] xato:', (e as Error)?.name || 'Error');
+      if (!res.headersSent) res.status(500).json({ error: 'internal' });
+      else next();
+    });
+  };
+
+const isObj = (v: unknown): v is Record<string, any> => !!v && typeof v === 'object' && !Array.isArray(v);
+const fullName = (u: any) => [u?.firstName, u?.lastName].filter(Boolean).join(' ').trim();
+const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const PLATFORM_TG = { scope: 'platform' as const, companyId: null, type: 'telegram_user' as const };
+
+export const LOGIN_MAX = 5;
+const LOGIN_WINDOW_MS = 10 * 60_000;
+export const TEST_CALL_MAX = 5;
+const TEST_CALL_WINDOW_MS = 3600_000;
+const ATTEMPT_TTL_MS = 15 * 60_000;
+
+const PHONE_RE = /^\+?[1-9]\d{8,14}$/;
+const CODE_RE = /^\d{4,8}$/;
+const ATTEMPT_RE = /^[0-9a-f-]{36}$/;
+
+// Server bergan loginAttemptId → kim boshlagan (sir emas; kod/parol bu yerda yo'q)
+const attempts = new Map<string, { userId: string; expiresAt: number }>();
+
+function ownAttempt(id: unknown, userId: string): string | null {
+  const now = Date.now();
+  for (const [k, v] of attempts) if (v.expiresAt <= now) attempts.delete(k);
+  if (typeof id !== 'string' || !ATTEMPT_RE.test(id)) return null;
+  const a = attempts.get(id);
+  return a && a.userId === userId ? id : null;
+}
+
+interface Dev { userId: string; name: string; role: string }
+
+async function developer(req: Request): Promise<Dev> {
+  const userId = String(req.user?.userId || '');
+  const me: any = isObjectIdString(userId) ? await User.findById(userId).select('firstName lastName').lean() : null;
+  return { userId, name: fullName(me) || 'Dasturchi', role: String(req.user?.role || 'dasturchi') };
+}
+
+async function limited(res: Response, key: string, max: number, windowMs: number): Promise<boolean> {
+  const rl = await hitRate(key, max, windowMs);
+  if (rl.allowed) return false;
+  res.status(429).json({ error: 'rate_limited', retryAfterSec: rl.retryAfterSec });
+  return true;
+}
+
+// Worker xato kodlari → HTTP (javobda faqat kod; kiritilgan qiymatlar hech qachon qaytmaydi)
+const RPC_HTTP: Record<string, number> = {
+  worker_offline: 503, timeout: 504, bad_response: 502, not_leased: 503, telegram_unavailable: 503,
+  phone_invalid: 400, phone_banned: 403, code_invalid: 400, code_expired: 410, password_invalid: 400,
+  attempt_expired: 410, password_required: 409, already_connected: 409, not_authorized: 409,
+  flood_wait: 429, busy: 409,
+};
+
+async function rpcError(res: Response, e: unknown): Promise<void> {
+  const code = e instanceof WorkerRpcFailure ? e.code : 'error';
+  const retryAfterSec = e instanceof WorkerRpcFailure ? e.retryAfterSec : undefined;
+  if (code === 'flood_wait' && retryAfterSec) await setFloodWait(Date.now() + retryAfterSec * 1000).catch(() => undefined);
+  res.status(RPC_HTTP[code] || 502).json({ error: code, ...(retryAfterSec ? { retryAfterSec } : {}) });
+}
+
+const audit = (req: Request, dev: Dev, action: 'create' | 'update' | 'delete', description: string, extra: { entityId?: string; companyId?: string } = {}) =>
+  logAudit({
+    userId: dev.userId, userName: dev.name, userRole: dev.role, action, entity: 'ai_telegram_account',
+    entityId: extra.entityId || 'platform', companyId: extra.companyId, description, req,
+  }).catch(() => {});
+
+export async function platformStatusView() {
+  const conn: any = await AiChannelConnection.findOne(PLATFORM_TG)
+    .select('status lastError workerId leaseUntil udpProbe connectedAt').lean();
+  const w = getActiveWorker();
+  return {
+    aiVoiceEnabled: aiConfig.enabled,
+    account: await accountDto(),
+    worker: {
+      connectedHere: !!w,
+      workerId: w?.workerId || conn?.workerId || undefined,
+      leaseActive: !!conn?.leaseUntil && new Date(conn.leaseUntil).getTime() > Date.now(),
+    },
+    lastError: conn?.status !== 'connected' ? (conn?.lastError || undefined) : undefined,
+    udpCheckedAt: conn?.udpProbe?.at ? new Date(conn.udpProbe.at).toISOString() : undefined,
+    connectedAt: conn?.connectedAt ? new Date(conn.connectedAt).toISOString() : undefined,
+    limits: { loginPer10Min: LOGIN_MAX, testCallsPerHour: TEST_CALL_MAX },
+  };
+}
+
+// ───────────── Holat ─────────────
+router.get('/telegram-account', wrap(async (_req, res) => {
+  res.json(await platformStatusView());
+}));
+
+// ───────────── Login: telefon → kod → 2FA ─────────────
+router.post('/telegram-account/login/start', wrap(async (req, res) => {
+  const dev = await developer(req);
+  const phone = isObj(req.body) && typeof req.body.phone === 'string' ? req.body.phone.replace(/[\s()-]/g, '') : '';
+  if (!PHONE_RE.test(phone)) return res.status(400).json({ error: 'phone_invalid' });
+  if (await limited(res, `aiv:tglogin:start:${dev.userId}`, LOGIN_MAX, LOGIN_WINDOW_MS)) return;
+  if (!getActiveWorker()) return res.status(503).json({ error: 'worker_offline' });
+  const loginAttemptId = crypto.randomUUID();
+  attempts.set(loginAttemptId, { userId: dev.userId, expiresAt: Date.now() + ATTEMPT_TTL_MS });
+  let r;
+  try {
+    r = await callWorker('auth.start', { loginAttemptId, phone });
+  } catch (e) {
+    attempts.delete(loginAttemptId);
+    return rpcError(res, e);
+  }
+  const phoneMasked = maskPhone(phone);
+  if (r.status === 'connected') {
+    attempts.delete(loginAttemptId);
+    await setConnectedAccount({}, dev.userId);
+    audit(req, dev, 'update', 'AI Telegram akkaunti ulandi');
+    return res.json({ status: 'connected', phoneMasked, account: await accountDto() });
+  }
+  await setLoginState({ status: r.status, phoneMasked, by: dev.userId });
+  audit(req, dev, 'update', 'AI Telegram: kirish boshlandi');
+  res.json({ status: r.status, loginAttemptId, phoneMasked });
+}));
+
+async function finishConnected(req: Request, dev: Dev, info: { tgUserId?: string; username?: string; displayName?: string }) {
+  await setConnectedAccount(info, dev.userId);
+  audit(req, dev, 'update', 'AI Telegram akkaunti ulandi');
+}
+
+router.post('/telegram-account/login/code', wrap(async (req, res) => {
+  const dev = await developer(req);
+  const body = isObj(req.body) ? req.body : {};
+  const code = typeof body.code === 'string' ? body.code.replace(/\D/g, '') : '';
+  if (!CODE_RE.test(code)) return res.status(400).json({ error: 'code_invalid' });
+  const loginAttemptId = ownAttempt(body.loginAttemptId, dev.userId);
+  if (!loginAttemptId) return res.status(410).json({ error: 'attempt_expired' });
+  if (await limited(res, `aiv:tglogin:code:${dev.userId}`, LOGIN_MAX, LOGIN_WINDOW_MS)) return;
+  if (!getActiveWorker()) return res.status(503).json({ error: 'worker_offline' });
+  let r;
+  try {
+    r = await callWorker('auth.code', { loginAttemptId, code });
+  } catch (e) {
+    return rpcError(res, e);
+  }
+  if (r.status === 'connected') {
+    attempts.delete(loginAttemptId);
+    await finishConnected(req, dev, r);
+    return res.json({ status: 'connected', account: await accountDto() });
+  }
+  await setLoginState({ status: 'awaiting_password', by: dev.userId });
+  res.json({ status: 'awaiting_password', loginAttemptId });
+}));
+
+router.post('/telegram-account/login/password', wrap(async (req, res) => {
+  const dev = await developer(req);
+  const body = isObj(req.body) ? req.body : {};
+  const password = typeof body.password === 'string' ? body.password : '';
+  if (!password || password.length > 256) return res.status(400).json({ error: 'password_invalid' });
+  const loginAttemptId = ownAttempt(body.loginAttemptId, dev.userId);
+  if (!loginAttemptId) return res.status(410).json({ error: 'attempt_expired' });
+  if (await limited(res, `aiv:tglogin:pw:${dev.userId}`, LOGIN_MAX, LOGIN_WINDOW_MS)) return;
+  if (!getActiveWorker()) return res.status(503).json({ error: 'worker_offline' });
+  let r;
+  try {
+    r = await callWorker('auth.password', { loginAttemptId, password });
+  } catch (e) {
+    return rpcError(res, e);
+  }
+  attempts.delete(loginAttemptId);
+  await finishConnected(req, dev, r);
+  res.json({ status: 'connected', account: await accountDto() });
+}));
+
+router.post('/telegram-account/login/cancel', wrap(async (req, res) => {
+  const dev = await developer(req);
+  const id = ownAttempt(isObj(req.body) ? req.body.loginAttemptId : undefined, dev.userId);
+  if (id) attempts.delete(id);
+  const conn: any = await AiChannelConnection.findOne(PLATFORM_TG).select('status').lean();
+  if (conn?.status === 'awaiting_code' || conn?.status === 'awaiting_password') await setLoginState({ status: 'disconnected', by: dev.userId });
+  res.json({ ok: true });
+}));
+
+router.post('/telegram-account/logout', wrap(async (req, res) => {
+  const dev = await developer(req);
+  if (await limited(res, `aiv:tglogout:${dev.userId}`, LOGIN_MAX, LOGIN_WINDOW_MS)) return;
+  if (!getActiveWorker()) return res.status(503).json({ error: 'worker_offline' });
+  try {
+    await callWorker('auth.logout', {});
+  } catch (e) {
+    return rpcError(res, e);
+  }
+  await setLoggedOut(dev.userId);
+  audit(req, dev, 'delete', 'AI Telegram akkauntidan chiqildi');
+  res.json({ ok: true, account: await accountDto() });
+}));
+
+// ───────────── UDP tekshiruv ─────────────
+router.post('/telegram-account/udp-probe', wrap(async (req, res) => {
+  const dev = await developer(req);
+  if (await limited(res, `aiv:tgudp:${dev.userId}`, 10, LOGIN_WINDOW_MS)) return;
+  if (!getActiveWorker()) return res.status(503).json({ error: 'worker_offline' });
+  let r;
+  try {
+    r = await callWorker('udp.probe', {});
+  } catch (e) {
+    return rpcError(res, e);
+  }
+  await ensurePlatformConnection();
+  await AiChannelConnection.updateOne(PLATFORM_TG, { $set: { udpProbe: { ok: !!r?.ok, at: new Date() } } });
+  res.json({ ok: !!r?.ok, details: typeof r?.details === 'string' ? r.details.slice(0, 200) : undefined });
+}));
+
+// ───────────── Sinov qo'ng'irog'i (B7) ─────────────
+/** Sinov uchun nomzodlar: faqat Telegram qo'ng'irog'iga rozilik bergan xodimlar. */
+router.get('/telegram-account/test-targets', wrap(async (req, res) => {
+  const q = typeof req.query.q === 'string' ? req.query.q.trim().slice(0, 40) : '';
+  const contacts: any[] = await AiEmployeeContact.find({ 'telegram.callConsent': 'granted', 'telegram.tgUserId': { $type: 'string' } })
+    .select('companyId employeeId telegram.resolveStatus').limit(500).lean();
+  if (!contacts.length) return res.json({ targets: [] });
+  const userFilter: Record<string, unknown> = { _id: { $in: contacts.map((c) => c.employeeId) } };
+  if (q) {
+    const rx = new RegExp(esc(q), 'i');
+    userFilter.$or = [{ firstName: rx }, { lastName: rx }];
+  }
+  const users: any[] = await User.find(userFilter).select('firstName lastName companyId').limit(20).lean();
+  const companyIds = [...new Set(users.map((u) => String(u.companyId || '')).filter((id) => isObjectIdString(id)))];
+  const companies: any[] = companyIds.length ? await Company.find({ _id: { $in: companyIds } }).select('name').lean() : [];
+  const cName = new Map(companies.map((c) => [String(c._id), String(c.name || '')]));
+  const byUser = new Map(contacts.map((c) => [String(c.employeeId), c]));
+  res.json({
+    targets: users.map((u) => ({
+      userId: String(u._id), name: fullName(u) || '—', companyId: String(u.companyId || ''),
+      companyName: cName.get(String(u.companyId || '')) || '',
+      resolveStatus: String(byUser.get(String(u._id))?.telegram?.resolveStatus || 'unknown'),
+    })),
+  });
+}));
+
+router.post('/telegram-account/test-call', wrap(async (req, res) => {
+  const dev = await developer(req);
+  const userId = isObj(req.body) ? req.body.userId : undefined;
+  if (!isObjectIdString(userId)) return res.status(400).json({ error: 'invalid', errors: ['userId'] });
+  const target: any = await User.findById(userId).select('firstName lastName companyId language').lean();
+  const companyId = target?.companyId ? String(target.companyId) : '';
+  if (!target || !companyId) return res.status(404).json({ error: 'not_found' });
+  const ct: any = await AiEmployeeContact.findOne({ companyId, employeeId: userId }).select('telegram.callConsent').lean();
+  // B7: faqat rozilik bergan xodimga
+  if (ct?.telegram?.callConsent !== 'granted') return res.status(409).json({ error: 'no_consent' });
+  if (await limited(res, `aiv:tgtest:${dev.userId}`, TEST_CALL_MAX, TEST_CALL_WINDOW_MS)) return;
+
+  const ctx = {
+    companyId, employeeId: String(userId), correlationId: newCorrelationId(), purpose: 'test' as const,
+    lang: (target.language === 'ru' ? 'ru' : 'uz') as 'uz' | 'ru', now: new Date(), attemptNo: 1,
+  };
+  const av = await telegramCallChannel.isAvailable(ctx);
+  let result: { outcome: string; errorCode?: string; sessionId?: string };
+  if (!av.ok) {
+    result = { outcome: 'unavailable', errorCode: av.reason };
+  } else {
+    const r = await telegramCallChannel.attempt(ctx, { kind: 'test', ringTimeoutSec: 45, maxDurationSec: 60 });
+    result = { outcome: r.outcome, errorCode: r.errorCode, sessionId: r.sessionId };
+  }
+  // 'no_answer' + sessionId — qo'ng'iroq terildi, natija keyin call.state orqali keladi
+  const placed = !!result.sessionId && result.outcome === 'no_answer';
+  audit(req, dev, 'create',
+    `AI Telegram: sinov qo'ng'irog'i — ${fullName(target) || 'xodim'} (${placed ? 'terildi' : (result.errorCode || result.outcome)})`,
+    { entityId: String(userId), companyId });
+  res.status(placed ? 202 : 409).json({ placed, ...result });
+}));
+
+/** Faqat testlar uchun. */
+export function __resetPlatformRoutesForTests(): void { attempts.clear(); }
 
 export default router;

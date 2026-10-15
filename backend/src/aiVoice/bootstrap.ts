@@ -18,6 +18,8 @@ import { registerErpTools } from './tools/erp';
 import adminRoutes from './routes/adminRoutes';
 import meRoutes from './routes/meRoutes';
 import platformRoutes from './routes/platformRoutes';
+import platformAdminRoutes from './routes/platformAdminRoutes';
+import chatRoutes from './routes/chatRoutes';
 
 // AI ovozli yordamchini ishga tushirish (index.ts: startAutoSnapshots()'dan keyin startAiVoice()).
 // AI_VOICE_ENABLED o'chiq bo'lsa HECH NARSA qilmaydi: navbat, heartbeat, SIGTERM tinglovchisi yo'q —
@@ -29,7 +31,10 @@ import platformRoutes from './routes/platformRoutes';
  * admin guard'iga tushmaydi. Platforma — faqat dasturchi; admin va me — dasturchiga yopiq.
  */
 export function mountAiVoiceRoutes(app: Pick<Router, 'use'>): void {
-  app.use('/api/ai-voice/platform', requireAuth, requireDeveloper, platformRoutes);
+  // platformAdminRoutes (firmalar, miya/limitlar, sarf, audit, arxivlar) — mos kelmasa P6 platformRoutes'ga o'tadi
+  app.use('/api/ai-voice/platform', requireAuth, requireDeveloper, platformAdminRoutes, platformRoutes);
+  // Chatdagi AI kontakti (P7) — /me'dan OLDIN (aniqroq prefiks), workGate ALLOW ostida
+  app.use('/api/ai-voice/me/chat', requireAuth, blockDeveloper, chatRoutes);
   app.use('/api/ai-voice/me', requireAuth, blockDeveloper, meRoutes);
   app.use('/api/ai-voice/admin', requireAuth, blockDeveloper, adminRoutes);
 }

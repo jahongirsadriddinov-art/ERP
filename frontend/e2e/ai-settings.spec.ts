@@ -1,8 +1,11 @@
 import { test, expect, Page } from '@playwright/test';
 
-// AI ovozli yordamchi sozlamalari (P8): firma egasi Profil → "AI ovozli yordamchi" → Ish jadvali bo'limida
-// ish boshlanishi, hafta kunlari va bayram sanasini o'zgartiradi → Saqlash. Backend soxta (mock):
-// PUT /api/ai-voice/admin/settings tanasi to'g'ri ekani tekshiriladi (telefon va kompyuter o'lchamida).
+// AI yordamchi sozlamalari (egasi so'rovlari 2026-10-15): firma egasi Profil → "AI ovozli yordamchi".
+// Tekshiriladi: Beta belgisi va izohi; AI miyasi / Limit va xarajat firma UI'da YO'Q; ish jadvalini saqlash
+// (PUT tanasi); xodimga alohida jadval (PATCH tanasi); skroll — yon menyu joyida qoladi, kontent oxirigacha
+// tushadi, oxirgi element pastki menyu ostida qolmaydi. Dasturchi paneli → AI platforma: firma AI'sini yoqish.
+// Holat ROST (server o'chiq ≠ firma o'chiq), saqlangandan keyin qayta so'raladi; rolga mos izoh (direktor /
+// o'rinbosar / ishchi); shaxsiy sozlamalarda o'chiq tugma sababi. Backend soxta (mock) — telefon va kompyuter o'lchamida.
 
 const shift = {
   id: 'main', name: 'Asosiy smena', objectIds: [], roles: ['ishchi', 'prorab', 'brigadir'], workStart: '08:00', callLeadMin: 0,
@@ -19,14 +22,33 @@ const settings = {
   provider: { primary: 'gemini_live', fallback: 'gemini_cascade' },
   brain: { provider: 'gemini', fallback: 'openrouter', effort: 'low' },
   limits: { userSessionsPerHour: 6, companyMinutesPerDay: 120, monthlyBudgetUsd: 20, hardStop: true, botMsgsPer10Min: 20, toolCallsPerSession: 30 },
-  privacy: { recordAudio: false, transcriptRetentionDays: 30, auditRetentionDays: 365 },
+  privacy: { recordAudio: false, transcriptRetentionDays: 7, auditRetentionDays: 365 },
   version: 3,
 };
-const view = (s: any) => ({
-  settings: s, editor: { canEditSchedule: true, canEditBossRows: true },
-  providers: { gemini: true, openrouter: true, claude: false },
-  status: { aiVoiceEnabled: true, planHasFeature: true, companyActive: true },
+const companyView = (s: any) => { const { brain: _b, provider: _p, limits: _l, ...rest } = s; return rest; };
+type Opts = { serverOn?: boolean; boss?: boolean; me?: any; initial?: any };
+const view = (s: any, o: Opts = {}) => ({
+  settings: companyView(s), editor: { canEditSchedule: true, canEditBossRows: o.boss !== false, canDownloadArchives: o.boss !== false },
+  status: { aiVoiceEnabled: o.serverOn !== false, planHasFeature: true, companyActive: true },
 });
+const employees = Array.from({ length: 45 }, (_, i) => ({
+  userId: `u${i + 2}`, name: `Xodim ${i + 1}`, role: i % 5 === 0 ? 'prorab' : 'ishchi', telegramLinked: i % 2 === 0, resolveStatus: 'ok',
+  callConsent: i % 3 === 0 ? 'granted' : 'none', optOut: { calls: false, reminders: false, all: false }, disabledChannels: [], scheduleOverride: null,
+}));
+// Server /platform/companies shakli (platformAdminRoutes.ts)
+const companies = [
+  { companyId: 'c1', name: 'Jondor Iris Stroy', status: 'ACTIVE', planHasFeature: true, aiEnabled: true, attendanceEnabled: true, monthCostUsdMicros: 4_200_000, monthlyBudgetUsd: 20 },
+  { companyId: 'c2', name: 'Alfa Qurilish', status: 'ACTIVE', planHasFeature: true, aiEnabled: false, attendanceEnabled: false, monthCostUsdMicros: 0, monthlyBudgetUsd: 20 },
+];
+const platformView = (id: string, patch: any = {}) => {
+  const c = companies.find((x) => x.companyId === id)!;
+  return {
+    companyId: id, name: c.name, status: { exists: true, active: true, planHasFeature: true, aiVoiceEnabled: true },
+    settings: { ...settings, companyId: id, enabled: c.aiEnabled, ...patch },
+    providers: { gemini: true, openrouter: false, claude: false },
+    month: { costUsdMicros: c.monthCostUsdMicros, budgetUsd: 20, hardStop: true, exceeded: false },
+  };
+};
 
 // Service Worker so'rovlarni o'zi yuborsa page.route ularni ushlamaydi (haqiqiy serverga ketardi) — o'chiramiz
 test.use({ serviceWorkers: 'block' });
@@ -38,7 +60,10 @@ const CORS = {
   'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
 };
 
-async function mockApi(page: Page, puts: any[]) {
+type Calls = { puts: any[]; patches: { url: string; body: any }[]; platformPuts: { url: string; body: any }[]; settingsGets: number; saved?: any };
+const newCalls = (): Calls => ({ puts: [], patches: [], platformPuts: [], settingsGets: 0 });
+
+async function mockApi(page: Page, calls: Calls, o: Opts = {}) {
   await page.route(/\/api\//, async (route) => {
     const req = route.request();
     const url = req.url();
@@ -48,36 +73,69 @@ async function mockApi(page: Page, puts: any[]) {
     route = { ...route, fulfill: (o: any) => fulfill({ ...o, headers: { ...CORS, ...(o.headers || {}) } }) } as any;
     if (url.includes('/api/status')) return route.fulfill({ json: { siteEnabled: true, appEnabled: true, botEnabled: true } });
     if (url.includes('/api/deploy/latest')) return route.fulfill({ json: { available: false } });
+    // Ishchi/prorab uchun "Ishga keldim" darvozasi yopilsin — bugun kelgan
+    if (url.includes('/api/attendance/today')) return route.fulfill({ json: { status: 'present', checkIn: new Date().toISOString() } });
     if (url.includes('/api/admin/subscriptions/my')) return route.fulfill({ json: { status: 'active', daysLeft: 30, features: ['ai_assistant'] } });
     if (url.includes('/api/ai-voice/admin/settings')) {
       if (method === 'PUT') {
         const body = req.postDataJSON();
-        puts.push(body);
+        calls.puts.push(body);
         const sh = { ...shift, ...(body.patch?.attendance?.shifts?.[0] || {}) };
-        return route.fulfill({ json: view({ ...settings, attendance: { ...settings.attendance, shifts: [sh] }, version: settings.version + 1 }) });
+        const next = { ...settings, ...(body.patch?.enabled !== undefined ? { enabled: body.patch.enabled } : {}), attendance: { ...settings.attendance, shifts: [sh] }, version: settings.version + 1 };
+        calls.saved = next;
+        return route.fulfill({ json: view(next, o) });
       }
-      return route.fulfill({ json: view(settings) });
+      calls.settingsGets++;
+      return route.fulfill({ json: view(calls.saved || o.initial || settings, o) });
     }
-    if (url.includes('/api/ai-voice/me')) return route.fulfill({ status: 501, json: { error: 'not_implemented' } });
+    if (url.includes('/api/ai-voice/admin/employees')) {
+      if (method === 'PATCH') {
+        const body = req.postDataJSON();
+        calls.patches.push({ url, body });
+        const id = decodeURIComponent(url.split('/admin/employees/')[1].split('?')[0]);
+        return route.fulfill({ json: { employee: { ...employees.find((e) => e.userId === id), ...body } } });
+      }
+      return route.fulfill({ json: { employees } });
+    }
+    if (url.includes('/api/ai-voice/admin/archives')) {
+      if (o.boss === false) return route.fulfill({ status: 403, json: { error: 'forbidden' } });
+      return route.fulfill({ json: { page: 1, limit: 60, total: 1, items: [{ id: 'a1', companyId: 'c1', period: '2026-10-07', part: 1, status: 'done', fileName: 'ai-transcripts-c1-2026-10-07-p1.jsonl.gz', size: 18432, counts: { conversations: 12, events: 140 }, createdAt: '2026-10-15T00:10:00Z' }] } });
+    }
+    if (url.includes('/api/ai-voice/platform/overview')) {
+      return route.fulfill({ json: { aiVoiceEnabled: false, providers: { gemini: true, openrouter: false, claude: false }, enabledCompanies: 1, month: { month: '2026-10', costUsdMicros: 4_200_000 }, archives: { total: 3, pendingDelete: 0, keepInDbDays: 7 }, queue: { running: false } } });
+    }
+    if (url.includes('/api/ai-voice/platform/companies/')) {
+      const id = decodeURIComponent(url.split('/platform/companies/')[1].split('?')[0]);
+      if (method === 'PATCH') {
+        const body = req.postDataJSON();
+        calls.platformPuts.push({ url, body });
+        const c = companies.find((x) => x.companyId === id)!;
+        if (body.patch?.enabled !== undefined) c.aiEnabled = body.patch.enabled;
+        return route.fulfill({ json: platformView(id, { ...body.patch, version: body.version + 1 }) });
+      }
+      return route.fulfill({ json: platformView(id) });
+    }
+    if (url.includes('/api/ai-voice/platform/companies')) return route.fulfill({ json: { page: 1, limit: 100, total: companies.length, items: companies } });
+    if (url.includes('/api/ai-voice/platform/')) return route.fulfill({ status: 501, json: { error: 'not_implemented' } });
+    if (url.includes('/api/ai-voice/me')) {
+      if (!o.me) return route.fulfill({ status: 501, json: { error: 'not_implemented' } });
+      if (url.includes('/me/reminders')) return route.fulfill({ json: { reminders: [] } });
+      return route.fulfill({ json: o.me.prefs });
+    }
     if (url.includes('/api/ai-voice/')) return route.fulfill({ json: {} });
     if (method === 'GET') return route.fulfill({ json: [] });
     return route.fulfill({ json: {} });
   });
 }
 
-test('AI sozlamalari: ish jadvalini o\'zgartirib saqlash — PUT tanasi to\'g\'ri', async ({ page }) => {
-  const errors: string[] = [];
-  page.on('pageerror', (e) => errors.push(e.message));
-
-  const puts: any[] = [];
-  await mockApi(page, puts);
-  await page.addInitScript(() => {
+async function seed(page: Page, user: Record<string, unknown>, pageKey = 'profile') {
+  await page.addInitScript(([u, p]) => {
     try {
       if (sessionStorage.getItem('e2e-seeded')) return;
       sessionStorage.setItem('e2e-seeded', '1');
       localStorage.setItem('token', 'e2e-token');
-      localStorage.setItem('currentUser', JSON.stringify({ id: 'u1', name: 'Egasi', role: 'direktor', phone: '+998900000001', projectIds: [], isOwner: true, companyId: 'c1', language: 'uz' }));
-      localStorage.setItem('page', 'profile');
+      localStorage.setItem('currentUser', JSON.stringify(u));
+      localStorage.setItem('page', p as string);
       localStorage.setItem('erp_visited', '1');
       localStorage.setItem('i18nextLng', 'uz');
       // PIN o'rnatilgan va ilova hozirgina faol bo'lgan — qulf ekrani chiqmaydi
@@ -86,15 +144,69 @@ test('AI sozlamalari: ish jadvalini o\'zgartirib saqlash — PUT tanasi to\'g\'r
       localStorage.setItem('erp_lockTimeoutMin', '60');
       localStorage.setItem('erp_lastActiveAt', String(Date.now()));
     } catch { /* */ }
-  });
-  await page.goto('/');
+  }, [user, pageKey] as const);
+}
 
-  // Profil → AI ovozli yordamchi
+const owner = { id: 'u1', name: 'Egasi', role: 'direktor', phone: '+998900000001', projectIds: [], isOwner: true, companyId: 'c1', language: 'uz' };
+
+async function openAiSettings(page: Page) {
+  await page.goto('/');
   const row = page.getByRole('button', { name: /AI ovozli yordamchi/ }).first();
   await expect(row).toBeVisible({ timeout: 20_000 });
   await row.click();
-  const panel = page.getByTestId('ai-settings-panel');
-  await expect(panel).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId('ai-settings-panel')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId('ai-tab-general')).toBeVisible();
+}
+
+/** Element turgan skroll konteynerini (yoki oynani) oxirigacha tushiradi. */
+async function scrollToEnd(page: Page, testId: string) {
+  await page.evaluate((id) => {
+    const el = document.querySelector(`[data-testid="${id}"]`)!;
+    for (let p = el.parentElement; p; p = p.parentElement) {
+      const cs = getComputedStyle(p);
+      if (/(auto|scroll)/.test(cs.overflowY) && p.scrollHeight > p.clientHeight + 1) p.scrollTop = p.scrollHeight;
+    }
+    window.scrollTo(0, document.documentElement.scrollHeight);
+  }, testId);
+  await page.waitForTimeout(250);
+}
+
+/** Element ekranda va ustini hech narsa (pastki menyu, saqlash paneli) yopmagan. */
+async function expectReachable(page: Page, testId: string) {
+  const ok = await page.evaluate((id) => {
+    const el = document.querySelector(`[data-testid="${id}"]`) as HTMLElement;
+    const r = el.getBoundingClientRect();
+    if (r.bottom > window.innerHeight || r.top < 0) return `outside: ${Math.round(r.top)}..${Math.round(r.bottom)} / ${window.innerHeight}`;
+    const hit = document.elementFromPoint(r.left + Math.min(20, r.width / 2), r.top + r.height / 2);
+    return hit && (el === hit || el.contains(hit)) ? 'ok' : `covered by ${hit?.tagName}.${String((hit as HTMLElement)?.className).slice(0, 50)}`;
+  }, testId);
+  expect(ok).toBe('ok');
+}
+
+test('AI sozlamalari: beta, AI miyasi/limit yo\'q, ish jadvalini saqlash', async ({ page }, info) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  const calls = newCalls();
+  await mockApi(page, calls);
+  await seed(page, owner);
+  await openAiSettings(page);
+
+  // Beta belgisi: bosilganda qisqa izoh chiqadi, Esc bilan yopiladi
+  const beta = page.getByTestId('ai-settings-panel').getByRole('button', { name: /beta/i }).first();
+  await expect(beta).toBeVisible();
+  await beta.click();
+  await expect(page.getByRole('tooltip')).toBeVisible();
+  await page.screenshot({ path: `test-results/ai-beta-${info.project.name}.png` });
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('tooltip')).toHaveCount(0);
+
+  // AI miyasi va limit/xarajat firma UI'da yo'q (faqat dasturchi panelida)
+  await expect(page.getByTestId('ai-tab-provider')).toHaveCount(0);
+  await expect(page.getByTestId('ai-tab-limits')).toHaveCount(0);
+  await expect(page.getByText('AI miyasi', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Limit va xarajat', { exact: true })).toHaveCount(0);
+  for (const k of ['general', 'schedule', 'channels', 'employees', 'tools', 'history', 'test']) await expect(page.getByTestId(`ai-tab-${k}`)).toBeVisible();
+  await page.screenshot({ path: `test-results/ai-general-${info.project.name}.png`, fullPage: false });
 
   // Ish jadvali
   await page.getByTestId('ai-tab-schedule').click();
@@ -110,21 +222,196 @@ test('AI sozlamalari: ish jadvalini o\'zgartirib saqlash — PUT tanasi to\'g\'r
   // Saqlash
   await expect(page.getByTestId('ai-save-bar')).toBeVisible();
   await page.getByTestId('ai-save').click();
-  await expect.poll(() => puts.length).toBe(1);
-  const body = puts[0];
+  await expect.poll(() => calls.puts.length).toBe(1);
+  const body = calls.puts[0];
   expect(body.version).toBe(3);
   expect(Object.keys(body.patch)).toEqual(['attendance']);
-  expect(Object.keys(body.patch.attendance)).toEqual(['shifts']);
-  expect(body.patch.attendance.shifts).toHaveLength(1);
   expect(body.patch.attendance.shifts[0]).toMatchObject({
     id: 'main', workStart: '07:30', callTime: '07:30', workdays: [1, 2, 3, 4, 5], skipDates: ['2027-03-21'], extraWorkDates: [],
   });
-  expect(body.patch.timezone).toBeUndefined();
-  // Saqlangach o'zgarish paneli yo'qoladi
+  expect(body.patch.brain).toBeUndefined();
+  expect(body.patch.limits).toBeUndefined();
   await expect(page.getByTestId('ai-save-bar')).toHaveCount(0);
 
-  // Sahifa yon tomonga siljimaydi
+  // Tarix: arxiv ro'yxati (server shakli: bitta kun + qism, suhbatlar soni)
+  await page.getByTestId('ai-tab-history').click();
+  await expect(page.getByTestId('ai-archive-a1')).toBeVisible();
+  await expect(page.getByTestId('ai-archive-a1')).toContainText('12');
+  // Direktorga mos izoh, holat — ishlayapti
+  await expect(page.getByTestId('ai-role-help-boss')).toBeVisible();
+  await expect(page.getByTestId('ai-status-badge')).toHaveAttribute('data-state', 'on');
+
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(2);
   expect(errors, errors.join('\n')).toEqual([]);
+});
+
+test('AI sozlamalari: skroll oxirigacha, menyu joyida; xodimga alohida jadval', async ({ page }, info) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  const calls = newCalls();
+  await mockApi(page, calls);
+  await seed(page, owner);
+  await openAiSettings(page);
+
+  await page.getByTestId('ai-tab-employees').click();
+  await expect(page.getByTestId('ai-emp-u2')).toBeVisible();
+  await expect(page.getByTestId('ai-emp-more')).toBeVisible();          // 45 ta → 30 + "Yana ko'rsatish"
+
+  // Kontent oxirigacha skroll qilinadi va oxirgi element hech narsa ostida qolmaydi
+  await scrollToEnd(page, 'ai-emp-more');
+  await expectReachable(page, 'ai-emp-more');
+  // Menyu (telefon: yuqoridagi lenta, kompyuter: yon menyu) skroll paytida ham ko'rinib turadi
+  const nav = await page.getByTestId('ai-settings-nav').boundingBox();
+  expect(nav).not.toBeNull();
+  expect(nav!.y).toBeGreaterThanOrEqual(-1);
+  expect(nav!.y).toBeLessThan(page.viewportSize()!.height / 2);
+  await page.screenshot({ path: `test-results/ai-scroll-end-${info.project.name}.png` });
+
+  await page.getByTestId('ai-emp-more').click();
+  await expect(page.getByTestId('ai-emp-u46')).toBeAttached();
+  await scrollToEnd(page, 'ai-settings-end');
+  await expectReachable(page, 'ai-emp-u46');
+
+  // Xodimga alohida jadval: Du, Se, Ch + 07:00
+  await page.getByTestId('ai-emp-u2').scrollIntoViewIfNeeded();
+  await page.getByTestId('ai-emp-toggle-u2').click();
+  await page.getByTestId('ai-emp-default-u2').click();
+  for (const d of [4, 5, 6]) await page.getByTestId(`ai-emp-wd-u2-${d}`).click();   // standart Du–Sh dan Pa, Ju, Sh olib tashlanadi
+  await page.getByTestId('ai-emp-start-u2').fill('07:00');
+  await page.screenshot({ path: `test-results/ai-emp-override-${info.project.name}.png` });
+  await page.getByTestId('ai-emp-save-u2').click();
+  await expect.poll(() => calls.patches.length).toBe(1);
+  expect(calls.patches[0].url).toContain('/admin/employees/u2');
+  expect(calls.patches[0].body).toEqual({ scheduleOverride: { weekdays: [1, 2, 3], workStart: '07:00' } });
+  await expect(page.getByTestId('ai-emp-u2')).toContainText('07:00');
+
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(overflow).toBeLessThanOrEqual(2);
+  expect(errors, errors.join('\n')).toEqual([]);
+});
+
+test('Dasturchi paneli → AI platforma: firma AI\'sini yoqish, limitni saqlash', async ({ page }, info) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  const calls = newCalls();
+  await mockApi(page, calls);
+  await seed(page, { id: 'd1', name: 'Dasturchi', role: 'dasturchi', phone: '+998900000009', projectIds: [], language: 'uz' }, 'dashboard');
+  await page.goto('/');
+
+  const tab = page.getByRole('button', { name: /AI platforma/ }).first();
+  await expect(tab).toBeVisible({ timeout: 20_000 });
+  await tab.click();
+  await expect(page.getByTestId('ai-platform-panel')).toBeVisible();
+  // Holat: serverda AI o'chiq — aniq sabab va keyingi qadam (AI_VOICE_ENABLED)
+  await expect(page.getByTestId('ai-pf-server')).toContainText('AI_VOICE_ENABLED');
+  await expect(page.getByTestId('ai-pf-worker')).toBeVisible();
+  await page.screenshot({ path: `test-results/ai-platform-overview-${info.project.name}.png` });
+  await page.getByTestId('ai-pf-tab-companies').click();
+  await expect(page.getByTestId('ai-pf-company-c1')).toBeVisible();
+
+  await page.getByTestId('ai-pf-enable-c2').click();
+  await expect.poll(() => calls.platformPuts.length).toBe(1);
+  expect(calls.platformPuts[0].url).toContain('/platform/companies/c2');
+  expect(calls.platformPuts[0].body).toEqual({ version: 3, patch: { enabled: true } });
+  await expect(page.getByTestId('ai-pf-enable-c2')).toHaveAttribute('aria-checked', 'true');
+
+  await page.getByTestId('ai-pf-edit-c1').click();
+  await expect(page.getByTestId('ai-pf-editor-c1')).toBeVisible();
+  await page.getByTestId('ai-pf-budget-c1').fill('50');
+  await page.screenshot({ path: `test-results/ai-platform-${info.project.name}.png` });
+  await page.getByTestId('ai-pf-save-c1').click();
+  await expect.poll(() => calls.platformPuts.length).toBe(2);
+  expect(calls.platformPuts[1].body).toEqual({ version: 3, patch: { limits: { ...settings.limits, monthlyBudgetUsd: 50 } } });
+
+  // Backend hali tayyor bo'lmagan bo'limlar yumshoq xabar beradi (sahifa yiqilmaydi)
+  await page.getByTestId('ai-pf-tab-usage').click();
+  await expect(page.getByText(/hali tayyor emas/).first()).toBeVisible();
+
+  expect(errors, errors.join('\n')).toEqual([]);
+});
+
+test('Holat rost: firmada yoqilgan, server o\'chiq — "To\'xtagan" + sabab; saqlangach qayta so\'raladi', async ({ page }, info) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  const calls = newCalls();
+  await mockApi(page, calls, { serverOn: false, initial: { ...settings, enabled: false } });
+  await seed(page, owner);
+  await openAiSettings(page);
+
+  // Firma kaliti o'chiq + server o'chiq — ikkala sabab, "O'chiq"
+  await expect(page.getByTestId('ai-status-badge')).toHaveAttribute('data-state', 'off');
+  await expect(page.getByTestId('ai-check-server')).toHaveAttribute('data-ok', '0');
+  await expect(page.getByTestId('ai-check-company')).toHaveAttribute('data-ok', '0');
+
+  // Yoqish — saqlanmaguncha ogohlantirish
+  await page.getByTestId('ai-enabled').click();
+  await expect(page.getByTestId('ai-status-pending')).toBeVisible();
+  const getsBefore = calls.settingsGets;
+  await page.getByTestId('ai-save').click();
+  await expect.poll(() => calls.puts.length).toBe(1);
+  expect(calls.puts[0].patch).toEqual({ enabled: true });
+  await expect.poll(() => calls.settingsGets).toBeGreaterThan(getsBefore);   // saqlangach serverdan qayta o'qildi
+  // Endi faqat server sababi qoldi: "O'chiq" emas — "To'xtagan"
+  await expect(page.getByTestId('ai-status-badge')).toHaveAttribute('data-state', 'blocked');
+  await expect(page.getByTestId('ai-check-company')).toHaveAttribute('data-ok', '1');
+  await expect(page.getByTestId('ai-check-server')).toHaveAttribute('data-ok', '0');
+  await expect(page.getByTestId('ai-status-pending')).toHaveCount(0);
+  await page.screenshot({ path: `test-results/ai-status-${info.project.name}.png` });
+  expect(errors, errors.join('\n')).toEqual([]);
+});
+
+test('O\'rinbosar: o\'ziga mos izoh, arxiv faqat direktorda (sababi yozilgan)', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  const calls = newCalls();
+  await mockApi(page, calls, { boss: false });
+  await seed(page, { ...owner, id: 'u9', role: 'orinbosar', isOwner: false });
+  await openAiSettings(page);
+  await expect(page.getByTestId('ai-role-help-deputy')).toBeVisible();
+  await page.getByTestId('ai-tab-history').click();
+  await expect(page.getByTestId('ai-archives-locked')).toBeVisible();
+  expect(errors, errors.join('\n')).toEqual([]);
+});
+
+test('Mening AI sozlamalarim: ishchiga mos izoh; o\'chiq tugmalar sababini aytadi', async ({ page }, info) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  const calls = newCalls();
+  const prefs = {
+    disabledChannels: [], callConsent: 'none', optOut: { calls: false, reminders: false, all: true }, quietHours: null,
+    status: { aiActive: true, attendanceEnabled: true, telegramLinked: false, planHasFeature: true },
+  };
+  await mockApi(page, calls, { me: { prefs } });
+  await seed(page, { id: 'u5', name: 'Ishchi', role: 'ishchi', phone: '+998900000005', projectIds: [], companyId: 'c1', language: 'uz' });
+  await page.goto('/');
+  const row = page.getByRole('button', { name: /AI qo'ng'iroqlarim/ }).first();
+  await expect(row).toBeVisible({ timeout: 20_000 });
+  await row.click();
+  await expect(page.getByTestId('ai-prefs-panel')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId('ai-role-help-worker')).toBeVisible();
+  // "Hammasidan" voz kechilgan — kanallar o'chiq va SABABI yonida yozilgan
+  await expect(page.getByTestId('ai-my-ch-push')).toBeDisabled();
+  await expect(page.getByTestId('ai-my-ch-push')).toHaveAttribute('title', /Hammasidan/);
+  await expect(page.getByTestId('ai-why-channels')).toBeVisible();
+  // Telegram ulanmagan — rozilik izohi
+  await expect(page.getByTestId('ai-consent-note')).toBeVisible();
+  await page.screenshot({ path: `test-results/ai-prefs-${info.project.name}.png`, fullPage: true });
+  expect(errors, errors.join('\n')).toEqual([]);
+});
+
+test('Mening AI sozlamalarim: AI firmada o\'chiq — sabab va keyingi qadam', async ({ page }) => {
+  const calls = newCalls();
+  const prefs = {
+    disabledChannels: [], callConsent: 'granted', optOut: { calls: false, reminders: false, all: false },
+    status: { aiActive: false, attendanceEnabled: false, telegramLinked: true, planHasFeature: true },
+  };
+  await mockApi(page, calls, { me: { prefs } });
+  await seed(page, { id: 'u6', name: 'Prorab', role: 'prorab', phone: '+998900000006', projectIds: [], companyId: 'c1', language: 'uz' });
+  await page.goto('/');
+  await page.getByRole('button', { name: /AI qo'ng'iroqlarim/ }).first().click({ timeout: 20_000 });
+  await expect(page.getByTestId('ai-prefs-off')).toContainText('Rahbaringizdan');
+  await expect(page.getByTestId('ai-role-help-foreman')).toBeVisible();
+  await expect(page.getByTestId('ai-consent-btn')).toBeDisabled();
+  await expect(page.getByTestId('ai-consent-btn')).toHaveAttribute('title', /ishlamayapti/);
 });

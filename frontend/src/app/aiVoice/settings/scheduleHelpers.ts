@@ -145,7 +145,8 @@ export function validateDraft(d: AiSettingsData): DraftError[] {
   for (const s of d.attendance.shifts) validateShift(s).forEach((x) => e.add(x));
   if (!d.fallbackOrder.length || !channelsUnique(d.fallbackOrder)) e.add("fallbackOrder");
   if (!isHHmm(d.calls.quietHours.from) || !isHHmm(d.calls.quietHours.to)) e.add("quietHours");
-  if (!(d.limits.monthlyBudgetUsd >= 0 && d.limits.monthlyBudgetUsd <= 10000)) e.add("budget");
+  // limits firma ko'rinishida kelmaydi (dasturchi bo'limi) — bo'lsagina tekshiriladi
+  if (d.limits && !(d.limits.monthlyBudgetUsd >= 0 && d.limits.monthlyBudgetUsd <= 10000)) e.add("budget");
   return [...e];
 }
 

@@ -26,6 +26,8 @@ export interface IAiEmployeeContact extends Document {
   botBlockedAt?: Date;
   /** Shaxsiy jim soatlar (P3, /me): firma jim soatlariga QO'SHIMCHA — bu oraliqda AI qo'ng'iroq qilmaydi. */
   quietHours?: { from: string; to: string };
+  /** Shaxsiy ish jadvali (owner 2026-10-15): o'z ish kunlari (ISO 1..7) va ixtiyoriy ish boshlanishi. Yo'q — firma smenasi. */
+  scheduleOverride?: { weekdays: number[]; workStart?: string; updatedBy?: string; updatedAt?: Date };
   stats: { lastCallAt?: Date; failuresInRow: number };
   createdAt: Date;
   updatedAt: Date;
@@ -61,6 +63,10 @@ const AiEmployeeContactSchema = new Schema<IAiEmployeeContact>({
   botAiModeUntil: Date,
   botBlockedAt: Date,
   quietHours: { type: { from: String, to: String, _id: false }, default: undefined },
+  scheduleOverride: {
+    type: { weekdays: { type: [Number], default: undefined }, workStart: String, updatedBy: String, updatedAt: Date, _id: false },
+    default: undefined,
+  },
   stats: {
     lastCallAt: Date,
     failuresInRow: { type: Number, default: 0 },

@@ -99,9 +99,10 @@ describe('kirish nazorati', () => {
     expect(r.headers['cache-control']).toBe('no-store');
     expect(r.body.settings.companyId).toBe(A.companyId);
     expect(r.body.settings.timezone).toBe('Asia/Tashkent');
-    expect(r.body.editor).toEqual({ canEditSchedule: true, canEditBossRows: true });
+    expect(r.body.editor).toEqual({ canEditSchedule: true, canEditBossRows: true, canDownloadArchives: true });
     const o = await get('/settings', A.orinbosarId);
     expect(o.body.editor.canEditBossRows).toBe(false);
+    expect(o.body.editor.canDownloadArchives).toBe(false);
   });
 });
 
@@ -127,30 +128,41 @@ describe('sozlamalar PUT', () => {
     expect(r.body.errors.join(' ')).toMatch(/timezone/);
   });
 
-  it("kalitlar HECH QACHON javobda yo'q; faqat 'sozlanganmi' bayroqlari", async () => {
+  it("kalitlar HECH QACHON javobda yo'q; AI miyasi/limitlar firma ko'rinishida yo'q (owner 2026-10-15)", async () => {
     Object.assign(process.env, SECRETS);
     delete process.env.GEMINI_API_KEYS;
     const r = await get('/settings', A.ownerId);
-    expect(r.body.providers).toEqual({ gemini: true, openrouter: true, claude: true });
+    expect(r.body.providers).toBeUndefined();
+    expect(r.body.settings.brain).toBeUndefined();
+    expect(r.body.settings.provider).toBeUndefined();
+    expect(r.body.settings.limits).toBeUndefined();
     const ch = await get('/channels/status', A.ownerId);
     const s = await fresh(A.ownerId);
     const bad = await put('/settings', A.ownerId, { version: s.settings.version, patch: { brain: { provider: 'gemini', apiKey: 'x' } } });
-    expect(bad.status).toBe(400);
+    expect(bad.status).toBe(403);
     for (const body of [JSON.stringify(r.body), JSON.stringify(ch.body), JSON.stringify(bad.body)]) {
       for (const v of Object.values(SECRETS)) expect(body).not.toContain(v);
       expect(body).not.toContain('TEST-SECRET');
     }
     for (const k of Object.keys(SECRETS)) delete process.env[k];
-    expect((await get('/settings', A.ownerId)).body.providers).toEqual({ gemini: false, openrouter: false, claude: false });
   });
 
-  it('miya provayderi va zaxira tanlanadi (gemini|claude, openrouter|none)', async () => {
+  it("brain/provider/limits'ni firma admini o'zgartira olmaydi — 403 developer_only, bazada o'zgarmaydi", async () => {
     const s = await fresh(A.ownerId);
-    const r = await put('/settings', A.ownerId, { version: s.settings.version, patch: { brain: { provider: 'claude', fallback: 'none', effort: 'medium' } } });
-    expect(r.status).toBe(200);
-    expect(r.body.settings.brain).toEqual({ provider: 'claude', fallback: 'none', effort: 'medium' });
-    const bad = await put('/settings', A.ownerId, { version: r.body.settings.version, patch: { brain: { provider: 'openai' } } });
-    expect(bad.status).toBe(400);
+    const before: any = await AiAssistantSettings.findOne({ companyId: A.companyId }).lean();
+    for (const patch of [
+      { brain: { provider: 'claude', fallback: 'none', effort: 'medium' } },
+      { provider: { primary: 'gemini_cascade' } },
+      { limits: { monthlyBudgetUsd: 999 } },
+      { language: 'ru', limits: { hardStop: false } },
+    ]) {
+      const r = await put('/settings', A.ownerId, { version: s.settings.version, patch });
+      expect(r.status).toBe(403);
+      expect(r.body.error).toBe('developer_only');
+    }
+    const after: any = await AiAssistantSettings.findOne({ companyId: A.companyId }).lean();
+    expect(after.version).toBe(before.version);
+    expect(after.language ?? null).toBe(before.language ?? null);
   });
 
   it("fallbackOrder: takrorsiz va ma'lum kanallar", async () => {
@@ -164,14 +176,6 @@ describe('sozlamalar PUT', () => {
     expect(ok.body.settings.fallbackOrder).toEqual(['bot_message', 'push', 'notify_manager']);
   });
 
-  it('limitlar chegaralari tekshiriladi', async () => {
-    const s = await fresh(A.ownerId);
-    const lim = { ...s.settings.limits, monthlyBudgetUsd: -1 };
-    expect((await put('/settings', A.ownerId, { version: s.settings.version, patch: { limits: lim } })).status).toBe(400);
-    const ok = await put('/settings', A.ownerId, { version: s.settings.version, patch: { limits: { ...s.settings.limits, monthlyBudgetUsd: 35 } } });
-    expect(ok.status).toBe(200);
-    expect(ok.body.settings.limits.monthlyBudgetUsd).toBe(35);
-  });
 });
 
 describe('tools matritsasi (kod chegarasi)', () => {
@@ -306,6 +310,49 @@ describe('xodimlar', () => {
     expect((await patch(`/employees/${A.ownerId}`, A.orinbosarId, { disabledChannels: ['push'] })).status).toBe(403);
     expect((await patch(`/employees/${A.orinbosarId}`, A.ownerId, { disabledChannels: ['push'] })).status).toBe(200);
   });
+
+  it("shaxsiy ish jadvali (#5): firma jadvali qoidalari bilan tekshiriladi, ro'yxatda ko'rinadi, null — o'chiriladi", async () => {
+    const list0 = await get('/employees', A.ownerId);
+    expect(list0.body.employees.find((e: any) => e.userId === A.worker2Id).scheduleOverride).toBeNull();
+    const bad = [
+      { weekdays: [] }, { weekdays: [8] }, { weekdays: [1, 1] }, { weekdays: [1], workStart: '25:00' },
+      { weekdays: [1], extra: 1 }, { weekdays: [1, 2], workStart: '23:30' }, 'x',
+    ];
+    for (const scheduleOverride of bad) {
+      const r = await patch(`/employees/${A.worker2Id}`, A.ownerId, { scheduleOverride });
+      expect(r.status, JSON.stringify(scheduleOverride)).toBe(400);
+    }
+    const ok = await patch(`/employees/${A.worker2Id}`, A.orinbosarId, { scheduleOverride: { weekdays: [5, 1, 3], workStart: '10:00' } });
+    expect(ok.status).toBe(200);
+    expect(ok.body.employee.scheduleOverride).toEqual({ weekdays: [1, 3, 5], workStart: '10:00' });
+    const c: any = await AiEmployeeContact.findOne({ companyId: A.companyId, employeeId: A.worker2Id }).lean();
+    expect(c.scheduleOverride).toMatchObject({ weekdays: [1, 3, 5], workStart: '10:00', updatedBy: A.orinbosarId });
+    const list = await get('/employees', A.ownerId);
+    expect(list.body.employees.find((e: any) => e.userId === A.worker2Id).scheduleOverride).toEqual({ weekdays: [1, 3, 5], workStart: '10:00' });
+    // workStart ixtiyoriy — firma vaqti qoladi
+    const days = await patch(`/employees/${A.worker2Id}`, A.ownerId, { scheduleOverride: { weekdays: [6, 7] } });
+    expect(days.body.employee.scheduleOverride).toEqual({ weekdays: [6, 7] });
+    // boshqa firma xodimi — 404 (to'g'ri qiymat bilan ham)
+    expect((await patch(`/employees/${B.workerId}`, A.ownerId, { scheduleOverride: { weekdays: [1] } })).status).toBe(404);
+    const off = await patch(`/employees/${A.worker2Id}`, A.ownerId, { scheduleOverride: null });
+    expect(off.status).toBe(200);
+    expect(off.body.employee.scheduleOverride).toBeNull();
+    expect(((await AiEmployeeContact.findOne({ companyId: A.companyId, employeeId: A.worker2Id }).lean()) as any).scheduleOverride).toBeUndefined();
+  });
+
+  it("shaxsiy jadval: o'rinbosarga jadval yopiq bo'lsa — 403", async () => {
+    let s = await fresh(A.ownerId);
+    expect((await put('/settings', A.ownerId, { version: s.settings.version, patch: { attendance: { orinbosarCanEditSchedule: false } } })).status).toBe(200);
+    expect((await patch(`/employees/${A.worker2Id}`, A.orinbosarId, { scheduleOverride: { weekdays: [1] } })).status).toBe(403);
+    s = await fresh(A.ownerId);
+    expect((await put('/settings', A.ownerId, { version: s.settings.version, patch: { attendance: { orinbosarCanEditSchedule: true } } })).status).toBe(200);
+  });
+
+  it("transkript arxivlari: faqat egasi/direktor; o'rinbosar 403", async () => {
+    expect((await get('/archives', A.ownerId)).status).toBe(200);
+    expect((await get('/archives', A.orinbosarId)).status).toBe(403);
+    expect((await get('/archives/665f1c2e9b1e8a0000000abc/download', A.ownerId)).status).toBe(404);
+  });
 });
 
 describe('run-now / sinov / audit / sarf', () => {
@@ -382,17 +429,11 @@ describe('run-now / sinov / audit / sarf', () => {
     expect(denied.body.items[0].actorName).toMatch(/ishchi/);
   });
 
-  it('sarf: kunlik va provayder bo\'yicha jami, oylik byudjet', async () => {
-    await recordUsage({ companyId: A.companyId, userId: A.ownerId, provider: 'gemini', model: 'gemini-3.8-flash' }, { tokensIn: 1000, tokensOut: 500, costUsdMicros: 1500 });
+  it("sarf va xarajat firma adminiga yopiq — dasturchi paneliga ko'chirilgan (403)", async () => {
     await recordUsage({ companyId: A.companyId, userId: null, provider: 'openrouter', model: 'x' }, { tokensIn: 10, costUsdMicros: 500 });
-    await recordUsage({ companyId: B.companyId, userId: null, provider: 'gemini', model: 'x' }, { costUsdMicros: 99_000 });
     const r = await get('/usage', A.ownerId);
-    expect(r.status).toBe(200);
-    expect(r.body.totals.costUsdMicros).toBe(2000);
-    expect(r.body.byProvider).toMatchObject({ gemini: 1500, openrouter: 500 });
-    expect(r.body.days).toHaveLength(1);
-    expect(r.body.month.costUsdMicros).toBe(2000);
-    expect(typeof r.body.month.budgetUsd).toBe('number');
+    expect(r.status).toBe(403);
+    expect(r.body.error).toBe('developer_only');
   });
 });
 

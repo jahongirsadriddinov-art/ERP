@@ -21,8 +21,8 @@ import { ROLE_LABELS, VoicePlayer } from "./App";
 import { SkeletonList, SkeletonMessage } from "./Skeleton";
 import { openExternalUrl } from "./platform";
 import { AnnouncementComposer, GlobalAnnouncementList } from "./AnnouncementParts";
-// AI Telegram hisobi (AI ovozli yordamchi) — alohida chunk, faqat tab ochilganda
-const TelegramAccountPanel = lazy(() => import("./aiVoice/settings/TelegramAccountPanel"));
+// AI platforma boshqaruvi (firmalar, AI miyasi, limitlar, xarajat, Telegram hisobi, arxiv, audit) — alohida chunk
+const AiPlatformPanel = lazy(() => import("./aiVoice/settings/platform/AiPlatformPanel"));
 
 // ─── Developer Panel ────────────────────────────────────────────────────────────
 export default function DeveloperPanel({ currentUser, onLogout }: { currentUser: AppUser; onLogout: () => void }) {
@@ -353,7 +353,7 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
             {t('devPanel.tabs.announcements')}
           </button>
           <button onClick={() => setTab("aiVoice")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "aiVoice" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
-            {t('aiVoice.telegram.tab')}
+            {t('aiVoice.platform.title')}
           </button>
         </div>
         {/* Ma'lumotlar FAQAT panel birinchi ochilganda yuklanardi — keyin
@@ -665,7 +665,7 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
             </div>
           ))
         ) : tab === "aiVoice" ? (
-          <Suspense fallback={<div className="h-40 rounded-2xl bg-muted/40 animate-pulse" />}><TelegramAccountPanel /></Suspense>
+          <Suspense fallback={<div className="h-40 rounded-2xl bg-muted/40 animate-pulse" />}><AiPlatformPanel /></Suspense>
         ) : tab === "announcements" ? (
           // ── Global e'lon — BARCHA firmalarning BARCHA xodimlariga (kirganda avtomatik oyna + push + Telegram) ──
           <div className="space-y-3">

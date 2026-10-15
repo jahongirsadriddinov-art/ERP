@@ -18,7 +18,7 @@ export default function ToolsMatrix({ view, draft, update }: SectionProps) {
   const { t, i18n } = useTranslation();
   const k = (s: string) => t(`aiVoice.admin.tools.${s}`);
   const [tools, setTools] = useState<AiToolEntry[] | null>(null);
-  useEffect(() => { adminApi.getTools().then((r) => setTools(r.ok ? r.data.tools : [])); }, []);
+  useEffect(() => { adminApi.getTools().then((r) => setTools(r.ok && Array.isArray(r.data?.tools) ? r.data.tools : [])); }, []);
   const lang = i18n.language === "ru" ? "ru" : "uz";
   const canBoss = view.editor.canEditBossRows;
 
@@ -35,7 +35,7 @@ export default function ToolsMatrix({ view, draft, update }: SectionProps) {
 
   return (
     <div className="space-y-4">
-      <Card icon={Shield} title={t("aiVoice.admin.tabs.tools")} hint={k("hint")} testId="ai-tools">
+      <Card icon={Shield} title={t("aiVoice.ui.tabs.tools")} hint={k("hint")} testId="ai-tools">
         {!canBoss && <div className="mb-3"><Notice tone="lock">{k("bossLocked")}</Notice></div>}
         {tools === null ? <Skeleton h="h-32" /> : tools.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-6">{k("empty")}</p>

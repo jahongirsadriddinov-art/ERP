@@ -1,0 +1,10 @@
+.env
+.venv/
+data/
+__pycache__/
+*.pyc
+*.enc
+*.pem
+*.tmp
+.pytest_cache/
+live-call-report.json

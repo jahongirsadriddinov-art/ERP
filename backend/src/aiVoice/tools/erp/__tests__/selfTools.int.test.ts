@@ -4,7 +4,8 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import Transaction from '../../../../models/Transaction';
 import Attendance from '../../../../models/Attendance';
 import AiAssistantSettings from '../../../../models/AiAssistantSettings';
-import { addDays, localDate } from '../../../lib/zonedTime';
+import AiEmployeeContact from '../../../../models/AiEmployeeContact';
+import { addDays, isoWeekdayOf, localDate } from '../../../lib/zonedTime';
 import { call, resetCaches, setupErp, teardownErp, type Env } from './erpHelpers';
 
 let env: Env;
@@ -71,6 +72,22 @@ describe('getMySchedule', () => {
     const boss: any = (await call(A.ownerId, A.companyId, 'getMySchedule')).result.data;
     expect(boss.shifts).toHaveLength(0);
     expect(boss.note).toBeTruthy();
+  });
+
+  it("shaxsiy ish jadvali (#5): xodimning o'z kunlari va ish boshlanishi qaytadi", async () => {
+    const { A } = env;
+    const d0 = localDate();
+    const wd = isoWeekdayOf(d0);
+    const other = (wd % 7) + 1;   // bugun emas
+    await AiEmployeeContact.updateOne({ companyId: A.companyId, employeeId: A.workerId },
+      { $set: { scheduleOverride: { weekdays: [other], workStart: '10:00' } } }, { upsert: true });
+    resetCaches();
+    const d: any = (await call(A.workerId, A.companyId, 'getMySchedule')).result.data;
+    expect(d.shifts[0].workStart).toBe('10:00');
+    expect(d.shifts[0].workdays).toEqual([other]);
+    expect(d.shifts[0].workday).toBe(false);
+    expect(d.shifts[0].personalSchedule).toBe(true);
+    await AiEmployeeContact.updateOne({ companyId: A.companyId, employeeId: A.workerId }, { $unset: { scheduleOverride: '' } });
   });
 
   it("noto'g'ri yoki juda uzoq sana — xato", async () => {

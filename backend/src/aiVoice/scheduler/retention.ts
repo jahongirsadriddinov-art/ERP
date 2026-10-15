@@ -1,14 +1,15 @@
 import AiAttendanceConfirmation from '../../models/AiAttendanceConfirmation';
 import AiCallEvent from '../../models/AiCallEvent';
 import AiCallSession from '../../models/AiCallSession';
-import AiConversation from '../../models/AiConversation';
 import AiReminder from '../../models/AiReminder';
 import { getSettings } from '../settings';
 
 // Kunlik saqlash muddati tozalovchisi (retention.sweep). TTL indekslar (AiCallEvent/AiActionAudit expiresAt)
 // asosiy ishni qiladi; bu yerda — firma sozlamasi KAMAYTIRILGAN bo'lsa eski yozuvlar ham kesiladi va
 // TTL'siz kolleksiyalar tozalanadi:
-//  • transcriptRetentionDays: AiCallEvent, sessiya summary'si, ovozli/bot AiConversation (chat emas);
+//  • transcriptRetentionDays (≥14, zaxira): AiCallEvent, sessiya summary'si. AiConversation va 7 kundan eski
+//    AiCallEvent'lar archive/transcriptArchive.ts'da avval FAYLGA arxivlanadi, keyin o'chiriladi (#3) —
+//    bu yerda AiConversation o'chirilmaydi (arxivsiz yo'qolmasin);
 //  • auditRetentionDays: yakunlangan AiCallSession va AiAttendanceConfirmation;
 //  • yopilgan eslatmalar (done/cancelled/missed/failed) — 90 kundan keyin.
 // Faol sessiyalarga va oddiy chat suhbatlariga tegilmaydi.
@@ -33,9 +34,6 @@ export async function retentionSweep(now: Date = new Date()): Promise<RetentionS
       stats.summaries += (await AiCallSession.updateMany(
         { companyId, isActive: false, createdAt: { $lt: tCut }, summary: { $exists: true } }, { $unset: { summary: 1 } },
       )).modifiedCount || 0;
-      stats.conversations += (await AiConversation.deleteMany(
-        { companyId, source: { $in: ['voice_inapp', 'telegram_call', 'bot'] }, updatedAt: { $lt: tCut } },
-      )).deletedCount || 0;
       stats.sessions += (await AiCallSession.deleteMany({ companyId, isActive: false, createdAt: { $lt: aCut } })).deletedCount || 0;
       stats.confirmations += (await AiAttendanceConfirmation.deleteMany({ companyId, createdAt: { $lt: aCut } })).deletedCount || 0;
       stats.companies++;

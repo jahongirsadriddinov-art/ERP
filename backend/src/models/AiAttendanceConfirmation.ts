@@ -22,6 +22,9 @@ export interface IAiAttendanceConfirmation extends Document {
   employeeId: string;
   date: string;                   // YYYY-MM-DD (Asia/Tashkent)
   shiftId: string;
+  /** Rejalashtirilgan paytdagi xodimning amaldagi vaqtlari (shaxsiy jadval bo'lsa — uniki). Eski yozuvlarda yo'q = smena. */
+  workStart?: string;
+  absentCutoff?: string;
   objectIds: string[];
   scheduledAt: Date;
   planMode: 'full' | 'bot_only';  // maxLateMin'dan kech rejalashtirilsa — faqat bot xabari (C2)
@@ -60,6 +63,8 @@ const AiAttendanceConfirmationSchema = new Schema<IAiAttendanceConfirmation>({
   employeeId: { type: String, required: true },
   date: { type: String, required: true, match: /^\d{4}-\d{2}-\d{2}$/ },
   shiftId: { type: String, required: true },
+  workStart: String,
+  absentCutoff: String,
   objectIds: { type: [String], default: [] },
   scheduledAt: { type: Date, required: true },
   planMode: { type: String, enum: ['full', 'bot_only'], default: 'full' },

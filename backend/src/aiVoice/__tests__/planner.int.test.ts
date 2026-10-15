@@ -5,11 +5,12 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from
 import type { MongoMemoryServer } from 'mongodb-memory-server';
 import AiAttendanceConfirmation from '../../models/AiAttendanceConfirmation';
 import AiJob from '../../models/AiJob';
+import AiEmployeeContact from '../../models/AiEmployeeContact';
 import Attendance from '../../models/Attendance';
 import User from '../../models/User';
 import { __setSettingsCacheTtlForTests, defaultShift } from '../settings';
 import { setSharedQueue } from '../queue/jobQueue';
-import { planDecision, plannerTick, planShift } from '../scheduler/planner';
+import { planDecision, plannerTick, planShift, shiftVariants } from '../scheduler/planner';
 import { runAttendancePlanNow } from '../scheduler/api';
 import { JOBS, keys } from '../scheduler/jobTypes';
 import { localDate, zonedToUtc } from '../lib/zonedTime';
@@ -233,5 +234,103 @@ describe('run-now (C5)', () => {
     expect(await runAttendancePlanNow({ companyId: A.companyId, shiftId: 'nope', requestedBy: A.ownerId })).toEqual({ ok: false, code: 'not_found' });
     await enableAttendance(A.companyId, {}, { 'attendance.enabled': false });
     expect(await runAttendancePlanNow({ companyId: A.companyId, shiftId: 'main', requestedBy: A.ownerId })).toEqual({ ok: false, code: 'disabled' });
+  });
+});
+
+// ───────────── Owner 2026-10-15 (#5): xodimning shaxsiy ish jadvali ─────────────
+describe('shaxsiy ish jadvali (planner)', () => {
+  afterEach(async () => { await AiEmployeeContact.deleteMany({ companyId: A.companyId }); });
+  const setOverride = (employeeId: string, scheduleOverride: Record<string, unknown>) =>
+    AiEmployeeContact.updateOne({ companyId: A.companyId, employeeId }, { $set: { scheduleOverride }, $setOnInsert: { companyId: A.companyId, employeeId } }, { upsert: true });
+  const conf = (employeeId: string) => AiAttendanceConfirmation.findOne({ companyId: A.companyId, employeeId }).lean() as Promise<any>;
+
+  it("o'z vaqtida: firma 08:00, xodim 10:00 — boshqalar 08:00 da, u 10:00 da; yakunlash ham o'z vaqtida (14:00)", async () => {
+    await enableAttendance(A.companyId, { workStart: '08:00', absentCutoff: '12:00', roles: ['ishchi'] }, { fallbackOrder: ['bot_message'] });
+    await setOverride(A.workerId, { weekdays: [1, 2, 3, 4, 5, 6], workStart: '10:00' });
+    const clock = new Clock(at(WED, '08:00'));
+    const q = mkQueue(clock);
+    expect((await plannerTick(q, clock.now())).planned).toBe(1);
+    await drain(q);
+    clock.addSec(5);
+    await drain(q);
+    expect((await AiAttendanceConfirmation.find({ companyId: A.companyId }).lean()).map((c: any) => c.employeeId)).toEqual([A.worker2Id]);
+    expect(await conf(A.worker2Id)).toMatchObject({ workStart: '08:00', absentCutoff: '12:00' });
+
+    clock.set(at(WED, '09:59'));
+    expect((await plannerTick(q, clock.now())).planned).toBe(0);
+    clock.set(at(WED, '10:00'));
+    expect((await plannerTick(q, clock.now())).planned).toBe(1);
+    expect(await AiJob.countDocuments({ dedupeKey: keys.planAt(A.companyId, WED, 'main', '10:00') })).toBe(1);
+    await drain(q);
+    clock.addSec(5);
+    await drain(q);
+    const w = await conf(A.workerId);
+    expect(w).toMatchObject({ workStart: '10:00', absentCutoff: '14:00', planMode: 'full' });
+    expect(new Date(w.scheduledAt).toISOString()).toBe(at(WED, '10:00').toISOString());
+    // Xabarda xodimning o'z ish boshlanishi
+    const msg = fc.of('bot_message').find((s) => s.ctx.employeeId === A.workerId);
+    expect((msg?.req as any)?.text).toContain('10:00');
+    expect(fc.of('bot_message').filter((s) => s.ctx.employeeId === A.workerId)).toHaveLength(1);
+
+    // 12:00 — firma yakunlashi: faqat worker2; worker'ning vaqti (14:00) hali kelmagan
+    clock.set(at(WED, '12:00'));
+    await plannerTick(q, clock.now());
+    await drain(q);
+    expect((await conf(A.worker2Id)).finalizedAt).toBeTruthy();
+    expect((await conf(A.workerId)).finalizedAt ?? null).toBeNull();
+    clock.set(at(WED, '14:00'));
+    await plannerTick(q, clock.now());
+    await drain(q);
+    const wf = await conf(A.workerId);
+    expect(wf.finalizedAt).toBeTruthy();
+    expect(wf.status).toBe('absent');
+    expect(await AiJob.countDocuments({ type: JOBS.finalize, dedupeKey: keys.finalize(A.companyId, WED, 'main') })).toBe(1);
+    expect(await AiJob.countDocuments({ type: JOBS.finalize, dedupeKey: keys.finalizeAt(A.companyId, WED, 'main', '14:00') })).toBe(1);
+  });
+
+  it("o'z ish kunlari: faqat Yakshanba ishlaydigan xodim — Chorshanba yo'q, Yakshanba o'z vaqtida; bayram (skipDates) hammaga", async () => {
+    await enableAttendance(A.companyId, { workStart: '08:00', roles: ['ishchi'] }, { fallbackOrder: ['bot_message'] });
+    await setOverride(A.workerId, { weekdays: [7], workStart: '09:00' });
+    const clock = new Clock(at(WED, '08:00'));
+    const q = mkQueue(clock);
+    await plannerTick(q, clock.now());
+    await drain(q);
+    expect((await AiAttendanceConfirmation.find({ companyId: A.companyId }).lean()).map((c: any) => c.employeeId)).toEqual([A.worker2Id]);
+    clock.set(at(WED, '09:00'));
+    expect((await plannerTick(q, clock.now())).planned).toBe(0);         // Chorshanba — uning ish kuni emas
+
+    clock.set(at(SUN, '08:30'));
+    expect((await plannerTick(q, clock.now())).planned).toBe(0);         // firma dam oladi, u esa 09:00 da
+    clock.set(at(SUN, '09:00'));
+    expect((await plannerTick(q, clock.now())).planned).toBe(1);
+    await drain(q);
+    const sun: any[] = await AiAttendanceConfirmation.find({ companyId: A.companyId, date: SUN }).lean();
+    expect(sun.map((c) => c.employeeId)).toEqual([A.workerId]);
+    expect(sun[0]).toMatchObject({ workStart: '09:00' });
+
+    await AiAttendanceConfirmation.deleteMany({});
+    await AiJob.deleteMany({});
+    await enableAttendance(A.companyId, { workStart: '08:00', roles: ['ishchi'], skipDates: [SUN] }, { fallbackOrder: ['bot_message'] });
+    expect(await plannerTick(q, clock.now())).toEqual({ planned: 0, finalize: 0 });
+    expect(await confCount()).toBe(0);
+  });
+
+  it("run-now (qo'lda): firma yakunlash vaqti o'tgan, lekin shaxsiy jadvalli xodimniki emas — faqat u rejalashtiriladi", async () => {
+    await enableAttendance(A.companyId, { workStart: '08:00', absentCutoff: '12:00', roles: ['ishchi'] });
+    await setOverride(A.workerId, { weekdays: [3], workStart: '11:00' });
+    const clock = new Clock(at(WED, '13:00'));
+    const q = mkQueue(clock);
+    const r = await planShift(q, { companyId: A.companyId, shiftId: 'main', manual: true }, clock.now());
+    expect(r).toMatchObject({ created: 1 });
+    expect((await AiAttendanceConfirmation.find({ companyId: A.companyId }).lean()).map((c: any) => c.employeeId)).toEqual([A.workerId]);
+    expect(await conf(A.workerId)).toMatchObject({ absentCutoff: '15:00' });
+  });
+
+  it('shiftVariants: shaxsiy jadval bo\'lmasa — faqat smena; bir xillari birlashtiriladi', () => {
+    const sh = { ...defaultShift(), workStart: '08:00', callTime: '08:00', absentCutoff: '12:00' };
+    expect(shiftVariants(sh, [])).toEqual([sh]);
+    const v = shiftVariants(sh, [{ weekdays: [1, 2, 3, 4, 5, 6] }, { weekdays: [7], workStart: '09:00' }, { weekdays: [7], workStart: '09:00' }]);
+    expect(v).toHaveLength(2);
+    expect(v[1]).toMatchObject({ workdays: [7], callTime: '09:00', absentCutoff: '13:00' });
   });
 });

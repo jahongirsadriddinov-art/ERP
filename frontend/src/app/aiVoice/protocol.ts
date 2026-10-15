@@ -41,8 +41,26 @@ export interface AivPttReq { on: boolean }
 export interface AivConfirmActionReq { pendingActionId: string; accept: boolean }
 export interface AivPresenceReq { visible: boolean }
 
-export interface AivIncoming { sessionId: string; purpose: Purpose; expiresAt: string; companyName?: string }
-export interface AivReady { sessionId: string; inputSampleRate: 16000; outputSampleRate: 24000; frameMs: 40; ptt: boolean }
+/** aiv:hangup — sessionId ixtiyoriy (bo'lmasa shu socket'ning faol sessiyasi). */
+export interface AivHangupReq { sessionId?: string }
+
+/** Socket ack xato kodlari (aiv:start / accept / confirm-action). */
+export type AivErrorCode =
+  | 'disabled' | 'busy' | 'platform_cap' | 'company_cap' | 'limit' | 'budget' | 'off_shift' | 'denied'
+  | 'unsupported_transport' | 'not_found' | 'answered_elsewhere' | 'bad_request' | 'error';
+export type AivAck = { ok: true } | { ok: false; code: AivErrorCode; message?: string };
+/** aiv:start va aiv:accept ack'i: correlationId — audio kadr sarlavhasidagi 16 bayt (A10). */
+export type AivSessionAck =
+  | { ok: true; sessionId: string; correlationId: string }
+  | { ok: false; code: AivErrorCode; message?: string };
+/** aiv:confirm-action ack'i — amalning HAQIQIY natijasi (modelning so'zi emas). */
+export type AivConfirmActionAck =
+  | { ok: true; status: ToolStatus; message: string }
+  | { ok: false; code: AivErrorCode; message?: string };
+
+/** correlationId — mijoz yuboradigan audio kadrlar sarlavhasiga yoziladi. */
+export interface AivIncoming { sessionId: string; correlationId: string; purpose: Purpose; expiresAt: string; companyName?: string }
+export interface AivReady { sessionId: string; correlationId: string; inputSampleRate: 16000; outputSampleRate: 24000; frameMs: 40; ptt: boolean }
 export interface AivTranscript { sessionId: string; role: 'user' | 'assistant'; text: string; final: boolean }
 export interface AivToolEvent { sessionId: string; name: string; status: ToolStatus; message: string }
 export interface AivConfirm { sessionId: string; pendingActionId: string; summary: string; expiresAt: string }
@@ -50,7 +68,7 @@ export type AivEndReason =
   | 'hangup' | 'completed' | 'timeout' | 'max_duration' | 'declined' | 'busy' | 'answered_elsewhere'
   | 'error' | 'shutdown' | 'revoked' | 'off_shift' | 'limit' | 'unsupported_transport';
 export interface AivEnd { sessionId: string; reason: AivEndReason }
-export interface AivError { code: string; message: string }
+export interface AivError { code: AivErrorCode | string; message: string }
 
 // ───────────── REST DTO'lar (P3/P6/P8 to'ldiradi) ─────────────
 export interface AiMePrefsDto {
@@ -65,6 +83,8 @@ export interface AiTelegramAccountDto {
   workerConnected: boolean; workerVersion?: string; lastHealthAt?: string; udpOk?: boolean;
   floodWaitUntil?: string; dailyCallCount: number; dailyCap: number;
 }
+/** GET /api/ai-voice/me/pending-call — muddati o'tmagan AI qo'ng'irog'i (bildirishnomadan ochganlar uchun). */
+export type AiPendingCallDto = { call: AivIncoming | null };
 
 // ───────────── Binary audio kadr ─────────────
 // [16 bayt UUID (correlationId)][u32 LE seq][PCM16LE …]

@@ -648,3 +648,13 @@ P0 goes first and ships on its own. P1 follows. P2–P8 then run in parallel and
   makes OUTBOUND connections (backend socket + Telegram), so a home PC behind NAT works. The Dockerfile stays for later
   server hosting. In-app voice on the free 0.1-CPU backend is pilot-only (1–2 concurrent sessions max; enforce via
   `AI_LIVE_MAX_CONCURRENT=1` default on free plan). Owner already added `OPENROUTER_API_KEY` on Render.
+
+## Owner requests (2026-10-15)
+1. Mark the AI assistant as **BETA** everywhere it appears (AI buttons, settings, chat AI contact): a small "Beta" badge; on hover/focus/tap a short, clear explanation of what beta means and the current limitations (Uzbek quality not final, may misunderstand, calls depend on free plan limits, always verify important actions).
+2. Company AI settings page is too complex: redesign for clarity (simple sections, plain-language labels, sensible defaults, progressive disclosure). **Move "AI miyasi" (provider/model) and "Limit va xarajat" (limits/cost) OUT of the company UI into the DEVELOPER admin panel.** The developer panel must manage EVERYTHING about AI platform-wide (enable per company, provider/model, limits, costs/usage per company, Telegram account, worker status, transcripts archive, audit across companies).
+3. **Audit / transcripts:** every AI conversation (text and voice-call transcripts) is recorded; kept in the database for **7 days**; then automatically archived to a FILE (per company, compressed JSONL, stored with the existing durable file storage) and deleted from the database. Archives listed/downloadable for directors (own company) and the developer (all).
+4. **Scroll bugs** in the new UI: the settings side menu must not scroll away with content (sticky/independent); every scrollable area must scroll to its very end; the focused/hovered area scrolls, not the page behind. Check all new AI panels on phone and desktop.
+5. **Per-employee work schedule:** besides the company schedule, each employee can have their own workdays / start time (override). Planner, bot /jadval and site must honour it.
+6. **AI in the chat** (app + site), in addition to the floating assistant: an "AI yordamchi" contact in the chat list, like a Telegram contact — the user can write to it and CALL it (in-app AI voice call), with history.
+7. Sounds: only call sounds remain; Apple haptics (done in f15e120).
+8. Approval misrouting fixed (f15e120): one Telegram chat ↔ one user.

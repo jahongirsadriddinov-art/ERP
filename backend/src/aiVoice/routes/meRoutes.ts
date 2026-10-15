@@ -319,7 +319,7 @@ router.post('/attendance/:id/respond', wrap(async (req, res) => {
 /** Muddati o'tmagan AI qo'ng'irog'i (bildirishnomadan ilovani ochganlar uchun). */
 router.get('/pending-call', wrap(async (req, res) => {
   const m = me(req);
-  const s: any = await AiCallSession.findOne({ employeeId: m.userId, companyId: m.companyId, isActive: true, channel: 'inapp_call', status: { $in: ['queued', 'dialing', 'ringing'] } })
+  const s: any = await AiCallSession.findOne({ employeeId: m.userId, companyId: m.companyId, isActive: true, channel: 'inapp_call', direction: { $ne: 'inbound' }, status: { $in: ['queued', 'dialing', 'ringing'] } })
     .select('correlationId purpose limits ringingAt startedAt createdAt').lean();
   if (!s) return res.json({ call: null });
   const from = new Date(s.ringingAt || s.startedAt || s.createdAt).getTime();

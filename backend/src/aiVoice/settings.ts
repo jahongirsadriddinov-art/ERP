@@ -1,4 +1,5 @@
 import AiAssistantSettings from '../models/AiAssistantSettings';
+import AiEmployeeContact from '../models/AiEmployeeContact';
 import Company from '../models/Company';
 import User from '../models/User';
 import { companyHasFeature } from '../middleware/requireFeature';
@@ -13,6 +14,11 @@ import { validateToolsMatrix } from './tools/rbac';
 // (kod chegaralari: timezone qulflangan, recordAudio=false, tools matritsasi shiftdan oshmaydi).
 
 export const AI_FEATURE_KEY = 'ai_assistant';
+
+/** Suhbat/transkriptlar bazada shuncha kun turadi, keyin faylga arxivlanib o'chiriladi (owner 2026-10-15). */
+export const TRANSCRIPT_DB_DAYS = 7;
+/** AiCallEvent TTL (transcriptRetentionDays) kamida shuncha — arxiv ishi bir necha kun to'xtasa ham ma'lumot yo'qolmaydi. */
+export const TRANSCRIPT_TTL_MIN_DAYS = 14;
 
 export function defaultShift(id = 'main'): AiShift {
   return {
@@ -158,7 +164,8 @@ export function mergeDefaults(companyId: string, doc: any): AiSettingsData {
     },
     privacy: {
       recordAudio: false,                                            // v1: qulflangan
-      transcriptRetentionDays: pick(priv.transcriptRetentionDays, num, d.privacy.transcriptRetentionDays),
+      // Owner 2026-10-15: suhbatlar 7 kundan keyin arxivlanadi; TTL faqat zaxira — arxivdan oldin o'chirmasin
+      transcriptRetentionDays: Math.max(TRANSCRIPT_TTL_MIN_DAYS, pick(priv.transcriptRetentionDays, num, d.privacy.transcriptRetentionDays)),
       auditRetentionDays: pick(priv.auditRetentionDays, num, d.privacy.auditRetentionDays),
     },
     version: pick(doc.version, num, 0),
@@ -491,4 +498,97 @@ export async function updateSchedule(
 export async function getSettingsFresh(companyId: string): Promise<AiSettingsData> {
   cache.delete(companyId);
   return getSettings(companyId);
+}
+
+// ───────────── Faqat dasturchi boshqaradigan bo'limlar (owner 2026-10-15) ─────────────
+// "AI miyasi" (brain + ovoz provayderi/modellari) va "Limit va xarajat" firma UI'sidan olib tashlandi:
+// firma admini ularni ko'rmaydi va o'zgartira olmaydi — faqat /api/ai-voice/platform (dasturchi).
+export const DEVELOPER_ONLY_KEYS = ['brain', 'provider', 'limits'] as const;
+export type CompanySettingsView = Omit<AiSettingsData, typeof DEVELOPER_ONLY_KEYS[number]>;
+
+/** Firma adminiga qaytariladigan sozlama: dasturchi bo'limlarisiz. */
+export function companySettingsView(s: AiSettingsData): CompanySettingsView {
+  const { brain: _b, provider: _p, limits: _l, ...rest } = s;
+  return rest;
+}
+
+/** Patch'dagi dasturchi bo'limlari (bo'sh massiv — yo'q). */
+export function developerOnlyKeysIn(patch: unknown): string[] {
+  return isObj(patch) ? DEVELOPER_ONLY_KEYS.filter((k) => patch[k] !== undefined) : [];
+}
+
+// ───────────── Xodimning shaxsiy ish jadvali (owner 2026-10-15, #5) ─────────────
+// Firma smenasidan tashqari xodimga o'z ish kunlari (ISO) va ixtiyoriy ish boshlanishi berilishi mumkin.
+// Ustuvorlik o'zgarmaydi: skipDates (bayram) > extraWorkDates > hafta kunlari — faqat hafta kunlari va
+// boshlanish vaqti xodimniki. absentCutoff smenadagi oraliq bilan birga suriladi (08:00/12:00 → 10:00/14:00).
+
+export interface EmployeeScheduleOverride { weekdays: number[]; workStart?: string }
+
+/** Bazadagi qiymatni tozalaydi; yaroqsiz bo'lsa — null (firma jadvali amal qiladi). */
+export function normalizeOverride(v: unknown): EmployeeScheduleOverride | null {
+  if (!isObj(v) || !Array.isArray(v.weekdays)) return null;
+  const weekdays = [...new Set(v.weekdays.filter((d: unknown) => intIn(d, 1, 7)) as number[])].sort((a, b) => a - b);
+  if (!weekdays.length) return null;
+  return { weekdays, ...(isHHmm(v.workStart) ? { workStart: v.workStart } : {}) };
+}
+
+/** Xodim uchun amaldagi smena (override bo'lmasa — smenaning o'zi). */
+export function effectiveShift(shift: AiShift, override?: unknown): AiShift {
+  const ov = normalizeOverride(override);
+  if (!ov) return shift;
+  const workStart = ov.workStart || shift.workStart;
+  const delta = parseHHmm(workStart) - parseHHmm(shift.workStart);
+  return {
+    ...shift,
+    workdays: ov.weekdays as AiShift['workdays'],
+    workStart,
+    callTime: deriveCallTime(workStart, shift.callLeadMin),
+    absentCutoff: delta ? shiftHHmm(shift.absentCutoff, delta) : shift.absentCutoff,
+  };
+}
+
+/**
+ * Shaxsiy jadval validatori — firma jadvali bilan BIR XIL qoidalar (validateShift) har bir smenaga
+ * qo'llangan holda tekshiriladi. null — o'chirish (firma jadvaliga qaytish).
+ */
+export function validateEmployeeOverride(v: unknown, settings: Pick<AiSettingsData, 'attendance'>): string[] {
+  if (v === null) return [];
+  if (!isObj(v)) return ["scheduleOverride: object yoki null bo'lishi kerak"];
+  const errors: string[] = [];
+  for (const k of Object.keys(v)) if (k !== 'weekdays' && k !== 'workStart') errors.push(`scheduleOverride.${k}: noma'lum maydon`);
+  if (!uniqueValid(v.weekdays, (d) => intIn(d, 1, 7)) || !v.weekdays.length) errors.push("scheduleOverride.weekdays: 1..7 (ISO), takrorsiz, kamida bittasi");
+  if (v.workStart !== undefined && v.workStart !== null && !isHHmm(v.workStart)) errors.push('scheduleOverride.workStart: HH:mm');
+  if (errors.length) return errors;
+  const ov = normalizeOverride(v)!;
+  settings.attendance.shifts.forEach((sh, i) => {
+    const eff = effectiveShift(sh, ov);
+    const errs: string[] = [];
+    validateShift(eff, i, errs);
+    // Surilgan absentCutoff yarim tundan o'tib qisilgan bo'lsa ham xato (kun oxirida yakunlash buziladi)
+    if (ov.workStart && parseHHmm(sh.absentCutoff) + parseHHmm(ov.workStart) - parseHHmm(sh.workStart) > 23 * 60 + 59) {
+      errs.push(`attendance.shifts[${i}].absentCutoff: ish boshlanishi juda kech`);
+    }
+    for (const e of errs) errors.push(`scheduleOverride (${sh.name || sh.id}): ${e.replace(/^attendance\.shifts\[\d+\][.:]?\s*/, '')}`);
+  });
+  return [...new Set(errors)];
+}
+
+/** Bitta xodimning shaxsiy jadvali (meRoutes, bot, tool'lar uchun). */
+export async function getEmployeeOverride(companyId: string, employeeId: string): Promise<EmployeeScheduleOverride | null> {
+  if (!companyId || !employeeId) return null;
+  const c: any = await AiEmployeeContact.findOne({ companyId, employeeId }).select('scheduleOverride').lean();
+  return normalizeOverride(c?.scheduleOverride);
+}
+
+/** Firmadagi barcha shaxsiy jadvallar (employeeId → override); ids berilsa — faqat ular. */
+export async function loadEmployeeOverrides(companyId: string, ids?: string[]): Promise<Map<string, EmployeeScheduleOverride>> {
+  const filter: Record<string, unknown> = { companyId, 'scheduleOverride.weekdays.0': { $exists: true } };
+  if (ids) filter.employeeId = { $in: ids };
+  const rows: any[] = await AiEmployeeContact.find(filter).select('employeeId scheduleOverride').limit(5000).lean();
+  const out = new Map<string, EmployeeScheduleOverride>();
+  for (const r of rows) {
+    const ov = normalizeOverride(r.scheduleOverride);
+    if (ov) out.set(String(r.employeeId), ov);
+  }
+  return out;
 }

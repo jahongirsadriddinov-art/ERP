@@ -32,18 +32,24 @@ export interface AiSettingsData {
   fallbackOrder: ChannelName[];
   reminders: { defaultLeadMin: number; defaultChannels: ChannelName[]; maxActivePerUser: number };
   tools: { byRole: Partial<Record<AiRole, string[]>>; allowOffShiftAssistant: boolean };
-  provider: { primary: "gemini_live" | "gemini_cascade"; fallback: "gemini_cascade" | "none"; liveModel?: string; textModel?: string; ttsModel?: string; transcribeModel?: string };
-  brain: { provider: "gemini" | "claude"; fallback: "openrouter" | "none"; effort: "low" | "medium" | "high" };
-  limits: { userSessionsPerHour: number; companyMinutesPerDay: number; monthlyBudgetUsd: number; hardStop: boolean; botMsgsPer10Min: number; toolCallsPerSession: number };
+  /** Dasturchi bo'limlari: firma ko'rinishida (/admin/settings) KELMAYDI — faqat /platform/companies/:id. */
+  provider?: AiProviderCfg;
+  brain?: AiBrainCfg;
+  limits?: AiLimitsCfg;
   privacy: { recordAudio: false; transcriptRetentionDays: number; auditRetentionDays: number };
   version: number;
   updatedBy?: string;
 }
 
+export interface AiProviderCfg { primary: "gemini_live" | "gemini_cascade"; fallback: "gemini_cascade" | "none"; liveModel?: string; textModel?: string; ttsModel?: string; transcribeModel?: string }
+export interface AiBrainCfg { provider: "gemini" | "claude"; fallback: "openrouter" | "none"; effort: "low" | "medium" | "high" }
+export interface AiLimitsCfg { userSessionsPerHour: number; companyMinutesPerDay: number; monthlyBudgetUsd: number; hardStop: boolean; botMsgsPer10Min: number; toolCallsPerSession: number }
+
 export interface AiSettingsView {
   settings: AiSettingsData;
-  editor: { canEditSchedule: boolean; canEditBossRows: boolean };
-  providers: { gemini: boolean; openrouter: boolean; claude: boolean };
+  editor: { canEditSchedule: boolean; canEditBossRows: boolean; canDownloadArchives?: boolean };
+  /** Eski server qaytarishi mumkin; yangi firma ko'rinishida yo'q. */
+  providers?: { gemini: boolean; openrouter: boolean; claude: boolean };
   status: { aiVoiceEnabled: boolean; planHasFeature: boolean; companyActive: boolean };
 }
 
@@ -60,11 +66,53 @@ export interface AiChannelsStatus {
 export interface AiEmployeeRow {
   userId: string; name: string; role: string; telegramLinked: boolean; resolveStatus: string; callConsent: string;
   optOut: { calls: boolean; reminders: boolean; all: boolean }; channelOrder?: ChannelName[]; disabledChannels: ChannelName[];
+  /** Xodimning alohida ish jadvali (null/yo'q — firma jadvali). Server qo'llamasa maydon kelmaydi. */
+  scheduleOverride?: AiScheduleOverride | null;
+}
+
+/** Xodim uchun alohida ish kunlari (ISO 1-7) va ixtiyoriy ish boshlanishi. */
+export interface AiScheduleOverride { weekdays: IsoWeekday[]; workStart?: string }
+
+/** Suhbatlar arxivi fayli (7 kundan keyin bazadan siqilgan JSONL faylga o'tkaziladi). Server: bitta kun (period) + qism (part). */
+export interface AiTranscriptArchive {
+  id: string; periodFrom: string; periodTo: string; size: number; createdAt: string; companyId?: string; companyName?: string;
+  part?: number; fileName?: string; conversations?: number;
+}
+
+/** Dasturchi paneli: firma qatori (normalizePlatformCompany orqali). */
+export interface PlatformCompany {
+  id: string; name: string; aiEnabled: boolean; planHasFeature?: boolean; status?: string; attendanceEnabled?: boolean;
+  usage: { monthCostUsdMicros: number; sessions: number; budgetUsd?: number; exceeded?: boolean };
+}
+/** PATCH /platform/companies/:id → {version, patch}. Faqat shu 4 bo'lim (server PLATFORM_KEYS). */
+export interface PlatformCompanyPatch { enabled?: boolean; brain?: AiBrainCfg; limits?: AiLimitsCfg; provider?: AiProviderCfg }
+/** GET /platform/companies/:id — to'liq sozlama (versiya bilan), provayder kalitlari holati, oylik xarajat. */
+export interface PlatformCompanyView {
+  companyId: string; name: string;
+  status: { exists: boolean; active: boolean; planHasFeature: boolean; aiVoiceEnabled: boolean };
+  settings: AiSettingsData;
+  providers: { gemini: boolean; openrouter: boolean; claude: boolean };
+  month: { costUsdMicros: number; budgetUsd: number; hardStop: boolean; exceeded: boolean };
+}
+export interface PlatformUsageRow { companyId: string; name?: string; costUsdMicros: number; sessions?: number; tokensIn?: number; tokensOut?: number; telegramCalls?: number; botMessages?: number }
+export interface PlatformUsage extends Partial<AiUsageSummary> { byCompany?: PlatformUsageRow[]; companies?: PlatformUsageRow[] }
+/** GET /platform/overview — platforma holati (server kaliti, provayderlar, navbat, arxivlar). */
+export interface PlatformOverview {
+  aiVoiceEnabled: boolean; providers: { gemini: boolean; openrouter: boolean; claude: boolean }; enabledCompanies: number;
+  month: { month: string; costUsdMicros: number }; archives: { total: number; pendingDelete: number; keepInDbDays: number }; queue: { running: boolean };
+}
+/** GET /platform/telegram-account — worker holati (P6). */
+export interface PlatformTgStatus {
+  aiVoiceEnabled?: boolean;
+  account?: { status?: string; username?: string; phoneMasked?: string; workerConnected?: boolean; workerVersion?: string; lastHealthAt?: string; udpOk?: boolean; dailyCallCount?: number; dailyCap?: number } | null;
+  worker?: { connectedHere: boolean; workerId?: string; leaseActive: boolean }; lastError?: string; connectedAt?: string;
 }
 
 export interface AiAuditItem {
   id: string; at: string; actorUserId: string; actorName: string; actorRole: string; targetUserId?: string; targetName?: string;
   channel: string; tool: string; kind: "read" | "write"; status: string; resultSummary?: string; errorCode?: string; latencyMs?: number;
+  /** Faqat platforma (dasturchi) auditida. */
+  companyId?: string; companyName?: string;
 }
 export interface AiAuditPage { page: number; limit: number; total: number; items: AiAuditItem[] }
 
@@ -135,14 +183,53 @@ export const adminApi = {
   getTools: () => call<{ tools: AiToolEntry[] }>("GET", "/admin/tools"),
   getChannelsStatus: () => call<AiChannelsStatus>("GET", "/admin/channels/status"),
   getEmployees: (q = "") => call<{ employees: AiEmployeeRow[] }>("GET", `/admin/employees${qs({ q })}`),
-  patchEmployee: (userId: string, body: { channelOrder?: ChannelName[] | null; disabledChannels?: ChannelName[] }) =>
+  patchEmployee: (userId: string, body: { channelOrder?: ChannelName[] | null; disabledChannels?: ChannelName[]; scheduleOverride?: AiScheduleOverride | null }) =>
     call<{ employee: AiEmployeeRow }>("PATCH", `/admin/employees/${encodeURIComponent(userId)}`, body),
   runNow: (shiftId: string) => call<{ ok: true; jobId: string; duplicate: boolean }>("POST", "/admin/attendance/run-now", { shiftId }),
   getAudit: (p: { page?: number; limit?: number; status?: string; tool?: string; from?: string; to?: string } = {}) =>
     call<AiAuditPage>("GET", `/admin/audit${qs(p)}`),
-  getUsage: (p: { from?: string; to?: string } = {}) => call<AiUsageSummary>("GET", `/admin/usage${qs(p)}`),
   sendTest: () => call<{ ok: true; channel: string }>("POST", "/admin/test", { channel: "bot_message" }),
+  // Arxivlar — faqat egasi/direktor (o'rinbosarga 403)
+  getArchives: () => call<unknown>("GET", "/admin/archives?limit=60"),
+  archiveUrl: (id: string) => `/admin/archives/${encodeURIComponent(id)}/download`,
 };
+
+/** Dasturchi (platforma) — barcha firmalar. Javob shakllari platform/helpers.ts'da normallashtiriladi. */
+export const platformApi = {
+  getOverview: () => call<PlatformOverview>("GET", "/platform/overview"),
+  getTelegram: () => call<PlatformTgStatus>("GET", "/platform/telegram-account"),
+  getCompanies: (p: { q?: string; page?: number; limit?: number } = {}) => call<unknown>("GET", `/platform/companies${qs({ limit: 100, ...p })}`),
+  getCompany: (id: string) => call<PlatformCompanyView>("GET", `/platform/companies/${encodeURIComponent(id)}`),
+  patchCompany: (id: string, version: number, patch: PlatformCompanyPatch) =>
+    call<PlatformCompanyView>("PATCH", `/platform/companies/${encodeURIComponent(id)}`, { version, patch }),
+  getUsage: (p: { from?: string; to?: string } = {}) => call<PlatformUsage>("GET", `/platform/usage${qs(p)}`),
+  getCompanyUsage: (id: string, p: { from?: string; to?: string } = {}) => call<AiUsageSummary>("GET", `/platform/usage/${encodeURIComponent(id)}${qs(p)}`),
+  getAudit: (p: { page?: number; limit?: number; status?: string; companyId?: string } = {}) =>
+    call<AiAuditPage & { items: (AiAuditItem & { companyId?: string; companyName?: string })[] }>("GET", `/platform/audit${qs(p)}`),
+  getArchives: (p: { companyId?: string } = {}) => call<unknown>("GET", `/platform/archives${qs({ limit: 60, ...p })}`),
+  archiveUrl: (id: string) => `/platform/archives/${encodeURIComponent(id)}/download`,
+  runArchive: () => call<{ ok: true; jobId: string; duplicate: boolean }>("POST", "/platform/archives/run", {}),
+};
+
+/** Faylni token bilan yuklab olib, brauzerda saqlash (arxivlar). true — muvaffaqiyatli. */
+export async function downloadFile(path: string, fallbackName: string): Promise<boolean> {
+  try {
+    const r = await fetch(`${API_BASE}${BASE}${path}`, { cache: "no-store" });
+    if (!r.ok) return false;
+    const blob = await r.blob();
+    const cd = r.headers.get("Content-Disposition") || "";
+    const m = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(cd);
+    const name = m ? decodeURIComponent(m[1]) : fallbackName;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = name; a.rel = "noopener";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 30_000);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export const meApi = {
   get: () => call<AiMePrefs>("GET", "/me"),

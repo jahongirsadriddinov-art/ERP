@@ -7,6 +7,7 @@ import User from '../../models/User';
 import AiAssistantSettings from '../../models/AiAssistantSettings';
 import AiActionAudit from '../../models/AiActionAudit';
 import AuditLog from '../../models/AuditLog';
+import AiEmployeeContact from '../../models/AiEmployeeContact';
 import { dispatchAiCallback, dispatchAiMessage, registerBotInstance, aiBotInAiMode, aiBotResetChat } from '../bot/botHooks';
 import { __scheduleDrafts, draftPatch, parseUserDates, parseUserTime } from '../bot/scheduleMenu';
 import { getSettingsFresh, invalidateSettings, updateSchedule, __setSettingsCacheTtlForTests } from '../settings';
@@ -228,6 +229,22 @@ describe('ruxsatlar', () => {
     }
     expect((await shiftOf(A)).workStart).toBe('08:00');
     expect(__scheduleDrafts().size).toBe(0);
+  });
+
+  it("ishchi /jadval: shaxsiy ish jadvali (#5) bo'lsa — o'z kunlari va vaqti ko'rsatiladi; bo'lmasa — yo'q", async () => {
+    bot.sendMessage.mockClear();
+    await say(A.workerId, '/jadval');
+    expect(String(bot.sendMessage.mock.calls[0][1])).not.toContain('shaxsiy');
+    await AiEmployeeContact.updateOne({ companyId: A.companyId, employeeId: A.workerId },
+      { $set: { scheduleOverride: { weekdays: [5, 1, 3], workStart: '10:00' } } }, { upsert: true });
+    bot.sendMessage.mockClear();
+    await say(A.workerId, '/jadval');
+    const t = String(bot.sendMessage.mock.calls[0][1]);
+    expect(t).toContain('faqat firma rahbari');
+    expect(t).toContain('shaxsiy ish jadvalingiz');
+    expect(t).toContain('10:00');
+    expect(t).toContain('Du Ch Ju');
+    await AiEmployeeContact.updateOne({ companyId: A.companyId, employeeId: A.workerId }, { $unset: { scheduleOverride: '' } });
   });
 
   it("o'rinbosar: bayroq yoqiq — mumkin, o'chiq — yo'q", async () => {

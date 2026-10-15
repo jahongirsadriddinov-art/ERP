@@ -178,7 +178,9 @@ describe('retention.sweep', () => {
     await AiConversation.collection.updateMany({ _id: { $in: [cv._id, chat._id] } }, { $set: { updatedAt: mid } });
 
     const st = await retentionSweep(now);
-    expect(st).toMatchObject({ events: 1, sessions: 1, confirmations: 1, conversations: 1 });
+    // Suhbatlar endi bu yerda o'chirilmaydi — avval faylga arxivlanadi (archive/transcriptArchive, #3)
+    expect(st).toMatchObject({ events: 1, sessions: 1, confirmations: 1, conversations: 0 });
+    expect(await AiConversation.exists({ _id: cv._id })).toBeTruthy();
     expect(await AiCallSession.exists({ _id: sOld._id })).toBeNull();
     expect((await AiCallSession.findById(sMid._id).lean() as any).summary).toBeUndefined();   // 30 kundan eski transcript
     expect(await AiCallSession.exists({ _id: sAct._id })).toBeTruthy();                       // faol — tegilmaydi

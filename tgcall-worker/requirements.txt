@@ -1,0 +1,15 @@
+# Aniq versiyalar (review P6). Telegram qo'ng'iroq dvigateli — versiyaga juda sezgir, yangilashdan oldin
+# kamida 20 ta jonli qo'ng'iroq bilan tekshiring.
+py-tgcalls==3.0.0
+ntgcalls==3.0.3
+telethon==1.45.0
+python-socketio[asyncio_client]==5.17.0
+python-engineio==4.14.0
+aiohttp==3.14.5
+numpy==2.5.4
+soxr==1.1.0
+cryptography==50.0.2
+python-dotenv==1.2.4
+# Testlar
+pytest==9.1.1
+pytest-asyncio==1.4.0

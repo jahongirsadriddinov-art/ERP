@@ -120,6 +120,10 @@ describe("kanal tartibi (fallback)", () => {
     expect(validateDraft(settings({ fallbackOrder: ["push", "push"] }))).toContain("fallbackOrder");
     expect(validateDraft(settings({ fallbackOrder: [] }))).toContain("fallbackOrder");
   });
+  it("firma ko'rinishida limits yo'q — yiqilmaydi", () => {
+    const { limits: _l, brain: _b, provider: _p, ...rest } = settings();
+    expect(validateDraft(rest as any)).toEqual([]);
+  });
 });
 
 describe("smena tekshiruvi", () => {

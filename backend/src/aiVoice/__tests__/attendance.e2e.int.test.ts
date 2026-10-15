@@ -72,12 +72,12 @@ describe('attendance e2e — to\'liq ertalab', () => {
     expect(fc.of('bot_message').map((s) => s.ctx.employeeId).sort()).toEqual([A.workerId, A.worker2Id, B.workerId, B.worker2Id].sort());
 
     // A.ishchi tasdiqlaydi, B.ishchi rad etadi (→ B rahbariga darhol xabar)
-    expect(await respondAttendance({ companyId: A.companyId, employeeId: A.workerId, buttonToken: await tokenOf(A.workerId), answer: 'confirm', via: 'bot' }))
+    expect(await respondAttendance({ companyId: A.companyId, employeeId: A.workerId, buttonToken: await tokenOf(A.workerId), answer: 'confirm', via: 'bot', at: clock.now() }))
       .toMatchObject({ ok: true, status: 'confirmed' });
-    expect(await respondAttendance({ companyId: B.companyId, employeeId: B.workerId, buttonToken: await tokenOf(B.workerId), answer: 'decline', via: 'bot' }))
+    expect(await respondAttendance({ companyId: B.companyId, employeeId: B.workerId, buttonToken: await tokenOf(B.workerId), answer: 'decline', via: 'bot', at: clock.now() }))
       .toMatchObject({ ok: true, status: 'declined' });
     // Boshqa firmaning tokeni bilan — topilmaydi
-    expect(await respondAttendance({ companyId: A.companyId, employeeId: A.worker2Id, buttonToken: await tokenOf(B.worker2Id), answer: 'confirm', via: 'bot' }))
+    expect(await respondAttendance({ companyId: A.companyId, employeeId: A.worker2Id, buttonToken: await tokenOf(B.worker2Id), answer: 'confirm', via: 'bot', at: clock.now() }))
       .toEqual({ ok: false, code: 'not_found' });
     await step();
 

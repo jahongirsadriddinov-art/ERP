@@ -10,23 +10,28 @@ import { aiConfig } from '../config';
 import {
   CHANNEL_NAMES, type AiEmployeeRowDto, type AiSchedulePatch, type AiSettingsData, type AiSettingsViewDto, type ChannelName,
 } from '../contracts';
-import { geminiConfigured } from '../lib/geminiKeys';
+import { listArchives, readArchiveFile, sendArchive } from '../archive/transcriptArchive';
 import { isObjectIdString } from '../lib/ids';
 import { hitRate } from '../lib/mongoRateLimit';
 import { addDays, isHHmm, isIsoDate, localDate } from '../lib/zonedTime';
 import { runAttendancePlanNow } from '../scheduler/api';
 import {
-  canEditSchedule, getCompanyAiState, getSettingsFresh, isAiActive, saveSettings, updateSchedule, validateSettingsUpdate,
+  canEditSchedule, companySettingsView, developerOnlyKeysIn, getCompanyAiState, getSettingsFresh, isAiActive, normalizeOverride,
+  saveSettings, updateSchedule, validateEmployeeOverride, validateSettingsUpdate, type CompanySettingsView, type EmployeeScheduleOverride,
 } from '../settings';
 import { toolCatalog } from '../tools/registry';
 import { registerErpTools } from '../tools/erp';
-import { budgetExceeded, monthCostMicros, recordUsage } from '../usage';
+import { recordUsage } from '../usage';
 
 // Firma admini: /api/ai-voice/admin (index.ts: requireAuth + blockDeveloper).
 // Kirish: firma egasi, direktor yoki o'rinbosar (requireAuth rolni har so'rovda DB'dan qayta o'qiydi) +
 // tarifda ai_assistant (fail-closed: firma/obuna topilmasa — 403). Sozlamalar optimistik versiya bilan (409),
 // tools matritsasi kod chegarasi bilan (400), PATCH /employees rozilik/opt-out'ni RAD etadi (B9),
 // run-now qo'lda dedupe kaliti bilan (scheduler/api), timezone faqat o'qish. Kalit qiymatlari HECH QACHON qaytmaydi.
+// Owner 2026-10-15: "AI miyasi" (brain/provider) va "Limit va xarajat" (limits, /usage) — FAQAT dasturchi
+// (/api/ai-voice/platform/...): bu yerda qaytmaydi, o'zgartirishga urinish — 403 developer_only.
+// Xodimning shaxsiy ish jadvali (scheduleOverride) — firma jadvali bilan bir xil ruxsat va validatsiya.
+// Transkript arxivlari — faqat egasi/direktor, faqat o'z firmasi.
 
 const router = Router();
 
@@ -67,14 +72,18 @@ const wrap = (fn: (req: Request, res: Response) => Promise<unknown>) =>
   (req: Request, res: Response, next: NextFunction) => { fn(req, res).catch(next); };
 
 // ───────────── Sozlamalar ─────────────
-async function buildView(a: Admin, settings?: AiSettingsData): Promise<AiSettingsViewDto> {
+/** Firma ko'rinishi: dasturchi bo'limlari (brain/provider/limits) va provayder kalitlari holati yo'q. */
+type CompanyViewDto = Omit<AiSettingsViewDto, 'settings' | 'providers' | 'editor'> & {
+  settings: CompanySettingsView;
+  editor: AiSettingsViewDto['editor'] & { canDownloadArchives: boolean };
+};
+
+async function buildView(a: Admin, settings?: AiSettingsData): Promise<CompanyViewDto> {
   const s = settings || await getSettingsFresh(a.companyId);
   const st = await getCompanyAiState(a.companyId);
   return {
-    settings: s,
-    editor: { canEditSchedule: canEditSchedule(a, s), canEditBossRows: isTopBoss(a) },
-    // Faqat "sozlanganmi" — kalit qiymatlari emas
-    providers: { gemini: geminiConfigured(), openrouter: aiConfig.brain.openRouterConfigured, claude: aiConfig.brain.claudeConfigured },
+    settings: companySettingsView(s),
+    editor: { canEditSchedule: canEditSchedule(a, s), canEditBossRows: isTopBoss(a), canDownloadArchives: isTopBoss(a) },
     status: { aiVoiceEnabled: aiConfig.enabled, planHasFeature: st.hasFeature, companyActive: st.exists && st.active },
   };
 }
@@ -89,6 +98,9 @@ router.put('/settings', wrap(async (req, res) => {
   if (!isObj(body) || typeof body.version !== 'number' || !Number.isInteger(body.version) || body.version < 0 || !isObj(body.patch)) {
     return res.status(400).json({ error: 'invalid', errors: ['{version:number, patch:object} kerak'] });
   }
+  // AI miyasi va limitlar — faqat dasturchi paneli (owner 2026-10-15)
+  const devOnly = developerOnlyKeysIn(body.patch);
+  if (devOnly.length) return res.status(403).json({ error: 'developer_only', fields: devOnly });
   registerErpTools(); // tools matritsasini tekshirish uchun reestr to'la bo'lsin (idempotent)
   const current = await getSettingsFresh(a.companyId);
   if (body.version !== current.version) return res.status(409).json({ error: 'version_conflict', current: await buildView(a, current) });
@@ -177,10 +189,14 @@ router.get('/channels/status', wrap(async (_req, res) => {
 }));
 
 // ───────────── Xodimlar ─────────────
-const CONTACT_FIELDS = 'employeeId telegram.tgUserId telegram.resolveStatus telegram.callConsent optOut channelPrefs';
+const CONTACT_FIELDS = 'employeeId telegram.tgUserId telegram.resolveStatus telegram.callConsent optOut channelPrefs scheduleOverride';
 
-function rowOf(u: any, c: any): AiEmployeeRowDto {
+/** Xodim qatori + shaxsiy ish jadvali (null — firma smenasi amal qiladi). */
+type EmployeeRow = AiEmployeeRowDto & { scheduleOverride: EmployeeScheduleOverride | null };
+
+function rowOf(u: any, c: any): EmployeeRow {
   return {
+    scheduleOverride: normalizeOverride(c?.scheduleOverride),
     userId: String(u._id),
     name: fullName(u) || '—',
     role: String(u.role),
@@ -206,7 +222,7 @@ router.get('/employees', wrap(async (req, res) => {
   res.json({ employees: users.map((u) => rowOf(u, byId.get(String(u._id)))) });
 }));
 
-const EMPLOYEE_PATCH_KEYS = new Set(['channelOrder', 'disabledChannels']);
+const EMPLOYEE_PATCH_KEYS = new Set(['channelOrder', 'disabledChannels', 'scheduleOverride']);
 const knownChannels = (v: unknown): v is ChannelName[] =>
   Array.isArray(v) && v.every((x) => (CHANNEL_NAMES as unknown[]).includes(x)) && new Set(v).size === v.length;
 
@@ -223,6 +239,15 @@ router.patch('/employees/:userId', wrap(async (req, res) => {
   if (body.disabledChannels !== undefined && !knownChannels(body.disabledChannels)) {
     return res.status(400).json({ error: 'invalid', errors: ["disabledChannels: takrorsiz, ma'lum kanallar"] });
   }
+  // Shaxsiy ish jadvali: firma jadvali bilan bir xil ruxsat (canEditSchedule) va bir xil qoidalar
+  let override: EmployeeScheduleOverride | null | undefined;
+  if (body.scheduleOverride !== undefined) {
+    const s = await getSettingsFresh(a.companyId);
+    if (!canEditSchedule(a, s)) return res.status(403).json({ error: 'forbidden', message: "Ish jadvalini o'zgartirishga ruxsat yo'q" });
+    const errs = validateEmployeeOverride(body.scheduleOverride, s);
+    if (errs.length) return res.status(400).json({ error: 'invalid', errors: errs });
+    override = body.scheduleOverride === null ? null : normalizeOverride(body.scheduleOverride);
+  }
   const userId = String(req.params.userId);
   if (!isObjectIdString(userId)) return res.status(404).json({ error: 'not_found' });
   const target: any = await User.findOne({ _id: userId, companyId: a.companyId, role: { $ne: 'dasturchi' } })
@@ -235,6 +260,8 @@ router.patch('/employees/:userId', wrap(async (req, res) => {
   if (body.channelOrder === null) $unset['channelPrefs.order'] = '';
   else if (body.channelOrder !== undefined) $set['channelPrefs.order'] = body.channelOrder;
   if (body.disabledChannels !== undefined) $set['channelPrefs.disabled'] = body.disabledChannels;
+  if (override === null) $unset.scheduleOverride = '';
+  else if (override) $set.scheduleOverride = { ...override, updatedBy: a.userId, updatedAt: new Date() };
   if (Object.keys($set).length || Object.keys($unset).length) {
     await AiEmployeeContact.updateOne(
       { companyId: a.companyId, employeeId: userId },
@@ -245,6 +272,14 @@ router.patch('/employees/:userId', wrap(async (req, res) => {
       },
       { upsert: true },
     );
+  }
+  if (override !== undefined) {
+    logAudit({
+      userId: a.userId, userName: a.name || 'Admin', userRole: a.role, action: 'update', entity: 'ai_settings', entityId: userId,
+      description: override ? `AI: xodimning shaxsiy ish jadvali (${override.weekdays.join(',')}${override.workStart ? ` ${override.workStart}` : ''})`
+        : "AI: xodimning shaxsiy ish jadvali o'chirildi (firma jadvali)",
+      companyId: a.companyId, req,
+    }).catch(() => {});
   }
   const c: any = await AiEmployeeContact.findOne({ companyId: a.companyId, employeeId: userId }).select(CONTACT_FIELDS).lean();
   res.json({ employee: rowOf(target, c) });
@@ -307,43 +342,33 @@ router.get('/audit', wrap(async (req, res) => {
   });
 }));
 
-// ───────────── Sarf va xarajat ─────────────
-router.get('/usage', wrap(async (req, res) => {
+// ───────────── Sarf va xarajat — dasturchi paneliga ko'chirildi (owner 2026-10-15) ─────────────
+router.get('/usage', (_req, res) => { res.status(403).json({ error: 'developer_only' }); });
+
+// ───────────── Transkript arxivlari (#3): faqat egasi/direktor, faqat o'z firmasi ─────────────
+function requireTopBoss(_req: Request, res: Response, next: NextFunction) {
+  if (!isTopBoss(adminOf(res))) return res.status(403).json({ error: 'forbidden', message: 'Faqat firma egasi yoki direktor' });
+  return next();
+}
+
+router.get('/archives', requireTopBoss, wrap(async (req, res) => {
   const a = adminOf(res);
-  let to = dateParam(req.query.to) || localDate();
-  let from = dateParam(req.query.from) || addDays(to, -29);
-  if (from > to) [from, to] = [to, from];
-  if (from < addDays(to, -366)) from = addDays(to, -366);
-  const rows: any[] = await AiUsageMetrics.aggregate([
-    { $match: { companyId: a.companyId, userId: null, day: { $gte: from, $lte: to } } },
-    { $group: {
-      _id: { day: '$day', provider: '$provider' },
-      costUsdMicros: { $sum: '$costUsdMicros' }, tokensIn: { $sum: '$tokensIn' }, tokensOut: { $sum: '$tokensOut' },
-      sessions: { $sum: '$sessions' }, audioInSec: { $sum: '$audioInSec' }, audioOutSec: { $sum: '$audioOutSec' },
-      toolCalls: { $sum: '$toolCalls' }, telegramCalls: { $sum: '$telegramCalls' }, botMessages: { $sum: '$botMessages' },
-    } },
-    { $sort: { '_id.day': 1, '_id.provider': 1 } },
-  ]);
-  const days = new Map<string, { day: string; costUsdMicros: number; tokens: number; sessions: number }>();
-  const totals = { costUsdMicros: 0, tokensIn: 0, tokensOut: 0, sessions: 0, audioSec: 0, toolCalls: 0, telegramCalls: 0, botMessages: 0 };
-  const byProvider: Record<string, number> = {};
-  for (const r of rows) {
-    const d = days.get(r._id.day) || { day: r._id.day, costUsdMicros: 0, tokens: 0, sessions: 0 };
-    d.costUsdMicros += r.costUsdMicros; d.tokens += r.tokensIn + r.tokensOut; d.sessions += r.sessions;
-    days.set(r._id.day, d);
-    totals.costUsdMicros += r.costUsdMicros; totals.tokensIn += r.tokensIn; totals.tokensOut += r.tokensOut;
-    totals.sessions += r.sessions; totals.audioSec += r.audioInSec + r.audioOutSec; totals.toolCalls += r.toolCalls;
-    totals.telegramCalls += r.telegramCalls; totals.botMessages += r.botMessages;
-    byProvider[r._id.provider] = (byProvider[r._id.provider] || 0) + r.costUsdMicros;
-  }
-  const s = await getSettingsFresh(a.companyId);
-  res.json({
-    from, to, days: [...days.values()], totals, byProvider,
-    month: {
-      costUsdMicros: await monthCostMicros(a.companyId), budgetUsd: s.limits.monthlyBudgetUsd,
-      hardStop: s.limits.hardStop, exceeded: await budgetExceeded(a.companyId),
-    },
-  });
+  res.json(await listArchives({ companyId: a.companyId }, {
+    page: Number.parseInt(String(req.query.page || '1'), 10) || 1,
+    limit: Number.parseInt(String(req.query.limit || '30'), 10) || 30,
+    from: dateParam(req.query.from), to: dateParam(req.query.to),
+  }));
+}));
+
+router.get('/archives/:id/download', requireTopBoss, wrap(async (req, res) => {
+  const a = adminOf(res);
+  const f = await readArchiveFile(String(req.params.id), { companyId: a.companyId });
+  if (!f) return res.status(404).json({ error: 'not_found' });
+  logAudit({
+    userId: a.userId, userName: a.name || 'Admin', userRole: a.role, action: 'download', entity: 'ai_settings', entityId: String(req.params.id),
+    description: `AI transkript arxivi yuklab olindi (${f.period})`, companyId: a.companyId, req,
+  }).catch(() => {});
+  sendArchive(res, f.fileName, f.data);
 }));
 
 // ───────────── Sinov xabari (FAQAT chaqiruvchining o'ziga, mavjud bot orqali) ─────────────

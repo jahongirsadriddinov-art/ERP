@@ -15,10 +15,13 @@ export const JOBS = {
   reminderTick: 'reminder.tick',
   reminderFire: 'reminder.fire',         // rem:<id>:<nextFireAt ISO>
   retention: 'retention.sweep',
+  archive: 'transcripts.archive',        // arch:<YYYY-MM-DD>[:more:<n>] — 7 kundan eski suhbatlar → gzip JSONL fayl
 } as const;
 
 export const keys = {
   plan: (c: string, d: string, s: string) => `att:plan:${c}:${d}:${s}`,
+  /** Shaxsiy jadvalli xodimlar boshqa vaqtda boshlasa — o'sha so'rov vaqti uchun alohida kalit (#5). */
+  planAt: (c: string, d: string, s: string, callTime: string) => `att:plan:${c}:${d}:${s}@${callTime}`,
   planManual: (c: string, d: string, s: string, minute: string) => `att:plan:${c}:${d}:${s}:manual:${minute}`,
   step: (conf: string, i: number) => `att:step:${conf}:${i}`,
   outcome: (sessionId: string) => `att:out:${sessionId}`,
@@ -26,8 +29,10 @@ export const keys = {
   buttons: (conf: string, i: number) => `att:btn:${conf}:${i}`,
   manager: (conf: string) => `att:mgr:${conf}`,
   finalize: (c: string, d: string, s: string) => `att:fin:${c}:${d}:${s}`,
+  finalizeAt: (c: string, d: string, s: string, cutoff: string) => `att:fin:${c}:${d}:${s}@${cutoff}`,
   summary: (c: string, d: string, s: string, m: string) => `att:sum:${c}:${d}:${s}:${m}`,
   reminderFire: (id: string, at: Date) => `rem:${id}:${at.toISOString()}`,
+  archive: (day: string, n = 0) => (n ? `arch:${day}:more:${n}` : `arch:${day}`),
 };
 
 /** Navbat: aniq berilgan yoki jarayonning umumiy navbati (AI o'chiq bo'lsa — null). */

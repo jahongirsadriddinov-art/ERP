@@ -9,7 +9,7 @@ import { getChannel } from '../channels/registry';
 import type { JobQueue } from '../queue/jobQueue';
 import { onSessionsEnded, type EndedSession } from '../sessions';
 import { getSettings, isAiActive } from '../settings';
-import { isWithinQuietHours, zonedToUtc } from '../lib/zonedTime';
+import { isHHmm, isWithinQuietHours, zonedToUtc } from '../lib/zonedTime';
 import {
   canContinueChain, decideNext, effectiveOrder, firstDecision, isCallChannel, mapSessionStatus, PENDING_OUTCOMES,
   type FlowAttempt, type LastResult, type ManagerReason, type NextDecision, type StepConfig,
@@ -55,8 +55,14 @@ interface FlowCtx {
 
 async function loadFlowCtx(conf: any, now: Date): Promise<FlowCtx | null> {
   const settings = await getSettings(conf.companyId);
-  const shift = settings.attendance.shifts.find((s) => s.id === conf.shiftId);
-  if (!shift) return null;
+  const base = settings.attendance.shifts.find((s) => s.id === conf.shiftId);
+  if (!base) return null;
+  // Rejalashtirilgan paytdagi xodim vaqtlari (shaxsiy jadval, #5) — kun davomida barqaror
+  const shift: AiShift = {
+    ...base,
+    ...(isHHmm(conf.workStart) ? { workStart: conf.workStart } : {}),
+    ...(isHHmm(conf.absentCutoff) ? { absentCutoff: conf.absentCutoff } : {}),
+  };
   const user: any = await User.findOne({ _id: conf.employeeId, companyId: conf.companyId })
     .select('firstName lastName language isBlocked').lean().catch(() => null);
   if (!user || user.isBlocked) return null;

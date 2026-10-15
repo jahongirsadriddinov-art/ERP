@@ -1,8 +1,9 @@
-import type { ReactNode } from "react";
+import { useId, useState, type ReactNode } from "react";
 import { MorphIcon } from "morphicons/react";
 import Lock from "@hugeicons/core-free-icons/LockIcon";
 import Info from "@hugeicons/core-free-icons/InformationCircleIcon";
 import Alert from "@hugeicons/core-free-icons/Alert02Icon";
+import Chevron from "@hugeicons/core-free-icons/ArrowDown01Icon";
 
 // AI sozlamalari bo'limlari uchun umumiy kichik komponentlar — ilovaning dizayn tili (DataSafety/Profil):
 // shisha yuza (surface), yumaloq burchaklar, ingichka chegara, telefon va kompyuterda moslashuvchan.
@@ -150,3 +151,24 @@ export function Skeleton({ h = "h-40" }: { h?: string }) {
 }
 
 export const fmtUsd = (micros: number) => `${(micros / 1e6).toFixed(micros >= 10_000_000 ? 0 : 2)}`;
+
+/** Ixtiyoriy (kam ishlatiladigan) sozlamalar — bosilganda ochiladi. */
+export function More({ title, hint, children, testId, defaultOpen = false }: {
+  title: ReactNode; hint?: ReactNode; children: ReactNode; testId?: string; defaultOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  const id = useId();
+  return (
+    <div className="rounded-2xl border border-border bg-card/40" data-testid={testId}>
+      <button type="button" aria-expanded={open} aria-controls={id} onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center gap-3 px-4 py-3 text-left rounded-2xl hover:bg-muted/30 liquid-transition">
+        <span className="flex-1 min-w-0">
+          <span className="block text-sm font-semibold">{title}</span>
+          {hint && <span className="block text-[11px] text-muted-foreground mt-0.5">{hint}</span>}
+        </span>
+        <MorphIcon icon={Chevron} className={`w-4 h-4 text-muted-foreground flex-shrink-0 liquid-transition ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && <div id={id} className="px-4 pb-4 pt-1">{children}</div>}
+    </div>
+  );
+}

@@ -8,7 +8,8 @@ import Company from '../../models/Company';
 import {
   __setSettingsCacheTtlForTests, applySchedulePatch, canEditSchedule, defaultSettings, defaultShift, deriveCallTime,
   getCompanyAiState, getSettings, invalidateSettings, isAiActive, mergeDefaults, saveSettings, updateSchedule,
-  validateSettingsUpdate,
+  validateSettingsUpdate, companySettingsView, developerOnlyKeysIn, effectiveShift, normalizeOverride, validateEmployeeOverride,
+  TRANSCRIPT_DB_DAYS, TRANSCRIPT_TTL_MIN_DAYS,
 } from '../settings';
 import { registerTool, unregisterTool } from '../tools/registry';
 import type { AiToolDef } from '../tools/types';
@@ -50,7 +51,7 @@ describe('standartlar va mergeDefaults', () => {
     expect(m.enabled).toBe(false);
     expect(m.timezone).toBe('Asia/Tashkent');
     expect(m.language).toBe('uz');
-    expect(m.privacy).toEqual({ recordAudio: false, transcriptRetentionDays: 7, auditRetentionDays: 365 });
+    expect(m.privacy).toEqual({ recordAudio: false, transcriptRetentionDays: 14, auditRetentionDays: 365 }); // ≥14 (arxivdan keyin TTL)
     expect(m.brain).toEqual({ provider: 'gemini', fallback: 'none', effort: 'high' }); // apiKey tashlanadi
     expect(m.calls.quietHours).toEqual({ from: '21:00', to: '07:00' });
     expect(mergeDefaults('c1', null).companyId).toBe('c1');
@@ -265,5 +266,70 @@ describe('DB: kesh, versiya, jadval, isAiActive', () => {
     await Company.updateOne({ _id: A.companyId }, { $set: { status: 'ACTIVE' } });
     invalidateSettings(A.companyId);
     expect(await isAiActive(A.companyId)).toBe(true);
+  });
+});
+
+// ───────────── Owner 2026-10-15: shaxsiy jadval (#5), dasturchi bo'limlari (#2), transkript TTL (#3) ─────────────
+describe('xodimning shaxsiy ish jadvali (validator + effectiveShift)', () => {
+  const st = (shift: Partial<ReturnType<typeof defaultShift>> = {}) => {
+    const s = defaultSettings('c1');
+    s.attendance.shifts = [{ ...defaultShift(), workStart: '08:00', callLeadMin: 30, callTime: '07:30', absentCutoff: '12:00', ...shift }];
+    return s;
+  };
+
+  it('effectiveShift: hafta kunlari va ish boshlanishi xodimniki; callTime va absentCutoff oraliq bilan suriladi', () => {
+    const sh = st().attendance.shifts[0];
+    expect(effectiveShift(sh, null)).toBe(sh);
+    expect(effectiveShift(sh, { weekdays: [] })).toBe(sh);                       // yaroqsiz — firma jadvali
+    const e = effectiveShift(sh, { weekdays: [5, 1, 1], workStart: '10:00' });
+    expect(e).toMatchObject({ workdays: [1, 5], workStart: '10:00', callTime: '09:30', absentCutoff: '14:00' });
+    expect(e.skipDates).toBe(sh.skipDates);                                      // bayramlar — firmaniki
+    const early = effectiveShift(sh, { weekdays: [7], workStart: '06:30' });
+    expect(early).toMatchObject({ workdays: [7], callTime: '06:00', absentCutoff: '10:30' });
+    expect(effectiveShift(sh, { weekdays: [2] })).toMatchObject({ workdays: [2], workStart: '08:00', absentCutoff: '12:00' });
+  });
+
+  it('validator: firma jadvali bilan bir xil qoidalar; null — ruxsat', () => {
+    const s = st();
+    expect(validateEmployeeOverride(null, s)).toEqual([]);
+    expect(validateEmployeeOverride({ weekdays: [1, 3], workStart: '09:15' }, s)).toEqual([]);
+    expect(validateEmployeeOverride({ weekdays: [6] }, s)).toEqual([]);
+    expect(validateEmployeeOverride({ weekdays: [] }, s).join()).toMatch(/weekdays/);
+    expect(validateEmployeeOverride({ weekdays: [0] }, s).join()).toMatch(/weekdays/);
+    expect(validateEmployeeOverride({ weekdays: [1, 1] }, s).join()).toMatch(/weekdays/);
+    expect(validateEmployeeOverride({ weekdays: [1.5] }, s).join()).toMatch(/weekdays/);
+    expect(validateEmployeeOverride({ weekdays: [1], workStart: '8:00' }, s).join()).toMatch(/workStart/);
+    expect(validateEmployeeOverride({ weekdays: [1], foo: 1 }, s).join()).toMatch(/foo/);
+    expect(validateEmployeeOverride([1, 2], s).join()).toMatch(/object/);
+    // so'rov vaqti yarim tundan oldin (callLeadMin 30) — firma qoidasi bilan bir xil xato
+    expect(validateEmployeeOverride({ weekdays: [1], workStart: '00:10' }, s).join()).toMatch(/callLeadMin/);
+    // surilgan absentCutoff yarim tundan o'tadi
+    expect(validateEmployeeOverride({ weekdays: [1], workStart: '21:00' }, s).join()).toMatch(/kech/);
+  });
+
+  it('normalizeOverride: tartiblaydi, takrorni olib tashlaydi, yaroqsizini null qiladi', () => {
+    expect(normalizeOverride({ weekdays: [3, 1, 3], workStart: '07:00' })).toEqual({ weekdays: [1, 3], workStart: '07:00' });
+    expect(normalizeOverride({ weekdays: [9] })).toBeNull();
+    expect(normalizeOverride({ weekdays: [2], workStart: 'x' })).toEqual({ weekdays: [2] });
+    expect(normalizeOverride(undefined)).toBeNull();
+  });
+});
+
+describe("dasturchi bo'limlari va transkript TTL", () => {
+  it("companySettingsView brain/provider/limits'ni olib tashlaydi; developerOnlyKeysIn ularni topadi", () => {
+    const v: any = companySettingsView(defaultSettings('c1'));
+    expect(v.brain).toBeUndefined();
+    expect(v.provider).toBeUndefined();
+    expect(v.limits).toBeUndefined();
+    expect(v.attendance).toBeDefined();
+    expect(developerOnlyKeysIn({ language: 'ru', limits: {}, brain: {} })).toEqual(['brain', 'limits']);
+    expect(developerOnlyKeysIn({ language: 'ru' })).toEqual([]);
+    expect(developerOnlyKeysIn(null)).toEqual([]);
+  });
+
+  it(`transcriptRetentionDays (AiCallEvent TTL) kamida ${TRANSCRIPT_TTL_MIN_DAYS} kun — arxivdan (${TRANSCRIPT_DB_DAYS} kun) oldin o'chmaydi`, () => {
+    expect(TRANSCRIPT_TTL_MIN_DAYS).toBeGreaterThan(TRANSCRIPT_DB_DAYS);
+    expect(mergeDefaults('c1', { privacy: { transcriptRetentionDays: 1 } }).privacy.transcriptRetentionDays).toBe(TRANSCRIPT_TTL_MIN_DAYS);
+    expect(mergeDefaults('c1', { privacy: { transcriptRetentionDays: 60 } }).privacy.transcriptRetentionDays).toBe(60);
   });
 });

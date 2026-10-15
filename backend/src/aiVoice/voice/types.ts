@@ -1,4 +1,4 @@
-import type { AiLang, AivEndReason, CallChannel, Purpose } from '../contracts';
+import type { AiLang, AivConfirmActionAck, AivEndReason, CallChannel, Purpose } from '../contracts';
 
 // Ovoz dvigateli turlari (P5 amalga oshiradi, P6 Telegram ko'prigi shu orqali ulanadi).
 export type {
@@ -14,6 +14,8 @@ export interface VoiceTransport {
   flushAudio(): void;
   sendEvent(event: string, payload: unknown): void;
   close(reason: AivEndReason): void;
+  /** P5 qo'shimchasi (ixtiyoriy): transportda hali yuborilmagan baytlar — chiqish navbati cap'i (A10) uchun. */
+  backlogBytes?(): number;
 }
 
 export interface StartVoiceSessionOpts {
@@ -34,6 +36,14 @@ export interface StartVoiceSessionOpts {
   /** In-app: audio faqat shu socket'dan qabul qilinadi (A10). */
   socketId?: string;
   workerInstanceId?: string;
+  /** P5 qo'shimchasi (ixtiyoriy): shu vaqtda ulanmasa — 'timeout' (no_answer). In-app: 30 s. */
+  ringTimeoutSec?: number;
+  /** P5 qo'shimchasi (ixtiyoriy): suhbat chegarasi; berilmasa — sozlamadan (assistant/boshqa). */
+  maxDurationSec?: number;
+  /** P5 qo'shimchasi (ixtiyoriy): eslatma matni va h.k. — promptga untrusted sifatida. */
+  requestText?: string;
+  /** P5 qo'shimchasi (ixtiyoriy): foydalanuvchi o'zi qo'ng'iroq qildi (chat AI kontakti / aiv:start). */
+  userInitiated?: boolean;
 }
 
 export type StartVoiceSessionResult =
@@ -43,13 +53,20 @@ export type StartVoiceSessionResult =
 export interface VoiceSessionHandle {
   readonly sessionId: string;
   readonly correlationId: string;
+  /** P5 qo'shimchalari (ixtiyoriy — mavjud soxta handle'lar buzilmasin). */
+  readonly employeeId?: string;
+  readonly companyId?: string;
+  readonly purpose?: Purpose;
+  /** 'ringing' | 'connecting' | 'connected' | 'ending' | 'ended'. */
+  readonly state?: string;
   /** 16 kHz PCM16LE (kadr sarlavhasiz). */
   pushAudio(pcm16k: Buffer): void;
   activityStart(): void;
   activityEnd(): void;
   /** Mijoz ulandi (in-app accept / Telegram connected) — disclosure ijro etiladi. */
   connected(): Promise<void>;
-  confirmAction(pendingActionId: string, accept: boolean): Promise<void>;
+  /** Haqiqiy natija qaytadi (P5: void → ack; void kutgan chaqiruvchilar uchun mos). */
+  confirmAction(pendingActionId: string, accept: boolean): Promise<AivConfirmActionAck>;
   end(reason: AivEndReason): Promise<void>;
 }
 

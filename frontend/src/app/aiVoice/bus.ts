@@ -4,7 +4,8 @@
 
 export type AiVoiceBusEvent =
   | { type: 'open'; source?: string }          // foydalanuvchi "AI bilan gaplashish"ni bosdi
-  | { type: 'active'; active: boolean };        // AI qo'ng'iroq holati o'zgardi
+  | { type: 'active'; active: boolean }         // AI qo'ng'iroq holati o'zgardi
+  | { type: 'chat' };                           // AI bilan shaxsiy matnli chatni ochish (masalan guruhdan)
 
 type Listener = (e: AiVoiceBusEvent) => void;
 
@@ -30,6 +31,13 @@ export function subscribe(fn: Listener): () => void {
 export function openAiVoiceCall(source?: string): boolean {
   if (listeners.size === 0) return false;
   emit({ type: 'open', source });
+  return true;
+}
+
+/** AI bilan shaxsiy matnli chat oynasini ochish (AiVoiceRoot pastdan chiquvchi panel). */
+export function openAiChat(): boolean {
+  if (listeners.size === 0) return false;
+  emit({ type: 'chat' });
   return true;
 }
 

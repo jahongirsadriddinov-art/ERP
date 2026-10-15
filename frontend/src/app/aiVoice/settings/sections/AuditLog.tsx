@@ -14,6 +14,62 @@ const STATUS_TONE: Record<string, Tone> = {
 const FILTERS = ["", "ok", "needs_confirmation", "denied", "error"];
 const LIMIT = 20;
 
+// ── Audit yozuvini oddiy tilga o'girish (avval "bot.schedule" va xom JSON ko'rinardi) ──
+const TOOL_L: Record<string, [string, string]> = {
+  "bot.schedule": ["Ish jadvali o'zgartirildi", "Изменён график работы"],
+  "admin.settings": ["AI sozlamalari o'zgartirildi", "Изменены настройки AI"],
+  createReminder: ["Eslatma yaratildi", "Создано напоминание"],
+  updateReminder: ["Eslatma o'zgartirildi", "Напоминание изменено"],
+  cancelReminder: ["Eslatma bekor qilindi", "Напоминание отменено"],
+  listReminders: ["Eslatmalar ko'rildi", "Просмотр напоминаний"],
+  getMyTasks: ["Vazifalar so'raldi", "Запрошены задачи"],
+  getMySchedule: ["Ish jadvali so'raldi", "Запрошен график"],
+  getProjectSummary: ["Obyektlar holati so'raldi", "Запрошен статус объектов"],
+  getInventoryBalance: ["Material ehtiyoji so'raldi", "Запрошена потребность в материалах"],
+  getAttendanceSummary: ["Davomat so'raldi", "Запрошена посещаемость"],
+  getAllowedFinancialReport: ["Moliyaviy hisobot so'raldi", "Запрошен финансовый отчёт"],
+  notifyManager: ["Rahbarga xabar yuborildi", "Сообщение руководителю"],
+  getEmployeeProfile: ["Xodim ma'lumoti so'raldi", "Запрошены данные сотрудника"],
+};
+const CHANNEL_L: Record<string, [string, string]> = {
+  bot: ["Telegram bot", "Telegram-бот"], bot_message: ["Telegram bot", "Telegram-бот"], telegram_call: ["Telegram qo'ng'iroq", "Звонок Telegram"],
+  inapp: ["Ilova", "Приложение"], inapp_call: ["Ilova qo'ng'iroq", "Звонок в приложении"], chat: ["Ilova chati", "Чат приложения"], web: ["Sayt", "Сайт"], voice: ["Ovozli", "Голос"],
+};
+const MONTHS: [string[], string[]] = [
+  ["yanvar", "fevral", "mart", "aprel", "may", "iyun", "iyul", "avgust", "sentabr", "oktabr", "noyabr", "dekabr"],
+  ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"],
+];
+const DAYS: [string[], string[]] = [["Du", "Se", "Ch", "Pa", "Ju", "Sh", "Ya"], ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]];
+const niceDate = (s: string, ru: boolean) => s.replace(/(\d{4})-(\d{2})-(\d{2})/g, (_m, _y, mo, d) => ru ? `${+d} ${MONTHS[1][+mo - 1]}` : `${+d}-${MONTHS[0][+mo - 1]}`);
+
+function describePatch(obj: any, ru: boolean): string {
+  const { patch, shiftId: _s, ...rest } = obj || {};
+  const p = { ...(patch && typeof patch === "object" ? patch : {}), ...rest };
+  const out: string[] = [];
+  const yesNo = (v: any, on: [string, string], off: [string, string]) => (v ? on : off)[ru ? 1 : 0];
+  for (const [key, v] of Object.entries(p || {})) {
+    if (key === "workStart") out.push(ru ? `начало работы ${v}` : `ish boshlanishi ${v}`);
+    else if (key === "weekdays" && Array.isArray(v)) out.push((ru ? "рабочие дни: " : "ish kunlari: ") + (v as number[]).map((d) => DAYS[ru ? 1 : 0][d - 1]).join(", "));
+    else if (key === "attendance") out.push(yesNo(v, ["ertalabki so'rov yoqildi", "утренний опрос включён"], ["ertalabki so'rov o'chirildi", "утренний опрос выключен"]));
+    else if (key === "enabled" || key === "aiEnabled") out.push(yesNo(v, ["AI yoqildi", "AI включён"], ["AI o'chirildi", "AI выключен"]));
+    else if (key === "skipDates" && Array.isArray(v)) out.push((ru ? "выходные даты: " : "dam olish kunlari: ") + niceDate((v as string[]).join(", "), ru));
+    else if (key === "extraWorkDates" && Array.isArray(v)) out.push((ru ? "доп. рабочие даты: " : "qo'shimcha ish kunlari: ") + niceDate((v as string[]).join(", "), ru));
+  }
+  return out.join(" · ");
+}
+
+export function humanizeAudit(it: { tool: string; channel?: string; resultSummary?: string }, ru: boolean) {
+  const title = TOOL_L[it.tool]?.[ru ? 1 : 0] || it.tool.replace(/[._]/g, " ");
+  const channel = (it.channel && CHANNEL_L[it.channel]?.[ru ? 1 : 0]) || it.channel || "";
+  let detail = it.resultSummary || "";
+  const j = detail.indexOf("{");
+  if (j >= 0) {
+    try { const d = describePatch(JSON.parse(detail.slice(j)), ru); if (d) detail = d; } catch { /* JSON emas — matn qoladi */ }
+  }
+  detail = niceDate(detail.replace(/^(Eslatma yaratildi|Ish jadvali \(bot\)):\s*/i, ""), ru);
+  return { title, channel, detail };
+}
+
 export default function AuditLog({ fetcher = adminApi.getAudit as Fetcher, title, hint, testId = "ai-audit" }: { fetcher?: Fetcher; title?: string; hint?: string; testId?: string } = {}) {
   const { t, i18n } = useTranslation();
   const k = (s: string, o?: Record<string, unknown>) => t(`aiVoice.admin.audit.${s}`, o as any) as string;
@@ -39,20 +95,20 @@ export default function AuditLog({ fetcher = adminApi.getAudit as Fetcher, title
       ) : (
         <>
           <ul className="space-y-2">
-            {data.items.map((it) => (
+            {data.items.map((it) => { const h = humanizeAudit(it, i18n.language === "ru"); return (
               <li key={it.id} className="rounded-xl border border-border bg-card/60 px-3 py-2.5">
                 <div className="flex items-start gap-2">
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold truncate">{it.tool}</p>
+                    <p className="text-sm font-semibold truncate">{h.title}</p>
                     <p className="text-[11px] text-muted-foreground truncate">
-                      {it.companyName ? `${it.companyName} · ` : ""}{fmt.format(new Date(it.at))} · {it.actorName || it.actorRole} · {it.channel}{it.targetName ? ` → ${it.targetName}` : ""}
+                      {it.companyName ? `${it.companyName} · ` : ""}{fmt.format(new Date(it.at))} · {it.actorName || it.actorRole} · {h.channel}{it.targetName ? ` → ${it.targetName}` : ""}
                     </p>
-                    {it.resultSummary && <p className="text-xs mt-1 break-words line-clamp-2">{it.resultSummary}</p>}
+                    {h.detail && <p className="text-xs mt-1 break-words line-clamp-2">{h.detail}</p>}
                   </div>
                   <Badge tone={STATUS_TONE[it.status] || "gray"}>{k(`status.${it.status}`)}</Badge>
                 </div>
               </li>
-            ))}
+            ); })}
           </ul>
           <div className="flex items-center justify-between gap-2 mt-3">
             <button type="button" className="h-9 px-3 rounded-xl border border-border text-xs font-semibold disabled:opacity-40" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>{k("prev")}</button>

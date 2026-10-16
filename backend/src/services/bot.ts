@@ -29,7 +29,7 @@ import { persistUploadedFile } from './durableFiles';
 import { deriveWebhookSecret, canDecideSubscription, sendToCompanyAdmins } from './botSecurity';
 import {
   registerBotInstance, dispatchAiCallback, dispatchAiMessage, aiBotResetChat, aiSuppressedMorningUserIds,
-  WORKER_OFFSHIFT_CALLBACK_RE, AI_BOT_COMMANDS,
+  WORKER_OFFSHIFT_CALLBACK_RE, AI_BOT_COMMANDS, aiBotButtonText,
 } from '../aiVoice/bot/botHooks';
 import { aiConfig } from '../aiVoice/config';
 
@@ -997,17 +997,26 @@ const USER_KEYBOARD_FINISHED = async (lang?: BotLang) => {
 // qabul qiladi; platforma darajasida foydalanuvchini biror buyruqni QO'LDA
 // yozishdan (garchi tugma ko'rinmasa ham) to'liq to'sib bo'lmaydi — bu
 // Telegram Bot API'ning o'zi cheklovi, kodning kamchiligi emas.
+// AI yoqilgan bo'lsa — /ai va /jadval buyruqlari klaviaturada tugma bo'lib turadi (yozish shart emas)
+async function withAiRow(kbP: any, user: any, lang?: BotLang) {
+  const kb: any = await kbP;
+  if (!aiConfig.enabled || !user?.companyId || !Array.isArray(kb?.keyboard)) return kb;
+  const row = [{ text: aiBotButtonText('ai', lang) }];
+  if (isAdmin(user.role)) row.push({ text: aiBotButtonText('schedule', lang) });
+  return { ...kb, keyboard: [...kb.keyboard, row] };
+}
+
 export async function keyboardForUser(user: any, lang?: BotLang) {
   if (isDev(user.role)) return DEVELOPER_KEYBOARD(lang);
-  if (isAdmin(user.role)) return ADMIN_KEYBOARD(lang);
+  if (isAdmin(user.role)) return withAiRow(ADMIN_KEYBOARD(lang), user, lang);
   if (isWorker(user.role)) {
     const { status } = await getAttendanceStatus(String(user._id));
     if (status === 'NOT_STARTED') return CHECKIN_ONLY_KEYBOARD(lang);
-    if (status === 'WORKING') return USER_KEYBOARD_WITH_CHECKOUT(lang);
+    if (status === 'WORKING') return withAiRow(USER_KEYBOARD_WITH_CHECKOUT(lang), user, lang);
     // Ish tugagan — qayta "Ishga keldim" bosilmaguncha botning boshqa funksiyalari yopiq
     return CHECKIN_ONLY_KEYBOARD(lang);
   }
-  return USER_KEYBOARD(lang);
+  return withAiRow(USER_KEYBOARD(lang), user, lang);
 }
 
 // ─── /start command ────────────────────────────────────────────────────────────

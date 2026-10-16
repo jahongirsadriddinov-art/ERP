@@ -51,8 +51,21 @@ export const AI_BOT_COMMANDS: { command: string; kind: AiBotCommand; description
 ];
 
 /** "/ai", "/jadval" (ixtiyoriy "@BotName" va matn bilan) → buyruq turi; boshqasi null. */
+// Klaviatura tugmalari matni (bot.ts klaviaturaga qo'shadi) — bosilsa buyruq bilan bir xil ishlaydi
+const AI_BUTTONS: Record<AiBotCommand, { uz: string; ru: string }> = {
+  ai: { uz: '🤖 AI yordamchi', ru: '🤖 AI-помощник' },
+  schedule: { uz: '📅 Ish jadvali', ru: '📅 График работы' },
+} as any;
+export function aiBotButtonText(kind: AiBotCommand, lang?: string): string {
+  return lang === 'ru' ? AI_BUTTONS[kind].ru : AI_BUTTONS[kind].uz;
+}
+
 export function aiBotCommandOf(text: unknown): AiBotCommand | null {
   if (typeof text !== 'string') return null;
+  const t = text.trim();
+  for (const [kind, v] of Object.entries(AI_BUTTONS) as [AiBotCommand, { uz: string; ru: string }][]) {
+    if (t === v.uz || t === v.ru) return kind;
+  }
   const m = /^\/([a-z]+)(@\w+)?(\s|$)/i.exec(text);
   if (!m) return null;
   const name = m[1].toLowerCase();

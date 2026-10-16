@@ -13,6 +13,7 @@ import { ensurePlatformConnection } from '../lib/workerLease';
 import {
   accountDto, maskPhone, setConnectedAccount, setFloodWait, setLoggedOut, setLoginState,
 } from '../telegram/accountService';
+import { setOpenConversation } from '../telegram/incomingCalls';
 import { callWorker, WorkerRpcFailure } from '../telegram/workerRpc';
 import { getActiveWorker } from '../telegram/workerNamespace';
 
@@ -105,7 +106,7 @@ const audit = (req: Request, dev: Dev, action: 'create' | 'update' | 'delete', d
 
 export async function platformStatusView() {
   const conn: any = await AiChannelConnection.findOne(PLATFORM_TG)
-    .select('status lastError workerId leaseUntil udpProbe connectedAt').lean();
+    .select('status lastError workerId leaseUntil udpProbe connectedAt openConversation openConversationAt').lean();
   const w = getActiveWorker();
   return {
     aiVoiceEnabled: aiConfig.enabled,
@@ -119,6 +120,8 @@ export async function platformStatusView() {
     udpCheckedAt: conn?.udpProbe?.at ? new Date(conn.udpProbe.at).toISOString() : undefined,
     connectedAt: conn?.connectedAt ? new Date(conn.connectedAt).toISOString() : undefined,
     limits: { loginPer10Min: LOGIN_MAX, testCallsPerHour: TEST_CALL_MAX },
+    openConversation: conn?.openConversation === true,
+    openConversationAt: conn?.openConversationAt ? new Date(conn.openConversationAt).toISOString() : undefined,
   };
 }
 
@@ -225,6 +228,18 @@ router.post('/telegram-account/logout', wrap(async (req, res) => {
   await setLoggedOut(dev.userId);
   audit(req, dev, 'delete', 'AI Telegram akkauntidan chiqildi');
   res.json({ ok: true, account: await accountDto() });
+}));
+
+// ───────────── "Ochiq muloqot" (kiruvchi qo'ng'iroqlar) ─────────────
+// Yoqilsa: faqat bog'langan + rozilik bergan xodimlarning qo'ng'irog'ini AI qabul qiladi (telegram/incomingCalls.ts).
+router.post('/telegram-account/open-conversation', wrap(async (req, res) => {
+  const dev = await developer(req);
+  const enabled = isObj(req.body) ? req.body.enabled : undefined;
+  if (typeof enabled !== 'boolean') return res.status(400).json({ error: 'invalid', errors: ['enabled'] });
+  if (await limited(res, `aiv:tgopen:${dev.userId}`, 20, LOGIN_WINDOW_MS)) return;
+  const workerSynced = await setOpenConversation(enabled, dev.userId);
+  audit(req, dev, 'update', `AI Telegram: "Ochiq muloqot" ${enabled ? 'yoqildi' : "o'chirildi"}`);
+  res.json({ ok: true, openConversation: enabled, workerSynced });
 }));
 
 // ───────────── UDP tekshiruv ─────────────

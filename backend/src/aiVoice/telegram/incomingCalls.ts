@@ -1,0 +1,154 @@
+import AiChannelConnection from '../../models/AiChannelConnection';
+import AiEmployeeContact from '../../models/AiEmployeeContact';
+import { WORKER_ROLES, isOnShift } from '../../middleware/workGate';
+import { logAudit } from '../../services/audit';
+import { checkActor } from '../actor';
+import { aiConfig, INSTANCE_ID } from '../config';
+import type { IncomingCallAck, IncomingCallRequest, WorkerEvent } from '../contracts';
+import { hitRate } from '../lib/mongoRateLimit';
+import { ensurePlatformConnection } from '../lib/workerLease';
+import { telegramCapacity } from '../sessions';
+import { getSettings, isAiActive } from '../settings';
+import { getVoiceSessionManager, resolveVoiceLang } from '../voice/sessionManager';
+import { registerBridge, TelegramTransport } from './callBridge';
+import { callWorker } from './workerRpc';
+import { setIncomingCallHandler, workerConnectedHere, workerHub } from './workerNamespace';
+
+// "Ochiq muloqot" (owner so'rovi): AI Telegram akkauntiga kiruvchi shaxsiy qo'ng'iroqlar.
+//  • platforma sozlamasi (AiChannelConnection.openConversation), standart O'CHIQ — o'chiq bo'lsa worker
+//    qo'ng'iroqni o'zi darhol rad etadi (A3, o'zgarmagan);
+//  • yoqilgan bo'lsa worker {tgUserId} so'raydi: faqat AiEmployeeContact'da bog'langan, callConsent='granted',
+//    bloklanmagan, firmasida AI yoqilgan (tarif bilan) xodim qabul qilinadi; notanish — rad (busy);
+//  • qabulda — in-app bilan bir xil user-initiated ovozli sessiya (xodim aktyor, tool/RBAC/transkript);
+//  • har qabul/rad AuditLog'ga (entity 'ai_telegram_incoming'); bir raqamdan spam — audit soatiga 10 ta.
+
+const PLATFORM_TG = { scope: 'platform' as const, companyId: null, type: 'telegram_user' as const };
+const TG_ID_RE = /^\d{1,20}$/;
+/** Worker accept → confirm kutadi (calls.py INCOMING_ACCEPT_TIMEOUT_S = 20) + zaxira. */
+const INCOMING_RING_FALLBACK_SEC = 40;
+const AUDIT_PER_CALLER_HOUR = 10;
+
+export type IncomingDecision = IncomingCallAck & { companyId?: string; employeeId?: string };
+
+const maskTg = (id: string) => (id.length > 4 ? `…${id.slice(-4)}` : '…');
+
+export async function getOpenConversation(): Promise<boolean> {
+  const c: any = await AiChannelConnection.findOne(PLATFORM_TG).select('openConversation').lean();
+  return c?.openConversation === true;
+}
+
+/** Holatni workerga yuborish (worker yo'q bo'lsa — keyingi 'up'da). true — worker tasdiqladi. */
+export async function pushOpenConversation(open?: boolean): Promise<boolean> {
+  if (!workerConnectedHere()) return false;
+  try {
+    const v = typeof open === 'boolean' ? open : await getOpenConversation();
+    await callWorker('incoming.config', { open: v });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function setOpenConversation(enabled: boolean, by: string, now: Date = new Date()): Promise<boolean> {
+  await ensurePlatformConnection();
+  await AiChannelConnection.updateOne(PLATFORM_TG, { $set: { openConversation: enabled, openConversationBy: by, openConversationAt: now } });
+  return pushOpenConversation(enabled);
+}
+
+async function auditIncoming(tgUserId: string, d: IncomingDecision, actor?: { name: string; role: string }): Promise<void> {
+  const accepted = d.accept === true;
+  await logAudit({
+    userId: d.employeeId || 'telegram',
+    userName: actor?.name || (d.employeeId ? 'Xodim' : `Telegram ${maskTg(tgUserId)}`),
+    userRole: actor?.role || 'unknown',
+    action: 'create',
+    entity: 'ai_telegram_incoming',
+    entityId: accepted ? d.sessionId : undefined,
+    companyId: d.companyId,
+    description: accepted
+      ? "AI Telegram: kiruvchi qo'ng'iroq qabul qilindi (Ochiq muloqot)"
+      : `AI Telegram: kiruvchi qo'ng'iroq rad etildi — ${(d as { reason: string }).reason}`,
+  }).catch(() => undefined);
+}
+
+/** Qaror (testlar to'g'ridan-to'g'ri chaqiradi). Sessiya faqat qabulda yaratiladi. */
+export async function decideIncomingCall(req: IncomingCallRequest, now: Date = new Date()): Promise<IncomingDecision> {
+  const tgUserId = String(req?.tgUserId || '');
+  if (!TG_ID_RE.test(tgUserId)) return { accept: false, reason: 'bad_request' };
+  const rl = await hitRate(`aiv:tgin:${tgUserId}`, AUDIT_PER_CALLER_HOUR, 3600_000, now);
+  let actor: { name: string; role: string } | undefined;
+  const decide = async (): Promise<IncomingDecision> => {
+    if (!aiConfig.enabled) return { accept: false, reason: 'disabled' };
+    if (!(await getOpenConversation())) return { accept: false, reason: 'closed' };
+    if (!rl.allowed) return { accept: false, reason: 'rate_limited' };
+    const ct: any = await AiEmployeeContact.findOne({ 'telegram.tgUserId': tgUserId })
+      .select('companyId employeeId telegram.callConsent optOut').lean();
+    if (!ct) return { accept: false, reason: 'unknown_caller' };
+    const companyId = String(ct.companyId || '');
+    const employeeId = String(ct.employeeId || '');
+    const base = { companyId, employeeId };
+    if (ct.telegram?.callConsent !== 'granted') return { ...base, accept: false, reason: 'no_consent' };
+    if (ct.optOut?.all) return { ...base, accept: false, reason: 'opt_out' };
+    const ac = await checkActor(employeeId, companyId);
+    if (!ac.ok) return { ...base, accept: false, reason: ac.code === 'blocked' ? 'blocked' : `denied_${ac.code}` };
+    actor = { name: ac.actor.name, role: ac.actor.role };
+    if (!(await isAiActive(companyId))) return { ...base, accept: false, reason: 'ai_disabled' };
+    // A1: bir vaqtda 1 ta Telegram qo'ng'irog'i
+    if (req.workerBusy === true || !(await telegramCapacity())) return { ...base, accept: false, reason: 'busy' };
+    if (!workerConnectedHere()) return { ...base, accept: false, reason: 'worker_not_here' };
+    const settings = await getSettings(companyId);
+    // In-app qo'ng'iroq bilan bir xil cheklovlar: ishchi rollar smenadan tashqarida, soatlik limit (umumiy kalit)
+    if (WORKER_ROLES.includes(ac.actor.role) && !settings.tools.allowOffShiftAssistant && !(await isOnShift(employeeId))) {
+      return { ...base, accept: false, reason: 'off_shift' };
+    }
+    const perHour = Math.max(0, Number(settings.limits.userSessionsPerHour) || 0);
+    if (!(await hitRate(`aiv:start:${employeeId}`, perHour, 3_600_000, now)).allowed) return { ...base, accept: false, reason: 'limit' };
+
+    const lang = await resolveVoiceLang(companyId, employeeId, settings);
+    const maxDurationSec = Math.min(600, Math.max(30, Math.round(Number(settings.calls.assistantMaxDurationSec) || 300)));
+    const transport = new TelegramTransport();
+    const started = await getVoiceSessionManager().start({
+      companyId, employeeId, purpose: 'assistant', channel: 'telegram_call', lang, ptt: false, transport,
+      userInitiated: true, workerInstanceId: INSTANCE_ID, ringTimeoutSec: INCOMING_RING_FALLBACK_SEC, maxDurationSec,
+    });
+    if (!started.ok) return { ...base, accept: false, reason: started.reason };
+    const h = started.handle;
+    transport.bind(h.sessionId);
+    registerBridge({ sessionId: h.sessionId, handle: h, employeeId, companyId });
+    return { ...base, accept: true, sessionId: h.sessionId, maxDurationSec };
+  };
+  let d: IncomingDecision;
+  try {
+    d = await decide();
+  } catch (e) {
+    console.error("[aiVoice/telegram] kiruvchi qo'ng'iroq qarori xatosi:", (e as Error)?.name || 'Error');
+    d = { accept: false, reason: 'error' };
+  }
+  // Spam: bitta raqamdan soatiga 10 tadan ortiq — audit yozilmaydi (rad baribir)
+  if (rl.allowed) await auditIncoming(tgUserId, d, actor);
+  return d;
+}
+
+/** Worker uchun javob (faqat ack maydonlari — firma/xodim id'lari workerga ketmaydi). */
+async function handleIncoming(req: IncomingCallRequest): Promise<IncomingCallAck> {
+  const d = await decideIncomingCall(req);
+  return d.accept ? { accept: true, sessionId: d.sessionId, maxDurationSec: d.maxDurationSec } : { accept: false, reason: d.reason };
+}
+
+let initialized = false;
+
+/** Worker ulanganda holatni yuborish, health'da farq bo'lsa tuzatish (idempotent). */
+export function initIncomingCalls(): void {
+  setIncomingCallHandler(handleIncoming);
+  if (initialized) return;
+  initialized = true;
+  workerHub.on('up', () => { pushOpenConversation().catch(() => undefined); });
+  workerHub.on('event', (ev: WorkerEvent) => {
+    if (ev?.type !== 'health' || typeof ev.status?.openConversation !== 'boolean') return;
+    const reported = ev.status.openConversation;
+    getOpenConversation()
+      .then((want) => (want !== reported ? pushOpenConversation(want) : false))
+      .catch(() => undefined);
+  });
+}
+

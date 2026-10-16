@@ -17,6 +17,7 @@ def build_status(runtime: Any, calls: Any, udp_ok: Optional[bool]) -> dict:
         "version": __version__,
         "connected": bool(getattr(runtime, "ready", False)),
         "activeCalls": int(getattr(calls, "active_count", 0) or 0),
+        "openConversation": bool(getattr(calls, "open_incoming", False)),
     }
     if st["connected"]:
         if getattr(runtime, "me_id", None):

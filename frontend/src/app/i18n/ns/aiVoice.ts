@@ -49,6 +49,46 @@ export const uz = {
     },
     more: "Qo'shimcha sozlamalar",
     moreHint: "Odatda o'zgartirish shart emas",
+    // ── Soddalashtirilgan bitta ekran (owner 2026-10-16): 3 ta blok + "Qo'shimcha sozlamalar" ──
+    simple: {
+      powerTitle: "AI yordamchi",
+      powerOn: "Yoqilgan",
+      powerOff: "O'chiq",
+      companyOff: {
+        boss: "Yoqish uchun tugmani bosing, so'ng \"Saqlash\"ni bosing.",
+        deputy: "Yoqish uchun tugmani bosing, so'ng \"Saqlash\"ni bosing (yoki direktordan so'rang).",
+      },
+      scheduleTitle: "Ish jadvali",
+      scheduleHint: "AI qaysi kunlari va soat nechada xodimlardan \"ishga kelasizmi?\" deb so'raydi.",
+      askMorning: "Ertalab davomat so'rash",
+      askMorningOff: "O'chiq — AI ertalab hech kimdan so'ramaydi (eslatma va savollar ishlayveradi).",
+      holidays: "Bayram va dam olish kunlari",
+      holidaysHint: "Bu sanalarda AI hech kimdan so'ramaydi.",
+      channelsTitle: "Kimga va qanday",
+      channelsHint: "AI xodimga yoqilgan yo'llar bilan murojaat qiladi: javob bo'lmasa — keyingisiga o'tadi.",
+      ch: {
+        bot_message: { title: "Telegram xabar", hint: "Bot orqali xabar va javob tugmalari" },
+        telegram_call: { title: "Telegram qo'ng'iroq", hint: "AI Telegram orqali ovozli qo'ng'iroq qiladi (xodim rozilik bergan bo'lsa)" },
+        inapp_call: { title: "Ilovada qo'ng'iroq", hint: "Ilova ochiq bo'lsa, AI ilovaning o'zida qo'ng'iroq qiladi" },
+      },
+      tgReady: "AI Telegram akkaunti ulangan — qo'ng'iroq qila oladi.",
+      tgNotReady: "AI Telegram akkaunti hali ulanmagan yoki xizmat o'chiq — hozircha Telegram qo'ng'iroq ishlamaydi, AI keyingi yo'lga o'tadi.",
+      lastOne: "Kamida bitta yo'l yoqilgan bo'lishi kerak.",
+      order: "Tartib",
+      who: "Kimlardan so'ralsin",
+      lateTitle: "Kechikish va \"kelmadi\" vaqti",
+      advTitle: "Qo'shimcha sozlamalar",
+      advHint: "Xodimlar, ruxsatlar, tarix va sinov — odatda o'zgartirish shart emas.",
+      adv: {
+        employees: { title: "Har bir xodim uchun", hint: "Alohida ish kunlari va o'chirilgan yo'llar" },
+        tools: { title: "Kim nima so'ray oladi", hint: "AI har bir lavozimga nimalarni qila olishi" },
+        order: { title: "Murojaat tartibi va tinch soatlar", hint: "Qaysi yo'l birinchi, kechasi bezovta qilmaslik, eslatmalar" },
+        schedule: { title: "Jadval tafsilotlari", hint: "Smenalar, kalendar, kechikish va \"kelmadi\" vaqti" },
+        talk: { title: "Til va ovoz", hint: "AI qaysi tilda va qanday ovozda gapiradi" },
+        history: { title: "Tarix", hint: "AI nima qildi va suhbatlar arxivi" },
+        test: { title: "Sinab ko'rish", hint: "O'zingizga sinov xabari yuborish" },
+      },
+    },
     general: {
       onTitle: "AI yordamchi yoqilgan",
       offTitle: "AI yordamchi o'chiq",
@@ -466,6 +506,16 @@ export const uz = {
       freq: { none: "Bir martalik", daily: "Har kuni", weekdays: "Ish kunlari", weekly: "Har hafta", monthly: "Har oy" },
       status: { active: "Faol", done: "Bajarildi", cancelled: "Bekor qilingan", failed: "Xato", missed: "O'tkazib yuborilgan" },
     },
+    // ── Soddalashtirilgan shaxsiy ko'rinish (owner 2026-10-16) ──
+    simple: {
+      howTitle: "Menga qanday murojaat qilinsin",
+      howHint: "O'chirilgan yo'l orqali AI sizga murojaat qilmaydi.",
+      pushHint: "Telefoningizga bildirishnoma",
+      consentAsk: "Telegram qo'ng'irog'i uchun rozilik kerak.",
+      consentOk: "Rozilik berilgan",
+      more: "Qo'shimcha",
+      moreHint: "Voz kechish",
+    },
     saved: "Saqlandi",
   },
   telegram: {
@@ -475,6 +525,16 @@ export const uz = {
     features: {
       login: "Kirish kodi va parol faqat serverdagi worker'ga uzatiladi, brauzerda saqlanmaydi",
       health: "Worker holati, UDP tekshiruvi va kunlik qo'ng'iroq limiti",
+    },
+    // "Ochiq muloqot" — kiruvchi qo'ng'iroqlar
+    open: {
+      title: "Ochiq muloqot",
+      label: "Xodimlar AI akkauntiga o'zlari qo'ng'iroq qila olsin",
+      hint: "Yoqilsa, AI Telegram akkauntiga kelgan qo'ng'iroqqa AI javob beradi va xodim bilan suhbatlashadi (ilovadagi AI qo'ng'iroq kabi).",
+      rules: "Faqat Telegram'i bog'langan, rozilik bergan, bloklanmagan va firmasida AI yoqilgan xodimlar. Notanish raqamlar rad etiladi. Bir vaqtda bitta qo'ng'iroq. Har bir qabul/rad auditga yoziladi.",
+      onToast: "Ochiq muloqot yoqildi",
+      offToast: "Ochiq muloqot o'chirildi",
+      notSynced: "Saqlandi. Worker ulanganda qo'llanadi.",
     },
     // P6: TelegramAccountPanel
     refresh: "Yangilash",
@@ -606,6 +666,46 @@ export const ru = {
     },
     more: "Дополнительные настройки",
     moreHint: "Обычно менять не нужно",
+    // ── Упрощённый единый экран (owner 2026-10-16): 3 блока + «Дополнительные настройки» ──
+    simple: {
+      powerTitle: "AI-помощник",
+      powerOn: "Включён",
+      powerOff: "Выключен",
+      companyOff: {
+        boss: "Чтобы включить, нажмите переключатель, затем «Сохранить».",
+        deputy: "Чтобы включить, нажмите переключатель, затем «Сохранить» (или попросите директора).",
+      },
+      scheduleTitle: "График работы",
+      scheduleHint: "В какие дни и во сколько AI спрашивает сотрудников «вы выходите на работу?».",
+      askMorning: "Утренний опрос явки",
+      askMorningOff: "Выключено — утром AI никого не спрашивает (напоминания и вопросы работают).",
+      holidays: "Праздники и выходные",
+      holidaysHint: "В эти даты AI никого не спрашивает.",
+      channelsTitle: "Кому и как",
+      channelsHint: "AI связывается с сотрудником включёнными способами: нет ответа — переходит к следующему.",
+      ch: {
+        bot_message: { title: "Сообщение в Telegram", hint: "Сообщение от бота с кнопками ответа" },
+        telegram_call: { title: "Звонок в Telegram", hint: "AI звонит голосом через Telegram (если сотрудник дал согласие)" },
+        inapp_call: { title: "Звонок в приложении", hint: "Если приложение открыто, AI звонит прямо в нём" },
+      },
+      tgReady: "Telegram-аккаунт AI подключён — звонить может.",
+      tgNotReady: "Telegram-аккаунт AI ещё не подключён или служба выключена — пока звонок в Telegram не работает, AI перейдёт к следующему способу.",
+      lastOne: "Должен быть включён хотя бы один способ.",
+      order: "Порядок",
+      who: "Кого спрашивать",
+      lateTitle: "Опоздание и время «не пришёл»",
+      advTitle: "Дополнительные настройки",
+      advHint: "Сотрудники, разрешения, история и проверка — обычно менять не нужно.",
+      adv: {
+        employees: { title: "Для каждого сотрудника", hint: "Свои рабочие дни и отключённые способы" },
+        tools: { title: "Кто что может спросить", hint: "Что AI может делать для каждой должности" },
+        order: { title: "Порядок связи и тихие часы", hint: "Какой способ первый, не беспокоить ночью, напоминания" },
+        schedule: { title: "Детали графика", hint: "Смены, календарь, опоздание и время «не пришёл»" },
+        talk: { title: "Язык и голос", hint: "На каком языке и каким голосом говорит AI" },
+        history: { title: "История", hint: "Что сделал AI и архив разговоров" },
+        test: { title: "Проверка", hint: "Отправить себе тестовое сообщение" },
+      },
+    },
     general: {
       onTitle: "AI-помощник включён",
       offTitle: "AI-помощник выключен",
@@ -1022,6 +1122,16 @@ export const ru = {
       freq: { none: "Однократно", daily: "Каждый день", weekdays: "По рабочим дням", weekly: "Каждую неделю", monthly: "Каждый месяц" },
       status: { active: "Активно", done: "Выполнено", cancelled: "Отменено", failed: "Ошибка", missed: "Пропущено" },
     },
+    // ── Упрощённый личный вид (owner 2026-10-16) ──
+    simple: {
+      howTitle: "Как со мной связываться",
+      howHint: "Через выключенный способ AI с вами не связывается.",
+      pushHint: "Уведомление на телефон",
+      consentAsk: "Для звонка в Telegram нужно согласие.",
+      consentOk: "Согласие дано",
+      more: "Дополнительно",
+      moreHint: "Отказ от обращений",
+    },
     saved: "Сохранено",
   },
   telegram: {
@@ -1031,6 +1141,16 @@ export const ru = {
     features: {
       login: "Код входа и пароль передаются только воркеру на сервере и не сохраняются в браузере",
       health: "Состояние воркера, проверка UDP и дневной лимит звонков",
+    },
+    // "Открытый разговор" — входящие звонки
+    open: {
+      title: "Открытый разговор",
+      label: "Сотрудники могут сами звонить AI-аккаунту",
+      hint: "Если включено, AI отвечает на звонки в Telegram-аккаунт AI и разговаривает с сотрудником (как AI-звонок в приложении).",
+      rules: "Только сотрудники с привязанным Telegram, давшие согласие, не заблокированные и с включённым AI в компании. Незнакомые номера отклоняются. Одновременно один звонок. Каждый приём/отказ записывается в аудит.",
+      onToast: "Открытый разговор включён",
+      offToast: "Открытый разговор выключен",
+      notSynced: "Сохранено. Применится, когда воркер подключится.",
     },
     // P6: TelegramAccountPanel
     refresh: "Обновить",

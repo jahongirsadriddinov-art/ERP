@@ -4,7 +4,7 @@ import AiChannelConnection from '../../models/AiChannelConnection';
 import { aiConfig, INSTANCE_ID } from '../config';
 import {
   AIV_WORKER_NAMESPACE, AUDIO_FRAME_MAX_BYTES, WORKER_EVENTS,
-  type LeaseAck, type WorkerAuthAck, type WorkerAuthRequest, type WorkerEvent,
+  type IncomingCallAck, type IncomingCallRequest, type LeaseAck, type WorkerAuthAck, type WorkerAuthRequest, type WorkerEvent,
 } from '../contracts';
 import { issueWorkerChallenge, verifyWorkerAuth, workerAuthConfigured } from '../lib/workerAuth';
 import { acquireWorkerLease, releaseWorkerLease, renewWorkerLease } from '../lib/workerLease';
@@ -36,6 +36,11 @@ workerHub.setMaxListeners(50);
 
 let nsp: Namespace | null = null;
 let active: ActiveWorker | null = null;
+
+// "Ochiq muloqot": kiruvchi qo'ng'iroq qarori (incomingCalls.ts o'rnatadi — aylanma import bo'lmasin)
+type IncomingHandler = (req: IncomingCallRequest) => Promise<IncomingCallAck>;
+let incomingHandler: IncomingHandler | null = null;
+export function setIncomingCallHandler(h: IncomingHandler | null): void { incomingHandler = h; }
 
 /** Shu instansiyada lease egasi bo'lgan, ulangan worker (RPC va audio uchun). */
 export function getActiveWorker(): ActiveWorker | null {
@@ -174,6 +179,18 @@ function onConnection(socket: Socket): void {
     if (!st.authed || active?.socket !== socket || !ev || typeof ev !== 'object' || overRate()) return reply({ ok: false });
     workerHub.emit('event', ev);
     reply({ ok: true });
+  });
+
+  socket.on(WORKER_EVENTS.incomingCall, async (req: IncomingCallRequest, ack: unknown) => {
+    const reply = ackFn(ack);
+    if (!st.authed || active?.socket !== socket || !req || typeof req !== 'object' || overRate()) return reply({ accept: false, reason: 'not_leased' } satisfies IncomingCallAck);
+    if (!incomingHandler) return reply({ accept: false, reason: 'not_ready' } satisfies IncomingCallAck);
+    try {
+      reply(await incomingHandler(req));
+    } catch (e) {
+      console.error("[aiVoice/telegram] kiruvchi qo'ng'iroq xatosi:", (e as Error)?.name || 'Error');
+      reply({ accept: false, reason: 'error' } satisfies IncomingCallAck);
+    }
   });
 
   socket.on(WORKER_EVENTS.audio, (buf: unknown) => {

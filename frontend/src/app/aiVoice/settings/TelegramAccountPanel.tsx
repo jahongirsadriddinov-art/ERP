@@ -10,7 +10,7 @@ import Logout from "@hugeicons/core-free-icons/Logout01Icon";
 import Search from "@hugeicons/core-free-icons/Search01Icon";
 import Check from "@hugeicons/core-free-icons/CheckmarkCircle02Icon";
 import { API_BASE } from "../../api";
-import { Badge, Card, Field, More, Notice, Skeleton, type Tone } from "./ui";
+import { Badge, Card, Field, More, Notice, Skeleton, Toggle, type Tone } from "./ui";
 
 // Dasturchi paneli → AI → Telegram: AI qo'ng'iroq qiladigan platforma Telegram akkaunti (P6).
 // Worker holati, ulash (telefon → kod → 2FA), UDP tekshiruvi, sinov qo'ng'irog'i, chiqish.
@@ -24,6 +24,7 @@ interface TgAccount {
 interface TgView {
   aiVoiceEnabled?: boolean; account?: TgAccount | null; worker?: { connectedHere?: boolean; workerId?: string; leaseActive?: boolean };
   lastError?: string; udpCheckedAt?: string; connectedAt?: string; limits?: { loginPer10Min?: number; testCallsPerHour?: number };
+  openConversation?: boolean; openConversationAt?: string;
 }
 interface TestTarget { userId: string; name: string; companyId: string; companyName: string; resolveStatus: string }
 interface Res<T> { ok: boolean; status: number; data: T; error: string; body: any }
@@ -102,6 +103,16 @@ export default function TelegramAccountPanel() {
     if (r.data?.ok) toast.success(k("udp.okToast")); else toast.error(k("udp.badToast"));
     load();
   };
+  // "Ochiq muloqot": bog'langan xodimlarning kiruvchi qo'ng'iroqlarini AI qabul qiladi (standart o'chiq)
+  const toggleOpen = async (enabled: boolean) => {
+    setBusy("open");
+    const r = await api<{ ok: boolean; openConversation: boolean; workerSynced?: boolean }>("POST", "/open-conversation", { enabled });
+    setBusy("");
+    if (!r.ok) { toast.error(errText(r)); return; }
+    setV((p) => (p ? { ...p, openConversation: !!r.data?.openConversation } : p));
+    toast.success(k(enabled ? "open.onToast" : "open.offToast"));
+    if (r.data?.workerSynced === false) toast.message(k("open.notSynced"));
+  };
   const logout = async () => {
     if (!window.confirm(k("logout.confirm"))) return;
     setBusy("logout");
@@ -132,6 +143,11 @@ export default function TelegramAccountPanel() {
       {connected && (
         <>
           <TestCallCard k={k} errText={errText} canCall={workerOn} />
+          <Card icon={Telegram} title={k("open.title")} testId="ai-tg-open">
+            <Toggle checked={!!v.openConversation} disabled={!!busy} onChange={toggleOpen} testId="ai-tg-open-toggle"
+              label={k("open.label")} hint={k("open.hint")} />
+            <p className="text-[11px] text-muted-foreground mt-1">{k("open.rules")}</p>
+          </Card>
           <Card icon={Computer} title={k("actions.title")}>
             <div className="flex flex-wrap gap-2">
               <button type="button" disabled={!workerHere || !!busy} data-testid="ai-tg-udp" onClick={udp}

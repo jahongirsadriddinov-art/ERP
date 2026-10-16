@@ -8,7 +8,7 @@ import { Server } from 'socket.io';
 import { io as ioc, type Socket as ClientSocket } from 'socket.io-client';
 import {
   AIV_WORKER_NAMESPACE, WORKER_EVENTS, workerChallengeMessage,
-  type LeaseAck, type WorkerAuthAck, type WorkerChallenge, type WorkerEvent, type WorkerRpcRequest,
+  type IncomingCallAck, type IncomingCallRequest, type LeaseAck, type WorkerAuthAck, type WorkerChallenge, type WorkerEvent, type WorkerRpcRequest,
 } from '../contracts';
 import { __resetWorkerAuthCacheForTests } from '../lib/workerAuth';
 import { __resetWorkerNamespaceForTests, closeWorkerNamespace, registerAiWorkerNamespace } from '../telegram/workerNamespace';
@@ -55,6 +55,7 @@ const DEFAULT_HANDLERS: Record<string, RpcHandler> = {
   'call.hangup': () => ({ ok: true }),
   'udp.probe': () => ({ ok: true, details: 'fake' }),
   'auth.logout': () => ({ ok: true }),
+  'incoming.config': (p: { open: boolean }) => ({ ok: true, open: p.open }),
 };
 
 export class FakeWorker {
@@ -145,6 +146,11 @@ export class FakeWorker {
   }
 
   sendAudio(frame: Buffer): void { this.socket.emit(WORKER_EVENTS.audio, frame); }
+
+  /** "Ochiq muloqot": kiruvchi qo'ng'iroq haqida backenddan qaror so'rash (Python: calls.on_incoming). */
+  incoming(req: IncomingCallRequest): Promise<IncomingCallAck> {
+    return this.socket.timeout(10_000).emitWithAck(WORKER_EVENTS.incomingCall, req);
+  }
 
   rpcsOf(method: string): WorkerRpcRequest[] { return this.rpcs.filter((r) => r.method === method); }
 

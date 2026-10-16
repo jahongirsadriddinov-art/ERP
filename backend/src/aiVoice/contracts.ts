@@ -315,7 +315,14 @@ export const WORKER_EVENTS = {
   rpc: 'worker:rpc',                    // s → w   WorkerRpcRequest    (ack: WorkerRpcResponse)
   event: 'worker:event',                // w → s   WorkerEvent
   audio: 'worker:audio',                // ikki tomonga, binary kadr
+  incomingCall: 'worker:incoming.call', // w → s   IncomingCallRequest (ack: IncomingCallAck) — "Ochiq muloqot"
 } as const;
+
+/** "Ochiq muloqot": AI akkauntiga kiruvchi shaxsiy qo'ng'iroq — qarorni backend beradi. */
+export interface IncomingCallRequest { tgUserId: string; workerBusy?: boolean; at?: number }
+export type IncomingCallAck =
+  | { accept: true; sessionId: string; maxDurationSec: number }
+  | { accept: false; reason: string };
 
 export interface WorkerHandshakeAuth { workerId: string; version: string }
 export interface WorkerChallenge { nonce: string; expiresAt: number; instanceId: string }
@@ -345,6 +352,8 @@ export interface WorkerRpcMethods {
   'call.place': { params: { sessionId: string; tgUserId: string; timeoutSec: number; maxDurationSec: number }; result: { accepted: boolean; reason?: string } };
   'call.hangup': { params: { sessionId: string; reason: string }; result: { ok: true } };
   'udp.probe': { params: Record<string, never>; result: { ok: boolean; details?: string } };
+  /** "Ochiq muloqot" holati (standart o'chiq) — worker 'up' bo'lganda va o'zgarganda yuboriladi. */
+  'incoming.config': { params: { open: boolean }; result: { ok: true; open?: boolean } };
 }
 export type WorkerRpcMethod = keyof WorkerRpcMethods;
 export interface WorkerRpcRequest<M extends WorkerRpcMethod = WorkerRpcMethod> {
@@ -366,6 +375,8 @@ export interface WorkerStatus {
   activeCalls: number;
   udpOk?: boolean;
   floodWaitUntil?: number;
+  /** Worker'dagi "Ochiq muloqot" holati (backend bilan solishtirish uchun). */
+  openConversation?: boolean;
 }
 
 export type WorkerCallState = 'dialing' | 'ringing' | 'connected' | 'ended';

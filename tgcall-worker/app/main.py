@@ -29,6 +29,8 @@ from .udp_probe import probe
 
 log = logging.getLogger("tgw")
 
+EV_INCOMING = "worker:incoming.call"
+
 
 class _NoSecretsFilter(logging.Filter):
     """Kutubxona loglari DEBUG'da so'rov tanalarini chiqarmasligi uchun — faqat INFO+ ruxsat."""
@@ -82,7 +84,13 @@ async def amain() -> int:
     async def send_up(frame: bytes) -> None:
         await bridge.send_audio(frame)
 
-    calls = CallManager(runtime, emit, send_up)
+    async def ask_incoming(data: dict):
+        # Ochiq muloqot: backend qaror beradi (bog'langan xodim + rozilik); javob kelmasa — rad
+        if not bridge.authed:
+            return None
+        return await bridge.call(EV_INCOMING, data, timeout=12)
+
+    calls = CallManager(runtime, emit, send_up, ask_incoming=ask_incoming)
     runtime.calls = calls
 
     async def on_login_success(session: str) -> None:
@@ -139,6 +147,15 @@ async def amain() -> int:
     async def h_hangup(p: dict) -> dict:
         return await calls.hangup(p)
 
+    async def h_incoming_config(p: dict) -> dict:
+        v = p.get("open")
+        if not isinstance(v, bool):
+            raise RpcError("bad_request")
+        if calls.open_incoming != v:
+            log.info("Ochiq muloqot: %s", "yoqildi" if v else "o'chirildi")
+        calls.open_incoming = v
+        return {"ok": True, "open": v}
+
     async def h_udp(_p: dict) -> dict:
         r = await probe(cfg.stun_host, cfg.stun_port)
         udp_state["ok"] = bool(r.get("ok"))
@@ -148,6 +165,7 @@ async def amain() -> int:
         "auth.start": h_auth_start, "auth.code": h_auth_code, "auth.password": h_auth_password,
         "auth.logout": h_auth_logout, "status": h_status, "contact.resolve": h_resolve,
         "binding.expect": h_binding, "call.place": h_place, "call.hangup": h_hangup, "udp.probe": h_udp,
+        "incoming.config": h_incoming_config,
     }
 
     async def on_lost(reason: str) -> None:

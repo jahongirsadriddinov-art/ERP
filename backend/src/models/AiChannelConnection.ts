@@ -29,6 +29,10 @@ export interface IAiChannelConnection extends Document {
   lastError?: string;
   connectedBy?: string;
   connectedAt?: Date;
+  /** "Ochiq muloqot": bog'langan xodimlarning kiruvchi qo'ng'iroqlarini AI qabul qiladi (standart o'chiq). */
+  openConversation?: boolean;
+  openConversationBy?: string;
+  openConversationAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -59,6 +63,9 @@ const AiChannelConnectionSchema = new Schema<IAiChannelConnection>({
   lastError: { type: String, maxlength: 500 },
   connectedBy: String,
   connectedAt: Date,
+  openConversation: { type: Boolean, default: false },
+  openConversationBy: String,
+  openConversationAt: Date,
 }, { timestamps: true });
 
 AiChannelConnectionSchema.index({ scope: 1, companyId: 1, type: 1 }, { unique: true });

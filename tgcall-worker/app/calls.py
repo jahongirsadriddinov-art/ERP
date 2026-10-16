@@ -1,7 +1,9 @@
 """Qo'ng'iroqlar boshqaruvi: terish, jiringlash, ulanish, audio ikki tomonga, yakunlash.
 
   • bir vaqtda faqat 1 ta qo'ng'iroq (review A1);
-  • kiruvchi qo'ng'iroqlar avtomatik rad etiladi (A3) — bu tg.py'da, shu yerda faqat qaror funksiyasi;
+  • kiruvchi qo'ng'iroqlar avtomatik rad etiladi (A3) — tg.py'da. "Ochiq muloqot" yoqilgan bo'lsa (backend
+    'incoming.config' RPC) — on_incoming(): qarorni backend beradi (bog'langan + rozilik), qabul qilinsa
+    chiquvchi qo'ng'iroq bilan BIR XIL audio yo'li (_run);
   • 'ringing' — Telethon raw UpdatePhoneCall(PhoneCallWaiting.receive_date) orqali (pytgcalls bermaydi);
   • audio: Telegram 48 kHz → 16 kHz (40 ms kadrlar) → backend; backend 24 kHz → 48 kHz → 10 ms ritmli yuboruvchi;
   • maksimal davomiylik taymeri; backend hangup; worker o'chishida qo'ng'iroq yopiladi.
@@ -32,10 +34,16 @@ class Engine(Protocol):
     async def record(self, user_id: int) -> None: ...
     async def send_frame(self, user_id: int, pcm48: bytes) -> None: ...
     async def hangup(self, user_id: int) -> None: ...
+    async def decline_incoming(self, user_id: int) -> None: ...
 
 
 EmitFn = Callable[[dict], Awaitable[Any]]
 SendUpFn = Callable[[bytes], Awaitable[Any]]
+AskFn = Callable[[dict], Awaitable[Optional[dict]]]
+
+# Kiruvchi qo'ng'iroqni qabul qilish (accept → confirm) uchun kutish chegarasi
+INCOMING_ACCEPT_TIMEOUT_S = 20
+_SID_HEX = set("0123456789abcdefABCDEF")
 
 
 @dataclass
@@ -57,6 +65,7 @@ class ActiveCall:
     down_resampler: A.StreamResampler = field(default_factory=lambda: A.StreamResampler(A.OUT_RATE, A.TG_RATE))
     chunker: A.Chunker = field(default_factory=lambda: A.Chunker(A.UP_CHUNK_BYTES))
     up_seq: int = 0
+    incoming: bool = False           # "Ochiq muloqot": xodim o'zi qo'ng'iroq qildi
     done: asyncio.Event = field(default_factory=asyncio.Event)
     started_at: float = field(default_factory=time.monotonic)
 
@@ -64,8 +73,16 @@ class ActiveCall:
 class CallManager:
     def __init__(self, engine: Engine, emit: EmitFn, send_up: SendUpFn,
                  now_ms: Callable[[], float] = lambda: time.time() * 1000,
-                 sender_factory: Optional[Callable[[Callable[[bytes], Awaitable[None]]], A.PacedSender]] = None):
+                 sender_factory: Optional[Callable[[Callable[[bytes], Awaitable[None]]], A.PacedSender]] = None,
+                 ask_incoming: Optional[AskFn] = None):
         self.engine = engine
+        self._ask_incoming = ask_incoming
+        # "Ochiq muloqot" — standart O'CHIQ; faqat backend 'incoming.config' bilan yoqadi
+        self.open_incoming = False
+        self._incoming_pending: set[int] = set()
+        self._incoming_gone: set[int] = set()
+        self.incoming_accepted = 0
+        self.incoming_declined = 0
         self._emit = emit
         self._send_up = send_up
         self._now_ms = now_ms
@@ -229,6 +246,65 @@ class CallManager:
         if c:
             await self._end(c, reason)
 
+    # ── "Ochiq muloqot": kiruvchi qo'ng'iroq (tg.py chaqiradi) ──
+    async def _decline(self, user_id: int) -> None:
+        self.incoming_declined += 1
+        try:
+            await self.engine.decline_incoming(user_id)
+        except Exception as e:
+            log.debug("decline: %s", type(e).__name__)
+
+    async def on_incoming(self, user_id: int) -> str:
+        """Kiruvchi qo'ng'iroq: backend qaror beradi. Natija: 'accepted' | 'declined' | 'ignored'."""
+        if user_id <= 0:
+            return "ignored"
+        if user_id in self._incoming_pending:
+            return "ignored"                    # takroriy voqea
+        if not self.open_incoming or self._ask_incoming is None or not self.engine.ready:
+            await self._decline(user_id)
+            return "declined"
+        busy = self.active_count >= MAX_CONCURRENT or bool(self._incoming_pending)
+        self._incoming_pending.add(user_id)
+        self._incoming_gone.discard(user_id)
+        try:
+            try:
+                ack = await self._ask_incoming({"tgUserId": str(user_id), "workerBusy": busy, "at": int(self._now_ms())})
+            except Exception as e:
+                log.debug("incoming so'rovi: %s", type(e).__name__)
+                ack = None
+            sid = str((ack or {}).get("sessionId") or "")
+            ok = bool(isinstance(ack, dict) and ack.get("accept") is True and len(sid) == 24 and set(sid) <= _SID_HEX)
+            if not ok:
+                log.info("kiruvchi qo'ng'iroq rad etildi (%s)", str((ack or {}).get("reason") or "no_answer")[:40])
+                await self._decline(user_id)
+                return "declined"
+            # Qaror kutilayotganda boshqa qo'ng'iroq boshlangan yoki qo'ng'iroq qiluvchi go'shakni qo'ygan
+            gone = user_id in self._incoming_gone
+            if gone or self.active_count >= MAX_CONCURRENT or not self.engine.ready:
+                if not gone:
+                    await self._decline(user_id)
+                ev = {"type": "call.state", "sessionId": sid, "state": "ended", "reason": "hangup" if gone else "busy", "at": int(self._now_ms())}
+                try:
+                    await self._emit(ev)
+                except Exception:
+                    pass
+                return "declined"
+            try:
+                max_dur = int(min(900, max(30, int((ack or {}).get("maxDurationSec") or 300))))
+            except (TypeError, ValueError):
+                max_dur = 300
+            c = ActiveCall(session_id=sid, user_id=user_id, frame_uuid=A.session_frame_uuid(sid),
+                           timeout_sec=INCOMING_ACCEPT_TIMEOUT_S, max_duration_sec=max_dur, incoming=True)
+            self.active = c
+            self.total_calls += 1
+            self.incoming_accepted += 1
+            log.info("kiruvchi qo'ng'iroq qabul qilinmoqda")
+            c.task = asyncio.ensure_future(self._run(c))
+            return "accepted"
+        finally:
+            self._incoming_pending.discard(user_id)
+            self._incoming_gone.discard(user_id)
+
     # ── Telegram voqealari (tg.py chaqiradi) ──
     async def on_ringing(self, user_id: int) -> None:
         c = self.active
@@ -238,10 +314,16 @@ class CallManager:
             await self._event(c, "ringing")
 
     def on_discarded(self, user_id: int, reason: Optional[str]) -> None:
+        if user_id in self._incoming_pending:
+            self._incoming_gone.add(user_id)    # qaror kutilayotganda qo'ng'iroq qiluvchi go'shakni qo'ydi
         c = self.active
         if not c or c.user_id != user_id:
             return
         c.discard_reason = reason
+        if c.incoming and c.state in ("dialing", "ringing") and not c.end_reason:
+            # Kiruvchi: ulanishdan oldin bekor qilindi — kutmasdan yopamiz
+            asyncio.ensure_future(self._end(c, "hangup"))
+            return
         if c.state == "connected":
             # Suhbatdosh go'shakni qo'ydi
             c.end_reason = c.end_reason or ("network" if reason == "disconnect" else "completed_remote")

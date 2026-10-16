@@ -1,7 +1,8 @@
 """Telegram qatlami: Telethon + py-tgcalls. FAQAT lease bo'lganda ishga tushadi (lease.py).
 
   • sessiya — session_store (shifrlangan, faqat shu diskda);
-  • kiruvchi qo'ng'iroqlar darhol "band" deb rad etiladi (A3);
+  • kiruvchi qo'ng'iroqlar darhol "band" deb rad etiladi (A3). "Ochiq muloqot" yoqilgan bo'lsa — rad
+    etilmaydi: pytgcalls INCOMING_CALL voqeasida CallManager.on_incoming() backenddan qaror so'raydi;
   • DM'lar AI'ga uzatilmaydi — faqat bog'lash kodi tekshiriladi (binding.py), boshqasi e'tiborsiz;
   • kontakt aniqlash tartibi (A2): kesh → @username → (ruxsat bo'lsa) bitta importContacts, faqat id mos bo'lsa.
 """
@@ -22,22 +23,43 @@ log = logging.getLogger("tgw.tg")
 
 EmitFn = Callable[[dict], Awaitable[Any]]
 
+# Ochiq muloqot: pytgcalls shu vaqt ichida INCOMING_CALL bermasa — qo'ng'iroq rad etiladi (osilib qolmasin)
+INCOMING_GUARD_S = 12.0
+
 
 def _type_name(o: Any) -> str:
     return type(o).__name__
+
+
+def _peer_id(rt: Any, pc: Any) -> int:
+    """Suhbatdosh id'si: chiquvchida participant_id, kiruvchida (admin_id — qo'ng'iroq qiluvchi) admin_id."""
+    admin = int(getattr(pc, "admin_id", 0) or 0)
+    part = int(getattr(pc, "participant_id", 0) or 0)
+    me = getattr(rt, "me_id", None)
+    if me and admin and admin != me:
+        return admin
+    return part
 
 
 async def handle_phone_call_update(rt: "TelegramRuntime", pc: Any) -> None:
     """Raw UpdatePhoneCall ishlovchisi (testlar soxta obyektlar bilan chaqiradi — sinf nomi bo'yicha)."""
     name = _type_name(pc)
     if name == "PhoneCallRequested":
+        caller = int(getattr(pc, "admin_id", 0) or 0)
+        if caller and rt.calls is not None and getattr(rt.calls, "open_incoming", False):
+            # Ochiq muloqot: bu yerda rad etilmaydi — qaror pytgcalls INCOMING_CALL voqeasida (backend)
+            rt.call_users[pc.id] = (caller, pc.access_hash)
+            guard = getattr(rt, "guard_incoming", None)
+            if guard:
+                guard(caller, pc.id, pc.access_hash)
+            return
         # A3: kiruvchi qo'ng'iroq — darhol rad (busy). Hech qachon javob berilmaydi.
         await rt.discard_raw(pc.id, pc.access_hash, busy=True)
         rt.incoming_discarded += 1
         log.info("kiruvchi qo'ng'iroq rad etildi")
         return
     if name in ("PhoneCallWaiting", "PhoneCallAccepted", "PhoneCall"):
-        uid = int(getattr(pc, "participant_id", 0) or 0)
+        uid = _peer_id(rt, pc)
         if uid:
             rt.call_users[pc.id] = (uid, pc.access_hash)
         if name == "PhoneCallWaiting" and getattr(pc, "receive_date", None) and rt.calls:
@@ -76,6 +98,7 @@ class TelegramRuntime:
         self.display_name: Optional[str] = None
         self.call_users: dict[int, tuple[int, int]] = {}
         self.incoming_discarded = 0
+        self._incoming_seen: set[int] = set()
         self.last_error: Optional[str] = None
         self._lock = asyncio.Lock()
         self._ap = None
@@ -156,9 +179,15 @@ class TelegramRuntime:
 
         @pytg.on_update(filters.chat_update(ChatUpdate.Status.INCOMING_CALL))
         async def on_incoming(_, u: ChatUpdate):
+            uid = int(u.chat_id)
+            if self.calls is not None and getattr(self.calls, "open_incoming", False):
+                # Ochiq muloqot: pytgcalls kiruvchi holatni tayyorladi — qaror fonda (yangilanishlar oqimi to'xtamasin)
+                self._incoming_seen.add(uid)
+                asyncio.ensure_future(self.calls.on_incoming(uid))
+                return
             # pytgcalls holatini ham tozalash (raw ishlovchi allaqachon rad etgan)
             try:
-                await pytg.leave_call(u.chat_id)
+                await pytg.leave_call(uid)
             except Exception:
                 pass
 
@@ -175,6 +204,15 @@ class TelegramRuntime:
         self.display_name = " ".join(x for x in [getattr(me, "first_name", None), getattr(me, "last_name", None)] if x) or None
         self.last_error = None
         log.info("Telegram ulandi")
+        # StringSession entity keshini diskda saqlamaydi — qayta ishga tushgandan keyin bog'langan xodimlar
+        # (ular akkauntga DM yozgan) "peer_unknown" bo'lib qolmasin: dialoglar bir marta o'qiladi
+        asyncio.ensure_future(self._warm_peers(client))
+
+    async def _warm_peers(self, client) -> None:
+        try:
+            await asyncio.wait_for(client.get_dialogs(limit=200), timeout=60)
+        except Exception as e:
+            log.debug("dialoglar: %s", type(e).__name__)
 
     async def stop(self, reason: str = "stop") -> None:
         """Telethon uziladi va sessiya xotiradan tashlanadi (lease yo'qolganda — A4)."""
@@ -261,6 +299,36 @@ class TelegramRuntime:
         for cid, (uid, ah) in list(self.call_users.items()):
             if uid == user_id:
                 await self.discard_raw(cid, ah, busy=False)
+
+    async def decline_incoming(self, user_id: int) -> None:
+        """Kiruvchi qo'ng'iroqni "band" deb rad etish va pytgcalls kutish holatini tozalash."""
+        for cid, (uid, ah) in list(self.call_users.items()):
+            if uid == user_id:
+                await self.discard_raw(cid, ah, busy=True)
+        self.incoming_discarded += 1
+        if self.pytg is not None:
+            try:
+                await self.pytg.leave_call(user_id)
+            except Exception:
+                pass
+
+    def guard_incoming(self, user_id: int, call_id: int, access_hash: int) -> None:
+        """pytgcalls INCOMING_CALL bermasa (masalan DH xatosi) — qo'ng'iroq osilib qolmasin."""
+        self._incoming_seen.discard(user_id)
+
+        async def _guard() -> None:
+            await asyncio.sleep(INCOMING_GUARD_S)
+            if user_id in self._incoming_seen:
+                self._incoming_seen.discard(user_id)
+                return
+            cm = self.calls
+            if cm is not None and ((cm.active and cm.active.user_id == user_id) or user_id in getattr(cm, "_incoming_pending", ())):
+                return
+            if call_id in self.call_users:
+                await self.discard_raw(call_id, access_hash, busy=True)
+                self.incoming_discarded += 1
+
+        asyncio.ensure_future(_guard())
 
     async def discard_raw(self, call_id: int, access_hash: int, busy: bool) -> None:
         if not self.client:

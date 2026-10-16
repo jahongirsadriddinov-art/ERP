@@ -5,12 +5,15 @@ import { describe, it, expect, beforeAll, afterAll, afterEach, beforeEach, vi } 
 import type { MongoMemoryServer } from 'mongodb-memory-server';
 import AiCallSession from '../../models/AiCallSession';
 import AiChannelConnection from '../../models/AiChannelConnection';
+import AiAssistantSettings from '../../models/AiAssistantSettings';
 import AiEmployeeContact from '../../models/AiEmployeeContact';
+import User from '../../models/User';
 import { telegramCallChannel } from '../channels/telegramCallChannel';
 import { aiConfig, INSTANCE_ID } from '../config';
 import type { ChannelCtx } from '../contracts';
 import { ensurePlatformConnection } from '../lib/workerLease';
 import { localDate } from '../lib/zonedTime';
+import { invalidateSettings } from '../settings';
 import { __resetCallBridgeForTests, initCallBridge, mapEndReason } from '../telegram/callBridge';
 import { workerHub } from '../telegram/workerNamespace';
 import { tone } from '../voice/audio';
@@ -44,6 +47,10 @@ async function contact(employeeId: string, tg: Record<string, unknown> = {}, ext
     { $set: { telegram: { tgUserId: String(++tgSeq), callConsent: 'granted', resolveStatus: 'resolved', ...tg }, ...extra } },
     { upsert: true },
   );
+}
+async function setCompanyConsent(v: boolean) {
+  await AiAssistantSettings.updateOne({ companyId: A.companyId }, { $set: { 'calls.companyConsent': v } });
+  invalidateSettings();
 }
 const conn = async (): Promise<any> => AiChannelConnection.findOne(PLATFORM_TG).lean();
 async function worker(): Promise<FakeWorker> { const w = await FakeWorker.ready(srv.url); workers.push(w); return w; }
@@ -123,21 +130,39 @@ describe('mavjudlik: rozilik, maxfiylik, akkaunt, chegaralar', () => {
     expect(await reason(A.workerId)).toBe('ok');
   });
 
-  it("xodim: rozilik yo'q / qaytarib olingan / opt-out / bog'lanmagan / aniqlanmagan / maxfiylik", async () => {
+  it("xodim: kompaniya roziligi / eski shaxsiy rozilik / opt-out / bog'lanmagan / aniqlanmagan / maxfiylik", async () => {
     await account();
+    // Owner 2026-10-16: kompaniya roziligi o'chiq — faqat eski shaxsiy 'granted' o'tadi
+    await setCompanyConsent(false);
     await contact(A.workerId, { callConsent: 'none' });
     expect(await reason(A.workerId)).toBe('no_consent');
     await contact(A.workerId, { callConsent: 'revoked' });
     expect(await reason(A.workerId)).toBe('no_consent');
+    await contact(A.workerId, { callConsent: 'granted' });
+    expect(await reason(A.workerId)).toBe('ok');
+    // Kompaniya roziligi yoqilgan (standart) — xodimdan so'ralmaydi
+    await setCompanyConsent(true);
+    await contact(A.workerId, { callConsent: 'revoked' });
+    expect(await reason(A.workerId)).toBe('ok');
     await contact(A.workerId, {}, { optOut: { calls: true, reminders: false, all: false } });
     expect(await reason(A.workerId)).toBe('opt_out');
     await contact(A.workerId, { tgUserId: undefined }, { optOut: { calls: false, reminders: false, all: false } });
     expect(await reason(A.workerId)).toBe('not_bound');
+    // Aniqlanmagan — qo'ng'iroq paytida worker aniqlaydi; yaqinda not_found bo'lgan — kutiladi
     await contact(A.workerId, { resolveStatus: 'unknown' });
+    expect(await reason(A.workerId)).toBe('ok');
+    await contact(A.workerId, { resolveStatus: 'not_found', checkedAt: new Date() });
     expect(await reason(A.workerId)).toBe('not_resolved');
+    await contact(A.workerId, { resolveStatus: 'not_found', checkedAt: new Date(Date.now() - 7 * 3600_000) });
+    expect(await reason(A.workerId)).toBe('ok');
     await contact(A.workerId, { resolveStatus: 'privacy_restricted' });
     expect(await reason(A.workerId)).toBe('privacy_restricted');
-    expect(await reason(A.worker2Id)).toBe('no_consent');   // kontakt umuman yo'q
+    // Kontakt umuman yo'q: bot bog'lanishi bo'lmasa — not_bound; ERP botga bog'langach — tgUserId backfill, ok
+    await User.updateOne({ _id: A.worker2Id }, { $unset: { telegramChatId: 1, telegramUserId: 1 } });
+    expect(await reason(A.worker2Id)).toBe('not_bound');
+    await User.updateOne({ _id: A.worker2Id }, { $set: { telegramChatId: '5550001' } });
+    expect(await reason(A.worker2Id)).toBe('ok');
+    expect((await AiEmployeeContact.findOne({ employeeId: A.worker2Id }).lean() as any).telegram).toMatchObject({ tgUserId: '5550001', resolveStatus: 'unknown' });
   });
 
   it("worker uzoq vaqt ko'rinmagan — worker_offline (keyingi kanalga o'tiladi)", async () => {
@@ -203,13 +228,30 @@ describe("worker bilan oqim", () => {
     expect(await AiCallSession.countDocuments({ isActive: true })).toBe(0);
   });
 
-  it("peer_unknown — kontakt qayta aniqlanadi (resolveStatus=unknown), qayta urinilmaydi", async () => {
+  it("peer_unknown — bir marta telefon bilan qayta (faqat shu qo'ng'iroq uchun); baribir noma'lum — not_found", async () => {
     const w = await worker();
     w.handlers['call.place'] = () => ({ accepted: false, reason: 'peer_unknown' });
     await account(); await contact(A.workerId);
     const r = await telegramCallChannel.attempt(ctx(A.workerId), req);
     expect(r).toMatchObject({ outcome: 'unavailable', retryable: false, errorCode: 'peer_unknown' });
-    expect((await AiEmployeeContact.findOne({ employeeId: A.workerId }).lean() as any).telegram.resolveStatus).toBe('unknown');
+    const place = w.rpcsOf('call.place');
+    expect(place).toHaveLength(2);
+    expect((place[0].params as any).phone).toBeUndefined();
+    const u: any = await User.findById(A.workerId).select('phone').lean();
+    expect((place[1].params as any).phone).toBe(u.phone);
+    const ct: any = await AiEmployeeContact.findOne({ employeeId: A.workerId }).lean();
+    expect(ct.telegram.resolveStatus).toBe('not_found');
+    expect(ct.telegram.checkedAt).toBeInstanceOf(Date);
+  });
+
+  it("aniqlanmagan peer — telefon bilan qabul qilindi: resolved", async () => {
+    const w = await worker();
+    w.handlers['call.place'] = (p: any) => (p.phone ? { accepted: true } : { accepted: false, reason: 'peer_unknown' });
+    await account(); await contact(A.workerId, { resolveStatus: 'unknown' });
+    const r = await telegramCallChannel.attempt(ctx(A.workerId), req);
+    expect(r).toMatchObject({ outcome: 'no_answer' });
+    expect((await AiEmployeeContact.findOne({ employeeId: A.workerId }).lean() as any).telegram.resolveStatus).toBe('resolved');
+    await w.callState(r.sessionId!, 'ended', 'completed');
   });
 
   it("worker javob bermadi (uzilish) — qayta navbat, fallback emas", async () => {

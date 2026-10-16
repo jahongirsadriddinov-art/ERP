@@ -1,9 +1,9 @@
 import { test, expect, Page } from '@playwright/test';
 
-// AI yordamchi sozlamalari (egasi so'rovlari 2026-10-15): firma egasi Profil → "AI ovozli yordamchi".
-// Tekshiriladi: Beta belgisi va izohi; AI miyasi / Limit va xarajat firma UI'da YO'Q; ish jadvalini saqlash
-// (PUT tanasi); xodimga alohida jadval (PATCH tanasi); skroll — yon menyu joyida qoladi, kontent oxirigacha
-// tushadi, oxirgi element pastki menyu ostida qolmaydi. Dasturchi paneli → AI platforma: firma AI'sini yoqish.
+// AI yordamchi sozlamalari: firma egasi Profil → "AI ovozli yordamchi". Owner 2026-10-16 "soddalashtir": BITTA
+// ekran, 3 blok (AI holati, Ish jadvali, Kimga va qanday) + yig'iladigan "Qo'shimcha sozlamalar". Tekshiriladi:
+// Beta belgisi; AI miyasi / Limit va xarajat firma UI'da YO'Q; jadval + kanallarni saqlash (PUT tanasi); xodimga
+// alohida jadval (PATCH tanasi); skroll — kontent oxirigacha tushadi, oxirgi element pastki menyu ostida qolmaydi. Dasturchi paneli → AI platforma: firma AI'sini yoqish.
 // Holat ROST (server o'chiq ≠ firma o'chiq), saqlangandan keyin qayta so'raladi; rolga mos izoh (direktor /
 // o'rinbosar / ishchi); shaxsiy sozlamalarda o'chiq tugma sababi. Backend soxta (mock) — telefon va kompyuter o'lchamida.
 
@@ -97,6 +97,9 @@ async function mockApi(page: Page, calls: Calls, o: Opts = {}) {
       }
       return route.fulfill({ json: { employees } });
     }
+    if (url.includes('/api/ai-voice/admin/channels/status')) {
+      return route.fulfill({ json: { bot: { configured: true, webhookSecretConfigured: true }, telegramAccount: { status: 'connected', workerConnected: false, dailyCallCount: 0, dailyCap: 200 } } });
+    }
     if (url.includes('/api/ai-voice/admin/archives')) {
       if (o.boss === false) return route.fulfill({ status: 403, json: { error: 'forbidden' } });
       return route.fulfill({ json: { page: 1, limit: 60, total: 1, items: [{ id: 'a1', companyId: 'c1', period: '2026-10-07', part: 1, status: 'done', fileName: 'ai-transcripts-c1-2026-10-07-p1.jsonl.gz', size: 18432, counts: { conversations: 12, events: 140 }, createdAt: '2026-10-15T00:10:00Z' }] } });
@@ -149,13 +152,26 @@ async function seed(page: Page, user: Record<string, unknown>, pageKey = 'profil
 
 const owner = { id: 'u1', name: 'Egasi', role: 'direktor', phone: '+998900000001', projectIds: [], isOwner: true, companyId: 'c1', language: 'uz' };
 
+/** Telefon loyihasida eng tor keng tarqalgan ekran — 390px (iPhone 12–15). */
+async function phone390(page: Page, info: { project: { name: string } }) {
+  if (info.project.name === 'telefon') await page.setViewportSize({ width: 390, height: 844 });
+}
+
 async function openAiSettings(page: Page) {
   await page.goto('/');
   const row = page.getByRole('button', { name: /AI ovozli yordamchi/ }).first();
   await expect(row).toBeVisible({ timeout: 20_000 });
   await row.click();
   await expect(page.getByTestId('ai-settings-panel')).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByTestId('ai-tab-general')).toBeVisible();
+  await expect(page.getByTestId('ai-power')).toBeVisible();
+}
+
+/** "Qo'shimcha sozlamalar"ni ochib, ichidagi bitta qatorni ochadi. */
+async function openAdvanced(page: Page, key: string) {
+  const toggle = page.getByTestId('ai-advanced-toggle');
+  if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
+  await page.getByTestId(`ai-adv-${key}`).click();
+  await expect(page.getByTestId(`ai-adv-body-${key}`)).toBeVisible();
 }
 
 /** Element turgan skroll konteynerini (yoki oynani) oxirigacha tushiradi. */
@@ -183,34 +199,41 @@ async function expectReachable(page: Page, testId: string) {
   expect(ok).toBe('ok');
 }
 
-test('AI sozlamalari: beta, AI miyasi/limit yo\'q, ish jadvalini saqlash', async ({ page }, info) => {
+const noOverflow = async (page: Page) => {
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(overflow).toBeLessThanOrEqual(2);
+};
+
+test('AI sozlamalari: bitta ekran, 3 blok — jadval va kanallarni saqlash; AI miyasi/limit yo\'q', async ({ page }, info) => {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   const calls = newCalls();
+  await phone390(page, info);
   await mockApi(page, calls);
   await seed(page, owner);
   await openAiSettings(page);
 
+  // 3 ta asosiy blok + bitta "Qo'shimcha sozlamalar"; eski tablar yo'q
+  for (const id of ['ai-power', 'ai-schedule', 'ai-quick-channels', 'ai-advanced-toggle']) await expect(page.getByTestId(id)).toBeVisible();
+  await expect(page.getByTestId('ai-advanced-toggle')).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.locator('[data-testid^="ai-tab-"]')).toHaveCount(0);
+  await expect(page.getByTestId('ai-status-badge')).toHaveAttribute('data-state', 'on');
+  await expect(page.getByTestId('ai-role-help-boss')).toBeVisible();
+  // AI miyasi va limit/xarajat firma UI'da yo'q (faqat dasturchi panelida)
+  await expect(page.getByText('AI miyasi', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Limit va xarajat', { exact: true })).toHaveCount(0);
+  // Telegram qo'ng'irog'i — ROST holat: akkaunt ulangan, lekin qo'ng'iroq xizmati ishlamayapti
+  await expect(page.getByTestId('ai-tg-ready')).toHaveAttribute('data-ok', '0');
+  await page.screenshot({ path: `test-results/ai-main-${info.project.name}.png`, fullPage: true });
+
   // Beta belgisi: bosilganda qisqa izoh chiqadi, Esc bilan yopiladi
   const beta = page.getByTestId('ai-settings-panel').getByRole('button', { name: /beta/i }).first();
-  await expect(beta).toBeVisible();
   await beta.click();
   await expect(page.getByRole('tooltip')).toBeVisible();
-  await page.screenshot({ path: `test-results/ai-beta-${info.project.name}.png` });
   await page.keyboard.press('Escape');
   await expect(page.getByRole('tooltip')).toHaveCount(0);
 
-  // AI miyasi va limit/xarajat firma UI'da yo'q (faqat dasturchi panelida)
-  await expect(page.getByTestId('ai-tab-provider')).toHaveCount(0);
-  await expect(page.getByTestId('ai-tab-limits')).toHaveCount(0);
-  await expect(page.getByText('AI miyasi', { exact: true })).toHaveCount(0);
-  await expect(page.getByText('Limit va xarajat', { exact: true })).toHaveCount(0);
-  for (const k of ['general', 'schedule', 'channels', 'employees', 'tools', 'history', 'test']) await expect(page.getByTestId(`ai-tab-${k}`)).toBeVisible();
-  await page.screenshot({ path: `test-results/ai-general-${info.project.name}.png`, fullPage: false });
-
-  // Ish jadvali
-  await page.getByTestId('ai-tab-schedule').click();
-  await expect(page.getByTestId('ai-schedule')).toBeVisible();
+  // 2-blok: ish jadvali
   await page.getByTestId('ai-work-start').fill('07:30');
   await expect(page.getByTestId('ai-call-time')).toContainText('07:30');
   await page.getByTestId('ai-wd-6').click();                       // shanbani olib tashlash
@@ -219,13 +242,26 @@ test('AI sozlamalari: beta, AI miyasi/limit yo\'q, ish jadvalini saqlash', async
   await page.getByTestId('ai-date-add-skip').click();
   await expect(page.getByTestId('ai-date-skip-2027-03-21')).toBeVisible();
 
-  // Saqlash
+  // 3-blok: ilovada qo'ng'iroqni o'chirib-yoqish (joyi saqlanadi), Telegram qo'ng'irog'ini o'chirish
+  await page.getByTestId('ai-ch-inapp_call').click();
+  await expect(page.getByTestId('ai-ch-inapp_call')).toHaveAttribute('aria-checked', 'false');
+  await page.waitForTimeout(450);                                   // ilova bo'ylab: bir tugmani 0.4 s ichida qayta bosish e'tiborsiz (tapGuard)
+  await page.getByTestId('ai-ch-inapp_call').click();
+  await expect(page.getByTestId('ai-ch-inapp_call')).toHaveAttribute('aria-checked', 'true');
+  await page.getByTestId('ai-ch-telegram_call').click();
+  await expect(page.getByTestId('ai-ch-telegram_call')).toHaveAttribute('aria-checked', 'false');
+  await expect(page.getByTestId('ai-order-line')).not.toContainText('Telegram qo\'ng\'iroq');
+  await expect(page.getByTestId('ai-tg-ready')).toHaveCount(0);
+
+  // Saqlash: faqat o'zgargan qismlar, versiya bilan
   await expect(page.getByTestId('ai-save-bar')).toBeVisible();
+  await page.screenshot({ path: `test-results/ai-dirty-${info.project.name}.png` });
   await page.getByTestId('ai-save').click();
   await expect.poll(() => calls.puts.length).toBe(1);
   const body = calls.puts[0];
   expect(body.version).toBe(3);
-  expect(Object.keys(body.patch)).toEqual(['attendance']);
+  expect(Object.keys(body.patch).sort()).toEqual(['attendance', 'fallbackOrder']);
+  expect(body.patch.fallbackOrder).toEqual(['bot_message', 'inapp_call', 'push', 'notify_manager']);
   expect(body.patch.attendance.shifts[0]).toMatchObject({
     id: 'main', workStart: '07:30', callTime: '07:30', workdays: [1, 2, 3, 4, 5], skipDates: ['2027-03-21'], extraWorkDates: [],
   });
@@ -233,44 +269,41 @@ test('AI sozlamalari: beta, AI miyasi/limit yo\'q, ish jadvalini saqlash', async
   expect(body.patch.limits).toBeUndefined();
   await expect(page.getByTestId('ai-save-bar')).toHaveCount(0);
 
-  // Tarix: arxiv ro'yxati (server shakli: bitta kun + qism, suhbatlar soni)
-  await page.getByTestId('ai-tab-history').click();
+  // Qo'shimcha sozlamalar → Tarix: arxiv ro'yxati (server shakli: bitta kun + qism, suhbatlar soni)
+  await openAdvanced(page, 'history');
   await expect(page.getByTestId('ai-archive-a1')).toBeVisible();
   await expect(page.getByTestId('ai-archive-a1')).toContainText('12');
-  // Direktorga mos izoh, holat — ishlayapti
-  await expect(page.getByTestId('ai-role-help-boss')).toBeVisible();
-  await expect(page.getByTestId('ai-status-badge')).toHaveAttribute('data-state', 'on');
+  await page.screenshot({ path: `test-results/ai-advanced-${info.project.name}.png`, fullPage: true });
 
-  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-  expect(overflow).toBeLessThanOrEqual(2);
+  await noOverflow(page);
   expect(errors, errors.join('\n')).toEqual([]);
 });
 
-test('AI sozlamalari: skroll oxirigacha, menyu joyida; xodimga alohida jadval', async ({ page }, info) => {
+test('AI sozlamalari: skroll oxirigacha; xodimga alohida jadval', async ({ page }, info) => {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   const calls = newCalls();
+  await phone390(page, info);
   await mockApi(page, calls);
   await seed(page, owner);
   await openAiSettings(page);
 
-  await page.getByTestId('ai-tab-employees').click();
+  // Asosiy ekran: oxirgi element hech narsa ostida qolmaydi
+  await scrollToEnd(page, 'ai-settings-end');
+  await expectReachable(page, 'ai-advanced-toggle');
+
+  await openAdvanced(page, 'employees');
   await expect(page.getByTestId('ai-emp-u2')).toBeVisible();
   await expect(page.getByTestId('ai-emp-more')).toBeVisible();          // 45 ta → 30 + "Yana ko'rsatish"
-
-  // Kontent oxirigacha skroll qilinadi va oxirgi element hech narsa ostida qolmaydi
   await scrollToEnd(page, 'ai-emp-more');
   await expectReachable(page, 'ai-emp-more');
-  // Menyu (telefon: yuqoridagi lenta, kompyuter: yon menyu) skroll paytida ham ko'rinib turadi
-  const nav = await page.getByTestId('ai-settings-nav').boundingBox();
-  expect(nav).not.toBeNull();
-  expect(nav!.y).toBeGreaterThanOrEqual(-1);
-  expect(nav!.y).toBeLessThan(page.viewportSize()!.height / 2);
   await page.screenshot({ path: `test-results/ai-scroll-end-${info.project.name}.png` });
 
   await page.getByTestId('ai-emp-more').click();
   await expect(page.getByTestId('ai-emp-u46')).toBeAttached();
   await scrollToEnd(page, 'ai-settings-end');
+  await expectReachable(page, 'ai-adv-test');                       // ochiq ro'yxatdan keyin ham oxirgi qatorgacha tushadi
+  await page.getByTestId('ai-emp-u46').evaluate((el) => el.scrollIntoView({ block: 'center' }));
   await expectReachable(page, 'ai-emp-u46');
 
   // Xodimga alohida jadval: Du, Se, Ch + 07:00
@@ -286,8 +319,14 @@ test('AI sozlamalari: skroll oxirigacha, menyu joyida; xodimga alohida jadval', 
   expect(calls.patches[0].body).toEqual({ scheduleOverride: { weekdays: [1, 2, 3], workStart: '07:00' } });
   await expect(page.getByTestId('ai-emp-u2')).toContainText('07:00');
 
-  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-  expect(overflow).toBeLessThanOrEqual(2);
+  // Boshqa qator ochilsa oldingisi yopiladi; "Jadval tafsilotlari" ham oxirigacha ko'rinadi
+  await openAdvanced(page, 'schedule');
+  await expect(page.getByTestId('ai-adv-body-employees')).toHaveCount(0);
+  await scrollToEnd(page, 'ai-settings-end');
+  await expectReachable(page, 'ai-max-late');
+  await page.screenshot({ path: `test-results/ai-schedule-details-${info.project.name}.png`, fullPage: true });
+
+  await noOverflow(page);
   expect(errors, errors.join('\n')).toEqual([]);
 });
 
@@ -335,6 +374,7 @@ test('Holat rost: firmada yoqilgan, server o\'chiq — "To\'xtagan" + sabab; saq
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   const calls = newCalls();
+  await phone390(page, info);
   await mockApi(page, calls, { serverOn: false, initial: { ...settings, enabled: false } });
   await seed(page, owner);
   await openAiSettings(page);
@@ -354,7 +394,7 @@ test('Holat rost: firmada yoqilgan, server o\'chiq — "To\'xtagan" + sabab; saq
   await expect.poll(() => calls.settingsGets).toBeGreaterThan(getsBefore);   // saqlangach serverdan qayta o'qildi
   // Endi faqat server sababi qoldi: "O'chiq" emas — "To'xtagan"
   await expect(page.getByTestId('ai-status-badge')).toHaveAttribute('data-state', 'blocked');
-  await expect(page.getByTestId('ai-check-company')).toHaveAttribute('data-ok', '1');
+  await expect(page.getByTestId('ai-check-company')).toHaveCount(0);
   await expect(page.getByTestId('ai-check-server')).toHaveAttribute('data-ok', '0');
   await expect(page.getByTestId('ai-status-pending')).toHaveCount(0);
   await page.screenshot({ path: `test-results/ai-status-${info.project.name}.png` });
@@ -369,7 +409,7 @@ test('O\'rinbosar: o\'ziga mos izoh, arxiv faqat direktorda (sababi yozilgan)', 
   await seed(page, { ...owner, id: 'u9', role: 'orinbosar', isOwner: false });
   await openAiSettings(page);
   await expect(page.getByTestId('ai-role-help-deputy')).toBeVisible();
-  await page.getByTestId('ai-tab-history').click();
+  await openAdvanced(page, 'history');
   await expect(page.getByTestId('ai-archives-locked')).toBeVisible();
   expect(errors, errors.join('\n')).toEqual([]);
 });

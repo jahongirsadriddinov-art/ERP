@@ -89,6 +89,7 @@ import { isAiCallActive, decideCallOffer } from "./aiVoice/bus";
 import { motion, AnimatePresence } from "motion/react";
 import { setSiteLanguage, SiteLang, langLabel } from "./i18n";
 import { isTelegramMiniApp, getTelegramInitData, markManualLogout, clearManualLogout, telegramAutoLoginAllowed } from "./telegramWebApp";
+import { isChatMuted } from "./chat/chatPrefs";
 import { installAndroidBackHandler, saveOrShareBlob, openExternalUrl, isNative, isTabletOrLarger, notifyOS, ensureNotifyPermission, appInForeground } from "./platform";
 import QrLoginPanel from "./QrLoginPanel";
 import { AppDownloadCards } from "./AppDownload";
@@ -4840,6 +4841,7 @@ export default function App() {
         const name = sender?.name || tApp('chat.notifNewMessage');
         const preview = m.type && m.type !== 'text' ? m.text : (m.text || "");
         const viewingChat = pageRef.current === 'chat' && chatOpenRef.current;
+        if (isChatMuted(liveUser.id, m)) return; // ovozsiz qilingan chat — toast ham, tizim bildirishnomasi ham yo'q
         if (!viewingChat) toast.message(name, { description: preview });
         // MUHIM: `new Notification(...)` konstruktori to'g'ridan-to'g'ri
         // chaqirilsa — Android'da (Chrome/WebView, jumladan Capacitor)

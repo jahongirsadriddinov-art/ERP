@@ -61,6 +61,8 @@ export interface AiSettingsData {
     maxAttemptsPerChannel: number; backoffMin: number[]; ringTimeoutSec: number; maxDurationSec: number;
     assistantMaxDurationSec: number; companyConcurrency: number; minGapSec: number;
     quietHours: { from: HHmm; to: HHmm };
+    /** Owner 2026-10-16: firma (egasi/direktor/o'rinbosar) barcha xodimlar nomidan qo'ng'iroqqa rozi. Standart true. */
+    companyConsent: boolean;
   };
   fallbackOrder: ChannelName[];
   reminders: { defaultLeadMin: number; defaultChannels: ChannelName[]; maxActivePerUser: number };
@@ -82,7 +84,7 @@ export interface AiSettingsData {
   updatedBy?: string;
 }
 
-export type TextProviderName = 'gemini' | 'openrouter' | 'claude';
+export type TextProviderName = 'gemini' | 'groq' | 'openrouter' | 'claude';
 export interface AiBrainSettings {
   /** 'claude' faqat ANTHROPIC_API_KEY sozlangan bo'lsa ishlaydi, aks holda Gemini (xatosiz). */
   provider: 'gemini' | 'claude';
@@ -349,7 +351,8 @@ export interface WorkerRpcMethods {
     result: { status: 'resolved' | 'not_found' | 'privacy_restricted' | 'mismatch' | 'flood_wait'; tgUserId?: string; retryAfterSec?: number };
   };
   'binding.expect': { params: { employeeId: string; codeHash: string; expectedTgUserId: string; expiresAt: number }; result: { ok: true } };
-  'call.place': { params: { sessionId: string; tgUserId: string; timeoutSec: number; maxDurationSec: number }; result: { accepted: boolean; reason?: string } };
+  /** phone/username — faqat peer noma'lum bo'lsa, SHU qo'ng'iroq uchun (worker saqlamaydi, log qilmaydi). */
+  'call.place': { params: { sessionId: string; tgUserId: string; timeoutSec: number; maxDurationSec: number; phone?: string; username?: string }; result: { accepted: boolean; reason?: string } };
   'call.hangup': { params: { sessionId: string; reason: string }; result: { ok: true } };
   'udp.probe': { params: Record<string, never>; result: { ok: boolean; details?: string } };
   /** "Ochiq muloqot" holati (standart o'chiq) — worker 'up' bo'lganda va o'zgarganda yuboriladi. */
@@ -497,8 +500,12 @@ export interface AiSettingsViewDto {
 export interface AiSettingsPutReq { version: number; patch: Record<string, unknown> }
 /** PATCH /admin/schedule (va bot menyusi) — settings.updateSchedule'ga boradi. */
 export interface AiScheduleUpdateReq { shiftId: string; patch: AiSchedulePatch }
-/** PATCH /admin/employees/:userId — consent/optOut maydonlari RAD etiladi (B9). */
-export interface AiEmployeePatchReq { channelOrder?: ChannelName[] | null; disabledChannels?: ChannelName[] }
+/** PATCH /admin/employees/:userId — shaxsiy rozilik maydoni RAD etiladi; optOut — rahbar qo'yadi (owner 2026-10-16). */
+export interface AiEmployeePatchReq {
+  channelOrder?: ChannelName[] | null; disabledChannels?: ChannelName[];
+  /** Owner 2026-10-16: rahbar xodim uchun opt-out qo'yadi (ConsentLog source:'admin'). */
+  optOut?: Partial<{ calls: boolean; reminders: boolean; all: boolean }>;
+}
 export interface AiAttendanceRowDto {
   confirmationId: string; employeeId: string; name: string; shiftId: string; date: IsoDate;
   status: 'pending' | 'confirmed' | 'late' | 'declined' | 'no_answer' | 'call_failed' | 'checked_in' | 'absent';

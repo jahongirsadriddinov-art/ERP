@@ -27,9 +27,14 @@ function contentText(c: unknown): string {
   return '';
 }
 
+// OpenAI-mos sessiya — OpenRouter va Groq uchun umumiy (name/url/sarlavhalar farq qiladi)
+interface CompatTarget { name: 'openrouter' | 'groq'; url: string; headers: Record<string, string>; multiModel: boolean }
+const OPENROUTER_TARGET: CompatTarget = { name: 'openrouter', url: OPENROUTER_URL, headers: { 'HTTP-Referer': 'https://erp-firma.uz', 'X-Title': 'ERP AI' }, multiModel: true };
+export const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
+
 class OpenRouterSession implements ProviderSession {
   private messages: any[];
-  constructor(private o: ProviderStartOpts, private fetchImpl: FetchLike, private models: string[], private apiKey: string) {
+  constructor(private o: ProviderStartOpts, private fetchImpl: FetchLike, private models: string[], private apiKey: string, private target: CompatTarget = OPENROUTER_TARGET) {
     this.messages = [
       { role: 'system', content: o.system },
       ...trimHistory(o.history).map((h) => ({ role: h.role, content: h.text })),
@@ -43,30 +48,30 @@ class OpenRouterSession implements ProviderSession {
     }));
     const body = {
       model: this.models[0],
-      ...(this.models.length > 1 ? { models: this.models.slice(0, 3) } : {}),
+      ...(this.target.multiModel && this.models.length > 1 ? { models: this.models.slice(0, 3) } : {}),
       messages: this.messages,
       ...(tools.length ? { tools, tool_choice: 'auto' } : {}),
       max_tokens: 2048,
     };
-    const res = await this.fetchImpl(OPENROUTER_URL, {
+    const P = this.target.name;
+    const res = await this.fetchImpl(this.target.url, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${this.apiKey}`,
         'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://erp-firma.uz',
-        'X-Title': 'ERP AI',
+        ...this.target.headers,
       },
       body: JSON.stringify(body),
       signal,
     });
-    if (!res.ok) throw new ProviderError('openrouter', `HTTP_${res.status}`, res.status);
+    if (!res.ok) throw new ProviderError(P, `HTTP_${res.status}`, res.status);
     const json: any = await res.json().catch(() => null);
     if (!json || json.error) {
       const st = Number(json?.error?.code) || undefined;
-      throw new ProviderError('openrouter', st ? `HTTP_${st}` : 'BAD_RESPONSE', st);
+      throw new ProviderError(P, st ? `HTTP_${st}` : 'BAD_RESPONSE', st);
     }
     const msg = json.choices?.[0]?.message;
-    if (!msg) throw new ProviderError('openrouter', 'EMPTY');
+    if (!msg) throw new ProviderError(P, 'EMPTY');
     const toolCalls: any[] = Array.isArray(msg.tool_calls) ? msg.tool_calls : [];
     const calls = toolCalls.map((tc, i) => {
       const id = String(tc?.id || `or_${i}`);
@@ -80,7 +85,7 @@ class OpenRouterSession implements ProviderSession {
       } catch { return { id, name, args: {}, argsError: 'INVALID_JSON' }; }
     });
     const text = contentText(msg.content).trim();
-    if (!text && !calls.length) throw new ProviderError('openrouter', 'EMPTY');
+    if (!text && !calls.length) throw new ProviderError(P, 'EMPTY');
     // Assistant xabari (tool_calls, reasoning_details bilan) tarixga o'zgarishsiz qaytariladi
     this.messages.push({
       role: 'assistant', content: msg.content ?? null,
@@ -109,6 +114,21 @@ export function createOpenRouterProvider(deps: { fetchImpl?: FetchLike; models?:
       const models = deps.models?.length ? deps.models : aiConfig.brain.openRouterModels.length ? aiConfig.brain.openRouterModels : DEFAULT_OPENROUTER_MODELS;
       const key = deps.apiKey ?? (process.env.OPENROUTER_API_KEY || '').trim();
       return new OpenRouterSession(o, deps.fetchImpl || (globalThis.fetch as unknown as FetchLike), models, key);
+    },
+  };
+}
+
+// Groq — tez zaxira (owner 2026-10-16): GROQ_API_KEY, GROQ_MODEL (vergul bilan; birinchisi ishlatiladi,
+// keyingi so'rov xato bersa agent keyingi provayderga o'tadi).
+export function createGroqProvider(deps: { fetchImpl?: FetchLike; models?: string[]; apiKey?: string; requestTimeoutMs?: number } = {}): TextProvider {
+  return {
+    name: 'groq',
+    requestTimeoutMs: deps.requestTimeoutMs ?? 15_000,
+    start: (o) => {
+      const models = deps.models?.length ? deps.models : aiConfig.brain.groqModels;
+      const key = deps.apiKey ?? (process.env.GROQ_API_KEY || '').trim();
+      return new OpenRouterSession(o, deps.fetchImpl || (globalThis.fetch as unknown as FetchLike), models, key,
+        { name: 'groq', url: GROQ_URL, headers: {}, multiModel: false });
     },
   };
 }

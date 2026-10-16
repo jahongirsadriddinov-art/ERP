@@ -1,5 +1,6 @@
 import AiChannelConnection from '../../models/AiChannelConnection';
 import AiEmployeeContact from '../../models/AiEmployeeContact';
+import User from '../../models/User';
 import { WORKER_ROLES, isOnShift } from '../../middleware/workGate';
 import { logAudit } from '../../services/audit';
 import { checkActor } from '../actor';
@@ -10,15 +11,18 @@ import { ensurePlatformConnection } from '../lib/workerLease';
 import { telegramCapacity } from '../sessions';
 import { getSettings, isAiActive } from '../settings';
 import { getVoiceSessionManager, resolveVoiceLang } from '../voice/sessionManager';
+import { getCallConsent } from '../consent';
 import { registerBridge, TelegramTransport } from './callBridge';
+import { findEmployeeByTgId } from './tgLink';
 import { callWorker } from './workerRpc';
 import { setIncomingCallHandler, workerConnectedHere, workerHub } from './workerNamespace';
 
 // "Ochiq muloqot" (owner so'rovi): AI Telegram akkauntiga kiruvchi shaxsiy qo'ng'iroqlar.
 //  • platforma sozlamasi (AiChannelConnection.openConversation), standart O'CHIQ — o'chiq bo'lsa worker
 //    qo'ng'iroqni o'zi darhol rad etadi (A3, o'zgarmagan);
-//  • yoqilgan bo'lsa worker {tgUserId} so'raydi: faqat AiEmployeeContact'da bog'langan, callConsent='granted',
-//    bloklanmagan, firmasida AI yoqilgan (tarif bilan) xodim qabul qilinadi; notanish — rad (busy);
+//  • yoqilgan bo'lsa worker {tgUserId} so'raydi: Telegram id ERP bot bog'lanishidan (yoki eski kontaktdan) topilgan,
+//    samarali rozilikka ega (consent.getCallConsent), bloklanmagan, firmasida AI yoqilgan xodim qabul qilinadi;
+//    notanish — rad (busy);
 //  • qabulda — in-app bilan bir xil user-initiated ovozli sessiya (xodim aktyor, tool/RBAC/transkript);
 //  • har qabul/rad AuditLog'ga (entity 'ai_telegram_incoming'); bir raqamdan spam — audit soatiga 10 ta.
 
@@ -81,14 +85,18 @@ export async function decideIncomingCall(req: IncomingCallRequest, now: Date = n
     if (!aiConfig.enabled) return { accept: false, reason: 'disabled' };
     if (!(await getOpenConversation())) return { accept: false, reason: 'closed' };
     if (!rl.allowed) return { accept: false, reason: 'rate_limited' };
-    const ct: any = await AiEmployeeContact.findOne({ 'telegram.tgUserId': tgUserId })
-      .select('companyId employeeId telegram.callConsent optOut').lean();
-    if (!ct) return { accept: false, reason: 'unknown_caller' };
-    const companyId = String(ct.companyId || '');
-    const employeeId = String(ct.employeeId || '');
+    // Owner 2026-10-16: Telegram id ERP bot bog'lanishidan ham olinadi (kod shart emas; darhol backfill)
+    const who = await findEmployeeByTgId(tgUserId);
+    if (!who) {
+      // Dasturchi akkaunti (firmasiz) — ovozli sessiya firma konteksti talab qiladi; aniq sabab bilan rad
+      const dev = await User.exists({ role: 'dasturchi', $or: [{ telegramUserId: tgUserId }, { telegramChatId: tgUserId }] });
+      return { accept: false, reason: dev ? 'developer_unsupported' : 'unknown_caller' };
+    }
+    const { companyId, employeeId } = who;
     const base = { companyId, employeeId };
-    if (ct.telegram?.callConsent !== 'granted') return { ...base, accept: false, reason: 'no_consent' };
-    if (ct.optOut?.all) return { ...base, accept: false, reason: 'opt_out' };
+    const ct: any = await AiEmployeeContact.findOne({ companyId, employeeId }).select('telegram.callConsent optOut').lean();
+    const consent = await getCallConsent(companyId, employeeId, { incoming: true, contact: ct });
+    if (!consent.allowed) return { ...base, accept: false, reason: consent.reason || 'no_consent' };
     const ac = await checkActor(employeeId, companyId);
     if (!ac.ok) return { ...base, accept: false, reason: ac.code === 'blocked' ? 'blocked' : `denied_${ac.code}` };
     actor = { name: ac.actor.name, role: ac.actor.role };

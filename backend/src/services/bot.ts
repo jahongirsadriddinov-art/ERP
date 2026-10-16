@@ -32,6 +32,7 @@ import {
   WORKER_OFFSHIFT_CALLBACK_RE, AI_BOT_COMMANDS, aiBotButtonText,
 } from '../aiVoice/bot/botHooks';
 import { aiConfig } from '../aiVoice/config';
+import { onBotLinked as onAiBotLinked } from '../aiVoice/telegram/tgLink';
 
 dotenv.config();
 
@@ -1085,6 +1086,8 @@ bot.on('contact', async (msg: any) => {
     await User.updateMany({ telegramChatId: chatId.toString(), _id: { $ne: user._id } }, { $unset: { telegramChatId: 1 } }).catch(() => {});
     user.telegramChatId = chatId.toString();
     await user.save();
+    // AI (owner 2026-10-16): Telegram user id bot bog'lanishidan — AI kontaktiga darhol (kod shart emas)
+    void onAiBotLinked(String(user._id));
 
     const lang = user.language as BotLang | undefined;
     let welcomeText = tb(lang, 'contactConfirmed', { name: `${user.firstName} ${user.lastName || ''}`.trim(), role: user.role });

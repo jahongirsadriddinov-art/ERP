@@ -11,6 +11,7 @@ import { pushChannel } from './channels/pushChannel';
 import { managerChannel } from './channels/managerChannel';
 import { inAppCallChannel } from './channels/inAppCallChannel';
 import { telegramCallChannel } from './channels/telegramCallChannel';
+import { backfillTgLinks } from './telegram/tgLink';
 import { workerConnectedHere, closeWorkerNamespace } from './telegram/workerNamespace';
 import { shutdownAiVoiceSockets } from './socket/inAppSocket';
 import { getVoiceSessionManager } from './voice/sessionManager';
@@ -90,6 +91,12 @@ export function startAiVoice(opts: { installSignalHandlers?: boolean } = {}): Ai
   setSharedQueue(queue);
   ensurePlatformConnection().catch((e) => console.error('[aiVoice] platforma ulanish yozuvi xatosi:', (e as Error).message));
   queue.start();
+  // Owner 2026-10-16: ERP botga bog'langan xodimlarning Telegram id'si AI kontaktlariga (kod shart emas)
+  const backfillTimer = setTimeout(() => {
+    backfillTgLinks().then((n) => { if (n) console.log(`[aiVoice] Telegram bog'lanishi: ${n} ta kontakt yangilandi`); })
+      .catch((e) => console.error('[aiVoice] Telegram backfill xatosi:', (e as Error)?.name || 'Error'));
+  }, 5_000);
+  backfillTimer.unref?.();
 
   // Instansiya heartbeat — ikki instansiya bir vaqtda bo'lsa instances.ts ogohlantiradi (C3).
   const version = (process.env.RENDER_GIT_COMMIT || '').slice(0, 12) || undefined;

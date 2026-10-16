@@ -9,6 +9,7 @@ import { Server } from 'socket.io';
 import { io as ioc, type Socket as ClientSocket } from 'socket.io-client';
 import type { MongoMemoryServer } from 'mongodb-memory-server';
 import AiAssistantSettings from '../../models/AiAssistantSettings';
+import AiRateCounter from '../../models/AiRateCounter';
 import AiCallSession from '../../models/AiCallSession';
 import AiConversation from '../../models/AiConversation';
 import { __setActorCacheTtlForTests } from '../actor';
@@ -137,12 +138,33 @@ describe('aiv:start (foydalanuvchi AI\'ga qo\'ng\'iroq qiladi)', () => {
 
   it('userSessionsPerHour — limitdan keyin rad', async () => {
     await setLimits({ 'limits.userSessionsPerHour': 1 });
+    await AiRateCounter.deleteMany({});             // oldingi testlardagi ulangan qo'ng'iroqlar hisobga kirmasin
     const c = await client(A.orinbosarId, 'orinbosar');
+    const readyP = nextEvent(c, 'aiv:ready');
     const a1 = await ask(c, 'aiv:start', { purpose: 'assistant' });
     expect(a1.ok).toBe(true);
+    await readyP;                                   // faqat ULANGAN qo'ng'iroq soatlik limitga yoziladi
     await ask(c, 'aiv:hangup', { sessionId: a1.sessionId });
     await vi.waitFor(async () => expect(((await AiCallSession.findById(a1.sessionId).lean()) as any).isActive).toBe(false));
-    expect(await ask(c, 'aiv:start', { purpose: 'assistant' })).toMatchObject({ ok: false, code: 'limit' });
+    const r = await ask(c, 'aiv:start', { purpose: 'assistant' });
+    expect(r).toMatchObject({ ok: false, code: 'limit' });
+    expect(String(r.message)).toMatch(/matn bilan davom etamiz/);
+  });
+
+  it('userSessionsPerHour — ulanmay qolgan urinish (ready kelmadi) limitni yemaydi', async () => {
+    await setLimits({ 'limits.userSessionsPerHour': 1, 'tools.allowOffShiftAssistant': true });
+    await AiRateCounter.deleteMany({});
+    live = new FakeVoiceProvider({ failOpen: new Error('429 RESOURCE_EXHAUSTED quota') });   // AI ulanmaydi
+    const c = await client(A.prorabId, 'prorab');
+    for (let i = 0; i < 2; i++) {
+      const endP = nextEvent(c, 'aiv:end');
+      const errP = nextEvent(c, 'aiv:error');
+      const a = await ask(c, 'aiv:start', { purpose: 'assistant' });
+      expect(a).toMatchObject({ ok: true });
+      expect(await errP).toMatchObject({ code: 'ai_quota' });   // sabab end'dan oldin (mijoz matnga o'tadi)
+      await endP;
+      await vi.waitFor(async () => expect(((await AiCallSession.findById(a.sessionId).lean()) as any).isActive).toBe(false));
+    }
   });
 });
 

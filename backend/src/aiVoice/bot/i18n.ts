@@ -39,6 +39,7 @@ const uz = {
   consentOpenAccount: "💬 AI akkauntini ochish",
   consentDenied: "Qabul qilindi. AI yordamchi sizga qo'ng'iroq qilmaydi.",
   consentTgConflict: "Bu Telegram akkaunt boshqa xodimga bog'langan. Rahbaringizga murojaat qiling.",
+  consentByCompany: "ℹ️ AI qo'ng'iroqlari roziligini firma rahbariyati boshqaradi — sizdan hech narsa talab qilinmaydi.",
   // ── Amal tasdig'i (ai:x) ──
   pendingAsk: (p: { summary: string }) => `❓ Tasdiqlaysizmi?\n${p.summary}`,
   pendingYes: '✅ Tasdiqlash',
@@ -132,6 +133,7 @@ const ru: Dict = {
   consentOpenAccount: '💬 Открыть аккаунт AI',
   consentDenied: 'Принято. AI-помощник не будет вам звонить.',
   consentTgConflict: 'Этот Telegram-аккаунт привязан к другому сотруднику. Обратитесь к руководителю.',
+  consentByCompany: 'ℹ️ Согласием на звонки AI управляет руководство компании — от вас ничего не требуется.',
   pendingAsk: (p) => `❓ Подтверждаете?\n${p.summary}`,
   pendingYes: '✅ Подтвердить',
   pendingNo: '✖️ Отменить',

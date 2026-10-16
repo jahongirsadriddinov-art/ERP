@@ -40,6 +40,7 @@ export function defaultSettings(companyId: string): AiSettingsData {
     calls: {
       maxAttemptsPerChannel: 2, backoffMin: [3, 10], ringTimeoutSec: 45, maxDurationSec: 120,
       assistantMaxDurationSec: 600, companyConcurrency: 3, minGapSec: 20, quietHours: { from: '21:00', to: '07:00' },
+      companyConsent: true,
     },
     // A1: bot xabari doim 1-qadam, Telegram qo'ng'irog'i faqat eskalatsiya
     fallbackOrder: ['bot_message', 'telegram_call', 'inapp_call', 'push', 'notify_manager'],
@@ -130,6 +131,7 @@ export function mergeDefaults(companyId: string, doc: any): AiSettingsData {
       minGapSec: pick(calls.minGapSec, num, d.calls.minGapSec),
       quietHours: isObj(calls.quietHours) && isHHmm(calls.quietHours.from) && isHHmm(calls.quietHours.to)
         ? { from: calls.quietHours.from, to: calls.quietHours.to } : d.calls.quietHours,
+      companyConsent: pick(calls.companyConsent, bool, d.calls.companyConsent),
     },
     fallbackOrder: arr(doc.fallbackOrder) && doc.fallbackOrder.length ? doc.fallbackOrder : d.fallbackOrder,
     reminders: {
@@ -232,6 +234,11 @@ export async function isAiActive(companyId: string): Promise<boolean> {
 const TOP_KEYS = new Set(['enabled', 'language', 'voiceName', 'timezone', 'disclosureText', 'attendance', 'calls',
   'fallbackOrder', 'reminders', 'tools', 'provider', 'brain', 'limits', 'privacy', 'version', 'companyId', 'updatedBy']);
 const MODEL_RE = /^[A-Za-z0-9._-]{1,64}$/;
+
+/** Kompaniya qo'ng'iroq roziligini kim o'zgartira oladi (owner 2026-10-16). */
+export function canEditCompanyConsent(editor: { role: string; isOwner: boolean }): boolean {
+  return editor.isOwner || editor.role === 'direktor' || editor.role === 'orinbosar';
+}
 
 const intIn = (v: unknown, lo: number, hi: number) => typeof v === 'number' && Number.isInteger(v) && v >= lo && v <= hi;
 const numIn = (v: unknown, lo: number, hi: number) => typeof v === 'number' && Number.isFinite(v) && v >= lo && v <= hi;
@@ -343,6 +350,11 @@ export function validateSettingsUpdate(
   if (!intIn(c.companyConcurrency, 1, 10)) errors.push('calls.companyConcurrency: 1..10');
   if (!intIn(c.minGapSec, 0, 600)) errors.push('calls.minGapSec: 0..600');
   if (!isObj(c.quietHours) || !isHHmm(c.quietHours.from) || !isHHmm(c.quietHours.to)) errors.push('calls.quietHours: HH:mm');
+  if (typeof c.companyConsent !== 'boolean') errors.push('calls.companyConsent: boolean');
+  // Owner 2026-10-16: kompaniya roziligini FAQAT egasi/direktor/o'rinbosar o'zgartiradi (dasturchi ham emas)
+  else if (c.companyConsent !== current.calls.companyConsent && !canEditCompanyConsent(editor)) {
+    errors.push("calls.companyConsent: faqat firma egasi, direktor yoki o'rinbosar o'zgartira oladi");
+  }
 
   if (!uniqueValid<ChannelName>(merged.fallbackOrder, (x) => (CHANNEL_NAMES as unknown[]).includes(x)) || !merged.fallbackOrder.length) {
     errors.push("fallbackOrder: takrorsiz, ma'lum kanallar");

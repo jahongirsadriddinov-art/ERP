@@ -137,6 +137,10 @@ describe('Gemini kalitlari (yagona rotatsiya)', () => {
     delete process.env.GEMINI_API_KEYS;
     process.env.GEMINI_API_KEY = 'single';
     expect(geminiKeyCount()).toBe(1);
+    // Ikkalasi ham — birlashtiriladi (takrorlarsiz)
+    process.env.GEMINI_API_KEYS = 'k0, single';
+    expect(geminiKeyCount()).toBe(2);
+    delete process.env.GEMINI_API_KEY;
     process.env.GEMINI_API_KEYS = 'k0, k1 ,k2';
     expect(geminiKeyCount()).toBe(3);
     const used: string[] = [];

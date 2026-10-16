@@ -22,13 +22,20 @@ export interface AiChatState {
   thinking: boolean;
   aiActive: boolean | null;
   lastError: AiChatErrorCode | null;
+  /** AI "qo'ng'iroq qilaman" dedi (requestCallback) — shu vaqtgacha chatda "AI qo'ng'iroq qilmoqda" belgisi. */
+  callExpectedUntil: number;
+  /** Ovozli qo'ng'iroq ishlamay matnga o'tildi — chat tepasidagi izoh (i18n kaliti). */
+  notice: string | null;
 }
 
-const INITIAL: AiChatState = { status: "idle", items: [], thinking: false, aiActive: null, lastError: null };
+const INITIAL: AiChatState = { status: "idle", items: [], thinking: false, aiActive: null, lastError: null, callExpectedUntil: 0, notice: null };
+const CALL_EXPECT_MS = 120_000;
 let st: AiChatState = INITIAL;
 let owner = "";
 let seq = 0;
 const listeners = new Set<() => void>();
+const callListeners = new Set<(ms: number) => void>();
+let callTimer: ReturnType<typeof setTimeout> | null = null;
 
 function set(patch: Partial<AiChatState>) {
   st = { ...st, ...patch };
@@ -86,11 +93,42 @@ export async function sendAiChat(text: string, lang: string): Promise<void> {
   await deliver(id, clean, lang);
 }
 
+/**
+ * AI chatda o'ziga qo'ng'iroqni navbatga qo'ydi (requestCallback ok) — ovozli ildiz (AiVoiceRoot) kelgan
+ * qo'ng'iroqni darhol ulashi uchun xabar beramiz; chatda "AI qo'ng'iroq qilmoqda" belgisi.
+ */
+function noteCallRequested(): void {
+  const until = Date.now() + CALL_EXPECT_MS;
+  set({ callExpectedUntil: until });
+  if (callTimer) clearTimeout(callTimer);
+  callTimer = setTimeout(() => { callTimer = null; if (st.callExpectedUntil <= Date.now() + 50) set({ callExpectedUntil: 0 }); }, CALL_EXPECT_MS);
+  for (const l of Array.from(callListeners)) { try { l(CALL_EXPECT_MS); } catch { /* */ } }
+}
+
+/** Qo'ng'iroq keldi / tugadi — belgini o'chiramiz. */
+export function clearAiCallExpected(): void {
+  if (callTimer) { clearTimeout(callTimer); callTimer = null; }
+  if (st.callExpectedUntil) set({ callExpectedUntil: 0 });
+}
+
+/** AiVoiceRoot obunasi: chatda qo'ng'iroq so'ralganda (ms — kutish oynasi). */
+export function onAiCallRequested(fn: (ms: number) => void): () => void {
+  callListeners.add(fn);
+  return () => { callListeners.delete(fn); };
+}
+
+/** Ovozli qo'ng'iroq matnga o'tganda chat tepasidagi izoh (null — olib tashlash). */
+export function setAiChatNotice(key: string | null): void { if (st.notice !== key) set({ notice: key }); }
+
+export const replyRequestedCall = (r: { toolCalls?: { name: string; status: string }[] } | null | undefined): boolean =>
+  !!r?.toolCalls?.some((t) => t && t.name === "requestCallback" && t.status === "ok");
+
 async function deliver(id: string, text: string, lang: string) {
   const me = owner;
   try {
     const r = await sendAiChatMessage(text, lang);
     if (me !== owner) return;
+    if (replyRequestedCall(r)) noteCallRequested();
     const now = new Date();
     const day = tashkentDay(now);
     const extra: AiChatEntry[] = [{ id: localId(), kind: "msg", role: "assistant", text: r.reply, day, at: now.toISOString() }];
@@ -154,4 +192,7 @@ export function useAiChat(): AiChatState {
 }
 
 /** Faqat testlar uchun. */
-export function __resetAiChat(): void { st = INITIAL; owner = ""; listeners.clear(); }
+export function __resetAiChat(): void {
+  st = INITIAL; owner = ""; listeners.clear(); callListeners.clear();
+  if (callTimer) { clearTimeout(callTimer); callTimer = null; }
+}

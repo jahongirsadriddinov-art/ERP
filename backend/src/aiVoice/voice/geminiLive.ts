@@ -1,6 +1,6 @@
 import { Behavior, GoogleGenAI, Modality, Type } from '@google/genai';
 import type { JsonSchema, ToolDeclaration, ToolResult } from '../contracts';
-import { geminiKeyCount, isAuthError, isQuotaError, markGeminiKeyFailed, markGeminiKeyOk, pickGeminiKey } from '../lib/geminiKeys';
+import { GeminiQuotaError, isAuthError, isQuotaError, withGeminiKey } from '../lib/geminiKeys';
 import { VoiceEmitter, parseDurationMs } from './provider';
 import type { VoiceOpenOpts, VoiceProvider, VoiceSession } from './types';
 
@@ -11,7 +11,8 @@ import type { VoiceOpenOpts, VoiceProvider, VoiceSession } from './types';
 // open() faqat setupComplete kelgach resolve bo'ladi (≤4 s, aks holda SETUP_TIMEOUT → kaskad).
 // API sirti node_modules/@google/genai/dist/genai.d.ts bo'yicha tekshirilgan (Session.sendRealtimeInput,
 // sendClientContent, sendToolResponse, LiveServerMessage). Model nomi — env/sozlamada (kodda emas).
-// HAQIQIY ulanish bu yerda sinalmagan (kalit yo'q) — geminiLive.live.test.ts RUN_LIVE_TESTS=1 bilan.
+// 2026-10-16 haqiqiy kalit bilan sinaldi (12 ERP tool + to'liq prompt): gemini-3.8-live setup ~0.9 s,
+// birinchi ovoz ~1.7 s; gemini-3.1-flash-live-preview ham ishlaydi. Qayta sinash: geminiLive.live.test.ts.
 
 export interface LiveSessionLike {
   sendRealtimeInput(p: any): void;
@@ -239,14 +240,10 @@ export class GeminiLiveProvider implements VoiceProvider {
 
   async open(opts: VoiceOpenOpts): Promise<VoiceSession> {
     const config = buildLiveConfig(opts);
-    const tries = opts.apiKey ? 1 : Math.max(1, geminiKeyCount());
-    let last: Error = new Error('GEMINI_NOT_CONFIGURED');
-    for (let i = 0; i < tries; i++) {
-      const k = opts.apiKey ? { index: -1, key: opts.apiKey } : pickGeminiKey();
-      if (!k) break;
+    const connectWith = async (key: string): Promise<VoiceSession> => {
       const s = new GeminiLiveSession();
       try {
-        const live = await this.connector.connect(k.key, {
+        const live = await this.connector.connect(key, {
           model: opts.model,
           config,
           callbacks: {
@@ -257,17 +254,31 @@ export class GeminiLiveProvider implements VoiceProvider {
         });
         s.attach(live);
         await this.waitSetup(s);
-        if (k.index >= 0) markGeminiKeyOk(k.index);
         return s;
       } catch (e) {
-        last = e as Error;
         void s.close('setup_failed');
-        if (k.index >= 0 && isQuotaError(e)) { markGeminiKeyFailed(k.index, 60_000); continue; }
-        if (k.index >= 0 && isAuthError(e)) { markGeminiKeyFailed(k.index, 10 * 60_000); continue; }
-        throw last;
+        throw e;
       }
+    };
+    if (opts.apiKey) return connectWith(opts.apiKey);
+    // Umumiy kalit aylanishi (lib/geminiKeys): kvota kalit × model bo'yicha (scope) — Live 429 matn
+    // modellarini to'smaydi; sovushdagi kalitlar o'tkaziladi, hammasi band bo'lsa — darhol GeminiQuotaError
+    // (tarmoqsiz) va menejer keyingi Live modeli / kaskadga o'tadi.
+    let sawQuota = false;
+    let authErr: unknown = null;
+    try {
+      return await withGeminiKey(async (key) => {
+        try { return await connectWith(key); } catch (e) {
+          if (isQuotaError(e)) sawQuota = true;
+          else if (isAuthError(e)) authErr = e;
+          throw e;
+        }
+      }, { scope: opts.model });
+    } catch (e) {
+      // Hamma kalit RUXSAT xatosi bilan yiqildi — "limit" emas, "kalit noto'g'ri" (aniq sabab mijozga)
+      if (e instanceof GeminiQuotaError && authErr && !sawQuota) throw authErr;
+      throw e;
     }
-    throw last;
   }
 
   private async waitSetup(s: GeminiLiveSession): Promise<void> {

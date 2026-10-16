@@ -1,14 +1,15 @@
-import User from '../../models/User';
 import AiEmployeeContact from '../../models/AiEmployeeContact';
 import AiChannelConnection from '../../models/AiChannelConnection';
 import { setCallConsent } from '../consent';
 import { sha256Hex } from '../lib/crypto';
-import { isObjectIdString, newBindingCode, randomBase62 } from '../lib/ids';
-import { sendToUser, type SendResult } from '../channels/botChannel';
+import { isObjectIdString, newBindingCode } from '../lib/ids';
+import type { SendResult } from '../channels/botChannel';
 import { getBotInstance } from './instance';
 import { ta } from './i18n';
-import { answer, closeButtons, consentData, type CallbackActor } from './guard';
+import { answer, closeButtons, type CallbackActor } from './guard';
 
+// Owner 2026-10-16: rozilikni firma beradi, xodim so'ralmaydi (sendConsentRequest — no-op, eski tugmalar — izoh).
+// Quyidagi recordConsentPress — eski oqim (testlar va tarixiy ma'lumot uchun saqlangan).
 // Qo'ng'iroq roziligi (ai:o:<token>:y|n, review A2/B5/B9). Rozilikni FAQAT xodimning o'zi beradi
 // (consent.setCallConsent, ConsentLog source:'bot'). "Ha" bosilganda Telegram identifikatori
 // query.from.id'dan olinadi va bir martalik bog'lash kodi (AI-4821) ko'rsatiladi — xodim uni AI
@@ -36,34 +37,13 @@ export async function aiAccountUsername(): Promise<string | null> {
 }
 
 /**
- * Xodimga rozilik so'rovini yuboradi (P3/P8 ham chaqiradi; botChannel kind:'consent').
- * Yangi token 7 kun amal qiladi; eski token almashtiriladi.
+ * Owner 2026-10-16: xodimdan rozilik SO'RALMAYDI — rozilikni firma rahbariyati beradi (calls.companyConsent).
+ * Eski chaqiruvchilar (botChannel kind:'consent', requestCallback) uchun imzo saqlangan: hech narsa yubormaydi,
+ * tugma yo'q, 'not_needed' qaytaradi.
  */
 export async function sendConsentRequest(p: { companyId: string; employeeId: string; now?: Date }): Promise<SendResult> {
-  const now = p.now || new Date();
   if (!isObjectIdString(p.employeeId)) return { ok: false, code: 'no_user', retryable: false };
-  const u: any = await User.findOne({ _id: p.employeeId, companyId: p.companyId, isBlocked: { $ne: true } }).select('language').lean();
-  if (!u) return { ok: false, code: 'no_user', retryable: false };
-  const token = randomBase62(16);
-  await AiEmployeeContact.updateOne(
-    { companyId: p.companyId, employeeId: p.employeeId },
-    {
-      $set: { 'telegram.consentToken': token, 'telegram.consentTokenExpiresAt': new Date(now.getTime() + CONSENT_TOKEN_TTL_MS) },
-      $setOnInsert: { companyId: p.companyId, employeeId: p.employeeId },
-    },
-    { upsert: true },
-  );
-  await AiEmployeeContact.updateOne(
-    { companyId: p.companyId, employeeId: p.employeeId, 'telegram.callConsent': { $in: ['none', null] } },
-    { $set: { 'telegram.callConsent': 'requested' } },
-  );
-  return sendToUser(p.employeeId, ta(u.language, 'consentAsk'), {
-    companyId: p.companyId,
-    buttons: [[
-      { text: ta(u.language, 'consentYes'), callback_data: consentData(token, 'y') },
-      { text: ta(u.language, 'consentNo'), callback_data: consentData(token, 'n') },
-    ]],
-  });
+  return { ok: false, code: 'not_needed', retryable: false };
 }
 
 export type ConsentPressResult =
@@ -104,6 +84,12 @@ export async function recordConsentPress(a: Pick<CallbackActor, 'userId' | 'comp
 
 export async function handleConsentCallback(query: any, a: CallbackActor, parts: string[]): Promise<boolean> {
   const bot = getBotInstance();
+  // Owner 2026-10-16: eski "Ha/Yo'q" tugmalari endi hech narsani o'zgartirmaydi — faqat izoh, tugmalar yopiladi
+  if (parts.length === 4) {
+    await answer(bot, query.id, ta(a.lang, 'consentByCompany'), true);
+    await closeButtons(bot, a, query, ta(a.lang, 'consentByCompany'));
+    return true;
+  }
   const out = parts.length === 4 ? await recordConsentPress(a, parts[2], parts[3]) : { r: 'forged' as const };
   switch (out.r) {
     case 'forged': await answer(bot, query.id, ta(a.lang, 'expired'), true); return true;

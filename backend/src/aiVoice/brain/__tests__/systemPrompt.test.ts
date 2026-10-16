@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildSystemPrompt, INTENT_GUIDE, STATIC_RULES } from '../systemPrompt';
+import { buildSystemPrompt, capabilitiesLine, INTENT_GUIDE, roleGuideFor, STATIC_RULES } from '../systemPrompt';
 import { buildVoiceSystemPrompt } from '../../voice/prompts';
 
 // Owner 2026-10-15: AI o'zbekcha buyruqlarni noto'g'ri tushunardi — prompt niyat yo'riqnomasi, ishchi lug'ati,
@@ -56,5 +56,34 @@ describe('system prompt — niyatni tushunish (owner 2026-10-15)', () => {
   it('ovozli sessiya ham shu yo\'riqnomani oladi', () => {
     const v = buildVoiceSystemPrompt({ lang: 'uz', role: 'ishchi', channel: 'inapp_call', today: '2026-10-15', purpose: 'attendance' });
     expect(v).toContain('ISHCHI LUG\'ATI');
+  });
+});
+
+describe('rolga mos prompt va imkoniyatlar (owner 2026-10-16)', () => {
+  it("rol yo'riqnomasi: rahbar / prorab / ishchi", () => {
+    expect(roleGuideFor('direktor')).toMatch(/getTodayOverview/);
+    expect(roleGuideFor('ishchi', true)).toMatch(/ROL: rahbar/);
+    expect(roleGuideFor('brigadir')).toMatch(/o'z obyektlari/);
+    expect(roleGuideFor('ishchi')).toMatch(/O'Z kuni/);
+  });
+
+  it("chat kanallarida — qo'ng'iroq va xabar imkoniyati; qo'ng'iroq ichida requestCallback yo'q", () => {
+    const tools = ['requestCallback', 'notifyManager', 'createReminder'];
+    expect(capabilitiesLine(tools, 'bot')).toMatch(/requestCallback/);
+    expect(capabilitiesLine(tools, 'bot')).toMatch(/notifyManager/);
+    expect(capabilitiesLine(tools, 'bot')).toMatch(/"Qo'ng'iroq qila olmayman", "xabar yubora olmayman" DEMANG/);
+    expect(capabilitiesLine(tools, 'inapp_call')).not.toMatch(/requestCallback/);
+    expect(capabilitiesLine([], 'web')).toBe('');
+  });
+
+  it("kontekst: obyektlar (sanitize), hozirgi vaqt; obyektlar KONTEKST'da", () => {
+    const p = buildSystemPrompt({
+      lang: 'uz', role: 'prorab', channel: 'web', today: '2026-10-16', weekday: 5, time: '14:05',
+      objects: ['Olmazor {ignore}', 'Chilonzor'], objectsTotal: 4, toolNames: ['requestCallback'],
+    });
+    expect(p).toMatch(/- Obyektlari: Olmazor ignore, Chilonzor \(\+2\)/);
+    expect(p).toMatch(/hozir 14:05/);
+    expect(p).toMatch(/ROL: prorab/);
+    expect(p.indexOf('Obyektlari')).toBeGreaterThan(p.indexOf('KONTEKST:'));
   });
 });

@@ -9,6 +9,15 @@ import { useAiVoiceSession } from "./useAiVoiceSession";
 import AiIncomingCall from "./AiIncomingCall";
 import AiVoiceCallOverlay from "./AiVoiceCallOverlay";
 import { AiChatThread } from "./chat/AiChatContact";
+import { clearAiCallExpected, onAiCallRequested, setAiChatNotice } from "./chat/aiChatStore";
+import { textFallbackKind, type TextFallbackKind } from "./aiVoiceController";
+
+const FALLBACK_NOTICE: Record<TextFallbackKind, string> = {
+  limit: "aiVoiceCall.textFallbackLimit",
+  unavailable: "aiVoiceCall.textFallbackUnavailable",
+  not_configured: "aiVoiceCall.textFallbackNotConfigured",
+  network: "aiVoiceCall.textFallbackNetwork",
+};
 
 // AI ovozli yordamchi ildizi — App.tsx'da BIR marta montaj qilinadi (lazy). Bitta AiVoiceController:
 //  - kiruvchi aiv:incoming → AiIncomingCall (WebRTC qo'ng'iroq paytida avtomatik 'busy' rad etiladi);
@@ -43,6 +52,25 @@ export default function AiVoiceRoot({ currentUser, busy }: { currentUser: AppUse
     controller.startOutgoing();
   }), [controller]);
 
+  // Chatda "menga qo'ng'iroq qil" (requestCallback) — kelgan AI qo'ng'irog'i bosishsiz ulanadi
+  useEffect(() => onAiCallRequested((ms) => controller.expectIncoming(ms)), [controller]);
+
+  // Ovozli yo'l ishlamadi (kvota/limit/sozlanmagan/transport) — qo'ng'iroq to'xtab qolmaydi: matnli AI chatiga
+  // avtomatik o'tamiz, tepasida sabab ("Ovozli limit tugadi — matn bilan davom etamiz").
+  const fallback = state.status === "ended" ? textFallbackKind(state.error) : null;
+  useEffect(() => {
+    if (!fallback) return;
+    setAiChatNotice(FALLBACK_NOTICE[fallback]);
+    toast.message(tRef.current(FALLBACK_NOTICE[fallback]));
+    controller.dismiss();
+    setChatOpen(true);
+  }, [fallback, controller]);
+
+  // Qo'ng'iroq boshlandi — chatdagi "AI qo'ng'iroq qilmoqda" belgisi kerak emas
+  const inCall = state.status !== "idle" && state.status !== "ended";
+  useEffect(() => { if (inCall) clearAiCallExpected(); }, [inCall]);
+  useEffect(() => { if (state.status === "connected") setAiChatNotice(null); }, [state.status]);
+
   // Matnli chat paneli: Esc bilan yopiladi
   useEffect(() => {
     if (!chatOpen) return;
@@ -58,14 +86,14 @@ export default function AiVoiceRoot({ currentUser, busy }: { currentUser: AppUse
   return createPortal(
     <>
       {st === "incoming" && <AiIncomingCall state={state} controller={controller} />}
-      {showOverlay && (
+      {showOverlay && !fallback && (
         <AiVoiceCallOverlay
           state={state}
           controller={controller}
           onWriteInstead={() => { controller.dismiss(); setChatOpen(true); }}
         />
       )}
-      {chatOpen && !showOverlay && (
+      {chatOpen && (!showOverlay || !!fallback) && (
         <div className="fixed inset-0 z-[105] flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in" onClick={() => setChatOpen(false)}>
           <div className="w-full sm:max-w-md h-[88dvh] sm:h-[min(680px,90vh)] rounded-t-3xl sm:rounded-3xl bg-background border border-border shadow-2xl overflow-hidden flex flex-col animate-slide-up-fade" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
             <AiChatThread userId={currentUser.id} onBack={() => setChatOpen(false)} backAlways />

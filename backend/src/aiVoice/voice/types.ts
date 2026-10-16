@@ -76,4 +76,6 @@ export interface VoiceSessionManagerApi {
   endAllForUser(userId: string, reason: AivEndReason): Promise<number>;
   /** SIGTERM: barcha sessiyalar 'interrupted'. */
   drain(timeoutMs: number): Promise<void>;
+  /** Ixtiyoriy: qo'ng'iroqdan OLDIN isitish (disclosure klipi) — foydalanuvchi AI chatini ochganda. */
+  prewarm?(companyId: string, userId: string): Promise<void>;
 }

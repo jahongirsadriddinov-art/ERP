@@ -277,57 +277,26 @@ describe('ai:r — eslatma', () => {
   });
 });
 
-describe('ai:o — rozilik oqimi', () => {
-  it("so'rov yuboriladi; 'Ha' → granted, tgUserId = from.id, bog'lash kodi va t.me havolasi; takroriy — allaqachon", async () => {
+describe("ai:o — rozilik oqimi (owner 2026-10-16: xodimdan so'ralmaydi)", () => {
+  it("sendConsentRequest hech narsa yubormaydi (tugma yo'q), rozilik o'zgarmaydi — 'not_needed'", async () => {
     const s = await sendConsentRequest({ companyId: A.companyId, employeeId: A.workerId });
-    expect(s.ok).toBe(true);
-    const msg = sent()[0];
-    expect(msg.text).toContain("AI yordamchi qo'ng'iroq qilishiga rozimisiz?");
-    const yes = msg.opts.reply_markup.inline_keyboard[0][0].callback_data as string;
-    expect(yes).toMatch(/^ai:o:[A-Za-z0-9]{16}:y$/);
-    expect((await AiEmployeeContact.findOne({ employeeId: A.workerId }).lean() as any).telegram.callConsent).toBe('requested');
-
-    bot.sendMessage.mockClear();
-    await press(A.workerId, yes);
-    const ct: any = await AiEmployeeContact.findOne({ employeeId: A.workerId }).select('+telegram.bindingCodeHash').lean();
-    expect(ct.telegram.callConsent).toBe('granted');
-    expect(ct.telegram.tgUserId).toBe(String(CHAT[A.workerId]));
-    const bind = sent().find((m) => /AI-\d{4}/.test(m.text))!;
-    const code = /AI-\d{4}/.exec(bind.text)![0];
-    expect(bind.text).toContain('@qurilish_ai');
-    expect(JSON.stringify(bind.opts)).toContain('https://t.me/qurilish_ai');
-    expect(ct.telegram.bindingCodeHash).toBe(bindingCodeHash(code));
-    expect(ct.telegram.bindingCodeHash).toBe(sha256Hex(code));
-    expect(await ConsentLog.countDocuments({ userId: A.workerId, consentType: 'ai_call', source: 'bot' })).toBe(1);
-
-    await press(A.workerId, yes);
-    expect(alerts().some((t) => t.includes('Allaqachon'))).toBe(true);
-    expect(await ConsentLog.countDocuments({ userId: A.workerId, consentType: 'ai_call' })).toBe(1);
+    expect(s).toEqual({ ok: false, code: 'not_needed', retryable: false });
+    expect(sent()).toHaveLength(0);
+    expect(await AiEmployeeContact.countDocuments({ employeeId: A.workerId })).toBe(0);
   });
 
-  it("boshqa xodim tokeni, muddati o'tgan token — rad; 'Yo'q' → revoked", async () => {
-    await sendConsentRequest({ companyId: A.companyId, employeeId: A.workerId });
-    const tok = (await AiEmployeeContact.findOne({ employeeId: A.workerId }).lean() as any).telegram.consentToken;
-    await press(A.worker2Id, consentData(tok, 'y'));
-    await press(B.workerId, consentData(tok, 'y'));
-    expect((await AiEmployeeContact.findOne({ employeeId: A.workerId }).lean() as any).telegram.callConsent).toBe('requested');
-    await press(A.workerId, consentData(tok, 'n'));
-    expect((await AiEmployeeContact.findOne({ employeeId: A.workerId }).lean() as any).telegram.callConsent).toBe('revoked');
-
-    await sendConsentRequest({ companyId: A.companyId, employeeId: A.worker2Id });
-    await AiEmployeeContact.updateOne({ employeeId: A.worker2Id }, { $set: { 'telegram.consentTokenExpiresAt': new Date(Date.now() - 1000) } });
-    const tok2 = (await AiEmployeeContact.findOne({ employeeId: A.worker2Id }).lean() as any).telegram.consentToken;
-    await press(A.worker2Id, consentData(tok2, 'y'));
-    expect((await AiEmployeeContact.findOne({ employeeId: A.worker2Id }).lean() as any).telegram.callConsent).toBe('requested');
-  });
-
-  it("bitta Telegram identifikatori ikki xodimga bog'lanmaydi", async () => {
-    await AiEmployeeContact.create({ companyId: B.companyId, employeeId: B.workerId, telegram: { tgUserId: String(CHAT[A.workerId]) } } as any);
-    await sendConsentRequest({ companyId: A.companyId, employeeId: A.workerId });
-    const tok = (await AiEmployeeContact.findOne({ employeeId: A.workerId }).lean() as any).telegram.consentToken;
-    await press(A.workerId, consentData(tok, 'y'));
-    expect((await AiEmployeeContact.findOne({ employeeId: A.workerId }).lean() as any).telegram.callConsent).not.toBe('granted');
-    expect(alerts().some((t) => t.includes('boshqa xodimga'))).toBe(true);
+  it("eski 'Ha/Yo'q' tugmasi — faqat izoh (rahbariyat boshqaradi), rozilik/ConsentLog o'zgarmaydi", async () => {
+    await AiEmployeeContact.create({
+      companyId: A.companyId, employeeId: A.workerId,
+      telegram: { callConsent: 'requested', consentToken: 'abcdefghij123456', consentTokenExpiresAt: new Date(Date.now() + 3600_000) },
+    } as any);
+    await press(A.workerId, consentData('abcdefghij123456', 'y'));
+    expect(alerts().some((t) => t.includes('rahbariyati boshqaradi'))).toBe(true);
+    const ct: any = await AiEmployeeContact.findOne({ employeeId: A.workerId }).lean();
+    expect(ct.telegram.callConsent).toBe('requested');
+    expect(ct.telegram.tgUserId).toBeUndefined();
+    expect(await ConsentLog.countDocuments({ userId: A.workerId })).toBe(0);
+    expect(sent().some((m) => /AI-\d{4}/.test(m.text))).toBe(false);
   });
 });
 

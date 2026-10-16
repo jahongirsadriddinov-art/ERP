@@ -4,7 +4,7 @@ import mongoose, { Schema, Document } from 'mongoose';
 // provider: ovoz (gemini_live/gemini_cascade), matn miyasi (gemini/openrouter/claude — llm-provider.md),
 // shuningdek tool chaqiruvlari, Telegram va bot hisoblagichlari uchun ichki qiymatlar.
 export const AI_USAGE_PROVIDERS = [
-  'gemini_live', 'gemini_cascade', 'gemini', 'openrouter', 'claude', 'tools', 'telegram', 'bot', 'none',
+  'gemini_live', 'gemini_cascade', 'gemini', 'groq', 'openrouter', 'claude', 'tools', 'telegram', 'bot', 'none',
 ] as const;
 export type AiUsageProvider = typeof AI_USAGE_PROVIDERS[number];
 

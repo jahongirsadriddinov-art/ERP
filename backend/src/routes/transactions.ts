@@ -12,7 +12,6 @@ import { scoped, stamped } from '../middleware/scope';
 import { getTenant } from '../middleware/tenantContext';
 import { emitToUser } from '../services/socket';
 import { tb, BotLang } from '../i18n/bot';
-import { sendEmail } from '../services/email';
 import { logAudit } from '../services/audit';
 // XATO TUZATILDI: bu faylda avval FAQAT Telegram bot xabari (bot.sendMessage)
 // va real-vaqt socket (emitToUser) yuborilardi — foydalanuvchi bot orqali
@@ -24,6 +23,7 @@ import { logAudit } from '../services/audit';
 // bo'lsa ham keladi) endi shu faylning barcha bildirishnoma nuqtalariga ham
 // qo'shildi.
 import { sendPushToUser } from '../services/push';
+import { approveTransactionAction, confirmTransactionAction, rejectTransactionAction } from '../services/transactionActions';
 
 const router = Router();
 
@@ -268,270 +268,36 @@ router.post('/', async (req, res) => {
 // o'zi yuborgan tranzaksiyani tasdiqlab qo'ya olar edi.
 router.patch('/:id/confirm', async (req, res) => {
   try {
-    const { defect } = req.body;
-    const tx = await Transaction.findOne(scoped({ _id: req.params.id }));
-    if (!tx) return res.status(404).json({ error: 'Topilmadi' });
-    if (tx.status !== 'pending') return res.status(409).json({ error: 'Bu allaqachon qayta ishlangan' });
-
-    const actingUserId = getTenant()?.userId;
-    if (!actingUserId || String(tx.toUserId) !== String(actingUserId)) {
-      return res.status(403).json({ error: 'Faqat qabul qiluvchi tasdiqlashi mumkin' });
-    }
-
-    tx.status = 'confirmed';
-    if (defect) tx.defect = defect;
-    tx.confirmedById = actingUserId;
-    tx.confirmedDate = new Date().toISOString().split('T')[0];
-    await tx.save();
-
-    // Update material sent/remaining counts + create a linked expense record
-    // when a material transfer is confirmed, so it shows up in Moliya.
-    let expenseTx: any = null;
-    if (tx.type === 'transfer' && tx.projectId && tx.materialName && tx.quantity) {
-      try {
-        await Material.findOneAndUpdate(
-          { objectId: tx.projectId, name: tx.materialName },
-          { $inc: { sent: tx.quantity, remaining: -tx.quantity } }
-        );
-        // Yuboruvchi kiritgan narx (tx.price) katalogdagi Material.price'dan ustuvor —
-        // smetada yo'q/eskirgan narx bo'lsa ham chiqim to'g'ri hisoblansin.
-        const mat = await Material.findOne({ objectId: tx.projectId, name: tx.materialName });
-        const unitPrice = tx.price ?? mat?.price;
-        if (unitPrice) {
-          expenseTx = await Transaction.create(stamped({
-            type: 'material',
-            status: 'confirmed',
-            date: tx.date,
-            amount: unitPrice * tx.quantity,
-            description: `Material: ${tx.materialName} (${tx.quantity} ${tx.unit})`,
-            projectId: tx.projectId,
-            createdById: tx.fromUserId,
-            toUserId: tx.toUserId,
-            confirmedById: actingUserId,
-            confirmedDate: tx.confirmedDate,
-            sourceTransferId: String(tx._id),
-          }));
-        }
-      } catch (matErr) {
-        console.error('Material update error:', matErr);
-      }
-    }
-
-    // Realtime — ochiq veb-sessiyalar darhol yangilansin (Telegram orqali ham shu yo'l ishlaydi)
-    const payload = { ...tx.toObject(), id: tx._id };
-    if (tx.toUserId) emitToUser(String(tx.toUserId), 'transaction:update', payload);
-    if (tx.fromUserId) emitToUser(String(tx.fromUserId), 'transaction:update', payload);
-    if (expenseTx) {
-      const expPayload = { ...expenseTx.toObject(), id: expenseTx._id };
-      if (tx.fromUserId) emitToUser(String(tx.fromUserId), 'transaction:new', expPayload);
-      if (tx.toUserId) emitToUser(String(tx.toUserId), 'transaction:new', expPayload);
-    }
-
-    // Notify sender (Telegram + Email)
-    try {
-      const fromUserId = tx.fromUserId || tx.createdById;
-      if (fromUserId) {
-        const fromUser = await User.findById(fromUserId).catch(() => null) ||
-                         await User.findOne({ _id: fromUserId }).catch(() => null);
-        if (fromUser) {
-          const label = (tx.type === 'transfer' ? tx.materialName : tx.description) || '—';
-          if (fromUser.telegramChatId) {
-            await bot.sendMessage(fromUser.telegramChatId, tb(fromUser.language as BotLang | undefined, 'simpleConfirmedNotify', { label })).catch(console.error);
-          }
-          sendPushToUser(String(fromUser._id), {
-            title: '✅ Tasdiqlandi',
-            body: label,
-            tag: 'confirmed',
-          }).catch(() => {});
-          if (fromUser.email && tx.type !== 'transfer') {
-            await sendEmail(fromUser.email, "Tranzaksiya tasdiqlandi — QurilishERP", `
-              <h2>Tranzaksiya tasdiqlandi ✅</h2>
-              <p><b>${label}</b> — ${(tx.amount || 0).toLocaleString()} so'm</p>
-              <p>Sana: ${tx.confirmedDate}</p>
-            `).catch(console.error);
-          }
-        }
-      }
-    } catch(notifErr) {
-      console.error('Telegram/Email notification error:', notifErr);
-    }
-
-    const result = tx.toObject();
-    res.json({ ...result, id: tx._id });
+    const r = await confirmTransactionAction({ txFilter: scoped({ _id: req.params.id }), actorUserId: getTenant()?.userId, defect: req.body?.defect });
+    if (!r.ok) return res.status(r.status).json({ error: r.error });
+    const result = r.tx.toObject();
+    res.json({ ...result, id: r.tx._id });
   } catch (err) {
     console.error('Confirm error:', err);
     res.status(500).json({ error: 'Server xatoligi' });
   }
 });
 
-// Admin chiqim tasdiqlash (expense approval chain)
+// Admin chiqim tasdiqlash (expense approval chain). Mantiq — services/transactionActions.ts
+// (AI yordamchi ham aynan shu funksiyani chaqiradi: bir xil qoidalar, atomik holat o'tishi).
 router.patch('/:id/approve', async (req, res) => {
   try {
-    const { note } = req.body;
-    const tx = await Transaction.findOne(scoped({ _id: req.params.id }));
-    if (!tx) return res.status(404).json({ error: 'Topilmadi' });
-    if (tx.status !== 'pending') return res.status(409).json({ error: 'Bu allaqachon qayta ishlangan' });
-    if (!tx.requiresAdminApproval) return res.status(400).json({ error: 'Bu tranzaksiya admin tasdiqlashini talab qilmaydi' });
-
-    const actingUserId = getTenant()?.userId;
-    if (!actingUserId) return res.status(401).json({ error: 'Autentifikatsiya talab etiladi' });
-
-    const actor = await User.findById(actingUserId).catch(() => null);
-    if (!actor || !['direktor', 'orinbosar'].includes(actor.role)) {
-      return res.status(403).json({ error: 'Faqat direktor yoki orinbosar tasdiqlashi mumkin' });
-    }
-    // Xodim chiqim yaratganda ANIQ tasdiqlovchi tanlagan bo'lsa — FAQAT
-    // o'sha odam tasdiqlay oladi, boshqa admin emas (aniq talab). Eski
-    // (approverId'siz) yozuvlar uchun eski xatti-harakat saqlanadi — har
-    // qanday admin tasdiqlay oladi.
-    if (tx.approverId && String(tx.approverId) !== String(actingUserId)) {
-      return res.status(403).json({ error: 'Bu chiqimni faqat tanlangan tasdiqlovchi tasdiqlay oladi' });
-    }
-
-    const historyEntry = {
-      userId: actingUserId,
-      name: `${actor.firstName} ${actor.lastName || ''}`.trim(),
-      role: actor.role,
-      action: 'approved' as const,
-      date: new Date().toISOString().split('T')[0],
-      note: note || '',
-    };
-
-    tx.approvalHistory = [...(tx.approvalHistory || []), historyEntry];
-    tx.status = 'confirmed';
-    tx.confirmedById = actingUserId;
-    tx.confirmedDate = new Date().toISOString().split('T')[0];
-    await tx.save();
-
-    // Audit log
-    await logAudit({
-      userId: actingUserId,
-      userName: historyEntry.name,
-      userRole: actor.role,
-      action: 'approve',
-      entity: 'transaction',
-      entityId: String(tx._id),
-      description: `Chiqim tasdiqlandi: ${tx.description || '—'} — ${(tx.amount || 0).toLocaleString()} so'm`,
-      newValue: { status: 'confirmed', approvedBy: historyEntry.name },
-      companyId: actor.companyId,
-      req,
-    });
-
-    // Realtime emit
-    const payload = { ...tx.toObject(), id: tx._id };
-    if (tx.createdById) emitToUser(String(tx.createdById), 'transaction:update', payload);
-    if (tx.toUserId) emitToUser(String(tx.toUserId), 'transaction:update', payload);
-
-    // Email notification to creator
-    try {
-      const creatorId = tx.createdById || tx.toUserId;
-      if (creatorId) {
-        const creator = await User.findById(creatorId).catch(() => null);
-        if (creator?.email) {
-          await sendEmail(creator.email, "Chiqim tasdiqlandi — QurilishERP", `
-            <h2>Chiqim tasdiqlandi ✅</h2>
-            <p><b>${tx.description || '—'}</b> — ${(tx.amount || 0).toLocaleString()} so'm</p>
-            <p>Tasdiqlagan: ${historyEntry.name} (${actor.role})</p>
-            <p>Sana: ${historyEntry.date}</p>
-          `).catch(console.error);
-        }
-      }
-    } catch {}
-
-    // Telegram notification
-    try {
-      const creatorId = tx.createdById || tx.toUserId;
-      if (creatorId) {
-        const creator = await User.findById(creatorId).catch(() => null);
-        if (creator) {
-          const label = tx.description || '—';
-          if (creator.telegramChatId) {
-            await bot.sendMessage(creator.telegramChatId, `✅ Chiqimingiz tasdiqlandi: *${label}* — ${(tx.amount || 0).toLocaleString()} so'm`, { parse_mode: 'Markdown' }).catch(console.error);
-          }
-          sendPushToUser(String(creator._id), {
-            title: '✅ Chiqim tasdiqlandi',
-            body: `${label} — ${(tx.amount || 0).toLocaleString()} so'm`,
-            tag: 'confirmed',
-          }).catch(() => {});
-        }
-      }
-    } catch {}
-
-    res.json({ ...tx.toObject(), id: tx._id });
+    const r = await approveTransactionAction({ txFilter: scoped({ _id: req.params.id }), actorUserId: getTenant()?.userId, note: req.body?.note, req });
+    if (!r.ok) return res.status(r.status).json({ error: r.error });
+    res.json({ ...r.tx.toObject(), id: r.tx._id });
   } catch (err) {
     console.error('Approve error:', err);
     res.status(500).json({ error: 'Server xatoligi' });
   }
 });
 
-// Reject transaction — qabul qiluvchi yoki admin rad etishi mumkin
+// Reject transaction — qabul qiluvchi yoki admin (approverId tanlangan bo'lsa — faqat o'sha admin)
 router.patch('/:id/reject', async (req, res) => {
   try {
-    const { note } = req.body;
-    const tx = await Transaction.findOne(scoped({ _id: req.params.id }));
-    if (!tx) return res.status(404).json({ error: 'Topilmadi' });
-    if (tx.status !== 'pending') return res.status(409).json({ error: 'Bu allaqachon qayta ishlangan' });
-
-    const actingUserId = getTenant()?.userId;
-    if (!actingUserId) return res.status(401).json({ error: 'Autentifikatsiya talab etiladi' });
-
-    const actor = await User.findById(actingUserId).catch(() => null);
-    const isAdmin = actor && ['direktor', 'orinbosar'].includes(actor.role);
-    const isRecipient = String(tx.toUserId) === String(actingUserId);
-
-    if (!isAdmin && !isRecipient) {
-      return res.status(403).json({ error: 'Faqat qabul qiluvchi yoki admin rad etishi mumkin' });
-    }
-    // Agar chiqim uchun ANIQ tasdiqlovchi tanlangan bo'lsa — faqat o'sha admin
-    // rad eta oladi (boshqa admin emas). isRecipient yo'li (transfer qabul
-    // qiluvchisi) bunga bog'liq emas — approverId faqat admin-tasdiqlash
-    // oqimiga tegishli, shuning uchun isAdmin bo'lgan holatdagina tekshiramiz.
-    if (isAdmin && tx.approverId && String(tx.approverId) !== String(actingUserId)) {
-      return res.status(403).json({ error: 'Bu chiqimni faqat tanlangan tasdiqlovchi rad eta oladi' });
-    }
-
-    if (tx.requiresAdminApproval && actor) {
-      tx.approvalHistory = [...(tx.approvalHistory || []), {
-        userId: actingUserId,
-        name: `${actor.firstName} ${actor.lastName || ''}`.trim(),
-        role: actor.role,
-        action: 'rejected',
-        date: new Date().toISOString().split('T')[0],
-        note: note || '',
-      }];
-    }
-
-    tx.status = 'rejected';
-    await tx.save();
-
-    const payload = { ...tx.toObject(), id: tx._id };
-    if (tx.toUserId) emitToUser(String(tx.toUserId), 'transaction:update', payload);
-    if (tx.fromUserId) emitToUser(String(tx.fromUserId), 'transaction:update', payload);
-
-    // Notify sender
-    try {
-      const fromUserId = tx.fromUserId || tx.createdById;
-      if (fromUserId) {
-        const fromUser = await User.findById(fromUserId).catch(() => null) ||
-                         await User.findOne({ _id: fromUserId }).catch(() => null);
-        if (fromUser) {
-          const label = (tx.type === 'transfer' ? tx.materialName : tx.description) || '—';
-          if (fromUser.telegramChatId) {
-            await bot.sendMessage(fromUser.telegramChatId, tb(fromUser.language as BotLang | undefined, 'simpleRejectedNotify', { label })).catch(console.error);
-          }
-          sendPushToUser(String(fromUser._id), {
-            title: '❌ Rad etildi',
-            body: label,
-            tag: 'rejected',
-          }).catch(() => {});
-        }
-      }
-    } catch(notifErr) {
-      console.error('Telegram notification error:', notifErr);
-    }
-
-    const result = tx.toObject();
-    res.json({ ...result, id: tx._id });
+    const r = await rejectTransactionAction({ txFilter: scoped({ _id: req.params.id }), actorUserId: getTenant()?.userId, note: req.body?.note });
+    if (!r.ok) return res.status(r.status).json({ error: r.error });
+    const result = r.tx.toObject();
+    res.json({ ...result, id: r.tx._id });
   } catch (err) {
     console.error('Reject error:', err);
     res.status(500).json({ error: 'Server xatoligi' });

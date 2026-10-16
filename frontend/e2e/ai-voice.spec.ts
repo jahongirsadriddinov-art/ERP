@@ -25,6 +25,8 @@ class FakeSio {
   private queue: string[] = [];
   private waiters: (() => void)[] = [];
   events: { name: string; data: any }[] = [];
+  /** aiv:start javobi: ok — ulanadi; quota — server sababni aytib tugatadi; limit — ack rad etadi. */
+  startMode: 'ok' | 'quota' | 'limit' = 'ok';
 
   push(packet: string) {
     this.queue.push(packet);
@@ -44,7 +46,15 @@ class FakeSio {
     const [name, data] = arr;
     this.events.push({ name, data });
     const ackId = m[1];
-    if (name === 'aiv:start' && ackId) {
+    if (name === 'aiv:start' && ackId && this.startMode === 'limit') {
+      this.push(`43${ackId}${JSON.stringify([{ ok: false, code: 'limit', message: "Soatlik ovozli qo'ng'iroqlar soni tugadi" }])}`);
+    } else if (name === 'aiv:start' && ackId && this.startMode === 'quota') {
+      this.push(`43${ackId}${JSON.stringify([{ ok: true, sessionId: SID, correlationId: CID }])}`);
+      setTimeout(() => {
+        this.emit('aiv:error', { code: 'ai_quota', message: 'Ovozli limit tugadi — matn bilan davom etamiz.' });
+        this.emit('aiv:end', { sessionId: SID, reason: 'error' });
+      }, 150);
+    } else if ((name === 'aiv:start' || name === 'aiv:accept') && ackId) {
       this.push(`43${ackId}${JSON.stringify([{ ok: true, sessionId: SID, correlationId: CID }])}`);
       setTimeout(() => {
         this.emit('aiv:ready', { sessionId: SID, correlationId: CID, inputSampleRate: 16000, outputSampleRate: 24000, frameMs: 40, ptt: false });
@@ -101,6 +111,11 @@ async function mockApi(page: Page, sio: FakeSio, calls: Calls) {
     if (url.includes('/api/ai-voice/me/chat/message')) {
       const body = req.postDataJSON();
       calls.chatPosts.push(body);
+      if (/qo'ng'iroq qil/.test(body.text)) {
+        // AI requestCallback'ni bajardi — server ~bir zumda ilova ichida qo'ng'iroq qiladi (aiv:incoming)
+        setTimeout(() => sio.emit('aiv:incoming', { sessionId: SID, correlationId: CID, purpose: 'assistant', expiresAt: new Date(Date.now() + 30_000).toISOString(), companyName: 'Test' }), 600);
+        return json({ reply: "Hozir ilova ichida qo'ng'iroq qilaman.", pendingActions: [], toolCalls: [{ name: 'requestCallback', status: 'ok' }] });
+      }
       return json({ reply: `Bugun 12 ishchi keldi (savol: ${body.text})`, pendingActions: [], toolCalls: [] });
     }
     if (url.includes('/api/ai-voice/me/chat')) {
@@ -231,4 +246,40 @@ test("guruhga AI qo'shish va @AI bilan savol", async ({ page }) => {
   // AI javobi guruhda odatdagi xabar bo'lib, "🤖 AI yordamchi" nomi bilan ko'rinadi
   await expect(page.getByText('Salom! Qanday yordam bera olaman?').last()).toBeVisible({ timeout: 10_000 });
   await expect(page.getByText('🤖 AI yordamchi', { exact: true }).last()).toBeVisible();
+});
+
+test("ovozli limit/kvota — qo'ng'iroq to'xtab qolmaydi: matnli AI chatiga o'tadi (sabab bilan)", async ({ page }) => {
+  const { sio } = await setup(page);
+  sio.startMode = 'quota';
+  await page.getByTestId('ai-chat-contact').click({ timeout: 20_000 });
+  await expect.poll(() => sio.got('aiv:presence').length, { timeout: 15_000 }).toBeGreaterThan(0);
+  await page.getByTestId('ai-chat-call').click();
+  await expect.poll(() => sio.got('aiv:start').length, { timeout: 15_000 }).toBe(1);
+  const notice = page.getByTestId('ai-chat-notice').first();
+  await expect(notice).toContainText('Ovozli limit tugadi — matn bilan davom etamiz', { timeout: 10_000 });
+  await expect(page.getByTestId('ai-call-overlay')).toBeHidden();
+  await expect(page.getByTestId('ai-chat-input').first()).toBeEnabled();
+
+  // Soatlik limit (ack rad etadi) — xuddi shunday matnga o'tadi, "Limit tugadi" bilan to'xtamaydi
+  sio.startMode = 'limit';
+  await page.keyboard.press('Escape');
+  await page.getByTestId('ai-chat-call').first().click();
+  await expect.poll(() => sio.got('aiv:start').length, { timeout: 15_000 }).toBe(2);
+  await expect(page.getByTestId('ai-chat-notice').first()).toContainText('matn bilan davom etamiz', { timeout: 10_000 });
+  await expect(page.getByText("Limit tugadi — keyinroq urinib ko'ring")).toHaveCount(0);
+});
+
+test("chatda 'menga qo'ng'iroq qil' — AI qo'ng'irog'i jiringlamasdan darhol ulanadi", async ({ page }) => {
+  const { sio } = await setup(page);
+  await page.getByTestId('ai-chat-contact').click({ timeout: 20_000 });
+  await expect.poll(() => sio.got('aiv:presence').length, { timeout: 15_000 }).toBeGreaterThan(0);
+  await page.getByTestId('ai-chat-input').fill("menga qo'ng'iroq qil");
+  await page.getByTestId('ai-chat-send').click();
+  await expect(page.getByTestId('ai-chat-msg-ai').last()).toContainText("qo'ng'iroq qilaman");
+  await expect.poll(() => sio.got('aiv:accept').map((e) => e.data?.sessionId), { timeout: 10_000 }).toEqual([SID]);
+  const overlay = page.getByTestId('ai-call-overlay');
+  await expect(overlay).toBeVisible();
+  await expect(page.getByTestId('ai-call-captions')).toContainText('Men AI yordamchiman', { timeout: 10_000 });
+  await page.getByTestId('ai-call-hangup').click();
+  await expect(overlay).toBeHidden({ timeout: 6_000 });
 });

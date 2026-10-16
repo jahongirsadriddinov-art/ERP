@@ -6,7 +6,8 @@ import AiReminder from '../../models/AiReminder';
 import {
   CHANNEL_NAMES, type AiMePrefsDto, type AiMePrefsPatchReq, type AiReminderDto, type AivIncoming, type ChannelName,
 } from '../contracts';
-import { setCallConsent, setOptOut } from '../consent';
+import { companyConsentOf, evaluateCallConsent, setCallConsent, setOptOut } from '../consent';
+import { ensureContactTgUserId } from '../telegram/tgLink';
 import { getCompanyAiState, getSettings, isAiActive } from '../settings';
 import { isObjectIdString, newCorrelationId } from '../lib/ids';
 import { isHHmm, localDate } from '../lib/zonedTime';
@@ -17,7 +18,8 @@ import { REMINDER_CHANNELS } from '../scheduler/reminders';
 // O'zim: /api/ai-voice/me (bootstrap: requireAuth + blockDeveloper; workGate ALLOW ro'yxatida —
 // smenasi yopiq ishchi ham o'z sozlamasi/eslatmasi/davomat javobiga yeta oladi).
 // Hamma narsa FAQAT req.user.userId uchun: yo'l/tana orqali boshqa foydalanuvchi ID'si qabul qilinmaydi
-// (eslatma maqsadi ham faqat o'zi). Rozilik/opt-out — consent.ts orqali (ConsentLog source:'me').
+// (eslatma maqsadi ham faqat o'zi). Owner 2026-10-16: PATCH / (rozilik/opt-out/kanallar/jim soatlar/til) —
+// faqat rahbarlar o'zi uchun; xodimlarga 403 (GET / — faqat ko'rish). Rozilik/opt-out — consent.ts orqali.
 // GET / har doim ishlaydi (AI holatini ko'rsatadi); qolgan yo'llar AI faol bo'lmasa 403 ai_disabled.
 
 const router = Router();
@@ -51,9 +53,18 @@ router.use(requireActive);
 const isChannel = (c: unknown): c is ChannelName => (CHANNEL_NAMES as unknown[]).includes(c);
 const uniqChannels = (v: unknown): v is ChannelName[] => Array.isArray(v) && v.length <= CHANNEL_NAMES.length && v.every(isChannel) && new Set(v).size === v.length;
 
-async function prefsDto(m: Me): Promise<AiMePrefsDto & { status: { aiActive: boolean; attendanceEnabled: boolean; telegramLinked: boolean; planHasFeature: boolean } }> {
+type PrefsStatus = {
+  aiActive: boolean; attendanceEnabled: boolean; telegramLinked: boolean; planHasFeature: boolean;
+  /** Owner 2026-10-16: false — faqat ko'rish (xodim); kompaniya roziligi va samarali rozilik. */
+  canEdit: boolean; companyConsent: boolean; callsAllowed: boolean;
+};
+
+async function prefsDto(m: Me, canEdit: boolean): Promise<AiMePrefsDto & { status: PrefsStatus }> {
+  // ERP bot bog'lanishidan tgUserId (kod shart emas) — ko'rinishda ham to'g'ri holat
+  await ensureContactTgUserId(m.companyId, m.userId).catch(() => undefined);
   const c: any = await AiEmployeeContact.findOne({ companyId: m.companyId, employeeId: m.userId }).lean();
   const [aiActive, settings, state] = await Promise.all([isAiActive(m.companyId), getSettings(m.companyId), getCompanyAiState(m.companyId)]);
+  const companyConsent = companyConsentOf(settings);
   return {
     ...(c?.languageOverride ? { languageOverride: c.languageOverride } : {}),
     ...(c?.channelPrefs?.order?.length ? { channelOrder: c.channelPrefs.order } : {}),
@@ -67,16 +78,24 @@ async function prefsDto(m: Me): Promise<AiMePrefsDto & { status: { aiActive: boo
       attendanceEnabled: aiActive && settings.attendance.enabled,
       telegramLinked: !!c?.telegram?.tgUserId,
       planHasFeature: state.hasFeature,
+      canEdit,
+      companyConsent,
+      callsAllowed: evaluateCallConsent(companyConsent, c).allowed,
     },
   };
 }
 
-router.get('/', wrap(async (req, res) => { res.json(await prefsDto(me(req))); }));
+router.get('/', wrap(async (req, res) => { res.json(await prefsDto(me(req), isBoss(req))); }));
 
 const PATCH_KEYS = new Set(['languageOverride', 'channelOrder', 'disabledChannels', 'callConsent', 'optOut', 'quietHours']);
 
+/** Owner 2026-10-16: AI sozlamalarini faqat rahbarlar (egasi/direktor/o'rinbosar) o'zi uchun o'zgartiradi. */
+const isBoss = (req: Request) => !!req.user?.isOwner || req.user?.role === 'direktor' || req.user?.role === 'orinbosar';
+
 router.patch('/', wrap(async (req, res) => {
   const m = me(req);
+  // Xodimlar uchun faqat ko'rish (GET /) — rozilik/opt-out/kanallar/jim soatlarni rahbariyat boshqaradi
+  if (!isBoss(req)) return res.status(403).json({ error: 'forbidden', message: "AI sozlamalarini rahbariyat boshqaradi" });
   const b = (req.body || {}) as AiMePrefsPatchReq & Record<string, unknown>;
   if (typeof b !== 'object' || Array.isArray(b)) return res.status(400).json({ error: 'bad_request' });
   const unknown = Object.keys(b).filter((k) => !PATCH_KEYS.has(k));
@@ -120,7 +139,7 @@ router.patch('/', wrap(async (req, res) => {
     const r = await setOptOut({ companyId: m.companyId, employeeId: m.userId, actorUserId: m.userId, source: 'me', ...b.optOut });
     if (!r.ok) return res.status(400).json({ error: r.code });
   }
-  res.json(await prefsDto(m));
+  res.json(await prefsDto(m, true));
 }));
 
 // ───────────── Eslatmalar ─────────────

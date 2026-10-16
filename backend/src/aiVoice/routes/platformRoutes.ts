@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { Router, type NextFunction, type Request, type Response } from 'express';
+import AiAssistantSettings from '../../models/AiAssistantSettings';
 import AiChannelConnection from '../../models/AiChannelConnection';
 import AiEmployeeContact from '../../models/AiEmployeeContact';
 import Company from '../../models/Company';
@@ -7,6 +8,9 @@ import User from '../../models/User';
 import { logAudit } from '../../services/audit';
 import { telegramCallChannel } from '../channels/telegramCallChannel';
 import { aiConfig } from '../config';
+import { companyConsentMap, evaluateCallConsent, getCallConsent } from '../consent';
+import { isAiActive } from '../settings';
+import { botLinkedTgId } from '../telegram/tgLink';
 import { isObjectIdString, newCorrelationId } from '../lib/ids';
 import { hitRate } from '../lib/mongoRateLimit';
 import { ensurePlatformConnection } from '../lib/workerLease';
@@ -24,8 +28,8 @@ import { getActiveWorker } from '../telegram/workerNamespace';
 //  • telefon/kod/parol HECH QACHON saqlanmaydi, log/audit qilinmaydi, xato matniga qo'shilmaydi —
 //    to'g'ridan-to'g'ri worker RPC'ga uzatiladi; kutilayotgan login holati faqat worker xotirasida,
 //    backend faqat server bergan loginAttemptId'ni (sir emas) va uni boshlagan dasturchini biladi;
-//  • login qadamlari 5 ta / 10 daqiqa; sinov qo'ng'irog'i 5 ta / soat, faqat callConsent='granted'
-//    xodimga va firma bilan audit yozuvi;
+//  • login qadamlari 5 ta / 10 daqiqa; sinov qo'ng'irog'i 5 ta / soat, faqat samarali rozilikka ega
+//    (consent.getCallConsent) xodimga va firma bilan audit yozuvi;
 //  • StringSession bu yerda yo'q — u faqat worker diskida (TG_SESSION_KEY bilan shifrlangan).
 
 const router = Router();
@@ -259,29 +263,46 @@ router.post('/telegram-account/udp-probe', wrap(async (req, res) => {
 }));
 
 // ───────────── Sinov qo'ng'irog'i (B7) ─────────────
-/** Sinov uchun nomzodlar: faqat Telegram qo'ng'irog'iga rozilik bergan xodimlar. */
+/**
+ * Sinov uchun nomzodlar (owner 2026-10-16): AI yoqilgan (faol, tarifli) firmalarning samarali roziligi bor va
+ * ERP botga (yoki eski kod bilan) Telegram bog'langan xodimlari. Telefon raqamlari qaytmaydi.
+ */
 router.get('/telegram-account/test-targets', wrap(async (req, res) => {
   const q = typeof req.query.q === 'string' ? req.query.q.trim().slice(0, 40) : '';
-  const contacts: any[] = await AiEmployeeContact.find({ 'telegram.callConsent': 'granted', 'telegram.tgUserId': { $type: 'string' } })
-    .select('companyId employeeId telegram.resolveStatus').limit(500).lean();
-  if (!contacts.length) return res.json({ targets: [] });
-  const userFilter: Record<string, unknown> = { _id: { $in: contacts.map((c) => c.employeeId) } };
+  const enabled: any[] = await AiAssistantSettings.find({ enabled: true }).select('companyId').limit(500).lean();
+  const companyIds: string[] = [];
+  for (const id of [...new Set(enabled.map((s) => String(s.companyId || '')))]) {
+    if (isObjectIdString(id) && (await isAiActive(id))) companyIds.push(id);
+  }
+  if (!companyIds.length) return res.json({ targets: [] });
+  const userFilter: Record<string, unknown> = {
+    companyId: { $in: companyIds }, isBlocked: { $ne: true }, role: { $ne: 'dasturchi' },
+  };
+  const and: Record<string, unknown>[] = [];
   if (q) {
     const rx = new RegExp(esc(q), 'i');
-    userFilter.$or = [{ firstName: rx }, { lastName: rx }];
+    and.push({ $or: [{ firstName: rx }, { lastName: rx }] });
   }
-  const users: any[] = await User.find(userFilter).select('firstName lastName companyId').limit(20).lean();
-  const companyIds = [...new Set(users.map((u) => String(u.companyId || '')).filter((id) => isObjectIdString(id)))];
-  const companies: any[] = companyIds.length ? await Company.find({ _id: { $in: companyIds } }).select('name').lean() : [];
-  const cName = new Map(companies.map((c) => [String(c._id), String(c.name || '')]));
-  const byUser = new Map(contacts.map((c) => [String(c.employeeId), c]));
-  res.json({
-    targets: users.map((u) => ({
-      userId: String(u._id), name: fullName(u) || '—', companyId: String(u.companyId || ''),
-      companyName: cName.get(String(u.companyId || '')) || '',
-      resolveStatus: String(byUser.get(String(u._id))?.telegram?.resolveStatus || 'unknown'),
-    })),
-  });
+  // Telefon tanlanmaydi
+  const users: any[] = await User.find(and.length ? { ...userFilter, $and: and } : userFilter)
+    .select('firstName lastName companyId telegramChatId telegramUserId').sort({ firstName: 1 }).limit(500).lean();
+  const contacts: any[] = users.length ? await AiEmployeeContact.find({ employeeId: { $in: users.map((u) => String(u._id)) } })
+    .select('companyId employeeId telegram.tgUserId telegram.callConsent telegram.resolveStatus optOut').lean() : [];
+  const byUser = new Map(contacts.map((c) => [`${c.companyId}:${c.employeeId}`, c]));
+  const consentOn = await companyConsentMap(companyIds);
+  const targets: unknown[] = [];
+  for (const u of users) {
+    const companyId = String(u.companyId || '');
+    const ct = byUser.get(`${companyId}:${String(u._id)}`);
+    const linked = !!botLinkedTgId(u) || typeof ct?.telegram?.tgUserId === 'string';
+    if (!linked || !evaluateCallConsent(consentOn.get(companyId) !== false, ct).allowed) continue;
+    targets.push({ userId: String(u._id), name: fullName(u) || '—', companyId, resolveStatus: String(ct?.telegram?.resolveStatus || 'unknown') });
+    if (targets.length >= 20) break;
+  }
+  const names = new Map<string, string>();
+  const cos: any[] = await Company.find({ _id: { $in: [...new Set(targets.map((t: any) => t.companyId))] } }).select('name').lean();
+  for (const c of cos) names.set(String(c._id), String(c.name || ''));
+  res.json({ targets: targets.map((t: any) => ({ ...t, companyName: names.get(t.companyId) || '' })) });
 }));
 
 router.post('/telegram-account/test-call', wrap(async (req, res) => {
@@ -291,9 +312,9 @@ router.post('/telegram-account/test-call', wrap(async (req, res) => {
   const target: any = await User.findById(userId).select('firstName lastName companyId language').lean();
   const companyId = target?.companyId ? String(target.companyId) : '';
   if (!target || !companyId) return res.status(404).json({ error: 'not_found' });
-  const ct: any = await AiEmployeeContact.findOne({ companyId, employeeId: userId }).select('telegram.callConsent').lean();
-  // B7: faqat rozilik bergan xodimga
-  if (ct?.telegram?.callConsent !== 'granted') return res.status(409).json({ error: 'no_consent' });
+  // B7 (owner 2026-10-16): faqat samarali rozilikka ega xodimga (firma roziligi yoki eski shaxsiy, opt-out'siz)
+  const consent = await getCallConsent(companyId, String(userId));
+  if (!consent.allowed) return res.status(409).json({ error: consent.reason || 'no_consent' });
   if (await limited(res, `aiv:tgtest:${dev.userId}`, TEST_CALL_MAX, TEST_CALL_WINDOW_MS)) return;
 
   const ctx = {

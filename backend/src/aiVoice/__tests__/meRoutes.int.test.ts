@@ -77,47 +77,64 @@ describe('auth / workGate', () => {
 });
 
 describe('GET/PATCH /', () => {
+  // Owner 2026-10-16: PATCH faqat rahbarlar (o'zi uchun)
+  let BOSS: string;
+  beforeAll(() => { BOSS = A.orinbosarId; });
   it('standart sozlamalar va holat', async () => {
     const r = await api('get', '/', A.workerId);
     expect(r.status).toBe(200);
     expect(r.body).toMatchObject({ disabledChannels: [], callConsent: 'none', optOut: { calls: false, reminders: false, all: false }, quietHours: null });
     expect(r.body.status).toMatchObject({ aiActive: true, telegramLinked: false, planHasFeature: true });
   });
+  it("owner 2026-10-16: xodim AI sozlamalarini o'zgartira olmaydi — PATCH 403, GET faqat ko'rish", async () => {
+    for (const id of [A.workerId, A.prorabId]) {
+      for (const body of [{ callConsent: 'granted' }, { optOut: { calls: true } }, { disabledChannels: ['push'] }, { channelOrder: ['push'] },
+        { quietHours: { from: '22:00', to: '07:00' } }, { languageOverride: 'ru' }]) {
+        expect((await api('patch', '/', id, body)).status).toBe(403);
+      }
+    }
+    expect(await AiEmployeeContact.countDocuments({ employeeId: A.workerId, $or: [{ 'optOut.calls': true }, { quietHours: { $exists: true } }] })).toBe(0);
+    expect(await ConsentLog.countDocuments({ userId: A.workerId })).toBe(0);
+    const g = await api('get', '/', A.workerId);
+    expect(g.status).toBe(200);
+    expect(g.body.status).toMatchObject({ canEdit: false, companyConsent: true, callsAllowed: true });
+    expect((await api('get', '/', BOSS)).body.status.canEdit).toBe(true);
+  });
   it("o'z sozlamalari: til, kanal tartibi, opt-out, rozilik (ConsentLog source:'me')", async () => {
-    const r = await api('patch', '/', A.workerId, {
+    const r = await api('patch', '/', BOSS, {
       languageOverride: 'ru', channelOrder: ['push', 'bot_message'], disabledChannels: ['telegram_call'],
       optOut: { calls: true }, callConsent: 'granted',
     });
     expect(r.status).toBe(200);
     expect(r.body).toMatchObject({ languageOverride: 'ru', channelOrder: ['push', 'bot_message'], disabledChannels: ['telegram_call'], callConsent: 'granted', optOut: { calls: true } });
-    const logs: any[] = await ConsentLog.find({ userId: A.workerId }).lean();
+    const logs: any[] = await ConsentLog.find({ userId: BOSS }).lean();
     expect(logs.map((l) => [l.consentType, l.source]).sort()).toEqual([['ai_call', 'me'], ['ai_opt_out', 'me']]);
     // null — o'chiradi
-    const r2 = await api('patch', '/', A.workerId, { languageOverride: null, channelOrder: null });
+    const r2 = await api('patch', '/', BOSS, { languageOverride: null, channelOrder: null });
     expect(r2.body.languageOverride).toBeUndefined();
     expect(r2.body.channelOrder).toBeUndefined();
   });
   it("shaxsiy jim soatlar: o'rnatish (yarim tundan o'tuvchi ham), null — o'chirish", async () => {
-    const r = await api('patch', '/', A.workerId, { quietHours: { from: '22:00', to: '08:30' } });
+    const r = await api('patch', '/', BOSS, { quietHours: { from: '22:00', to: '08:30' } });
     expect(r.status).toBe(200);
     expect(r.body.quietHours).toEqual({ from: '22:00', to: '08:30' });
-    expect((await api('get', '/', A.workerId)).body.quietHours).toEqual({ from: '22:00', to: '08:30' });
-    const r2 = await api('patch', '/', A.workerId, { quietHours: null });
+    expect((await api('get', '/', BOSS)).body.quietHours).toEqual({ from: '22:00', to: '08:30' });
+    const r2 = await api('patch', '/', BOSS, { quietHours: null });
     expect(r2.body.quietHours).toBeNull();
     for (const q of [{ from: '25:00', to: '07:00' }, { from: '08:00', to: '08:00' }, { from: '08:00' }, { from: '08:00', to: '09:00', x: 1 }, 'night']) {
-      expect((await api('patch', '/', A.workerId, { quietHours: q })).status).toBe(400);
+      expect((await api('patch', '/', BOSS, { quietHours: q })).status).toBe(400);
     }
   });
   it("boshqa foydalanuvchini o'zgartirib bo'lmaydi (employeeId/userId maydonlari rad etiladi)", async () => {
     for (const body of [{ employeeId: A.worker2Id, optOut: { all: true } }, { userId: A.worker2Id }, { companyId: B.companyId }]) {
-      expect((await api('patch', '/', A.workerId, body)).status).toBe(400);
+      expect((await api('patch', '/', BOSS, body)).status).toBe(400);
     }
     expect(await AiEmployeeContact.countDocuments({ employeeId: A.worker2Id })).toBe(0);
     expect(await AiEmployeeContact.countDocuments({ companyId: B.companyId })).toBe(0);
   });
   it("noto'g'ri qiymatlar — 400", async () => {
     for (const body of [{ channelOrder: ['sms'] }, { channelOrder: ['push', 'push'] }, { optOut: { calls: 'yes' } }, { callConsent: 'none' }, { languageOverride: 'en' }, { optOut: {} }]) {
-      expect((await api('patch', '/', A.workerId, body)).status).toBe(400);
+      expect((await api('patch', '/', BOSS, body)).status).toBe(400);
     }
   });
 });

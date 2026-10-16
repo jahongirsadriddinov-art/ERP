@@ -21,7 +21,7 @@ export interface SendOpts {
   companyId?: string;
 }
 
-export type SendFailCode = 'no_bot' | 'no_user' | 'no_chat' | 'blocked' | 'rate_limited' | 'chat_not_found' | 'bad_request' | 'error';
+export type SendFailCode = 'no_bot' | 'no_user' | 'no_chat' | 'blocked' | 'rate_limited' | 'chat_not_found' | 'bad_request' | 'not_needed' | 'error';
 export type SendResult =
   | { ok: true; messageId: string }
   | { ok: false; code: SendFailCode; retryable: boolean; retryAfterSec?: number };
@@ -178,6 +178,8 @@ function mapSend(s: SendResult, now: Date): ChannelAttemptResult {
     case 'no_user': case 'no_chat': case 'chat_not_found': return { outcome: 'unavailable', retryable: false, errorCode: s.code };
     case 'no_bot': return { outcome: 'unavailable', retryable: true, errorCode: 'no_bot' };
     case 'bad_request': return { outcome: 'failed', retryable: false, errorCode: 'bad_request' };
+    // Owner 2026-10-16: rozilik so'rovi endi yuborilmaydi (kompaniya roziligi)
+    case 'not_needed': return { outcome: 'unavailable', retryable: false, errorCode: 'not_needed' };
     default: return { outcome: 'failed', retryable: true, errorCode: 'telegram_error' };
   }
 }

@@ -8,7 +8,7 @@ import {
   type AiLang, type AivConfirmActionAck, type AivEndReason, type AivErrorCode, type AivIncoming, type AivSessionAck, type Purpose,
 } from '../contracts';
 import { isObjectIdString } from '../lib/ids';
-import { hitRate } from '../lib/mongoRateLimit';
+import { hitRate, peekRate } from '../lib/mongoRateLimit';
 import { sanitizeForPrompt } from '../lib/untrusted';
 import { getCompanyAiState, getSettings } from '../settings';
 import { confirmPendingAction } from '../tools/executor';
@@ -34,6 +34,7 @@ const PRESENCE_FRESH_MS = 60_000;
 const RING_TIMEOUT_SEC = 30;
 const REBIND_GRACE_MS = 15_000;
 const STALE_BOUND_MS = 4_000;
+const HOUR_MS = 3_600_000;
 
 interface SockEntry {
   socket: Socket;
@@ -44,6 +45,7 @@ interface SockEntry {
   lastSeen: number;
   win: { start: number; count: number };
   badFrames: number;
+  warmedAt: number;
 }
 
 const byUser = new Map<string, Map<string, SockEntry>>();
@@ -52,6 +54,32 @@ const byCorrelation = new Map<string, InAppCall>();
 const starting = new Set<string>();
 
 const isWebsocket = (s: Socket): boolean => (s.conn as any)?.transport?.name === 'websocket';
+const WS_UPGRADE_WAIT_MS = 3_000;
+const WARM_EVENT = 'aiv:warm';          // mijoz AI chatini ochganda — disclosure klipini isitish
+const WARM_GAP_MS = 5 * 60_000;
+
+/**
+ * Polling → websocket yangilanishini qisqa kutadi (Render/Cloudflare ortida birinchi soniyalarda
+ * transport hali polling bo'lishi mumkin — darhol 'unsupported_transport' qaytarmaymiz).
+ */
+function waitWebsocket(s: Socket, ms = WS_UPGRADE_WAIT_MS): Promise<boolean> {
+  if (isWebsocket(s)) return Promise.resolve(true);
+  const conn: any = s.conn;
+  if (!conn || typeof conn.once !== 'function' || !s.connected) return Promise.resolve(false);
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      clearTimeout(t);
+      try { conn.off?.('upgrade', finish); } catch { /* */ }
+      resolve(isWebsocket(s));
+    };
+    const t = setTimeout(finish, ms);
+    t.unref?.();
+    conn.once('upgrade', () => setImmediate(finish));
+  });
+}
 
 function entryOf(socketId: string, userId: string): SockEntry | undefined {
   return byUser.get(userId)?.get(socketId);
@@ -87,6 +115,8 @@ class InAppCall implements VoiceTransport {
   accepted: boolean;
   ended = false;
   lastInAt = 0;
+  /** aiv:ready birinchi marta yuborilganda (haqiqatan ulangan qo'ng'iroq) — soatlik hisobga yoziladi. */
+  onReady: (() => void) | null = null;
   private seq = 0;
   private graceTimer: NodeJS.Timeout | null = null;
 
@@ -122,6 +152,7 @@ class InAppCall implements VoiceTransport {
   flushAudio(): void { /* no-op */ }
 
   sendEvent(event: string, payload: unknown): void {
+    if (event === S.ready && this.onReady) { const f = this.onReady; this.onReady = null; try { f(); } catch { /* */ } }
     const s = this.bound;
     if (!this.ended && s?.connected) s.emit(event, payload);
   }
@@ -186,7 +217,7 @@ export function registerAiVoiceSocket(socket: Socket): void {
   if (!userId) return;
   const entry: SockEntry = {
     socket, userId, companyId, role: String(socket.data?.role || ''), visible: false, lastSeen: 0,
-    win: { start: 0, count: 0 }, badFrames: 0,
+    win: { start: 0, count: 0 }, badFrames: 0, warmedAt: 0,
   };
   let m = byUser.get(userId);
   if (!m) { m = new Map(); byUser.set(userId, m); }
@@ -205,12 +236,23 @@ export function registerAiVoiceSocket(socket: Socket): void {
     }
   });
 
-  socket.on(C.accept, (req: unknown, ack: unknown) => {
+  socket.on(C.accept, async (req: unknown, ack: unknown) => {
     const reply = ackFn(ack);
-    try { reply(handleAccept(entry, req)); } catch (e) {
+    try {
+      // Avval transport (kutish), keyin accept — accept'ning o'zi sinxron (atomik) qoladi
+      if (!(await waitWebsocket(socket))) return reply(fail('unsupported_transport'));
+      reply(handleAccept(entry, req));
+    } catch (e) {
       console.error('[aiVoice] aiv:accept xatosi:', (e as Error).message);
       reply(fail('error'));
     }
+  });
+
+  socket.on(WARM_EVENT, () => {
+    const now = Date.now();
+    if (!entry.companyId || now - entry.warmedAt < WARM_GAP_MS) return;
+    entry.warmedAt = now;
+    void getVoiceSessionManager().prewarm?.(entry.companyId, entry.userId);
   });
 
   socket.on(C.decline, (req: unknown, ack: unknown) => {
@@ -277,7 +319,7 @@ export function registerAiVoiceSocket(socket: Socket): void {
 async function handleStart(e: SockEntry, req: unknown): Promise<AivSessionAck> {
   const r = req as any;
   if (!r || r.purpose !== 'assistant') return fail('bad_request');
-  if (!isWebsocket(e.socket)) return fail('unsupported_transport');
+  if (!(await waitWebsocket(e.socket))) return fail('unsupported_transport');
   if (!e.companyId || !isObjectIdString(e.userId)) return fail('denied');
   if (starting.has(e.userId)) return fail('busy');
   starting.add(e.userId);
@@ -285,14 +327,19 @@ async function handleStart(e: SockEntry, req: unknown): Promise<AivSessionAck> {
     const settings = await getSettings(e.companyId);
     // Ishchi rollar smenadan tashqarida AI'ga qo'ng'iroq qila olmaydi (design §7, workGate bilan bir xil)
     if (WORKER_ROLES.includes(e.role) && !settings.tools.allowOffShiftAssistant && !(await isOnShift(e.userId))) return fail('off_shift');
-    const perHour = Math.max(0, Number(settings.limits.userSessionsPerHour) || 0);
-    const rl = await hitRate(`aiv:start:${e.userId}`, perHour, 3_600_000);
-    if (!rl.allowed) return fail('limit');
     const lang: AiLang = await resolveVoiceLang(e.companyId, e.userId, settings);
+    // Soatlik limit faqat HAQIQATAN ulangan qo'ng'iroqlarni sanaydi (aiv:ready) — ulanmay qolgan urinishlar
+    // (kvota/tarmoq) foydalanuvchining limitini yemasin (owner 2026-10-16: "Limit tugadi" sababi shu edi).
+    const perHour = Math.max(0, Number(settings.limits.userSessionsPerHour) || 0);
+    const rateKey = `aiv:start:${e.userId}`;
+    if (perHour <= 0 || (await peekRate(rateKey, HOUR_MS)) >= perHour) {
+      return fail('limit', lang === 'ru' ? 'Лимит голосовых звонков за час исчерпан — продолжим текстом.' : "Soatlik ovozli qo'ng'iroqlar soni tugadi — matn bilan davom etamiz.");
+    }
 
     const call = new InAppCall(e.userId, e.companyId, 'assistant', true);
     call.bound = e.socket;
     call.lastInAt = Date.now();
+    call.onReady = () => { void hitRate(rateKey, perHour, HOUR_MS).catch(() => undefined); };
     const res = await getVoiceSessionManager().start({
       companyId: e.companyId, employeeId: e.userId, purpose: 'assistant', channel: 'inapp_call', lang, ptt: !!r.ptt,
       transport: call, socketId: e.socket.id, userInitiated: true, ringTimeoutSec: RING_TIMEOUT_SEC,

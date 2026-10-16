@@ -125,6 +125,14 @@ export const uz = {
   groupHint: "AI shu guruhda: «@AI» deb yozing",
   groupLoadErr: "AI holatini yuklab bo'lmadi",
   aiSender: "AI yordamchi",
+  // Ovozli ishonchlilik (2026-10-16): limit/kvotada matnga o'tish, "menga qo'ng'iroq qil"
+  textFallbackLimit: "Ovozli limit tugadi — matn bilan davom etamiz",
+  textFallbackUnavailable: "AI ovozli xizmatiga ulanib bo'lmadi — matn bilan davom etamiz",
+  textFallbackNotConfigured: "AI ovozli xizmati sozlanmagan (API kalit) — matn bilan davom etamiz. Administratorga ayting",
+  textFallbackNetwork: "Tarmog'ingiz ovozli aloqani qo'llamaydi — matn bilan davom etamiz",
+  infoFallback: "Zaxira ovoz rejimi — gapirishda davom eting",
+  infoTtsTextOnly: "AI ovozi o'rniga qurilmangiz o'qib beradi",
+  callingYou: "AI hozir sizga qo'ng'iroq qiladi — ilovani ochiq qoldiring",
 };
 
 export const ru = {
@@ -248,4 +256,11 @@ export const ru = {
   groupHint: "ИИ в этой группе: напишите «@AI»",
   groupLoadErr: "Не удалось загрузить статус ИИ",
   aiSender: "ИИ-помощник",
+  textFallbackLimit: "Голосовой лимит исчерпан — продолжим текстом",
+  textFallbackUnavailable: "Не удалось подключиться к голосовому ИИ — продолжим текстом",
+  textFallbackNotConfigured: "Голосовой ИИ не настроен (API-ключ) — продолжим текстом. Сообщите администратору",
+  textFallbackNetwork: "Ваша сеть не поддерживает голосовую связь — продолжим текстом",
+  infoFallback: "Резервный голосовой режим — продолжайте говорить",
+  infoTtsTextOnly: "Вместо голоса ИИ читает ваше устройство",
+  callingYou: "ИИ сейчас вам позвонит — не закрывайте приложение",
 };

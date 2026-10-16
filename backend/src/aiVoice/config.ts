@@ -47,6 +47,12 @@ export const aiConfig = {
 
   /** Matn miyasi (llm-provider.md). Kalit qiymatlari faqat env'da; bu yerda faqat "sozlanganmi". */
   brain: {
+    /** Groq — tez, OpenAI-mos (GROQ_API_KEY; mavjud /api/ai chat ham ishlatadi). GROQ_MODEL vergul bilan ro'yxat. */
+    get groqConfigured() { return !!(process.env.GROQ_API_KEY || '').trim(); },
+    get groqModels(): string[] {
+      const list = (process.env.GROQ_MODEL || '').split(',').map((m) => m.trim()).filter(Boolean);
+      return list.length ? list : ['openai/gpt-oss-120b', 'llama-3.3-70b-versatile'];
+    },
     get openRouterConfigured() { return !!(process.env.OPENROUTER_API_KEY || '').trim(); },
     /** Vergul bilan ro'yxat bo'lishi mumkin (OpenRouter `models` zaxira massivi). */
     get openRouterModels(): string[] {

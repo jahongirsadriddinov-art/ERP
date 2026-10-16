@@ -4,7 +4,8 @@
   • kiruvchi qo'ng'iroqlar darhol "band" deb rad etiladi (A3). "Ochiq muloqot" yoqilgan bo'lsa — rad
     etilmaydi: pytgcalls INCOMING_CALL voqeasida CallManager.on_incoming() backenddan qaror so'raydi;
   • DM'lar AI'ga uzatilmaydi — faqat bog'lash kodi tekshiriladi (binding.py), boshqasi e'tiborsiz;
-  • kontakt aniqlash tartibi (A2): kesh → @username → (ruxsat bo'lsa) bitta importContacts, faqat id mos bo'lsa.
+  • kontakt aniqlash tartibi (A2 + owner 2026-10-16, peers.py): kesh → dialoglar → @username → bitta importContacts
+    (telefon faqat shu so'rov uchun backenddan), faqat id mos bo'lsa; soatiga ≤5 import.
 """
 from __future__ import annotations
 
@@ -16,6 +17,7 @@ from typing import Any, Awaitable, Callable, Optional
 
 from . import __version__
 from .binding import BindingMatcher
+from .peers import PeerResolver, mask_id
 from .errors import discard_reason_name, flood_seconds, map_call_error
 from .session_store import SessionStore, SessionStoreError
 
@@ -102,6 +104,7 @@ class TelegramRuntime:
         self.last_error: Optional[str] = None
         self._lock = asyncio.Lock()
         self._ap = None
+        self.peers = PeerResolver(self)
 
     # ── holat ──
     @property
@@ -343,6 +346,54 @@ class TelegramRuntime:
         except Exception as e:
             log.debug("discard: %s", type(e).__name__)
 
+    # ── PeerOps (peers.py) ──
+    async def refresh_dialogs(self) -> None:
+        if self.client:
+            await asyncio.wait_for(self.client.get_dialogs(limit=200), timeout=30)
+
+    async def username_id(self, username: str) -> Optional[int]:
+        if not self.client:
+            return None
+        ent = await self.client.get_entity(username)
+        return int(getattr(ent, "id", 0)) or None
+
+    async def contact_ids(self) -> set[int]:
+        from telethon.tl import functions
+        ids = await self.client(functions.contacts.GetContactIDsRequest(hash=0))
+        return {int(i) for i in (ids or [])}
+
+    async def import_phone(self, phone: str) -> list[int]:
+        from telethon.tl import functions, types
+        res = await self.client(functions.contacts.ImportContactsRequest([
+            types.InputPhoneContact(client_id=random.randint(1, 2**31 - 1), phone=phone, first_name="ERP", last_name="xodim"),
+        ]))
+        return [int(u.id) for u in (getattr(res, "users", []) or [])]
+
+    async def delete_contacts(self, user_ids: list[int]) -> None:
+        from telethon.tl import functions
+        inputs = [await self.client.get_input_entity(uid) for uid in user_ids]
+        await self.client(functions.contacts.DeleteContactsRequest(id=inputs))
+
+    def _note_flood(self, e: Exception) -> Optional[int]:
+        fs = flood_seconds(e)
+        if fs and self.calls:
+            self.calls.flood_wait_until_ms = max(self.calls.flood_wait_until_ms, time.time() * 1000 + fs * 1000)
+        return fs
+
+    async def resolve_peer(self, user_id: int, username: Optional[str] = None, phone: Optional[str] = None) -> str:
+        """call.place uchun: 'resolved' | 'not_found' | 'mismatch' | 'import_limited' | 'flood_wait' | 'privacy_restricted'."""
+        if not self.client:
+            return "not_found"
+        try:
+            return await self.peers.resolve(int(user_id), username, phone)
+        except Exception as e:
+            if self._note_flood(e):
+                return "flood_wait"
+            if map_call_error(e) == "privacy":
+                return "privacy_restricted"
+            log.debug("peer %s: %s", mask_id(user_id), type(e).__name__)
+            return "not_found"
+
     # ── contact.resolve (A2) ──
     async def resolve_contact(self, p: dict) -> dict:
         from .errors import RpcError
@@ -354,45 +405,18 @@ class TelegramRuntime:
             raise RpcError("bad_request")
         if expected <= 0:
             raise RpcError("bad_request")
+        # Telefon faqat backend ruxsat bergan bo'lsa (allowImport) — bitta import, id mos kelishi shart
+        phone = p.get("phone") if p.get("allowImport") is True else None
         try:
-            # 1) kesh / dialoglar (xodim akkauntga yozgan bo'lsa — access_hash bor)
-            if await self.has_peer(expected):
-                return {"status": "resolved", "tgUserId": str(expected)}
-            # 2) @username
-            un = str(p.get("username") or "").lstrip("@")
-            if un:
-                try:
-                    ent = await self.client.get_entity(un)
-                    if int(getattr(ent, "id", 0)) == expected:
-                        return {"status": "resolved", "tgUserId": str(expected)}
-                    return {"status": "mismatch"}
-                except (ValueError, TypeError):
-                    pass
-            # 3) faqat ruxsat bo'lsa va bitta: importContacts (id mos kelishi SHART)
-            phone = str(p.get("phone") or "")
-            if p.get("allowImport") is True and phone:
-                from telethon.tl import functions, types
-                res = await self.client(functions.contacts.ImportContactsRequest([
-                    types.InputPhoneContact(client_id=random.randint(1, 2**31 - 1), phone=phone, first_name="ERP", last_name="xodim"),
-                ]))
-                users = list(getattr(res, "users", []) or [])
-                match = any(int(u.id) == expected for u in users)
-                if users:
-                    try:
-                        await self.client(functions.contacts.DeleteContactsRequest(id=users))
-                    except Exception:
-                        pass
-                if match:
-                    return {"status": "resolved", "tgUserId": str(expected)}
-                return {"status": "mismatch" if users else "not_found"}
-            return {"status": "not_found"}
+            st = await self.peers.resolve(expected, p.get("username"), phone)
         except Exception as e:
-            fs = flood_seconds(e)
+            fs = self._note_flood(e)
             if fs:
-                if self.calls:
-                    self.calls.flood_wait_until_ms = max(self.calls.flood_wait_until_ms, time.time() * 1000 + fs * 1000)
                 return {"status": "flood_wait", "retryAfterSec": fs}
             if map_call_error(e) == "privacy":
                 return {"status": "privacy_restricted"}
             log.debug("resolve: %s", type(e).__name__)
             return {"status": "not_found"}
+        if st == "resolved":
+            return {"status": "resolved", "tgUserId": str(expected)}
+        return {"status": "mismatch" if st == "mismatch" else "not_found"}

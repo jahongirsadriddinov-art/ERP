@@ -119,6 +119,19 @@ export function moveItem<T>(list: readonly T[], i: number, dir: -1 | 1): T[] {
 export const addChannel = (list: readonly ChannelName[], c: ChannelName) => (list.includes(c) ? [...list] : [...list, c]);
 export const removeChannel = (list: readonly ChannelName[], c: ChannelName) => list.filter((x) => x !== c);
 export const missingChannels = (list: readonly ChannelName[]) => CHANNEL_NAMES.filter((c) => !list.includes(c));
+/**
+ * Oddiy ko'rinishdagi kalit: kanalni yoqish/o'chirish. Yoqilganda standart tartibdagi joyiga qo'yiladi
+ * (masalan Telegram qo'ng'iroq — bot xabaridan keyin, push'dan oldin); oxirgi kanal o'chirilmaydi.
+ */
+export function setChannelEnabled(list: readonly ChannelName[], c: ChannelName, on: boolean): ChannelName[] {
+  if (!on) return list.length > 1 ? removeChannel(list, c) : [...list];
+  if (list.includes(c)) return [...list];
+  const rank = CHANNEL_NAMES.indexOf(c);
+  const at = list.findIndex((x) => CHANNEL_NAMES.indexOf(x) > rank);
+  const out = [...list];
+  out.splice(at < 0 ? out.length : at, 0, c);
+  return out;
+}
 
 // ───────────── Tekshiruv (saqlashdan oldin) ─────────────
 export type DraftError =

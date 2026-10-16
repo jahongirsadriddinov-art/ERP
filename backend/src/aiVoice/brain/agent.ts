@@ -12,11 +12,14 @@ import { executeTool, type ExecuteOutcome } from '../tools/executor';
 import { effectiveToolNames } from '../tools/rbac';
 import { getTool, toolDeclarations } from '../tools/registry';
 import { registerErpTools } from '../tools/erp';
+import { promptObjects } from '../tools/erp/common';
 import { resolveTextProviderOrder } from './providerOrder';
+import { quotaKindOf, quotaMessage, type QuotaKind } from './quota';
+import { capToolResult, decisionKindOf, explicitDecision } from './toolPolicy';
 import { buildSystemPrompt } from './systemPrompt';
 import { createClaudeProvider } from './providers/claude';
 import { createGeminiProvider } from './providers/gemini';
-import { createOpenRouterProvider } from './providers/openrouter';
+import { createOpenRouterProvider, createGroqProvider } from './providers/openrouter';
 import { errorCode, type ProviderCall, type ProviderSession, type ProviderToolResult, type TextProvider } from './providers/types';
 
 // ErpTextAgent — TextAgent'ning haqiqiy amalga oshirilishi (llm-provider.md):
@@ -41,6 +44,10 @@ const MSG = {
   badArgs: { uz: "Tool argumentlari noto'g'ri (JSON emas) — amal bajarilmadi.", ru: 'Неверные аргументы инструмента (не JSON) — действие не выполнено.' },
   unknownTool: { uz: "Bunday tool yo'q yoki ruxsat etilmagan.", ru: 'Такого инструмента нет или он не разрешён.' },
   perRound: { uz: "Bir navbatda juda ko'p tool chaqirildi — qolganlari bajarilmadi.", ru: 'Слишком много вызовов за один шаг — остальные не выполнены.' },
+  needExplicit: {
+    uz: "Bu qaror uchun foydalanuvchining aniq buyrug'i kerak (masalan: \"tasdiqla\" yoki \"rad et\"). Bajarilmadi — foydalanuvchidan so'rang.",
+    ru: 'Для этого решения нужна явная команда пользователя («утверди» или «отклони»). Не выполнено — спросите пользователя.',
+  },
 };
 type Lang = 'uz' | 'ru';
 const m = (k: keyof typeof MSG, lang: Lang) => MSG[k][lang];
@@ -54,7 +61,7 @@ export interface ErpTextAgentDeps {
   /** Provayderlarni almashtirish (testlar: soxta Gemini mijozi / soxta fetch). */
   providers?: Partial<Record<TextProviderName, TextProvider>>;
   /** Qaysi provayderlar sozlangan (standart — env'dan). */
-  env?: { gemini: boolean; openrouter: boolean; claude: boolean };
+  env?: { gemini: boolean; openrouter: boolean; claude: boolean; groq?: boolean };
   /** Butun run() uchun vaqt chegarasi (ms). */
   totalTimeoutMs?: number;
 }
@@ -63,6 +70,10 @@ interface RunState {
   toolCalls: TextAgentOutput['toolCalls'];
   pendingActions: PendingActionInfo[];
   writeStatuses: { name: string; status: ToolStatus; message: string }[];
+  /** Provayder kvotasi (eng og'iri: daily > minute) — hamma provayder yiqilsa foydalanuvchiga aytiladi. */
+  quota: QuotaKind | null;
+  userText: string;
+  history: { role: 'user' | 'assistant'; text: string }[];
   usage: { tokensIn: number; tokensOut: number; costUsdMicros: number; model: string; provider: TextProviderName | 'none' };
 }
 
@@ -71,6 +82,7 @@ export class ErpTextAgent implements TextAgent {
   constructor(private deps: ErpTextAgentDeps = {}) {
     this.providers = {
       gemini: deps.providers?.gemini || createGeminiProvider(),
+      groq: deps.providers?.groq || createGroqProvider(),
       openrouter: deps.providers?.openrouter || createOpenRouterProvider(),
       claude: deps.providers?.claude || createClaudeProvider(),
     };
@@ -79,7 +91,7 @@ export class ErpTextAgent implements TextAgent {
   async run(input: TextAgentInput): Promise<TextAgentOutput> {
     const lang: Lang = input?.ctx?.lang === 'ru' ? 'ru' : 'uz';
     const st: RunState = {
-      toolCalls: [], pendingActions: [], writeStatuses: [],
+      toolCalls: [], pendingActions: [], writeStatuses: [], quota: null, userText: '', history: [],
       usage: { tokensIn: 0, tokensOut: 0, costUsdMicros: 0, model: 'none', provider: 'none' },
     };
     const reply = (text: string): TextAgentOutput => ({
@@ -94,6 +106,8 @@ export class ErpTextAgent implements TextAgent {
     const ac = await checkActor(ctx0.userId, ctx0.companyId);
     if (!ac.ok) return reply(m('disabled', lang));
     if (!userText) return reply(m('failed', lang));
+    st.userText = userText;
+    st.history = Array.isArray(input.history) ? input.history : [];
     if (await budgetExceeded(ctx0.companyId)) return reply(m('budget', lang));
 
     registerErpTools();                                         // idempotent
@@ -107,11 +121,15 @@ export class ErpTextAgent implements TextAgent {
     };
     const allowed = effectiveToolNames(settings, actor.role, actor.isOwner, { channel: ctx.channel, purpose: ctx.purpose });
     const tools = toolDeclarations(allowed, lang);
-    const company = await getCompanyAiState(ctx.companyId);
+    const [company, objects] = await Promise.all([
+      getCompanyAiState(ctx.companyId),
+      promptObjects(ctx).catch(() => ({ names: [] as string[], total: 0 })),
+    ]);
     const now = zonedParts(new Date());
     const system = buildSystemPrompt({
       lang, companyName: company.name, userName: actor.name, role: actor.role, isOwner: actor.isOwner,
-      channel: ctx.channel, today: now.date, weekday: now.isoWeekday,
+      channel: ctx.channel, today: now.date, weekday: now.isoWeekday, time: now.hhmm,
+      objects: objects.names, objectsTotal: objects.total, toolNames: allowed,
     });
 
     const runId = randomUUID();
@@ -129,10 +147,12 @@ export class ErpTextAgent implements TextAgent {
         return reply(this.guard(text, st, lang));
       } catch (e) {
         if (input.signal?.aborted) break;
+        const qk = quotaKindOf(e);
+        if (qk && st.quota !== 'daily') st.quota = qk;
         console.warn(`[aiVoice] matn provayderi ${name} xatosi: ${errorCode(e)} — keyingisiga o'tiladi`);
       }
     }
-    const base = m('failed', lang);
+    const base = st.quota ? quotaMessage(st.quota, lang) : m('failed', lang);
     return reply(st.writeStatuses.length ? `${base}\n${this.factual(st, lang)}` : base);
   }
 
@@ -148,12 +168,20 @@ export class ErpTextAgent implements TextAgent {
       if (!turn.calls.length) return turn.text || (turn.truncated ? m('failed', lang) : '');
       if (round >= maxRounds) return turn.text ? `${turn.text}\n${m('rounds', lang)}` : m('rounds', lang);
 
-      const results: ProviderToolResult[] = [];
+      // Tezlik: o'qish tool'lari parallel; yozuvlar ketma-ket (tartib va idempotentlik uchun).
+      // Natijalar har doim modelning chaqiruv tartibida yoziladi.
+      const done = new Map<number, ToolResult>();
+      const calls = turn.calls.slice(0, MAX_CALLS_PER_ROUND);
+      const isRead = (c: ProviderCall) => !c.argsError && getTool(c.name)?.kind === 'read' && allowed.includes(c.name);
+      await Promise.all(calls.map(async (c, i) => { if (isRead(c)) done.set(i, await this.execOne(c, ctx, allowed, runId, st, lang)); }));
+      for (const [i, c] of calls.entries()) if (!done.has(i)) done.set(i, await this.execOne(c, ctx, allowed, runId, st, lang));
+      const results: ProviderToolResult[] = turn.calls.map((call, i) => ({
+        id: call.id, name: call.name,
+        result: capToolResult(done.get(i) ?? { status: 'error' as const, message: m('perRound', lang), retryable: false }),
+      }));
       for (const [i, call] of turn.calls.entries()) {
-        const result = i < MAX_CALLS_PER_ROUND
-          ? await this.execOne(call, ctx, allowed, runId, st, lang)
-          : { status: 'error' as const, message: m('perRound', lang), retryable: false };
-        results.push({ id: call.id, name: call.name, result });
+        const r = results[i].result;
+        st.toolCalls.push({ name: call.name.slice(0, 64), status: r.status, message: r.message });
       }
       session.addToolResults(results);
     }
@@ -163,21 +191,24 @@ export class ErpTextAgent implements TextAgent {
     let result: ToolResult;
     let outcome: ExecuteOutcome | undefined;
     const def = getTool(call.name);
+    const decision = decisionKindOf(call.name);
     if (call.argsError) result = { status: 'error', message: m('badArgs', lang), retryable: false };
     else if (!def || !allowed.includes(call.name)) result = { status: 'denied', message: m('unknownTool', lang), retryable: false };
-    else {
+    else if (def.ownDecision && (!decision || !explicitDecision(decision, st.userText, st.history))) {
+      result = { status: 'error', message: m('needExplicit', lang), retryable: false };
+    } else {
+      const explicitUserDecision = !!def.ownDecision;      // yuqorida tekshirildi
       // Yozuvlar uchun idempotentlik: shu run ichida bir xil chaqiruv (yoki provayder almashganda) — bir marta
       const idempotencyKey = def.kind === 'write'
         ? `aiv:${runId}:${sha256Hex(`${call.name}|${JSON.stringify(call.args)}`).slice(0, 24)}` : undefined;
       try {
-        outcome = await executeTool(ctx, call.name, call.args, { idempotencyKey });
+        outcome = await executeTool(ctx, call.name, call.args, { idempotencyKey, explicitUserDecision });
         result = outcome.result;
       } catch (e) {
         console.error(`[aiVoice] executeTool ${call.name} kutilmagan xato:`, (e as Error)?.message);
         result = { status: 'error', message: m('failed', lang), retryable: false };
       }
     }
-    st.toolCalls.push({ name: call.name.slice(0, 64), status: result.status, message: result.message });
     if (outcome?.pending && !st.pendingActions.some((p) => p.pendingActionId === outcome!.pending!.pendingActionId)) {
       st.pendingActions.push(outcome.pending);
     }

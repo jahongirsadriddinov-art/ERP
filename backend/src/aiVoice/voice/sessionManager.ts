@@ -12,7 +12,7 @@ import { geminiConfigured } from '../lib/geminiKeys';
 import { newCorrelationId } from '../lib/ids';
 import { localDate, zonedParts, zonedToUtc } from '../lib/zonedTime';
 import { costUsdMicros } from '../pricing';
-import { finishSession, liveCapacity, onSessionsEnded, recordCallEvent, touchSession, type EndedSession } from '../sessions';
+import { countActiveSessions, endActiveSessions, finishSession, liveCapacity, onSessionsEnded, recordCallEvent, touchSession, type EndedSession } from '../sessions';
 import { getCompanyAiState, getSettings, isAiActive } from '../settings';
 import { confirmPendingAction, executeTool } from '../tools/executor';
 import { effectiveToolNames } from '../tools/rbac';
@@ -30,6 +30,10 @@ import {
 import { openFirstAvailable, openWithTimeout, type ProviderCandidate, type ProviderKind } from './provider';
 import { ATTENDANCE_TOOL, attendanceToolDeclaration, runAttendanceTool } from './sessionTools';
 import { TranscriptLog } from './transcriptLog';
+import {
+  classifyVoiceError, FAIL_TEXT, failCodeFor, LIVE_FALLBACK_MODELS, liveModelDown, modelChain, noteLiveFailure, noteLiveOk,
+  worthNextModel, type VoiceErrorKind,
+} from './voiceErrors';
 import type {
   StartVoiceSessionOpts, StartVoiceSessionResult, VoiceOpenOpts, VoiceProvider, VoiceSession, VoiceSessionHandle,
   VoiceSessionManagerApi, VoiceTransport,
@@ -52,6 +56,13 @@ import type {
 //  • chiqish audio real vaqtda uzatiladi (OutQueue: ~400 ms oldinda, transport cap ~500 ms, A10);
 //  • har bir yakuniy transkript AiConversation'ga (source + sessionId) — 7 kunlik retention/arxiv uchun.
 // Har yakun sessions.finishSession() orqali → onSessionsEnded → P3 runner keyingi qadamni qo'yadi.
+// Ishonchlilik (owner 2026-10-16 "ilovada AI qo'ng'iroq ishlamayapti"):
+//  • Live modellar zanjiri (AI_LIVE_MODEL → tasdiqlangan zaxiralar), ishlamagan model "o'chirgich"da
+//    (voiceErrors), keyin kaskad; kalit xatosi (auth) bo'lsa kaskad ham sinalmaydi;
+//  • hech biri ochilmasa — mijozga sabab kodi (aiv:error ai_quota|ai_not_configured|ai_unavailable), keyin end;
+//  • suhbat o'rtasida Live uzilib qayta ulanib bo'lmasa — kaskadga o'tiladi (qo'ng'iroq uzilmaydi);
+//  • aiv:ready faqat provayder TAYYOR bo'lganda (mijoz "AI ulanmoqda" ko'radi, jim "ulandi" emas);
+//  • semafor/band "osilib" qolmasin: cap yoki band bo'lsa 45 s+ yangilanmagan begona sessiyalar yakunlanadi.
 
 type FinalStatus = Exclude<AiCallStatus, 'queued' | 'dialing' | 'ringing' | 'connected'>;
 type FailReason = Extract<StartVoiceSessionResult, { ok: false }>['reason'];
@@ -62,11 +73,15 @@ export interface ProviderSessionCtx {
   transportKind: VoiceTransport['kind'];
   models: { live: string; tts: string; transcribe: string };
   onTtsUnavailable: () => void;
+  /** Kaskad: ovozni matnga o'girib bo'lmaydi (kvota) — matnli rejimga o'tish. */
+  onInputUnavailable?: (kind: 'quota') => void;
   onToolEvent: (e: { name: string; status: ToolStatus; message: string }) => void;
   onPendingAction: (p: PendingActionInfo) => void;
 }
 
 export interface VoiceManagerDeps {
+  /** Kaskad (Live'siz) ochib bo'ladimi — Live semafori to'lganda foydalanuvchi qo'ng'irog'i kaskadga o'tadi. */
+  canCascade?: () => boolean;
   /** Provayder fabrikasi (testlar soxtasini beradi). null — bu tur mavjud emas. */
   providerFor?: (kind: ProviderKind, ctx: ProviderSessionCtx) => VoiceProvider | null;
   disclosure?: DisclosureService;
@@ -75,7 +90,19 @@ export interface VoiceManagerDeps {
   disclosureTimeoutMs?: number;
 }
 
+/** canCascade tekshiruvi uchun bo'sh kontekst (provayder fabrikasi faqat turini ko'radi). */
+const PROBE_CTX = {
+  toolCtx: {} as ToolCtx, lang: 'uz', transportKind: 'inapp', models: { live: '', tts: '', transcribe: '' },
+  onTtsUnavailable: () => undefined, onToolEvent: () => undefined, onPendingAction: () => undefined,
+} as ProviderSessionCtx;
+
 const GENERIC_ERR = { uz: "Ichki xato yuz berdi.", ru: 'Внутренняя ошибка.' };
+const FALLBACK_NOTE = {
+  uz: "Ovozli aloqa zaxira rejimga o'tdi — suhbatni davom ettiring.",
+  ru: 'Голосовая связь перешла в резервный режим — продолжайте разговор.',
+};
+/** Live modellarini sinash uchun umumiy vaqt (keyin darhol kaskad). */
+const LIVE_BUDGET_MS = 7_000;
 const DENIED = { uz: "Bu amalga ruxsat yo'q.", ru: 'Нет доступа к этому действию.' };
 
 function statusFor(reason: string, answered: boolean): FinalStatus {
@@ -99,7 +126,7 @@ function defaultProviderFor(kind: ProviderKind, c: ProviderSessionCtx): VoicePro
     agent: createTextAgent(), ctx: c.toolCtx, transcriber: new GeminiTranscriber(), tts: new GeminiTts(),
     transcribeModel: c.models.transcribe, ttsModel: c.models.tts,
     ttsFailureMode: c.transportKind === 'telegram' ? 'close' : 'text_only',
-    onTtsUnavailable: c.onTtsUnavailable, onToolEvent: c.onToolEvent, onPendingAction: c.onPendingAction,
+    onTtsUnavailable: c.onTtsUnavailable, onInputUnavailable: c.onInputUnavailable, onToolEvent: c.onToolEvent, onPendingAction: c.onPendingAction,
   });
 }
 
@@ -142,6 +169,11 @@ class ManagedVoiceSession implements VoiceSessionHandle {
   private model = '';
   private openOpts: VoiceOpenOpts | null = null;
   private providerReady: Promise<boolean> = Promise.resolve(false);
+  private failKind: VoiceErrorKind | null = null;
+  private cascade: ProviderCandidate | null = null;
+  private fellBack = false;
+  /** Live semafori to'lgan (foydalanuvchi qo'ng'irog'i) — faqat kaskad. */
+  liveBlocked = false;
   private allowedTools = new Set<string>();
   private pendingTools = new Map<string, string>();
   private disclosureDone = false;
@@ -217,6 +249,8 @@ class ManagedVoiceSession implements VoiceSessionHandle {
     const p = this.settings.provider;
     return {
       live: p.liveModel || aiConfig.models.live,
+      // Sozlama/env (vergul bilan bir nechta bo'lishi mumkin) → tasdiqlangan zaxiralar
+      liveChain: modelChain(p.liveModel || aiConfig.models.live, LIVE_FALLBACK_MODELS, 5),
       tts: p.ttsModel || aiConfig.models.tts,
       // Kaskad transkripsiyasi generateContent orqali — standart matn modeli (inline audio)
       transcribe: p.transcribeModel || aiConfig.models.text,
@@ -260,23 +294,56 @@ class ManagedVoiceSession implements VoiceSessionHandle {
       const base: Omit<VoiceOpenOpts, 'model'> = {
         systemInstruction, tools: decls, lang: this.lang, voiceName: this.settings.voiceName, ptt: this.opts.ptt,
       };
-      const kinds: ProviderKind[] = [this.settings.provider.primary];
-      if (this.settings.provider.fallback === 'gemini_cascade' && !kinds.includes('gemini_cascade')) kinds.push('gemini_cascade');
+      // Owner 2026-10-16: qo'ng'iroq "limit" bilan to'xtamasin — kaskad (transkripsiya → TextAgent → TTS)
+      // doim oxirgi zaxira (sozlamadagi fallback='none' bo'lsa ham). Live semafori to'lgan bo'lsa — faqat kaskad.
+      const kinds: ProviderKind[] = this.liveBlocked ? ['gemini_cascade'] : [this.settings.provider.primary];
+      if (!kinds.includes('gemini_cascade')) kinds.push('gemini_cascade');
       const models = this.models();
       const pctx: ProviderSessionCtx = {
         toolCtx: this.toolCtx(), lang: this.lang, transportKind: this.transport.kind, models,
         onTtsUnavailable: () => this.safeSend(AIV_SERVER_EVENTS.error, { code: 'tts_unavailable', message: 'TTS unavailable — text only' }),
+        onInputUnavailable: (kind) => this.toTextMode(kind),
         onToolEvent: (e) => this.safeSend(AIV_SERVER_EVENTS.tool, { sessionId: this.sessionId, ...e }),
         onPendingAction: (p) => this.sendConfirmCard(p),
       };
       const candidates: ProviderCandidate[] = [];
+      const cascadeProvider = kinds.includes('gemini_cascade') ? this.deps.providerFor('gemini_cascade', pctx) : null;
       for (const k of kinds) {
-        const provider = this.deps.providerFor(k, pctx);
-        if (provider) candidates.push({ kind: k, model: k === 'gemini_live' ? models.live : aiConfig.models.text, provider });
+        if (k === 'gemini_live') {
+          const provider = this.deps.providerFor(k, pctx);
+          if (!provider) continue;
+          // "O'chirgich"dagi modellar o'tkaziladi; hammasi o'chiq va kaskad yo'q bo'lsa — baribir birinchisi
+          const healthy = models.liveChain.filter((m) => !liveModelDown(m));
+          const list = healthy.length ? healthy : (cascadeProvider ? [] : models.liveChain.slice(0, 1));
+          for (const m of list) candidates.push({ kind: k, model: m, provider });
+        } else if (cascadeProvider) {
+          this.cascade = { kind: k, model: aiConfig.models.text, provider: cascadeProvider };
+          candidates.push(this.cascade);
+        }
       }
-      if (!candidates.length) { this.ev('error', { stage: 'open', message: 'no_provider' }); return this.providerFailed(); }
+      if (!candidates.length) {
+        this.failKind = 'not_configured';
+        this.ev('error', { stage: 'open', message: 'no_provider' });
+        return this.providerFailed();
+      }
       const opened = await openFirstAvailable(candidates, base, this.deps.setupTimeoutMs,
-        (kind, err) => this.ev('error', { stage: 'open', provider: kind, message: err.message.slice(0, 200) }));
+        (kind, err, model) => {
+          const k = kind === 'gemini_live' ? noteLiveFailure(model, err) : classifyVoiceError(err);
+          this.failKind = k;
+          this.ev('error', { stage: 'open', provider: kind, model, kind: k, message: err.message.slice(0, 200) });
+        },
+        {
+          skip: (c, err, elapsed) => {
+            if (!err) return false;
+            const k = classifyVoiceError(err);
+            // Kalit noto'g'ri / sozlanmagan — kaskad ham shu kalit bilan ishlaydi: behuda kutmaymiz
+            if (k === 'auth' || k === 'not_configured') return true;
+            if (c.kind !== 'gemini_live') return false;
+            return elapsed > LIVE_BUDGET_MS || !worthNextModel(err);
+          },
+        });
+      if (opened.kind === 'gemini_live') noteLiveOk(opened.model);
+      this.failKind = null;
       if (this.isOver()) { void opened.session.close('ended'); return false; }
       this.vs = opened.session;
       this.provider = opened.provider;
@@ -294,8 +361,26 @@ class ManagedVoiceSession implements VoiceSessionHandle {
 
   /** Provayder umuman ochilmadi: hali ulanmagan qo'ng'iroq darhol 'failed' (o'lik qo'ng'iroqni qabul qildirmaymiz). */
   private providerFailed(): false {
-    if (this.state === 'ringing') void this.end('error');
+    if (this.state === 'ringing') { this.sendFailReason(); void this.end('error'); }
     return false;
+  }
+
+  /** Mijozga tushunarli sabab (kvota / sozlanmagan / ulanib bo'lmadi) — end'dan OLDIN. */
+  private sendFailReason() {
+    const code = failCodeFor(this.failKind || 'other');
+    this.safeSend(AIV_SERVER_EVENTS.error, { code, message: FAIL_TEXT[code][this.lang] });
+  }
+
+  /**
+   * Ovozli yo'l butunlay kvotada (kaskad transkripsiyasi ham) — mijozga sabab (ai_quota: "matn bilan davom
+   * etamiz") va qo'ng'iroqni yopamiz; mijoz avtomatik AI chatiga (matnli rejim) o'tadi.
+   */
+  private toTextMode(kind: 'quota') {
+    if (this.isOver()) return;
+    this.failKind = kind;
+    this.ev('error', { stage: 'text_mode', kind });
+    this.sendFailReason();
+    void this.end('error');
   }
 
   private attach(s: VoiceSession) {
@@ -323,6 +408,7 @@ class ManagedVoiceSession implements VoiceSessionHandle {
       if (s !== this.vs || this.isOver()) return;
       this.ev('error', { stage: 'provider_closed', reason: String(c.reason).slice(0, 80), message: c.error ? String(c.error).slice(0, 200) : undefined });
       if (c.reason === 'tts_unavailable') { void this.end('error'); return; }
+      if (c.error && this.kind === 'gemini_live') noteLiveFailure(this.model, new Error(String(c.error)));
       void this.resume('closed');
     });
   }
@@ -336,23 +422,26 @@ class ManagedVoiceSession implements VoiceSessionHandle {
     await AiCallSession.updateOne({ _id: this.sessionId, isActive: true }, { $set: { status: 'connected', answeredAt: this.answeredAt } })
       .catch((e) => console.error('[aiVoice] sessiya holati yozilmadi:', (e as Error).message));
     this.ev('state', { state: 'connected' });
-    this.safeSend(AIV_SERVER_EVENTS.ready, {
-      sessionId: this.sessionId, correlationId: this.correlationId, inputSampleRate: 16000, outputSampleRate: 24000, frameMs: 40, ptt: this.opts.ptt,
-    });
     this.startDurationTimers();
     const ok = await this.providerReady;
     if (this.state !== 'connecting') return;             // shu orada yakunlandi
-    if (!ok || !this.vs) { await this.end('error'); return; }
+    // Provayder umuman ochilmadi — suhbat bo'lmagan: yakun 'failed' (interrupted emas), sabab mijozga
+    if (!ok || !this.vs) { this.answeredAt = undefined; this.sendFailReason(); await this.end('error'); return; }
+    // ready — provayder TAYYOR bo'lgandagina (mijoz shu paytgacha "AI ulanmoqda" ko'radi)
+    this.safeSend(AIV_SERVER_EVENTS.ready, {
+      sessionId: this.sessionId, correlationId: this.correlationId, inputSampleRate: 16000, outputSampleRate: 24000, frameMs: 40, ptt: this.opts.ptt,
+    });
     this.state = 'connected';
     await this.playDisclosure();
   }
 
   private async playDisclosure() {
     const text = this.disclosureText();
-    const clip = await this.deps.disclosure.getClip(this.clipReq(), this.deps.disclosureTimeoutMs).catch(() => null);
-    if (this.state !== 'connected' || !this.vs) return;
+    // Ogohlantirish matni DARHOL ko'rinadi; klip qisqa kutiladi (isitilgan bo'lsa — keshdan bir zumda)
     this.safeSend(AIV_SERVER_EVENTS.transcript, { sessionId: this.sessionId, role: 'assistant', text, final: true });
     this.log.add('assistant', text);
+    const clip = await this.deps.disclosure.getClip(this.clipReq(), this.deps.disclosureTimeoutMs).catch(() => null);
+    if (this.state !== 'connected' || !this.vs) return;
     if (clip && clip.length >= 2) {
       // Klip — model ovozidan OLDIN, deterministik (A8)
       for (const f of chunkPcm(clip)) this.sendOut(f);
@@ -486,7 +575,7 @@ class ManagedVoiceSession implements VoiceSessionHandle {
   private async resume(why: 'goaway' | 'closed'): Promise<void> {
     if (this.resuming || this.isOver()) return;
     if (!this.resumptionHandle || this.kind !== 'gemini_live' || !this.provider || !this.openOpts || this.resumeAttempts >= 3) {
-      if (why === 'closed') await this.end('error');
+      if (why === 'closed' && !(await this.fallbackToCascade())) { this.sendFailReason(); await this.end('error'); }
       return;
     }
     this.resuming = true;
@@ -501,7 +590,36 @@ class ManagedVoiceSession implements VoiceSessionHandle {
       if (old && old !== s) void old.close('goaway');
     } catch (e) {
       this.ev('error', { stage: 'resume', message: (e as Error).message.slice(0, 200) });
-      if (why === 'closed') await this.end('error');
+      this.resuming = false;
+      if (why === 'closed' && !(await this.fallbackToCascade())) { this.sendFailReason(); await this.end('error'); }
+    } finally {
+      this.resuming = false;
+    }
+  }
+
+  /** Live suhbat o'rtasida yiqildi (kvota/uzilish) — qo'ng'iroqni uzmasdan kaskadga o'tamiz (bir marta). */
+  private async fallbackToCascade(): Promise<boolean> {
+    const c = this.cascade;
+    if (!c || this.fellBack || this.kind !== 'gemini_live' || !this.openOpts || this.isOver() || this.state !== 'connected') return false;
+    this.fellBack = true;
+    this.resuming = true;
+    const old = this.vs;
+    try {
+      const { resumptionHandle: _h, ...rest } = this.openOpts;
+      const s = await openWithTimeout(c.provider, { ...rest, model: c.model }, this.deps.setupTimeoutMs);
+      if (this.isOver()) { void s.close('ended'); return true; }
+      this.vs = s; this.provider = c.provider; this.kind = c.kind; this.model = c.model;
+      this.openOpts = { ...rest, model: c.model };
+      this.pendingTools.clear();
+      this.attach(s);
+      this.ev('state', { state: 'fallback', to: c.kind });
+      AiCallSession.updateOne({ _id: this.sessionId }, { $set: { provider: c.kind, modelId: c.model } }).catch(() => undefined);
+      this.safeSend(AIV_SERVER_EVENTS.error, { code: 'ai_fallback', message: FALLBACK_NOTE[this.lang] });
+      if (old && old !== s) void old.close('fallback');
+      return true;
+    } catch (e) {
+      this.ev('error', { stage: 'fallback', message: (e as Error).message.slice(0, 200) });
+      return false;
     } finally {
       this.resuming = false;
     }
@@ -582,14 +700,18 @@ export class VoiceSessionManager implements VoiceSessionManagerApi {
   private draining = false;
   private offEnded: () => void;
   private d: ConstructorParameters<typeof ManagedVoiceSession>[1];
+  private canCascade: () => boolean;
 
   constructor(deps: VoiceManagerDeps = {}) {
+    const pf = deps.providerFor;
+    this.canCascade = deps.canCascade || (pf ? () => !!pf('gemini_cascade', PROBE_CTX) : geminiConfigured);
     this.d = {
       providerFor: deps.providerFor || defaultProviderFor,
       disclosure: deps.disclosure || createDefaultDisclosure(),
       setupTimeoutMs: deps.setupTimeoutMs ?? 4_500,
       touchMs: deps.touchMs ?? LIMITS.sessionTouchMs,
-      disclosureTimeoutMs: deps.disclosureTimeoutMs ?? 3_000,
+      // Klip isitilgan bo'lsa bir zumda; bo'lmasa uzoq kutmaymiz — model ogohlantirishni o'zi aytadi
+      disclosureTimeoutMs: deps.disclosureTimeoutMs ?? 1_500,
     };
     this.offEnded = onSessionsEnded((list) => this.onExternalEnd(list));
   }
@@ -608,37 +730,58 @@ export class VoiceSessionManager implements VoiceSessionManagerApi {
       const settings = await getSettings(opts.companyId);
       const now = new Date();
       if (await companyMinutesExceeded(opts.companyId, settings, now)) return fail('limit');
-      const cap = await liveCapacity(opts.companyId, settings.calls.companyConcurrency);
-      if (!cap.ok) return fail(cap.reason || 'platform_cap');
+      let cap = await liveCapacity(opts.companyId, settings.calls.companyConcurrency);
+      // Semafor "osilib" qolmasin (jarayon qulagan / Render uyqusi): eskirgan begona sessiyalarni yopib qayta tekshiramiz
+      if (!cap.ok && (await this.reclaimOrphans(cap.reason === 'company_cap' ? { companyId: opts.companyId } : {}))) {
+        cap = await liveCapacity(opts.companyId, settings.calls.companyConcurrency);
+      }
+      // Foydalanuvchi o'zi qo'ng'iroq qilganda (ilova, assistant) Live semafori to'lsa — "limit" emas, kaskad
+      // (u Live sessiya kvotasini band qilmaydi). Rejali qo'ng'iroqlar (A6) esa kutadi — o'zgarmagan.
+      const userCall = opts.purpose === 'assistant' && opts.channel === 'inapp_call';
+      let liveBlocked = false;
+      if (!cap.ok && cap.reason === 'platform_cap' && userCall && this.canCascade()) {
+        if ((await countActiveSessions({ companyId: opts.companyId })) >= settings.calls.companyConcurrency) return fail('company_cap');
+        liveBlocked = true;
+      } else if (!cap.ok) return fail(cap.reason || 'platform_cap');
 
       const limits = {
         ringTimeoutSec: Math.max(0, Math.round(opts.ringTimeoutSec ?? settings.calls.ringTimeoutSec)),
         maxDurationSec: Math.max(1, Math.round(opts.maxDurationSec ?? (opts.purpose === 'assistant' ? settings.calls.assistantMaxDurationSec : settings.calls.maxDurationSec))),
       };
       let doc: any;
-      try {
-        doc = await AiCallSession.create({
+      const create = () => AiCallSession.create({
           companyId: opts.companyId, employeeId: opts.employeeId, correlationId: opts.correlationId || newCorrelationId(),
           ...(opts.attemptKey ? { attemptKey: opts.attemptKey } : {}),
           purpose: opts.purpose, channel: opts.channel,
           direction: (opts.userInitiated ?? (opts.purpose === 'assistant' && opts.channel === 'inapp_call')) ? 'inbound' : 'outbound',
           status: opts.channel === 'telegram_call' ? 'dialing' : 'ringing', isActive: true,
           attemptNo: opts.attemptNo ?? 1, jobId: opts.jobId, confirmationId: opts.confirmationId,
-          provider: settings.provider.primary, instanceId: INSTANCE_ID, workerInstanceId: opts.workerInstanceId, socketId: opts.socketId,
+          provider: liveBlocked ? 'gemini_cascade' : settings.provider.primary, instanceId: INSTANCE_ID, workerInstanceId: opts.workerInstanceId, socketId: opts.socketId,
           limits, startedAt: now, ringingAt: now,
-        });
+      });
+      const isBusyErr = (e: any) => e?.code === 11000 && (e?.keyPattern?.employeeId || /employeeId|one_active_call/.test(String(e?.message)));
+      try {
+        try { doc = await create(); } catch (e: any) {
+          // Band — lekin eski sessiya eskirgan bo'lsa (yangilanmayapti) uni yopib bir marta qayta urinamiz
+          if (!isBusyErr(e) || !(await this.reclaimOrphans({ employeeId: opts.employeeId }))) throw e;
+          doc = await create();
+        }
       } catch (e: any) {
-        if (e?.code === 11000 && (e?.keyPattern?.employeeId || /employeeId|one_active_call/.test(String(e?.message)))) return fail('busy');
+        if (isBusyErr(e)) return fail('busy');
         console.error('[aiVoice] sessiya yaratilmadi:', e?.message);
         return fail('error');
       }
       // Poyga: count → insert atomik emas. Faol sessiyalar tartibida o'rnimiz chegaradan oshsa — izsiz chekinamiz
-      const over = await this.overCap(String(doc._id), opts.companyId, settings);
-      if (over) {
+      const over = await this.overCap(String(doc._id), opts.companyId, settings, liveBlocked);
+      if (over === 'platform_cap' && userCall && this.canCascade()) {
+        liveBlocked = true;
+        await AiCallSession.updateOne({ _id: doc._id }, { $set: { provider: 'gemini_cascade' } }).catch(() => undefined);
+      } else if (over) {
         await AiCallSession.deleteOne({ _id: doc._id }).catch(() => undefined);
         return fail(over);
       }
       const s = new ManagedVoiceSession(this, this.d, opts, settings, ac.actor, doc, limits);
+      s.liveBlocked = liveBlocked;
       this.sessions.set(s.sessionId, s);
       this.byCorrelation.set(s.correlationId, s.sessionId);
       s.init();
@@ -649,10 +792,49 @@ export class VoiceSessionManager implements VoiceSessionManagerApi {
     }
   }
 
-  private async overCap(id: string, companyId: string, s: AiSettingsData): Promise<'platform_cap' | 'company_cap' | null> {
-    const active: any[] = await AiCallSession.find({ isActive: true }).sort({ createdAt: 1, _id: 1 }).select('_id companyId').limit(1000).lean();
-    const pIdx = active.findIndex((a) => String(a._id) === id);
-    if (pIdx >= aiConfig.liveMaxConcurrent) return 'platform_cap';
+  /**
+   * Qo'ng'iroqdan oldin isitish: disclosure klipini (TTS) keshga render qiladi — ulanishda ogohlantirish
+   * darhol ijro etilsin. Hech narsa yubormaydi, xato jim. Kesh firma + til + ovoz + matn bo'yicha (bitta TTS).
+   */
+  async prewarm(companyId: string, userId: string): Promise<void> {
+    try {
+      if (this.draining || !aiConfig.enabled || !companyId || !userId) return;
+      if (!(await isAiActive(companyId))) return;
+      const settings = await getSettings(companyId);
+      const [lang, st] = await Promise.all([resolveVoiceLang(companyId, userId, settings), getCompanyAiState(companyId)]);
+      await this.d.disclosure.getClip({
+        text: disclosureTextFor(lang, st.name, settings.disclosureText), lang, voiceName: settings.voiceName,
+        model: settings.provider.ttsModel || aiConfig.models.tts,
+      }, 15_000);
+    } catch { /* isitish — majburiy emas */ }
+  }
+
+  /**
+   * Shu jarayonda bo'lmagan va 45 s+ (3 × touch) yangilanmagan faol sessiyalar — o'lik (egasi har 15 s
+   * yangilaydi). Ularni 'interrupted' qilamiz (shartli — tirik sessiyaga tegmaydi). Yopilganlar soni.
+   */
+  private async reclaimOrphans(filter: Record<string, unknown>): Promise<number> {
+    try {
+      const staleBefore = new Date(Date.now() - Math.max(45_000, this.d.touchMs * 3));
+      const docs: any[] = await AiCallSession.find({ ...filter, isActive: true, updatedAt: { $lt: staleBefore } }).select('_id').limit(50).lean();
+      const ids = docs.map((d) => String(d._id)).filter((id) => !this.sessions.has(id));
+      if (!ids.length) return 0;
+      const ended = await endActiveSessions({ _id: { $in: ids }, updatedAt: { $lt: staleBefore } }, 'interrupted', 'orphan_reclaim');
+      if (ended.length) console.warn(`[aiVoice] ${ended.length} ta osilgan sessiya yopildi (orphan_reclaim)`);
+      return ended.length;
+    } catch (e) {
+      console.error('[aiVoice] orphan reclaim xatosi:', (e as Error).message);
+      return 0;
+    }
+  }
+
+  private async overCap(id: string, companyId: string, s: AiSettingsData, liveBlocked = false): Promise<'platform_cap' | 'company_cap' | null> {
+    const active: any[] = await AiCallSession.find({ isActive: true }).sort({ createdAt: 1, _id: 1 }).select('_id companyId provider').limit(1000).lean();
+    if (!liveBlocked) {
+      // Live semafori faqat Live sessiyalarni sanaydi (kaskaddagilar Live kvotasini band qilmaydi)
+      const pIdx = active.filter((a) => a.provider !== 'gemini_cascade' || String(a._id) === id).findIndex((a) => String(a._id) === id);
+      if (pIdx >= aiConfig.liveMaxConcurrent) return 'platform_cap';
+    }
     const cIdx = active.filter((a) => a.companyId === companyId).findIndex((a) => String(a._id) === id);
     if (cIdx >= s.calls.companyConcurrency) return 'company_cap';
     return null;

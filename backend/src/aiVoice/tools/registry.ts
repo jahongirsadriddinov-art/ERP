@@ -6,6 +6,8 @@ import type { AiToolDef } from './types';
 
 const tools = new Map<string, AiToolDef>();
 const NAME_RE = /^[a-zA-Z][a-zA-Z0-9_]{1,63}$/;
+/** O'z qarori (ownDecision) bo'la oladigan tool nomlari — boshqa "approve*" nomlar taqiqlangan (B3). */
+const OWN_DECISION_NAMES = new Set(['approveTransaction', 'rejectTransaction']);
 
 export function registerTool(def: AiToolDef): void {
   if (!NAME_RE.test(def.name)) throw new Error(`[aiVoice] tool nomi noto'g'ri: ${def.name}`);
@@ -19,7 +21,14 @@ export function registerTool(def: AiToolDef): void {
   if (def.parameters?.type !== 'object') throw new Error(`[aiVoice] ${def.name}: parameters.type 'object' bo'lishi shart`);
   if (def.kind === 'read' && def.confirm !== 'never') throw new Error(`[aiVoice] ${def.name}: o'qish tool'i tasdiq talab qilmaydi`);
   // B3: tasdiq FAQAT UI/bot tugmasidan — model chaqira oladigan "confirm/approve" tool bo'lmaydi
-  if (/^(confirm|approve|accept)/i.test(def.name)) throw new Error(`[aiVoice] ${def.name}: tasdiqlovchi tool taqiqlangan`);
+  // Istisno: ownDecision — ERP yozuvi bo'yicha foydalanuvchining o'z qarori (AI pending amali EMAS);
+  // faqat aniq ro'yxatdagi nomlar (pending/AiAction tasdiqlovchi tool baribir taqiqlangan).
+  if (/^(confirm|approve|accept)/i.test(def.name) && !(def.ownDecision && OWN_DECISION_NAMES.has(def.name))) {
+    throw new Error(`[aiVoice] ${def.name}: tasdiqlovchi tool taqiqlangan`);
+  }
+  if (def.ownDecision && (!OWN_DECISION_NAMES.has(def.name) || def.kind !== 'write' || def.confirm !== 'never' || def.targetUserArg)) {
+    throw new Error(`[aiVoice] ${def.name}: ownDecision faqat write + confirm:'never' + targetUserArg'siz`);
+  }
   // B4: boshqa foydalanuvchiga ta'sir qiladigan yozuv kimga ta'sir qilishini e'lon qilishi shart
   if (def.kind === 'write' && def.confirm === 'when_other_user' && !def.targetUserArg) {
     throw new Error(`[aiVoice] ${def.name}: when_other_user uchun targetUserArg majburiy`);

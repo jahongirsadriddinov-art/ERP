@@ -12,6 +12,7 @@ import { createClaudeProvider } from '../providers/claude';
 import { createGeminiProvider } from '../providers/gemini';
 import { createOpenRouterProvider } from '../providers/openrouter';
 import { buildSystemPrompt } from '../systemPrompt';
+import { __resetGeminiKeysForTests } from '../../lib/geminiKeys';
 import { ctxFor, resetCaches, setupErp, teardownErp, type Env } from '../../tools/erp/__tests__/erpHelpers';
 import { fakeFetch, fakeGenai, geminiCall, geminiText, orText, orToolCalls } from './fakes';
 
@@ -30,7 +31,8 @@ afterAll(async () => {
   if (savedKeys !== undefined) process.env.GEMINI_API_KEYS = savedKeys;
   await teardownErp(env);
 });
-beforeEach(async () => { resetCaches(); await AiReminder.deleteMany({}); });
+// Kalit sovushi (429 → 60 s) testlar orasida tozalanadi
+beforeEach(async () => { resetCaches(); __resetGeminiKeysForTests(); await AiReminder.deleteMany({}); });
 
 const agentWith = (g?: ReturnType<typeof fakeGenai>, f?: ReturnType<typeof fakeFetch>, envFlags = ALL_ON) => new ErpTextAgent({
   providers: {

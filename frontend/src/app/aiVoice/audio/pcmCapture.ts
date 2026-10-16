@@ -41,7 +41,26 @@ export function createAudioContext(): AudioContext {
   const ctx = new AC({ latencyHint: "interactive" });
   // Foydalanuvchi harakati ichida chaqiriladi — autoplay siyosati ruxsat beradi
   ctx.resume?.().catch(() => { /* */ });
+  resumeOnGesture(ctx);
   return ctx;
+}
+
+/**
+ * Kontekst "suspended" qolsa (avtomatik qabul, iOS/Android WebView autoplay siyosati) — birinchi bosish /
+ * tugmada uyg'otamiz; aks holda AI ovozi eshitilmaydi va mikrofon kadrlari kelmaydi.
+ */
+export function resumeOnGesture(ctx: AudioContext, target: Pick<Window, "addEventListener" | "removeEventListener"> | null = typeof window !== "undefined" ? window : null): void {
+  if (!target) return;
+  const evs = ["pointerdown", "touchend", "keydown"] as const;
+  const off = () => { for (const e of evs) target.removeEventListener(e, kick, true); };
+  const kick = () => {
+    if (ctx.state === "closed") { off(); return; }
+    if (ctx.state === "running") { off(); return; }
+    ctx.resume?.().then(() => { if (ctx.state === "running") off(); }).catch(() => { /* */ });
+  };
+  for (const e of evs) target.addEventListener(e, kick, true);
+  // Ishlayotgan bo'lsa — tinglovchilar keraksiz
+  setTimeout(() => { if (ctx.state === "running" || ctx.state === "closed") off(); }, 1500);
 }
 
 export async function openMic(): Promise<MediaStream> {

@@ -4,6 +4,7 @@ import { EnergyVad, type VadOptions } from './vad';
 import { OUT_RATE, pcmDurationMs, splitSentences } from './audio';
 import type { Transcriber, TtsSynth } from './geminiSpeech';
 import type { VoiceOpenOpts, VoiceProvider, VoiceSession } from './types';
+import { classifyVoiceError, turnFailText } from './voiceErrors';
 
 // Kaskad provayder (zaxira, A6/D6): server VAD (energiya) → transkripsiya → TextAgent (P2,
 // DI orqali; tool'lar agent ichida tools/executor orqali — bir xil RBAC/audit) → TTS gapma-gap.
@@ -22,6 +23,8 @@ export interface CascadeDeps {
   vad?: Partial<VadOptions>;
   ttsFailureMode?: 'text_only' | 'close';
   onTtsUnavailable?: () => void;
+  /** Ovozni matnga o'girib bo'lmaydi (barcha kalit × model kvotada) — menejer matnli rejimga o'tkazadi. */
+  onInputUnavailable?: (kind: 'quota') => void;
   onToolEvent?: (e: { name: string; status: ToolStatus; message: string }) => void;
   onPendingAction?: (p: PendingActionInfo) => void;
   now?: () => number;
@@ -116,12 +119,20 @@ export class CascadeSession extends VoiceEmitter implements VoiceSession {
     if (this.closed) return;
     const ac = new AbortController();
     this.current = ac;
-    const timeout = setTimeout(() => ac.abort(), this.d.turnTimeoutMs ?? 30_000);
+    let timedOut = false;
+    const timeout = setTimeout(() => { timedOut = true; ac.abort(); }, this.d.turnTimeoutMs ?? 30_000);
     try {
       let userText = input.text || '';
       if (input.audio) {
         const audioInSec = input.audio.length / 32_000;
-        const tr = await this.d.transcriber.transcribe(input.audio, { lang: this.lang, model: this.d.transcribeModel, signal: ac.signal });
+        let tr: Awaited<ReturnType<Transcriber['transcribe']>>;
+        try {
+          tr = await this.d.transcriber.transcribe(input.audio, { lang: this.lang, model: this.d.transcribeModel, signal: ac.signal });
+        } catch (e) {
+          // Kvota (hamma kalit va zaxira modellar) — ovoz endi tushunilmaydi: matnli rejimga o'tish signali
+          if (!ac.signal.aborted && !this.closed && classifyVoiceError(e) === 'quota') this.d.onInputUnavailable?.('quota');
+          throw e;
+        }
         this.emit('usage', { tokensIn: tr.tokensIn || 0, tokensOut: tr.tokensOut || 0, audioInSec, audioOutSec: 0 });
         userText = (tr.text || '').trim();
         if (!userText || ac.signal.aborted || this.closed) return;
@@ -140,6 +151,13 @@ export class CascadeSession extends VoiceEmitter implements VoiceSession {
       if (!reply) return;
       this.emit('transcript', { role: 'assistant', text: reply, final: true });
       await this.speak(reply, ac);
+    } catch (e) {
+      // Sukut o'rniga qisqa sabab (kvota / tushunolmadim) — foydalanuvchi "AI jim qoldi" deb o'ylamasin
+      if ((!ac.signal.aborted || timedOut) && !this.closed) {
+        const kind = classifyVoiceError(e);
+        this.emit('transcript', { role: 'assistant', text: turnFailText(kind, this.lang), final: true });
+      }
+      throw e;
     } finally {
       clearTimeout(timeout);
       if (this.current === ac) this.current = null;

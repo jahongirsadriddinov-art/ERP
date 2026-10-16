@@ -36,7 +36,15 @@ import { validateArgs } from './validate';
 const HANDLER_TIMEOUT_MS = 20_000;
 const SESSION_WINDOW_MS = 3 * 3600_000;
 
-export interface ExecuteOptions { idempotencyKey?: string }
+export interface ExecuteOptions {
+  idempotencyKey?: string;
+  /**
+   * ownDecision tool'lari (approveTransaction/rejectTransaction) uchun: chaqiruvchi foydalanuvchining
+   * SHU navbatdagi aniq buyrug'ini tekshirgan (brain/toolPolicy.explicitDecision). Berilmasa — bajarilmaydi
+   * (masalan, Live ovozda matn yo'q: model o'zi yoki untrusted matn qaror qila olmaydi).
+   */
+  explicitUserDecision?: boolean;
+}
 export interface ExecuteOutcome { result: ToolResult; pending?: PendingActionInfo; auditId?: string }
 
 const MSG = {
@@ -49,6 +57,10 @@ const MSG = {
   confirm: { uz: 'Tasdiqlash kutilmoqda — foydalanuvchi tugmani bosishi kerak. Hali BAJARILMADI.', ru: 'Ожидает подтверждения кнопкой. Ещё НЕ выполнено.' },
   gone: { uz: "Amal topilmadi, muddati o'tgan yoki allaqachon ko'rib chiqilgan.", ru: 'Действие не найдено, истекло или уже обработано.' },
   cancelled: { uz: 'Bekor qilindi.', ru: 'Отменено.' },
+  explicit: {
+    uz: "Bu qaror uchun foydalanuvchining aniq buyrug'i kerak — chatda yoki botda \"tasdiqla\" / \"rad et\" deb yozsin. Bajarilmadi.",
+    ru: 'Для этого решения нужна явная команда пользователя — пусть напишет в чате или боте «утверди» / «отклони». Не выполнено.',
+  },
   timeout: { uz: "Amal juda uzoq davom etdi — natija noma'lum, qayta urinmang.", ru: 'Действие заняло слишком долго — результат неизвестен.' },
 };
 const t = (k: keyof typeof MSG, lang: 'uz' | 'ru') => MSG[k][lang] || MSG[k].uz;
@@ -245,6 +257,13 @@ export async function executeTool(ctx: ToolCtx, name: string, rawArgs: unknown, 
       const auditId = await finishAudit(p, result, startedAt, { idempotencyKey: opts.idempotencyKey, targetUserId: target });
       return { result, auditId };
     }
+  }
+
+  // O'z qarori (ownDecision) — faqat chaqiruvchi aniq buyruqni tasdiqlagan bo'lsa (kod chegarasi, B3)
+  if (p.def.ownDecision && !opts.explicitUserDecision) {
+    const result: ToolResult = { status: 'error', message: t('explicit', lang), retryable: false };
+    const auditId = await finishAudit(p, result, startedAt, { idempotencyKey: opts.idempotencyKey, targetUserId: target });
+    return { result, auditId };
   }
 
   // Boshqa foydalanuvchiga ta'sir qiluvchi HAR QANDAY yozuv — inson tasdig'i (kod chegarasi, B4)

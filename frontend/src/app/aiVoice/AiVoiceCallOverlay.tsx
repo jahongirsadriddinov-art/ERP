@@ -56,6 +56,12 @@ export function errorKey(err: AiCallError | null, reason: string | null): string
   return endReasonKey(reason);
 }
 
+/** Server ma'lumot hodisalari (xato emas): Live → kaskad zaxira, faqat matnli ovoz (qurilma o'qib beradi). */
+const INFO_KEY: Record<string, string> = {
+  ai_fallback: "aiVoiceCall.infoFallback",
+  tts_unavailable: "aiVoiceCall.infoTtsTextOnly",
+};
+
 const TOOL_KEY: Record<string, string> = {
   ok: "aiVoiceCall.toolOk", denied: "aiVoiceCall.toolDenied", not_found: "aiVoiceCall.toolNotFound",
   error: "aiVoiceCall.toolError", needs_confirmation: "aiVoiceCall.toolNeedsConfirmation",
@@ -178,8 +184,9 @@ export default function AiVoiceCallOverlay({ state, controller, onWriteInstead }
         {/* Tool natijasi */}
         {state.tool && !ended && (
           <div className="relative flex-shrink-0 px-4 pb-2 flex justify-center">
-            <span className={`text-[11px] px-3 py-1.5 rounded-full max-w-full truncate ${state.tool.status === "ok" ? "bg-green-500/20 text-green-200" : state.tool.status === "needs_confirmation" ? "bg-amber-500/20 text-amber-200" : "bg-red-500/20 text-red-200"}`}>
-              {t(TOOL_KEY[state.tool.status] || "aiVoiceCall.toolError")}{state.tool.message ? ` · ${state.tool.message}` : ""}
+            <span className={`text-[11px] px-3 py-1.5 rounded-full max-w-full truncate ${INFO_KEY[state.tool.name] ? "bg-white/10 text-white/85" : state.tool.status === "ok" ? "bg-green-500/20 text-green-200" : state.tool.status === "needs_confirmation" ? "bg-amber-500/20 text-amber-200" : "bg-red-500/20 text-red-200"}`}>
+              {INFO_KEY[state.tool.name] ? t(INFO_KEY[state.tool.name])
+                : <>{t(TOOL_KEY[state.tool.status] || "aiVoiceCall.toolError")}{state.tool.message ? ` · ${state.tool.message}` : ""}</>}
             </span>
           </div>
         )}

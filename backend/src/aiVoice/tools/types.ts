@@ -38,6 +38,12 @@ export interface AiToolDef<A = any> {
    * istalgan chuqurlikda {"untrusted_text": "..."} ga o'raydi va ≤200 belgiga qisqartiradi (B4).
    */
   untrustedKeys?: string[];
+  /**
+   * Foydalanuvchining O'Z qarori (masalan, u tanlangan tasdiqlovchi bo'lgan chiqimni tasdiqlash/rad etish).
+   * ERP yozuvi bo'yicha qaror — AI tasdiq-kutish (pending) amallarini tasdiqlamaydi (B3). Faqat
+   * kind:'write', confirm:'never'. Agent buni faqat foydalanuvchining shu navbatdagi aniq so'rovi bilan chaqiradi.
+   */
+  ownDecision?: boolean;
   handler: (ctx: ToolCtx, args: A) => Promise<ToolResult>;
 }
 

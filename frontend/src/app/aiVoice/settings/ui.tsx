@@ -28,16 +28,18 @@ export function Card({ title, hint, icon, right, children, testId }: {
   );
 }
 
-export function Toggle({ checked, onChange, label, hint, disabled, testId }: {
+export function Toggle({ checked, onChange, label, hint, disabled, testId, title, icon }: {
   checked: boolean; onChange: (v: boolean) => void; label: ReactNode; hint?: ReactNode; disabled?: boolean; testId?: string;
+  /** O'chiq bo'lsa — sababi (sichqoncha ustiga kelganda). */ title?: string; icon?: any;
 }) {
   return (
-    <label className={`flex items-start gap-3 py-2 ${disabled ? "opacity-60" : "cursor-pointer"}`}>
+    <label className={`flex items-start gap-3 py-2 ${disabled ? "opacity-60" : "cursor-pointer"}`} title={title}>
+      {icon && <span className="icon-chip w-9 h-9 rounded-xl flex-shrink-0"><MorphIcon icon={icon} className="w-[18px] h-[18px]" /></span>}
       <span className="flex-1 min-w-0">
         <span className="block text-sm font-medium">{label}</span>
         {hint && <span className="block text-xs text-muted-foreground mt-0.5">{hint}</span>}
       </span>
-      <button type="button" role="switch" aria-checked={checked} disabled={disabled} data-testid={testId}
+      <button type="button" role="switch" aria-checked={checked} disabled={disabled} data-testid={testId} title={title}
         onClick={() => onChange(!checked)}
         className={`relative mt-0.5 w-11 h-6 rounded-full flex-shrink-0 liquid-transition ${checked ? "bg-primary" : "bg-muted-foreground/30"}`}>
         <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow liquid-transition ${checked ? "translate-x-5" : ""}`} />
@@ -116,7 +118,7 @@ export function Chip({ active, onClick, children, disabled, title, testId, tone 
   const on = tone === "danger" ? "bg-red-500/12 text-red-700 dark:text-red-300 border-red-500/40" : "bg-primary text-primary-foreground border-primary";
   return (
     <button type="button" onClick={onClick} disabled={disabled} title={title} aria-pressed={!!active} data-testid={testId}
-      className={`h-9 min-w-[2.5rem] px-3 rounded-full border text-[13px] font-semibold liquid-transition disabled:opacity-50 ${active ? on : "border-border bg-card/60 text-foreground hover:border-primary/50"}`}>
+      className={`h-9 min-w-[2.5rem] px-3 flex-shrink-0 whitespace-nowrap rounded-full border text-[13px] font-semibold liquid-transition disabled:opacity-50 ${active ? on : "border-border bg-card/60 text-foreground hover:border-primary/50"}`}>
       {children}
     </button>
   );

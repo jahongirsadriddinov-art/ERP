@@ -13,6 +13,7 @@ import User from '../../models/User';
 import { JWT_SECRET } from '../../middleware/auth';
 import { mountAiVoiceRoutes } from '../bootstrap';
 import { ensurePlatformConnection } from '../lib/workerLease';
+import { invalidateSettings } from '../settings';
 import { __resetCallBridgeForTests, initCallBridge } from '../telegram/callBridge';
 import { decideIncomingCall, initIncomingCalls } from '../telegram/incomingCalls';
 import { workerHub } from '../telegram/workerNamespace';
@@ -122,6 +123,11 @@ describe('platforma toggle', () => {
   });
 });
 
+async function setCompanyConsent(v: boolean) {
+  await (await import('../../models/AiAssistantSettings')).default.updateOne({ companyId: A.companyId }, { $set: { 'calls.companyConsent': v } });
+  invalidateSettings();
+}
+
 describe("kiruvchi qo'ng'iroq qarori", () => {
   it("o'chiq bo'lsa — rad (closed), sessiya yo'q, audit bor", async () => {
     await AiChannelConnection.updateOne(PLATFORM_TG, { $set: { openConversation: false } });
@@ -156,11 +162,14 @@ describe("kiruvchi qo'ng'iroq qarori", () => {
   it("notanish / rozilik yo'q / bloklangan / AI o'chiq firma / worker band — rad, sessiya yaratilmaydi", async () => {
     await AiChannelConnection.updateOne(PLATFORM_TG, { $set: { openConversation: true } });
     expect(await w.incoming({ tgUserId: '123456789' })).toEqual({ accept: false, reason: 'unknown_caller' });
+    // Kompaniya roziligi o'chiq va shaxsiy rozilik yo'q — rad (owner 2026-10-16)
+    await setCompanyConsent(false);
     expect(await w.incoming({ tgUserId: '880002' })).toEqual({ accept: false, reason: 'no_consent' });
     expect(await w.incoming({ tgUserId: '880003' })).toEqual({ accept: false, reason: 'blocked' });
     expect(await w.incoming({ tgUserId: '880004' })).toEqual({ accept: false, reason: 'ai_disabled' });
     expect(await w.incoming({ tgUserId: '880005', workerBusy: true })).toEqual({ accept: false, reason: 'busy' });
     expect(await w.incoming({ tgUserId: 'abc' })).toEqual({ accept: false, reason: 'bad_request' });
+    await setCompanyConsent(true);
     expect(await AiCallSession.countDocuments({})).toBe(0);
     const audits = await incomingAudits();
     const unknown = audits.find((a) => /unknown_caller/.test(a.description));
@@ -168,6 +177,25 @@ describe("kiruvchi qo'ng'iroq qarori", () => {
     expect(unknown.companyId).toBeUndefined();
     expect(unknown.userName).not.toContain('123456789');     // to'liq Telegram id audit nomida yo'q
     for (const r of ['no_consent', 'blocked', 'ai_disabled', 'busy']) expect(audits.some((a) => a.description.endsWith(`— ${r}`)), r).toBe(true);
+  });
+
+  it("owner 2026-10-16: kontakt/kod yo'q, ERP botga bog'langan + kompaniya roziligi — qabul, tgUserId darhol backfill", async () => {
+    await AiChannelConnection.updateOne(PLATFORM_TG, { $set: { openConversation: true } });
+    await User.updateOne({ _id: A.ownerId }, { $set: { telegramChatId: '880010' } });
+    expect(await AiEmployeeContact.countDocuments({ employeeId: A.ownerId })).toBe(0);
+    const ack = await w.incoming({ tgUserId: '880010' });
+    expect(ack).toMatchObject({ accept: true });
+    const ct: any = await AiEmployeeContact.findOne({ companyId: A.companyId, employeeId: A.ownerId }).lean();
+    expect(ct.telegram).toMatchObject({ tgUserId: '880010', callConsent: 'none' });
+    if (ack.accept) await w.callState(ack.sessionId, 'ended', 'completed');
+    // Bot bog'lanishi boshqa xodimga o'tdi — eski kontakt endi bu id bilan qabul qilinmaydi
+    await User.updateOne({ _id: A.ownerId }, { $set: { telegramChatId: '880011' } });
+    await vi.waitFor(async () => expect(await AiCallSession.countDocuments({ isActive: true })).toBe(0));
+    expect(await w.incoming({ tgUserId: '880010' })).toEqual({ accept: false, reason: 'unknown_caller' });
+    // Dasturchining bot bog'lanishi — xodim emas: firma kontekstisiz ovozli sessiya yo'q (aniq sabab)
+    await User.updateOne({ _id: dev }, { $set: { telegramChatId: '880012' } });
+    expect(await w.incoming({ tgUserId: '880012' })).toEqual({ accept: false, reason: 'developer_unsupported' });
+    expect(await AiCallSession.countDocuments({ isActive: true })).toBe(0);
   });
 
   it("bitta raqamdan spam — rad, audit soatiga 10 tadan oshmaydi", async () => {

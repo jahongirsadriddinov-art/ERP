@@ -12,6 +12,7 @@ import objectRoutes from './routes/objects';
 import usersRoutes from './routes/users';
 import transactionRoutes from './routes/transactions';
 import messageRoutes from './routes/messages';
+import messagesReadAllRoutes from './routes/messagesReadAll';
 import groupRoutes from './routes/groups';
 import materialRoutes from './routes/materials';
 import companyRoutes from './routes/companies';
@@ -243,6 +244,7 @@ app.use('/api/register', registerRoutes); // v1.2 self-signup (pre-auth, ochiq)
 app.use('/api/objects',      requireAuth, blockDeveloper, objectRoutes);
 app.use('/api/users',        requireAuth, usersRoutes);        // dasturchi: read-only via DeveloperPanel
 app.use('/api/transactions', requireAuth, blockDeveloper, transactionRoutes);
+app.use('/api/messages/read-all', requireAuth, messagesReadAllRoutes); // "Hammasini o'qildi qilish"
 app.use('/api/messages',     requireAuth, messageRoutes);      // dasturchi: support chat
 app.use('/api/groups',       requireAuth, groupRoutes);        // dasturchi: support chat
 app.use('/api/materials',    requireAuth, blockDeveloper, materialRoutes);

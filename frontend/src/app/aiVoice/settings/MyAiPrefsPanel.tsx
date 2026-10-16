@@ -3,26 +3,31 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { MorphIcon } from "morphicons/react";
 import Bell from "@hugeicons/core-free-icons/Notification03Icon";
-import Phone from "@hugeicons/core-free-icons/AiPhone01Icon";
+import Phone from "@hugeicons/core-free-icons/Call02Icon";
 import Route from "@hugeicons/core-free-icons/Message01Icon";
 import Moon from "@hugeicons/core-free-icons/Moon02Icon";
-import Stop from "@hugeicons/core-free-icons/Cancel01Icon";
+import Telegram from "@hugeicons/core-free-icons/TelegramIcon";
+import Smart from "@hugeicons/core-free-icons/SmartPhone01Icon";
+import Ok from "@hugeicons/core-free-icons/CheckmarkCircle02Icon";
 import Task from "@hugeicons/core-free-icons/Task01Icon";
 import Lock from "@hugeicons/core-free-icons/LockIcon";
 import BetaBadge from "../BetaBadge";
 import { isNotReady, meApi, type ApiResult, type AiMePrefs, type AiMePrefsPatch, type AiReminder, type ChannelName } from "./api";
-import { prefsLock, readCurrentUser, roleGroup, telegramCallNote, type PrefsArea, type PrefsLock } from "./aiAccess";
+import { prefsLock, readCurrentUser, roleGroup, type PrefsArea, type PrefsLock } from "./aiAccess";
 import RoleHelp from "./RoleHelp";
 import { addChannel, isHHmm, normalizeHHmm, removeChannel } from "./scheduleHelpers";
-import { Badge, Card, Chip, Notice, Skeleton, TimeField, Toggle, type Tone } from "./ui";
+import { Badge, Card, More, Notice, Skeleton, TimeField, Toggle } from "./ui";
 
 // AI ovozli yordamchi — har bir xodimning shaxsiy sozlamalari (/api/ai-voice/me, P3 backend): Telegram
 // qo'ng'iroq roziligi, murojaat kanallari, shaxsiy tinch soatlar (server qo'llasa), voz kechish va eslatmalarim.
 // Rozilik va voz kechishni FAQAT xodimning o'zi o'zgartiradi. Server hali tayyor bo'lmasa (501/404) — yumshoq xabar.
 // Owner 2026-10-15: izoh rolga mos (direktor / o'rinbosar / prorab-brigadir / ishchi); o'chiq tugma YONIDA nega
 // o'chiqligi yoziladi (AI firmada ishlamayapti, tarifda yo'q, "Hammasidan" voz kechilgan, saqlanmoqda).
-const MY_CHANNELS: ChannelName[] = ["bot_message", "telegram_call", "inapp_call", "push"];
-const CONSENT_TONE: Record<string, Tone> = { granted: "green", requested: "amber", revoked: "red", none: "gray" };
+// Owner 2026-10-16 "soddalashtir": bitta "Menga qanday murojaat qilinsin" ro'yxati (Telegram qo'ng'irog'i roziligi
+// shu qatorning o'zida), tinch soatlar, eslatmalarim; voz kechish — "Qo'shimcha" ichida (yoqilgan bo'lsa ochiq).
+const MY_CHANNELS: { c: ChannelName; icon: any }[] = [
+  { c: "bot_message", icon: Telegram }, { c: "telegram_call", icon: Phone }, { c: "inapp_call", icon: Smart }, { c: "push", icon: Bell },
+];
 const looksLikePrefs = (v: any): v is AiMePrefs => !!v && typeof v === "object" && !!v.optOut && typeof v.callConsent === "string";
 
 export default function MyAiPrefsPanel() {
@@ -60,13 +65,11 @@ export default function MyAiPrefsPanel() {
 
   const me = readCurrentUser();
   const group = roleGroup(me.role, me.isOwner);
+  // Sahifa sarlavhasi allaqachon "AI qo'ng'iroqlarim" — bu yerda faqat ixcham qator (Beta + bir jumla), takror karta yo'q
   const header = (
-    <div className="surface no-lift border border-border rounded-2xl p-4 flex items-start gap-3">
-      <div className="icon-chip w-11 h-11 rounded-xl flex-shrink-0"><MorphIcon icon={Bell} className="w-5 h-5" /></div>
-      <div className="flex-1 min-w-0">
-        <div className="flex flex-wrap items-center gap-2"><p className="text-sm font-bold">{k("title")}</p><BetaBadge /></div>
-        <p className="text-xs text-muted-foreground mt-1">{k("subtitle")}</p>
-      </div>
+    <div className="flex items-start gap-2 px-1">
+      <BetaBadge />
+      <p className="flex-1 min-w-0 text-xs text-muted-foreground leading-relaxed" title={k("title")}>{k("subtitle")}</p>
     </div>
   );
 
@@ -90,7 +93,6 @@ export default function MyAiPrefsPanel() {
   const lockOf = (a: PrefsArea) => prefsLock(prefs, a, busy);
   const why = (l: PrefsLock | null) => (l ? t(`aiVoice.prefs.why.${l}`) : undefined);
   const globalLock = lockOf("consent"); // aiOff/plan bo'lsa hamma joy uchun bir xil sabab
-  const tgNote = telegramCallNote(prefs);
 
   return (
     <div className="space-y-4" data-testid="ai-prefs-panel">
@@ -106,45 +108,54 @@ export default function MyAiPrefsPanel() {
       )}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
         <div className="space-y-4 min-w-0">
-          <Card icon={Phone} title={k("consent.title")} hint={k("consent.hint")}
-            right={<Badge tone={CONSENT_TONE[prefs.callConsent] || "gray"}>{t(`aiVoice.prefs.consent.state.${prefs.callConsent}`)}</Badge>}>
-            <button type="button" disabled={!!lockOf("consent")} data-testid="ai-consent-btn" title={why(lockOf("consent"))}
-              aria-describedby={aiOff ? "ai-prefs-why" : undefined}
-              onClick={() => save({ callConsent: granted ? "revoked" : "granted" }, (p) => ({ ...p, callConsent: granted ? "revoked" : "granted" }))}
-              className={granted ? "h-10 px-4 rounded-xl border border-red-500/40 text-red-600 dark:text-red-400 text-sm font-bold hover:bg-red-500/10 disabled:opacity-60"
-                : "btn btn-primary h-10 px-4 rounded-xl text-sm font-bold disabled:opacity-60"}>
-              {granted ? k("consent.revoke") : k("consent.grant")}
-            </button>
-            <Why lock={lockOf("consent")} />
-            {!aiOff && prefs.status?.telegramLinked === false && <p className="text-[11px] text-muted-foreground mt-2" data-testid="ai-consent-note">{k("why.consentNotLinked")}</p>}
-          </Card>
-
-          <Card icon={Route} title={k("channels.title")} hint={k("channels.hint")}>
-            <div className="flex flex-wrap gap-2">
-              {MY_CHANNELS.map((c) => {
+          <Card icon={Route} title={k("simple.howTitle")} hint={k("simple.howHint")} testId="ai-my-how">
+            <div className="rounded-xl border border-border bg-card/60 px-3 divide-y divide-border/60">
+              {MY_CHANNELS.map(({ c, icon }) => {
                 const on = !prefs.disabledChannels.includes(c);
                 const next = on ? addChannel(prefs.disabledChannels, c) : removeChannel(prefs.disabledChannels, c);
+                const l = lockOf("channels");
                 return (
-                  <Chip key={c} active={on} disabled={!!lockOf("channels")} testId={`ai-my-ch-${c}`} title={why(lockOf("channels"))}
-                    onClick={() => save({ disabledChannels: next }, (p) => ({ ...p, disabledChannels: next }))}>
-                    {t(`aiVoice.admin.channels.names.${c}`)}
-                  </Chip>
+                  <div key={c} className="py-0.5">
+                    <Toggle testId={`ai-my-ch-${c}`} icon={icon} checked={on} disabled={!!l} title={why(l)}
+                      label={<span className="font-semibold">{c === "push" ? t("aiVoice.admin.channels.names.push") : t(`aiVoice.ui.simple.ch.${c}.title`)}</span>}
+                      hint={c === "push" ? k("simple.pushHint") : t(`aiVoice.ui.simple.ch.${c}.hint`)}
+                      onChange={() => save({ disabledChannels: next }, (p) => ({ ...p, disabledChannels: next }))} />
+                    {c === "telegram_call" && on && (
+                      <div className={`ml-12 mb-2.5 rounded-xl px-3 py-2.5 border ${granted ? "bg-emerald-500/[0.06] border-emerald-500/25" : "bg-amber-500/[0.06] border-amber-500/30"}`} data-testid="ai-consent">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className={`flex-1 min-w-[9rem] text-xs font-semibold flex items-center gap-1.5 ${granted ? "text-emerald-700 dark:text-emerald-300" : "text-amber-800 dark:text-amber-200"}`}>
+                            <MorphIcon icon={granted ? Ok : Phone} className="w-3.5 h-3.5 flex-shrink-0" />
+                            {granted ? k("simple.consentOk") : k("simple.consentAsk")}
+                          </p>
+                          <button type="button" disabled={!!lockOf("consent")} data-testid="ai-consent-btn" title={why(lockOf("consent"))}
+                            aria-describedby={aiOff ? "ai-prefs-why" : undefined}
+                            onClick={() => save({ callConsent: granted ? "revoked" : "granted" }, (p) => ({ ...p, callConsent: granted ? "revoked" : "granted" }))}
+                            className={granted ? "h-8 px-3 rounded-lg text-xs font-semibold text-muted-foreground hover:text-red-600 hover:bg-red-500/10 disabled:opacity-60"
+                              : "btn btn-primary h-9 px-3.5 rounded-xl text-xs font-bold disabled:opacity-60"}>
+                            {granted ? k("consent.revoke") : k("consent.grant")}
+                          </button>
+                        </div>
+                        {!aiOff && prefs.status?.telegramLinked === false && <p className="text-[11px] text-muted-foreground mt-1.5" data-testid="ai-consent-note">{k("why.consentNotLinked")}</p>}
+                      </div>
+                    )}
+                  </div>
                 );
               })}
             </div>
             <Why lock={lockOf("channels")} testId="ai-why-channels" />
-            {!lockOf("channels") && tgNote && <p className="text-[11px] text-muted-foreground mt-2" data-testid="ai-tg-note">{k(`why.${tgNote}`)}</p>}
           </Card>
 
           {quietSupported && (
             <Card icon={Moon} title={k("quiet.title")} hint={k("quiet.hint")}>
-              <Toggle checked={!!quiet} label={k("quiet.enable")} disabled={!!lockOf("quiet")}
-                onChange={(v) => {
-                  const q = v ? { from: "21:00", to: "07:00" } : null;
-                  save({ quietHours: q }, (p) => ({ ...p, quietHours: q }));
-                }} />
+              <div className="rounded-xl border border-border bg-card/60 px-3">
+                <Toggle checked={!!quiet} label={<span className="font-semibold">{k("quiet.enable")}</span>} disabled={!!lockOf("quiet")} title={why(lockOf("quiet"))}
+                  onChange={(v) => {
+                    const q = v ? { from: "21:00", to: "07:00" } : null;
+                    save({ quietHours: q }, (p) => ({ ...p, quietHours: q }));
+                  }} />
+              </div>
               {quiet && (
-                <div className="grid grid-cols-2 gap-3 max-w-sm mt-2">
+                <div className="grid grid-cols-2 gap-3 max-w-sm mt-3">
                   {(["from", "to"] as const).map((side) => (
                     <TimeField key={side} label={t(`aiVoice.admin.channels.${side}`)} value={quiet[side]} disabled={!!lockOf("quiet")}
                       onChange={(v) => {
@@ -159,22 +170,9 @@ export default function MyAiPrefsPanel() {
               <Why lock={lockOf("quiet")} />
             </Card>
           )}
-
-          <Card icon={Stop} title={k("optOut.title")} hint={k("optOut.hint")}>
-            <div className="divide-y divide-border/60">
-              {(["calls", "reminders", "all"] as const).map((x) => {
-                const l = lockOf(x === "all" ? "optOutAll" : "optOut");
-                return (
-                  <Toggle key={x} checked={prefs.optOut[x]} label={k(`optOut.${x}`)} disabled={!!l} testId={`ai-optout-${x}`}
-                    hint={l && l !== "busy" && !aiOff ? <span className="inline-flex items-start gap-1"><MorphIcon icon={Lock} className="w-3 h-3 mt-0.5 flex-shrink-0" />{why(l)}</span> : undefined}
-                    onChange={(v) => save({ optOut: { [x]: v } }, (p) => ({ ...p, optOut: { ...p.optOut, [x]: v } }))} />
-                );
-              })}
-            </div>
-            {aiOff && <Why lock={globalLock} />}
-          </Card>
         </div>
 
+        <div className="space-y-4 min-w-0">
         <Card icon={Task} title={k("reminders.title")}>
           {reminders === null ? <Notice>{t("aiVoice.common.notReady")}</Notice> : reminders.length === 0 ? (
             <p className="text-sm text-muted-foreground py-4 text-center">{k("reminders.empty")}</p>
@@ -205,6 +203,23 @@ export default function MyAiPrefsPanel() {
             </ul>
           )}
         </Card>
+
+          <More title={k("simple.more")} hint={k("simple.moreHint")} testId="ai-my-more"
+            defaultOpen={prefs.optOut.all || prefs.optOut.calls || prefs.optOut.reminders}>
+            <p className="text-[11px] text-muted-foreground mb-1">{k("optOut.hint")}</p>
+            <div className="divide-y divide-border/60">
+              {(["calls", "reminders", "all"] as const).map((x) => {
+                const l = lockOf(x === "all" ? "optOutAll" : "optOut");
+                return (
+                  <Toggle key={x} checked={prefs.optOut[x]} label={k(`optOut.${x}`)} disabled={!!l} testId={`ai-optout-${x}`}
+                    hint={l && l !== "busy" && !aiOff ? <span className="inline-flex items-start gap-1"><MorphIcon icon={Lock} className="w-3 h-3 mt-0.5 flex-shrink-0" />{why(l)}</span> : undefined}
+                    onChange={(v) => save({ optOut: { [x]: v } }, (p) => ({ ...p, optOut: { ...p.optOut, [x]: v } }))} />
+                );
+              })}
+            </div>
+            {aiOff && <Why lock={globalLock} />}
+          </More>
+        </div>
       </div>
     </div>
   );

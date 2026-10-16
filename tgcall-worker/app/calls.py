@@ -30,6 +30,7 @@ class Engine(Protocol):
     @property
     def ready(self) -> bool: ...
     async def has_peer(self, user_id: int) -> bool: ...
+    # ixtiyoriy: async def resolve_peer(self, user_id, username, phone) -> str (tg.py)
     async def play(self, user_id: int, timeout_sec: int) -> None: ...
     async def record(self, user_id: int) -> None: ...
     async def send_frame(self, user_id: int, pcm48: bytes) -> None: ...
@@ -43,6 +44,9 @@ AskFn = Callable[[dict], Awaitable[Optional[dict]]]
 
 # Kiruvchi qo'ng'iroqni qabul qilish (accept → confirm) uchun kutish chegarasi
 INCOMING_ACCEPT_TIMEOUT_S = 20
+# Peer aniqlash natijasi → call.place rad sababi (backend: peer_unknown bo'lsa bir marta telefon bilan qayta)
+_PEER_REASON = {"mismatch": "peer_mismatch", "import_limited": "import_limited", "flood_wait": "flood_wait",
+                "privacy_restricted": "privacy_restricted"}
 _SID_HEX = set("0123456789abcdefABCDEF")
 
 
@@ -127,7 +131,18 @@ class CallManager:
         except Exception:
             known = False
         if not known:
-            return {"accepted": False, "reason": "peer_unknown"}
+            # Owner 2026-10-16: dialoglar → @username → (backend telefon bergan bo'lsa) bitta import, id mos kelishi shart
+            resolve = getattr(self.engine, "resolve_peer", None)
+            st = "not_found"
+            if resolve is not None:
+                try:
+                    st = await resolve(uid, p.get("username"), p.get("phone"))
+                except Exception:
+                    st = "not_found"
+            if st != "resolved":
+                return {"accepted": False, "reason": _PEER_REASON.get(st, "peer_unknown")}
+            if self.active_count >= MAX_CONCURRENT:   # aniqlash paytida boshqa qo'ng'iroq boshlangan bo'lishi mumkin
+                return {"accepted": False, "reason": "busy_worker"}
         c = ActiveCall(session_id=sid, user_id=uid, frame_uuid=frame_uuid, timeout_sec=timeout, max_duration_sec=max_dur)
         self.active = c
         self.total_calls += 1

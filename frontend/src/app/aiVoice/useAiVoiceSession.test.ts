@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { AiVoiceController, type AiVoiceDeps, type SocketLike } from "./aiVoiceController";
+import { AiVoiceController, textFallbackKind, type AiVoiceDeps, type SocketLike } from "./aiVoiceController";
 import { __resetAiVoiceBus, isAiCallActive } from "./bus";
 import { encodeAudioFrame } from "./protocol";
 
@@ -377,5 +377,90 @@ describe("AiVoiceController — presence, kech ulanish, qayta ulanish", () => {
     expect(s.sent("aiv:hangup")).toHaveLength(1);
     expect(isAiCallActive()).toBe(false);
     expect(c.getState().status).toBe("idle");
+  });
+});
+
+describe("AiVoiceController — ovozli ishonchlilik (kvota → matn, 'menga qo'ng'iroq qil')", () => {
+  it("server ai_quota sababini aytib tugatsa — xato kodi ai_quota, matnli rejim 'limit'", async () => {
+    const s = new FakeSocket();
+    s.acks["aiv:start"] = () => ({ ok: true, sessionId: SID, correlationId: CID });
+    const { deps } = makeDeps(s);
+    ctl = new AiVoiceController(deps);
+    ctl.start();
+    ctl.startOutgoing();
+    await flush();
+    s.fire("aiv:error", { code: "ai_quota", message: "Ovozli limit tugadi — matn bilan davom etamiz." });
+    expect(ctl.getState().tool).toBeNull();               // sabab — chip emas, yakuniy xato
+    s.fire("aiv:end", { sessionId: SID, reason: "error" });
+    const st = ctl.getState();
+    expect(st).toMatchObject({ status: "ended", error: { kind: "server", code: "ai_quota" } });
+    expect(textFallbackKind(st.error)).toBe("limit");
+  });
+
+  it("ack rad etish kodlari matnga o'tkazadi: limit/budget/platform_cap → limit; unsupported_transport → network; boshqalar — yo'q", () => {
+    expect(textFallbackKind({ kind: "server", code: "limit" })).toBe("limit");
+    expect(textFallbackKind({ kind: "server", code: "budget" })).toBe("limit");
+    expect(textFallbackKind({ kind: "server", code: "platform_cap" })).toBe("limit");
+    expect(textFallbackKind({ kind: "server", code: "ai_not_configured" })).toBe("not_configured");
+    expect(textFallbackKind({ kind: "server", code: "ai_unavailable" })).toBe("unavailable");
+    expect(textFallbackKind({ kind: "server", code: "unsupported_transport" })).toBe("network");
+    expect(textFallbackKind({ kind: "server", code: "off_shift" })).toBeNull();
+    expect(textFallbackKind({ kind: "mic", code: "permission_denied" })).toBeNull();
+    expect(textFallbackKind(null)).toBeNull();
+  });
+
+  it("ai_fallback / tts_unavailable — xato emas, ma'lumot chipi; qo'ng'iroq davom etadi", async () => {
+    const s = new FakeSocket();
+    s.acks["aiv:start"] = () => ({ ok: true, sessionId: SID, correlationId: CID });
+    const { deps } = makeDeps(s);
+    ctl = new AiVoiceController(deps);
+    ctl.start();
+    ctl.startOutgoing();
+    await flush();
+    s.fire("aiv:ready", ready());
+    s.fire("aiv:error", { code: "ai_fallback", message: "zaxira" });
+    expect(ctl.getState()).toMatchObject({ status: "connected", tool: { name: "ai_fallback", status: "ok" } });
+    s.fire("aiv:end", { sessionId: SID, reason: "hangup" });
+    expect(ctl.getState().error).toBeNull();
+  });
+
+  it("chatda qo'ng'iroq so'ralgan (expectIncoming) — kelgan AI qo'ng'irog'i jiringlamasdan ulanadi", async () => {
+    const s = new FakeSocket();
+    s.acks["aiv:accept"] = () => ({ ok: true, sessionId: SID, correlationId: CID });
+    const { deps, spies } = makeDeps(s, { canAutoAccept: () => true });
+    ctl = new AiVoiceController(deps);
+    ctl.start();
+    const presenceBefore = s.sent("aiv:presence").length;
+    ctl.expectIncoming(60_000);
+    expect(s.sent("aiv:presence").length).toBe(presenceBefore + 1);
+    s.fire("aiv:incoming", incoming({ purpose: "assistant" }));
+    expect(spies.startRing).not.toHaveBeenCalled();
+    expect(ctl.getState().status).toBe("connecting");
+    await flush();
+    expect(s.sent("aiv:accept")[0].data).toEqual({ sessionId: SID });
+    s.fire("aiv:ready", ready());
+    expect(ctl.getState().status).toBe("connected");
+  });
+
+  it("kutish oynasi o'tgan yoki avtomatik qabul mumkin emas — oddiy jiringlash", () => {
+    const s = new FakeSocket();
+    const { deps, spies } = makeDeps(s, { canAutoAccept: () => false });
+    ctl = new AiVoiceController(deps);
+    ctl.start();
+    ctl.expectIncoming(60_000);
+    s.fire("aiv:incoming", incoming());
+    expect(ctl.getState().status).toBe("incoming");
+    expect(spies.startRing).toHaveBeenCalledTimes(1);
+    ctl.decline();
+
+    const s2 = new FakeSocket();
+    const m2 = makeDeps(s2, { canAutoAccept: () => true });
+    ctl.dispose();
+    ctl = new AiVoiceController(m2.deps);
+    ctl.start();
+    ctl.expectIncoming(1_000);
+    vi.advanceTimersByTime(2_000);
+    s2.fire("aiv:incoming", incoming({ sessionId: "sess-9" }));
+    expect(ctl.getState().status).toBe("incoming");
   });
 });

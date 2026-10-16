@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import type { AiSettingsData, AiShift } from "./api";
 import {
   addChannel, addDate, addShiftDate, callTimeOf, channelsUnique, dayStatus, diffPatch, isHHmm, isIsoDate, isoWeekdayOf,
-  missingChannels, moveItem, normalizeHHmm, removeChannel, removeShiftDate, todayTashkent, toggleCalendarDay, toggleWeekday,
+  missingChannels, moveItem, normalizeHHmm, removeChannel, removeShiftDate, setChannelEnabled, todayTashkent, toggleCalendarDay, toggleWeekday,
   validateDraft, validateShift,
 } from "./scheduleHelpers";
 
@@ -148,5 +148,18 @@ describe("diffPatch", () => {
     expect((p.attendance as any).shifts[0]).toMatchObject({ workStart: "07:30", callLeadMin: 15, callTime: "07:15" });
     expect(diffPatch(a, settings())).toEqual({});
     expect(diffPatch(a, settings({ enabled: true, limits: { ...a.limits, monthlyBudgetUsd: 50 } }))).toEqual({ enabled: true, limits: { monthlyBudgetUsd: 50 } });
+  });
+});
+
+describe("setChannelEnabled", () => {
+  it("yoqilganda standart joyiga qo'yadi, takrorlamaydi", () => {
+    expect(setChannelEnabled(["bot_message", "push", "notify_manager"], "telegram_call", true)).toEqual(["bot_message", "telegram_call", "push", "notify_manager"]);
+    expect(setChannelEnabled(["push"], "bot_message", true)).toEqual(["bot_message", "push"]);
+    expect(setChannelEnabled(["bot_message"], "notify_manager", true)).toEqual(["bot_message", "notify_manager"]);
+    expect(setChannelEnabled(["bot_message", "push"], "push", true)).toEqual(["bot_message", "push"]);
+  });
+  it("o'chirilganda olib tashlaydi, oxirgisini qoldiradi", () => {
+    expect(setChannelEnabled(["bot_message", "telegram_call"], "telegram_call", false)).toEqual(["bot_message"]);
+    expect(setChannelEnabled(["inapp_call"], "inapp_call", false)).toEqual(["inapp_call"]);
   });
 });

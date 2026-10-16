@@ -13,7 +13,7 @@ import BetaBadge from "../BetaBadge";
 import { openAiVoiceCall } from "../bus";
 import { useAiStatus } from "../aiStatus";
 import {
-  answerAiChatConfirm, bindAiChatUser, loadAiChat, retryAiChat, sendAiChat, tashkentDay, useAiChat, type AiChatEntry,
+  answerAiChatConfirm, bindAiChatUser, loadAiChat, retryAiChat, sendAiChat, setAiChatNotice, tashkentDay, useAiChat, type AiChatEntry,
 } from "./aiChatStore";
 import type { AiChatErrorCode } from "./api";
 
@@ -238,6 +238,17 @@ export function AiChatThread({ userId, onBack, backAlways = false }: { userId: s
         </button>
       </div>
 
+      {/* Ovozli qo'ng'iroq matnga o'tdi (kvota/limit) — izoh */}
+      {chat.notice && (
+        <div className="flex-shrink-0 px-3 pt-2" data-testid="ai-chat-notice" role="status">
+          <div className="max-w-3xl mx-auto flex items-start gap-2 rounded-2xl border border-amber-500/40 bg-amber-500/[0.08] px-3 py-2 text-xs">
+            <MorphIcon icon={Alert} className="w-4 h-4 flex-shrink-0 text-amber-600 dark:text-amber-400 mt-px" />
+            <p className="flex-1 min-w-0 leading-snug">{t(chat.notice)}</p>
+            <button type="button" onClick={() => setAiChatNotice(null)} className="text-[11px] font-semibold text-muted-foreground hover:text-foreground flex-shrink-0">{t("aiVoiceCall.close")}</button>
+          </div>
+        </div>
+      )}
+
       {/* Xabarlar */}
       <div className="relative flex-1 min-h-0">
         <div ref={listRef} onScroll={onScroll} className="absolute inset-0 overflow-y-auto overscroll-contain px-3 sm:px-5 py-4" data-testid="ai-chat-list" role="log" aria-live="polite">
@@ -313,6 +324,14 @@ export function AiChatThread({ userId, onBack, backAlways = false }: { userId: s
                 </div>
               );
             })}
+
+            {chat.callExpectedUntil > 0 && !chat.thinking && (
+              <div className="flex justify-center my-1" data-testid="ai-chat-calling" role="status">
+                <span className="inline-flex items-center gap-1.5 text-[11.5px] font-medium text-primary rounded-full px-3 py-1.5 border border-primary/30 animate-pulse" style={{ background: "color-mix(in srgb, var(--primary) 10%, transparent)" }}>
+                  <MorphIcon icon={Phone} className="w-3.5 h-3.5" />{t("aiVoiceCall.callingYou")}
+                </span>
+              </div>
+            )}
 
             {chat.thinking && (
               <div className="flex justify-start" aria-label={t("aiVoiceCall.thinking")}>

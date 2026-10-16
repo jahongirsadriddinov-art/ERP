@@ -69,7 +69,7 @@ export function errorCode(e: unknown): string {
 }
 
 /** Tarix: oxirgi N navbat, har biri cheklangan uzunlikda. */
-export function trimHistory(h: ProviderStartOpts['history'], maxTurns = 12, maxChars = 2000): ProviderStartOpts['history'] {
+export function trimHistory(h: ProviderStartOpts['history'], maxTurns = 10, maxChars = 1500): ProviderStartOpts['history'] {
   return (Array.isArray(h) ? h : [])
     .filter((x) => x && (x.role === 'user' || x.role === 'assistant') && typeof x.text === 'string' && x.text.trim())
     .slice(-maxTurns)

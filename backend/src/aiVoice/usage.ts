@@ -21,7 +21,7 @@ const knownProvider = (p: unknown): AiUsageProvider =>
  * qaytarsa — shu ishlatiladi, aks holda narx jadvali (pricing.ts) bo'yicha hisoblanadi.
  */
 export async function recordTextUsage(
-  key: { companyId: string; userId?: string | null; provider: 'gemini' | 'openrouter' | 'claude'; model: string; at?: Date },
+  key: { companyId: string; userId?: string | null; provider: 'gemini' | 'groq' | 'openrouter' | 'claude'; model: string; at?: Date },
   u: { tokensIn?: number; tokensOut?: number; cacheReadTokens?: number; costUsd?: number; toolCalls?: number },
 ): Promise<void> {
   const cost = typeof u.costUsd === 'number' && Number.isFinite(u.costUsd) && u.costUsd >= 0

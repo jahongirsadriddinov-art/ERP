@@ -9,6 +9,13 @@ import { REMINDER_TOOLS } from './reminders';
 import { getAllowedFinancialReport } from './getAllowedFinancialReport';
 import { notifyManager } from './notifyManager';
 import { getEmployeeProfile } from './getEmployeeProfile';
+import { DECISION_TOOLS } from './transactionDecisions';
+import { listExpenses } from './listExpenses';
+import { getObjectDetails } from './getObjectDetails';
+import { listEmployees } from './listEmployees';
+import { getTodayOverview } from './getTodayOverview';
+import { ensureCallbackJob, requestCallback } from './requestCallback';
+import { getSharedQueue } from '../../queue/jobQueue';
 
 // P2: ERP tool'lari registry.registerTool() orqali ro'yxatga olinadi. bootstrap.startAiVoice() va
 // P8 adminRoutes GET /tools chaqiradi — IDEMPOTENT (ikkinchi chaqiruv no-op; testlar oldindan
@@ -24,11 +31,22 @@ export const ERP_TOOLS: AiToolDef[] = [
   getAllowedFinancialReport,
   notifyManager,
   getEmployeeProfile,
+  // 2026-10-16 (owner: "AI hamma narsani bilsin, tasdiqla desam tasdiqlasin, qo'ng'iroq qilsin")
+  getTodayOverview,
+  getObjectDetails,
+  listEmployees,
+  listExpenses,
+  ...DECISION_TOOLS,
+  requestCallback,
 ];
 
 let registered = false;
 
 export function registerErpTools(): void {
+  // bootstrap navbatni shu chaqiruvdan keyin (sinxron) o'rnatadi — 'ai.callback' ishlovchisi keyingi tikda
+  // ulanadi, shunda qayta ishga tushgandan keyin ham navbatdagi qo'ng'iroqlar bajariladi. Har chaqiruvda
+  // (idempotent): tool'lar oldinroq (masalan, admin GET /tools) ro'yxatga olingan bo'lsa ham navbat ulanadi.
+  setImmediate(() => ensureCallbackJob(getSharedQueue()));
   if (registered) return;
   registered = true;
   for (const def of ERP_TOOLS) if (!hasTool(def.name)) registerTool(def);

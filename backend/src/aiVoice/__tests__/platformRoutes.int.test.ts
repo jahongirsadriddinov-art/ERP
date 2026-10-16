@@ -7,6 +7,7 @@ import request from 'supertest';
 import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
 import type { MongoMemoryServer } from 'mongodb-memory-server';
+import AiAssistantSettings from '../../models/AiAssistantSettings';
 import AiCallSession from '../../models/AiCallSession';
 import AiChannelConnection from '../../models/AiChannelConnection';
 import AiEmployeeContact from '../../models/AiEmployeeContact';
@@ -14,6 +15,7 @@ import AuditLog from '../../models/AuditLog';
 import User from '../../models/User';
 import { JWT_SECRET } from '../../middleware/auth';
 import { mountAiVoiceRoutes } from '../bootstrap';
+import { invalidateSettings } from '../settings';
 import { __resetPlatformRoutesForTests, LOGIN_MAX, TEST_CALL_MAX } from '../routes/platformRoutes';
 import { workerHub } from '../telegram/workerNamespace';
 import { tone } from '../voice/audio';
@@ -225,6 +227,11 @@ describe('login: telefon → kod → 2FA (B8)', () => {
   });
 });
 
+async function setCompanyConsent(v: boolean) {
+  await AiAssistantSettings.updateOne({ companyId: A.companyId }, { $set: { 'calls.companyConsent': v } });
+  invalidateSettings();
+}
+
 describe("sinov qo'ng'irog'i (B7)", () => {
   async function ready() {
     const w = await worker();
@@ -232,19 +239,37 @@ describe("sinov qo'ng'irog'i (B7)", () => {
     return w;
   }
 
-  it("rozilik yo'q — 409 no_consent, qo'ng'iroq yo'q; nomzodlar ro'yxatida faqat rozilik berganlar", async () => {
+  it("rozilik yo'q — 409 no_consent, qo'ng'iroq yo'q; nomzodlar: AI yoqilgan firma + samarali rozilik + Telegram bog'langan", async () => {
     const dev = await newDev();
     const w = await ready();
     await AiEmployeeContact.create({ companyId: A.companyId, employeeId: A.worker2Id, telegram: { tgUserId: '880001', callConsent: 'requested' } } as any);
     await AiEmployeeContact.create({ companyId: A.companyId, employeeId: A.workerId, telegram: { tgUserId: '880002', callConsent: 'granted', resolveStatus: 'resolved' } } as any);
-    const r = await post('/test-call', dev, { userId: A.worker2Id });
-    expect(r.status).toBe(409);
-    expect(r.body).toEqual({ error: 'no_consent' });
-    expect(w.rpcsOf('call.place')).toHaveLength(0);
-    expect((await post('/test-call', dev, { userId: 'bad' })).status).toBe(400);
-    const t = await get('/test-targets', dev);
-    expect(t.body.targets.map((x: any) => x.userId)).toEqual([A.workerId]);
-    expect(t.body.targets[0]).toMatchObject({ companyName: 'TgPl', resolveStatus: 'resolved' });
+    // Kompaniya roziligi o'chiq — faqat eski shaxsiy rozilik
+    await setCompanyConsent(false);
+    try {
+      const r = await post('/test-call', dev, { userId: A.worker2Id });
+      expect(r.status).toBe(409);
+      expect(r.body).toEqual({ error: 'no_consent' });
+      expect(w.rpcsOf('call.place')).toHaveLength(0);
+      expect((await post('/test-call', dev, { userId: 'bad' })).status).toBe(400);
+      const t = await get('/test-targets', dev);
+      expect(t.body.targets.map((x: any) => x.userId)).toEqual([A.workerId]);
+      expect(t.body.targets[0]).toMatchObject({ companyName: 'TgPl', resolveStatus: 'resolved' });
+    } finally {
+      await setCompanyConsent(true);
+    }
+    // Owner 2026-10-16: kompaniya roziligi yoqilgan — ERP botga bog'langan xodim (kontakt/kodsiz) ham ro'yxatda,
+    // opt-out qilingan va AI o'chiq firma xodimlari yo'q; telefon qaytmaydi
+    await User.updateOne({ _id: A.prorabId }, { $set: { telegramChatId: '880020' } });
+    await AiEmployeeContact.updateOne({ employeeId: A.worker2Id }, { $set: { 'optOut.calls': true } });
+    const OFF = await seedCompany('OffPl', { aiEnabled: false });
+    await User.updateOne({ _id: OFF.workerId }, { $set: { telegramChatId: '880021' } });
+    const t2 = await get('/test-targets', dev);
+    const ids = t2.body.targets.map((x: any) => x.userId);
+    expect(ids).toEqual(expect.arrayContaining([A.workerId, A.prorabId]));
+    expect(ids).not.toContain(A.worker2Id);
+    expect(ids).not.toContain(OFF.workerId);
+    expect(JSON.stringify(t2.body)).not.toMatch(/phone|\+998/);
   });
 
   it("rozilik bor — 202, worker'ga call.place, firma bilan audit yozuvi", async () => {
@@ -264,7 +289,7 @@ describe("sinov qo'ng'irog'i (B7)", () => {
   it("rozilik bor, lekin kanal mavjud emas (aniqlanmagan) — 409 placed:false, baribir audit", async () => {
     const dev = await newDev();
     await ready();
-    await AiEmployeeContact.create({ companyId: A.companyId, employeeId: A.workerId, telegram: { tgUserId: '880004', callConsent: 'granted', resolveStatus: 'unknown' } } as any);
+    await AiEmployeeContact.create({ companyId: A.companyId, employeeId: A.workerId, telegram: { tgUserId: '880004', callConsent: 'granted', resolveStatus: 'not_found', checkedAt: new Date() } } as any);
     const r = await post('/test-call', dev, { userId: A.workerId });
     expect(r.status).toBe(409);
     expect(r.body).toMatchObject({ placed: false, outcome: 'unavailable', errorCode: 'not_resolved' });
@@ -274,7 +299,7 @@ describe("sinov qo'ng'irog'i (B7)", () => {
   it(`${TEST_CALL_MAX} ta / soat`, async () => {
     const dev = await newDev();
     await ready();
-    await AiEmployeeContact.create({ companyId: A.companyId, employeeId: A.workerId, telegram: { tgUserId: '880005', callConsent: 'granted', resolveStatus: 'unknown' } } as any);
+    await AiEmployeeContact.create({ companyId: A.companyId, employeeId: A.workerId, telegram: { tgUserId: '880005', callConsent: 'granted', resolveStatus: 'not_found', checkedAt: new Date() } } as any);
     for (let i = 0; i < TEST_CALL_MAX; i++) expect((await post('/test-call', dev, { userId: A.workerId })).status).toBe(409);
     const r = await post('/test-call', dev, { userId: A.workerId });
     expect(r.status).toBe(429);

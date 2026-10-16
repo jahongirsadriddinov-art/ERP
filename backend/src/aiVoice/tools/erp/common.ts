@@ -92,3 +92,18 @@ export const OBJECT_STATUS: Record<string, { uz: string; ru: string }> = {
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const cf = (ctx: Pick<ToolCtx, 'companyId'>, filter: Record<string, unknown> = {}): any => inCompany(ctx, filter);
+
+/**
+ * System prompt uchun "mening obyektlarim" (rolga moslash): rahbar — firmaning faol obyektlari,
+ * boshqalar — ko'ra oladigan obyektlari. Faqat nomlar (≤5) va jami soni; nomlar prompt'da sanitize qilinadi.
+ */
+export async function promptObjects(ctx: ToolCtx, limit = 5): Promise<{ names: string[]; total: number }> {
+  const visible = await visibleObjectIds(ctx);
+  if (visible !== null && !visible.length) return { names: [], total: 0 };
+  const filter = visible === null ? { status: 'active' } : { _id: { $in: visible } };
+  const [rows, total] = await Promise.all([
+    ObjectModel.find(cf(ctx, filter)).select('name').sort({ updatedAt: -1 }).limit(limit).lean(),
+    ObjectModel.countDocuments(cf(ctx, filter)),
+  ]);
+  return { names: (rows as any[]).map((o) => String(o.name || '')).filter(Boolean), total };
+}

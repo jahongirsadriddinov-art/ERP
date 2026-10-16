@@ -91,6 +91,25 @@ export interface AiVoiceDeps {
   now(): number;
   lang(): "uz" | "ru";
   onNotice(key: "busyWebrtc" | "unsupported"): void;
+  /** Qo'ng'iroqni bosishsiz qabul qilish mumkinmi (sahifada avval foydalanuvchi harakati bo'lgan, iOS emas). */
+  canAutoAccept?(): boolean;
+}
+
+/** Ovozli yo'l ishlamaydi (kvota/limit/sozlanmagan/transport) — oyna o'rniga matnli AI chatiga o'tamiz. */
+const TEXT_FALLBACK_CODES = new Set([
+  "ai_quota", "ai_unavailable", "ai_not_configured", "limit", "budget", "platform_cap", "company_cap", "unsupported_transport",
+]);
+/** Server aiv:error'dagi "yakuniy sabab" kodlari (end'dan OLDIN keladi). */
+const SERVER_FAIL_CODES = new Set(["ai_quota", "ai_unavailable", "ai_not_configured"]);
+
+export type TextFallbackKind = "limit" | "unavailable" | "not_configured" | "network";
+/** Xato matnli rejimga o'tishni talab qiladimi; qaysi sabab bilan (UI matni uchun). */
+export function textFallbackKind(err: AiCallError | null): TextFallbackKind | null {
+  if (!err || err.kind !== "server" || !TEXT_FALLBACK_CODES.has(err.code)) return null;
+  if (err.code === "ai_not_configured") return "not_configured";
+  if (err.code === "ai_unavailable") return "unavailable";
+  if (err.code === "unsupported_transport") return "network";
+  return "limit";
 }
 
 // Vaqtlar (ms)
@@ -104,6 +123,7 @@ const ENDED_DISMISS_MS = 2500;
 const PENDING_MIN_GAP_MS = 10_000;
 const PTT_TAIL_FRAMES = 15;            // 600 ms sukunat — server VAD gap tugaganini sezsin
 const MAX_CAPTIONS = 12;
+const EXPECT_CALL_MAX_MS = 5 * 60_000;
 
 const ACTIVE: AiCallStatus[] = ["incoming", "connecting", "ringing", "connected", "reconnecting"];
 const IN_CALL: AiCallStatus[] = ["connecting", "ringing", "connected", "reconnecting"];
@@ -137,6 +157,10 @@ export class AiVoiceController {
   private lastPendingAt = -Infinity;
   private capId = 0;
   private toolClearTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Server oxirgi aiv:error'da aytgan yakuniy sabab (ai_quota …) — end kelganda xato kodi shu bo'ladi. */
+  private serverFail: { code: string; message?: string } | null = null;
+  /** Foydalanuvchi chatda "menga qo'ng'iroq qil" degan — shu vaqtgacha kelgan AI qo'ng'irog'i avtomatik qabul qilinadi. */
+  private expectCallUntil = 0;
 
   constructor(private deps: AiVoiceDeps) {}
 
@@ -174,6 +198,15 @@ export class AiVoiceController {
   }
 
   setBusy(b: boolean): void { this.busy = b; }
+
+  /**
+   * Chatda AI'dan qo'ng'iroq so'raldi (requestCallback) — keyingi `ms` ichida kelgan AI qo'ng'irog'i
+   * jiringlamasdan darhol ulanadi (foydalanuvchi o'zi so'ragan). Presence ham darhol yangilanadi.
+   */
+  expectIncoming(ms = 120_000): void {
+    this.expectCallUntil = this.deps.now() + Math.max(0, Math.min(EXPECT_CALL_MAX_MS, ms));
+    this.emitPresence();
+  }
 
   /** AI holati (aiStatus) yangilanganda — darhol presence va kutilayotgan qo'ng'iroqni tekshirish. */
   notifyAiStatus(): void {
@@ -348,6 +381,8 @@ export class AiVoiceController {
       if (g !== this.gen) return false;
       this.capture = await this.deps.createCapture(ctx, stream, (pcm, rms) => this.onFrame(pcm, rms));
       if (g !== this.gen) return false;
+      // Avtomatik qabul / iOS: kontekst "suspended" qolgan bo'lishi mumkin — yana bir bor uyg'otamiz
+      try { void ctx.resume?.()?.catch?.(() => { /* */ }); } catch { /* */ }
       void this.refreshOutputs(g);
       return true;
     } catch (e) {
@@ -549,6 +584,8 @@ export class AiVoiceController {
     this.gen++;
     this.clearTimer("dismiss");
     this.resetSession();
+    const auto = this.expectCallUntil > this.deps.now() && this.autoAcceptOk();
+    this.expectCallUntil = 0;
     this.sessionId = d.sessionId;
     this.correlationId = typeof d.correlationId === "string" ? d.correlationId : null;
     const ringMs = Number.isFinite(exp) ? Math.max(5000, Math.min(120_000, exp - nowWall)) : 45_000;
@@ -557,6 +594,7 @@ export class AiVoiceController {
       purpose: d.purpose || null, companyName: d.companyName, expiresAt: nowWall + ringMs,
     });
     setAiCallActive(true);
+    if (auto) { this.accept(); return; }
     try { this.stopRing = this.deps.startRing(); } catch { /* */ }
     try { this.stopAttention = this.deps.startAttention(); } catch { /* */ }
     const g = this.gen;
@@ -565,6 +603,11 @@ export class AiVoiceController {
       this.finish("timeout", null, 0);
     });
   };
+
+  private autoAcceptOk(): boolean {
+    if (this.busy || this.deps.doc?.hidden) return false;
+    try { return !!this.deps.canAutoAccept?.(); } catch { return false; }
+  }
 
   private matches(sessionId: unknown): boolean {
     return typeof sessionId === "string" && !!this.sessionId && sessionId === this.sessionId;
@@ -660,13 +703,20 @@ export class AiVoiceController {
       this.finish(reason, null, 0);
       return;
     }
-    const err: AiCallError | null = SERVER_END_ERRORS.includes(reason) ? { kind: "server", code: reason } : null;
+    let err: AiCallError | null = SERVER_END_ERRORS.includes(reason) ? { kind: "server", code: reason } : null;
+    // Server end'dan oldin aniq sabab aytgan bo'lsa (kvota / sozlanmagan / ulanib bo'lmadi) — shu kod
+    if (reason === "error" && this.serverFail) err = { kind: "server", code: this.serverFail.code, message: this.serverFail.message };
     this.finish(reason, err);
   };
 
   private onError = (d: AivError) => {
     if (!d || !IN_CALL.includes(this.st.status)) return;
-    this.showTool({ name: "error", status: "error", message: String(d.message || d.code || "").slice(0, 200) });
+    const code = String(d.code || "");
+    const message = String(d.message || code).slice(0, 200);
+    if (SERVER_FAIL_CODES.has(code)) { this.serverFail = { code, message }; return; }
+    // Zaxira rejim (Live → kaskad) yoki faqat matnli ovoz — xato emas, ma'lumot
+    if (code === "ai_fallback" || code === "tts_unavailable") { this.showTool({ name: code, status: "ok", message }); return; }
+    this.showTool({ name: "error", status: "error", message });
   };
 
   // ───── yakunlash / tozalash ─────
@@ -693,6 +743,7 @@ export class AiVoiceController {
   }
 
   private resetSession() {
+    this.serverFail = null;
     this.sessionId = null;
     this.correlationId = null;
     this.seq = 0;

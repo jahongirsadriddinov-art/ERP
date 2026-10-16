@@ -658,3 +658,13 @@ P0 goes first and ships on its own. P1 follows. P2–P8 then run in parallel and
 6. **AI in the chat** (app + site), in addition to the floating assistant: an "AI yordamchi" contact in the chat list, like a Telegram contact — the user can write to it and CALL it (in-app AI voice call), with history.
 7. Sounds: only call sounds remain; Apple haptics (done in f15e120).
 8. Approval misrouting fixed (f15e120): one Telegram chat ↔ one user.
+
+## Owner decision (2026-10-16): company-level consent
+- Consent for AI calls is given by the company's direktor/orinbosar (owner) for ALL employees at once
+  (company setting, default ON when AI is enabled). Employees are NOT asked individually and CANNOT change any
+  AI setting (their personal AI prefs are read-only; only bosses can change per-employee options/opt-out).
+  This supersedes review B9's "only the employee sets consent".
+- No binding code needed: the employee's Telegram user id is taken from the ERP bot link (private chat id ==
+  Telegram user id). For outgoing calls the worker resolves the peer from dialogs/username, else via a single
+  rate-limited contacts.importContacts by the employee's ERP phone, accepted only if the returned user id equals
+  the bot-known id.

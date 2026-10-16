@@ -8,6 +8,8 @@ import { isObjectIdString } from '../lib/ids';
 import { ensurePlatformConnection } from '../lib/workerLease';
 import { localDate, zonedToUtc } from '../lib/zonedTime';
 import { sendToUser } from '../channels/botChannel';
+import { getCallConsent } from '../consent';
+import { backfillTgLinks, ensureContactTgUserId } from './tgLink';
 import { callWorker, WorkerRpcFailure } from './workerRpc';
 import { getActiveWorker, workerConnectedHere, workerHub } from './workerNamespace';
 
@@ -16,8 +18,9 @@ import { getActiveWorker, workerConnectedHere, workerHub } from './workerNamespa
 //  • holat/health: worker 'health' voqeasi → AiChannelConnection;
 //  • kunlik chegara: platforma bo'yicha AI_TG_DAILY_CAP + firma kvotasi AI_TG_COMPANY_DAILY_QUOTA (A1);
 //  • flood-wait: worker FloodWait xabar qilsa — kanal shu vaqtgacha mavjud emas;
-//  • kontaktni aniqlash tartibi (A2): worker keshi/dialoglari → @username → bog'lash kodi (binding).
-//    Ommaviy importContacts YO'Q — bitta-bitta import faqat AI_TG_ALLOW_IMPORT=1 bo'lsa va soatiga 3 tagacha.
+//  • kontaktni aniqlash tartibi (A2): worker keshi/dialoglari → @username → (eski) bog'lash kodi.
+//    Ommaviy importContacts YO'Q. Fon aniqlashda bitta import faqat AI_TG_ALLOW_IMPORT=1 bo'lsa, soatiga 3 tagacha;
+//    owner 2026-10-16: qo'ng'iroq paytida (call.place) telefon faqat shu qo'ng'iroq uchun, worker soatiga ≤5 import.
 
 const PLATFORM_TG = { scope: 'platform' as const, companyId: null, type: 'telegram_user' as const };
 const TG_USERNAME_RE = /^[A-Za-z][A-Za-z0-9_]{3,31}$/;
@@ -187,9 +190,10 @@ let importWindow: { start: number; count: number } = { start: 0, count: 0 };
 
 /** Bitta xodim kontaktini worker orqali aniqlash. Natija AiEmployeeContact.telegram.resolveStatus'ga yoziladi. */
 export async function resolveContact(companyId: string, employeeId: string, now: Date = new Date()): Promise<string> {
+  await ensureContactTgUserId(companyId, employeeId);
   const ct: any = await AiEmployeeContact.findOne({ companyId, employeeId }).lean();
   const tg = ct?.telegram;
-  if (!tg?.tgUserId || tg.callConsent !== 'granted') return 'skipped';
+  if (!tg?.tgUserId || !(await getCallConsent(companyId, employeeId, { contact: ct })).allowed) return 'skipped';
   let allowImport = false;
   let phone: string | undefined;
   if (importAllowed()) {
@@ -207,7 +211,7 @@ export async function resolveContact(companyId: string, employeeId: string, now:
     if (allowImport) importWindow.count++;
     const set: Record<string, unknown> = {};
     switch (r.status) {
-      case 'resolved': set['telegram.resolveStatus'] = 'resolved'; set['telegram.resolvedAt'] = now; break;
+      case 'resolved': set['telegram.resolveStatus'] = 'resolved'; set['telegram.resolvedAt'] = now; set['telegram.checkedAt'] = now; break;
       case 'privacy_restricted': set['telegram.resolveStatus'] = 'privacy_restricted'; break;
       case 'not_found': case 'mismatch': set['telegram.resolveStatus'] = 'not_found'; break;
       case 'flood_wait': if (r.retryAfterSec) await setFloodWait(now.getTime() + r.retryAfterSec * 1000); break;
@@ -248,8 +252,8 @@ export async function syncBindings(now: Date = new Date()): Promise<number> {
 /** Hali aniqlanmagan (rozilik bergan) kontaktlarni bittadan aniqlash — ommaviy emas. */
 export async function resolvePendingContacts(now: Date = new Date(), limit = 3): Promise<number> {
   if (!workerConnectedHere()) return 0;
+  // Rozilik resolveContact ichida (samarali: firma yoki shaxsiy) tekshiriladi
   const rows: any[] = await AiEmployeeContact.find({
-    'telegram.callConsent': 'granted',
     'telegram.tgUserId': { $type: 'string' },
     'telegram.resolveStatus': { $in: ['unknown', 'not_found', null] },
   }).select('companyId employeeId').limit(50).lean();
@@ -296,6 +300,7 @@ export async function applyBinding(ev: { employeeId: string; tgUserId: string; u
 // ───────────── Davriy ishlar va voqealar ─────────────
 
 let lastMaintenanceAt = 0;
+let lastBackfillAt = 0;
 let maintenanceRunning = false;
 
 /** Bog'lash kodlarini sinxronlash va kontaktlarni aniqlash (≤1 marta/daqiqa, faqat worker shu instansiyada). */
@@ -305,6 +310,8 @@ export async function runMaintenance(now: Date = new Date(), opts: { force?: boo
   maintenanceRunning = true;
   lastMaintenanceAt = now.getTime();
   try {
+    // ERP bot bog'lanishlari → AI kontaktlari (≤1 marta / 10 daqiqa)
+    if (now.getTime() - lastBackfillAt >= 10 * 60_000) { lastBackfillAt = now.getTime(); await backfillTgLinks(); }
     await syncBindings(now);
     await resolvePendingContacts(now);
   } catch (e) {
@@ -335,4 +342,5 @@ export function __resetAccountServiceForTests(): void {
   lastResolveAttempt.clear();
   importWindow = { start: 0, count: 0 };
   lastMaintenanceAt = 0;
+  lastBackfillAt = 0;
 }

@@ -47,8 +47,22 @@ export function createDefaultDeps(extra: ExtraDeps = {}): AiVoiceDeps {
     now: () => Date.now(),
     lang: () => "uz",
     onNotice: () => {},
+    canAutoAccept,
   };
   return { ...base, ...rest };
+}
+
+/**
+ * "Menga qo'ng'iroq qil" dan keyin AI qo'ng'irog'ini bosishsiz ulash mumkinmi: sahifada foydalanuvchi
+ * harakati bo'lgan (AudioContext autoplay siyosati) va iOS emas (u yerda ovoz faqat bosish ichida ochiladi).
+ */
+export function canAutoAccept(): boolean {
+  if (typeof navigator === "undefined") return false;
+  try {
+    if (/iPhone|iPad|iPod/i.test(navigator.userAgent || "")) return false;
+    const ua = (navigator as any).userActivation as { hasBeenActive?: boolean } | undefined;
+    return ua ? !!ua.hasBeenActive : true;
+  } catch { return false; }
 }
 
 /** React hook: bitta controller (komponent umri davomida), holatga obuna. */

@@ -15,7 +15,9 @@ import AiEmployeeContact from '../../models/AiEmployeeContact';
 import { JWT_SECRET } from '../../middleware/auth';
 import { mountAiVoiceRoutes } from '../bootstrap';
 import { registerBotInstance } from '../bot/botHooks';
-import { invalidateSettings } from '../settings';
+import { invalidateSettings, validateSettingsUpdate } from '../settings';
+import AuditLog from '../../models/AuditLog';
+import ConsentLog from '../../models/ConsentLog';
 import { registerTool, unregisterTool } from '../tools/registry';
 import type { AiToolDef } from '../tools/types';
 import { recordUsage } from '../usage';
@@ -118,6 +120,30 @@ describe('sozlamalar PUT', () => {
     expect(stale.body.error).toBe('version_conflict');
     expect(stale.body.current.settings.version).toBe(v0 + 1);
     expect(stale.body.current.settings.language).toBe('ru');
+  });
+
+  it("owner 2026-10-16: calls.companyConsent — standart true; faqat egasi/direktor/o'rinbosar; audit + ConsentLog", async () => {
+    expect((await fresh(B.ownerId)).settings.calls.companyConsent).toBe(true);
+    // Xodim (prorab — smenada bo'lsa ham) admin sozlamalariga kira olmaydi
+    await Attendance.create({ userId: B.prorabId, companyId: B.companyId, date: todayInTashkent(), checkIn: new Date().toISOString() } as any);
+    expect((await put('/settings', B.prorabId, { version: 0, patch: { calls: { companyConsent: false } } })).status).toBe(403);
+    let s = await fresh(B.ownerId);
+    const bad = await put('/settings', B.ownerId, { version: s.settings.version, patch: { calls: { companyConsent: 'no' } } });
+    expect(bad.status).toBe(400);
+    expect(bad.body.errors.join(' ')).toMatch(/companyConsent/);
+    const off = await put('/settings', B.orinbosarId, { version: s.settings.version, patch: { calls: { companyConsent: false } } });
+    expect(off.status).toBe(200);
+    expect(off.body.settings.calls).toMatchObject({ companyConsent: false, ringTimeoutSec: 45 });
+    s = await fresh(B.ownerId);
+    expect((await put('/settings', B.ownerId, { version: s.settings.version, patch: { calls: { companyConsent: true } } })).status).toBe(200);
+    const logs: any[] = await ConsentLog.find({ companyId: B.companyId, consentType: 'ai_call_company' }).sort({ createdAt: 1 }).lean();
+    expect(logs.map((l) => [l.userId, l.value, l.source])).toEqual([[B.orinbosarId, 'revoked', 'admin'], [B.ownerId, 'granted', 'admin']]);
+    expect(await AuditLog.countDocuments({ companyId: B.companyId, description: /kompaniya.*rozilik|qo'ng'iroq roziligi o'chirildi/ })).toBe(2);
+    // Dasturchi (platforma yo'li) kompaniya roziligini o'zgartira olmaydi
+    const cur = (await fresh(B.ownerId)).settings as any;
+    const v = validateSettingsUpdate({ calls: { companyConsent: false } }, { ...cur, brain: { provider: 'gemini', fallback: 'openrouter', effort: 'low' }, provider: { primary: 'gemini_live', fallback: 'gemini_cascade' }, limits: { userSessionsPerHour: 6, companyMinutesPerDay: 120, monthlyBudgetUsd: 20, hardStop: true, botMsgsPer10Min: 20, toolCallsPerSession: 30 } }, { role: 'dasturchi', isOwner: false });
+    expect(v.ok).toBe(false);
+    if (!v.ok) expect(v.errors.join(' ')).toMatch(/companyConsent/);
   });
 
   it("noto'g'ri tana — 400; timezone faqat Asia/Tashkent", async () => {
@@ -288,15 +314,29 @@ describe('xodimlar', () => {
     expect(q.body.employees.map((e: any) => e.userId)).toEqual([A.worker2Id]);
   });
 
-  it('PATCH: rozilik/opt-out maydonlari RAD etiladi (B9), kanal sozlamasi saqlanadi', async () => {
-    for (const body of [{ callConsent: 'granted' }, { optOut: { calls: false } }, { telegram: { callConsent: 'granted' } }, { channelOrder: ['push'], optOut: { all: false } }]) {
+  it("PATCH: shaxsiy rozilik RAD etiladi; opt-out'ni rahbar qo'yadi (owner 2026-10-16, ConsentLog 'admin'); kanal sozlamasi saqlanadi", async () => {
+    for (const body of [{ callConsent: 'granted' }, { telegram: { callConsent: 'granted' } }, { channelOrder: ['push'], callConsent: 'revoked' }]) {
       const r = await patch(`/employees/${A.workerId}`, A.ownerId, body);
       expect(r.status).toBe(400);
       expect(r.body.error).toBe('forbidden_fields');
     }
+    for (const optOut of [{}, { calls: 'yes' }, { sms: true }, 'all']) {
+      expect((await patch(`/employees/${A.workerId}`, A.ownerId, { optOut })).status).toBe(400);
+    }
     const c: any = await AiEmployeeContact.findOne({ companyId: A.companyId, employeeId: A.workerId }).lean();
     expect(c.telegram.callConsent).toBe('granted');
     expect(c.optOut.calls).toBe(true);
+    const off = await patch(`/employees/${A.workerId}`, A.orinbosarId, { optOut: { calls: false } });
+    expect(off.status).toBe(200);
+    expect(off.body.employee).toMatchObject({ optOut: { calls: false }, callsAllowed: true });
+    const on = await patch(`/employees/${A.workerId}`, A.ownerId, { optOut: { calls: true } });
+    expect(on.body.employee).toMatchObject({ optOut: { calls: true }, callsAllowed: false });
+    const logs: any[] = await ConsentLog.find({ userId: A.workerId, consentType: 'ai_opt_out', source: 'admin' }).lean();
+    expect(logs.map((l) => l.value)).toEqual(['opt_in', 'opt_out']);
+    expect(await AuditLog.countDocuments({ entity: 'ai_settings', entityId: A.workerId, description: /opt-out/ })).toBe(2);
+    // O'rinbosar egasi/direktorga opt-out qo'ya olmaydi; xodim (prorab) admin yo'liga kira olmaydi
+    expect((await patch(`/employees/${A.ownerId}`, A.orinbosarId, { optOut: { all: true } })).status).toBe(403);
+    expect((await patch(`/employees/${A.workerId}`, A.prorabId, { optOut: { calls: false } })).status).toBe(403);
     const ok = await patch(`/employees/${A.workerId}`, A.orinbosarId, { channelOrder: ['inapp_call', 'bot_message'], disabledChannels: ['telegram_call'] });
     expect(ok.status).toBe(200);
     expect(ok.body.employee).toMatchObject({ channelOrder: ['inapp_call', 'bot_message'], disabledChannels: ['telegram_call'], callConsent: 'granted' });

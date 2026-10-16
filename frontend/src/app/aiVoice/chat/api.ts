@@ -12,7 +12,8 @@ export interface AiChatItem {
   lines?: { role: "user" | "assistant"; text: string }[];
 }
 export interface AiPendingAction { pendingActionId: string; summary: string; expiresAt: string; tool: string }
-export interface AiChatReply { reply: string; pendingActions: AiPendingAction[] }
+export interface AiChatToolCall { name: string; status: string }
+export interface AiChatReply { reply: string; pendingActions: AiPendingAction[]; toolCalls?: AiChatToolCall[] }
 
 export type AiChatErrorCode = "rate" | "ai_disabled" | "off_shift" | "agent_error" | "network" | "error";
 

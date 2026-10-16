@@ -67,22 +67,32 @@ export interface ProviderCandidate {
 
 export interface OpenedProvider { session: VoiceSession; kind: ProviderKind; model: string; provider: VoiceProvider }
 
+export interface OpenFirstOpts {
+  /** Shu nomzodni (oldingi xatoga qarab) o'tkazib yuborish kerakmi — masalan tarmoq xatosida qolgan Live modellari. */
+  skip?: (c: ProviderCandidate, lastErr: Error | null, elapsedMs: number) => boolean;
+  now?: () => number;
+}
+
 /** Nomzodlarni tartib bilan sinaydi; birinchi muvaffaqiyatlisi qaytadi. Hammasi yiqilsa — oxirgi xato. */
 export async function openFirstAvailable(
   candidates: ProviderCandidate[],
   base: Omit<VoiceOpenOpts, 'model'>,
   timeoutMs: number,
-  onFail?: (kind: ProviderKind, err: Error) => void,
+  onFail?: (kind: ProviderKind, err: Error, model: string) => void,
+  o: OpenFirstOpts = {},
 ): Promise<OpenedProvider> {
-  let last: Error = new Error('NO_PROVIDER');
+  const now = o.now || Date.now;
+  const t0 = now();
+  let last: Error | null = null;
   for (const c of candidates) {
+    if (o.skip?.(c, last, now() - t0)) continue;
     try {
       const session = await openWithTimeout(c.provider, { ...base, model: c.model }, timeoutMs);
       return { session, kind: c.kind, model: c.model, provider: c.provider };
     } catch (e) {
       last = e as Error;
-      onFail?.(c.kind, last);
+      onFail?.(c.kind, last, c.model);
     }
   }
-  throw last;
+  throw last || new Error('NO_PROVIDER');
 }

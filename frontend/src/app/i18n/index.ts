@@ -10,6 +10,7 @@ import * as nsChat from './ns/chat';
 import * as nsAiVoice from './ns/aiVoice';
 import * as nsAiVoiceCall from './ns/aiVoiceCall';
 import * as nsExtra from './ns/extra';
+import * as nsChatUi from './ns/chatUi';
 
 // Chuqur birlashtirish — qo'shimcha kalitlar mavjud bo'limlarga qo'shiladi, ularni almashtirmaydi
 const deepMerge = (base: any, add: any): any => {
@@ -33,6 +34,7 @@ const uzMerged = deepMerge({
   chat: nsChat.uz,
   aiVoice: nsAiVoice.uz,
   aiVoiceCall: nsAiVoiceCall.uz,
+  chatUi: nsChatUi.uz,
 }, nsExtra.uz);
 const ruMerged = deepMerge({
   ...RESOURCES.ru,
@@ -43,6 +45,7 @@ const ruMerged = deepMerge({
   chat: nsChat.ru,
   aiVoice: nsAiVoice.ru,
   aiVoiceCall: nsAiVoiceCall.ru,
+  chatUi: nsChatUi.ru,
 }, nsExtra.ru);
 
 const uzCyrl = transliterateDict(uzMerged);

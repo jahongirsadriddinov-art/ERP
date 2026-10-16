@@ -1,8 +1,8 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
 // Xodimning AI kanallari bo'yicha sozlamasi/holati: kanal tartibi, Telegram identifikatori,
-// qo'ng'iroq roziligi va opt-out. Rozilik FAQAT xodimning o'zi (bot tugmasi yoki /me) orqali
-// o'rnatiladi (review B9); har o'zgarish ConsentLog'ga ham yoziladi.
+// eski shaxsiy qo'ng'iroq roziligi va opt-out. Owner 2026-10-16: asosiy rozilik — firma sozlamasi
+// (calls.companyConsent), tgUserId — ERP bot bog'lanishidan (aiVoice/telegram/tgLink); har o'zgarish ConsentLog'ga.
 export interface IAiEmployeeContact extends Document {
   companyId: string;
   employeeId: string;
@@ -13,6 +13,8 @@ export interface IAiEmployeeContact extends Document {
     username?: string;
     resolveStatus: 'unknown' | 'resolved' | 'not_found' | 'privacy_restricted' | 'blocked';
     resolvedAt?: Date;
+    /** Oxirgi aniqlash urinishi (qo'ng'iroq paytida, owner 2026-10-16). */
+    checkedAt?: Date;
     callConsent: 'none' | 'requested' | 'granted' | 'revoked';
     consentAt?: Date;
     consentToken?: string;          // ai:o:<token> — 7 kun amal qiladi (B5)
@@ -46,6 +48,7 @@ const AiEmployeeContactSchema = new Schema<IAiEmployeeContact>({
     username: String,
     resolveStatus: { type: String, enum: ['unknown', 'resolved', 'not_found', 'privacy_restricted', 'blocked'], default: 'unknown' },
     resolvedAt: Date,
+    checkedAt: Date,
     callConsent: { type: String, enum: ['none', 'requested', 'granted', 'revoked'], default: 'none' },
     consentAt: Date,
     consentToken: String,

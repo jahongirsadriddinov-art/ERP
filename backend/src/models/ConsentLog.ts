@@ -13,7 +13,7 @@ export interface IConsentLog extends Document {
   userAgent?: string;
   // AI ovozli yordamchi (review B9): rozilik qiymati va manbasi — faqat xodimning o'zi (bot tugmasi / /me)
   value?: 'granted' | 'revoked' | 'opt_out' | 'opt_in';
-  source?: 'bot' | 'me' | 'voice';
+  source?: 'bot' | 'me' | 'voice' | 'admin';
 }
 
 const ConsentLogSchema: Schema = new Schema({
@@ -27,7 +27,7 @@ const ConsentLogSchema: Schema = new Schema({
   ip: { type: String },
   userAgent: { type: String },
   value: { type: String, enum: ['granted', 'revoked', 'opt_out', 'opt_in'] },
-  source: { type: String, enum: ['bot', 'me', 'voice'] },
+  source: { type: String, enum: ['bot', 'me', 'voice', 'admin'] },
 }, { timestamps: true });
 
 export default mongoose.model<IConsentLog>('ConsentLog', ConsentLogSchema);

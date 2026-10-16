@@ -7,6 +7,8 @@ import User from '../../models/User';
 import { logAudit } from '../../services/audit';
 import { getBotInstance } from '../bot/botHooks';
 import { aiConfig } from '../config';
+import { companyConsentOf, evaluateCallConsent, logCompanyConsent, setOptOutByBoss } from '../consent';
+import { botLinkedTgId } from '../telegram/tgLink';
 import {
   CHANNEL_NAMES, type AiEmployeeRowDto, type AiSchedulePatch, type AiSettingsData, type AiSettingsViewDto, type ChannelName,
 } from '../contracts';
@@ -26,7 +28,8 @@ import { recordUsage } from '../usage';
 // Firma admini: /api/ai-voice/admin (index.ts: requireAuth + blockDeveloper).
 // Kirish: firma egasi, direktor yoki o'rinbosar (requireAuth rolni har so'rovda DB'dan qayta o'qiydi) +
 // tarifda ai_assistant (fail-closed: firma/obuna topilmasa — 403). Sozlamalar optimistik versiya bilan (409),
-// tools matritsasi kod chegarasi bilan (400), PATCH /employees rozilik/opt-out'ni RAD etadi (B9),
+// tools matritsasi kod chegarasi bilan (400). Owner 2026-10-16: calls.companyConsent (kompaniya roziligi) shu yerda,
+// PATCH /employees shaxsiy rozilikni rad etadi, lekin rahbar opt-out qo'ya oladi (ConsentLog source:'admin'),
 // run-now qo'lda dedupe kaliti bilan (scheduler/api), timezone faqat o'qish. Kalit qiymatlari HECH QACHON qaytmaydi.
 // Owner 2026-10-15: "AI miyasi" (brain/provider) va "Limit va xarajat" (limits, /usage) — FAQAT dasturchi
 // (/api/ai-voice/platform/...): bu yerda qaytmaydi, o'zgartirishga urinish — 403 developer_only.
@@ -113,6 +116,18 @@ router.put('/settings', wrap(async (req, res) => {
     entityId: a.companyId, description: `AI sozlamalari o'zgartirildi: ${Object.keys(body.patch).join(', ').slice(0, 200)}`,
     companyId: a.companyId, req,
   }).catch(() => {});
+  // Owner 2026-10-16: kompaniya qo'ng'iroq roziligi — alohida audit va ConsentLog (huquqiy iz)
+  if (saved.value.calls.companyConsent !== current.calls.companyConsent) {
+    const on = saved.value.calls.companyConsent;
+    logAudit({
+      userId: a.userId, userName: a.name || 'Admin', userRole: a.role, action: 'update', entity: 'ai_settings', entityId: a.companyId,
+      description: on ? "AI: kompaniya barcha xodimlar nomidan qo'ng'iroqlarga rozilik berdi"
+        : "AI: kompaniya qo'ng'iroq roziligi o'chirildi",
+      companyId: a.companyId, req,
+    }).catch(() => {});
+    logCompanyConsent({ companyId: a.companyId, actorUserId: a.userId, value: on, ip: req.ip, userAgent: String(req.headers['user-agent'] || '').slice(0, 200) })
+      .catch(() => {});
+  }
   res.json(await buildView(a, saved.value));
 }));
 
@@ -194,13 +209,15 @@ const CONTACT_FIELDS = 'employeeId telegram.tgUserId telegram.resolveStatus tele
 /** Xodim qatori + shaxsiy ish jadvali (null — firma smenasi amal qiladi). */
 type EmployeeRow = AiEmployeeRowDto & { scheduleOverride: EmployeeScheduleOverride | null };
 
-function rowOf(u: any, c: any): EmployeeRow {
+function rowOf(u: any, c: any, companyConsent = true): EmployeeRow & { callsAllowed: boolean } {
   return {
+    // Owner 2026-10-16: samarali rozilik (firma roziligi yoki eski shaxsiy, opt-out'siz)
+    callsAllowed: evaluateCallConsent(companyConsent, c).allowed,
     scheduleOverride: normalizeOverride(c?.scheduleOverride),
     userId: String(u._id),
     name: fullName(u) || '—',
     role: String(u.role),
-    telegramLinked: !!(u.telegramChatId || c?.telegram?.tgUserId),
+    telegramLinked: !!(botLinkedTgId(u) || c?.telegram?.tgUserId),
     resolveStatus: String(c?.telegram?.resolveStatus || 'unknown'),
     callConsent: String(c?.telegram?.callConsent || 'none'),
     optOut: { calls: !!c?.optOut?.calls, reminders: !!c?.optOut?.reminders, all: !!c?.optOut?.all },
@@ -215,14 +232,15 @@ router.get('/employees', wrap(async (req, res) => {
   const filter: Record<string, unknown> = { companyId: a.companyId, role: { $ne: 'dasturchi' }, isBlocked: { $ne: true } };
   if (q) filter.$or = [{ firstName: new RegExp(esc(q), 'i') }, { lastName: new RegExp(esc(q), 'i') }];
   // Telefon raqamlari tanlanmaydi (shaxsiy ma'lumot)
-  const users: any[] = await User.find(filter).select('firstName lastName role telegramChatId isOwner').sort({ firstName: 1 }).limit(500).lean();
+  const users: any[] = await User.find(filter).select('firstName lastName role telegramChatId telegramUserId isOwner').sort({ firstName: 1 }).limit(500).lean();
   const contacts: any[] = await AiEmployeeContact.find({ companyId: a.companyId, employeeId: { $in: users.map((u) => String(u._id)) } })
     .select(CONTACT_FIELDS).lean();
   const byId = new Map(contacts.map((c) => [String(c.employeeId), c]));
-  res.json({ employees: users.map((u) => rowOf(u, byId.get(String(u._id)))) });
+  const cc = companyConsentOf(await getSettingsFresh(a.companyId));
+  res.json({ employees: users.map((u) => rowOf(u, byId.get(String(u._id)), cc)) });
 }));
 
-const EMPLOYEE_PATCH_KEYS = new Set(['channelOrder', 'disabledChannels', 'scheduleOverride']);
+const EMPLOYEE_PATCH_KEYS = new Set(['channelOrder', 'disabledChannels', 'scheduleOverride', 'optOut']);
 const knownChannels = (v: unknown): v is ChannelName[] =>
   Array.isArray(v) && v.every((x) => (CHANNEL_NAMES as unknown[]).includes(x)) && new Set(v).size === v.length;
 
@@ -230,9 +248,15 @@ router.patch('/employees/:userId', wrap(async (req, res) => {
   const a = adminOf(res);
   const body = req.body;
   if (!isObj(body)) return res.status(400).json({ error: 'invalid' });
-  // B9: rozilik va opt-out'ni FAQAT xodimning o'zi o'zgartiradi — boshqa har qanday maydon rad etiladi
+  // Owner 2026-10-16: shaxsiy rozilik maydoni yo'q (kompaniya roziligi); rahbar xodim uchun opt-out qo'yadi
   const bad = Object.keys(body).filter((k) => !EMPLOYEE_PATCH_KEYS.has(k));
   if (bad.length) return res.status(400).json({ error: 'forbidden_fields', fields: bad });
+  if (body.optOut !== undefined) {
+    const o = body.optOut;
+    if (!isObj(o) || !Object.keys(o).length || Object.entries(o).some(([k, v]) => !['calls', 'reminders', 'all'].includes(k) || typeof v !== 'boolean')) {
+      return res.status(400).json({ error: 'invalid', errors: ['optOut: {calls?, reminders?, all?: boolean}'] });
+    }
+  }
   if (body.channelOrder !== undefined && body.channelOrder !== null && !(knownChannels(body.channelOrder) && body.channelOrder.length)) {
     return res.status(400).json({ error: 'invalid', errors: ["channelOrder: takrorsiz, ma'lum kanallar"] });
   }
@@ -251,7 +275,7 @@ router.patch('/employees/:userId', wrap(async (req, res) => {
   const userId = String(req.params.userId);
   if (!isObjectIdString(userId)) return res.status(404).json({ error: 'not_found' });
   const target: any = await User.findOne({ _id: userId, companyId: a.companyId, role: { $ne: 'dasturchi' } })
-    .select('firstName lastName role telegramChatId isOwner').lean();
+    .select('firstName lastName role telegramChatId telegramUserId isOwner').lean();
   if (!target) return res.status(404).json({ error: 'not_found' });
   // O'rinbosar firma egasi/direktorning sozlamasini o'zgartira olmaydi
   if (!isTopBoss(a) && (target.isOwner || target.role === 'direktor')) return res.status(403).json({ error: 'forbidden' });
@@ -273,6 +297,15 @@ router.patch('/employees/:userId', wrap(async (req, res) => {
       { upsert: true },
     );
   }
+  if (body.optOut !== undefined) {
+    const r = await setOptOutByBoss({ companyId: a.companyId, employeeId: userId, actorUserId: a.userId, ...body.optOut });
+    if (!r.ok) return res.status(r.code === 'not_found' ? 404 : 400).json({ error: r.code });
+    const parts = Object.entries(body.optOut as Record<string, boolean>).map(([k, v]) => `${k}=${v ? 'ha' : "yo'q"}`).join(', ');
+    logAudit({
+      userId: a.userId, userName: a.name || 'Admin', userRole: a.role, action: 'update', entity: 'ai_settings', entityId: userId,
+      description: `AI: xodim uchun voz kechish (opt-out) o'zgartirildi — ${parts}`, companyId: a.companyId, req,
+    }).catch(() => {});
+  }
   if (override !== undefined) {
     logAudit({
       userId: a.userId, userName: a.name || 'Admin', userRole: a.role, action: 'update', entity: 'ai_settings', entityId: userId,
@@ -282,7 +315,7 @@ router.patch('/employees/:userId', wrap(async (req, res) => {
     }).catch(() => {});
   }
   const c: any = await AiEmployeeContact.findOne({ companyId: a.companyId, employeeId: userId }).select(CONTACT_FIELDS).lean();
-  res.json({ employee: rowOf(target, c) });
+  res.json({ employee: rowOf(target, c, companyConsentOf(await getSettingsFresh(a.companyId))) });
 }));
 
 // ───────────── Davomatni hozir rejalashtirish ─────────────

@@ -1,4 +1,6 @@
+import AiCallSession from '../../../models/AiCallSession';
 import User from '../../../models/User';
+import { finishSession } from '../../sessions';
 import type { ChannelCtx, ChannelName } from '../../contracts';
 import { getChannel } from '../../channels/registry';
 import { newCorrelationId } from '../../lib/ids';
@@ -84,6 +86,9 @@ export function missingText(ch: ChannelName, reason: string, c: Lg): string {
       case 'account_not_connected': return l("AI Telegram akkaunti hali ulanmagan (administrator ulaydi)", 'Telegram-аккаунт AI ещё не подключён (подключает администратор)');
       case 'worker_offline': return l("Telegram qo'ng'iroq xizmati hozir o'chiq", 'сервис звонков Telegram сейчас выключен');
       case 'daily_cap': case 'company_quota': return l("bugungi Telegram qo'ng'iroqlar limiti tugagan", 'дневной лимит звонков Telegram исчерпан');
+      case 'busy': return l("oldingi qo'ng'iroq hali tugamagan", 'предыдущий звонок ещё не завершён');
+      case 'account_busy': return l("AI hozir boshqa qo'ng'iroqda", 'AI сейчас в другом звонке');
+      case 'worker_offline': case 'worker_not_here': return l("Telegram qo'ng'iroq xizmati qayta ulanmoqda", 'сервис звонков Telegram переподключается');
       case 'not_registered': return l("Telegram qo'ng'iroqlari hali yoqilmagan", 'звонки Telegram ещё не включены');
       default: return l("Telegram qo'ng'irog'i hozir mavjud emas", 'звонок в Telegram сейчас недоступен');
     }
@@ -91,6 +96,7 @@ export function missingText(ch: ChannelName, reason: string, c: Lg): string {
   switch (reason) {
     case 'offline': return l("ilova yoki sayt yopiq — ilovani oching", 'приложение закрыто — откройте приложение');
     case 'not_visible': return l("ilova oynasini ochiq qoldiring", 'держите окно приложения открытым');
+    case 'busy': return l("oldingi qo'ng'iroq hali tugamagan", 'предыдущий звонок ещё не завершён');
     case 'opt_out': return l("rahbariyat siz uchun AI qo'ng'iroqlarini o'chirgan", 'руководство отключило для вас звонки AI');
     case 'not_registered': return l("ilova ichidagi qo'ng'iroq hali yoqilmagan", 'звонки в приложении ещё не включены');
     default: return l("ilova ichidagi qo'ng'iroq hozir mavjud emas", 'звонок в приложении сейчас недоступен');
@@ -135,6 +141,23 @@ export function ensureCallbackJob(q: JobQueue | null): void {
 
 export type CallbackOutcome = 'calling' | 'retry' | 'unreachable' | 'skipped';
 
+/**
+ * Xodimning bazada "faol" qolgan, lekin hech qayerda tirik bo'lmagan qo'ng'iroq sessiyasi — yopiladi
+ * (aks holda "bitta xodim — bitta faol qo'ng'iroq" qoidasi qayta qo'ng'iroqni 'busy' qilib qo'yadi).
+ * Haqiqatan davom etayotgan qo'ng'iroqqa tegilmaydi (shu jarayonda tirik yoki yaqinda yangilangan).
+ */
+export async function reapStaleSessionOf(companyId: string, employeeId: string, now: Date): Promise<boolean> {
+  const s: any = await AiCallSession.findOne({ companyId, employeeId, isActive: true }).select('_id updatedAt answeredAt').lean().catch(() => null);
+  if (!s) return false;
+  const sid = String(s._id);
+  // sessionManager kechiktirib yuklanadi (tools ↔ voice import sikli bo'lmasin)
+  const { getVoiceSessionManager } = await import('../../voice/sessionManager');
+  if (getVoiceSessionManager().get(sid)) return false;                     // shu jarayonda tirik
+  if (s.updatedAt && now.getTime() - new Date(s.updatedAt).getTime() < 45_000) return false;
+  const ok = await finishSession(sid, s.answeredAt ? 'interrupted' : 'failed', 'callback:stale', { errorCode: 'stale', now }).catch(() => null);
+  return !!ok;
+}
+
 /** Ish bajarilishi: birinchi mavjud qo'ng'iroq kanali; hech biri bo'lmasa — bot xabari bilan aniq sababi. */
 export async function runCallback(p: {
   companyId: string; employeeId: string; correlationId: string; order: ChannelName[]; lang: 'uz' | 'ru'; attemptNo: number; maxAttempts: number;
@@ -145,6 +168,7 @@ export async function runCallback(p: {
   const u = await User.findOne({ _id: p.employeeId, companyId: p.companyId, isBlocked: { $ne: true } }).select('_id').lean().catch(() => null);
   if (!u) return 'skipped';
   const ctx: ChannelCtx = { companyId: p.companyId, employeeId: p.employeeId, correlationId: p.correlationId, purpose: 'assistant', lang: p.lang, now, attemptNo: p.attemptNo };
+  await reapStaleSessionOf(p.companyId, p.employeeId, now).catch(() => false);
   let retry = false;
   const reasons: Partial<Record<ChannelName, string>> = {};
   for (const name of p.order) {
@@ -171,6 +195,7 @@ export async function runCallback(p: {
       console.error('[aiVoice/callback] kanal xatosi:', (e as Error).message);
     }
   }
+  console.warn(`[aiVoice/callback] urinish ${p.attemptNo}/${p.maxAttempts}: ${JSON.stringify(reasons)}`);
   if (retry && p.attemptNo < p.maxAttempts) throw new Error('callback_retry');
   // Qo'ng'iroq bo'lmadi — botda aniq sababini qisqa aytamiz (foydalanuvchi kutib qolmasin)
   const why = p.order.filter((c) => reasons[c]).map((c) => missingText(c, String(reasons[c]), p)).slice(0, 2).join('; ');

@@ -196,5 +196,7 @@ export function avatarColor(seed: string): string {
   return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length];
 }
 export function initials(name: string): string {
-  return (name || "").split(" ").filter(Boolean).map((w) => w[0]).slice(0, 2).join("").toUpperCase() || "?";
+  // Emoji/belgi bilan boshlangan so'zlar ("🤖 AI yordamchi") — yarim surrogat "�" chiqmasin: faqat harf/raqam
+  const firsts = (name || "").split(/\s+/).map((w) => w.match(/[\p{L}\p{N}]/u)?.[0] || "").filter(Boolean);
+  return firsts.slice(0, 2).join("").toUpperCase() || "?";
 }

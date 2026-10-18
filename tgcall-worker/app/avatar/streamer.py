@@ -25,6 +25,7 @@ class AvatarStreamer:
                  sleep: Callable[[float], Awaitable[None]] = asyncio.sleep, renderer=None, look: str = "female"):
         self.size = size
         self.fps = max(5, min(30, int(fps)))
+        self.max_fps = self.fps
         if renderer is None:
             from .premium import get_renderer
             renderer = get_renderer(look, size)
@@ -88,6 +89,16 @@ class AvatarStreamer:
                 delay = t0 + n * step - self._clock()
                 if delay < -0.5:          # kompyuter sekinlashdi — jadval qayta boshlanadi
                     t0, n, delay = self._clock(), 0, 0.0
+                # Moslashuvchan FPS: chizish kadr vaqtining 85% dan oshsa — tezlik pasayadi (≥12), bo'shasa — qaytadi
+                if self.frames_sent and self.frames_sent % 30 == 0:
+                    budget = 1000.0 / self.fps
+                    if self.render_ms_avg > budget * 0.85 and self.fps > 12:
+                        self.fps = max(12, self.fps - 4)
+                    elif self.render_ms_avg < budget * 0.45 and self.fps < self.max_fps:
+                        self.fps = min(self.max_fps, self.fps + 2)
+                    if step != 1.0 / self.fps:
+                        step = 1.0 / self.fps
+                        t0, n = self._clock(), 0
                 await self._sleep(max(0.0, delay))
         finally:
             self._running = False

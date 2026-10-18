@@ -79,6 +79,7 @@ class ActiveCall:
     video_busy: bool = False
     video_fps: float = 1.0
     video_fps_until: float = 0.0
+    subtitles: bool = False          # avatar subtitri (owner 2026-10-19: standart o'chiq)
     avatar: Any = None               # avatar.hooks.AvatarSession (video qo'ng'iroqda)
     done: asyncio.Event = field(default_factory=asyncio.Event)
     started_at: float = field(default_factory=time.monotonic)
@@ -435,6 +436,8 @@ class CallManager:
         try:
             from .avatar import hooks as avatar_hooks
             c.avatar = avatar_hooks.start_for_call(self.engine, c.user_id, c.video, c.look)
+            if c.avatar is not None and c.subtitles:
+                c.avatar.set_subtitles(True)
         except Exception as e:
             c.avatar = None
             log.debug("avatar start: %s", type(e).__name__)
@@ -472,6 +475,18 @@ class CallManager:
             log.debug("kamera kadri: %s", type(e).__name__)
         finally:
             c.video_busy = False
+
+    # ── RPC: call.subtitles — avatar subtitri (standart o'chiq) ──
+    async def subtitles(self, p: dict) -> dict:
+        c = self.active
+        on = p.get("on")
+        if not isinstance(on, bool):
+            raise RpcError("bad_request")
+        if c and c.session_id == str(p.get("sessionId") or ""):
+            c.subtitles = on
+            if c.avatar is not None:
+                c.avatar.set_subtitles(on)
+        return {"ok": True, "on": on}
 
     # ── RPC: call.video_rate — videoga olishda vaqtincha ko'proq kadr ──
     async def video_rate(self, p: dict) -> dict:

@@ -364,6 +364,8 @@ export interface WorkerRpcMethods {
   'call.caption': { params: { sessionId: string; text: string; emotion?: string }; result: { ok: true } };
   /** Kamera kadrlari tezligi (videoga olishda vaqtincha ko'proq). */
   'call.video_rate': { params: { sessionId: string; fps: number; forSec: number }; result: { ok: true } };
+  /** Video avatar subtitri (standart o'chiq; foydalanuvchi so'rasa yoqiladi). */
+  'call.subtitles': { params: { sessionId: string; on: boolean }; result: { ok: true; on?: boolean } };
   'call.hangup': { params: { sessionId: string; reason: string }; result: { ok: true } };
   'udp.probe': { params: Record<string, never>; result: { ok: boolean; details?: string } };
   /** "Ochiq muloqot" holati (standart o'chiq) — worker 'up' bo'lganda va o'zgarganda yuboriladi. */

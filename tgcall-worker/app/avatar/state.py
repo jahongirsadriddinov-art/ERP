@@ -238,6 +238,8 @@ class AvatarState:
         self._mouth = 0.0
         self._mouth_w = 1.0
         self.phase = self.rng.uniform(0, 100)
+        # Owner 2026-10-19: subtitr standart O'CHIQ — "subtitrni yoq" deyilsa yoqiladi (kayfiyat baribir matndan)
+        self.show_captions = False
 
     # ── kirishlar ──
     def feed_audio(self, pcm: bytes) -> None:
@@ -274,7 +276,7 @@ class AvatarState:
 
     def _caption_page(self, t: float) -> tuple[str, ...]:
         c = self.caption
-        if not c.pages:
+        if not c.pages or not self.show_captions:
             return ()
         last_activity = max(c.set_t, self.lips.last_voice_t)
         budget = c.spoken * self.CHARS_PER_SEC

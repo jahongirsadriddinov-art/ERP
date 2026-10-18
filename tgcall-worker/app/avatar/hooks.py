@@ -139,8 +139,10 @@ class AvatarSession:
         self.look = look
         self.user_id = int(user_id)
         self.want_video = bool(want_video)
-        self.size = _int_env("AVATAR_SIZE", 480, 160, 720) // 2 * 2
-        self.fps = _int_env("AVATAR_FPS", 15, 5, 30)
+        # Telegram p2p video: ko'pi bilan 720p / 30 kadr/s. Standart 640 / 30 (sekin CPU'da streamer o'zi pasaytiradi)
+        self.size = _int_env("AVATAR_SIZE", 640, 160, 720) // 2 * 2
+        self.fps = _int_env("AVATAR_FPS", 30, 5, 30)
+        self.subtitles = False
         self.streamer: Optional[AvatarStreamer] = None
         self.active = False
         self._grace_until = 0.0
@@ -172,6 +174,7 @@ class AvatarSession:
             # Renderer qurilishi (~0.3 s) audio siklini to'xtatmasin — alohida oqimda
             renderer = await asyncio.get_running_loop().run_in_executor(None, get_renderer, self.look, self.size)
             self.streamer = AvatarStreamer(make_sender(self.engine, self.user_id), size=self.size, fps=self.fps, renderer=renderer)
+            self.streamer.state.show_captions = self.subtitles
             if self._pending_caption:
                 self.streamer.set_caption(*self._pending_caption)
             self._grace_until = time.monotonic() + 30.0
@@ -200,6 +203,11 @@ class AvatarSession:
     def feed_user_audio(self, pcm48: bytes) -> None:
         if self.streamer is not None:
             self.streamer.feed_user_audio(pcm48)
+
+    def set_subtitles(self, on: bool) -> None:
+        self.subtitles = bool(on)
+        if self.streamer is not None:
+            self.streamer.state.show_captions = self.subtitles
 
     def set_caption(self, text: str, emotion: Optional[str] = None) -> None:
         if self.streamer is not None:

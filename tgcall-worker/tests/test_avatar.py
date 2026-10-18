@@ -218,6 +218,8 @@ def test_caption_shown_paged_and_hidden():
     st = AvatarStreamer(lambda *a: None, clock=clk, seed=6).state
     long = " ".join(["Bugun obyektda beton quyish ishlari davom etdi"] * 4)
     st.set_caption(long)
+    assert st.params().caption == ()                    # owner 2026-10-19: subtitr standart o'chiq
+    st.show_captions = True
     first = st.params().caption
     assert first
     for _ in range(600):                                # 6 s gapirish
@@ -308,7 +310,7 @@ def test_session_decides_video(monkeypatch):
     async def run(eng, want=False):
         s = H.AvatarSession(eng, 42, want)
         s.start()
-        await asyncio.sleep(0.4)
+        await asyncio.sleep(1.5)
         s.set_caption("Rahmat!")
         await s.stop()
         return s
@@ -317,7 +319,7 @@ def test_session_decides_video(monkeypatch):
     monkeypatch.setattr(H, "DETECT_WAIT_S", 0.1)
     e = Eng(True)
     asyncio.run(run(e))
-    assert e.enabled and e.enabled[0][1] == 480 and e.frames >= 2
+    assert e.enabled and e.enabled[0][1] == 640 and e.frames >= 2
     e = Eng(False)
     asyncio.run(run(e))
     assert not e.enabled and e.frames == 0

@@ -171,4 +171,30 @@ export const forwardMedia: AiToolDef<FwdArgs> = {
   },
 };
 
-export const CAMERA_TOOLS: AiToolDef[] = [capturePhoto, recordVideo, forwardMedia];
+export const setSubtitles: AiToolDef<{ on: boolean }> = {
+  name: 'setSubtitles',
+  description: {
+    uz: "Video qo'ng'iroqdagi subtitrni (AI gapining yozuvi ekranda) yoqish/o'chirish. Standart o'chiq.",
+    ru: 'Включить/выключить субтитры (текст речи AI на экране) в видеозвонке. По умолчанию выключены.',
+  },
+  parameters: { type: 'object', properties: { on: { type: 'boolean' } }, required: ['on'] },
+  kind: 'read',
+  confirm: 'never',
+  general: true,
+  maxRoles: ALL_ROLES,
+  defaultRoles: ALL_ROLES,
+  purposes: ASSIST,
+  channels: ['telegram_call'],
+  behavior: 'BLOCKING',
+  handler: async (ctx, args) => {
+    if (!ctx.sessionId) return { status: 'error', retryable: false, message: L(ctx, "Faqat Telegram qo'ng'irog'ida.", 'Только в звонке Telegram.') };
+    try {
+      await callWorker('call.subtitles', { sessionId: ctx.sessionId, on: !!args.on });
+    } catch {
+      return { status: 'error', retryable: true, message: L(ctx, "Subtitrni hozir o'zgartirib bo'lmadi.", 'Не удалось переключить субтитры.') };
+    }
+    return ok(args.on ? L(ctx, 'Subtitr yoqildi.', 'Субтитры включены.') : L(ctx, "Subtitr o'chirildi.", 'Субтитры выключены.'), { on: !!args.on });
+  },
+};
+
+export const CAMERA_TOOLS: AiToolDef[] = [capturePhoto, recordVideo, forwardMedia, setSubtitles];

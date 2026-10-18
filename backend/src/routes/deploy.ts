@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { persistUploadedFile } from '../services/durableFiles';
 import { Router } from 'express';
 import multer from 'multer';
@@ -21,6 +22,14 @@ function checkDeploySecretRate(req: any): boolean {
 // GET /api/deploy/latest — HAMMAGA OCHIQ (auth/secret talab qilmaydi — login
 // qilmagan mehmon ham landing page'dan yuklab olishi kerak). Faqat versiya
 // matni + havolalarni qaytaradi, boshqa hech qanday maxfiy ma'lumot yo'q.
+
+/** Vaqtga bog'liq bo'lmagan taqqoslash (kalitni belgima-belgi taxmin qilib bo'lmasin). */
+function safeEqual(a: unknown, b: string): boolean {
+  if (typeof a !== 'string') return false;
+  const x = Buffer.from(a), y = Buffer.from(b);
+  return x.length === y.length && crypto.timingSafeEqual(x, y);
+}
+
 router.get('/latest', async (_req, res) => {
   try {
     const rel = await AppRelease.findOne({ key: 'latest' }).lean();
@@ -73,7 +82,7 @@ router.post('/upload-artifact', upload.single('file'), async (req, res) => {
     if (!checkDeploySecretRate(req)) return res.status(429).json({ error: "Juda ko'p urinish" });
     const secret = req.headers['x-deploy-secret'];
     const expected = process.env.DEPLOY_BROADCAST_SECRET;
-    if (!expected || secret !== expected) {
+    if (!expected || !safeEqual(secret, expected)) {
       return res.status(401).json({ error: 'Ruxsat yo\'q' });
     }
     if (!req.file) return res.status(400).json({ error: 'file talab etiladi (multipart/form-data)' });
@@ -127,7 +136,7 @@ router.post('/broadcast-update', async (req, res) => {
     if (!checkDeploySecretRate(req)) return res.status(429).json({ error: "Juda ko'p urinish" });
     const secret = req.headers['x-deploy-secret'];
     const expected = process.env.DEPLOY_BROADCAST_SECRET;
-    if (!expected || secret !== expected) {
+    if (!expected || !safeEqual(secret, expected)) {
       return res.status(401).json({ error: 'Ruxsat yo\'q' });
     }
 

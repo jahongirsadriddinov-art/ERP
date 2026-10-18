@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
+import { API_BASE } from "../../api";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { MorphIcon } from "morphicons/react";
@@ -83,11 +84,21 @@ function dayLabel(day: string, t: (k: string) => string, lang: string): string {
 // AI yuborgan rasm/video (owner 2026-10-19): matndagi [[image:URL]] / [[video:URL]] belgilarini ko'rsatadi.
 // Faqat https URL (xavfsizlik) — boshqasi oddiy matn bo'lib qoladi.
 const MEDIA_RE = /\[\[(image|video):(https:\/\/[^\]\s]+)\]\]/g;
+/** Faqat o'z backendimiz (/uploads) yoki Cloudinary — AI matniga yozdirilgan begona havola yuklanmaydi. */
+function trustedMediaUrl(u: string): boolean {
+  try {
+    const h = new URL(u).hostname;
+    const own = new URL(API_BASE || window.location.origin).hostname;
+    return h === own || h === "res.cloudinary.com";
+  } catch { return false; }
+}
+
 export function RichText({ text }: { text: string }) {
   const parts: ReactNode[] = [];
   let last = 0;
   for (const m of text.matchAll(MEDIA_RE)) {
     const at = m.index ?? 0;
+    if (!trustedMediaUrl(m[2])) continue;   // begona host — oddiy matn bo'lib qoladi (kuzatuv pikseli bo'lmasin)
     if (at > last) parts.push(text.slice(last, at).replace(/\n+$/, ""));
     parts.push(m[1] === "image"
       ? <a key={at} href={m[2]} target="_blank" rel="noreferrer" className="block mt-1.5"><img src={m[2]} alt="" loading="lazy" className="max-w-full max-h-72 rounded-xl" /></a>

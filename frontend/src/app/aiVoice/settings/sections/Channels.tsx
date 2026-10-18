@@ -6,7 +6,6 @@ import Down from "@hugeicons/core-free-icons/ArrowDown01Icon";
 import X from "@hugeicons/core-free-icons/Cancel01Icon";
 import Plus from "@hugeicons/core-free-icons/Add01Icon";
 import Route from "@hugeicons/core-free-icons/Message01Icon";
-import Moon from "@hugeicons/core-free-icons/Moon02Icon";
 import Bell from "@hugeicons/core-free-icons/Notification03Icon";
 import Telegram from "@hugeicons/core-free-icons/TelegramIcon";
 import type { SectionProps } from "../sectionProps";
@@ -15,7 +14,7 @@ import { addChannel, missingChannels, moveItem, normalizeHHmm, removeChannel } f
 import { Badge, Card, Chip, Field, More, NumField, Skeleton, TimeField } from "../ui";
 
 // "Kimga qanday murojaat": murojaat tartibi (1 → 2 → …, javob bo'lmasa keyingisi; yuqoriga/pastga, takrorsiz),
-// tinch soatlar, eslatmalar qayerga boradi, ulanishlar holati (faqat o'qish). Qo'ng'iroq raqamlari — "Qo'shimcha" ichida.
+// eslatmalar qayerga boradi, ulanishlar holati (faqat o'qish). Qo'ng'iroq raqamlari — "Qo'shimcha" ichida.
 export default function Channels({ draft, update }: SectionProps) {
   const { t } = useTranslation();
   const k = (s: string, o?: Record<string, unknown>) => t(`aiVoice.admin.channels.${s}`, o as any) as string;
@@ -60,15 +59,6 @@ export default function Channels({ draft, update }: SectionProps) {
             ))}
           </div>
         )}
-      </Card>
-
-      <Card icon={Moon} title={k("quietHours")} hint={k("quietHint")}>
-        <div className="grid grid-cols-2 gap-3 max-w-sm">
-          <TimeField label={k("from")} value={calls.quietHours.from}
-            onChange={(v) => { const n = normalizeHHmm(v); if (n) setCalls({ quietHours: { ...calls.quietHours, from: n } }); }} />
-          <TimeField label={k("to")} value={calls.quietHours.to}
-            onChange={(v) => { const n = normalizeHHmm(v); if (n) setCalls({ quietHours: { ...calls.quietHours, to: n } }); }} />
-        </div>
       </Card>
 
       <Card icon={Bell} title={u("remindersTitle")} hint={u("remindersHint")}>

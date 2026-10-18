@@ -209,20 +209,31 @@ describe('requestCallback', () => {
     expect(r.status).toBe('ok');
     expect(r.data.channel).toBe('inapp_call');
     expect(r.message).toMatch(/ilova ichida/);
-    expect(r.message).toMatch(/rozilik/);
-    expect(consentMock.sendConsentRequest).toHaveBeenCalledTimes(1);
+    // Owner 2026-10-16: rozilikni rahbariyat beradi — xodimdan rozilik so'ralmaydi
+    expect(r.message).toMatch(/rahbariyat tomonidan o'chirilgan/);
+    expect(r.message).not.toMatch(/rozilik|kod/);
+    expect(consentMock.sendConsentRequest).not.toHaveBeenCalled();
   });
 
-  it("hech qaysi kanal yo'q — navbatga qo'ymaydi, ANIQ nima kerakligini aytadi (rozilik so'rovi yuboriladi)", async () => {
+  it("Telegram ERP botga ulanmagan — botda telefon ulashishni aytadi (bog'lash kodi emas)", async () => {
+    const { A } = env;
+    avail.telegram_call = 'not_bound'; avail.inapp_call = 'offline';
+    const r: any = (await call(A.workerId, A.companyId, 'requestCallback', { channel: 'telegram' }, { channel: 'bot' })).result;
+    expect(r.status).toBe('error');
+    expect(r.message).toMatch(/ERP botiga telefon raqamingizni ulashing/);
+    expect(r.message).not.toMatch(/bog'lash kod/);
+  });
+
+  it("hech qaysi kanal yo'q — navbatga qo'ymaydi, ANIQ nima kerakligini aytadi (rozilik so'ralmaydi)", async () => {
     const { A } = env;
     avail.telegram_call = 'no_consent'; avail.inapp_call = 'offline';
     const r: any = (await call(A.workerId, A.companyId, 'requestCallback', {}, { channel: 'bot' })).result;
     expect(r.status).toBe('error');
-    expect(r.message).toMatch(/ruxsatingiz kerak|rozilik/);
+    expect(r.message).toMatch(/AI qo'ng'iroqlari rahbariyat tomonidan o'chirilgan/);
     expect(r.message).toMatch(/ilovani oching/);
-    expect(r.message).not.toMatch(/qila olmayman/);
+    expect(r.message).not.toMatch(/qila olmayman|rozilik/);
     expect(await AiJob.countDocuments({ type: CALLBACK_JOB })).toBe(0);
-    expect(consentMock.sendConsentRequest).toHaveBeenCalledWith({ companyId: A.companyId, employeeId: A.workerId });
+    expect(consentMock.sendConsentRequest).not.toHaveBeenCalled();
   });
 
   it("ish bajarilishi: mavjud kanal orqali qo'ng'iroq; hech biri bo'lmasa — botga sababi", async () => {

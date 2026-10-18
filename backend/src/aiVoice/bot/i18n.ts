@@ -56,7 +56,7 @@ const uz = {
   aiNoAccess: "AI yordamchidan foydalanishga ruxsat yo'q.",
   aiScheduleBtn: '📅 Ish jadvali',
   // ── Ish jadvali menyusi (ai:s, /jadval) ──
-  devNoCompany: "ℹ️ AI yordamchi va ish jadvali firma ichida ishlaydi. Siz dasturchi akkauntidasiz — firma yo'q.\n\n" +
+  devNoCompany: "ℹ️ Firma ma'lumotlari va ish jadvali firma ichida ishlaydi. Firmangiz yo'q (dasturchi akkaunti bo'lsa — /ai orqali umumiy savollar va platforma holati).\n\n" +
     "Sinash uchun firma rahbari (direktor) akkauntini boshqa Telegram raqamdan botga ulang yoki sayt/ilovadagi Profil → AI yordamchi bo'limidan foydalaning.",
   schNoAccess: "📅 Ish jadvalini faqat firma rahbari (direktor, egasi yoki ruxsat berilgan o'rinbosar) o'zgartira oladi.",
   schNoFeature: "Tarifingizda AI yordamchi yo'q yoki firma faol emas.",
@@ -147,7 +147,7 @@ const ru: Dict = {
   aiRate: 'Слишком много запросов — подождите немного.',
   aiNoAccess: 'Нет доступа к AI-помощнику.',
   aiScheduleBtn: '📅 График работы',
-  devNoCompany: 'ℹ️ AI-помощник и график работают внутри фирмы. У аккаунта разработчика нет фирмы.\n\n' +
+  devNoCompany: 'ℹ️ Данные фирмы и график работают внутри фирмы. У вас нет фирмы (аккаунт разработчика — /ai для общих вопросов и статуса платформы).\n\n' +
     'Для проверки подключите к боту аккаунт руководителя фирмы с другого номера Telegram или используйте Профиль → AI-помощник на сайте/в приложении.',
   schNoAccess: '📅 График работы может менять только руководитель фирмы (директор, владелец или заместитель с разрешением).',
   schNoFeature: 'В вашем тарифе нет AI-помощника или фирма неактивна.',

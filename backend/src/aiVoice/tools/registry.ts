@@ -8,6 +8,9 @@ const tools = new Map<string, AiToolDef>();
 const NAME_RE = /^[a-zA-Z][a-zA-Z0-9_]{1,63}$/;
 /** O'z qarori (ownDecision) bo'la oladigan tool nomlari — boshqa "approve*" nomlar taqiqlangan (B3). */
 const OWN_DECISION_NAMES = new Set(['approveTransaction', 'rejectTransaction']);
+/** Ovozli tasdiq tool'i — yagona nom, faqat ovozli kanallar (owner 2026-10-17 #4). */
+const SPOKEN_CONFIRM_NAMES = new Set(['answerPendingAction']);
+const VOICE_CHANNELS = new Set(['inapp_call', 'telegram_call']);
 
 export function registerTool(def: AiToolDef): void {
   if (!NAME_RE.test(def.name)) throw new Error(`[aiVoice] tool nomi noto'g'ri: ${def.name}`);
@@ -29,6 +32,11 @@ export function registerTool(def: AiToolDef): void {
   if (def.ownDecision && (!OWN_DECISION_NAMES.has(def.name) || def.kind !== 'write' || def.confirm !== 'never' || def.targetUserArg)) {
     throw new Error(`[aiVoice] ${def.name}: ownDecision faqat write + confirm:'never' + targetUserArg'siz`);
   }
+  if (def.spokenConfirm && (!SPOKEN_CONFIRM_NAMES.has(def.name) || def.kind !== 'write' || def.confirm !== 'never'
+    || def.targetUserArg || def.channels.some((c) => !VOICE_CHANNELS.has(c)))) {
+    throw new Error(`[aiVoice] ${def.name}: spokenConfirm faqat answerPendingAction + ovozli kanallar`);
+  }
+  if (SPOKEN_CONFIRM_NAMES.has(def.name) && !def.spokenConfirm) throw new Error(`[aiVoice] ${def.name}: spokenConfirm bayrog'i majburiy`);
   // B4: boshqa foydalanuvchiga ta'sir qiladigan yozuv kimga ta'sir qilishini e'lon qilishi shart
   if (def.kind === 'write' && def.confirm === 'when_other_user' && !def.targetUserArg) {
     throw new Error(`[aiVoice] ${def.name}: when_other_user uchun targetUserArg majburiy`);

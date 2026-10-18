@@ -433,4 +433,22 @@ describe('/ai rejimi', () => {
     expect(await warmAiModeCache()).toBe(1);
     expect(aiBotInAiMode(CHAT[A.orinbosarId])).toBe(true);
   });
+
+  it("dasturchi /ai — platforma rejimi (firmasiz): agentga companyId='platform', DB'ga yozilmaydi; /jadval — tushuntirish", async () => {
+    const dev: any = await User.create({ firstName: 'Dev', phone: '+998900007171', role: 'dasturchi', telegramChatId: 7171 } as any);
+    const devId = String(dev._id);
+    CHAT[devId] = 7171;
+    expect(await dispatchAiMessage(msgOf(devId, { text: '/ai Samarqandda havo qanday?' }), gate(devId))).toBe(true);
+    expect(aiBotInAiMode(7171)).toBe(true);
+    expect(calls.at(-1)?.ctx.companyId).toBe('platform');
+    expect(calls.at(-1)?.ctx.channel).toBe('bot');
+    expect(sent().at(-1)?.text).toBe('Javob: Samarqandda havo qanday?');
+    expect(await dispatchAiMessage(msgOf(devId, { text: 'soat necha?' }), gate(devId))).toBe(true);
+    expect(calls.at(-1)?.userText).toBe('soat necha?');
+    await __flushAiModePersist();
+    expect(await AiEmployeeContact.countDocuments({ employeeId: devId })).toBe(0);
+    aiBotResetChat(7171);
+    expect(await dispatchAiMessage(msgOf(devId, { text: '/jadval' }), gate(devId))).toBe(true);
+    expect(sent().at(-1)?.text).toContain('dasturchi');
+  });
 });

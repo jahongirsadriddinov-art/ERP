@@ -89,7 +89,8 @@ import { isAiCallActive, decideCallOffer } from "./aiVoice/bus";
 import { motion, AnimatePresence } from "motion/react";
 import { setSiteLanguage, SiteLang, langLabel } from "./i18n";
 import { isTelegramMiniApp, getTelegramInitData, markManualLogout, clearManualLogout, telegramAutoLoginAllowed } from "./telegramWebApp";
-import { isChatMuted } from "./chat/chatPrefs";
+import { isChatMuted, useChatPrefs } from "./chat/chatPrefs";
+import { buildEntries as buildChatEntries, navUnreadCount } from "./chat/chatModel";
 import { installAndroidBackHandler, saveOrShareBlob, openExternalUrl, isNative, isTabletOrLarger, notifyOS, ensureNotifyPermission, appInForeground } from "./platform";
 import QrLoginPanel from "./QrLoginPanel";
 import { AppDownloadCards } from "./AppDownload";
@@ -147,12 +148,68 @@ const SECTION_PATH_TO_FOCUS: Record<string, LandingFocus> = {
 let openModalCount = 0;
 const modalListeners = new Set<(open: boolean) => void>();
 function notifyModalListeners() { modalListeners.forEach(l => l(openModalCount > 0)); }
-function useAnyBigModalOpen() {
-  const [open, setOpen] = useState(openModalCount > 0);
+// Global kuzatuvchi: har qanday modal/sheet/overlay (useModalPresence
+// chaqirmaganlari ham) DOM'da paydo bo'lsa — navbar yashirinadi va
+// body'ga `modal-open` klassi qo'yiladi (CSS orqa fonni xiralashtiradi).
+// Belgisi: qorong'i fonli `fixed inset-0` qatlam, aria-modal dialog,
+// Radix overlay yoki `data-modal-open` atributi. Shaffof "click-catcher"
+// qatlamlar (menyu yopish uchun) hisobga olinmaydi.
+export const MODAL_OVERLAY_SELECTOR = [
+  '.fixed.inset-0[class*="bg-black/"]',
+  '[role="dialog"][aria-modal="true"]',
+  '[role="alertdialog"]',
+  '[data-slot="dialog-overlay"]', '[data-slot="sheet-overlay"]',
+  '[data-slot="drawer-overlay"]', '[data-slot="alert-dialog-overlay"]',
+  '[data-modal-open]',
+].join(',');
+export function domHasModalOverlay(root: ParentNode = document): boolean {
+  const els = root.querySelectorAll(MODAL_OVERLAY_SELECTOR);
+  for (const el of Array.from(els)) {
+    if ((el as HTMLElement).closest('[data-modal-ignore]')) continue;
+    if (el.getClientRects().length === 0) continue; // display:none
+    // Yopiq (opacity-0 / invisible / pointer-events-none) qatlam — hisoblanmaydi,
+    // aks holda navbar abadiy yashirin qolardi
+    const cs = typeof getComputedStyle === 'function' ? getComputedStyle(el) : null;
+    if (cs && (cs.visibility === 'hidden' || cs.pointerEvents === 'none' || cs.opacity === '0')) continue;
+    if ((el as HTMLElement).dataset?.state === 'closed') continue;
+    return true;
+  }
+  return false;
+}
+function useDomModalOverlay() {
+  const [open, setOpen] = useState(false);
   useEffect(() => {
-    modalListeners.add(setOpen);
-    return () => { modalListeners.delete(setOpen); };
+    if (typeof MutationObserver === 'undefined') return;
+    let raf = 0;
+    const check = () => { raf = 0; setOpen(domHasModalOverlay()); };
+    const schedule = () => { if (!raf) raf = requestAnimationFrame(check); };
+    const mo = new MutationObserver(schedule);
+    mo.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style', 'data-state', 'aria-modal'] });
+    // fade-in/out animatsiyasi tugaganda ham qayta tekshiriladi (opacity o'zgaradi)
+    document.addEventListener('animationend', schedule, true);
+    document.addEventListener('transitionend', schedule, true);
+    check();
+    return () => {
+      mo.disconnect(); if (raf) cancelAnimationFrame(raf);
+      document.removeEventListener('animationend', schedule, true);
+      document.removeEventListener('transitionend', schedule, true);
+    };
   }, []);
+  return open;
+}
+function useAnyBigModalOpen() {
+  const [counted, setCounted] = useState(openModalCount > 0);
+  const inDom = useDomModalOverlay();
+  useEffect(() => {
+    modalListeners.add(setCounted);
+    return () => { modalListeners.delete(setCounted); };
+  }, []);
+  const open = counted || inDom;
+  // body klassi — CSS (globals.css) uchun: telefonda orqa fon xiralashadi
+  useEffect(() => {
+    document.body.classList.toggle('modal-open', open);
+    return () => { document.body.classList.remove('modal-open'); };
+  }, [open]);
   return open;
 }
 export function useModalPresence() {
@@ -4457,6 +4514,14 @@ export default function App() {
   };
 
   const liveUser = currentUser ? (users.find(u => u.id === currentUser.id) ?? currentUser) : null;
+  // Chat belgisi — ChatList'dagi "O'qilmagan" jildi bilan bir xil manba (chatModel)
+  const [navChatPrefs] = useChatPrefs(currentUser?.id || '');
+  const navChatUnread = useMemo(() => {
+    if (!liveUser) return 0;
+    const list = buildChatEntries({ me: liveUser, users, groups, messages,
+      groupSeen: navChatPrefs.groupSeen, baseline: navChatPrefs.baseline, readAllAt: navChatPrefs.readAllAt, supportName: '' });
+    return navUnreadCount(list, new Set(navChatPrefs.muted));
+  }, [liveUser, users, groups, messages, navChatPrefs]);
 
   // Texnik ishlar rejimi — dasturchi botdan yoqib/o'chiradi (backend
   // requireAuth/optionalAuth ham xuddi shu holatga qarab 503 qaytaradi;
@@ -5176,7 +5241,7 @@ export default function App() {
   // performance uchun eng katta yutuq shu yerda (Render cold-start paytida
   // foydalanuvchi bo'sh skeleton emas, haqiqiy, ishlaydigan header ko'radi).
   const admin = isAdmin(liveUser.role);
-  const unreadMsgs = messages.filter(m=>m.toUserId===liveUser.id&&!m.read).length;
+  const unreadMsgs = navChatUnread;
   const isGpsAdmin = liveUser?.role === 'direktor' || liveUser?.role === 'orinbosar';
   const NAV: { key: NavPage; label: string; shortLabel?: string; icon: IconNode; badge?: number }[] = [
     { key: "dashboard", label: tApp('nav.dashboard'), shortLabel: tApp('nav.homeShort'), icon: Home },
@@ -5786,7 +5851,7 @@ export default function App() {
                 <MorphIcon icon={n.icon} className="w-[19px] h-[19px]" />
               </motion.span>
               {!!n.badge && n.badge>0 && (
-                <span className="badge-pulse absolute -top-1 right-1 min-w-[16px] h-4 px-0.5 bg-red-500 text-white rounded-full text-[9px] flex items-center justify-center font-bold shadow border border-black/20 z-[2]">{n.badge > 9 ? '9+' : n.badge}</span>
+                <span data-testid={`nav-badge-${n.key}`} className="badge-pulse absolute -top-1 right-1 min-w-[16px] h-4 px-0.5 bg-red-500 text-white rounded-full text-[9px] flex items-center justify-center font-bold shadow border border-black/20 z-[2]">{n.badge > 9 ? '9+' : n.badge}</span>
               )}
             </span>
             <span className={`block max-w-full px-0.5 truncate whitespace-nowrap text-[10px] leading-none tracking-tight transition-colors duration-300 ${active ? "font-bold text-white" : "font-medium text-white/55"}`}>

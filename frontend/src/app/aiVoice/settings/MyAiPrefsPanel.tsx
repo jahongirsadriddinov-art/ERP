@@ -25,6 +25,8 @@ import { Badge, Card, More, Notice, Skeleton, TimeField, Toggle } from "./ui";
 // o'chiqligi yoziladi (AI firmada ishlamayapti, tarifda yo'q, "Hammasidan" voz kechilgan, saqlanmoqda).
 // Owner 2026-10-16 "soddalashtir": bitta "Menga qanday murojaat qilinsin" ro'yxati (Telegram qo'ng'irog'i roziligi
 // shu qatorning o'zida), tinch soatlar, eslatmalarim; voz kechish — "Qo'shimcha" ichida (yoqilgan bo'lsa ochiq).
+// Owner 2026-10-17: xodim (status.canEdit=false) — faqat ko'radi ("Sozlamalarni rahbariyat boshqaradi");
+// kompaniya roziligi bo'lsa shaxsiy rozilik tugmasi o'rniga rost holat (callsAllowed) ko'rsatiladi.
 const MY_CHANNELS: { c: ChannelName; icon: any }[] = [
   { c: "bot_message", icon: Telegram }, { c: "telegram_call", icon: Phone }, { c: "inapp_call", icon: Smart }, { c: "push", icon: Bell },
 ];
@@ -93,11 +95,17 @@ export default function MyAiPrefsPanel() {
   const lockOf = (a: PrefsArea) => prefsLock(prefs, a, busy);
   const why = (l: PrefsLock | null) => (l ? t(`aiVoice.prefs.why.${l}`) : undefined);
   const globalLock = lockOf("consent"); // aiOff/plan bo'lsa hamma joy uchun bir xil sabab
+  const managed = prefs.status?.canEdit === false;
+  const companyMode = typeof prefs.status?.companyConsent === "boolean";
+  const callsOk = companyMode ? !!prefs.status?.callsAllowed : granted;
 
   return (
     <div className="space-y-4" data-testid="ai-prefs-panel">
       {header}
       <RoleHelp area="prefs" group={group} />
+      {managed && !aiOff && (
+        <Notice tone="lock" testId="ai-prefs-managed"><p className="font-semibold">{k("why.managed")}</p><p className="mt-0.5">{k("managedHint")}</p></Notice>
+      )}
       {aiOff && (
         <div id="ai-prefs-why" role="status">
           <Notice tone="lock" testId="ai-prefs-off">
@@ -121,7 +129,13 @@ export default function MyAiPrefsPanel() {
                       hint={c === "push" ? k("simple.pushHint") : t(`aiVoice.ui.simple.ch.${c}.hint`)}
                       onChange={() => save({ disabledChannels: next }, (p) => ({ ...p, disabledChannels: next }))} />
                     {c === "telegram_call" && on && (
-                      <div className={`ml-12 mb-2.5 rounded-xl px-3 py-2.5 border ${granted ? "bg-emerald-500/[0.06] border-emerald-500/25" : "bg-amber-500/[0.06] border-amber-500/30"}`} data-testid="ai-consent">
+                      <div className={`ml-12 mb-2.5 rounded-xl px-3 py-2.5 border ${callsOk ? "bg-emerald-500/[0.06] border-emerald-500/25" : "bg-amber-500/[0.06] border-amber-500/30"}`} data-testid="ai-consent" data-ok={callsOk ? "1" : "0"}>
+                        {companyMode ? (
+                          <p className={`text-xs font-semibold flex items-center gap-1.5 ${callsOk ? "text-emerald-700 dark:text-emerald-300" : "text-amber-800 dark:text-amber-200"}`}>
+                            <MorphIcon icon={callsOk ? Ok : Phone} className="w-3.5 h-3.5 flex-shrink-0" />
+                            {k(callsOk ? "simple.companyCallsOk" : "simple.companyCallsNo")}
+                          </p>
+                        ) : (
                         <div className="flex flex-wrap items-center gap-2">
                           <p className={`flex-1 min-w-[9rem] text-xs font-semibold flex items-center gap-1.5 ${granted ? "text-emerald-700 dark:text-emerald-300" : "text-amber-800 dark:text-amber-200"}`}>
                             <MorphIcon icon={granted ? Ok : Phone} className="w-3.5 h-3.5 flex-shrink-0" />
@@ -135,6 +149,7 @@ export default function MyAiPrefsPanel() {
                             {granted ? k("consent.revoke") : k("consent.grant")}
                           </button>
                         </div>
+                        )}
                         {!aiOff && prefs.status?.telegramLinked === false && <p className="text-[11px] text-muted-foreground mt-1.5" data-testid="ai-consent-note">{k("why.consentNotLinked")}</p>}
                       </div>
                     )}
@@ -212,7 +227,7 @@ export default function MyAiPrefsPanel() {
                 const l = lockOf(x === "all" ? "optOutAll" : "optOut");
                 return (
                   <Toggle key={x} checked={prefs.optOut[x]} label={k(`optOut.${x}`)} disabled={!!l} testId={`ai-optout-${x}`}
-                    hint={l && l !== "busy" && !aiOff ? <span className="inline-flex items-start gap-1"><MorphIcon icon={Lock} className="w-3 h-3 mt-0.5 flex-shrink-0" />{why(l)}</span> : undefined}
+                    hint={l && l !== "busy" && l !== "managed" && !aiOff ? <span className="inline-flex items-start gap-1"><MorphIcon icon={Lock} className="w-3 h-3 mt-0.5 flex-shrink-0" />{why(l)}</span> : undefined}
                     onChange={(v) => save({ optOut: { [x]: v } }, (p) => ({ ...p, optOut: { ...p.optOut, [x]: v } }))} />
                 );
               })}
@@ -228,7 +243,7 @@ export default function MyAiPrefsPanel() {
 /** O'chiq boshqaruv YONIDAGI sabab. busy (saqlanmoqda) — ko.rsatilmaydi. */
 function Why({ lock, testId }: { lock: PrefsLock | null; testId?: string }) {
   const { t } = useTranslation();
-  if (!lock || lock === "busy") return null;
+  if (!lock || lock === "busy" || lock === "managed") return null; // managed — tepada bitta xabar
   return (
     <p className="text-[11px] text-muted-foreground mt-2 flex items-start gap-1.5" data-testid={testId} data-lock={lock}>
       <MorphIcon icon={Lock} className="w-3.5 h-3.5 flex-shrink-0 mt-px" />

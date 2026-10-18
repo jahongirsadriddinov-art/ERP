@@ -44,6 +44,17 @@ export interface AiToolDef<A = any> {
    * kind:'write', confirm:'never'. Agent buni faqat foydalanuvchining shu navbatdagi aniq so'rovi bilan chaqiradi.
    */
   ownDecision?: boolean;
+  /**
+   * Umumiy (firma ma'lumotiga tegmaydigan) tool — ob-havo, qo'ng'iroqni tugatish (owner 2026-10-17).
+   * Firma tool matritsasidan qat'i nazar har doim yoqiq (maxRoles baribir amal qiladi) va firmasiz
+   * dasturchi (platforma) kontekstida ham ishlaydi. Handler companyId yo'q bo'lsa firma bazasiga tegmasligi shart.
+   */
+  general?: boolean;
+  /**
+   * Ovozli tasdiq (owner 2026-10-17 #4): faqat ovozli kanallar, faqat SHU sessiyada yaratilgan pending amal.
+   * Faqat registry'dagi aniq nom (answerPendingAction) — boshqa "tasdiqlovchi" tool'lar baribir taqiqlangan (B3).
+   */
+  spokenConfirm?: boolean;
   handler: (ctx: ToolCtx, args: A) => Promise<ToolResult>;
 }
 

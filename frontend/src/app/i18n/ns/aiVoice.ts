@@ -52,6 +52,20 @@ export const uz = {
     // ── Soddalashtirilgan bitta ekran (owner 2026-10-16): 3 ta blok + "Qo'shimcha sozlamalar" ──
     simple: {
       powerTitle: "AI yordamchi",
+      workTimeTitle: "Ish vaqti",
+      workTimeHint: "Ish qachon boshlanadi, kim kechikkan va kim kelmagan hisoblanadi — AI shunga qarab so'raydi.",
+      lateAfter: "Kechikdi deb hisoblash",
+      lateAfterHint: "Ish boshlanganidan necha daqiqa keyin",
+      absentAt: "\"Kelmadi\" vaqti",
+      absentAtHint: "Shu vaqtgacha javob bo'lmasa — kelmadi",
+      consentTitle: "Xodimlarga AI qo'ng'iroq qilishiga ruxsat",
+      consentOn: "Firma barcha xodimlar nomidan rozilik bergan — AI qo'ng'iroq qila oladi (voz kechganlardan tashqari).",
+      consentOff: "O'chiq — AI xodimlarga qo'ng'iroq qilmaydi, faqat xabar yozadi.",
+      quietTitle: "Tinch soatlar",
+      quietHint: "Bu vaqtda AI hech kimga qo'ng'iroq qilmaydi va yozmaydi.",
+      quietFrom: "Boshlanishi",
+      quietTo: "Tugashi",
+      tgOneAtATime: "Bitta AI Telegram akkaunti bir vaqtda faqat bitta qo'ng'iroq qiladi — qolganlari navbat bilan.",
       powerOn: "Yoqilgan",
       powerOff: "O'chiq",
       companyOff: {
@@ -122,6 +136,12 @@ export const uz = {
       created: "Yaratilgan: {{date}}",
     },
     emp: {
+      hint2: "Har bir xodim uchun: AI qo'ng'iroq qilsinmi, alohida ish jadvali va o'chiriladigan yo'llar.",
+      callsOk: "AI qo'ng'iroq qila oladi",
+      callsNo: "Qo'ng'iroq yo'q",
+      allowCalls: "AI qo'ng'iroq qilsin",
+      allowCallsHint: "O'chirsangiz, AI bu xodimga faqat xabar yozadi.",
+      allowCallsAll: "Xodim AI'dan butunlay voz kechgan.",
       hint: "Rozilik va voz kechishni faqat xodimning o'zi o'zgartiradi. Siz har bir xodimga alohida ish jadvali va o'chiriladigan kanallarni belgilay olasiz.",
       schedule: "Ish jadvali",
       companyDefault: "Firma jadvali",
@@ -459,7 +479,9 @@ export const uz = {
     },
   },
   prefs: {
+    managedHint: "Bu yerda faqat ko'rasiz. O'zgartirish kerak bo'lsa — rahbaringizga ayting.",
     why: {
+      managed: "Sozlamalarni rahbariyat boshqaradi",
       busy: "Saqlanmoqda — bir soniya kuting.",
       plan: "AI yordamchi firmangiz tarifiga kirmaydi.",
       aiOff: "AI yordamchi firmangizda hozircha ishlamayapti (o'chiq yoki server tomonida to'xtatilgan).",
@@ -509,6 +531,8 @@ export const uz = {
     // ── Soddalashtirilgan shaxsiy ko'rinish (owner 2026-10-16) ──
     simple: {
       howTitle: "Menga qanday murojaat qilinsin",
+      companyCallsOk: "AI sizga qo'ng'iroq qila oladi (firma ruxsat bergan)",
+      companyCallsNo: "AI sizga qo'ng'iroq qilmaydi — faqat xabar yozadi",
       howHint: "O'chirilgan yo'l orqali AI sizga murojaat qilmaydi.",
       pushHint: "Telefoningizga bildirishnoma",
       consentAsk: "Telegram qo'ng'irog'i uchun rozilik kerak.",
@@ -668,6 +692,20 @@ export const ru = {
     moreHint: "Обычно менять не нужно",
     // ── Упрощённый единый экран (owner 2026-10-16): 3 блока + «Дополнительные настройки» ──
     simple: {
+      workTimeTitle: "Рабочее время",
+      workTimeHint: "Когда начинается работа, кто считается опоздавшим и кто не пришёл — AI спрашивает по этим правилам.",
+      lateAfter: "Считать опозданием",
+      lateAfterHint: "Через сколько минут после начала",
+      absentAt: "Время «не пришёл»",
+      absentAtHint: "Нет ответа до этого времени — не пришёл",
+      consentTitle: "Разрешить AI звонить сотрудникам",
+      consentOn: "Компания дала согласие за всех сотрудников — AI может звонить (кроме отказавшихся).",
+      consentOff: "Выключено — AI не звонит сотрудникам, только пишет.",
+      quietTitle: "Тихие часы",
+      quietHint: "В это время AI никому не звонит и не пишет.",
+      quietFrom: "С",
+      quietTo: "До",
+      tgOneAtATime: "Один Telegram-аккаунт AI ведёт только один звонок одновременно — остальные по очереди.",
       powerTitle: "AI-помощник",
       powerOn: "Включён",
       powerOff: "Выключен",
@@ -739,6 +777,12 @@ export const ru = {
       created: "Создан: {{date}}",
     },
     emp: {
+      hint2: "Для каждого сотрудника: звонит ли AI, свой график и отключённые способы связи.",
+      callsOk: "AI может звонить",
+      callsNo: "Без звонков",
+      allowCalls: "AI может звонить",
+      allowCallsHint: "Если выключить, AI будет только писать этому сотруднику.",
+      allowCallsAll: "Сотрудник полностью отказался от AI.",
       hint: "Согласие и отказ меняет только сам сотрудник. Вы можете задать каждому отдельный график и отключить каналы.",
       schedule: "График работы",
       companyDefault: "График фирмы",
@@ -1075,7 +1119,9 @@ export const ru = {
     },
   },
   prefs: {
+    managedHint: "Здесь только просмотр. Чтобы изменить — обратитесь к руководителю.",
     why: {
+      managed: "Настройками управляет руководство",
       busy: "Сохраняется — подождите секунду.",
       plan: "AI-помощник не входит в тариф вашей фирмы.",
       aiOff: "AI-помощник в вашей фирме сейчас не работает (выключен или остановлен на сервере).",
@@ -1124,6 +1170,8 @@ export const ru = {
     },
     // ── Упрощённый личный вид (owner 2026-10-16) ──
     simple: {
+      companyCallsOk: "AI может вам звонить (разрешено компанией)",
+      companyCallsNo: "AI не звонит вам — только пишет",
       howTitle: "Как со мной связываться",
       howHint: "Через выключенный способ AI с вами не связывается.",
       pushHint: "Уведомление на телефон",

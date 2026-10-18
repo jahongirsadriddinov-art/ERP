@@ -130,6 +130,18 @@ export function folderUnreadChats(list: ChatEntry[], f: FolderId, muted: Set<str
   return n;
 }
 
+/**
+ * Pastki navbar (Chat) belgisi — ro'yxatdagi suhbatlar bilan AYNAN bir xil
+ * mantiq: faqat ro'yxatda ko'rinadigan, ovozsiz bo'lmagan suhbatlarning
+ * o'qilmagan xabarlari. (Avval xom `messages` sanalardi — o'chirilgan
+ * foydalanuvchi/AI xabari ham belgiga tushib, "O'qilmagan" jildi bo'sh edi.)
+ */
+export function navUnreadCount(list: ChatEntry[], muted: Set<string>): number {
+  let n = 0;
+  for (const e of list) if (e.unread > 0 && !muted.has(e.key)) n += e.unread;
+  return n;
+}
+
 // ─── Vaqt (Toshkent) ────────────────────────────────────────────────────────
 const TZ = "Asia/Tashkent";
 const UZ_WD = ["Yak", "Dush", "Sesh", "Chor", "Pay", "Jum", "Shan"];

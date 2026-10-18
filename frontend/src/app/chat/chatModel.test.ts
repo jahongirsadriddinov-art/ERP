@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildEntries, inFolder, sortEntries, folderUnreadChats, listTime, matchesQuery, type ChatEntry } from "./chatModel";
+import { buildEntries, inFolder, sortEntries, folderUnreadChats, navUnreadCount, listTime, matchesQuery, type ChatEntry } from "./chatModel";
 
 const me: any = { id: "me", name: "Men", role: "direktor", phone: "", projectIds: [] };
 const users: any[] = [
@@ -93,5 +93,20 @@ describe("o'zbekcha sana yorliqlari (brauzer lokalisiz)", () => {
     expect(dayLabel(Date.parse("2026-10-15T05:00:00Z"), "uz", tt, now)).toBe("chatUi.yesterday");
     expect(dayLabel(Date.parse("2026-09-03T05:00:00Z"), "uz", tt, now)).toBe("3-sentabr");
     expect(dayLabel(Date.parse("2025-09-03T05:00:00Z"), "uz", tt, now)).toBe("3-sentabr 2025");
+  });
+});
+
+describe("navUnreadCount", () => {
+  it("navbar belgisi ro'yxatdagi suhbatlar bilan mos (ro'yxatda yo'q yuboruvchi va ovozsiz sanalmaydi)", () => {
+    const extra = [...msgs,
+      { id: "x1", fromUserId: "ai-assistant", toUserId: "me", text: "ai", timestamp: T(6), read: false },
+      { id: "x2", fromUserId: "gone", toUserId: "me", text: "eski", timestamp: T(7), read: false },
+      { id: "x3", fromUserId: "w1", toUserId: "me", text: "del", timestamp: T(8), read: false, deleted: true },
+    ];
+    const l = buildEntries({ ...base, messages: extra });
+    expect(navUnreadCount(l, new Set())).toBe(3);
+    expect(navUnreadCount(l, new Set(["g:g1"]))).toBe(2);
+    // belgi > 0 bo'lsa — "O'qilmagan" jildi bo'sh emas
+    expect(l.filter((e) => inFolder(e, "unread")).length).toBeGreaterThan(0);
   });
 });

@@ -4,11 +4,11 @@ import type { IsoWeekday } from "../api";
 import type { ShiftProps } from "../sectionProps";
 import { shiftIndex, shiftUpdater } from "../sectionProps";
 import { callTimeOf, normalizeHHmm, sameDays, todayTashkent, toggleWeekday, validateShift, WEEKDAY_PRESETS, WEEKDAYS } from "../scheduleHelpers";
-import { Card, Chip, Notice, TimeField, Toggle } from "../ui";
+import { Card, Chip, Notice, NumField, TimeField, Toggle } from "../ui";
 import DateList, { useDateLabel } from "./DateList";
 
-// 2-blok "Ish jadvali" (owner 2026-10-16: soddalashtirish): ertalabki so'rov kaliti, ish boshlanishi,
-// hafta kunlari va bayramlar. Smenalar, kalendar, kechikish chegaralari — "Qo'shimcha sozlamalar"da.
+// 2-blok "Ish vaqti" (owner 2026-10-17: bog'liq narsalar bir joyda): ertalabki so'rov kaliti, ish boshlanishi,
+// "kechikdi" chegarasi va "kelmadi" vaqti, hafta kunlari va bayramlar. Smenalar, kalendar — "Qo'shimcha"da.
 const START_PRESETS = ["07:00", "07:30", "08:00", "08:30", "09:00"];
 
 export default function QuickSchedule({ view, draft, update, shiftIdx, setShiftIdx }: ShiftProps) {
@@ -27,7 +27,7 @@ export default function QuickSchedule({ view, draft, update, shiftIdx, setShiftI
   const asking = draft.attendance.enabled;
 
   return (
-    <Card icon={Calendar} title={u("scheduleTitle")} hint={u("scheduleHint")} testId="ai-schedule">
+    <Card icon={Calendar} title={u("workTimeTitle")} hint={u("workTimeHint")} testId="ai-schedule">
       <div className="rounded-xl border border-border bg-card/60 px-3 mb-4">
         <Toggle testId="ai-attendance" checked={asking} label={<span className="font-semibold">{u("askMorning")}</span>}
           hint={asking ? <span data-testid="ai-call-time">{k("callAt", { time: callTimeOf(shift.workStart, shift.callLeadMin) })}</span> : u("askMorningOff")}
@@ -50,6 +50,13 @@ export default function QuickSchedule({ view, draft, update, shiftIdx, setShiftI
           </div>
           <div className="flex flex-wrap gap-2">
             {START_PRESETS.map((p) => <Chip key={p} active={shift.workStart === p} onClick={() => setShift((s) => ({ ...s, workStart: p }))}>{p}</Chip>)}
+          </div>
+          {/* Ish boshlanishiga bog'liq chegaralar — shu yerning o'zida */}
+          <div className="grid grid-cols-2 gap-3 pt-1" data-testid="ai-late-rules">
+            <NumField label={u("lateAfter")} hint={u("lateAfterHint")} value={shift.lateAfterMin} min={0} max={240} suffix={t("aiVoice.common.min")}
+              testId="ai-late-after" onChange={(v) => setShift((s) => ({ ...s, lateAfterMin: v }))} />
+            <TimeField label={u("absentAt")} hint={u("absentAtHint")} value={shift.absentCutoff} testId="ai-absent-cutoff"
+              onChange={(v) => { const n = normalizeHHmm(v); if (n) setShift((s) => ({ ...s, absentCutoff: n })); }} />
           </div>
         </div>
 

@@ -24,9 +24,10 @@ export function defaultPrefs(now = Date.now()): ChatPrefs {
 
 export function loadPrefs(uid: string): ChatPrefs {
   const d = defaultPrefs();
+  if (!uid) return d; // tizimga kirilmagan — hech narsa yozilmaydi
   try {
     const raw = localStorage.getItem(KEY(uid));
-    if (!raw) { savePrefs(uid, d); return d; }
+    if (!raw) { try { localStorage.setItem(KEY(uid), JSON.stringify(d)); } catch { /* */ } return d; }
     const p = JSON.parse(raw) || {};
     return {
       v: 1,
@@ -42,16 +43,28 @@ export function loadPrefs(uid: string): ChatPrefs {
   } catch { return d; }
 }
 
-export function savePrefs(uid: string, p: ChatPrefs) {
+// Bir sahifadagi bir nechta useChatPrefs (ChatPage + App navbar belgisi) bir-biriga mos turishi uchun
+const PREFS_EVENT = "erp-chat-prefs";
+export function savePrefs(uid: string, p: ChatPrefs, src?: object) {
   try { localStorage.setItem(KEY(uid), JSON.stringify(p)); } catch { /* xotira yo'q — sessiya ichida ishlayveradi */ }
+  try { window.dispatchEvent(new CustomEvent(PREFS_EVENT, { detail: { uid, prefs: p, src } })); } catch { /* SSR/test */ }
 }
 
 export function useChatPrefs(uid: string) {
   const [prefs, setPrefs] = useState<ChatPrefs>(() => loadPrefs(uid));
+  const [token] = useState(() => ({}));
   useEffect(() => { setPrefs(loadPrefs(uid)); }, [uid]);
+  useEffect(() => {
+    const on = (ev: Event) => {
+      const d = (ev as CustomEvent).detail;
+      if (d && d.uid === uid && d.src !== token && d.prefs) setPrefs(d.prefs);
+    };
+    window.addEventListener(PREFS_EVENT, on);
+    return () => window.removeEventListener(PREFS_EVENT, on);
+  }, [uid, token]);
   const update = useCallback((fn: (p: ChatPrefs) => ChatPrefs) => {
-    setPrefs((prev) => { const next = fn(prev); if (next !== prev) savePrefs(uid, next); return next; });
-  }, [uid]);
+    setPrefs((prev) => { const next = fn(prev); if (next !== prev) savePrefs(uid, next, token); return next; });
+  }, [uid, token]);
   return [prefs, update] as const;
 }
 

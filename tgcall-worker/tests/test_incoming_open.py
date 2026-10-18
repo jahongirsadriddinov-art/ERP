@@ -73,7 +73,7 @@ def make(ask, eng=None, open_=True):
 async def test_accepted_for_bound_caller_bridges_audio_like_outgoing():
     cm, eng, events, up, asks = make(lambda d: {"accept": True, "sessionId": SID, "maxDurationSec": 120})
     assert await cm.on_incoming(555) == "accepted"
-    assert asks == [{"tgUserId": "555", "workerBusy": False, "at": asks[0]["at"]}]
+    assert asks == [{"tgUserId": "555", "workerBusy": False, "at": asks[0]["at"], "activeCount": 0, "pending": 0}]
     assert await _until(lambda: any(e["state"] == "connected" for e in events))
     assert eng.played and eng.played[0][0] == 555 and cm.active.incoming and cm.active.session_id == SID
     # Audio: Telegram → backend va backend → Telegram (chiquvchi bilan bir xil yo'l)

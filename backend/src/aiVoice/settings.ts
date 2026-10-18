@@ -51,7 +51,7 @@ export function defaultSettings(companyId: string): AiSettingsData {
     brain: { provider: 'gemini', fallback: 'openrouter', effort: 'low' },
     limits: {
       userSessionsPerHour: 6, companyMinutesPerDay: 120, monthlyBudgetUsd: 20, hardStop: true,
-      botMsgsPer10Min: 20, toolCallsPerSession: 30,
+      botMsgsPer10Min: 20, toolCallsPerSession: 30, workerCallCooldownSec: 90,
     },
     privacy: { recordAudio: false, transcriptRetentionDays: 30, auditRetentionDays: 365 },
     version: 0,
@@ -163,6 +163,7 @@ export function mergeDefaults(companyId: string, doc: any): AiSettingsData {
       hardStop: pick(lim.hardStop, bool, d.limits.hardStop),
       botMsgsPer10Min: pick(lim.botMsgsPer10Min, num, d.limits.botMsgsPer10Min),
       toolCallsPerSession: pick(lim.toolCallsPerSession, num, d.limits.toolCallsPerSession),
+      workerCallCooldownSec: pick(lim.workerCallCooldownSec, num, d.limits.workerCallCooldownSec ?? 90),
     },
     privacy: {
       recordAudio: false,                                            // v1: qulflangan
@@ -393,6 +394,7 @@ export function validateSettingsUpdate(
   if (!bool(l.hardStop)) errors.push('limits.hardStop: boolean');
   if (!intIn(l.botMsgsPer10Min, 1, 200)) errors.push('limits.botMsgsPer10Min: 1..200');
   if (!intIn(l.toolCallsPerSession, 1, 100)) errors.push('limits.toolCallsPerSession: 1..100');
+  if (l.workerCallCooldownSec !== undefined && !intIn(l.workerCallCooldownSec, 0, 600)) errors.push('limits.workerCallCooldownSec: 0..600');
 
   const pr = merged.privacy;
   if (!intIn(pr.transcriptRetentionDays, 1, 365)) errors.push('privacy.transcriptRetentionDays: 1..365');

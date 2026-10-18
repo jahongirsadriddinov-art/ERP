@@ -8,6 +8,7 @@ import { createTextAgent } from '../brain/textAgent';
 import { hitRate } from '../lib/mongoRateLimit';
 import { isObjectIdString, newCorrelationId } from '../lib/ids';
 import { getSettings } from '../settings';
+import { isPlatformScope, PLATFORM_SCOPE, platformSettings } from '../platform';
 import { getBotInstance } from './instance';
 import { ta, aiLangOf, localizeFree } from './i18n';
 import { AI_MODE_EXIT_DATA, aiActiveFor, answer, closeButtons, confirmKeyboard, type CallbackActor } from './guard';
@@ -82,6 +83,7 @@ export function inAiMode(chatId: number, now = Date.now()): boolean {
 // DB yozuvlari xodim bo'yicha KETMA-KET (kirish/chiqish tez almashsa eski $unset yangi $set'ni bosib ketmasin)
 const persistChain = new Map<string, Promise<void>>();
 function persistUntil(s: Pick<ModeState, 'userId' | 'companyId'>, until: Date | null) {
+  if (isPlatformScope(s.companyId)) return;            // dasturchi rejimi — faqat xotirada (firma yozuvi yo'q)
   const upd = until
     ? { $set: { botAiModeUntil: until }, $setOnInsert: { companyId: s.companyId, employeeId: s.userId } }
     : { $unset: { botAiModeUntil: 1 } };
@@ -147,7 +149,14 @@ const exitKb = (lang: unknown, boss: boolean) => ({
   ],
 });
 
+const isDev = (user: any) => String(user?.role) === 'dasturchi';
+/** Rejim kaliti: firma yoki (dasturchi uchun) platforma. */
+const scopeOf = (user: any): string => (isDev(user) ? PLATFORM_SCOPE : (user?.companyId ? String(user.companyId) : ''));
+/** AI shu foydalanuvchi uchun hozir ishlaydimi (dasturchi — server kaliti; xodim — firma sozlamasi). */
+const modeActive = (user: any, scope: string) => (isDev(user) ? Promise.resolve(aiConfig.enabled) : aiActiveFor(scope));
+
 function roleOf(user: any): AiRole | null {
+  if (isDev(user)) return 'dasturchi' as AiRole;      // platforma rejimi: faqat umumiy yordamchi (agent/executor cheklaydi)
   if (user?.isOwner) return 'direktor';
   return (AI_ROLES as string[]).includes(String(user?.role)) ? (user.role as AiRole) : null;
 }
@@ -158,11 +167,11 @@ function roleOf(user: any): AiRole | null {
  */
 export async function enterAiMode(msg: any, user: any, clearOtherStates: () => void, onEnter?: (chatId: number) => void): Promise<boolean> {
   const chatId = Number(msg.chat.id);
-  const companyId = user?.companyId ? String(user.companyId) : '';
-  if (!isObjectIdString(companyId) || !isObjectIdString(String(user?._id || ''))) return false;
+  const companyId = scopeOf(user);
+  if ((!isDev(user) && !isObjectIdString(companyId)) || !isObjectIdString(String(user?._id || ''))) return false;
   const bot = getBotInstance();
   const lang = user.language;
-  if (!(await aiActiveFor(companyId))) {
+  if (!(await modeActive(user, companyId))) {
     await bot?.sendMessage(chatId, ta(lang, 'aiOff')).catch(() => undefined);
     return true;
   }
@@ -210,11 +219,11 @@ export async function handleAiModeMessage(msg: any, user: any): Promise<boolean>
   const chatId = Number(msg.chat.id);
   const s = modes.get(chatId);
   if (!s || !inAiMode(chatId)) return false;
-  if (s.userId !== String(user?._id) || s.companyId !== String(user?.companyId || '')) { clearAiMode(chatId); return false; }
+  if (s.userId !== String(user?._id) || s.companyId !== scopeOf(user)) { clearAiMode(chatId); return false; }
   if (typeof msg.text === 'string' && isMenuButtonText(msg.text)) { clearAiMode(chatId); return false; }
   const bot = getBotInstance();
   const lang = user.language;
-  if (!(await aiActiveFor(s.companyId)) || !roleOf(user)) {
+  if (!(await modeActive(user, s.companyId)) || !roleOf(user)) {
     clearAiMode(chatId);
     await bot?.sendMessage(chatId, ta(lang, 'aiOff')).catch(() => undefined);
     return true;
@@ -238,7 +247,7 @@ async function ask(chatId: number, s: ModeState, user: any, text: string): Promi
   const bot = getBotInstance();
   const lang = user.language;
   const role = roleOf(user) as AiRole;
-  const settings = await getSettings(s.companyId);
+  const settings = isPlatformScope(s.companyId) ? platformSettings() : await getSettings(s.companyId);
   const rate = await hitRate(`aiv:botmsg:${s.userId}`, settings.limits.botMsgsPer10Min, RATE_WINDOW_MS);
   if (!rate.allowed) { await bot?.sendMessage(chatId, ta(lang, 'aiRate')).catch(() => undefined); return; }
 

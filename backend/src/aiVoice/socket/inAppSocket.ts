@@ -8,7 +8,7 @@ import {
   type AiLang, type AivConfirmActionAck, type AivEndReason, type AivErrorCode, type AivIncoming, type AivSessionAck, type Purpose,
 } from '../contracts';
 import { isObjectIdString } from '../lib/ids';
-import { hitRate, peekRate } from '../lib/mongoRateLimit';
+import { checkUserCallLimit, callLimitMessage } from '../voice/callLimits';
 import { sanitizeForPrompt } from '../lib/untrusted';
 import { getCompanyAiState, getSettings } from '../settings';
 import { confirmPendingAction } from '../tools/executor';
@@ -23,7 +23,7 @@ import type { StartVoiceSessionResult, VoiceSessionHandle, VoiceTransport } from
 //  • faqat websocket transporti (long-polling binary'ni base64 qiladi) — aks holda unsupported_transport;
 //  • audio kadr ≤8 KB, juft PCM uzunligi, ≤60 kadr/s (socket bo'yicha), FAQAT sessiyaga bog'langan socket'dan;
 //  • aiv:start (foydalanuvchi o'zi qo'ng'iroq qiladi — chat AI kontakti yoki yordamchi tugmasi):
-//    userSessionsPerHour, ishchi rollar smenadan tashqarida rad (allowOffShiftAssistant bo'lmasa);
+//    voice/callLimits (rahbarlarga limit yo'q, ishchilarga tanaffus), ishchi rollar smenadan tashqarida rad;
 //  • AI qo'ng'irog'i (attendance/reminder) foydalanuvchining shu instansiyadagi barcha socket'lariga
 //    aiv:incoming; birinchi aiv:accept yutadi (sinxron — atomik), qolgan tablar 'answered_elsewhere';
 //  • presence: aiv:presence {visible} — mavjudlik = visible && lastSeen < 60 s (A11);
@@ -34,7 +34,6 @@ const PRESENCE_FRESH_MS = 60_000;
 const RING_TIMEOUT_SEC = 30;
 const REBIND_GRACE_MS = 15_000;
 const STALE_BOUND_MS = 4_000;
-const HOUR_MS = 3_600_000;
 
 interface SockEntry {
   socket: Socket;
@@ -328,18 +327,14 @@ async function handleStart(e: SockEntry, req: unknown): Promise<AivSessionAck> {
     // Ishchi rollar smenadan tashqarida AI'ga qo'ng'iroq qila olmaydi (design §7, workGate bilan bir xil)
     if (WORKER_ROLES.includes(e.role) && !settings.tools.allowOffShiftAssistant && !(await isOnShift(e.userId))) return fail('off_shift');
     const lang: AiLang = await resolveVoiceLang(e.companyId, e.userId, settings);
-    // Soatlik limit faqat HAQIQATAN ulangan qo'ng'iroqlarni sanaydi (aiv:ready) — ulanmay qolgan urinishlar
-    // (kvota/tarmoq) foydalanuvchining limitini yemasin (owner 2026-10-16: "Limit tugadi" sababi shu edi).
-    const perHour = Math.max(0, Number(settings.limits.userSessionsPerHour) || 0);
-    const rateKey = `aiv:start:${e.userId}`;
-    if (perHour <= 0 || (await peekRate(rateKey, HOUR_MS)) >= perHour) {
-      return fail('limit', lang === 'ru' ? 'Лимит голосовых звонков за час исчерпан — продолжим текстом.' : "Soatlik ovozli qo'ng'iroqlar soni tugadi — matn bilan davom etamiz.");
-    }
+    // Owner 2026-10-17: rahbarlarga limit yo'q; ishchilarga qisqa tanaffus. Faqat HAQIQATAN ulangan
+    // qo'ng'iroqlar sanaladi (answeredAt) — ulanmay qolgan urinishlar limitni yemaydi.
+    const lim = await checkUserCallLimit({ companyId: e.companyId, employeeId: e.userId, role: e.role, settings });
+    if (!lim.ok) return fail('limit', callLimitMessage(lang, lim));
 
     const call = new InAppCall(e.userId, e.companyId, 'assistant', true);
     call.bound = e.socket;
     call.lastInAt = Date.now();
-    call.onReady = () => { void hitRate(rateKey, perHour, HOUR_MS).catch(() => undefined); };
     const res = await getVoiceSessionManager().start({
       companyId: e.companyId, employeeId: e.userId, purpose: 'assistant', channel: 'inapp_call', lang, ptt: !!r.ptt,
       transport: call, socketId: e.socket.id, userInitiated: true, ringTimeoutSec: RING_TIMEOUT_SEC,

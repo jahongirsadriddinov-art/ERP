@@ -28,6 +28,8 @@ export interface AiSettingsData {
   calls: {
     maxAttemptsPerChannel: number; backoffMin: number[]; ringTimeoutSec: number; maxDurationSec: number;
     assistantMaxDurationSec: number; companyConcurrency: number; minGapSec: number; quietHours: { from: string; to: string };
+    /** Firma barcha xodimlar nomidan AI qo'ng'iroqlariga rozilik bergan (standart true). Eski server — yo'q. */
+    companyConsent?: boolean;
   };
   fallbackOrder: ChannelName[];
   reminders: { defaultLeadMin: number; defaultChannels: ChannelName[]; maxActivePerUser: number };
@@ -68,6 +70,8 @@ export interface AiEmployeeRow {
   optOut: { calls: boolean; reminders: boolean; all: boolean }; channelOrder?: ChannelName[]; disabledChannels: ChannelName[];
   /** Xodimning alohida ish jadvali (null/yo'q — firma jadvali). Server qo'llamasa maydon kelmaydi. */
   scheduleOverride?: AiScheduleOverride | null;
+  /** Samarali rozilik: AI shu xodimga qo'ng'iroq qila oladimi (firma roziligi, voz kechmagan). */
+  callsAllowed?: boolean;
 }
 
 /** Xodim uchun alohida ish kunlari (ISO 1-7) va ixtiyoriy ish boshlanishi. */
@@ -133,7 +137,11 @@ export interface AiMePrefs {
   optOut: { calls: boolean; reminders: boolean; all: boolean };
   quietHours?: { from: string; to: string } | null;
   /** Server holati (P3): AI firmada faolmi — o'chiq bo'lsa o'zgartirish 403 ai_disabled. */
-  status?: { aiActive: boolean; attendanceEnabled: boolean; telegramLinked: boolean; planHasFeature: boolean };
+  status?: {
+    aiActive: boolean; attendanceEnabled: boolean; telegramLinked: boolean; planHasFeature: boolean;
+    /** false — faqat ko'rish (sozlamalarni rahbariyat boshqaradi). Eski server — yo'q (tahrirlash mumkin). */
+    canEdit?: boolean; companyConsent?: boolean; callsAllowed?: boolean;
+  };
 }
 export interface AiMePrefsPatch {
   languageOverride?: "uz" | "ru" | null;
@@ -183,7 +191,8 @@ export const adminApi = {
   getTools: () => call<{ tools: AiToolEntry[] }>("GET", "/admin/tools"),
   getChannelsStatus: () => call<AiChannelsStatus>("GET", "/admin/channels/status"),
   getEmployees: (q = "") => call<{ employees: AiEmployeeRow[] }>("GET", `/admin/employees${qs({ q })}`),
-  patchEmployee: (userId: string, body: { channelOrder?: ChannelName[] | null; disabledChannels?: ChannelName[]; scheduleOverride?: AiScheduleOverride | null }) =>
+  patchEmployee: (userId: string, body: { channelOrder?: ChannelName[] | null; disabledChannels?: ChannelName[]; scheduleOverride?: AiScheduleOverride | null;
+    optOut?: Partial<{ calls: boolean; reminders: boolean; all: boolean }> }) =>
     call<{ employee: AiEmployeeRow }>("PATCH", `/admin/employees/${encodeURIComponent(userId)}`, body),
   runNow: (shiftId: string) => call<{ ok: true; jobId: string; duplicate: boolean }>("POST", "/admin/attendance/run-now", { shiftId }),
   getAudit: (p: { page?: number; limit?: number; status?: string; tool?: string; from?: string; to?: string } = {}) =>

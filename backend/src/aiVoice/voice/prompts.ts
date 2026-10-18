@@ -25,8 +25,8 @@ const VOICE_RULES = {
 
 const PURPOSE_RULES: Record<Purpose, { uz: string; ru: string }> = {
   assistant: {
-    uz: "MAQSAD: foydalanuvchi o'zi qo'ng'iroq qildi — ERP bo'yicha savoliga yordam bering (vazifalar, jadval, eslatmalar, obyekt ma'lumotlari).",
-    ru: 'ЦЕЛЬ: пользователь сам позвонил — помогите с вопросом по ERP.',
+    uz: "MAQSAD: foydalanuvchi o'zi qo'ng'iroq qildi — so'raganini bajaring: ERP (vazifalar, jadval, eslatmalar, obyektlar) va oddiy kundalik savollar (vaqt, umumiy ma'lumot, maslahat) — qisqa va aniq.",
+    ru: 'ЦЕЛЬ: пользователь сам позвонил — сделайте то, что он просит: ERP и обычные бытовые вопросы (время, общие факты, совет) — кратко и точно.',
   },
   attendance: {
     uz: `MAQSAD: ertalabki davomat qo'ng'irog'i. Xodimdan bugun ishga kelishini so'rang: keladimi, kechikadimi (necha daqiqaga) yoki kelmaydimi.
@@ -59,6 +59,23 @@ export interface VoicePromptInput {
   weekday?: number;
   /** Eslatma matni va h.k. — untrusted sifatida qo'shiladi. */
   requestText?: string;
+  /** inbound — foydalanuvchi o'zi qo'ng'iroq qildi; outbound — AI qo'ng'iroq qildi. */
+  direction?: 'inbound' | 'outbound';
+}
+
+/** Qo'ng'iroq konteksti (owner 2026-10-17 #5): kim kimga, qaysi kanal orqali qo'ng'iroq qildi. */
+export function callContextLine(i: Pick<VoicePromptInput, 'lang' | 'channel' | 'direction' | 'userName' | 'companyName'>): string {
+  const name = sanitizeForPrompt(i.userName, 40) || (i.lang === 'ru' ? 'сотрудник' : 'xodim');
+  const company = sanitizeForPrompt(i.companyName, 60);
+  const tg = i.channel === 'telegram_call';
+  if (i.lang === 'ru') {
+    const via = tg ? 'через Telegram (голосовой звонок на Telegram-аккаунт ИИ)' : 'в приложении (голосовой звонок)';
+    const who = i.direction === 'inbound' ? `${name} сам(а) позвонил(а) вам ${via}` : `Вы позвонили ${name} ${via}`;
+    return `ЗВОНОК: ${who}. Вы — ИИ-помощник${company ? ` компании ${company}` : ''}. Соединение уже установлено — вы слышите собеседника.`;
+  }
+  const via = tg ? "Telegram orqali (AI Telegram akkauntiga ovozli qo'ng'iroq)" : "ilova ichida (ovozli qo'ng'iroq)";
+  const who = i.direction === 'inbound' ? `${name} sizga ${via} o'zi qo'ng'iroq qildi` : `Siz ${name}ga ${via} qo'ng'iroq qildingiz`;
+  return `QO'NG'IROQ: ${who}. Siz — ${company ? `${company} firmasining ` : ''}AI yordamchisisiz. Aloqa allaqachon o'rnatilgan — suhbatdoshni eshityapsiz.`;
 }
 
 export function buildVoiceSystemPrompt(i: VoicePromptInput): string {
@@ -67,7 +84,7 @@ export function buildVoiceSystemPrompt(i: VoicePromptInput): string {
     channel: i.channel, today: i.today, weekday: i.weekday,
   });
   const lang = i.lang === 'ru' ? 'ru' : 'uz';
-  const parts = [base, '', VOICE_RULES[lang], '', PURPOSE_RULES[i.purpose][lang]];
+  const parts = [base, '', VOICE_RULES[lang], '', callContextLine({ ...i, lang }), PURPOSE_RULES[i.purpose][lang]];
   if (i.requestText) parts.push(`${lang === 'ru' ? 'Текст' : 'Matn'}: ${JSON.stringify(wrapUntrusted(i.requestText))}`);
   return parts.join('\n');
 }
@@ -93,20 +110,25 @@ export function disclosureTextFor(lang: AiLang, companyName?: string, custom?: s
   return DEFAULT_DISCLOSURE[lang === 'ru' ? 'ru' : 'uz'](company);
 }
 
-/** Klip ijro etilgandan keyin modelga beriladigan birinchi navbat (Live o'zi gapirmaydi — kirish kerak). */
+/**
+ * Klip ijro etilgandan keyin modelga beriladigan birinchi navbat (Live o'zi gapirmaydi — kirish kerak).
+ * Owner 2026-10-17 #1: salom/tanishtiruv klipda ALLAQACHON aytilgan — model ikkinchi marta salomlashmasin.
+ */
 export function startTurnText(lang: AiLang, purpose: Purpose): string {
   if (lang === 'ru') {
-    return `[СИСТЕМА] Звонок соединён (${purpose}). Предупреждение об ИИ уже прозвучало. Не повторяйте его — сразу кратко перейдите к цели звонка.`;
+    const next = purpose === 'assistant' ? 'Скажите одну короткую фразу: «Слушаю вас.» — и ждите вопроса.' : 'Сразу кратко перейдите к цели звонка.';
+    return `[СИСТЕМА] Звонок соединён (${purpose}). Приветствие и представление УЖЕ прозвучали — НЕ здоровайтесь и не представляйтесь снова. ${next}`;
   }
-  return `[TIZIM] Qo'ng'iroq ulandi (${purpose}). AI haqidagi ogohlantirish allaqachon aytildi. Uni takrorlamang — darhol qisqa qilib qo'ng'iroq maqsadiga o'ting.`;
+  const next = purpose === 'assistant' ? "Faqat bitta qisqa jumla ayting: «Eshitaman.» — va savolni kuting." : "Darhol qisqa qilib qo'ng'iroq maqsadiga o'ting.";
+  return `[TIZIM] Qo'ng'iroq ulandi (${purpose}). Salom va tanishtiruv ALLAQACHON aytildi — QAYTA salomlashmang va o'zingizni tanishtirmang. ${next}`;
 }
 
 /** TTS klip bo'lmasa: model BIRINCHI bo'lib aynan shu jumlani aytsin (zaxira yo'l, A8). */
 export function firstTurnWithDisclosure(lang: AiLang, purpose: Purpose, disclosure: string): string {
   if (lang === 'ru') {
-    return `[СИСТЕМА] Звонок соединён (${purpose}). Начните ДОСЛОВНО с фразы: «${disclosure}» — затем кратко перейдите к цели звонка.`;
+    return `[СИСТЕМА] Звонок соединён (${purpose}). Начните ДОСЛОВНО с фразы: «${disclosure}» — затем, НЕ здороваясь повторно, кратко перейдите к цели звонка.`;
   }
-  return `[TIZIM] Qo'ng'iroq ulandi (${purpose}). AYNAN shu jumla bilan boshlang: «${disclosure}» — keyin qisqa qilib qo'ng'iroq maqsadiga o'ting.`;
+  return `[TIZIM] Qo'ng'iroq ulandi (${purpose}). AYNAN shu jumla bilan boshlang: «${disclosure}» — keyin QAYTA salomlashmasdan, qisqa qilib qo'ng'iroq maqsadiga o'ting.`;
 }
 
 export function wrapUpText(lang: AiLang): string {

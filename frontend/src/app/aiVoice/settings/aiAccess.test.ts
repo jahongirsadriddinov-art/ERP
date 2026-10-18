@@ -56,6 +56,9 @@ describe("shaxsiy sozlamalar: nega o'chiq", () => {
   it("AI firmada o'chiq — hamma joy qulf, tarif sababi alohida", () => {
     expect(prefsLock(prefs({ status: { aiActive: false, planHasFeature: true } }), "channels")).toBe("aiOff");
     expect(prefsLock(prefs({ status: { aiActive: false, planHasFeature: false } }), "consent")).toBe("plan");
+    // xodim: faqat ko'rish (eslatmani bekor qilish mumkin)
+    expect(prefsLock(prefs({ status: { aiActive: true, planHasFeature: true, canEdit: false } }), "channels")).toBe("managed");
+    expect(prefsLock(prefs({ status: { aiActive: true, planHasFeature: true, canEdit: false } }), "reminders")).toBe(null);
   });
   it("saqlanayotganda — busy (eslatmalar bundan mustasno)", () => {
     expect(prefsLock(prefs(), "channels", true)).toBe("busy");

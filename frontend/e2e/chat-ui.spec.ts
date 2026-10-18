@@ -33,7 +33,7 @@ function messages() {
 }
 const group = { _id: 'g1', name: 'Obyekt 1', memberIds: ['u1', 'u3', 'u5'], adminIds: ['u1'], createdBy: 'u1', companyId: 'c1' };
 
-async function setup(page: Page, opts: { readAllStatus?: number } = {}) {
+async function setup(page: Page, opts: { readAllStatus?: number; extraMsgs?: any[] } = {}) {
   const calls = { readAll: 0, markRead: [] as any[] };
   await page.route(/\/socket\.io\//, (r) => r.abort());
   await page.route(/\/api\//, async (route) => {
@@ -48,7 +48,7 @@ async function setup(page: Page, opts: { readAllStatus?: number } = {}) {
     if (url.includes('/api/messages/read-all') && method === 'POST') { calls.readAll++; return json({ ok: true }, opts.readAllStatus || 200); }
     if (url.includes('/api/messages/read') && method === 'PATCH') { calls.markRead.push(req.postDataJSON()); return json({ message: 'ok' }); }
     if (/\/api\/users(\?|$)/.test(url) && method === 'GET') return json(users);
-    if (/\/api\/messages\?/.test(url) && method === 'GET') return json(messages());
+    if (/\/api\/messages\?/.test(url) && method === 'GET') return json([...messages(), ...(opts.extraMsgs || [])]);
     if (/\/api\/groups\?/.test(url) && method === 'GET') return json([group]);
     if (url.includes('/api/ai-voice/')) return json({});
     if (method === 'GET') return json([]);
@@ -194,4 +194,34 @@ test("suhbat: sana ajratgichi, oxirigacha skroll, yuborish, 390px telefon", asyn
   const vp = page.viewportSize()!;
   expect(composer!.y + composer!.height).toBeLessThanOrEqual(vp.height);
   await shot(page, 'thread-unread');
+});
+
+test("Navbar chat belgisi O'qilmagan jildi bilan mos; modal ochilsa navbar yashirinadi va fon xiralashadi", async ({ page }, info) => {
+  test.skip(info.project.name !== 'telefon', 'pastki navbar — faqat telefonda');
+  await page.setViewportSize({ width: 390, height: 844 });
+  // Ro'yxatda yo'q yuboruvchilar (o'chirilgan xodim, AI) va o'chirilgan xabar — belgiga tushmasligi kerak
+  await setup(page, { extraMsgs: [
+    { _id: 'x1', fromUserId: 'gone', toUserId: 'u1', text: 'eski', timestamp: ago(3), read: false },
+    { _id: 'x2', fromUserId: 'ai-assistant', toUserId: 'u1', text: 'ai', timestamp: ago(2), read: false },
+    { _id: 'x3', fromUserId: 'u6', toUserId: 'u1', text: 'del', timestamp: ago(1), read: false, deleted: true },
+  ] });
+  const listSum = await page.locator('[data-testid="chat-list"] [data-testid="chat-unread-badge"]').evaluateAll((els) => els.reduce((n, e) => n + Number(e.textContent || 0), 0));
+  expect(listSum).toBe(4); // u3:2, u5:1, g1:1
+  await expect(page.getByTestId('nav-badge-chat').first()).toHaveText('4');
+  await page.getByTestId('chat-folder-unread').click();
+  await expect(page.getByTestId('chat-list-empty')).toHaveCount(0);
+  // Modal (chat sozlamalari) — navbar yashirinadi, body.modal-open, fon xira
+  const nav = page.locator('nav.ios-bottom-bar');
+  await expect(nav).not.toHaveClass(/ios-bottom-bar-hidden/);
+  await page.getByTestId('chat-more').click();
+  await page.getByTestId('chat-open-settings').click();
+  await expect(nav).toHaveClass(/ios-bottom-bar-hidden/);
+  await expect(page.locator('body')).toHaveClass(/modal-open/);
+  const blur = await page.locator('.fixed.inset-0.modal-backdrop').first().evaluate((el) => getComputedStyle(el).backdropFilter || (getComputedStyle(el) as any).webkitBackdropFilter);
+  expect(String(blur)).toContain('blur');
+  await page.screenshot({ path: `test-results/modal-nav-hidden-${info.project.name}.png` });
+  await page.keyboard.press('Escape');
+  await page.mouse.click(10, 10);
+  await expect(nav).not.toHaveClass(/ios-bottom-bar-hidden/, { timeout: 5_000 });
+  await expect(page.locator('body')).not.toHaveClass(/modal-open/);
 });

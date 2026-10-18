@@ -12,7 +12,8 @@ import { addChannel, removeChannel, toggleWeekday, WEEKDAY_PRESETS, WEEKDAYS } f
 import { normalizeOverride, overrideSummary, sameOverride, validateOverride } from "../employeeSchedule";
 import { Badge, Card, Chip, Notice, Skeleton, TimeField, Toggle, type Tone } from "../ui";
 
-// Xodimlar: Telegram bog'lanishi, rozilik va voz kechish holati (FAQAT ko'rish — B9). Admin har bir xodimga
+// Xodimlar: Telegram bog'lanishi, AI qo'ng'iroq qila oladimi (callsAllowed — firma roziligi), voz kechish.
+// Rahbar xodim uchun "qo'ng'iroq qilinmasin" (optOut.calls) qo'ya oladi (owner 2026-10-17). Admin har bir xodimga
 // alohida ish jadvali (kunlar + ixtiyoriy boshlanish vaqti; "Firma jadvali" — standart) va o'chiriladigan
 // kanallarni belgilaydi (PATCH darhol saqlanadi). Telefon raqamlari ko'rsatilmaydi. Ichki skroll yo'q —
 // uzun ro'yxat "Yana ko'rsatish" bilan bo'laklab ochiladi (sahifa oxirigacha tabiiy skroll qilinadi).
@@ -60,7 +61,7 @@ export default function Employees({ canEditBoss, canEditSchedule = true, draft }
   const shown = rows ? rows.slice(0, limit) : [];
 
   return (
-    <Card icon={Users} title={t("aiVoice.ui.tabs.employees")} hint={e("hint")} testId="ai-employees">
+    <Card icon={Users} title={t("aiVoice.ui.tabs.employees")} hint={e("hint2")} testId="ai-employees">
       <div className="relative mb-3">
         <MorphIcon icon={Search} className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
         <input type="search" value={q} onChange={(ev) => setQ(ev.target.value)} placeholder={k("search")} aria-label={k("search")}
@@ -88,7 +89,13 @@ export default function Employees({ canEditBoss, canEditSchedule = true, draft }
                       <div className="flex flex-wrap gap-1.5 mt-1.5">
                         <Badge tone={ov ? "amber" : "gray"}><MorphIcon icon={Calendar} className="w-3 h-3" />{ov ? overrideSummary(ov, wd) : e("companyDefault")}</Badge>
                         <Badge tone={r.telegramLinked ? "sky" : "gray"}>{r.telegramLinked ? k("linked") : k("notLinked")}</Badge>
-                        <Badge tone={CONSENT_TONE[r.callConsent] || "gray"}>{t(`aiVoice.admin.employees.consent.${r.callConsent}`, r.callConsent)}</Badge>
+                        {typeof r.callsAllowed === "boolean" ? (
+                          <span data-testid={`ai-emp-calls-${r.userId}`} data-ok={r.callsAllowed ? "1" : "0"}>
+                            <Badge tone={r.callsAllowed ? "green" : "gray"}>{e(r.callsAllowed ? "callsOk" : "callsNo")}</Badge>
+                          </span>
+                        ) : (
+                          <Badge tone={CONSENT_TONE[r.callConsent] || "gray"}>{t(`aiVoice.admin.employees.consent.${r.callConsent}`, r.callConsent)}</Badge>
+                        )}
                         {out.length > 0 && (
                           <Badge tone="red"><MorphIcon icon={Lock} className="w-3 h-3" />{k("optedOut")}: {out.map((x) => t(`aiVoice.admin.employees.optOut.${x}`)).join(", ")}</Badge>
                         )}
@@ -105,6 +112,11 @@ export default function Employees({ canEditBoss, canEditSchedule = true, draft }
                       {/* O'chiq boshqaruvlar sababi bilan: o'rinbosar direktor qatorini, jadval ruxsati yo'q bo'lsa — jadvalni */}
                       {locked && <Notice tone="lock" testId={`ai-emp-locked-${r.userId}`}>{t("aiVoice.common.locked")}</Notice>}
                       {!locked && !canEditSchedule && <Notice tone="lock">{t("aiVoice.admin.schedule.locked")}</Notice>}
+                      <div className="rounded-xl border border-border bg-card/60 px-3">
+                        <Toggle testId={`ai-emp-optout-${r.userId}`} checked={!r.optOut.calls && !r.optOut.all} disabled={busy === r.userId || locked || r.optOut.all}
+                          label={<span className="font-semibold">{e("allowCalls")}</span>} hint={e(r.optOut.all ? "allowCallsAll" : "allowCallsHint")}
+                          onChange={(v) => patchRow(r, { optOut: { calls: !v } }, k("saved"))} />
+                      </div>
                       <ScheduleEditor row={r} disabled={busy === r.userId || locked || !canEditSchedule} companyStart={companyStart} wd={wd} e={e}
                         onSave={(o) => patchRow(r, { scheduleOverride: o }, e("saved"))} />
                       <div>

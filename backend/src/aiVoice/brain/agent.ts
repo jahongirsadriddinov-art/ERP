@@ -2,21 +2,26 @@ import { randomUUID } from 'crypto';
 import type {
   PendingActionInfo, TextAgent, TextAgentInput, TextAgentOutput, TextProviderName, ToolCtx, ToolResult, ToolStatus,
 } from '../contracts';
+import AiActionAudit from '../../models/AiActionAudit';
 import { checkActor } from '../actor';
+import { aiConfig } from '../config';
+import { isObjectIdString } from '../lib/ids';
+import { buildPlatformSystemPrompt, loadDeveloperActor, PLATFORM_SCOPE, platformSettings, platformStatus } from '../platform';
 import { sha256Hex } from '../lib/crypto';
 import { zonedParts } from '../lib/zonedTime';
 import { costFromUsd, costUsdMicros } from '../pricing';
 import { getCompanyAiState, getSettings, isAiActive } from '../settings';
 import { budgetExceeded, recordTextUsage } from '../usage';
-import { executeTool, type ExecuteOutcome } from '../tools/executor';
-import { effectiveToolNames } from '../tools/rbac';
+import { confirmPendingAction, executeTool, type ExecuteOutcome } from '../tools/executor';
+import { effectiveToolNames, generalToolNames } from '../tools/rbac';
 import { getTool, toolDeclarations } from '../tools/registry';
 import { registerErpTools } from '../tools/erp';
 import { promptObjects } from '../tools/erp/common';
 import { resolveTextProviderOrder } from './providerOrder';
 import { quotaKindOf, quotaMessage, type QuotaKind } from './quota';
 import { capToolResult, decisionKindOf, explicitDecision } from './toolPolicy';
-import { buildSystemPrompt } from './systemPrompt';
+import { buildSystemPrompt, isVoiceChannel } from './systemPrompt';
+import { askedToConfirm, pureYesNo, stripRepeatedGreeting } from './style';
 import { createClaudeProvider } from './providers/claude';
 import { createGeminiProvider } from './providers/gemini';
 import { createOpenRouterProvider, createGroqProvider } from './providers/openrouter';
@@ -40,7 +45,13 @@ const MSG = {
   rounds: { uz: "So'rov juda ko'p bosqich talab qildi — iltimos, aniqroq qilib so'rang.", ru: 'Запрос потребовал слишком много шагов — уточните, пожалуйста.' },
   refusal: { uz: "Kechirasiz, bu so'rov bo'yicha yordam bera olmayman.", ru: 'Извините, с этим запросом я помочь не могу.' },
   noAction: { uz: 'Hech qanday amal bajarilmadi.', ru: 'Никакое действие не выполнено.' },
-  confirm: { uz: 'Tasdiqlash kerak — tugmani bosing. Hali bajarilmadi', ru: 'Нужно подтверждение — нажмите кнопку. Ещё не выполнено' },
+  confirm: { uz: "Tasdiqlash kerak — pastdagi tugmani bosing yoki «ha» deb yozing. Hali bajarilmadi", ru: 'Нужно подтверждение — нажмите кнопку ниже или напишите «да». Ещё не выполнено' },
+  confirmVoice: { uz: "Tasdiqlash kerak — «ha» yoki «yo'q» deng. Hali bajarilmadi", ru: 'Нужно подтверждение — скажите «да» или «нет». Ещё не выполнено' },
+  noPending: { uz: "Tasdiq kutayotgan amal yo'q yoki muddati o'tgan.", ru: 'Нет действия, ожидающего подтверждения, или срок истёк.' },
+  spokenOnly: {
+    uz: "Tasdiq uchun foydalanuvchining aniq «ha» yoki «yo'q» javobi kerak. Bajarilmadi — so'rang.",
+    ru: 'Для подтверждения нужен явный ответ «да» или «нет». Не выполнено — спросите.',
+  },
   badArgs: { uz: "Tool argumentlari noto'g'ri (JSON emas) — amal bajarilmadi.", ru: 'Неверные аргументы инструмента (не JSON) — действие не выполнено.' },
   unknownTool: { uz: "Bunday tool yo'q yoki ruxsat etilmagan.", ru: 'Такого инструмента нет или он не разрешён.' },
   perRound: { uz: "Bir navbatda juda ko'p tool chaqirildi — qolganlari bajarilmadi.", ru: 'Слишком много вызовов за один шаг — остальные не выполнены.' },
@@ -56,6 +67,8 @@ const m = (k: keyof typeof MSG, lang: Lang) => MSG[k][lang];
 export const SUCCESS_CLAIM_RE = /\b(yaratildi|yuborildi|saqlandi|bajarildi|o['ʻ’`]?chirildi|bekor qilindi|o['ʻ’`]?zgartirildi|yangilandi|qo['ʻ’`]?shildi|qo['ʻ’`]?yildi|belgilandi)\b|создан|отправлен|сохранен|сохранён|выполнен|отменен|отменён|изменен|изменён|обновлен|обновлён|удален|удалён|добавлен|поставлен/i;
 
 const MAX_CALLS_PER_ROUND = 8;
+/** Matnli "ha" faqat shu oynadagi (yangi) tasdiqqa tegishli. */
+const QUICK_CONFIRM_WINDOW_MS = 15 * 60_000;
 
 export interface ErpTextAgentDeps {
   /** Provayderlarni almashtirish (testlar: soxta Gemini mijozi / soxta fetch). */
@@ -74,6 +87,7 @@ interface RunState {
   quota: QuotaKind | null;
   userText: string;
   history: { role: 'user' | 'assistant'; text: string }[];
+  channel: ToolCtx['channel'];
   usage: { tokensIn: number; tokensOut: number; costUsdMicros: number; model: string; provider: TextProviderName | 'none' };
 }
 
@@ -91,7 +105,7 @@ export class ErpTextAgent implements TextAgent {
   async run(input: TextAgentInput): Promise<TextAgentOutput> {
     const lang: Lang = input?.ctx?.lang === 'ru' ? 'ru' : 'uz';
     const st: RunState = {
-      toolCalls: [], pendingActions: [], writeStatuses: [], quota: null, userText: '', history: [],
+      toolCalls: [], pendingActions: [], writeStatuses: [], quota: null, userText: '', history: [], channel: input?.ctx?.channel || 'web',
       usage: { tokensIn: 0, tokensOut: 0, costUsdMicros: 0, model: 'none', provider: 'none' },
     };
     const reply = (text: string): TextAgentOutput => ({
@@ -101,8 +115,11 @@ export class ErpTextAgent implements TextAgent {
 
     const ctx0 = input?.ctx;
     const userText = typeof input?.userText === 'string' ? input.userText.trim().slice(0, 4000) : '';
+    if (!ctx0?.userId) return reply(m('disabled', lang));
+    // Firmasiz kontekst — faqat dasturchi (platforma rejimi: umumiy yordamchi + platforma holati)
+    if (!isObjectIdString(ctx0.companyId)) return this.runPlatform(input, userText, st, lang, reply);
     // AI o'chiq bo'lsa — model ham, tool ham chaqirilmaydi
-    if (!ctx0?.companyId || !ctx0?.userId || !(await isAiActive(ctx0.companyId))) return reply(m('disabled', lang));
+    if (!(await isAiActive(ctx0.companyId))) return reply(m('disabled', lang));
     const ac = await checkActor(ctx0.userId, ctx0.companyId);
     if (!ac.ok) return reply(m('disabled', lang));
     if (!userText) return reply(m('failed', lang));
@@ -119,6 +136,12 @@ export class ErpTextAgent implements TextAgent {
     const ctx: ToolCtx = {
       ...ctx0, role: (actor.isOwner ? 'direktor' : actor.role) as ToolCtx['role'], isOwner: actor.isOwner, tz: 'Asia/Tashkent', lang,
     };
+    // #4: sof "ha"/"yo'q" — AI so'ragan tasdiqni SHU joyning o'zida hal qiladi (model chaqirilmaydi)
+    const yn = pureYesNo(userText);
+    if (yn !== null) {
+      const quick = await this.quickConfirm(ctx, yn, st, lang);
+      if (quick) return reply(quick);
+    }
     const allowed = effectiveToolNames(settings, actor.role, actor.isOwner, { channel: ctx.channel, purpose: ctx.purpose });
     const tools = toolDeclarations(allowed, lang);
     const [company, objects] = await Promise.all([
@@ -132,6 +155,39 @@ export class ErpTextAgent implements TextAgent {
       objects: objects.names, objectsTotal: objects.total, toolNames: allowed,
     });
 
+    return this.drive(order, { system, tools, ctx, allowed, input, userText, settings }, st, lang, reply);
+  }
+
+  /** Dasturchi (firmasiz): faqat umumiy tool'lar, platforma prompti, platforma chegaralari. */
+  private async runPlatform(
+    input: TextAgentInput, userText: string, st: RunState, lang: Lang, reply: (t: string) => TextAgentOutput,
+  ): Promise<TextAgentOutput> {
+    const ctx0 = input.ctx;
+    const dev = await loadDeveloperActor(ctx0.userId);
+    if (!dev || !aiConfig.enabled) return reply(m('disabled', lang));
+    if (!userText) return reply(m('failed', lang));
+    st.userText = userText;
+    st.history = Array.isArray(input.history) ? input.history : [];
+    registerErpTools();
+    const settings = platformSettings();
+    const order = resolveTextProviderOrder(settings.brain, this.deps.env);
+    if (!order.length) return reply(m('notReady', lang));
+    const ctx: ToolCtx = { ...ctx0, companyId: PLATFORM_SCOPE, role: 'dasturchi' as ToolCtx['role'], isOwner: false, tz: 'Asia/Tashkent', lang };
+    const allowed = generalToolNames({ channel: ctx.channel, purpose: ctx.purpose });
+    const tools = toolDeclarations(allowed, lang);
+    const now = zonedParts(new Date());
+    const status = await platformStatus().catch(() => ({ aiEnabled: aiConfig.enabled, companiesWithAi: 0, account: 'unknown', workerOnline: false }));
+    const system = buildPlatformSystemPrompt({ lang, userName: dev.name, today: now.date, time: now.hhmm, status, channel: ctx.channel });
+    return this.drive(order, { system, tools, ctx, allowed, input, userText, settings }, st, lang, reply);
+  }
+
+  /** Provayderlar zanjiri (asosiy → zaxira): tool raundlari, kvota va himoya. */
+  private async drive(
+    order: TextProviderName[],
+    a: { system: string; tools: ReturnType<typeof toolDeclarations>; ctx: ToolCtx; allowed: string[]; input: TextAgentInput; userText: string; settings: { brain: any; provider: any } },
+    st: RunState, lang: Lang, reply: (t: string) => TextAgentOutput,
+  ): Promise<TextAgentOutput> {
+    const { system, tools, ctx, allowed, input, userText, settings } = a;
     const runId = randomUUID();
     const maxRounds = Math.max(0, Math.min(5, input.maxToolRounds ?? 5));
     const deadline = AbortSignal.timeout(this.deps.totalTimeoutMs ?? 90_000);
@@ -154,6 +210,33 @@ export class ErpTextAgent implements TextAgent {
     }
     const base = st.quota ? quotaMessage(st.quota, lang) : m('failed', lang);
     return reply(st.writeStatuses.length ? `${base}\n${this.factual(st, lang)}` : base);
+  }
+
+  /**
+   * Matnli/ovozli kaskaddagi sof "ha"/"yo'q": AI oxirgi javobida tasdiq so'ragan bo'lsa — SHU kanaldagi
+   * eng yangi kutilayotgan amal (shu foydalanuvchi, ≤15 daqiqa; sessiya bo'lsa — shu sessiya) hal qilinadi.
+   * Bu foydalanuvchining O'Z matni (model emas) — B3 bilan mos. Mos amal bo'lmasa null (oddiy suhbat).
+   */
+  private async quickConfirm(ctx: ToolCtx, accept: boolean, st: RunState, lang: Lang): Promise<string | null> {
+    const lastAi = [...st.history].reverse().find((h) => h?.role === 'assistant');
+    if (!lastAi || !askedToConfirm(lastAi.text)) return null;
+    const now = Date.now();
+    const filter: Record<string, unknown> = {
+      companyId: String(ctx.companyId), actorUserId: String(ctx.userId), status: 'needs_confirmation',
+      'pending.channel': ctx.channel === 'telegram_call' ? 'bot' : ctx.channel,
+      'pending.expiresAt': { $gt: new Date(now) }, createdAt: { $gt: new Date(now - QUICK_CONFIRM_WINDOW_MS) },
+    };
+    if (ctx.sessionId) filter.sessionId = ctx.sessionId;
+    const row: any = await AiActionAudit.findOne(filter).sort({ createdAt: -1 }).select('_id').lean().catch(() => null);
+    if (!row) return null;
+    const out = await confirmPendingAction({
+      pendingActionId: String(row._id), actorUserId: ctx.userId, companyId: ctx.companyId, channel: ctx.channel, accept, lang,
+      ...(ctx.sessionId ? { sessionId: ctx.sessionId } : {}),
+    });
+    const r = out.result;
+    st.toolCalls.push({ name: 'confirm', status: r.status, message: r.message });
+    if (r.status === 'ok') return accept ? `✅ ${r.message}` : r.message;
+    return r.message || m('noPending', lang);
   }
 
   private async loop(
@@ -196,6 +279,9 @@ export class ErpTextAgent implements TextAgent {
     else if (!def || !allowed.includes(call.name)) result = { status: 'denied', message: m('unknownTool', lang), retryable: false };
     else if (def.ownDecision && (!decision || !explicitDecision(decision, st.userText, st.history))) {
       result = { status: 'error', message: m('needExplicit', lang), retryable: false };
+    } else if (def.spokenConfirm && pureYesNo(st.userText) !== ((call.args as any)?.accept === true)) {
+      // Kaskadda foydalanuvchining so'zi bor — model "ha"ni o'zi to'qiy olmaydi
+      result = { status: 'error', message: m('spokenOnly', lang), retryable: false };
     } else {
       const explicitUserDecision = !!def.ownDecision;      // yuqorida tekshirildi
       // Yozuvlar uchun idempotentlik: shu run ichida bir xil chaqiruv (yoki provayder almashganda) — bir marta
@@ -235,7 +321,7 @@ export class ErpTextAgent implements TextAgent {
     if (!st.writeStatuses.length) return m('noAction', lang);
     return st.writeStatuses.map((w) => {
       if (w.status === 'ok') return `✅ ${w.message}`;
-      if (w.status === 'needs_confirmation') return `⏳ ${m('confirm', lang)}.`;
+      if (w.status === 'needs_confirmation') return `⏳ ${this.confirmHint(st, lang)}.`;
       return `❌ ${w.message}`;
     }).join('\n');
   }
@@ -247,7 +333,13 @@ export class ErpTextAgent implements TextAgent {
     let out = (text || '').trim();
     if (out && SUCCESS_CLAIM_RE.test(out) && (!anyOk || anyNotOk)) out = this.factual(st, lang);
     if (!out) out = st.writeStatuses.length ? this.factual(st, lang) : m('failed', lang);
-    if (st.pendingActions.length && !/tasdiq|подтвер/i.test(out)) out += `\n⏳ ${m('confirm', lang)}.`;
+    // #1: salom suhbat boshida bir marta (bot/qo'ng'iroq kirishi yoki tarixda AI javobi bor bo'lsa — takrorlanmaydi)
+    if (st.channel !== 'web' || st.history.some((h) => h?.role === 'assistant')) out = stripRepeatedGreeting(out, st.userText);
+    if (st.pendingActions.length && !/tasdiq|подтвер/i.test(out)) out += `\n⏳ ${this.confirmHint(st, lang)}.`;
     return out;
+  }
+
+  private confirmHint(st: RunState, lang: Lang): string {
+    return m(isVoiceChannel(st.channel) ? 'confirmVoice' : 'confirm', lang);
   }
 }

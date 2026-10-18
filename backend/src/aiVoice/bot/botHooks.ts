@@ -131,11 +131,14 @@ export async function aiBotMessageHook(msg: any, user: any, _lang: string | unde
   if (msg.from?.id === undefined || String(msg.from.id) !== String(chatId)) return false;
   if (!user?._id || user.isBlocked) return false;
   // Dasturchi (yoki firmasiz) akkaunt — AI firma ichida ishlaydi. Avval jim qolardi ("buyruqlar ishlamayapti").
-  if (env.isCommand && (user.role === 'dasturchi' || !user.companyId)) {
+  // Owner 2026-10-17: dasturchi /ai bilan umumiy yordamchi + platforma holati (firma ma'lumotisiz) — platform.ts
+  const dev = user.role === 'dasturchi';
+  if (env.isCommand && dev && env.command === 'ai') return enterAiMode(msg, user, env.clearOtherStates, (id) => clearScheduleDraft(id));
+  if (env.isCommand && (dev || !user.companyId)) {
     await getBotInstance()?.sendMessage(chatId, ta(user.language, 'devNoCompany')).catch(() => undefined);
     return true;
   }
-  if (user.role === 'dasturchi') return false;
+  if (dev) return inAiMode(chatId) ? handleAiModeMessage(msg, user) : false;
   if (env.command === 'schedule') {
     if (!user.companyId) return false;
     const e = editorOf(user);

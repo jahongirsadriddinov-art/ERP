@@ -44,6 +44,9 @@ AskFn = Callable[[dict], Awaitable[Optional[dict]]]
 
 # Kiruvchi qo'ng'iroqni qabul qilish (accept → confirm) uchun kutish chegarasi
 INCOMING_ACCEPT_TIMEOUT_S = 20
+# play() (javob + kalit almashinuvi + ICE/p2p ulanish) uchun qo'shimcha zaxira: pytgcalls ulanishni
+# vaqt chegarasisiz kutadi — osilib qolsa akkaunt "band" bo'lib qolardi (owner 2026-10-17)
+CONNECT_GRACE_S = 25
 # Peer aniqlash natijasi → call.place rad sababi (backend: peer_unknown bo'lsa bir marta telefon bilan qayta)
 _PEER_REASON = {"mismatch": "peer_mismatch", "import_limited": "import_limited", "flood_wait": "flood_wait",
                 "privacy_restricted": "privacy_restricted"}
@@ -70,6 +73,8 @@ class ActiveCall:
     chunker: A.Chunker = field(default_factory=lambda: A.Chunker(A.UP_CHUNK_BYTES))
     up_seq: int = 0
     incoming: bool = False           # "Ochiq muloqot": xodim o'zi qo'ng'iroq qildi
+    video: bool = False              # backend video so'radi (avatar)
+    avatar: Any = None               # avatar.hooks.AvatarSession (video qo'ng'iroqda)
     done: asyncio.Event = field(default_factory=asyncio.Event)
     started_at: float = field(default_factory=time.monotonic)
 
@@ -99,10 +104,12 @@ class CallManager:
     def active_count(self) -> int:
         return 1 if self.active and self.active.state != "ended" else 0
 
-    async def _event(self, c: ActiveCall, state: str, reason: Optional[str] = None) -> None:
+    async def _event(self, c: ActiveCall, state: str, reason: Optional[str] = None, stage: Optional[str] = None) -> None:
         ev: dict = {"type": "call.state", "sessionId": c.session_id, "state": state, "at": int(self._now_ms())}
         if reason:
             ev["reason"] = reason
+        if stage:
+            ev["stage"] = stage
         try:
             await self._emit(ev)
         except Exception as e:  # socket uzilgan — backend 20 s'da o'zi yopadi
@@ -143,7 +150,9 @@ class CallManager:
                 return {"accepted": False, "reason": _PEER_REASON.get(st, "peer_unknown")}
             if self.active_count >= MAX_CONCURRENT:   # aniqlash paytida boshqa qo'ng'iroq boshlangan bo'lishi mumkin
                 return {"accepted": False, "reason": "busy_worker"}
-        c = ActiveCall(session_id=sid, user_id=uid, frame_uuid=frame_uuid, timeout_sec=timeout, max_duration_sec=max_dur)
+        self._avatar_watch()
+        c = ActiveCall(session_id=sid, user_id=uid, frame_uuid=frame_uuid, timeout_sec=timeout, max_duration_sec=max_dur,
+                       video=p.get("video") is True)
         self.active = c
         self.total_calls += 1
         c.task = asyncio.ensure_future(self._run(c))
@@ -151,18 +160,28 @@ class CallManager:
 
     async def _run(self, c: ActiveCall) -> None:
         await self._event(c, "dialing")
+        t0 = time.monotonic()
         try:
-            await self.engine.play(c.user_id, c.timeout_sec)
+            await asyncio.wait_for(self.engine.play(c.user_id, c.timeout_sec), timeout=c.timeout_sec + CONNECT_GRACE_S)
         except asyncio.CancelledError:
             await self._finish(c, c.end_reason or "hangup")
+            return
+        except asyncio.TimeoutError:
+            log.warning("qo'ng'iroq ulanmadi: network (bosqich: %s, %.1f s)", self._stage(c) or "connect_timeout", time.monotonic() - t0)
+            await self._safe_hangup(c)
+            await self._finish(c, c.end_reason or "network", "connect_timeout")
             return
         except Exception as e:
             fs = flood_seconds(e)
             if fs:
                 self.flood_wait_until_ms = self._now_ms() + fs * 1000
             reason = map_call_error(e, c.discard_reason)
-            log.info("qo'ng'iroq ulanmadi: %s", reason)
-            await self._finish(c, c.end_reason or reason)
+            stage = self._stage(c)
+            log.info("qo'ng'iroq ulanmadi: %s (bosqich: %s, xato: %s, %.1f s)", reason, stage or "-", type(e).__name__, time.monotonic() - t0)
+            # Telegram'dagi qo'ng'iroq ham yopiladi (pytgcalls ulanish xatosida discard qilmaydi) — aks holda
+            # akkaunt serverda "qo'ng'iroqda" qolib, keyingi qo'ng'iroq "band" bo'ladi
+            await self._safe_hangup(c)
+            await self._finish(c, c.end_reason or reason, stage)
             return
         if c.state == "ended" or c.end_reason:
             await self._safe_hangup(c)
@@ -179,10 +198,17 @@ class CallManager:
         await self._event(c, "connected")
 
         async def send(pcm: bytes) -> None:
-            await self.engine.send_frame(c.user_id, pcm)
+            try:
+                await self.engine.send_frame(c.user_id, pcm)
+            except Exception:
+                if c.avatar is None or not c.avatar.tolerate_audio_error():
+                    raise
+            if c.avatar is not None:
+                c.avatar.feed_audio(pcm)
 
         c.sender = self._sender_factory(send)
         c.sender_task = asyncio.ensure_future(c.sender.run())
+        self._avatar_start(c)
         try:
             done_wait = asyncio.ensure_future(c.done.wait())
             waiters = {done_wait, c.sender_task}
@@ -218,15 +244,29 @@ class CallManager:
         except Exception as e:
             log.debug("hangup: %s", type(e).__name__)
 
-    async def _finish(self, c: ActiveCall, reason: str) -> None:
+    def _stage(self, c: ActiveCall) -> Optional[str]:
+        fn = getattr(self.engine, "stage_of", None)
+        try:
+            return fn(c.user_id) if fn else None
+        except Exception:
+            return None
+
+    async def _finish(self, c: ActiveCall, reason: str, stage: Optional[str] = None) -> None:
         if c.finished:
             return
         c.finished = True
+        clear = getattr(self.engine, "clear_stage", None)
+        if clear:
+            try:
+                clear(c.user_id)
+            except Exception:
+                pass
+        await self._avatar_stop(c)
         c.state = "ended"
         c.done.set()
         if self.active is c:
             self.active = None
-        await self._event(c, "ended", reason)
+        await self._event(c, "ended", reason, stage)
 
     # ── RPC: call.hangup ──
     async def hangup(self, p: dict) -> dict:
@@ -279,11 +319,13 @@ class CallManager:
             await self._decline(user_id)
             return "declined"
         busy = self.active_count >= MAX_CONCURRENT or bool(self._incoming_pending)
+        self._avatar_watch()
         self._incoming_pending.add(user_id)
         self._incoming_gone.discard(user_id)
         try:
             try:
-                ack = await self._ask_incoming({"tgUserId": str(user_id), "workerBusy": busy, "at": int(self._now_ms())})
+                ack = await self._ask_incoming({"tgUserId": str(user_id), "workerBusy": busy, "at": int(self._now_ms()),
+                                                "activeCount": self.active_count, "pending": len(self._incoming_pending) - 1})
             except Exception as e:
                 log.debug("incoming so'rovi: %s", type(e).__name__)
                 ack = None
@@ -349,6 +391,8 @@ class CallManager:
         if not c or c.user_id != user_id or c.state != "connected":
             return
         for raw in pcm48_frames:
+            if c.avatar is not None:
+                c.avatar.feed_user_audio(raw)
             pcm16 = c.up_resampler.process(raw)
             for chunk in c.chunker.push(pcm16):
                 frame = A.encode_frame(c.frame_uuid, c.up_seq, chunk)
@@ -371,3 +415,35 @@ class CallManager:
             return
         c.sender.push(c.down_resampler.process(pcm))
 
+    # ── Video avatar (owner 8; app/avatar paketi). Faqat yoqish/o'chirish/uzatish chaqiruvlari ──
+    def _avatar_watch(self) -> None:
+        try:
+            from .avatar import hooks as avatar_hooks
+            avatar_hooks.watch(self.engine)
+        except Exception as e:  # Pillow yo'q va h.k. — audio qo'ng'iroqqa ta'sir qilmaydi
+            log.debug("avatar watch: %s", type(e).__name__)
+
+    def _avatar_start(self, c: ActiveCall) -> None:
+        try:
+            from .avatar import hooks as avatar_hooks
+            c.avatar = avatar_hooks.start_for_call(self.engine, c.user_id, c.video)
+        except Exception as e:
+            c.avatar = None
+            log.debug("avatar start: %s", type(e).__name__)
+
+    async def _avatar_stop(self, c: ActiveCall) -> None:
+        # Fonda — qo'ng'iroq holati darhol tozalansin (keyingi qo'ng'iroq "band" bo'lmasin)
+        a, c.avatar = c.avatar, None
+        if a is not None:
+            asyncio.ensure_future(a.stop())
+
+    # ── RPC: call.caption — AI'ning joriy gapi (subtitr + kayfiyat) ──
+    async def caption(self, p: dict) -> dict:
+        c = self.active
+        if not c or c.session_id != str(p.get("sessionId") or ""):
+            return {"ok": True}
+        text = str(p.get("text") or "")[:400]
+        emotion = p.get("emotion") if isinstance(p.get("emotion"), str) else None
+        if c.avatar is not None:
+            c.avatar.set_caption(text, emotion)
+        return {"ok": True}

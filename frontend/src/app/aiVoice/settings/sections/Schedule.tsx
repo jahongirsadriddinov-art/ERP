@@ -10,8 +10,8 @@ import Trash from "@hugeicons/core-free-icons/Delete02Icon";
 import type { ShiftProps } from "../sectionProps";
 import { shiftIndex, shiftUpdater } from "../sectionProps";
 import type { AiShift } from "../api";
-import { callTimeOf, dayStatus, isoWeekdayOf, normalizeHHmm, todayTashkent, toggleCalendarDay, upcomingDays, type DayStatus } from "../scheduleHelpers";
-import { Card, Chip, Notice, NumField, TextField, TimeField } from "../ui";
+import { callTimeOf, dayStatus, isoWeekdayOf, todayTashkent, toggleCalendarDay, upcomingDays, type DayStatus } from "../scheduleHelpers";
+import { Card, Chip, Notice, NumField, TextField } from "../ui";
 import DateList, { useDateLabel } from "./DateList";
 
 // "Jadval tafsilotlari" (Qo'shimcha sozlamalar ichida): smenalar, AI qachon so'rashi, 3 haftalik kalendar,
@@ -127,10 +127,6 @@ export default function Schedule({ view, draft, update, shiftIdx, setShiftIdx }:
 
         <Card icon={Settings} title={t("aiVoice.ui.simple.lateTitle")}>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <NumField label={k("lateAfter")} hint={k("lateAfterHint")} value={shift.lateAfterMin} min={0} max={240} suffix={t("aiVoice.common.min")}
-              onChange={(v) => setShift((s) => ({ ...s, lateAfterMin: v }))} />
-            <TimeField label={k("absentCutoff")} value={shift.absentCutoff}
-              onChange={(v) => { const n = normalizeHHmm(v); if (n) setShift((s) => ({ ...s, absentCutoff: n })); }} />
             <NumField label={k("buttonWait")} value={shift.buttonWaitMin} min={1} max={120} suffix={t("aiVoice.common.min")}
               onChange={(v) => setShift((s) => ({ ...s, buttonWaitMin: v }))} />
             <NumField label={k("maxLate")} hint={k("maxLateHint")} value={shift.maxLateMin} min={0} max={360} suffix={t("aiVoice.common.min")} testId="ai-max-late"

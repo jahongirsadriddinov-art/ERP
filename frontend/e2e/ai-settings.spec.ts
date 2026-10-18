@@ -15,7 +15,7 @@ const shift = {
 const settings = {
   companyId: 'c1', enabled: true, language: 'uz', voiceName: 'Kore', timezone: 'Asia/Tashkent',
   attendance: { enabled: true, suppressLegacyMorningReminder: true, orinbosarCanEditSchedule: true, shifts: [shift] },
-  calls: { maxAttemptsPerChannel: 2, backoffMin: [3, 10], ringTimeoutSec: 45, maxDurationSec: 120, assistantMaxDurationSec: 600, companyConcurrency: 3, minGapSec: 20, quietHours: { from: '21:00', to: '07:00' } },
+  calls: { maxAttemptsPerChannel: 2, backoffMin: [3, 10], ringTimeoutSec: 45, maxDurationSec: 120, assistantMaxDurationSec: 600, companyConcurrency: 3, minGapSec: 20, quietHours: { from: '21:00', to: '07:00' }, companyConsent: true },
   fallbackOrder: ['bot_message', 'telegram_call', 'inapp_call', 'push', 'notify_manager'],
   reminders: { defaultLeadMin: 0, defaultChannels: ['bot_message', 'push'], maxActivePerUser: 50 },
   tools: { byRole: {}, allowOffShiftAssistant: false },
@@ -33,7 +33,7 @@ const view = (s: any, o: Opts = {}) => ({
 });
 const employees = Array.from({ length: 45 }, (_, i) => ({
   userId: `u${i + 2}`, name: `Xodim ${i + 1}`, role: i % 5 === 0 ? 'prorab' : 'ishchi', telegramLinked: i % 2 === 0, resolveStatus: 'ok',
-  callConsent: i % 3 === 0 ? 'granted' : 'none', optOut: { calls: false, reminders: false, all: false }, disabledChannels: [], scheduleOverride: null,
+  callConsent: i % 3 === 0 ? 'granted' : 'none', optOut: { calls: false, reminders: false, all: false }, disabledChannels: [], scheduleOverride: null, callsAllowed: true,
 }));
 // Server /platform/companies shakli (platformAdminRoutes.ts)
 const companies = [
@@ -454,4 +454,69 @@ test('Mening AI sozlamalarim: AI firmada o\'chiq — sabab va keyingi qadam', as
   await expect(page.getByTestId('ai-role-help-foreman')).toBeVisible();
   await expect(page.getByTestId('ai-consent-btn')).toBeDisabled();
   await expect(page.getByTestId('ai-consent-btn')).toHaveAttribute('title', /ishlamayapti/);
+});
+
+test('Ish vaqti va "Kimga va qanday": kechikish, kelmadi vaqti, firma roziligi, tinch soatlar bir joyda', async ({ page }, info) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  const calls = newCalls();
+  await phone390(page, info);
+  await mockApi(page, calls);
+  await seed(page, owner);
+  await openAiSettings(page);
+  const sched = page.getByTestId('ai-schedule');
+  await expect(sched.getByTestId('ai-late-rules')).toBeVisible();
+  await expect(sched).toContainText('Ish vaqti');
+  await sched.getByTestId('ai-absent-cutoff').fill('11:00');
+  const ch = page.getByTestId('ai-quick-channels');
+  await expect(ch.getByTestId('ai-company-consent')).toHaveAttribute('aria-checked', 'true');
+  await ch.getByTestId('ai-company-consent').click();
+  await expect(ch.getByTestId('ai-company-consent')).toHaveAttribute('aria-checked', 'false');
+  await ch.getByTestId('ai-quiet-from').fill('22:00');
+  await expect(ch.getByTestId('ai-tg-one-call')).toBeVisible();
+  await noOverflow(page);
+  await page.screenshot({ path: `test-results/ai-worktime-${info.project.name}.png`, fullPage: true });
+  await page.getByTestId('ai-save').click();
+  await expect.poll(() => calls.puts.length).toBe(1);
+  const patch = calls.puts[0].patch;
+  expect(patch.attendance.shifts[0].absentCutoff).toBe('11:00');
+  expect(patch.calls.companyConsent).toBe(false);
+  expect(patch.calls.quietHours).toEqual({ from: '22:00', to: '07:00' });
+  expect(errors, errors.join('\n')).toEqual([]);
+});
+
+test("Xodimlar: AI qo'ng'iroq qila oladimi ko'rinadi, rahbar voz kechishni qo'yadi", async ({ page }, info) => {
+  const calls = newCalls();
+  await phone390(page, info);
+  await mockApi(page, calls);
+  await seed(page, owner);
+  await openAiSettings(page);
+  await openAdvanced(page, 'employees');
+  await expect(page.getByTestId('ai-emp-calls-u2')).toHaveAttribute('data-ok', '1');
+  await page.getByTestId('ai-emp-toggle-u2').click();
+  const sw = page.getByTestId('ai-emp-optout-u2');
+  await expect(sw).toHaveAttribute('aria-checked', 'true');
+  await sw.click();
+  await expect.poll(() => calls.patches.length).toBe(1);
+  expect(calls.patches[0].body).toEqual({ optOut: { calls: true } });
+  await expect(sw).toHaveAttribute('aria-checked', 'false');
+});
+
+test("Mening AI sozlamalarim: xodim — faqat ko'rish (rahbariyat boshqaradi)", async ({ page }, info) => {
+  const calls = newCalls();
+  await phone390(page, info);
+  const prefs = {
+    disabledChannels: [], callConsent: 'none', optOut: { calls: false, reminders: false, all: false }, quietHours: null,
+    status: { aiActive: true, attendanceEnabled: true, telegramLinked: true, planHasFeature: true, canEdit: false, companyConsent: true, callsAllowed: true },
+  };
+  await mockApi(page, calls, { me: { prefs } });
+  await seed(page, { id: 'u7', name: 'Ishchi', role: 'ishchi', phone: '+998900000007', projectIds: [], companyId: 'c1', language: 'uz' });
+  await page.goto('/');
+  await page.getByRole('button', { name: /AI qo'ng'iroqlarim/ }).first().click({ timeout: 20_000 });
+  await expect(page.getByTestId('ai-prefs-managed')).toContainText('rahbariyat boshqaradi');
+  await expect(page.getByTestId('ai-my-ch-bot_message')).toBeDisabled();
+  await expect(page.getByTestId('ai-consent')).toHaveAttribute('data-ok', '1');
+  await expect(page.getByTestId('ai-consent-btn')).toHaveCount(0);
+  await noOverflow(page);
+  await page.screenshot({ path: `test-results/ai-prefs-managed-${info.project.name}.png`, fullPage: true });
 });

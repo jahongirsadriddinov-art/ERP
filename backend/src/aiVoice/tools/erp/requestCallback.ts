@@ -11,9 +11,9 @@ import { ALL_ROLES, ASSIST, L, ok } from './common';
 // requestCallback — "menga qo'ng'iroq qil", "Telegramdan bir minutdan keyin qo'ng'iroq qil" (owner
 // 2026-10-16: AI "qo'ng'iroq qila olmayman" derdi). AI foydalanuvchining O'ZIGA qo'ng'iroqni navbatga
 // qo'yadi — mavjud kanal adapterlari orqali (telegram_call / inapp_call, purpose 'assistant').
-//  • Chaqiruv paytida kanallar tekshiriladi: Telegram (rozilik + bog'langan + worker ulangan) yoki ilova
-//    (foydalanuvchi onlayn). Hech biri bo'lmasa — ANIQ nima yetishmasligini aytadi (Telegram roziligi
-//    bo'lmasa — botga rozilik so'rovini o'zi yuboradi). Hech qachon "qila olmayman" emas.
+//  • Chaqiruv paytida kanallar tekshiriladi: Telegram (firma roziligi + ERP botga ulangan + worker) yoki ilova
+//    (foydalanuvchi onlayn). Hech biri bo'lmasa — ANIQ nima yetishmasligini aytadi. Hech qachon "qila olmayman" emas.
+//  • Owner 2026-10-16: rozilikni rahbariyat firma uchun beradi — xodimdan rozilik/bog'lash kodi so'ralmaydi.
 //  • Faqat o'ziga (boshqa odamga emas) — tasdiq tugmasi kerak emas. Chat kanallaridan (web/bot).
 // Ish turi 'ai.callback' — navbatga birinchi chaqiruvda va registerErpTools'dan keyin ro'yxatga olinadi.
 
@@ -63,11 +63,12 @@ export function missingText(ch: ChannelName, reason: string, c: Lg): string {
   const l = (uz: string, ru: string) => L(c as any, uz, ru);
   if (ch === 'telegram_call') {
     switch (reason) {
-      case 'no_consent': return l("Telegram qo'ng'irog'i uchun botda rozilik bering ('🤖 AI yordamchi' → \"Ha\")", 'Дайте согласие на звонки в боте («🤖 AI-помощник» → «Да»)');
-      case 'not_bound': case 'not_resolved': return l("botdagi bog'lash kodini AI Telegram akkauntiga yozing", 'отправьте код привязки из бота в Telegram-аккаунт AI');
+      case 'no_consent': return l("AI qo'ng'iroqlari rahbariyat tomonidan o'chirilgan", 'звонки AI отключены руководством');
+      case 'not_bound': return l("ERP botiga telefon raqamingizni ulashing (shunda Telegram'ingiz ulanadi)", 'поделитесь номером телефона в ERP-боте (так подключится ваш Telegram)');
+      case 'not_resolved': return l("AI Telegram'ingizni hali topa olmadi — ERP botidagi telefon raqamingiz Telegram raqamingiz bilan bir xil bo'lsin", 'AI пока не нашёл ваш Telegram — номер в ERP-боте должен совпадать с номером Telegram');
       case 'blocked': return l("Telegram'da AI akkauntini blokdan chiqaring", 'разблокируйте AI-аккаунт в Telegram');
       case 'privacy_restricted': return l("Telegram maxfiylik sozlamasida qo'ng'iroqlarga ruxsat bering", 'разрешите звонки в настройках конфиденциальности Telegram');
-      case 'opt_out': return l("siz AI qo'ng'iroqlarini o'chirib qo'ygansiz (AI sozlamalarida yoqing)", 'вы отключили звонки AI (включите в настройках AI)');
+      case 'opt_out': return l("rahbariyat siz uchun AI qo'ng'iroqlarini o'chirgan", 'руководство отключило для вас звонки AI');
       case 'account_not_connected': return l("AI Telegram akkaunti hali ulanmagan (administrator ulaydi)", 'Telegram-аккаунт AI ещё не подключён (подключает администратор)');
       case 'worker_offline': return l("Telegram qo'ng'iroq xizmati hozir o'chiq", 'сервис звонков Telegram сейчас выключен');
       case 'daily_cap': case 'company_quota': return l("bugungi Telegram qo'ng'iroqlar limiti tugagan", 'дневной лимит звонков Telegram исчерпан');
@@ -78,7 +79,7 @@ export function missingText(ch: ChannelName, reason: string, c: Lg): string {
   switch (reason) {
     case 'offline': return l("ilova yoki sayt yopiq — ilovani oching", 'приложение закрыто — откройте приложение');
     case 'not_visible': return l("ilova oynasini ochiq qoldiring", 'держите окно приложения открытым');
-    case 'opt_out': return l("siz AI qo'ng'iroqlarini o'chirib qo'ygansiz (AI sozlamalarida yoqing)", 'вы отключили звонки AI (включите в настройках AI)');
+    case 'opt_out': return l("rahbariyat siz uchun AI qo'ng'iroqlarini o'chirgan", 'руководство отключило для вас звонки AI');
     case 'not_registered': return l("ilova ichidagi qo'ng'iroq hali yoqilmagan", 'звонки в приложении ещё не включены');
     default: return l("ilova ichidagi qo'ng'iroq hozir mavjud emas", 'звонок в приложении сейчас недоступен');
   }
@@ -156,16 +157,6 @@ export async function runCallback(p: {
   return 'unreachable';
 }
 
-/** Telegram roziligi yo'q — foydalanuvchining o'zi so'radi: botga rozilik so'rovini yuboramiz. */
-async function askConsent(ctx: ToolCtx): Promise<boolean> {
-  try {
-    // Dinamik: bot modullari faqat kerak bo'lganda yuklanadi (registry/testlar)
-    const m = await import('../../bot/consentFlow');
-    const r = await m.sendConsentRequest({ companyId: ctx.companyId, employeeId: ctx.userId });
-    return !!r.ok;
-  } catch { return false; }
-}
-
 export const requestCallback: AiToolDef<{ channel?: 'inapp' | 'telegram'; delayMinutes?: number; when?: string }> = {
   name: 'requestCallback',
   description: {
@@ -215,18 +206,12 @@ export const requestCallback: AiToolDef<{ channel?: 'inapp' | 'telegram'; delayM
     const pre = await precheckChannels(chCtx, order);
     const first = order[0];
     const firstReason = pre.reasons[first];
-    // Telegram so'ralgan, rozilik yo'q — so'rovni o'zimiz yuboramiz (foydalanuvchining o'z iltimosi)
-    const consentSent = first === 'telegram_call' && firstReason === 'no_consent' ? await askConsent(ctx) : false;
     const transient = order.some((c) => TRANSIENT.has(String(pre.reasons[c])));
 
     if (soon && !pre.available.length && !transient) {
       const need = order.map((c) => missingText(c, String(pre.reasons[c]), ctx));
-      const msg = consentSent
-        ? L(ctx,
-          `Telegram orqali qo'ng'iroq qilishim uchun ruxsatingiz kerak — botga so'rov yubordim: "Ha" ni bosing va ko'rsatilgan kodni AI akkauntiga yozing, keyin yana "qo'ng'iroq qil" deng. Yoki: ${need[1] || need[0]}.`,
-          `Чтобы позвонить в Telegram, нужно ваше согласие — я отправил запрос в бот: нажмите «Да» и отправьте код AI-аккаунту, затем снова скажите «позвони». Или: ${need[1] || need[0]}.`)
-        : L(ctx, `Hozir qo'ng'iroq qilishim uchun: ${need.join(' yoki ')}.`, `Чтобы я позвонил сейчас: ${need.join(' или ')}.`);
-      return { status: 'error', message: msg, retryable: false, data: { missing: pre.reasons, consentRequestSent: consentSent } };
+      const msg = L(ctx, `Hozir qo'ng'iroq bo'lmaydi: ${need.join('; ')}.`, `Сейчас звонок невозможен: ${need.join('; ')}.`);
+      return { status: 'error', message: msg, retryable: false, data: { missing: pre.reasons } };
     }
     // Hozir mavjud kanal birinchi bo'lsin (so'ralgan kanal mavjud bo'lmasa — boshqasi orqali)
     if (soon && pre.available.length && !pre.available.includes(first)) order = [pre.available[0], ...order.filter((c) => c !== pre.available[0])];
@@ -251,7 +236,6 @@ export const requestCallback: AiToolDef<{ channel?: 'inapp' | 'telegram'; delayM
     if (!soon && !pre.available.length) {
       msg += ' ' + L(ctx, `Hozircha: ${missingText(order[0], String(pre.reasons[order[0]]), ctx)}.`, `Пока что: ${missingText(order[0], String(pre.reasons[order[0]]), ctx)}.`);
     }
-    if (consentSent) msg += ' ' + L(ctx, "Botga Telegram qo'ng'irog'i uchun ruxsat so'rovi yubordim.", 'Отправил в бот запрос на звонки в Telegram.');
     return ok(msg, { scheduledAt: runAt.toISOString(), localTime: at.hhmm, channel: order[0], duplicate: !!r?.duplicate });
   },
 };

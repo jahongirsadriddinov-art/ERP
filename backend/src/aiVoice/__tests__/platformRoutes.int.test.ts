@@ -16,7 +16,7 @@ import User from '../../models/User';
 import { JWT_SECRET } from '../../middleware/auth';
 import { mountAiVoiceRoutes } from '../bootstrap';
 import { invalidateSettings } from '../settings';
-import { __resetPlatformRoutesForTests, LOGIN_MAX, TEST_CALL_MAX } from '../routes/platformRoutes';
+import { __resetPlatformRoutesForTests, LOGIN_MAX, TEST_CALL_COOLDOWN_SEC, TEST_CALL_MAX } from '../routes/platformRoutes';
 import { workerHub } from '../telegram/workerNamespace';
 import { tone } from '../voice/audio';
 import { FakeVoiceProvider } from '../voice/fakeProvider';
@@ -296,12 +296,22 @@ describe("sinov qo'ng'irog'i (B7)", () => {
     expect(await AuditLog.countDocuments({ entity: 'ai_telegram_account', action: 'create', userId: dev, companyId: A.companyId })).toBe(1);
   });
 
-  it(`${TEST_CALL_MAX} ta / soat`, async () => {
+  it("owner 2026-10-17: terilmagan urinishlar sanalmaydi; terilgandan keyin 30 s oraliq (aniq soniya, daqiqa emas)", async () => {
     const dev = await newDev();
     await ready();
     await AiEmployeeContact.create({ companyId: A.companyId, employeeId: A.workerId, telegram: { tgUserId: '880005', callConsent: 'granted', resolveStatus: 'not_found', checkedAt: new Date() } } as any);
-    for (let i = 0; i < TEST_CALL_MAX; i++) expect((await post('/test-call', dev, { userId: A.workerId })).status).toBe(409);
+    for (let i = 0; i < TEST_CALL_MAX + 2; i++) expect((await post('/test-call', dev, { userId: A.workerId })).status).toBe(409);
+    await AiEmployeeContact.updateOne({ employeeId: A.workerId }, { $set: { 'telegram.resolveStatus': 'resolved' } });
+    const ok = await post('/test-call', dev, { userId: A.workerId });
+    expect(ok.status).toBe(202);
     const r = await post('/test-call', dev, { userId: A.workerId });
     expect(r.status).toBe(429);
+    expect(r.body).toMatchObject({ error: 'rate_limited', code: 'cooldown' });
+    expect(r.body.retryAfterSec).toBeGreaterThan(0);
+    expect(r.body.retryAfterSec).toBeLessThanOrEqual(TEST_CALL_COOLDOWN_SEC);
+    expect(r.body.message).toMatch(/soniyadan keyin/);
+    const st = await get('', dev);
+    expect(st.body.limits).toMatchObject({ testCallsPer10Min: TEST_CALL_MAX, testCallCooldownSec: TEST_CALL_COOLDOWN_SEC, concurrentCalls: 1 });
+    expect(st.body.notes.oneCallAtATime.uz).toMatch(/bitta qo'ng'iroq/);
   });
 });

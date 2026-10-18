@@ -25,8 +25,18 @@ function configuredFor(settings: Pick<AiSettingsData, 'tools'> | null | undefine
 
 export function toolAllowedForRole(def: AiToolDef, settings: Pick<AiSettingsData, 'tools'> | null | undefined, role: AiRole): boolean {
   if (!def.maxRoles.includes(role)) return false;           // kod shifti — hech qachon oshmaydi
+  if (def.general || def.spokenConfirm) return true;        // umumiy/ovozli tasdiq tool'lari — doim yoqiq
   const row = configuredFor(settings, role);
   return row ? row.includes(def.name) : def.defaultRoles.includes(role);
+}
+
+/** Firmasiz dasturchi (platforma) uchun: faqat umumiy tool'lar (firma ma'lumoti yo'q). */
+export function generalToolNames(opts: { channel?: ToolChannel; purpose?: Purpose } = {}): string[] {
+  return listTools()
+    .filter((t) => t.general)
+    .filter((t) => !opts.channel || t.channels.includes(opts.channel))
+    .filter((t) => !opts.purpose || t.purposes.includes(opts.purpose))
+    .map((t) => t.name);
 }
 
 /** Rol uchun samarali tool nomlari (kanal/maqsad bo'yicha ham filtrlanishi mumkin). */

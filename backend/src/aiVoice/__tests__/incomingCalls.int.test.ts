@@ -205,3 +205,44 @@ describe("kiruvchi qo'ng'iroq qarori", () => {
     expect((await incomingAudits()).length - before).toBe(10);
   });
 });
+
+describe("owner 2026-10-17: cheklovlar va osilgan sessiyalar", () => {
+  const connectAndEnd = async (tgUserId: string) => {
+    const ack = await w.incoming({ tgUserId, workerBusy: false });
+    expect(ack).toMatchObject({ accept: true });
+    if (!ack.accept) throw new Error('accept kutilgan');
+    await w.callState(ack.sessionId, 'connected');
+    await vi.waitFor(async () => expect((await AiCallSession.findById(ack.sessionId).lean() as any).status).toBe('connected'));
+    await w.callState(ack.sessionId, 'ended', 'completed');
+    await vi.waitFor(async () => expect((await AiCallSession.findById(ack.sessionId).lean() as any).isActive).toBe(false));
+  };
+
+  it("ishchi: ulangan qo'ng'iroqdan keyin qisqa tanaffus; ulanmagan urinish sanalmaydi; o'rinbosarga limit yo'q", async () => {
+    await AiChannelConnection.updateOne(PLATFORM_TG, { $set: { openConversation: true } });
+    // Ulanmagan (network) urinish — tanaffus boshlanmaydi
+    const a1 = await w.incoming({ tgUserId: '880001', workerBusy: false });
+    if (!a1.accept) throw new Error('accept kutilgan');
+    await w.callState(a1.sessionId, 'ended', 'network');
+    await vi.waitFor(async () => expect((await AiCallSession.findById(a1.sessionId).lean() as any).isActive).toBe(false));
+    await connectAndEnd('880001');
+    const r = await w.incoming({ tgUserId: '880001', workerBusy: false });
+    expect(r).toMatchObject({ accept: false, reason: expect.stringMatching(/^limit_cooldown_\d+s$/) });
+    // O'rinbosar — ketma-ket (spam himoyasi ham bog'langan xodimga qo'llanmaydi)
+    for (let i = 0; i < 3; i++) await connectAndEnd('880005');
+  });
+
+  it("bazada osilib qolgan Telegram sessiyasi (worker'da qo'ng'iroq yo'q) — darhol yopiladi, keyingi qo'ng'iroq 'busy' emas", async () => {
+    await AiChannelConnection.updateOne(PLATFORM_TG, { $set: { openConversation: true } });
+    const old = new Date(Date.now() - 60_000);
+    const { insertedId } = await AiCallSession.collection.insertOne({
+      companyId: A.companyId, employeeId: A.prorabId, correlationId: '00000000-0000-4000-8000-00000000abcd', purpose: 'assistant',
+      channel: 'telegram_call', direction: 'inbound', status: 'connected', isActive: true, attemptNo: 1, answeredAt: old,
+      limits: { ringTimeoutSec: 40, maxDurationSec: 300 }, usage: {}, recording: { enabled: false }, createdAt: old, updatedAt: new Date(),
+    } as any);
+    const ack = await w.incoming({ tgUserId: '880005', workerBusy: false });
+    expect(ack).toMatchObject({ accept: true });
+    const stale: any = await AiCallSession.findById(insertedId).lean();
+    expect(stale).toMatchObject({ isActive: false, endReason: 'tg:stale' });
+    if (ack.accept) await w.callState(ack.sessionId, 'ended', 'completed');
+  });
+});

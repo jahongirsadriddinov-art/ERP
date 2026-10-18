@@ -123,6 +123,10 @@ export function setAiChatNotice(key: string | null): void { if (st.notice !== ke
 export const replyRequestedCall = (r: { toolCalls?: { name: string; status: string }[] } | null | undefined): boolean =>
   !!r?.toolCalls?.some((t) => t && t.name === "requestCallback" && t.status === "ok");
 
+/** Server javobi matnli tasdiq bilan amalni hal qildimi (toolCalls: 'confirm'). */
+export const replyResolvedConfirm = (r: { toolCalls?: { name: string; status: string }[] } | null | undefined): boolean =>
+  !!r?.toolCalls?.some((t) => t && t.name === "confirm");
+
 async function deliver(id: string, text: string, lang: string) {
   const me = owner;
   try {
@@ -135,7 +139,14 @@ async function deliver(id: string, text: string, lang: string) {
     for (const p of r.pendingActions || []) {
       extra.push({ id: localId(), kind: "confirm", day, at: now.toISOString(), confirm: { ...p, state: "idle" } });
     }
-    set({ items: [...st.items.map((i) => (i.id === id ? { ...i, sending: false, failed: undefined } : i)), ...extra], thinking: false });
+    // Foydalanuvchi "ha"/"yo'q" deb yozdi va server kutilayotgan amalni hal qildi — ochiq kartalar yopiladi
+    const resolved = replyResolvedConfirm(r);
+    const items = st.items.map((i) => {
+      if (i.id === id) return { ...i, sending: false, failed: undefined };
+      if (resolved && i.kind === "confirm" && i.confirm?.state === "idle") return { ...i, confirm: { ...i.confirm, state: "done" as const, result: r.reply } };
+      return i;
+    });
+    set({ items: [...items, ...extra], thinking: false });
   } catch (e) {
     if (me !== owner) return;
     const code: AiChatErrorCode = e instanceof AiChatError ? e.code : "error";

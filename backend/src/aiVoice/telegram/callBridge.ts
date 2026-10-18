@@ -116,6 +116,32 @@ export function unregisterBridge(sessionId: string): void {
 
 export function activeBridgeCount(): number { return bridges.size; }
 
+/** Yangi sessiya ko'prigi ro'yxatga olinguncha (start → registerBridge) tegilmaydigan muddat. */
+const STALE_MIN_AGE_MS = 15_000;
+
+/**
+ * Worker "bo'shman" degan paytda chaqiriladi (worker shu instansiyada): bazada faol, lekin bu yerda
+ * ko'prigi yo'q (yoki ulangan deb belgilangan, ammo worker'da qo'ng'iroq yo'q) Telegram sessiyalari —
+ * tugagan qo'ng'iroq qoldig'i; darhol yopiladi, keyingi qo'ng'iroq 'busy' bo'lmasin (owner 2026-10-17).
+ */
+export async function reapStaleTelegramSessions(now: Date = new Date()): Promise<number> {
+  const docs: any[] = await AiCallSession.find({ channel: 'telegram_call', isActive: true, createdAt: { $lt: new Date(now.getTime() - STALE_MIN_AGE_MS) } })
+    .select('_id answeredAt').limit(20).lean();
+  let n = 0;
+  for (const d of docs) {
+    const sid = String(d._id);
+    const b = bridges.get(sid);
+    if (b && !b.answered) continue;                   // terilmoqda / jiringlamoqda — tirik
+    // Yaqinda ulangan — voqealar poygasi (health eski holat bilan kelgan bo'lishi mumkin)
+    if (b && d.answeredAt && now.getTime() - new Date(d.answeredAt).getTime() < STALE_MIN_AGE_MS) continue;
+    if (b) { b.ended = true; dropBridge(sid); b.handle.end('error').catch(() => undefined); }
+    const m = mapEndReason('network', !!d.answeredAt);
+    if (await finishSession(sid, m.status, 'tg:stale', { errorCode: 'stale', now })) n++;
+  }
+  if (n) console.warn(`[aiVoice/telegram] ${n} ta osilib qolgan Telegram sessiyasi yopildi`);
+  return n;
+}
+
 // ───────────── Natijalarni xaritalash ─────────────
 
 /** Worker tugash sababi → AiCallSession holati (P3 mapSessionStatus shu holatdan kanal natijasini oladi). */
@@ -173,11 +199,13 @@ export async function handleCallState(ev: Extract<WorkerEvent, { type: 'call.sta
       return;
     case 'ended': {
       b.ended = true;
+      // Ulanmaslik bosqichi (worker diagnostikasi) — faqat qisqa kod, endReason'da ko'rinadi
+      const stage = typeof ev.stage === 'string' && /^[a-z_]{1,24}$/.test(ev.stage) ? `@${ev.stage}` : '';
       const m = mapEndReason(ev.reason, b.answered);
       try {
         await applyEndSideEffects(b, ev.reason);
         // Avval aniq holat bilan yakunlanadi; menejerning keyingi finishSession'i no-op bo'ladi
-        await finishSession(sid, m.status, `tg:${ev.reason || 'ended'}`, { errorCode: ev.reason, now });
+        await finishSession(sid, m.status, `tg:${ev.reason || 'ended'}${stage}`, { errorCode: ev.reason, now });
       } finally {
         dropBridge(sid);
         try { await b.handle.end(m.aiv); } catch { /* allaqachon yopilgan */ }

@@ -16,6 +16,8 @@ import { listEmployees } from './listEmployees';
 import { getTodayOverview } from './getTodayOverview';
 import { ensureCallbackJob, requestCallback } from './requestCallback';
 import { getSharedQueue } from '../../queue/jobQueue';
+import { getWeather } from '../general/getWeather';
+import { GENERAL_CALL_TOOLS } from '../general/callControl';
 
 // P2: ERP tool'lari registry.registerTool() orqali ro'yxatga olinadi. bootstrap.startAiVoice() va
 // P8 adminRoutes GET /tools chaqiradi — IDEMPOTENT (ikkinchi chaqiruv no-op; testlar oldindan
@@ -38,6 +40,9 @@ export const ERP_TOOLS: AiToolDef[] = [
   listExpenses,
   ...DECISION_TOOLS,
   requestCallback,
+  // 2026-10-17 (owner: umumiy savollar, "telefonni o'chir", ovozli tasdiq)
+  getWeather,
+  ...GENERAL_CALL_TOOLS,
 ];
 
 let registered = false;

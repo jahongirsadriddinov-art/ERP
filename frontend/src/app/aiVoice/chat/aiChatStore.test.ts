@@ -7,14 +7,20 @@ vi.mock("./api", async (orig) => {
   return {
     ...real,
     loadAiChatHistory: vi.fn(async () => ({ aiActive: true, items: [] })),
-    sendAiChatMessage: vi.fn(async (text: string) => (text.includes("qo'ng'iroq")
-      ? { reply: "Hozir ilova ichida qo'ng'iroq qilaman.", pendingActions: [], toolCalls: [{ name: "requestCallback", status: "ok" }] }
-      : { reply: "Salom", pendingActions: [], toolCalls: [] })),
+    sendAiChatMessage: vi.fn(async (text: string) => {
+      if (text.includes("qo'ng'iroq")) return { reply: "Hozir ilova ichida qo'ng'iroq qilaman.", pendingActions: [], toolCalls: [{ name: "requestCallback", status: "ok" }] };
+      if (text.includes("rahbarga")) {
+        return { reply: "Tasdiqlaysizmi?", pendingActions: [{ pendingActionId: "a".repeat(24), summary: "Rahbarga xabar", expiresAt: new Date(Date.now() + 60_000).toISOString(), tool: "notifyManager" }], toolCalls: [{ name: "notifyManager", status: "needs_confirmation" }] };
+      }
+      if (text === "ha") return { reply: "✅ Xabar yuborildi.", pendingActions: [], toolCalls: [{ name: "confirm", status: "ok" }] };
+      return { reply: "Salom", pendingActions: [], toolCalls: [] };
+    }),
+    confirmAiChatAction: vi.fn(async () => ({ status: "ok", message: "Yuborildi." })),
   };
 });
 
 import {
-  __resetAiChat, bindAiChatUser, clearAiCallExpected, getAiChatState, onAiCallRequested, replyRequestedCall, sendAiChat, setAiChatNotice,
+  __resetAiChat, answerAiChatConfirm, bindAiChatUser, replyResolvedConfirm, clearAiCallExpected, getAiChatState, onAiCallRequested, replyRequestedCall, sendAiChat, setAiChatNotice,
 } from "./aiChatStore";
 
 beforeEach(() => { __resetAiChat(); bindAiChatUser("u1"); });
@@ -48,5 +54,28 @@ describe("aiChatStore — AI qo'ng'irog'i so'rovi", () => {
     expect(getAiChatState().notice).toBe("aiVoiceCall.textFallbackLimit");
     setAiChatNotice(null);
     expect(getAiChatState().notice).toBeNull();
+  });
+});
+
+describe("aiChatStore — tasdiq SHU chatda (owner 2026-10-17 #4)", () => {
+  it("pending amal — chatda tasdiq kartasi; tugma bosilsa natija kartada", async () => {
+    await sendAiChat("rahbarga xabar yubor", "uz");
+    const card = getAiChatState().items.find((i) => i.kind === "confirm");
+    expect(card?.confirm?.state).toBe("idle");
+    expect(card?.confirm?.summary).toBe("Rahbarga xabar");
+    await answerAiChatConfirm(card!.id, true, "uz");
+    const done = getAiChatState().items.find((i) => i.id === card!.id);
+    expect(done?.confirm?.state).toBe("done");
+    expect(done?.confirm?.result).toBe("Yuborildi.");
+  });
+
+  it("'ha' deb yozilsa — server tasdiqladi, ochiq karta yopiladi", async () => {
+    await sendAiChat("rahbarga xabar yubor", "uz");
+    await sendAiChat("ha", "uz");
+    const card = getAiChatState().items.find((i) => i.kind === "confirm");
+    expect(card?.confirm?.state).toBe("done");
+    expect(card?.confirm?.result).toMatch(/yuborildi/);
+    expect(replyResolvedConfirm({ toolCalls: [{ name: "confirm", status: "ok" }] })).toBe(true);
+    expect(replyResolvedConfirm({ toolCalls: [{ name: "getMyTasks", status: "ok" }] })).toBe(false);
   });
 });

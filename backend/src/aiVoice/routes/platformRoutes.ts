@@ -12,7 +12,7 @@ import { companyConsentMap, evaluateCallConsent, getCallConsent } from '../conse
 import { isAiActive } from '../settings';
 import { botLinkedTgId } from '../telegram/tgLink';
 import { isObjectIdString, newCorrelationId } from '../lib/ids';
-import { hitRate } from '../lib/mongoRateLimit';
+import { hitRate, peekRate } from '../lib/mongoRateLimit';
 import { ensurePlatformConnection } from '../lib/workerLease';
 import {
   accountDto, maskPhone, setConnectedAccount, setFloodWait, setLoggedOut, setLoginState,
@@ -28,7 +28,7 @@ import { getActiveWorker } from '../telegram/workerNamespace';
 //  • telefon/kod/parol HECH QACHON saqlanmaydi, log/audit qilinmaydi, xato matniga qo'shilmaydi —
 //    to'g'ridan-to'g'ri worker RPC'ga uzatiladi; kutilayotgan login holati faqat worker xotirasida,
 //    backend faqat server bergan loginAttemptId'ni (sir emas) va uni boshlagan dasturchini biladi;
-//  • login qadamlari 5 ta / 10 daqiqa; sinov qo'ng'irog'i 5 ta / soat, faqat samarali rozilikka ega
+//  • login qadamlari 5 ta / 10 daqiqa; sinov qo'ng'irog'i 20 ta / 10 daqiqa (30 s oraliq), faqat samarali rozilikka ega
 //    (consent.getCallConsent) xodimga va firma bilan audit yozuvi;
 //  • StringSession bu yerda yo'q — u faqat worker diskida (TG_SESSION_KEY bilan shifrlangan).
 
@@ -53,8 +53,17 @@ const PLATFORM_TG = { scope: 'platform' as const, companyId: null, type: 'telegr
 
 export const LOGIN_MAX = 5;
 const LOGIN_WINDOW_MS = 10 * 60_000;
-export const TEST_CALL_MAX = 5;
-const TEST_CALL_WINDOW_MS = 3600_000;
+// Owner 2026-10-17: sinov qo'ng'irog'i — 20 ta / 10 daqiqa, oraliq 30 s; faqat TERILGAN qo'ng'iroqlar sanaladi
+export const TEST_CALL_MAX = 20;
+const TEST_CALL_WINDOW_MS = 10 * 60_000;
+export const TEST_CALL_COOLDOWN_SEC = 30;
+const lastTestAt = new Map<string, number>();
+
+/** Bitta Telegram akkaunti bir vaqtda faqat BITTA qo'ng'iroqni ko'taradi (Telegram cheklovi). */
+export const ONE_CALL_NOTE = {
+  uz: "Bitta AI Telegram akkaunti bir vaqtda faqat bitta qo'ng'iroqni ko'taradi. Qo'ng'iroq davom etayotganda yangisi \"band\" bo'ladi; tugagach darhol keyingisi mumkin.",
+  ru: 'Один Telegram-аккаунт ИИ одновременно ведёт только один звонок. Во время разговора новый звонок получит «занято»; после завершения — можно сразу звонить снова.',
+};
 const ATTEMPT_TTL_MS = 15 * 60_000;
 
 const PHONE_RE = /^\+?[1-9]\d{8,14}$/;
@@ -123,7 +132,8 @@ export async function platformStatusView() {
     lastError: conn?.status !== 'connected' ? (conn?.lastError || undefined) : undefined,
     udpCheckedAt: conn?.udpProbe?.at ? new Date(conn.udpProbe.at).toISOString() : undefined,
     connectedAt: conn?.connectedAt ? new Date(conn.connectedAt).toISOString() : undefined,
-    limits: { loginPer10Min: LOGIN_MAX, testCallsPerHour: TEST_CALL_MAX },
+    limits: { loginPer10Min: LOGIN_MAX, testCallsPer10Min: TEST_CALL_MAX, testCallCooldownSec: TEST_CALL_COOLDOWN_SEC, concurrentCalls: 1 },
+    notes: { oneCallAtATime: ONE_CALL_NOTE },
     openConversation: conn?.openConversation === true,
     openConversationAt: conn?.openConversationAt ? new Date(conn.openConversationAt).toISOString() : undefined,
   };
@@ -315,7 +325,22 @@ router.post('/telegram-account/test-call', wrap(async (req, res) => {
   // B7 (owner 2026-10-16): faqat samarali rozilikka ega xodimga (firma roziligi yoki eski shaxsiy, opt-out'siz)
   const consent = await getCallConsent(companyId, String(userId));
   if (!consent.allowed) return res.status(409).json({ error: consent.reason || 'no_consent' });
-  if (await limited(res, `aiv:tgtest:${dev.userId}`, TEST_CALL_MAX, TEST_CALL_WINDOW_MS)) return;
+  {
+    const nowMs = Date.now();
+    const lang = target.language === 'ru' ? 'ru' : 'uz';
+    const last = lastTestAt.get(dev.userId) || 0;
+    const wait = Math.ceil((last + TEST_CALL_COOLDOWN_SEC * 1000 - nowMs) / 1000);
+    if (wait > 0) {
+      return res.status(429).json({ error: 'rate_limited', code: 'cooldown', retryAfterSec: wait,
+        message: lang === 'ru' ? `Следующий тестовый звонок — через ${wait} сек.` : `Keyingi sinov qo'ng'irog'i ${wait} soniyadan keyin.` });
+    }
+    const used = await peekRate(`aiv:tgtest:${dev.userId}`, TEST_CALL_WINDOW_MS, new Date(nowMs));
+    if (used >= TEST_CALL_MAX) {
+      const retryAfterSec = Math.max(1, Math.ceil((TEST_CALL_WINDOW_MS - (nowMs % TEST_CALL_WINDOW_MS)) / 1000));
+      return res.status(429).json({ error: 'rate_limited', code: 'window', retryAfterSec,
+        message: lang === 'ru' ? `${TEST_CALL_MAX} тестовых звонков за 10 минут — подождите ${retryAfterSec} сек.` : `10 daqiqada ${TEST_CALL_MAX} ta sinov qo'ng'irog'i — ${retryAfterSec} soniya kuting.` });
+    }
+  }
 
   const ctx = {
     companyId, employeeId: String(userId), correlationId: newCorrelationId(), purpose: 'test' as const,
@@ -331,6 +356,11 @@ router.post('/telegram-account/test-call', wrap(async (req, res) => {
   }
   // 'no_answer' + sessionId — qo'ng'iroq terildi, natija keyin call.state orqali keladi
   const placed = !!result.sessionId && result.outcome === 'no_answer';
+  // Terilmagan urinish (kanal yo'q, band, xato) limitga yozilmaydi
+  if (placed) {
+    lastTestAt.set(dev.userId, Date.now());
+    await hitRate(`aiv:tgtest:${dev.userId}`, TEST_CALL_MAX, TEST_CALL_WINDOW_MS).catch(() => undefined);
+  }
   audit(req, dev, 'create',
     `AI Telegram: sinov qo'ng'irog'i — ${fullName(target) || 'xodim'} (${placed ? 'terildi' : (result.errorCode || result.outcome)})`,
     { entityId: String(userId), companyId });
@@ -338,6 +368,6 @@ router.post('/telegram-account/test-call', wrap(async (req, res) => {
 }));
 
 /** Faqat testlar uchun. */
-export function __resetPlatformRoutesForTests(): void { attempts.clear(); }
+export function __resetPlatformRoutesForTests(): void { attempts.clear(); lastTestAt.clear(); }
 
 export default router;

@@ -78,6 +78,8 @@ export interface AiSettingsData {
   limits: {
     userSessionsPerHour: number; companyMinutesPerDay: number; monthlyBudgetUsd: number; hardStop: boolean;
     botMsgsPer10Min: number; toolCallsPerSession: number;
+    /** Ishchi rollar: ulangan qo'ng'iroqdan keyingi tanaffus (s, 0..600; standart 90). Rahbarlarga limit yo'q. */
+    workerCallCooldownSec?: number;
   };
   privacy: { recordAudio: false; transcriptRetentionDays: number; auditRetentionDays: number };
   version: number;
@@ -321,7 +323,7 @@ export const WORKER_EVENTS = {
 } as const;
 
 /** "Ochiq muloqot": AI akkauntiga kiruvchi shaxsiy qo'ng'iroq — qarorni backend beradi. */
-export interface IncomingCallRequest { tgUserId: string; workerBusy?: boolean; at?: number }
+export interface IncomingCallRequest { tgUserId: string; workerBusy?: boolean; at?: number; /** worker: faol qo'ng'iroqlar / kutilayotgan kiruvchilar soni (diagnostika) */ activeCount?: number; pending?: number }
 export type IncomingCallAck =
   | { accept: true; sessionId: string; maxDurationSec: number }
   | { accept: false; reason: string };
@@ -386,7 +388,7 @@ export type WorkerCallState = 'dialing' | 'ringing' | 'connected' | 'ended';
 export type WorkerCallEndReason =
   | 'completed' | 'busy' | 'declined' | 'timeout' | 'privacy' | 'blocked' | 'outdated' | 'flood_wait' | 'network' | 'hangup' | 'error';
 export type WorkerEvent =
-  | { type: 'call.state'; sessionId: string; state: WorkerCallState; reason?: WorkerCallEndReason; at: number }
+  | { type: 'call.state'; sessionId: string; state: WorkerCallState; reason?: WorkerCallEndReason; at: number; /** ulanmaslik bosqichi: accept | key_exchange | p2p_connect | connect_timeout | record */ stage?: string }
   | { type: 'health'; status: WorkerStatus; at: number }
   | { type: 'binding.matched'; employeeId: string; tgUserId: string; username?: string; at: number };
 

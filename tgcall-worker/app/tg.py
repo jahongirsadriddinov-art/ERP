@@ -33,6 +33,58 @@ def _type_name(o: Any) -> str:
     return type(o).__name__
 
 
+def summarize_servers(servers: Any) -> str:
+    """RTC serverlar xulosasi (IP/parol YO'Q): reflector / turn / stun / tcp soni."""
+    refl = turn = stun = tcp = 0
+    for s in list(servers or []):
+        if getattr(s, "peer_tag", None):
+            refl += 1
+        elif getattr(s, "turn", False):
+            turn += 1
+        if getattr(s, "stun", False):
+            stun += 1
+        if getattr(s, "tcp", False):
+            tcp += 1
+    return f"reflector={refl} turn={turn} stun={stun} tcp={tcp}"
+
+
+class BindingProbe:
+    """ntgcalls binding o'rami: qo'ng'iroq ulanish BOSQICHINI yozib boradi (owner 2026-10-17: "ulanmadi: network"
+    qaysi qadamda bo'lganini aniq bilish uchun). Qolgan hamma narsa o'zgarishsiz uzatiladi."""
+
+    def __init__(self, inner: Any, stages: dict):
+        object.__setattr__(self, "_inner", inner)
+        object.__setattr__(self, "_stages", stages)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._inner, name)
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        setattr(self._inner, name, value)
+
+    def _mark(self, chat_id: Any, stage: str) -> None:
+        try:
+            cid = int(chat_id)
+        except (TypeError, ValueError):
+            return
+        if cid > 0:
+            self._stages[cid] = stage
+
+    async def init_exchange(self, chat_id, *a, **kw):
+        self._mark(chat_id, "key_exchange")
+        return await self._inner.init_exchange(chat_id, *a, **kw)
+
+    async def exchange_keys(self, chat_id, *a, **kw):
+        self._mark(chat_id, "key_exchange")
+        return await self._inner.exchange_keys(chat_id, *a, **kw)
+
+    async def connect_p2p(self, chat_id, rtc_servers, versions, p2p_allowed, *a, **kw):
+        self._mark(chat_id, "p2p_connect")
+        log.info("p2p ulanish boshlandi: p2p=%s, %s, versiyalar=%s", bool(p2p_allowed), summarize_servers(rtc_servers),
+                 ",".join(str(v) for v in list(versions or [])[:4]))
+        return await self._inner.connect_p2p(chat_id, rtc_servers, versions, p2p_allowed, *a, **kw)
+
+
 def _peer_id(rt: Any, pc: Any) -> int:
     """Suhbatdosh id'si: chiquvchida participant_id, kiruvchida (admin_id — qo'ng'iroq qiluvchi) admin_id."""
     admin = int(getattr(pc, "admin_id", 0) or 0)
@@ -99,6 +151,8 @@ class TelegramRuntime:
         self.username: Optional[str] = None
         self.display_name: Optional[str] = None
         self.call_users: dict[int, tuple[int, int]] = {}
+        # user_id → ulanish bosqichi (accept/request → key_exchange → p2p_connect), diagnostika uchun
+        self.call_stage: dict[int, str] = {}
         self.incoming_discarded = 0
         self._incoming_seen: set[int] = set()
         self.last_error: Optional[str] = None
@@ -201,6 +255,11 @@ class TelegramRuntime:
                 await client.disconnect()
             finally:
                 raise
+        # Bosqich diagnostikasi (BindingProbe); o'rash muvaffaqiyatsiz bo'lsa — asl binding qoladi
+        try:
+            pytg._binding = BindingProbe(pytg._binding, self.call_stage)
+        except Exception as e:
+            log.debug("binding probe: %s", type(e).__name__)
         self.client, self.pytg = client, pytg
         self.me_id = int(me.id)
         self.username = getattr(me, "username", None)
@@ -232,6 +291,7 @@ class TelegramRuntime:
         self.pytg = self.client = None
         self.me_id = None
         self.call_users.clear()
+        self.call_stage.clear()
         if pytg is not None:
             try:
                 pytg.executor.shutdown(wait=False)
@@ -274,7 +334,14 @@ class TelegramRuntime:
         except (ValueError, TypeError):
             return False
 
+    def stage_of(self, user_id: int) -> Optional[str]:
+        return self.call_stage.get(int(user_id))
+
+    def clear_stage(self, user_id: int) -> None:
+        self.call_stage.pop(int(user_id), None)
+
     async def play(self, user_id: int, timeout_sec: int) -> None:
+        self.call_stage[int(user_id)] = "signaling"
         from pytgcalls.types import CallConfig, ExternalMedia, MediaStream
         await self.pytg.play(
             user_id,

@@ -17,6 +17,7 @@ import { redactText, redactToolOutput } from '../lib/redact';
 import { isUntrusted, wrapUntrusted } from '../lib/untrusted';
 import { getSettings } from '../settings';
 import { budgetExceeded, recordUsage } from '../usage';
+import { loadDeveloperActor, PLATFORM_SCOPE, platformSettings } from '../platform';
 import { getTool } from './registry';
 import { checkToolAccess } from './rbac';
 import type { AiToolDef, RefModel } from './types';
@@ -64,6 +65,25 @@ const MSG = {
   timeout: { uz: "Amal juda uzoq davom etdi — natija noma'lum, qayta urinmang.", ru: 'Действие заняло слишком долго — результат неизвестен.' },
 };
 const t = (k: keyof typeof MSG, lang: 'uz' | 'ru') => MSG[k][lang] || MSG[k].uz;
+
+/**
+ * "Tasdiq kutilmoqda" — modelga KANALGA MOS ko'rsatma (owner 2026-10-17 #4: tasdiq SHU joyda so'ralsin,
+ * "botga borib tugmani bosing" emas). Ovozda — og'zaki "Tasdiqlaysizmi?" + answerPendingAction.
+ */
+export function confirmMessage(ch: ToolChannel, lang: 'uz' | 'ru', summary?: string): string {
+  const what = summary ? (lang === 'ru' ? ` Действие: «${summary.slice(0, 200)}».` : ` Amal: «${summary.slice(0, 200)}».`) : '';
+  if (ch === 'inapp_call' || ch === 'telegram_call') {
+    return lang === 'ru'
+      ? `Ещё НЕ выполнено.${what} Кратко назовите действие и спросите «Подтверждаете?». Ответ «да» → answerPendingAction(accept=true), «нет» → accept=false.`
+      : `Hali BAJARILMADI.${what} Amalni bir jumlada aytib "Tasdiqlaysizmi?" deb so'rang. "Ha" desa → answerPendingAction(accept=true), "yo'q" desa → accept=false.`;
+  }
+  return lang === 'ru'
+    ? `Ещё НЕ выполнено.${what} Кнопки подтверждения появились в ЭТОМ чате — попросите нажать «Подтвердить» или написать «да».`
+    : `Hali BAJARILMADI.${what} Tasdiq tugmalari SHU chatda chiqdi — "Tasdiqlash" ni bosishini yoki "ha" deb yozishini so'rang.`;
+}
+
+/** Sozlama: firma — DB'dan; firmasiz (dasturchi) — platforma chegaralari. */
+const settingsFor = (companyId: string) => (isObjectIdString(companyId) ? getSettings(companyId) : Promise.resolve(platformSettings()));
 
 const deny = (lang: 'uz' | 'ru', key: keyof typeof MSG = 'denied'): ToolResult => ({ status: 'denied', message: t(key, lang), retryable: false });
 
@@ -146,6 +166,11 @@ async function prepare(ctx: ToolCtx, name: string, rawArgs: unknown): Promise<Pr
   const lang = ctx.lang === 'ru' ? 'ru' : 'uz';
   const def = getTool(name);
   const kind = def?.kind || 'read';
+  // ERP tool'lari firma ichida ishlaydi: firmasiz (dasturchi/platforma) kontekstda faqat UMUMIY tool'lar
+  if (!isObjectIdString(ctx?.companyId)) {
+    if (!def?.general) return { ok: false, result: deny(lang), code: 'no_company', kind, actorRole: ctx?.role || 'unknown' };
+    return prepareDeveloper(ctx, def, rawArgs, lang);
+  }
   if (!def) return { ok: false, result: deny(lang), code: 'unknown_tool', kind, actorRole: ctx.role };
 
   const ac = await checkActor(ctx.userId, ctx.companyId);
@@ -171,12 +196,29 @@ async function prepare(ctx: ToolCtx, name: string, rawArgs: unknown): Promise<Pr
   return { ok: true, p: { def, actor, args: v.value, ctx: fresh } };
 }
 
+/** Firmasiz (dasturchi) — faqat general tool, faqat faol dasturchi; kanal/maqsad/argumentlar tekshiriladi. */
+async function prepareDeveloper(ctx: ToolCtx, def: AiToolDef, rawArgs: unknown, lang: 'uz' | 'ru'): Promise<PrepareResult> {
+  const kind = def.kind;
+  const dev = await loadDeveloperActor(ctx.userId);
+  if (!dev) return { ok: false, result: deny(lang), code: 'no_company', kind, actorRole: ctx?.role || 'unknown' };
+  if (!aiConfig.enabled) return { ok: false, result: deny(lang, 'disabled'), code: 'disabled', kind, actorRole: dev.role };
+  if (!def.channels.includes(ctx.channel)) return { ok: false, result: deny(lang), code: 'channel', kind, actorRole: dev.role };
+  if (!def.purposes.includes(ctx.purpose)) return { ok: false, result: deny(lang), code: 'purpose', kind, actorRole: dev.role };
+  const v = validateArgs<Record<string, unknown>>(def.parameters, rawArgs);
+  if (!v.ok) return { ok: false, result: { status: 'error', message: v.error, retryable: false }, code: 'bad_args', kind, actorRole: dev.role };
+  const fresh: ToolCtx = { ...ctx, companyId: PLATFORM_SCOPE, role: dev.role as ToolCtx['role'], isOwner: false, tz: 'Asia/Tashkent' };
+  return { ok: true, p: { def, actor: dev, args: v.value, ctx: fresh } };
+}
+
 async function runHandler(p: Prepared): Promise<ToolResult> {
   const lang = p.ctx.lang === 'ru' ? 'ru' : 'uz';
+  const platform = !isObjectIdString(p.ctx.companyId);
   try {
     const r = await withTimeout(
-      runWithTenant({ userId: p.ctx.userId, role: p.actor.role, companyId: p.ctx.companyId, isOwner: p.actor.isOwner, isDeveloper: false },
-        () => p.def.handler(p.ctx, p.args)),
+      platform
+        ? p.def.handler(p.ctx, p.args)                   // general tool — firma konteksti yo'q
+        : runWithTenant({ userId: p.ctx.userId, role: p.actor.role, companyId: p.ctx.companyId, isOwner: p.actor.isOwner, isDeveloper: false },
+          () => p.def.handler(p.ctx, p.args)),
       HANDLER_TIMEOUT_MS,
     );
     return cleanResult(r, p.ctx.userId, p.def);
@@ -200,7 +242,8 @@ async function finishAudit(p: Prepared, result: ToolResult, startedAt: number, e
       status: result.status as any, resultSummary: result.message, idempotencyKey: extra.idempotencyKey, latencyMs,
     });
   }
-  if (p.def.kind === 'write' && result.status === 'ok') {
+  // Umumiy/ovozli tasdiq tool'lari firma audit jurnaliga yozilmaydi (tasdiqlangan amalning o'zi yoziladi)
+  if (p.def.kind === 'write' && result.status === 'ok' && !p.def.general && !p.def.spokenConfirm && isObjectIdString(p.ctx.companyId)) {
     await mirrorWriteToLegacyAudit({
       companyId: p.ctx.companyId, actorUserId: p.ctx.userId, actorName: p.actor.name, actorRole: p.actor.role,
       tool: p.def.name, channel: p.ctx.channel, entity: p.def.auditEntity, entityId: extra.targetUserId,
@@ -220,7 +263,8 @@ export async function executeTool(ctx: ToolCtx, name: string, rawArgs: unknown, 
   const prep = await prepare(ctx, safeName, rawArgs);
   if (!prep.ok) {
     const auditId = await writeToolAudit({
-      companyId: ctx.companyId, actorUserId: ctx.userId, actorRole: prep.actorRole, channel: ctx.channel, purpose: ctx.purpose,
+      // Firmasiz rad etish ham iz qoldiradi (platforma kaliti ostida)
+      companyId: isObjectIdString(ctx.companyId) ? ctx.companyId : PLATFORM_SCOPE, actorUserId: ctx.userId, actorRole: prep.actorRole, channel: ctx.channel, purpose: ctx.purpose,
       sessionId: ctx.sessionId, correlationId: ctx.correlationId, tool: safeName, kind: prep.kind, args: rawArgs,
       status: prep.result.status as any, resultSummary: prep.result.message, errorCode: prep.code, latencyMs: Date.now() - startedAt,
     }).catch(() => undefined);
@@ -236,14 +280,14 @@ export async function executeTool(ctx: ToolCtx, name: string, rawArgs: unknown, 
       .select('status resultSummary actorUserId tool').lean();
     if (prev && prev.actorUserId === p.ctx.userId && prev.tool === p.def.name) {
       if (prev.status === 'needs_confirmation') {
-        return { result: { status: 'needs_confirmation', message: t('confirm', lang), retryable: false, pendingActionId: String(prev._id) }, auditId: String(prev._id) };
+        return { result: { status: 'needs_confirmation', message: confirmMessage(p.ctx.channel, lang), retryable: false, pendingActionId: String(prev._id) }, auditId: String(prev._id) };
       }
       return { result: { status: prev.status === 'ok' || prev.status === 'confirmed' ? 'ok' : 'error', message: prev.resultSummary || '', retryable: false }, auditId: String(prev._id) };
     }
   }
 
   const sessKey = p.ctx.sessionId || p.ctx.correlationId;
-  const settings = await getSettings(p.ctx.companyId);
+  const settings = await settingsFor(p.ctx.companyId);
   const rate = await hitRate(`aiv:tools:${sessKey}`, settings.limits.toolCallsPerSession, SESSION_WINDOW_MS);
   if (!rate.allowed) {
     const result = deny(lang, 'rate');
@@ -291,7 +335,7 @@ export async function executeTool(ctx: ToolCtx, name: string, rawArgs: unknown, 
       },
     });
     return {
-      result: { status: 'needs_confirmation', message: t('confirm', lang), retryable: false, pendingActionId: auditId },
+      result: { status: 'needs_confirmation', message: confirmMessage(p.ctx.channel, lang, summary), retryable: false, pendingActionId: auditId },
       pending: { pendingActionId: auditId, token, summary, expiresAt: expiresAt.toISOString(), confirmVia: via, tool: p.def.name },
       auditId,
     };
@@ -312,6 +356,8 @@ export interface ConfirmInput {
   channel: ToolChannel;
   accept: boolean;
   lang?: 'uz' | 'ru';
+  /** Ovozli tasdiq: faqat SHU sessiyada yaratilgan amal. */
+  sessionId?: string;
 }
 
 /**
@@ -336,6 +382,10 @@ export async function confirmPendingAction(input: ConfirmInput): Promise<Execute
   };
   if (input.pendingActionId) filter._id = input.pendingActionId;
   if (input.token) filter['pending.token'] = sha256Hex(input.token);
+  if (input.sessionId !== undefined) {
+    if (typeof input.sessionId !== 'string' || !input.sessionId) return gone;
+    filter.sessionId = input.sessionId;
+  }
 
   const won: any = await AiActionAudit.findOneAndUpdate(
     filter,

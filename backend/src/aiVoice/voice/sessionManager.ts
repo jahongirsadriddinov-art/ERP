@@ -274,6 +274,11 @@ class ManagedVoiceSession implements VoiceSessionHandle {
     return { text: this.disclosureText(), lang: this.lang, voiceName: this.settings.voiceName, model: this.models().tts };
   }
 
+  /** Kim qo'ng'iroq qildi (prompt konteksti; DB 'direction' bilan bir xil qoida). */
+  private get direction(): 'inbound' | 'outbound' {
+    return (this.opts.userInitiated ?? (this.opts.purpose === 'assistant' && this.opts.channel === 'inapp_call')) ? 'inbound' : 'outbound';
+  }
+
   private async openProvider(): Promise<boolean> {
     try {
       const st = await getCompanyAiState(this.companyId);
@@ -289,7 +294,7 @@ class ManagedVoiceSession implements VoiceSessionHandle {
       const systemInstruction = buildVoiceSystemPrompt({
         lang: this.lang, purpose: this.purpose, channel: this.toolChannel, companyName: this.companyName,
         userName: this.actorName, role: this.actorRole, isOwner: this.actorIsOwner, today: zp.date, weekday: zp.isoWeekday,
-        requestText: this.opts.requestText,
+        requestText: this.opts.requestText, direction: this.direction,
       });
       const base: Omit<VoiceOpenOpts, 'model'> = {
         systemInstruction, tools: decls, lang: this.lang, voiceName: this.settings.voiceName, ptt: this.opts.ptt,

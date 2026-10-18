@@ -47,12 +47,14 @@ export function companyAiLabel(blocks: readonly CompanyBlock[]): CompanyAiLabel 
 }
 
 // ───────────── Shaxsiy sozlamalar: nega o'zgartirib bo'lmaydi ─────────────
-/** busy: saqlanmoqda · plan: tarifda yo'q · aiOff: firmada AI ishlamayapti · optOutAll: "Hammasidan" voz kechilgan. */
-export type PrefsLock = "busy" | "plan" | "aiOff" | "optOutAll";
+/** busy: saqlanmoqda · plan: tarifda yo'q · aiOff: firmada AI ishlamayapti · optOutAll: "Hammasidan" voz kechilgan ·
+ *  managed: xodim (server status.canEdit=false) — sozlamalarni rahbariyat boshqaradi, faqat ko'rish. */
+export type PrefsLock = "busy" | "plan" | "aiOff" | "optOutAll" | "managed";
 export type PrefsArea = "consent" | "channels" | "quiet" | "optOut" | "optOutAll" | "reminders";
 
 export function prefsLock(prefs: Pick<AiMePrefs, "optOut" | "status">, area: PrefsArea, busy = false): PrefsLock | null {
   if (prefs.status?.aiActive === false) return prefs.status.planHasFeature === false ? "plan" : "aiOff";
+  if (prefs.status?.canEdit === false && area !== "reminders") return "managed";
   if (busy && area !== "reminders") return "busy";
   // "Hammasidan" yoqilgan — kanallar, tinch soat va alohida voz kechishlarning ma'nosi yo'q
   if (prefs.optOut.all && (area === "channels" || area === "quiet" || area === "optOut")) return "optOutAll";

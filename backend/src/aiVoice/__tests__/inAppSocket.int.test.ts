@@ -59,6 +59,7 @@ beforeAll(async () => {
   await AiConversation.init();
   __setActorCacheTtlForTests(0);
   A = await seedCompany('P5S');
+  await setLimits({ 'limits.workerCallCooldownSec': 0 });   // tanaffus alohida testda sinaladi
   httpServer = http.createServer();
   io = new Server(httpServer);
   // services/socket.ts'dagi JWT tekshiruvi o'rniga — test socket.data'ni handshake'dan oladi
@@ -84,7 +85,7 @@ afterEach(async () => {
   setVoiceSessionManager(null);
   __resetInAppSocketsForTests();
   await AiCallSession.updateMany({ isActive: true }, { $set: { isActive: false, status: 'cancelled' } });
-  await setLimits({ 'limits.userSessionsPerHour': 6, 'tools.allowOffShiftAssistant': false });
+  await setLimits({ 'limits.userSessionsPerHour': 6, 'limits.workerCallCooldownSec': 0, 'tools.allowOffShiftAssistant': false });
 });
 
 afterAll(async () => {
@@ -136,23 +137,31 @@ describe('aiv:start (foydalanuvchi AI\'ga qo\'ng\'iroq qiladi)', () => {
     expect(await ask(c, 'aiv:start', { purpose: 'assistant' })).toMatchObject({ ok: true });
   });
 
-  it('userSessionsPerHour — limitdan keyin rad', async () => {
-    await setLimits({ 'limits.userSessionsPerHour': 1 });
-    await AiRateCounter.deleteMany({});             // oldingi testlardagi ulangan qo'ng'iroqlar hisobga kirmasin
-    const c = await client(A.orinbosarId, 'orinbosar');
-    const readyP = nextEvent(c, 'aiv:ready');
-    const a1 = await ask(c, 'aiv:start', { purpose: 'assistant' });
-    expect(a1.ok).toBe(true);
-    await readyP;                                   // faqat ULANGAN qo'ng'iroq soatlik limitga yoziladi
-    await ask(c, 'aiv:hangup', { sessionId: a1.sessionId });
-    await vi.waitFor(async () => expect(((await AiCallSession.findById(a1.sessionId).lean()) as any).isActive).toBe(false));
-    const r = await ask(c, 'aiv:start', { purpose: 'assistant' });
+  it("owner 2026-10-17: ishchiga qisqa tanaffus (aniq soniya bilan), rahbarga limit yo'q", async () => {
+    await setLimits({ 'limits.userSessionsPerHour': 1, 'limits.workerCallCooldownSec': 90, 'tools.allowOffShiftAssistant': true });
+    const call = async (c: ClientSocket) => {
+      const readyP = nextEvent(c, 'aiv:ready');
+      const a = await ask(c, 'aiv:start', { purpose: 'assistant' });
+      expect(a.ok).toBe(true);
+      await readyP;                                 // faqat ULANGAN qo'ng'iroq sanaladi
+      await ask(c, 'aiv:hangup', { sessionId: a.sessionId });
+      await vi.waitFor(async () => expect(((await AiCallSession.findById(a.sessionId).lean()) as any).isActive).toBe(false));
+    };
+    await AiCallSession.deleteMany({ employeeId: { $in: [A.workerId, A.orinbosarId] } });   // oldingi testlar tarixi
+    const w = await client(A.workerId, 'ishchi');
+    await call(w);
+    const r = await ask(w, 'aiv:start', { purpose: 'assistant' });
     expect(r).toMatchObject({ ok: false, code: 'limit' });
-    expect(String(r.message)).toMatch(/matn bilan davom etamiz/);
+    expect(String(r.message)).toMatch(/soniyadan keyin mumkin — hozircha matn bilan davom etamiz/);
+    expect(String(r.message)).not.toMatch(/daqiqa/);
+    // O'rinbosar: soatlik limit 1 bo'lsa ham — ketma-ket qo'ng'iroqlar
+    const o = await client(A.orinbosarId, 'orinbosar');
+    await call(o);
+    await call(o);
   });
 
-  it('userSessionsPerHour — ulanmay qolgan urinish (ready kelmadi) limitni yemaydi', async () => {
-    await setLimits({ 'limits.userSessionsPerHour': 1, 'tools.allowOffShiftAssistant': true });
+  it('ulanmay qolgan urinish (ready kelmadi) limitni yemaydi', async () => {
+    await setLimits({ 'limits.userSessionsPerHour': 1, 'limits.workerCallCooldownSec': 90, 'tools.allowOffShiftAssistant': true });
     await AiRateCounter.deleteMany({});
     live = new FakeVoiceProvider({ failOpen: new Error('429 RESOURCE_EXHAUSTED quota') });   // AI ulanmaydi
     const c = await client(A.prorabId, 'prorab');

@@ -1,6 +1,7 @@
 import type { AiLang, Purpose, ToolChannel } from '../contracts';
 import { buildSystemPrompt } from '../brain/systemPrompt';
 import { sanitizeForPrompt, wrapUntrusted } from '../lib/untrusted';
+import type { PersonaSettings } from '../persona';
 
 // Ovozli sessiya uchun system instruction va boshqaruv navbatlari. Asos — matn miyasining
 // qoidalari (brain/systemPrompt.ts: AI ekanini ochiq aytish, faqat tool natijasidan ma'lumot,
@@ -11,6 +12,8 @@ const VOICE_RULES = {
   uz: `OVOZLI SUHBAT QOIDALARI:
 - Bu jonli ovozli qo'ng'iroq. Juda qisqa gapiring: odatda 1–2 jumla, oddiy so'zlar, raqamlarni aniq ayting.
 - Har doim o'zbek tilida (LOTIN yozuvi) gapiring. Foydalanuvchi rus tilida gapirsa — rus tilida javob bering. Boshqa tilga (turk, ingliz) o'tmang.
+- ESHITISH (owner 2026-10-18): suhbatdosh O'ZBEKCHA gapiradi — ko'cha tili, sheva (Toshkent, Farg'ona, Samarqand, Buxoro, Xorazm, Surxondaryo), qisqartirilgan so'zlar ("qilvoring", "nima gap", "ketvotti", "obkeling", "kere", "zo'r") va rus so'zlari aralash ("короче", "щас", "давай", "объект", "прораб"). Uni turk, qozoq, qirg'iz, tojik, fors yoki arab tili deb QABUL QILMANG — har doim o'zbekcha deb tushuning va o'zbekcha javob bering. Ma'nosini kontekstdan toping; umuman tushunmasangiz — "Qaytaring-chi, yaxshi eshitmadim" deb qisqa so'rang, taxmin bilan amal bajarmang.
+- Tabiiy, jonli odamdek gapiring: bir xil balandlikda, xotirjam tempda, robotdek emas. Qisqa "xo'p", "tushundim" kabi so'zlar mumkin.
 - Kimligingiz haqidagi ogohlantirish (AI yordamchi ekaningiz) qo'ng'iroq boshida ALLAQACHON ijro etilgan — uni qayta to'liq takrorlamang, lekin so'rashsa AI ekaningizni tasdiqlang.
 - Tool chaqirganingizda natijani KUTING. Natija kelmaguncha "bajarildi", "yuborildi", "yozildi" demang; status="ok" bo'lmasa — bajarilmaganini ochiq ayting.
 - Tushunmasangiz — qisqa qayta so'rang. Shovqinli joy bo'lishi mumkin.
@@ -18,6 +21,7 @@ const VOICE_RULES = {
   ru: `ПРАВИЛА ГОЛОСОВОГО РАЗГОВОРА:
 - Это живой голосовой звонок. Говорите очень кратко: 1–2 предложения, простые слова.
 - По умолчанию говорите по-узбекски (латиница). Если собеседник говорит по-русски — отвечайте по-русски.
+- Собеседник говорит по-узбекски разговорно, с диалектами и русскими словами — НЕ принимайте это за турецкий, казахский, таджикский и т.п. Не поняли — коротко переспросите.
 - Предупреждение о том, что вы ИИ-помощник, уже прозвучало в начале звонка — не повторяйте его полностью, но подтвердите, если спросят.
 - Вызвав инструмент, ДОЖДИТЕСЬ результата. Не говорите «выполнено/отправлено», пока не получен status="ok".
 - Не называйте вслух телефоны, зарплаты и другие персональные данные.`,
@@ -61,6 +65,11 @@ export interface VoicePromptInput {
   requestText?: string;
   /** inbound — foydalanuvchi o'zi qo'ng'iroq qildi; outbound — AI qo'ng'iroq qildi. */
   direction?: 'inbound' | 'outbound';
+  time?: string;
+  persona?: PersonaSettings;
+  voiceName?: string;
+  /** Telegram video qo'ng'iroq: AI suhbatdosh kamerasini ko'radi (owner 2026-10-18). */
+  vision?: boolean;
 }
 
 /** Qo'ng'iroq konteksti (owner 2026-10-17 #5): kim kimga, qaysi kanal orqali qo'ng'iroq qildi. */
@@ -81,7 +90,8 @@ export function callContextLine(i: Pick<VoicePromptInput, 'lang' | 'channel' | '
 export function buildVoiceSystemPrompt(i: VoicePromptInput): string {
   const base = buildSystemPrompt({
     lang: i.lang, companyName: i.companyName, userName: i.userName, role: i.role, isOwner: i.isOwner,
-    channel: i.channel, today: i.today, weekday: i.weekday,
+    channel: i.channel, today: i.today, weekday: i.weekday, time: i.time,
+    persona: i.persona, voiceName: i.voiceName, vision: i.vision,
   });
   const lang = i.lang === 'ru' ? 'ru' : 'uz';
   const parts = [base, '', VOICE_RULES[lang], '', callContextLine({ ...i, lang }), PURPOSE_RULES[i.purpose][lang]];

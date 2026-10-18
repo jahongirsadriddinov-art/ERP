@@ -1,4 +1,6 @@
 import AiEmployeeContact from '../../models/AiEmployeeContact';
+import { resolveAvatarLook } from '../persona';
+import { getSettings } from '../settings';
 import User from '../../models/User';
 import { getCallConsent } from '../consent';
 import { aiConfig, INSTANCE_ID } from '../config';
@@ -67,7 +69,8 @@ async function employeePhone(c: ChannelCtx): Promise<string | undefined> {
 }
 
 async function placeCall(c: ChannelCtx, sessionId: string, peer: Peer, ring: number, max: number, now: Date) {
-  const base = { sessionId, tgUserId: peer.tgUserId, timeoutSec: ring, maxDurationSec: max, ...(peer.username ? { username: peer.username } : {}) };
+  const avatar = await getSettings(c.companyId).then((s) => resolveAvatarLook(s)).catch(() => undefined);
+  const base = { sessionId, tgUserId: peer.tgUserId, timeoutSec: ring, maxDurationSec: max, ...(peer.username ? { username: peer.username } : {}), ...(avatar ? { avatar } : {}) };
   // Avval telefonsiz (worker: kesh → dialoglar → username); worker peer'ni bilmasa — bir marta telefon bilan
   let phoneSent = false;
   let res = await callWorker('call.place', base);
@@ -118,6 +121,8 @@ export const telegramCallChannel: ChannelAdapter = {
         workerInstanceId: INSTANCE_ID,
         // Jiringlash vaqtini worker o'lchaydi (aniq natija bilan); menejer taymeri — faqat zaxira (+20 s)
         ringTimeoutSec: settings.ring + 20, maxDurationSec: settings.max,
+        // Eslatma/xabar matni qo'ng'iroqda aytilsin (ilova kanalidagi kabi; avval Telegram'da yo'q edi)
+        requestText: r?.kind === 'reminder' ? r.text : undefined,
       });
     } catch (e) {
       await releaseDailyCall(now);

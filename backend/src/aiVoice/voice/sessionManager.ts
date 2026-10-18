@@ -30,6 +30,8 @@ import {
 import { openFirstAvailable, openWithTimeout, type ProviderCandidate, type ProviderKind } from './provider';
 import { ATTENDANCE_TOOL, attendanceToolDeclaration, runAttendanceTool } from './sessionTools';
 import { TranscriptLog } from './transcriptLog';
+import { clearVision, pushFrame } from './vision';
+import { VISION_GUIDE } from '../brain/systemPrompt';
 import {
   classifyVoiceError, FAIL_TEXT, failCodeFor, LIVE_FALLBACK_MODELS, liveModelDown, modelChain, noteLiveFailure, noteLiveOk,
   worthNextModel, type VoiceErrorKind,
@@ -88,6 +90,8 @@ export interface VoiceManagerDeps {
   setupTimeoutMs?: number;
   touchMs?: number;
   disclosureTimeoutMs?: number;
+  /** Gemini Live'da ham TTS klipini ijro etish (standart false — ovoz ikki xil bo'lmasin; testlar uchun). */
+  clipOnLive?: boolean;
 }
 
 /** canCascade tekshiruvi uchun bo'sh kontekst (provayder fabrikasi faqat turini ko'radi). */
@@ -202,7 +206,7 @@ class ManagedVoiceSession implements VoiceSessionHandle {
 
   constructor(
     private mgr: VoiceSessionManager,
-    private deps: Required<Pick<VoiceManagerDeps, 'setupTimeoutMs' | 'touchMs' | 'disclosureTimeoutMs'>> & { providerFor: NonNullable<VoiceManagerDeps['providerFor']>; disclosure: DisclosureService },
+    private deps: Required<Pick<VoiceManagerDeps, 'setupTimeoutMs' | 'touchMs' | 'disclosureTimeoutMs' | 'clipOnLive'>> & { providerFor: NonNullable<VoiceManagerDeps['providerFor']>; disclosure: DisclosureService },
     private opts: StartVoiceSessionOpts,
     readonly settings: AiSettingsData,
     actor: ActorState,
@@ -283,8 +287,8 @@ class ManagedVoiceSession implements VoiceSessionHandle {
     try {
       const st = await getCompanyAiState(this.companyId);
       this.companyName = st.name;
-      // Disclosure klipini oldindan isitish (ringing paytida) — ulanishda kutish bo'lmasin
-      void this.deps.disclosure.getClip(this.clipReq(), 15_000).catch(() => null);
+      // Disclosure klipini oldindan isitish — faqat kaskad asosiy bo'lsa (Live'da klip ishlatilmaydi)
+      if (this.settings.provider.primary !== 'gemini_live' || this.deps.clipOnLive) void this.deps.disclosure.getClip(this.clipReq(), 15_000).catch(() => null);
 
       const names = effectiveToolNames(this.settings, this.actorRole, this.actorIsOwner, { channel: this.toolChannel, purpose: this.purpose });
       const decls: ToolDeclaration[] = toolDeclarations(names, this.lang);
@@ -294,7 +298,8 @@ class ManagedVoiceSession implements VoiceSessionHandle {
       const systemInstruction = buildVoiceSystemPrompt({
         lang: this.lang, purpose: this.purpose, channel: this.toolChannel, companyName: this.companyName,
         userName: this.actorName, role: this.actorRole, isOwner: this.actorIsOwner, today: zp.date, weekday: zp.isoWeekday,
-        requestText: this.opts.requestText, direction: this.direction,
+        requestText: this.opts.requestText, direction: this.direction, time: zp.hhmm,
+        persona: this.settings.persona, voiceName: this.settings.voiceName,
       });
       const base: Omit<VoiceOpenOpts, 'model'> = {
         systemInstruction, tools: decls, lang: this.lang, voiceName: this.settings.voiceName, ptt: this.opts.ptt,
@@ -445,7 +450,11 @@ class ManagedVoiceSession implements VoiceSessionHandle {
     // Ogohlantirish matni DARHOL ko'rinadi; klip qisqa kutiladi (isitilgan bo'lsa — keshdan bir zumda)
     this.safeSend(AIV_SERVER_EVENTS.transcript, { sessionId: this.sessionId, role: 'assistant', text, final: true });
     this.log.add('assistant', text);
-    const clip = await this.deps.disclosure.getClip(this.clipReq(), this.deps.disclosureTimeoutMs).catch(() => null);
+    // Owner 2026-10-18: "ovoz ikki xil — biri yo'g'on, biri ingichka, baland-past". TTS klipining ovozi Gemini
+    // Live ovozidan farq qiladi (boshqa model) — Live'da klip ISHLATILMAYDI: ogohlantirishni modelning o'zi
+    // aytadi, butun suhbat bitta ovozda. Klip faqat kaskadda (u yerda ham TTS — ovoz bir xil).
+    const clip = this.kind === 'gemini_live' && !this.deps.clipOnLive ? null
+      : await this.deps.disclosure.getClip(this.clipReq(), this.deps.disclosureTimeoutMs).catch(() => null);
     if (this.state !== 'connected' || !this.vs) return;
     if (clip && clip.length >= 2) {
       // Klip — model ovozidan OLDIN, deterministik (A8)
@@ -480,6 +489,21 @@ class ManagedVoiceSession implements VoiceSessionHandle {
     if (!pcm16k?.length || pcm16k.length % 2) return;
     this.inBytes += pcm16k.length;
     this.vs.pushAudio(pcm16k);
+  }
+
+  // Kamera (owner 2026-10-18): kadrlar xotiraga (tool'lar uchun) va ~1 kadr/s Live modelga
+  private visionOn = false;
+  private lastVideoAt = 0;
+  pushVideo(jpeg: Buffer): void {
+    if (this.state !== 'connected' || !this.vs || !this.disclosureDone) return;
+    pushFrame(this.sessionId, jpeg);
+    if (!this.visionOn) {
+      this.visionOn = true;
+      // Javob so'ramasdan (silent): model endi ko'rishini biladi
+      this.vs.sendText(`[TIZIM] Suhbatdosh kamerasini yoqdi. ${VISION_GUIDE}`, { silent: true });
+    }
+    const now = Date.now();
+    if (this.vs.sendVideo && now - this.lastVideoAt >= 900) { this.lastVideoAt = now; this.vs.sendVideo(jpeg); }
   }
 
   activityStart(): void { if (this.opts.ptt && this.state === 'connected') this.vs?.activityStart(); }
@@ -647,6 +671,7 @@ class ManagedVoiceSession implements VoiceSessionHandle {
 
   private async finish(reason: AivEndReason, writeDb: boolean): Promise<void> {
     this.state = 'ending';
+    clearVision(this.sessionId);
     for (const t of this.timers) clearTimeout(t);
     this.timers = [];
     if (this.ringTimer) clearTimeout(this.ringTimer);
@@ -717,6 +742,7 @@ export class VoiceSessionManager implements VoiceSessionManagerApi {
       touchMs: deps.touchMs ?? LIMITS.sessionTouchMs,
       // Klip isitilgan bo'lsa bir zumda; bo'lmasa uzoq kutmaymiz — model ogohlantirishni o'zi aytadi
       disclosureTimeoutMs: deps.disclosureTimeoutMs ?? 1_500,
+      clipOnLive: deps.clipOnLive ?? false,
     };
     this.offEnded = onSessionsEnded((list) => this.onExternalEnd(list));
   }
@@ -806,6 +832,7 @@ export class VoiceSessionManager implements VoiceSessionManagerApi {
       if (this.draining || !aiConfig.enabled || !companyId || !userId) return;
       if (!(await isAiActive(companyId))) return;
       const settings = await getSettings(companyId);
+      if (settings.provider.primary === 'gemini_live' && !this.d.clipOnLive) return;      // Live'da klip yo'q (bitta ovoz)
       const [lang, st] = await Promise.all([resolveVoiceLang(companyId, userId, settings), getCompanyAiState(companyId)]);
       await this.d.disclosure.getClip({
         text: disclosureTextFor(lang, st.name, settings.disclosureText), lang, voiceName: settings.voiceName,

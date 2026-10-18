@@ -42,7 +42,7 @@ beforeAll(async () => {
   live = new FakeVoiceProvider();
   mgr = new VoiceSessionManager({
     providerFor: (k) => (k === 'gemini_live' ? live : null),
-    disclosure: { getClip: async () => CLIP }, setupTimeoutMs: 1_000, touchMs: 500,
+    clipOnLive: true, disclosure: { getClip: async () => CLIP }, setupTimeoutMs: 1_000, touchMs: 500,
   });
   setVoiceSessionManager(mgr);
   w = await FakeWorker.ready(srv.url);

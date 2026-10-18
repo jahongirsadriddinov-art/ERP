@@ -66,7 +66,7 @@ function mk(o: { live?: FakeVoiceProvider | null; cascade?: FakeVoiceProvider | 
   const cascade = o.cascade === undefined ? null : o.cascade;
   const mgr = new VoiceSessionManager({
     providerFor: (kind: ProviderKind) => (kind === 'gemini_live' ? live : cascade),
-    disclosure: { getClip: async () => (o.clip === undefined ? CLIP : o.clip) },
+    clipOnLive: true, disclosure: { getClip: async () => (o.clip === undefined ? CLIP : o.clip) },
     setupTimeoutMs: 1_000, touchMs: 200, disclosureTimeoutMs: 500,
   });
   return { mgr, live: live!, cascade };

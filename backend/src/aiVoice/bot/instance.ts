@@ -13,6 +13,9 @@ export interface AiBotApi {
   /** Ovozli xabarni yuklab olish uchun (/ai rejimi). */
   getFileLink?(fileId: string): Promise<string>;
   sendChatAction?(chatId: number | string, action: string): Promise<any>;
+  /** Kamera rasm/videosi (owner 2026-10-18): Buffer + fileOptions {filename, contentType}. */
+  sendPhoto?(chatId: number | string, photo: any, opts?: any, fileOpts?: any): Promise<any>;
+  sendVideo?(chatId: number | string, video: any, opts?: any, fileOpts?: any): Promise<any>;
 }
 
 let botInstance: AiBotApi | null = null;

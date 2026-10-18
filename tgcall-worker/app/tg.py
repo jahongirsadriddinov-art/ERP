@@ -234,6 +234,15 @@ class TelegramRuntime:
             if self.calls:
                 await self.calls.on_frames(int(u.chat_id), [f.frame for f in u.frames])
 
+        @pytg.on_update(filters.stream_frame(Direction.INCOMING, Device.CAMERA))
+        async def on_camera(_, u: StreamFrames):
+            # Suhbatdosh kamerasi (owner 2026-10-18) — oxirgi kadr yetarli
+            if self.calls and u.frames:
+                f = u.frames[-1]
+                info = getattr(f, "info", None)
+                await self.calls.on_video(int(u.chat_id), f.frame, int(getattr(info, "width", 0) or 0),
+                                          int(getattr(info, "height", 0) or 0), getattr(info, "rotation", 0))
+
         @pytg.on_update(filters.chat_update(ChatUpdate.Status.INCOMING_CALL))
         async def on_incoming(_, u: ChatUpdate):
             uid = int(u.chat_id)
@@ -351,7 +360,12 @@ class TelegramRuntime:
 
     async def record(self, user_id: int) -> None:
         from pytgcalls.types import RecordStream
-        await self.pytg.record(user_id, RecordStream(True, self._ap))
+        # Kamera ham qabul qilinadi (suhbatdosh videoni yoqsa AI ko'radi). Kutubxona rad etsa — faqat ovoz.
+        try:
+            await self.pytg.record(user_id, RecordStream(True, self._ap, camera=True))
+        except Exception as e:
+            log.info("kamera qabuli yoqilmadi (%s) — faqat ovoz", type(e).__name__)
+            await self.pytg.record(user_id, RecordStream(True, self._ap))
 
     async def send_frame(self, user_id: int, pcm48: bytes) -> None:
         from pytgcalls.types import Device

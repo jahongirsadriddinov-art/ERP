@@ -99,7 +99,7 @@ const managers: VoiceSessionManager[] = [];
 function mk(live: FakeVoiceProvider | null, cascade: FakeVoiceProvider | null, clip: Buffer | null = tone(100, 24_000)) {
   const mgr = new VoiceSessionManager({
     providerFor: (kind: ProviderKind) => (kind === 'gemini_live' ? live : cascade),
-    disclosure: { getClip: async () => clip },
+    clipOnLive: true, disclosure: { getClip: async () => clip },
     setupTimeoutMs: 1_000, touchMs: 200, disclosureTimeoutMs: 300,
   });
   managers.push(mgr);
@@ -258,7 +258,7 @@ describe('VoiceSessionManager ishonchliligi', () => {
     const asked: string[] = [];
     const mgr = new VoiceSessionManager({
       providerFor: () => null,
-      disclosure: { getClip: async (r) => { asked.push(r.text); return null; } },
+      clipOnLive: true, disclosure: { getClip: async (r) => { asked.push(r.text); return null; } },
     });
     managers.push(mgr);
     await mgr.prewarm(A.companyId, A.workerId);
@@ -383,7 +383,7 @@ describe('Kvota-chidamlilik: Live semafori va kaskad transkripsiyasi', () => {
           onInputUnavailable: c.onInputUnavailable, onTtsUnavailable: c.onTtsUnavailable,
         });
       },
-      disclosure: { getClip: async () => null },
+      clipOnLive: true, disclosure: { getClip: async () => null },
       setupTimeoutMs: 1_000, touchMs: 200, disclosureTimeoutMs: 100,
     });
     managers.push(mgr);

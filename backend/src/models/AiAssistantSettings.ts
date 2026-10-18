@@ -11,6 +11,8 @@ export interface IAiAssistantSettings extends Document {
   voiceName: string;
   timezone: 'Asia/Tashkent';
   disclosureText?: string;
+  persona?: any;
+  avatar?: any;
   attendance: any;
   calls: any;
   fallbackOrder: string[];
@@ -33,6 +35,8 @@ const AiAssistantSettingsSchema = new Schema<IAiAssistantSettings>({
   voiceName: { type: String, default: 'Kore', maxlength: 40 },
   timezone: { type: String, enum: ['Asia/Tashkent'], default: 'Asia/Tashkent' },
   disclosureText: { type: String, maxlength: 300 },
+  persona: { type: Schema.Types.Mixed },
+  avatar: { type: Schema.Types.Mixed },
   attendance: { type: Schema.Types.Mixed, default: () => ({}) },
   calls: { type: Schema.Types.Mixed, default: () => ({}) },
   fallbackOrder: { type: [String], default: undefined },

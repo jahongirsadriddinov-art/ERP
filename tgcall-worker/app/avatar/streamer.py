@@ -11,7 +11,6 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Awaitable, Callable, Optional
 
-from .face import FaceRenderer
 from .state import AvatarState
 
 log = logging.getLogger("tgw.avatar")
@@ -23,10 +22,13 @@ MAX_SEND_ERRORS = 5
 class AvatarStreamer:
     def __init__(self, send_video: SendVideoFn, size: int = 480, fps: int = 15,
                  clock: Callable[[], float] = time.monotonic, seed: Optional[int] = None,
-                 sleep: Callable[[float], Awaitable[None]] = asyncio.sleep):
+                 sleep: Callable[[float], Awaitable[None]] = asyncio.sleep, renderer=None, look: str = "female"):
         self.size = size
         self.fps = max(5, min(30, int(fps)))
-        self.renderer = FaceRenderer(size)
+        if renderer is None:
+            from .premium import get_renderer
+            renderer = get_renderer(look, size)
+        self.renderer = renderer
         self.state = AvatarState(clock, seed=seed, paginate=self.renderer.subs.pages)
         self._send = send_video
         self._clock = clock

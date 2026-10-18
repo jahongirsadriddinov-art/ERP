@@ -134,8 +134,9 @@ def make_sender(engine: Any, user_id: int):
 class AvatarSession:
     """Bitta qo'ng'iroq uchun: video kerakligini aniqlaydi, oqimni yoqadi, ovoz/subtitrni uzatadi."""
 
-    def __init__(self, engine: Any, user_id: int, want_video: bool = False):
+    def __init__(self, engine: Any, user_id: int, want_video: bool = False, look: str = ""):
         self.engine = engine
+        self.look = look
         self.user_id = int(user_id)
         self.want_video = bool(want_video)
         self.size = _int_env("AVATAR_SIZE", 480, 160, 720) // 2 * 2
@@ -155,19 +156,22 @@ class AvatarSession:
             return False
         if m == "always" or self.want_video:
             return True
-        deadline = time.monotonic() + DETECT_WAIT_S
+        # Owner 2026-10-18: oddiy qo'ng'iroqda ham suhbatdosh kamerasini YOQSA — avatar ham yoqiladi.
+        # Shuning uchun butun qo'ng'iroq davomida kutamiz (stop() bekor qiladi); boshida tez, keyin sekinroq.
+        t0 = time.monotonic()
         while True:
             if _engine_is_video(self.engine, self.user_id):
                 return True
-            if time.monotonic() >= deadline:
-                return False
-            await asyncio.sleep(0.25)
+            await asyncio.sleep(0.25 if time.monotonic() - t0 < DETECT_WAIT_S else 0.5)
 
     async def _main(self) -> None:
         try:
             if not await self._decide():
                 return
-            self.streamer = AvatarStreamer(make_sender(self.engine, self.user_id), size=self.size, fps=self.fps)
+            from .premium import get_renderer
+            # Renderer qurilishi (~0.3 s) audio siklini to'xtatmasin — alohida oqimda
+            renderer = await asyncio.get_running_loop().run_in_executor(None, get_renderer, self.look, self.size)
+            self.streamer = AvatarStreamer(make_sender(self.engine, self.user_id), size=self.size, fps=self.fps, renderer=renderer)
             if self._pending_caption:
                 self.streamer.set_caption(*self._pending_caption)
             self._grace_until = time.monotonic() + 30.0
@@ -215,9 +219,9 @@ class AvatarSession:
         tracker.forget(self.user_id)
 
 
-def start_for_call(engine: Any, user_id: int, want_video: bool = False) -> Optional[AvatarSession]:
+def start_for_call(engine: Any, user_id: int, want_video: bool = False, look: str = "") -> Optional[AvatarSession]:
     if mode() == "off":
         return None
-    s = AvatarSession(engine, user_id, want_video)
+    s = AvatarSession(engine, user_id, want_video, look)
     s.start()
     return s

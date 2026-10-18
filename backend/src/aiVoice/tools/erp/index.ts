@@ -18,6 +18,9 @@ import { ensureCallbackJob, requestCallback } from './requestCallback';
 import { getSharedQueue } from '../../queue/jobQueue';
 import { getWeather } from '../general/getWeather';
 import { GENERAL_CALL_TOOLS } from '../general/callControl';
+import { KNOWLEDGE_TOOLS } from '../general/knowledge';
+import { CONTACT_TOOLS, ensureRelayJob } from './contactEmployee';
+import { CAMERA_TOOLS } from '../general/camera';
 
 // P2: ERP tool'lari registry.registerTool() orqali ro'yxatga olinadi. bootstrap.startAiVoice() va
 // P8 adminRoutes GET /tools chaqiradi — IDEMPOTENT (ikkinchi chaqiruv no-op; testlar oldindan
@@ -43,6 +46,12 @@ export const ERP_TOOLS: AiToolDef[] = [
   // 2026-10-17 (owner: umumiy savollar, "telefonni o'chir", ovozli tasdiq)
   getWeather,
   ...GENERAL_CALL_TOOLS,
+  // 2026-10-18 (owner: "dollar kursi", "internetdan izla" — hamma narsani bilsin)
+  ...KNOWLEDGE_TOOLS,
+  // 2026-10-18 (owner: "Testga ayt menga aloqaga chiqsin" — aniq xodimga xabar/qo'ng'iroq)
+  ...CONTACT_TOOLS,
+  // 2026-10-18 (owner: kamera — "rasmga ol", "videoga ol", "rahbarga yubor")
+  ...CAMERA_TOOLS,
 ];
 
 let registered = false;
@@ -51,7 +60,7 @@ export function registerErpTools(): void {
   // bootstrap navbatni shu chaqiruvdan keyin (sinxron) o'rnatadi — 'ai.callback' ishlovchisi keyingi tikda
   // ulanadi, shunda qayta ishga tushgandan keyin ham navbatdagi qo'ng'iroqlar bajariladi. Har chaqiruvda
   // (idempotent): tool'lar oldinroq (masalan, admin GET /tools) ro'yxatga olingan bo'lsa ham navbat ulanadi.
-  setImmediate(() => ensureCallbackJob(getSharedQueue()));
+  setImmediate(() => { ensureCallbackJob(getSharedQueue()); ensureRelayJob(getSharedQueue()); });
   if (registered) return;
   registered = true;
   for (const def of ERP_TOOLS) if (!hasTool(def.name)) registerTool(def);

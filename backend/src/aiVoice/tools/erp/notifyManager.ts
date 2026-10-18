@@ -1,6 +1,7 @@
 import { type AiToolDef } from '../types';
 import User from '../../../models/User';
 import { notifyManagersInApp } from '../../lib/managers';
+import { sendToUser } from '../../channels/botChannel';
 import { truncateText } from '../../lib/untrusted';
 import { cf, ALL_CHANNELS, ALL_ROLES, ASSIST, fullName, L, notFound, ok } from './common';
 
@@ -47,8 +48,11 @@ export const notifyManager: AiToolDef<{ message: string; urgency?: 'normal' | 'h
       entity: 'ai_message',
     });
     if (!managers.length) {
-      return notFound(ctx, L(ctx, 'Rahbar topilmadi — xabar yuborilmadi.', 'Руководитель не найден — сообщение не отправлено.'));
+      return notFound(ctx, L(ctx, "Sizning ustingizda rahbar yo'q — aniq odamga yuborish uchun uning ismini ayting (messageEmployee).", 'Над вами нет руководителя — назовите конкретного человека.'));
     }
+    // Owner 2026-10-18: faqat ilova bildirishnomasi ko'rinmay qolardi — Telegram'ga ham
+    const tgText = `${urgent ? '⚠️ ' : '✉️ '}${truncateText(fullName(me), 60)}:\n${truncateText(args.message, 300)}`;
+    await Promise.all(managers.map((m) => sendToUser(m.userId, tgText, { companyId: ctx.companyId }).catch(() => undefined)));
     return ok(L(ctx, `Xabar ${managers.length} ta rahbarga yuborildi.`, `Сообщение отправлено руководителям: ${managers.length}.`), {
       delivered: managers.map((m) => ({ name: m.name, role: m.role, via: m.via })),
     });

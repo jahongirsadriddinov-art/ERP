@@ -9,6 +9,7 @@ import { AI_ROLES, CHANNEL_NAMES, type AiSchedulePatch, type AiSettingsData, typ
 import { isObjectIdString } from './lib/ids';
 import { addDays, isHHmm, isIsoDate, localDate, parseHHmm, shiftHHmm } from './lib/zonedTime';
 import { validateToolsMatrix } from './tools/rbac';
+import { DEFAULT_AVATAR, DEFAULT_PERSONA, mergeAvatar, mergePersona, validateAvatar, validatePersona } from './persona';
 
 // AI sozlamalari: standart qiymatlar bilan birlashtirish, 10 s kesh, isAiActive, PUT validatori
 // (kod chegaralari: timezone qulflangan, recordAudio=false, tools matritsasi shiftdan oshmaydi).
@@ -36,6 +37,8 @@ export function defaultSettings(companyId: string): AiSettingsData {
     language: 'uz',
     voiceName: 'Kore',
     timezone: AI_TIMEZONE,
+    persona: { ...DEFAULT_PERSONA },
+    avatar: { ...DEFAULT_AVATAR },
     attendance: { enabled: false, suppressLegacyMorningReminder: true, orinbosarCanEditSchedule: true, shifts: [defaultShift()] },
     calls: {
       maxAttemptsPerChannel: 2, backoffMin: [3, 10], ringTimeoutSec: 45, maxDurationSec: 120,
@@ -115,6 +118,8 @@ export function mergeDefaults(companyId: string, doc: any): AiSettingsData {
     voiceName: pick(doc.voiceName, str, d.voiceName),
     timezone: AI_TIMEZONE,                                           // C7: qulflangan
     ...(str(doc.disclosureText) && doc.disclosureText ? { disclosureText: doc.disclosureText } : {}),
+    persona: mergePersona(doc.persona),
+    avatar: mergeAvatar(doc.avatar),
     attendance: {
       enabled: pick(att.enabled, bool, d.attendance.enabled),
       suppressLegacyMorningReminder: pick(att.suppressLegacyMorningReminder, bool, d.attendance.suppressLegacyMorningReminder),
@@ -232,7 +237,7 @@ export async function isAiActive(companyId: string): Promise<boolean> {
 }
 
 // ───────────── Validator (PUT /settings, P8) ─────────────
-const TOP_KEYS = new Set(['enabled', 'language', 'voiceName', 'timezone', 'disclosureText', 'attendance', 'calls',
+const TOP_KEYS = new Set(['enabled', 'language', 'voiceName', 'timezone', 'disclosureText', 'persona', 'avatar', 'attendance', 'calls',
   'fallbackOrder', 'reminders', 'tools', 'provider', 'brain', 'limits', 'privacy', 'version', 'companyId', 'updatedBy']);
 const MODEL_RE = /^[A-Za-z0-9._-]{1,64}$/;
 
@@ -308,6 +313,8 @@ export function validateSettingsUpdate(
   const merged: any = {
     ...current,
     ...pickDefined(patch, ['enabled', 'language', 'voiceName', 'disclosureText', 'fallbackOrder']),
+    persona: isObj(patch.persona) ? { ...(current.persona || DEFAULT_PERSONA), ...patch.persona } : current.persona,
+    avatar: isObj(patch.avatar) ? { ...(current.avatar || DEFAULT_AVATAR), ...patch.avatar } : current.avatar,
     attendance: { ...current.attendance, ...(sec('attendance') || {}) },
     calls: { ...current.calls, ...(sec('calls') || {}) },
     reminders: { ...current.reminders, ...(sec('reminders') || {}) },
@@ -325,6 +332,8 @@ export function validateSettingsUpdate(
   if (!['uz', 'ru', 'auto'].includes(merged.language)) errors.push('language: uz|ru|auto');
   if (!/^[A-Za-z0-9_-]{1,40}$/.test(String(merged.voiceName))) errors.push("voiceName: noto'g'ri");
   if (merged.disclosureText !== undefined && (typeof merged.disclosureText !== 'string' || merged.disclosureText.length > 300)) errors.push('disclosureText: ≤300 belgi');
+  validatePersona(patch.persona === undefined ? undefined : merged.persona, errors);
+  validateAvatar(patch.avatar === undefined ? undefined : merged.avatar, errors);
 
   const a = merged.attendance;
   if (!bool(a.enabled) || !bool(a.suppressLegacyMorningReminder) || !bool(a.orinbosarCanEditSchedule)) errors.push('attendance: boolean maydonlar');

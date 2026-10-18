@@ -202,9 +202,13 @@ export class GeminiLiveSession extends VoiceEmitter implements VoiceSession {
   }
   activityStart(): void { if (this.live && !this.closing) this.live.sendRealtimeInput({ activityStart: {} }); }
   activityEnd(): void { if (this.live && !this.closing) this.live.sendRealtimeInput({ activityEnd: {} }); }
-  sendText(text: string): void {
+  sendText(text: string, opts?: { silent?: boolean }): void {
     if (!this.live || this.closing) return;
-    this.live.sendClientContent({ turns: [{ role: 'user', parts: [{ text }] }], turnComplete: true });
+    this.live.sendClientContent({ turns: [{ role: 'user', parts: [{ text }] }], turnComplete: !opts?.silent });
+  }
+  sendVideo(jpeg: Buffer): void {
+    if (!this.live || this.closing || !jpeg?.length) return;
+    this.live.sendRealtimeInput({ video: { data: jpeg.toString('base64'), mimeType: 'image/jpeg' } });
   }
   toolResponse(responses: { id: string; name: string; result: ToolResult }[]): void {
     if (!this.live || this.closing || !responses.length) return;

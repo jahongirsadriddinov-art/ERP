@@ -1,4 +1,5 @@
 import AiChannelConnection from '../../models/AiChannelConnection';
+import { resolveAvatarLook } from '../persona';
 import AiEmployeeContact from '../../models/AiEmployeeContact';
 import User from '../../models/User';
 import { WORKER_ROLES, isOnShift } from '../../middleware/workGate';
@@ -132,7 +133,7 @@ export async function decideIncomingCall(req: IncomingCallRequest, now: Date = n
     const h = started.handle;
     transport.bind(h.sessionId);
     registerBridge({ sessionId: h.sessionId, handle: h, employeeId, companyId });
-    return { ...base, accept: true, sessionId: h.sessionId, maxDurationSec };
+    return { ...base, accept: true, sessionId: h.sessionId, maxDurationSec, avatar: resolveAvatarLook(settings) };
   };
   let d: IncomingDecision;
   try {
@@ -149,7 +150,7 @@ export async function decideIncomingCall(req: IncomingCallRequest, now: Date = n
 /** Worker uchun javob (faqat ack maydonlari — firma/xodim id'lari workerga ketmaydi). */
 async function handleIncoming(req: IncomingCallRequest): Promise<IncomingCallAck> {
   const d = await decideIncomingCall(req);
-  return d.accept ? { accept: true, sessionId: d.sessionId, maxDurationSec: d.maxDurationSec } : { accept: false, reason: d.reason };
+  return d.accept ? { accept: true, sessionId: d.sessionId, maxDurationSec: d.maxDurationSec, ...(d.avatar ? { avatar: d.avatar } : {}) } : { accept: false, reason: d.reason };
 }
 
 let initialized = false;

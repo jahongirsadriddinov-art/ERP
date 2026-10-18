@@ -50,6 +50,10 @@ export interface AiSettingsData {
   voiceName: string;
   timezone: 'Asia/Tashkent';
   disclosureText?: string;
+  /** AI xarakteri (owner 2026-10-18): uslub, ism, qo'shimcha ko'rsatma. */
+  persona?: { style: 'friendly' | 'formal' | 'cheerful' | 'calm' | 'strict'; name?: string; custom?: string };
+  /** Telegram video qo'ng'iroqdagi avatar: 'auto' — ovoz jinsiga qarab. */
+  avatar?: { look: 'auto' | 'female' | 'male' | 'orb' };
   attendance: {
     enabled: boolean;
     suppressLegacyMorningReminder: boolean;
@@ -320,12 +324,13 @@ export const WORKER_EVENTS = {
   event: 'worker:event',                // w → s   WorkerEvent
   audio: 'worker:audio',                // ikki tomonga, binary kadr
   incomingCall: 'worker:incoming.call', // w → s   IncomingCallRequest (ack: IncomingCallAck) — "Ochiq muloqot"
+  video: 'worker:video',                // w → s   binary: 16 bayt kadr UUID + 4 bayt (0) + JPEG — suhbatdosh kamerasi
 } as const;
 
 /** "Ochiq muloqot": AI akkauntiga kiruvchi shaxsiy qo'ng'iroq — qarorni backend beradi. */
 export interface IncomingCallRequest { tgUserId: string; workerBusy?: boolean; at?: number; /** worker: faol qo'ng'iroqlar / kutilayotgan kiruvchilar soni (diagnostika) */ activeCount?: number; pending?: number }
 export type IncomingCallAck =
-  | { accept: true; sessionId: string; maxDurationSec: number }
+  | { accept: true; sessionId: string; maxDurationSec: number; /** video avatar ko'rinishi */ avatar?: string }
   | { accept: false; reason: string };
 
 export interface WorkerHandshakeAuth { workerId: string; version: string }
@@ -354,7 +359,11 @@ export interface WorkerRpcMethods {
   };
   'binding.expect': { params: { employeeId: string; codeHash: string; expectedTgUserId: string; expiresAt: number }; result: { ok: true } };
   /** phone/username — faqat peer noma'lum bo'lsa, SHU qo'ng'iroq uchun (worker saqlamaydi, log qilmaydi). */
-  'call.place': { params: { sessionId: string; tgUserId: string; timeoutSec: number; maxDurationSec: number; phone?: string; username?: string }; result: { accepted: boolean; reason?: string } };
+  'call.place': { params: { sessionId: string; tgUserId: string; timeoutSec: number; maxDurationSec: number; phone?: string; username?: string; avatar?: string; video?: boolean }; result: { accepted: boolean; reason?: string } };
+  /** AI'ning joriy gapi — video avatar subtitri va kayfiyati (owner 2026-10-18). */
+  'call.caption': { params: { sessionId: string; text: string; emotion?: string }; result: { ok: true } };
+  /** Kamera kadrlari tezligi (videoga olishda vaqtincha ko'proq). */
+  'call.video_rate': { params: { sessionId: string; fps: number; forSec: number }; result: { ok: true } };
   'call.hangup': { params: { sessionId: string; reason: string }; result: { ok: true } };
   'udp.probe': { params: Record<string, never>; result: { ok: boolean; details?: string } };
   /** "Ochiq muloqot" holati (standart o'chiq) — worker 'up' bo'lganda va o'zgarganda yuboriladi. */
@@ -442,8 +451,10 @@ export interface VoiceSession {
   pushAudio(pcm16k: Buffer): void;
   activityStart(): void;
   activityEnd(): void;
-  /** Matnli navbat (masalan oldindan ijro etilgan disclosure'dan keyingi "start"). */
-  sendText(text: string): void;
+  /** Matnli navbat (masalan oldindan ijro etilgan disclosure'dan keyingi "start"). silent — javob so'ramasdan kontekstga. */
+  sendText(text: string, opts?: { silent?: boolean }): void;
+  /** Suhbatdosh kamerasi kadri (JPEG) — faqat ko'ra oladigan provayderlar (Gemini Live). */
+  sendVideo?(jpeg: Buffer): void;
   toolResponse(responses: { id: string; name: string; result: ToolResult }[]): void;
   close(reason: string): Promise<void>;
 }

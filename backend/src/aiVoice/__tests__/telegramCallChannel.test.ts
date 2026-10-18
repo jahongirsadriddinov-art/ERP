@@ -72,7 +72,7 @@ beforeAll(async () => {
 beforeEach(() => {
   mgr = new VoiceSessionManager({
     providerFor: (k) => (k === 'gemini_live' ? new FakeVoiceProvider() : null),
-    disclosure: { getClip: async () => tone(60, 24_000) }, setupTimeoutMs: 1_000, touchMs: 500,
+    clipOnLive: true, disclosure: { getClip: async () => tone(60, 24_000) }, setupTimeoutMs: 1_000, touchMs: 500,
   });
   setVoiceSessionManager(mgr);
 });
@@ -196,7 +196,7 @@ describe("worker bilan oqim", () => {
     expect(r.awaitResponseUntil!.getTime()).toBeGreaterThan(Date.now() + 100_000);
     const place = w.rpcsOf('call.place');
     expect(place).toHaveLength(1);
-    expect(place[0].params).toEqual({ sessionId: r.sessionId, tgUserId: ct.telegram.tgUserId, timeoutSec: 45, maxDurationSec: 120 });
+    expect(place[0].params).toEqual({ sessionId: r.sessionId, tgUserId: ct.telegram.tgUserId, timeoutSec: 45, maxDurationSec: 120, avatar: 'female' });
     expect((await conn()).dailyCallCount).toBe(1);
     const s: any = await AiCallSession.findById(r.sessionId).lean();
     expect(s).toMatchObject({ channel: 'telegram_call', isActive: true, workerInstanceId: INSTANCE_ID });

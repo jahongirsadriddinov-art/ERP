@@ -51,7 +51,7 @@ describe('ulanish va autentifikatsiya', () => {
   it("boshqa kalit bilan imzo — bad_signature va socket uziladi; lease olinmaydi", async () => {
     const w = await track(FakeWorker.connect(srv.url));
     const disc = w.waitDisconnect();
-    expect(await w.auth({ key: otherKeys.privateKey })).toEqual({ ok: false, error: 'bad_signature' });
+    expect(await w.auth({ key: otherKeys.privateKey })).toMatchObject({ ok: false, error: 'bad_signature' });
     expect(await disc).toBe(true);
     expect(workerConnectedHere()).toBe(false);
   });

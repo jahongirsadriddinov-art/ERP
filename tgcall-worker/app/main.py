@@ -61,6 +61,13 @@ async def amain() -> int:
         log.info("TG_SESSION_KEY yaratildi va .env fayliga yozildi (uni yo'qotmang)")
     cfg = cfgmod.from_env()
     print_public_key(public_key_b64(key), created)
+    # Video avatar ko'rinishlarini fonda oldindan tayyorlash (birinchi video qo'ng'iroqda kutish bo'lmasin)
+    try:
+        import threading
+        from .avatar.premium import warm_up
+        threading.Thread(target=warm_up, name="avatar-warmup", daemon=True).start()
+    except Exception:
+        pass
     bad = cfg.problems()
     if bad:
         log.error(".env faylida to'ldirilmagan/noto'g'ri qiymatlar: %s (README.md ga qarang)", ", ".join(bad))
@@ -90,7 +97,10 @@ async def amain() -> int:
             return None
         return await bridge.call(EV_INCOMING, data, timeout=12)
 
-    calls = CallManager(runtime, emit, send_up, ask_incoming=ask_incoming)
+    async def send_video(frame: bytes) -> None:
+        await bridge.send_video(frame)
+
+    calls = CallManager(runtime, emit, send_up, ask_incoming=ask_incoming, send_video=send_video)
     runtime.calls = calls
 
     async def on_login_success(session: str) -> None:
@@ -166,6 +176,7 @@ async def amain() -> int:
         "auth.logout": h_auth_logout, "status": h_status, "contact.resolve": h_resolve,
         "binding.expect": h_binding, "call.place": h_place, "call.hangup": h_hangup, "udp.probe": h_udp,
         "incoming.config": h_incoming_config,
+        "call.caption": lambda p: calls.caption(p), "call.video_rate": lambda p: calls.video_rate(p),
     }
 
     async def on_lost(reason: str) -> None:

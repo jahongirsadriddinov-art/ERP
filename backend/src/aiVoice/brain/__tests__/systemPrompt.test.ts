@@ -67,12 +67,12 @@ describe('rolga mos prompt va imkoniyatlar (owner 2026-10-16)', () => {
     expect(roleGuideFor('ishchi')).toMatch(/O'Z kuni/);
   });
 
-  it("chat kanallarida — qo'ng'iroq va xabar imkoniyati; qo'ng'iroq ichida requestCallback yo'q", () => {
+  it("chat va qo'ng'iroq kanallarida — qo'ng'iroq va xabar imkoniyati (owner 2026-10-18: qo'ng'iroq ichida ham qayta qo'ng'iroq)", () => {
     const tools = ['requestCallback', 'notifyManager', 'createReminder'];
     expect(capabilitiesLine(tools, 'bot')).toMatch(/requestCallback/);
     expect(capabilitiesLine(tools, 'bot')).toMatch(/notifyManager/);
-    expect(capabilitiesLine(tools, 'bot')).toMatch(/"Qo'ng'iroq qila olmayman", "xabar yubora olmayman" DEMANG/);
-    expect(capabilitiesLine(tools, 'inapp_call')).not.toMatch(/requestCallback/);
+    expect(capabilitiesLine(tools, 'bot')).toMatch(/"Qo'ng'iroq qila olmayman", "xabar yubora olmayman"/);
+    expect(capabilitiesLine(tools, 'inapp_call')).toMatch(/qo'ng'iroq tugagach keyinroq O'ZINGIZ qayta qo'ng'iroq/);
     expect(capabilitiesLine([], 'web')).toBe('');
   });
 

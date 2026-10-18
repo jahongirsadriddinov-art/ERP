@@ -27,6 +27,8 @@ const DEFAULT_TIMEOUT_MS: Record<WorkerRpcMethod, number> = {
   'call.hangup': 5_000,
   'udp.probe': 10_000,
   'incoming.config': 5_000,
+  'call.caption': 3_000,
+  'call.video_rate': 3_000,
 };
 
 const CODE_RE = /^[A-Za-z0-9_.:-]{1,64}$/;

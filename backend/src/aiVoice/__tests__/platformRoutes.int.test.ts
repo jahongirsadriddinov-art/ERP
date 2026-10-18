@@ -65,7 +65,7 @@ beforeAll(async () => {
 beforeEach(() => {
   mgr = new VoiceSessionManager({
     providerFor: (k) => (k === 'gemini_live' ? new FakeVoiceProvider() : null),
-    disclosure: { getClip: async () => tone(60, 24_000) }, setupTimeoutMs: 1_000, touchMs: 500,
+    clipOnLive: true, disclosure: { getClip: async () => tone(60, 24_000) }, setupTimeoutMs: 1_000, touchMs: 500,
   });
   setVoiceSessionManager(mgr);
 });

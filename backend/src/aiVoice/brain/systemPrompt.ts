@@ -1,5 +1,6 @@
 import type { AiLang, ToolChannel } from '../contracts';
 import { sanitizeForPrompt, UNTRUSTED_RULE } from '../lib/untrusted';
+import { personaPromptLine, type PersonaSettings } from '../persona';
 
 // Matn "miyasi" (TextAgent) uchun system prompt — o'zbekcha (asosiy). Doimiy qism BIRINCHI
 // (provayder prompt keshi uchun), o'zgaruvchan kontekst (sana, foydalanuvchi) OXIRIDA.
@@ -25,6 +26,9 @@ export const CHANNEL_GUIDE: Record<ToolChannel, string> = {
   web: `KANAL: ilova/saytdagi AI chat (yozma). Tasdiq kerak bo'lsa — tugmalar SHU chatda chiqadi: "Pastdagi «Tasdiqlash» tugmasini bosing yoki «ha» deb yozing" deng.`,
 };
 
+/** Kamera (owner 2026-10-18): suhbatdosh videosi ko'rinadi — tasvirlash, aniqlash, o'lchash, suratga/videoga olish. */
+export const VISION_GUIDE = `KAMERA: suhbatdosh kamerasini YOQGAN — siz uning videosini (har soniyada kadr) KO'RYAPSIZ. "Nima ko'ryapsan", "bu nima", "aniqla", "o'qib ber", "qancha", "o'lchab ko'r" → ko'rganingizni qisqa va aniq ayting (o'lcham — taxminiy; solishtirish uchun yonidagi narsani ayting). "Rasmga ol", "suratga ol" → capturePhoto; "videoga ol", "yozib ol" → recordVideo(seconds); qayerga yuborishni aytsa (o'ziga, rahbarga, xodimga) — "to" bilan. Ko'rmasangiz (kamera o'chiq yoki qorong'i) — ochiq ayting.`;
+
 export const isVoiceChannel = (ch: ToolChannel): boolean => ch === 'inapp_call' || ch === 'telegram_call';
 
 /**
@@ -45,13 +49,18 @@ ISHCHI LUG'ATI (so'z → tool):
 - Rahbar: "kim keldi", "davomat" → getAttendanceSummary; "bugun nima gap", "umumiy holat" → getTodayOverview; "xodimlar", "kim qayerda" → listEmployees; "xarajatlar", "chiqimlar" → listExpenses; "hisobot", "pul" → getAllowedFinancialReport.
 - "tasdiqlash kerak", "nima kutyapti" → listPendingApprovals. "tasdiqla", "ma'qulla", "утверди" → approveTransaction; "rad et", "отклони" → rejectTransaction (sababini so'rang). Bu foydalanuvchining O'Z qarori — tugma kerak emas; id'ni listPendingApprovals'dan oling, bir nechta bo'lsa qaysi biri ekanini so'rang.
 - "qo'ng'iroq qil", "menga qo'ng'iroq qiling", "позвони мне" → requestCallback (Telegram so'rasa channel="telegram", vaqt aytsa when). "Qo'ng'iroq qila olmayman" DEMANG — requestCallback natijasini ayting.
-- "prorabga ayt", "передай начальнику" → notifyManager.
+- "prorabga ayt", "rahbarimga ayt", "передай начальнику" (O'Z rahbariga) → notifyManager.
+- ANIQ ODAMGA: "Aliga ayt/yubor ...", "Testga xabar ber, menga aloqaga chiqsin" → messageEmployee(employeeName, message); "Aliga qo'ng'iroq qil/telefon qilib ayt ..." → callEmployee(employeeName, message). Ism bir nechta odamga mos kelsa — qaysi biri ekanini so'rang. Direktor uchun notifyManager EMAS.
 
 - "telefonni o'chir", "qo'ng'iroqni tugat", "qo'yib qo'y", "положи трубку" (qo'ng'iroqda) → endCall.
 - "ha", "tasdiqlayman", "yo'q", "bekor" — oldingi savolingiz tasdiq haqida bo'lsa (qo'ng'iroqda) → answerPendingAction.
 - "ob-havo", "havo qanday", "yomg'ir yog'adimi", "погода" → getWeather (shahar aytilmasa — obyekt joyi yoki Toshkent).
+- "dollar kursi", "yevro necha pul", "100 dollar necha so'm", "курс" → getExchangeRate (amount bilan).
+- "internetdan izla/qidir", yangiliklar, narxlar, sport, qonun, manzil, tashkilot telefoni/ish vaqti, "kim", "qachon", "qayerda" kabi yangi yoki aniq fakt kerak bo'lgan HAR QANDAY savol → searchWeb(query=<to'liq savol>), keyin javobni o'z so'zingiz bilan qisqa ayting.
+- "1 minutdan keyin qayta qo'ng'iroq qil", "keyinroq qo'ng'iroq qil" (qo'ng'iroq ichida ham) → requestCallback(delayMinutes yoki when; "Telegramdan" desa channel="telegram", "ilovadan" desa "inapp").
+- Rahbar: "tarjimon bo'l", "o'zbekcha-inglizcha tarjima qil", "переводи" → setTranslatorMode(on=true, langA, langB); "tarjimonni o'chir", "bas" → setTranslatorMode(on=false).
 
-UMUMIY SAVOLLAR: vaqt, sana, oddiy faktlar, hisob-kitob, maslahat, tarjima — o'z bilimingizdan qisqa va aniq javob bering ("men faqat ERP bo'yicha" DEMANG). Ob-havo — faqat getWeather natijasidan. Hozirgi vaqt va sana — KONTEKST'dan.
+UMUMIY SAVOLLAR: vaqt, sana, oddiy faktlar, hisob-kitob, maslahat, tarjima — o'z bilimingizdan qisqa va aniq javob bering ("men faqat ERP bo'yicha" DEMANG). Bilmasangiz yoki ma'lumot yangi bo'lishi kerak bo'lsa — searchWeb. Ob-havo — getWeather, valyuta — getExchangeRate. "Ma'lumotga ulana olmayman", "internetga kira olmayman", "bilmayman" DEMANG — avval tegishli tool'ni chaqiring; faqat tool xato qaytarsa — "hozir topa olmadim, birozdan keyin so'rang" deng. Hozirgi vaqt va sana — KONTEKST'dan.
 
 JAVOB USLUBI:
 - Aytilgan ishni BAJARING: buyruq bo'lsa — tegishli tool'ni darhol chaqiring, keyin natijani bir jumlada ayting. Savolga savol bilan javob bermang (faqat majburiy ma'lumot yetishmasa).
@@ -99,6 +108,11 @@ export interface SystemPromptInput {
   objectsTotal?: number;
   /** Ruxsat etilgan tool nomlari — imkoniyatlar qatori shunga qarab yoziladi. */
   toolNames?: string[];
+  /** AI xarakteri (sozlamalardan, owner 2026-10-18). */
+  persona?: PersonaSettings;
+  voiceName?: string;
+  /** Suhbatdosh kamerasi ko'rinadi (Telegram video qo'ng'iroq). */
+  vision?: boolean;
 }
 
 const WEEKDAY_UZ = ['', 'dushanba', 'seshanba', 'chorshanba', 'payshanba', 'juma', 'shanba', 'yakshanba'];
@@ -124,17 +138,22 @@ export function roleGuideFor(role: string, isOwner?: boolean): string {
 export function capabilitiesLine(toolNames: string[] | undefined, channel: ToolChannel): string {
   const has = (n: string) => !toolNames || toolNames.includes(n);
   const can: string[] = [];
-  if (has('requestCallback') && (channel === 'web' || channel === 'bot')) {
-    can.push("foydalanuvchiga O'ZI qo'ng'iroq qila olasiz — requestCallback (ilova ichida yoki Telegram orqali, hozir yoki aytilgan vaqtda)");
+  if (has('requestCallback')) {
+    can.push(isVoiceChannel(channel)
+      ? "qo'ng'iroq tugagach keyinroq O'ZINGIZ qayta qo'ng'iroq qila olasiz — requestCallback (\"1 minutdan keyin\" = delayMinutes 1; Telegram yoki ilova orqali)"
+      : "foydalanuvchiga O'ZI qo'ng'iroq qila olasiz — requestCallback (ilova ichida yoki Telegram orqali, hozir yoki aytilgan vaqtda)");
   }
   if (has('notifyManager')) can.push('rahbarga/prorabga bot orqali xabar yubora olasiz — notifyManager');
   if (has('createReminder')) can.push("eslatma qo'ya olasiz — u vaqtida bot/qo'ng'iroq orqali keladi (createReminder)");
   if (has('approveTransaction')) can.push("foydalanuvchi aytsa yozuvni tasdiqlay/rad eta olasiz — approveTransaction/rejectTransaction");
   if (has('getWeather')) can.push("istalgan shahar ob-havosini bilasiz — getWeather");
+  if (has('getExchangeRate')) can.push("Markaziy bank valyuta kursini bilasiz — getExchangeRate");
+  if (has('searchWeb')) can.push("INTERNETDAN (Google) istalgan narsani qidira olasiz — searchWeb");
+  if (has('setTranslatorMode')) can.push("rahbar so'rasa tarjimon bo'la olasiz (ikki til orasida) — setTranslatorMode");
   if (has('endCall') && isVoiceChannel(channel)) can.push("so'ralsa qo'ng'iroqni o'zingiz tugata olasiz — endCall");
   if (channel === 'bot') can.push("javobingizning o'zi Telegram botda xabar bo'lib boradi");
   if (!can.length) return '';
-  return `IMKONIYATLAR: ${can.join('; ')}. "Qo'ng'iroq qila olmayman", "xabar yubora olmayman" DEMANG — tool'ni chaqiring va uning natijasini ayting (nima yetishmasa — aynan o'shani).`;
+  return `IMKONIYATLAR: ${can.join('; ')}. "Qo'ng'iroq qila olmayman", "xabar yubora olmayman", "internetga kira olmayman" DEMANG — tool'ni chaqiring va uning natijasini ayting (nima yetishmasa — aynan o'shani).`;
 }
 
 export function buildSystemPrompt(i: SystemPromptInput): string {
@@ -149,6 +168,8 @@ export function buildSystemPrompt(i: SystemPromptInput): string {
     STATIC_RULES,
     '',
     capabilitiesLine(i.toolNames, i.channel),
+    personaPromptLine(i.persona, i.voiceName),
+    i.vision ? VISION_GUIDE : '',
     roleGuideFor(i.role, i.isOwner),
     CHANNEL_GUIDE[i.channel] || '',
     '',

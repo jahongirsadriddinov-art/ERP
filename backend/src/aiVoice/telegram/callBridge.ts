@@ -1,7 +1,7 @@
 import AiCallSession, { type AiCallStatus } from '../../models/AiCallSession';
 import AiEmployeeContact from '../../models/AiEmployeeContact';
 import {
-  AUDIO_FRAME_HEADER_BYTES, AUDIO_FRAME_MAX_BYTES, AUDIO_FRAMES_PER_SEC_MAX, decodeAudioFrame, encodeAudioFrame,
+  AIV_SERVER_EVENTS, AUDIO_FRAME_HEADER_BYTES, AUDIO_FRAME_MAX_BYTES, AUDIO_FRAMES_PER_SEC_MAX, decodeAudioFrame, encodeAudioFrame,
   type AivEndReason, type WorkerCallEndReason, type WorkerEvent,
 } from '../contracts';
 import { finishSession, onSessionsEnded } from '../sessions';
@@ -75,13 +75,27 @@ export class TelegramTransport implements VoiceTransport {
     sendWorkerAudio(h);
   }
 
-  sendEvent(_event: string, _payload: unknown): void {
-    // Telegram qo'ng'irog'ida UI yo'q — transkript/tool voqealari faqat menejer jurnalida
+  // Telegram qo'ng'irog'ida UI yo'q. Faqat AI gapi — video avatar subtitri uchun workerga (debounce 400 ms).
+  private capTimer: NodeJS.Timeout | null = null;
+  private capText = '';
+  sendEvent(event: string, payload: unknown): void {
+    if (this.closed || !this.sessionId || event !== AIV_SERVER_EVENTS.transcript) return;
+    const p = payload as { role?: string; text?: string };
+    if (p?.role !== 'assistant' || !p.text) return;
+    this.capText = String(p.text).slice(-400);
+    if (this.capTimer) return;
+    this.capTimer = setTimeout(() => {
+      this.capTimer = null;
+      if (this.closed || !this.sessionId || !this.capText) return;
+      callWorker('call.caption', { sessionId: this.sessionId, text: this.capText }).catch(() => undefined);
+    }, 400);
+    this.capTimer.unref?.();
   }
 
   close(reason: AivEndReason): void {
     if (this.closed) return;
     this.closed = true;
+    if (this.capTimer) { clearTimeout(this.capTimer); this.capTimer = null; }
     const sid = this.sessionId;
     if (!sid) return;
     const b = bridges.get(sid);
@@ -262,6 +276,7 @@ export function initCallBridge(): void {
     handleCallState(ev).catch((e) => console.error('[aiVoice/telegram] call.state xatosi:', (e as Error).message));
   });
   workerHub.on('audio', handleWorkerAudio);
+  workerHub.on('video', handleWorkerVideo);
   workerHub.on('down', onWorkerDown);
   workerHub.on('up', onWorkerUp);
   // Sessiya tashqaridan yakunlansa (sweep, blok, max_duration) — Telegram qo'ng'irog'i ham yopiladi
@@ -275,6 +290,17 @@ export function initCallBridge(): void {
       callWorker('call.hangup', { sessionId: s.sessionId, reason: String(s.reason).slice(0, 40) }).catch(() => undefined);
     }
   });
+}
+
+/** Suhbatdosh kamerasi kadri (worker → backend): 16 bayt UUID + 4 bayt + JPEG. Faqat ulangan qo'ng'iroq. */
+export function handleWorkerVideo(buf: Buffer): void {
+  if (!Buffer.isBuffer(buf) || buf.length < 24) return;
+  const h = buf.subarray(0, 16).toString('hex');
+  const uuid = `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+  const sid = byUuid.get(uuid);
+  const b = sid ? bridges.get(sid) : undefined;
+  if (!b || b.ended || !b.answered) return;
+  b.handle.pushVideo?.(buf.subarray(20));
 }
 
 /** Faqat testlar uchun. */

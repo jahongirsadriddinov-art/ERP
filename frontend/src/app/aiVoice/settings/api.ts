@@ -17,6 +17,9 @@ export interface AiShift {
   skipDates: string[]; extraWorkDates: string[];
 }
 
+export type PersonaStyle = "friendly" | "formal" | "cheerful" | "calm" | "strict";
+export type AvatarLook = "auto" | "female" | "male" | "orb";
+
 export interface AiSettingsData {
   companyId: string;
   enabled: boolean;
@@ -24,6 +27,10 @@ export interface AiSettingsData {
   voiceName: string;
   timezone: "Asia/Tashkent";
   disclosureText?: string;
+  /** AI xarakteri (owner 2026-10-18). Eski server — yo'q. */
+  persona?: { style: PersonaStyle; name?: string; custom?: string };
+  /** Telegram video qo'ng'iroqdagi avatar ('auto' — ovozga qarab). */
+  avatar?: { look: AvatarLook };
   attendance: { enabled: boolean; suppressLegacyMorningReminder: boolean; orinbosarCanEditSchedule: boolean; shifts: AiShift[] };
   calls: {
     maxAttemptsPerChannel: number; backoffMin: number[]; ringTimeoutSec: number; maxDurationSec: number;

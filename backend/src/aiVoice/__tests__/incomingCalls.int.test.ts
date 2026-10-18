@@ -74,7 +74,7 @@ beforeAll(async () => {
 beforeEach(async () => {
   mgr = new VoiceSessionManager({
     providerFor: (k) => (k === 'gemini_live' ? new FakeVoiceProvider() : null),
-    disclosure: { getClip: async () => tone(60, 24_000) }, setupTimeoutMs: 1_000, touchMs: 500,
+    clipOnLive: true, disclosure: { getClip: async () => tone(60, 24_000) }, setupTimeoutMs: 1_000, touchMs: 500,
   });
   setVoiceSessionManager(mgr);
 });
@@ -142,7 +142,8 @@ describe("kiruvchi qo'ng'iroq qarori", () => {
     expect(ack).toMatchObject({ accept: true, maxDurationSec: expect.any(Number) });
     if (!ack.accept) throw new Error('accept kutilgan');
     // Workerga firma/xodim id'lari ketmaydi
-    expect(Object.keys(ack).sort()).toEqual(['accept', 'maxDurationSec', 'sessionId']);
+    // avatar — video avatar ko'rinishi (owner 2026-10-18); firma/xodim id'lari workerga ketmaydi
+    expect(Object.keys(ack).sort()).toEqual(['accept', 'avatar', 'maxDurationSec', 'sessionId']);
     const s: any = await AiCallSession.findById(ack.sessionId).lean();
     expect(s).toMatchObject({ companyId: A.companyId, employeeId: A.workerId, channel: 'telegram_call', direction: 'inbound', purpose: 'assistant', isActive: true });
     const au = (await incomingAudits()).at(-1);

@@ -61,6 +61,8 @@ export interface VoiceSessionHandle {
   readonly state?: string;
   /** 16 kHz PCM16LE (kadr sarlavhasiz). */
   pushAudio(pcm16k: Buffer): void;
+  /** Suhbatdosh kamerasi (JPEG) — Telegram video qo'ng'iroq (owner 2026-10-18). */
+  pushVideo?(jpeg: Buffer): void;
   activityStart(): void;
   activityEnd(): void;
   /** Mijoz ulandi (in-app accept / Telegram connected) — disclosure ijro etiladi. */

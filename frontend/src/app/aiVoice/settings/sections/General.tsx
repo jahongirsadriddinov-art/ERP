@@ -2,28 +2,74 @@ import { useTranslation } from "react-i18next";
 import { MorphIcon } from "morphicons/react";
 import Clock from "@hugeicons/core-free-icons/Time04Icon";
 import type { SectionProps } from "../sectionProps";
-import { Field, SelectField, Toggle } from "../ui";
+import type { AvatarLook, PersonaStyle } from "../api";
+import { Chip, Field, SelectField, TextField, Toggle } from "../ui";
 
-// "Til va ovoz" (Qo'shimcha sozlamalar ichida): til, ovoz, ogohlantirish matni, eski eslatma, o'rinbosar huquqi.
+// "Til, ovoz va xarakter" (Qo'shimcha sozlamalar ichida): til, ovoz, AI xarakteri (uslub, ism, ko'rsatma),
+// video qo'ng'iroqdagi avatar, ogohlantirish matni, eski eslatma, o'rinbosar huquqi.
 // AI'ni yoqish va ertalabki so'rov — asosiy ekranda. Vaqt zonasi o'zgarmaydi (Toshkent).
-const VOICES = ["Kore", "Puck", "Charon", "Aoede", "Fenrir", "Leda", "Orus", "Zephyr"];
+const VOICES: [string, "female" | "male"][] = [
+  ["Kore", "female"], ["Aoede", "female"], ["Leda", "female"], ["Zephyr", "female"], ["Despina", "female"], ["Sulafat", "female"],
+  ["Puck", "male"], ["Charon", "male"], ["Fenrir", "male"], ["Orus", "male"], ["Iapetus", "male"], ["Achird", "male"],
+];
+const GENDER = new Map(VOICES);
+const STYLES: PersonaStyle[] = ["friendly", "formal", "cheerful", "calm", "strict"];
+const LOOKS: AvatarLook[] = ["auto", "female", "male", "orb"];
 
 export default function General({ view, draft, update }: SectionProps) {
   const { t } = useTranslation();
   const k = (s: string) => t(`aiVoice.admin.general.${s}`);
-  const voices = VOICES.includes(draft.voiceName) ? VOICES : [draft.voiceName, ...VOICES];
+  const voices = GENDER.has(draft.voiceName) ? VOICES : [[draft.voiceName, "female"] as [string, "female" | "male"], ...VOICES];
+  const persona = draft.persona || { style: "friendly" as PersonaStyle };
+  const look = draft.avatar?.look || "auto";
+  const autoLook = GENDER.get(draft.voiceName) === "male" ? "male" : "female";
+  const setPersona = (p: Partial<typeof persona>) => update((d) => ({ ...d, persona: { ...(d.persona || { style: "friendly" }), ...p } }));
   return (
     <div className="space-y-4" data-testid="ai-talk">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <SelectField label={k("language")} value={draft.language}
           options={(["uz", "ru", "auto"] as const).map((v) => ({ value: v, label: t(`aiVoice.admin.general.languages.${v}`) }))}
           onChange={(v) => update((d) => ({ ...d, language: v }))} />
-        <SelectField label={k("voice")} value={draft.voiceName} options={voices.map((v) => ({ value: v, label: v }))}
+        <SelectField label={k("voice")} value={draft.voiceName}
+          options={voices.map(([v, g]) => ({ value: v, label: `${v} (${k(g)})` }))}
           onChange={(v) => update((d) => ({ ...d, voiceName: v }))} />
       </div>
       <p className="text-[11px] text-muted-foreground inline-flex items-center gap-1.5" data-testid="ai-timezone">
         <MorphIcon icon={Clock} className="w-3.5 h-3.5" />{t("aiVoice.ui.general.tz")}
       </p>
+
+      <Field label={k("persona")} hint={k("personaHint")}>
+        <div className="flex flex-wrap gap-2" data-testid="ai-persona-style">
+          {STYLES.map((s) => (
+            <Chip key={s} active={persona.style === s} onClick={() => setPersona({ style: s })}>{t(`aiVoice.admin.general.styles.${s}`)}</Chip>
+          ))}
+        </div>
+      </Field>
+      <TextField label={k("aiName")} hint={k("aiNameHint")} value={persona.name || ""} maxLength={30} testId="ai-persona-name"
+        onChange={(v) => setPersona({ name: v })} />
+      <Field label={k("custom")} hint={k("customHint")}>
+        <textarea value={persona.custom || ""} maxLength={400} rows={2} data-testid="ai-persona-custom"
+          onChange={(e) => setPersona({ custom: e.target.value })}
+          className="w-full rounded-xl border border-border bg-card/70 px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 resize-y" />
+      </Field>
+
+      <Field label={k("avatar")} hint={k("avatarHint")}>
+        <div className="grid grid-cols-4 gap-2" data-testid="ai-avatar-look" role="radiogroup">
+          {LOOKS.map((l) => {
+            const img = l === "auto" ? autoLook : l;
+            const on = look === l;
+            return (
+              <button key={l} type="button" role="radio" aria-checked={on} onClick={() => update((d) => ({ ...d, avatar: { look: l } }))}
+                className={`rounded-2xl border p-1.5 text-center liquid-transition ${on ? "border-primary ring-2 ring-primary/30 bg-primary/5" : "border-border bg-card/60 hover:border-primary/50"}`}>
+                <img src={`/ai-avatars/${img}.webp`} alt="" loading="lazy" width={96} height={96}
+                  className="w-full aspect-square rounded-xl object-cover" />
+                <span className="block mt-1 text-[11px] font-semibold leading-tight">{t(`aiVoice.admin.general.looks.${l}`)}</span>
+              </button>
+            );
+          })}
+        </div>
+      </Field>
+
       <Field label={k("disclosure")} hint={k("disclosureHint")}>
         <textarea value={draft.disclosureText || ""} maxLength={300} rows={2}
           onChange={(e) => update((d) => ({ ...d, disclosureText: e.target.value }))}

@@ -26,6 +26,7 @@ EV = {
     "rpc": "worker:rpc",
     "event": "worker:event",
     "audio": "worker:audio",
+    "video": "worker:video",
 }
 
 
@@ -144,6 +145,10 @@ class Bridge:
     async def send_audio(self, frame: bytes) -> None:
         if self.authed and self.sio.connected:
             await self.sio.emit(EV["audio"], frame, namespace=NAMESPACE)
+
+    async def send_video(self, frame: bytes) -> None:
+        if self.authed and self.sio.connected:
+            await self.sio.emit(EV["video"], frame, namespace=NAMESPACE)
 
     # ── hayot sikli ──
     async def run(self) -> None:

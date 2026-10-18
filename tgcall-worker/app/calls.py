@@ -74,6 +74,11 @@ class ActiveCall:
     up_seq: int = 0
     incoming: bool = False           # "Ochiq muloqot": xodim o'zi qo'ng'iroq qildi
     video: bool = False              # backend video so'radi (avatar)
+    look: str = ""                   # avatar ko'rinishi: female | male | orb (backend sozlamasi)
+    video_last: float = 0.0          # oxirgi yuborilgan kamera kadri (monotonic)
+    video_busy: bool = False
+    video_fps: float = 1.0
+    video_fps_until: float = 0.0
     avatar: Any = None               # avatar.hooks.AvatarSession (video qo'ng'iroqda)
     done: asyncio.Event = field(default_factory=asyncio.Event)
     started_at: float = field(default_factory=time.monotonic)
@@ -83,8 +88,10 @@ class CallManager:
     def __init__(self, engine: Engine, emit: EmitFn, send_up: SendUpFn,
                  now_ms: Callable[[], float] = lambda: time.time() * 1000,
                  sender_factory: Optional[Callable[[Callable[[bytes], Awaitable[None]]], A.PacedSender]] = None,
-                 ask_incoming: Optional[AskFn] = None):
+                 ask_incoming: Optional[AskFn] = None,
+                 send_video: Optional[Callable[[bytes], Awaitable[None]]] = None):
         self.engine = engine
+        self._send_video = send_video
         self._ask_incoming = ask_incoming
         # "Ochiq muloqot" — standart O'CHIQ; faqat backend 'incoming.config' bilan yoqadi
         self.open_incoming = False
@@ -152,7 +159,7 @@ class CallManager:
                 return {"accepted": False, "reason": "busy_worker"}
         self._avatar_watch()
         c = ActiveCall(session_id=sid, user_id=uid, frame_uuid=frame_uuid, timeout_sec=timeout, max_duration_sec=max_dur,
-                       video=p.get("video") is True)
+                       video=p.get("video") is True, look=str(p.get("avatar") or "")[:16])
         self.active = c
         self.total_calls += 1
         c.task = asyncio.ensure_future(self._run(c))
@@ -351,7 +358,8 @@ class CallManager:
             except (TypeError, ValueError):
                 max_dur = 300
             c = ActiveCall(session_id=sid, user_id=user_id, frame_uuid=A.session_frame_uuid(sid),
-                           timeout_sec=INCOMING_ACCEPT_TIMEOUT_S, max_duration_sec=max_dur, incoming=True)
+                           timeout_sec=INCOMING_ACCEPT_TIMEOUT_S, max_duration_sec=max_dur, incoming=True,
+                           look=str((ack or {}).get("avatar") or "")[:16])
             self.active = c
             self.total_calls += 1
             self.incoming_accepted += 1
@@ -426,7 +434,7 @@ class CallManager:
     def _avatar_start(self, c: ActiveCall) -> None:
         try:
             from .avatar import hooks as avatar_hooks
-            c.avatar = avatar_hooks.start_for_call(self.engine, c.user_id, c.video)
+            c.avatar = avatar_hooks.start_for_call(self.engine, c.user_id, c.video, c.look)
         except Exception as e:
             c.avatar = None
             log.debug("avatar start: %s", type(e).__name__)
@@ -436,6 +444,45 @@ class CallManager:
         a, c.avatar = c.avatar, None
         if a is not None:
             asyncio.ensure_future(a.stop())
+
+    # ── Kamera (owner 2026-10-18): suhbatdosh videosi → JPEG → backend (AI ko'radi) ──
+    async def on_video(self, user_id: int, data: bytes, w: int, h: int, rotation=0) -> None:
+        c = self.active
+        if not c or c.user_id != user_id or c.state != "connected" or not data:
+            return
+        try:  # kamera yoqildi — AI avatari ham avtomatik yoqiladi
+            from .avatar import hooks as avatar_hooks
+            avatar_hooks.tracker.mark(user_id)
+        except Exception:
+            pass
+        if self._send_video is None or c.video_busy:
+            return
+        now = time.monotonic()
+        fps = c.video_fps if now < c.video_fps_until else 1.0
+        if now - c.video_last < 1.0 / max(0.2, fps):
+            return
+        c.video_last = now
+        c.video_busy = True
+        try:
+            from .vision import i420_to_jpeg, video_frame
+            jpeg = await asyncio.get_running_loop().run_in_executor(None, i420_to_jpeg, bytes(data), w, h, rotation)
+            if self.active is c and c.state == "connected":
+                await self._send_video(video_frame(c.frame_uuid, jpeg))
+        except Exception as e:
+            log.debug("kamera kadri: %s", type(e).__name__)
+        finally:
+            c.video_busy = False
+
+    # ── RPC: call.video_rate — videoga olishda vaqtincha ko'proq kadr ──
+    async def video_rate(self, p: dict) -> dict:
+        c = self.active
+        if c and c.session_id == str(p.get("sessionId") or ""):
+            try:
+                c.video_fps = max(0.5, min(8.0, float(p.get("fps") or 1)))
+                c.video_fps_until = time.monotonic() + max(1.0, min(30.0, float(p.get("forSec") or 10)))
+            except (TypeError, ValueError):
+                raise RpcError("bad_request")
+        return {"ok": True}
 
     # ── RPC: call.caption — AI'ning joriy gapi (subtitr + kayfiyat) ──
     async def caption(self, p: dict) -> dict:

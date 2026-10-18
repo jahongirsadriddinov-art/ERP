@@ -20,13 +20,15 @@ import { ALL_ROLES, ASSIST, L, ok } from './common';
 export const CALLBACK_JOB = 'ai.callback';
 const MAX_AHEAD_MS = 7 * 24 * 3600_000;
 const START_DELAY_MS = 5_000;          // AI javobi foydalanuvchiga yetib borsin
+const IN_CALL_MIN_DELAY_MS = 45_000;    // qo'ng'iroq ichidan: avval joriy qo'ng'iroq tugasin
 const SOON_MS = 90_000;                 // shundan yaqin — "hozir" (kanal hozir mavjud bo'lishi kerak)
 const CALL_CHANNELS: ChannelName[] = ['inapp_call', 'telegram_call'];
 /** Bir oz kutib o'tib ketadigan sabablar — qo'ng'iroq baribir navbatga qo'yiladi. */
 const TRANSIENT = new Set(['not_on_this_instance', 'flood_wait', 'account_busy', 'worker_not_here']);
 
 export function callbackOrder(pref: 'inapp' | 'telegram' | undefined, from: ToolCtx['channel']): ChannelName[] {
-  const first: ChannelName = pref === 'telegram' ? 'telegram_call' : pref === 'inapp' ? 'inapp_call' : from === 'bot' ? 'telegram_call' : 'inapp_call';
+  const first: ChannelName = pref === 'telegram' ? 'telegram_call' : pref === 'inapp' ? 'inapp_call'
+    : from === 'bot' || from === 'telegram_call' ? 'telegram_call' : 'inapp_call';
   return [first, ...CALL_CHANNELS.filter((c) => c !== first)];
 }
 
@@ -176,7 +178,8 @@ export const requestCallback: AiToolDef<{ channel?: 'inapp' | 'telegram'; delayM
   maxRoles: ALL_ROLES,
   defaultRoles: ALL_ROLES,
   purposes: ASSIST,
-  channels: ['web', 'bot'],
+  // Owner 2026-10-18: qo'ng'iroq ICHIDA ham ("1 minutdan keyin qayta qo'ng'iroq qil") — avval faqat chatdan edi
+  channels: ['web', 'bot', 'telegram_call', 'inapp_call'],
   behavior: 'BLOCKING',
   auditEntity: 'ai_callback',
   auditAction: 'create',
@@ -189,7 +192,9 @@ export const requestCallback: AiToolDef<{ channel?: 'inapp' | 'telegram'; delayM
     if (!q) return { status: 'error', message: L(ctx, "Qo'ng'iroq xizmati hozir ishga tushmagan (server AI rejimida emas). Administratorga ayting.", 'Сервис звонков сейчас не запущен. Сообщите администратору.'), retryable: false };
     ensureCallbackJob(q);
     const now = q.now();
-    let runAt = new Date(now.getTime() + START_DELAY_MS);
+    // Qo'ng'iroq ichidan so'ralsa — joriy qo'ng'iroq tugashiga vaqt qolsin (kamida 45 s)
+    const inCall = ctx.channel === 'telegram_call' || ctx.channel === 'inapp_call';
+    let runAt = new Date(now.getTime() + (inCall ? IN_CALL_MIN_DELAY_MS : START_DELAY_MS));
     if (args.when) {
       const t = parseWhen(args.when, now);
       if (!t) return { status: 'error', message: L(ctx, "Vaqtni tushunmadim — masalan \"15:30\" deb ayting.", 'Не понял время — скажите, например, «15:30».'), retryable: false };
@@ -208,7 +213,8 @@ export const requestCallback: AiToolDef<{ channel?: 'inapp' | 'telegram'; delayM
     const firstReason = pre.reasons[first];
     const transient = order.some((c) => TRANSIENT.has(String(pre.reasons[c])));
 
-    if (soon && !pre.available.length && !transient) {
+    // Qo'ng'iroq ichida kanal "band" ko'rinadi (aynan shu qo'ng'iroq) — bu to'siq emas
+    if (soon && !pre.available.length && !transient && !inCall) {
       const need = order.map((c) => missingText(c, String(pre.reasons[c]), ctx));
       const msg = L(ctx, `Hozir qo'ng'iroq bo'lmaydi: ${need.join('; ')}.`, `Сейчас звонок невозможен: ${need.join('; ')}.`);
       return { status: 'error', message: msg, retryable: false, data: { missing: pre.reasons } };

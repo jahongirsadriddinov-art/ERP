@@ -247,9 +247,11 @@ describe('requestCallback', () => {
     expect(attempts.at(-1)).toBe('bot_message');
   });
 
-  it("qo'ng'iroq ichida (kanal inapp_call) e'lon qilinmaydi", async () => {
+  it("qo'ng'iroq ichida ham ishlaydi (owner 2026-10-18) — kamida 45 s keyin (joriy qo'ng'iroq tugasin)", async () => {
     const { A } = env;
-    expect((await call(A.workerId, A.companyId, 'requestCallback', {}, { channel: 'inapp_call' })).result.status).toBe('denied');
+    const r: any = (await call(A.workerId, A.companyId, 'requestCallback', { delayMinutes: 0 }, { channel: 'inapp_call' })).result;
+    expect(r.status).not.toBe('denied');
+    if (r.status === 'ok') expect(new Date(r.data.scheduledAt).getTime() - Date.now()).toBeGreaterThan(40_000);
     expect(zonedParts(new Date()).date).toBe(d);
   });
 });

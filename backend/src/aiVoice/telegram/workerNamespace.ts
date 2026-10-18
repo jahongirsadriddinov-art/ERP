@@ -1,4 +1,5 @@
 import { EventEmitter } from 'events';
+import { VIDEO_FRAME_MAX_BYTES } from '../voice/vision';
 import type { Namespace, Server, Socket } from 'socket.io';
 import AiChannelConnection from '../../models/AiChannelConnection';
 import { aiConfig, INSTANCE_ID } from '../config';
@@ -198,6 +199,13 @@ function onConnection(socket: Socket): void {
     if (!Buffer.isBuffer(buf) && !(buf instanceof Uint8Array)) return;
     if (buf.length > AUDIO_FRAME_MAX_BYTES) return;
     workerHub.emit('audio', Buffer.isBuffer(buf) ? buf : Buffer.from(buf));
+  });
+
+  socket.on(WORKER_EVENTS.video, (buf: unknown) => {
+    if (!st.authed || active?.socket !== socket) return;
+    if (!Buffer.isBuffer(buf) && !(buf instanceof Uint8Array)) return;
+    if (buf.length < 24 || buf.length > VIDEO_FRAME_MAX_BYTES + 20) return;
+    workerHub.emit('video', Buffer.isBuffer(buf) ? buf : Buffer.from(buf));
   });
 
   socket.on('disconnect', () => {

@@ -14,7 +14,7 @@ from typing import Any, Awaitable, Callable, Optional
 import socketio
 
 from . import __version__
-from .keys import sign_challenge
+from .keys import public_key_b64, sign_challenge
 
 log = logging.getLogger("tgw.bridge")
 
@@ -123,7 +123,12 @@ class Bridge:
         else:
             self.auth_failures += 1
             err = ack.get("error") if isinstance(ack, dict) else "no_ack"
-            log.error("autentifikatsiya rad etildi: %s — Render'dagi AIV_WORKER_PUBKEY shu worker kalitiga mosmi?", err)
+            hint = ack.get("keyHint") if isinstance(ack, dict) else None
+            if hint:
+                log.error("autentifikatsiya rad etildi: %s — Render'dagi AIV_WORKER_PUBKEY '%s…' bilan boshlanadi, bu workerniki esa '%s…'",
+                          err, hint, public_key_b64(self._key)[:12])
+            else:
+                log.error("autentifikatsiya rad etildi: %s — Render'dagi AIV_WORKER_PUBKEY shu worker kalitiga mosmi?", err)
 
     # ── backendga yuborish ──
     async def call(self, event: str, data: dict, timeout: float = 10) -> Optional[dict]:

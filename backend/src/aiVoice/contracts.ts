@@ -331,7 +331,7 @@ export type IncomingCallAck =
 export interface WorkerHandshakeAuth { workerId: string; version: string }
 export interface WorkerChallenge { nonce: string; expiresAt: number; instanceId: string }
 export interface WorkerAuthRequest { workerId: string; nonce: string; signature: string /* base64 */ }
-export interface WorkerAuthAck { ok: boolean; error?: string }
+export interface WorkerAuthAck { ok: boolean; error?: string; /** bad_signature'da: backenddagi ochiq kalit boshi (sir emas, diagnostika) */ keyHint?: string }
 /** Imzolanadigan xabar (UTF-8). */
 export function workerChallengeMessage(workerId: string, nonce: string): string {
   return `aiv-worker\n${workerId}\n${nonce}`;

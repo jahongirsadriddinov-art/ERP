@@ -6,7 +6,7 @@ import {
   AIV_WORKER_NAMESPACE, AUDIO_FRAME_MAX_BYTES, WORKER_EVENTS,
   type IncomingCallAck, type IncomingCallRequest, type LeaseAck, type WorkerAuthAck, type WorkerAuthRequest, type WorkerEvent,
 } from '../contracts';
-import { issueWorkerChallenge, verifyWorkerAuth, workerAuthConfigured } from '../lib/workerAuth';
+import { configuredKeyHint, issueWorkerChallenge, verifyWorkerAuth, workerAuthConfigured } from '../lib/workerAuth';
 import { acquireWorkerLease, releaseWorkerLease, renewWorkerLease } from '../lib/workerLease';
 
 // Telegram qo'ng'iroq worker'i uchun "/aiv-worker" namespace (contracts.ts WORKER_EVENTS).
@@ -103,7 +103,7 @@ function onConnection(socket: Socket): void {
     try {
       const r = await verifyWorkerAuth(req);
       if (!r.ok) {
-        reply({ ok: false, error: r.error } satisfies WorkerAuthAck);
+        reply({ ok: false, error: r.error, ...(r.error === 'bad_signature' ? { keyHint: configuredKeyHint() } : {}) } satisfies WorkerAuthAck);
         socket.disconnect(true);
         return;
       }

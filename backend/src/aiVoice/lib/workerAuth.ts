@@ -40,6 +40,13 @@ function publicKey(): crypto.KeyObject | null {
 
 export function workerAuthConfigured(): boolean { return !!publicKey(); }
 
+/** Backend o'qigan ochiq kalitning boshi (32 bayt xom kalit base64, 12 belgi) — mos kelmaslikni topish uchun. Sir emas. */
+export function configuredKeyHint(): string {
+  const k = publicKey();
+  if (!k) return '';
+  try { return (k.export({ format: 'der', type: 'spki' }) as Buffer).subarray(-32).toString('base64').slice(0, 12); } catch { return ''; }
+}
+
 const WORKER_ID_RE = /^[A-Za-z0-9._:-]{1,64}$/;
 
 /** Ulanish boshida workerga yuboriladigan challenge. */

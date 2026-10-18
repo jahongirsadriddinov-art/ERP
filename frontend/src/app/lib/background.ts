@@ -18,6 +18,36 @@ export async function startBackground(opts: { trackLocation: boolean; intervalSe
   } catch (e) { console.warn("[background]", e); }
 }
 
+/** Android: ilova batareya cheklovidan chiqarilganmi (fonda uxlatilmaydi). Eski APK/veb — null. */
+export async function backgroundPermission(): Promise<{ ignoring: boolean; manufacturer: string } | null> {
+  if (!isAndroid()) return null;
+  try {
+    const { registerPlugin } = await import("@capacitor/core");
+    return await registerPlugin<any>("Background").batteryStatus();
+  } catch { return null; }
+}
+
+/** Fonda ishlash ruxsatini so'raydi: bildirishnomalar (Android 13+) va batareya cheklovidan chiqarish. */
+export async function requestBackgroundPermission(): Promise<void> {
+  if (!isAndroid()) return;
+  try {
+    const { LocalNotifications } = await import("@capacitor/local-notifications");
+    const st = await LocalNotifications.checkPermissions();
+    if (st.display !== "granted") await LocalNotifications.requestPermissions();
+  } catch { /* plagin yo'q */ }
+  try {
+    const { registerPlugin } = await import("@capacitor/core");
+    await registerPlugin<any>("Background").requestBatteryExemption();
+  } catch { /* eski APK */ }
+}
+
+export async function openAppSettings(): Promise<void> {
+  try {
+    const { registerPlugin } = await import("@capacitor/core");
+    await registerPlugin<any>("Background").openAppSettings();
+  } catch { /* eski APK */ }
+}
+
 export async function stopBackground() {
   if (!isAndroid()) return;
   lastKey = "";

@@ -91,7 +91,7 @@ import { setSiteLanguage, SiteLang, langLabel } from "./i18n";
 import { isTelegramMiniApp, getTelegramInitData, markManualLogout, clearManualLogout, telegramAutoLoginAllowed } from "./telegramWebApp";
 import { isChatMuted, useChatPrefs } from "./chat/chatPrefs";
 import { buildEntries as buildChatEntries, navUnreadCount } from "./chat/chatModel";
-import { installAndroidBackHandler, saveOrShareBlob, openExternalUrl, isNative, isTabletOrLarger, notifyOS, ensureNotifyPermission, appInForeground } from "./platform";
+import { installAndroidBackHandler, isAndroid, saveOrShareBlob, openExternalUrl, isNative, isTabletOrLarger, notifyOS, ensureNotifyPermission, appInForeground } from "./platform";
 import QrLoginPanel from "./QrLoginPanel";
 import { AppDownloadCards } from "./AppDownload";
 import { openMediaViewer } from "./MediaViewer";
@@ -120,6 +120,7 @@ const RegisterWizard = lazy(() => import("./RegisterWizard"));
 const DeveloperPanel = lazy(() => import("./DeveloperPanel"));
 const AIAssistant = lazy(() => import("./AIAssistant"));
 const AiVoiceRoot = lazy(() => import("./aiVoice/AiVoiceRoot"));
+const BackgroundPermissionPrompt = lazy(() => import("./BackgroundPermissionPrompt"));
 const QRScanner = lazy(() => import("./QRScanner"));
 const LandingPage = lazy(() => import("./LandingPage"));
 const LocationPicker = lazy(() => import("./LocationPicker"));
@@ -5919,6 +5920,12 @@ export default function App() {
       <Suspense fallback={null}>
         <AiVoiceRoot currentUser={liveUser} busy={!!activeCall} />
       </Suspense>
+      {/* Android: fonda ishlash ruxsati (Telegram kabi) — faqat kerak bo'lsa ko'rinadi */}
+      {isAndroid() && (
+        <Suspense fallback={null}>
+          <BackgroundPermissionPrompt userId={liveUser?.id} />
+        </Suspense>
+      )}
 
       {/* E'lonlar taxtasi */}
       {showAnnouncements && (

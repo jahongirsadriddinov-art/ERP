@@ -636,7 +636,12 @@ def get_renderer(look: Optional[str], size: int = 480):
     with _lock:
         r = _cache.get(key)
         if r is None:
-            r = OrbRenderer(size) if key[0] == "orb" else PersonRenderer(key[0], size)
+            if key[0] == "orb":
+                r = OrbRenderer(size)
+            else:
+                # Owner 2026-10-19: premium 3D odam (Blender/MakeHuman kadrlari); bo'lmasa — chizilgan yuz
+                from . import real3d
+                r = real3d.RealRenderer(key[0], size) if real3d.available(key[0]) else PersonRenderer(key[0], size)
             _cache[key] = r
         return r
 

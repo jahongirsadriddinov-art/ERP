@@ -5,7 +5,8 @@ import numpy as np
 from PIL import Image
 
 from app.avatar.emoji3d import EmojiRenderer, TOOL_LOOK
-from app.avatar.premium import LOOKS, OrbRenderer, PersonRenderer, get_renderer, normalize_look
+from app.avatar.premium import LOOKS, OrbRenderer, get_renderer, normalize_look
+from app.avatar.real3d import RealRenderer
 from app.avatar.state import FaceParams
 from app.avatar.face import i420_size
 from app.vision import i420_to_jpeg, video_frame
@@ -40,7 +41,7 @@ def test_i420_odd_size_and_short_frame():
 def test_premium_looks_render_valid_frames():
     for lk in LOOKS:
         r = get_renderer(lk, 320)
-        assert isinstance(r, OrbRenderer if lk == "orb" else PersonRenderer)
+        assert isinstance(r, OrbRenderer if lk == "orb" else RealRenderer)
         for p in (FaceParams(t=1), FaceParams(t=2, mouth_open=0.8, smile=0.7, blink=1.0, tilt_deg=4, caption=("Salom",))):
             im = r.render(p)
             assert im.size == (320, 320) and im.mode == "RGB"
@@ -116,3 +117,17 @@ def test_calls_on_video_throttles_and_sends():
 
     asyncio.run(go())
     assert len(sent) == 1 and sent[0][20:22] == b"\xff\xd8"
+
+
+def test_real3d_frames_follow_voice_emotion_and_activity():
+    r = RealRenderer("female", 320)
+    assert len(r.frames) == 40
+    assert r.choose(FaceParams(t=1, stream_age=1))[0] == "happy_rest_open"            # salom — tabassum
+    assert r.choose(FaceParams(t=20, stream_age=20, mouth_open=0.8, viseme="A"))[0] == "neutral_A_open"
+    assert r.choose(FaceParams(t=20, stream_age=20, mouth_open=0.35, viseme="O"))[0] == "neutral_U_open"
+    assert r.choose(FaceParams(t=20, stream_age=20, blink=1.0))[0] == "neutral_rest_closed"
+    assert r.choose(FaceParams(t=20, stream_age=20, emotion="concerned"))[0] == "concerned_rest_open"
+    assert r.choose(FaceParams(t=20, stream_age=20, activity="searchWeb", activity_phase="start")) == ("thinking_rest_open", "globe")
+    a = np.asarray(r.render(FaceParams(t=20, stream_age=20)), dtype=np.int16)
+    b = np.asarray(r.render(FaceParams(t=21, stream_age=21, mouth_open=0.9, viseme="A")), dtype=np.int16)
+    assert np.abs(a - b).sum() > 1000

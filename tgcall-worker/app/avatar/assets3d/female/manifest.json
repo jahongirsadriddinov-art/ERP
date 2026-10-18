@@ -1,0 +1,242 @@
+[
+{
+"expr": "neutral",
+"vis": "rest",
+"eye": "open",
+"file": "neutral_rest_open.webp"
+},
+{
+"expr": "neutral",
+"vis": "A",
+"eye": "open",
+"file": "neutral_A_open.webp"
+},
+{
+"expr": "neutral",
+"vis": "E",
+"eye": "open",
+"file": "neutral_E_open.webp"
+},
+{
+"expr": "neutral",
+"vis": "O",
+"eye": "open",
+"file": "neutral_O_open.webp"
+},
+{
+"expr": "neutral",
+"vis": "U",
+"eye": "open",
+"file": "neutral_U_open.webp"
+},
+{
+"expr": "neutral",
+"vis": "M",
+"eye": "open",
+"file": "neutral_M_open.webp"
+},
+{
+"expr": "neutral",
+"vis": "F",
+"eye": "open",
+"file": "neutral_F_open.webp"
+},
+{
+"expr": "neutral",
+"vis": "rest",
+"eye": "closed",
+"file": "neutral_rest_closed.webp"
+},
+{
+"expr": "happy",
+"vis": "rest",
+"eye": "open",
+"file": "happy_rest_open.webp"
+},
+{
+"expr": "happy",
+"vis": "A",
+"eye": "open",
+"file": "happy_A_open.webp"
+},
+{
+"expr": "happy",
+"vis": "E",
+"eye": "open",
+"file": "happy_E_open.webp"
+},
+{
+"expr": "happy",
+"vis": "O",
+"eye": "open",
+"file": "happy_O_open.webp"
+},
+{
+"expr": "happy",
+"vis": "U",
+"eye": "open",
+"file": "happy_U_open.webp"
+},
+{
+"expr": "happy",
+"vis": "M",
+"eye": "open",
+"file": "happy_M_open.webp"
+},
+{
+"expr": "happy",
+"vis": "F",
+"eye": "open",
+"file": "happy_F_open.webp"
+},
+{
+"expr": "happy",
+"vis": "rest",
+"eye": "closed",
+"file": "happy_rest_closed.webp"
+},
+{
+"expr": "thinking",
+"vis": "rest",
+"eye": "open",
+"file": "thinking_rest_open.webp"
+},
+{
+"expr": "thinking",
+"vis": "A",
+"eye": "open",
+"file": "thinking_A_open.webp"
+},
+{
+"expr": "thinking",
+"vis": "E",
+"eye": "open",
+"file": "thinking_E_open.webp"
+},
+{
+"expr": "thinking",
+"vis": "O",
+"eye": "open",
+"file": "thinking_O_open.webp"
+},
+{
+"expr": "thinking",
+"vis": "U",
+"eye": "open",
+"file": "thinking_U_open.webp"
+},
+{
+"expr": "thinking",
+"vis": "M",
+"eye": "open",
+"file": "thinking_M_open.webp"
+},
+{
+"expr": "thinking",
+"vis": "F",
+"eye": "open",
+"file": "thinking_F_open.webp"
+},
+{
+"expr": "thinking",
+"vis": "rest",
+"eye": "closed",
+"file": "thinking_rest_closed.webp"
+},
+{
+"expr": "concerned",
+"vis": "rest",
+"eye": "open",
+"file": "concerned_rest_open.webp"
+},
+{
+"expr": "concerned",
+"vis": "A",
+"eye": "open",
+"file": "concerned_A_open.webp"
+},
+{
+"expr": "concerned",
+"vis": "E",
+"eye": "open",
+"file": "concerned_E_open.webp"
+},
+{
+"expr": "concerned",
+"vis": "O",
+"eye": "open",
+"file": "concerned_O_open.webp"
+},
+{
+"expr": "concerned",
+"vis": "U",
+"eye": "open",
+"file": "concerned_U_open.webp"
+},
+{
+"expr": "concerned",
+"vis": "M",
+"eye": "open",
+"file": "concerned_M_open.webp"
+},
+{
+"expr": "concerned",
+"vis": "F",
+"eye": "open",
+"file": "concerned_F_open.webp"
+},
+{
+"expr": "concerned",
+"vis": "rest",
+"eye": "closed",
+"file": "concerned_rest_closed.webp"
+},
+{
+"expr": "surprised",
+"vis": "rest",
+"eye": "open",
+"file": "surprised_rest_open.webp"
+},
+{
+"expr": "surprised",
+"vis": "A",
+"eye": "open",
+"file": "surprised_A_open.webp"
+},
+{
+"expr": "surprised",
+"vis": "E",
+"eye": "open",
+"file": "surprised_E_open.webp"
+},
+{
+"expr": "surprised",
+"vis": "O",
+"eye": "open",
+"file": "surprised_O_open.webp"
+},
+{
+"expr": "surprised",
+"vis": "U",
+"eye": "open",
+"file": "surprised_U_open.webp"
+},
+{
+"expr": "surprised",
+"vis": "M",
+"eye": "open",
+"file": "surprised_M_open.webp"
+},
+{
+"expr": "surprised",
+"vis": "F",
+"eye": "open",
+"file": "surprised_F_open.webp"
+},
+{
+"expr": "surprised",
+"vis": "rest",
+"eye": "closed",
+"file": "surprised_rest_closed.webp"
+}
+]

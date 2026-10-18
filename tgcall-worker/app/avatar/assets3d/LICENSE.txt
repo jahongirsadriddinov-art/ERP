@@ -1,0 +1,1 @@
+3D characters made with Blender + MPFB (MakeHuman) from CC0 asset packs (makehuman_system_assets, hair01, eyebrows01, eyelashes01, faceunits01, visemes01). Source: tools/avatar3d/.

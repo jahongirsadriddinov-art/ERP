@@ -3,6 +3,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import Transaction from '../../../../models/Transaction';
 import Notification from '../../../../models/Notification';
+import Message from '../../../../models/Message';
 import { localDate } from '../../../lib/zonedTime';
 import { confirmPendingAction } from '../../executor';
 import { periodRange } from '../getAllowedFinancialReport';
@@ -64,7 +65,10 @@ describe('notifyManager', () => {
     expect(c.result.status).toBe('ok');
     const notes: any[] = await Notification.find({}).lean();
     expect(notes).toHaveLength(1);
-    expect(notes[0]).toMatchObject({ recipientId: A.prorabId, companyId: A.companyId, type: 'ai' });
+    // Owner 2026-10-19: oddiy chat xabari (ilovadagi chatda ko'rinadi) — bildirishnoma turi 'message'
+    expect(notes[0]).toMatchObject({ recipientId: A.prorabId, companyId: A.companyId, type: 'message' });
+    const dm: any = await Message.findOne({ fromUserId: A.workerId, toUserId: A.prorabId }).lean();
+    expect(dm?.companyId).toBe(A.companyId);
     expect(notes.some((n) => n.companyId === B.companyId)).toBe(false);
   });
 

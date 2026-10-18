@@ -5,6 +5,8 @@ import { truncateText } from '../../lib/untrusted';
 import { callWorker } from '../../telegram/workerRpc';
 import { collectFrames, encodeMp4, getMedia, lastMediaOf, latestFrame, saveMedia, type Media } from '../../voice/vision';
 import { findEmployee } from '../erp/contactEmployee';
+import { postChatDm, storeMedia } from '../../lib/chatPost';
+import { appendDaily } from '../../routes/chatShared';
 import { ALL_CHANNELS, ALL_ROLES, ASSIST, fullName, L, ok } from '../erp/common';
 import type { AiToolDef, ToolCtx, ToolResult } from '../types';
 import { inCompany } from '../types';
@@ -35,6 +37,16 @@ async function sendMediaTo(userId: string, companyId: string, m: Media, caption:
   return false;
 }
 
+/** O'ziga olingan rasm/video ilovadagi "AI yordamchi" chatida ham ko'rinsin (owner 2026-10-19). */
+async function keepInAiChat(ctx: ToolCtx, m: Media, caption?: string): Promise<void> {
+  const url = await storeMedia({ data: m.data, kind: m.kind });
+  if (!url) return;
+  (m as any).url = url;
+  const head = m.kind === 'photo' ? "📷 Qo'ng'iroqdan rasm" : "🎥 Qo'ng'iroqdan video";
+  await appendDaily({ userId: ctx.userId, companyId: ctx.companyId, role: ctx.role, isOwner: !!ctx.isOwner },
+    [{ role: 'assistant', content: `${head}${caption ? `: ${truncateText(caption, 200)}` : ''}\n[[${m.kind === 'photo' ? 'image' : 'video'}:${url}]]` }]).catch(() => undefined);
+}
+
 const deliveredText = (ctx: ToolCtx, kind: Media['kind'], sent: boolean, id: string) => {
   const what = kind === 'photo' ? L(ctx, 'Rasm', 'Фото') : L(ctx, 'Video', 'Видео');
   return sent
@@ -62,7 +74,10 @@ export const capturePhoto: AiToolDef<{ caption?: string }> = {
     const f = latestFrame(ctx.sessionId);
     if (!f) return NO_CAMERA(ctx);
     const m = saveMedia({ kind: 'photo', data: f.jpeg, companyId: ctx.companyId, ownerId: ctx.userId, caption: args.caption });
-    const sent = await sendMediaTo(ctx.userId, ctx.companyId, m, args.caption || L(ctx, "📷 AI qo'ng'iroqdan rasm", '📷 Фото из звонка AI'));
+    const [sent] = await Promise.all([
+      sendMediaTo(ctx.userId, ctx.companyId, m, args.caption || L(ctx, "📷 AI qo'ng'iroqdan rasm", '📷 Фото из звонка AI')),
+      keepInAiChat(ctx, m, args.caption),
+    ]);
     return ok(deliveredText(ctx, 'photo', sent, m.id), { mediaId: m.id, kind: 'photo', sentToMe: sent });
   },
 };
@@ -105,7 +120,10 @@ export const recordVideo: AiToolDef<{ seconds?: number; caption?: string }> = {
       return { status: 'error', retryable: true, message: L(ctx, "Videoni tayyorlab bo'lmadi, qayta urinib ko'ring.", 'Не удалось собрать видео.') };
     }
     const m = saveMedia({ kind: 'video', data, companyId: ctx.companyId, ownerId: ctx.userId, caption: args.caption });
-    const sent = await sendMediaTo(ctx.userId, ctx.companyId, m, args.caption || L(ctx, "🎥 AI qo'ng'iroqdan video", '🎥 Видео из звонка AI'));
+    const [sent] = await Promise.all([
+      sendMediaTo(ctx.userId, ctx.companyId, m, args.caption || L(ctx, "🎥 AI qo'ng'iroqdan video", '🎥 Видео из звонка AI')),
+      keepInAiChat(ctx, m, args.caption),
+    ]);
     return ok(deliveredText(ctx, 'video', sent, m.id), { mediaId: m.id, kind: 'video', seconds: sec, sentToMe: sent });
   },
 };
@@ -163,10 +181,14 @@ export const forwardMedia: AiToolDef<FwdArgs> = {
       }
       targets = [{ id: r.one.id, name: r.one.name }];
     }
+    // Owner 2026-10-19: ilovadagi chatga oddiy xabar (rasm/video bilan) + Telegram + bildirishnoma
     const sent: string[] = [];
     const failed: string[] = [];
-    for (const t of targets) ((await sendMediaTo(t.id, ctx.companyId, m, caption)) ? sent : failed).push(t.name);
-    if (!sent.length) return { status: 'error', retryable: false, message: L(ctx, `Yuborib bo'lmadi: ${failed.join(', ')} ERP botiga ulanmagan.`, `Не отправлено: ${failed.join(', ')} не подключены к боту.`) };
+    for (const t of targets) {
+      const r = await postChatDm({ companyId: ctx.companyId, fromUserId: ctx.userId, toUserId: t.id, text: args.caption ? truncateText(args.caption, 300) : '', media: { data: m.data, kind: m.kind }, mediaUrl: (m as any).url });
+      (r.ok ? sent : failed).push(t.name);
+    }
+    if (!sent.length) return { status: 'error', retryable: true, message: L(ctx, `Yuborib bo'lmadi: ${failed.join(', ')}.`, `Не отправлено: ${failed.join(', ')}.`) };
     return ok(L(ctx, `Yuborildi: ${sent.join(', ')}.${failed.length ? ` Yetmadi: ${failed.join(', ')}.` : ''}`, `Отправлено: ${sent.join(', ')}.${failed.length ? ` Не дошло: ${failed.join(', ')}.` : ''}`), { sent, failed });
   },
 };

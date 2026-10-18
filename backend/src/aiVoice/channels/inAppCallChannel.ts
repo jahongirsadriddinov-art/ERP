@@ -58,7 +58,7 @@ export const inAppCallChannel: ChannelAdapter = {
       res = await ringUser({
         companyId: c.companyId, employeeId: c.employeeId, purpose: c.purpose, lang: c.lang === 'ru' ? 'ru' : 'uz',
         attemptKey: c.attemptKey, confirmationId: c.confirmationId, attemptNo: c.attemptNo,
-        ringTimeoutSec: RING_SEC, maxDurationSec, requestText: r?.kind === 'reminder' ? r.text : undefined,
+        ringTimeoutSec: RING_SEC, maxDurationSec, requestText: r?.kind === 'reminder' || r?.kind === 'test' ? r.text : undefined,
       });
     } catch (e) {
       console.error('[aiVoice/inapp] qo\'ng\'iroq ochilmadi:', (e as Error).message);

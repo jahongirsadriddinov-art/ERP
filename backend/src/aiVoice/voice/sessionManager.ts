@@ -459,7 +459,7 @@ class ManagedVoiceSession implements VoiceSessionHandle {
       this.disclosureDone = true;
       this.uplinkOpenAt = Date.now() + 1_500;
       this.ev('state', { state: 'disclosure', mode: firstTime ? 'intro' : 'greeting' });
-      this.vs.sendText(greetingTurn(this.lang, { name: this.actorName, firstTime, disclosure: text, inbound: this.direction === 'inbound' }));
+      this.vs.sendText(greetingTurn(this.lang, { name: this.actorName, firstTime, disclosure: text, inbound: this.direction === 'inbound', reason: this.opts.requestText }));
       return;
     }
     this.safeSend(AIV_SERVER_EVENTS.transcript, { sessionId: this.sessionId, role: 'assistant', text, final: true });

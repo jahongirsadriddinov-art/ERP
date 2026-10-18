@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { MorphIcon } from "morphicons/react";
@@ -78,6 +78,24 @@ function dayLabel(day: string, t: (k: string) => string, lang: string): string {
   const d = new Date(`${day}T12:00:00Z`);
   if (Number.isNaN(d.getTime())) return day;
   try { return d.toLocaleDateString(lang === "ru" ? "ru-RU" : "uz-UZ", { day: "numeric", month: "long", timeZone: "Asia/Tashkent" }); } catch { return day; }
+}
+
+// AI yuborgan rasm/video (owner 2026-10-19): matndagi [[image:URL]] / [[video:URL]] belgilarini ko'rsatadi.
+// Faqat https URL (xavfsizlik) — boshqasi oddiy matn bo'lib qoladi.
+const MEDIA_RE = /\[\[(image|video):(https:\/\/[^\]\s]+)\]\]/g;
+export function RichText({ text }: { text: string }) {
+  const parts: ReactNode[] = [];
+  let last = 0;
+  for (const m of text.matchAll(MEDIA_RE)) {
+    const at = m.index ?? 0;
+    if (at > last) parts.push(text.slice(last, at).replace(/\n+$/, ""));
+    parts.push(m[1] === "image"
+      ? <a key={at} href={m[2]} target="_blank" rel="noreferrer" className="block mt-1.5"><img src={m[2]} alt="" loading="lazy" className="max-w-full max-h-72 rounded-xl" /></a>
+      : <video key={at} src={m[2]} controls playsInline preload="metadata" className="block mt-1.5 max-w-full max-h-72 rounded-xl" />);
+    last = at + m[0].length;
+  }
+  if (last < text.length) parts.push(text.slice(last));
+  return <>{parts}</>;
 }
 
 function CallEntry({ e }: { e: AiChatEntry }) {
@@ -310,7 +328,7 @@ export function AiChatThread({ userId, onBack, backAlways = false }: { userId: s
                       : "rounded-2xl rounded-bl-md bg-card border border-border/60"}`}
                     style={mine ? GRADIENT : undefined}
                   >
-                    {e.text}
+                    <RichText text={e.text || ""} />
                   </div>
                   {e.failed && (
                     <div className="flex items-center gap-1.5 mt-1 text-[11px] text-red-500">

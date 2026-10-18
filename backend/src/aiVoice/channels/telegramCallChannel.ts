@@ -122,7 +122,7 @@ export const telegramCallChannel: ChannelAdapter = {
         // Jiringlash vaqtini worker o'lchaydi (aniq natija bilan); menejer taymeri — faqat zaxira (+20 s)
         ringTimeoutSec: settings.ring + 20, maxDurationSec: settings.max,
         // Eslatma/xabar matni qo'ng'iroqda aytilsin (ilova kanalidagi kabi; avval Telegram'da yo'q edi)
-        requestText: r?.kind === 'reminder' ? r.text : undefined,
+        requestText: r?.kind === 'reminder' || r?.kind === 'test' ? r.text : undefined,
       });
     } catch (e) {
       await releaseDailyCall(now);

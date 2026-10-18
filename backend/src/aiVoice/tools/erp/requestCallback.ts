@@ -113,11 +113,12 @@ export function ensureCallbackJob(q: JobQueue | null): void {
   registeredOn.add(q);
   if (q.registeredTypes().includes(CALLBACK_JOB)) return;
   q.register(CALLBACK_JOB, async ({ job, queue }) => {
-    const p = (job.payload || {}) as { order?: ChannelName[]; lang?: 'uz' | 'ru' };
+    const p = (job.payload || {}) as { order?: ChannelName[]; lang?: 'uz' | 'ru'; reason?: string };
     await runCallback({
       companyId: String(job.companyId || ''), employeeId: String(job.employeeId || ''), correlationId: job.correlationId || newCorrelationId(),
       order: (p.order || []).filter((c) => CALL_CHANNELS.includes(c)), lang: p.lang === 'ru' ? 'ru' : 'uz',
       attemptNo: Number(job.attempts) || 1, maxAttempts: Number(job.maxAttempts) || 2,
+      reason: typeof p.reason === 'string' ? p.reason.slice(0, 300) : undefined,
     }, queue.now());
   }, { concurrency: 2, maxAttempts: 2, backoffBaseMs: 60_000 });
 }
@@ -127,6 +128,8 @@ export type CallbackOutcome = 'calling' | 'retry' | 'unreachable' | 'skipped';
 /** Ish bajarilishi: birinchi mavjud qo'ng'iroq kanali; hech biri bo'lmasa — bot xabari bilan aniq sababi. */
 export async function runCallback(p: {
   companyId: string; employeeId: string; correlationId: string; order: ChannelName[]; lang: 'uz' | 'ru'; attemptNo: number; maxAttempts: number;
+  /** Nima uchun qayta qo'ng'iroq (owner 2026-10-19: AI qo'ng'iroq boshida sababini aytsin). */
+  reason?: string;
 }, now: Date): Promise<CallbackOutcome> {
   if (!p.companyId || !(await isAiActive(p.companyId))) return 'skipped';
   const u = await User.findOne({ _id: p.employeeId, companyId: p.companyId, isBlocked: { $ne: true } }).select('_id').lean().catch(() => null);
@@ -140,7 +143,7 @@ export async function runCallback(p: {
     try {
       const av = await ch.isAvailable(ctx);
       if (!av.ok) { reasons[name] = av.reason || 'unavailable'; if (TRANSIENT.has(String(av.reason))) retry = true; continue; }
-      const r = await ch.attempt(ctx, { kind: 'test', maxDurationSec: 600 });
+      const r = await ch.attempt(ctx, { kind: 'test', maxDurationSec: 600, ...(p.reason ? { text: p.reason } : {}) });
       if (r.sessionId || r.outcome === 'answered' || r.outcome === 'delivered') return 'calling';
       if (r.retryable || r.retryAt) retry = true;
       reasons[name] = r.errorCode || r.outcome;
@@ -159,7 +162,7 @@ export async function runCallback(p: {
   return 'unreachable';
 }
 
-export const requestCallback: AiToolDef<{ channel?: 'inapp' | 'telegram'; delayMinutes?: number; when?: string }> = {
+export const requestCallback: AiToolDef<{ channel?: 'inapp' | 'telegram'; delayMinutes?: number; when?: string; reason?: string }> = {
   name: 'requestCallback',
   description: {
     uz: "Foydalanuvchining O'ZIGA AI qo'ng'irog'i (\"menga qo'ng'iroq qil\"). channel: telegram yoki inapp (ilova); delayMinutes — necha daqiqadan keyin (\"bir minutdan keyin\" = 1); when — aniq vaqt (\"15:30\" yoki ISO, Toshkent). Hech biri bo'lmasa — hozir.",
@@ -171,6 +174,7 @@ export const requestCallback: AiToolDef<{ channel?: 'inapp' | 'telegram'; delayM
       channel: { type: 'string', enum: ['inapp', 'telegram'] },
       delayMinutes: { type: 'integer', minimum: 0, maximum: 10080, description: 'Necha daqiqadan keyin' },
       when: { type: 'string', maxLength: 40, description: "Aniq vaqt: \"15:30\" yoki \"2026-10-16T15:30\" (Toshkent)" },
+      reason: { type: 'string', maxLength: 300, description: "NIMA UCHUN qo'ng'iroq: suhbat mavzusi yoki eslatiladigan narsa (masalan \"sement buyurtmasini eslatish\", \"hisobotni gaplashish\"). Qo'ng'iroq boshida AI shuni aytadi." },
     },
   },
   kind: 'write',
@@ -224,7 +228,13 @@ export const requestCallback: AiToolDef<{ channel?: 'inapp' | 'telegram'; delayM
 
     const r = await q.enqueue({
       type: CALLBACK_JOB, companyId: ctx.companyId, employeeId: ctx.userId, refId: ctx.userId,
-      payload: { order, lang }, runAt, maxAttempts: 2, correlationId: ctx.correlationId,
+      payload: {
+        order, lang,
+        // Sabab bo'lmasa ham AI qo'ng'iroqda nega qo'ng'iroq qilayotganini aytadi
+        reason: (args.reason && String(args.reason).trim().slice(0, 300))
+          || L(ctx, `foydalanuvchi ${args.when ? `soat ${args.when} da` : args.delayMinutes ? `${args.delayMinutes} daqiqadan keyin` : 'keyinroq'} qayta qo'ng'iroq qilishni so'ragan`, `пользователь попросил перезвонить ${args.when ? `в ${args.when}` : args.delayMinutes ? `через ${args.delayMinutes} мин` : 'позже'}`),
+      },
+      runAt, maxAttempts: 2, correlationId: ctx.correlationId,
       // Bir foydalanuvchiga 2 daqiqalik oynada bitta qo'ng'iroq (takror bosish / model takrori)
       dedupeKey: `aicb:${ctx.userId}:${Math.floor(runAt.getTime() / 120_000)}`,
     });

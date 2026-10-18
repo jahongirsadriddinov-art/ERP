@@ -63,7 +63,8 @@ router.get('/', wrap(async (req, res) => {
     isAiActive(m.companyId).catch(() => false),
     AiConversation.find({ userId: m.userId, companyId: m.companyId, source: 'chat', sessionId: { $regex: `^${CHAT_SESSION_PREFIX}` }, updatedAt: { $gte: since } })
       .sort({ sessionId: 1 }).limit(HISTORY_DAYS + 1).select('sessionId messages createdAt updatedAt').lean(),
-    AiConversation.find({ userId: m.userId, companyId: m.companyId, source: 'voice_inapp', updatedAt: { $gte: since } })
+    // Owner 2026-10-19: Telegram orqali qo'ng'iroqlar ham ilovadagi AI chatida ko'rinsin
+    AiConversation.find({ userId: m.userId, companyId: m.companyId, source: { $in: ['voice_inapp', 'telegram_call'] }, updatedAt: { $gte: since } })
       .sort({ createdAt: 1 }).limit(50).select('messages createdAt').lean(),
   ]);
   const items: (AiChatHistoryItem & { sortAt: number; seq: number })[] = [];

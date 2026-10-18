@@ -2,6 +2,7 @@ import User from '../../../models/User';
 import type { ChannelCtx, ChannelName } from '../../contracts';
 import { getChannel } from '../../channels/registry';
 import { sendToUser } from '../../channels/botChannel';
+import { postChatDm } from '../../lib/chatPost';
 import { isObjectIdString, newCorrelationId } from '../../lib/ids';
 import { truncateText } from '../../lib/untrusted';
 import { getSharedQueue, type JobQueue } from '../../queue/jobQueue';
@@ -95,20 +96,13 @@ export const messageEmployee: AiToolDef<Args> = {
   handler: async (ctx, args) => {
     const r = await findEmployee(ctx, args);
     if (!r.one) return whoMissing(ctx, r);
-    const from = await senderName(ctx);
-    const text = `✉️ ${from}:\n${truncateText(args.message, 400)}`;
-    const tg = await sendToUser(r.one.id, text, { companyId: ctx.companyId });
-    let inApp = false;
-    try {
-      const { createNotification } = await import('../../../services/notifications');
-      await createNotification({ recipientId: r.one.id, companyId: ctx.companyId, type: 'ai', title: `AI: ${from}`.slice(0, 120), body: truncateText(args.message, 500), entity: 'ai_message' });
-      inApp = true;
-    } catch { /* bildirishnoma ixtiyoriy */ }
-    if (!tg.ok && !inApp) {
-      return { status: 'error', message: L(ctx, `${r.one.name}ga yetkazib bo'lmadi (Telegram'ga ulanmagan).`, `Не удалось доставить ${r.one.name}.`), retryable: false };
+    // Owner 2026-10-19: oddiy CHAT xabari (ilovadagi chatda ko'rinadi) + Telegram + bildirishnoma
+    const sent = await postChatDm({ companyId: ctx.companyId, fromUserId: ctx.userId, toUserId: r.one.id, text: truncateText(args.message, 400) });
+    if (!sent.ok) {
+      return { status: 'error', message: L(ctx, `${r.one.name}ga yetkazib bo'lmadi.`, `Не удалось доставить ${r.one.name}.`), retryable: true };
     }
-    const where = tg.ok ? L(ctx, "Telegram'iga va ilovaga", 'в Telegram и в приложение') : L(ctx, 'faqat ilovaga (Telegram botga ulanmagan)', 'только в приложение (бот не подключён)');
-    return ok(L(ctx, `${r.one.name}ga xabar yuborildi — ${where}.`, `Сообщение ${r.one.name} отправлено — ${where}.`), { name: r.one.name, telegram: tg.ok, inApp });
+    const where = sent.telegram ? L(ctx, "ilovadagi chatga va Telegram'iga", 'в чат приложения и в Telegram') : L(ctx, 'ilovadagi chatga (Telegram botga ulanmagan)', 'в чат приложения (бот не подключён)');
+    return ok(L(ctx, `${r.one.name}ga xabar yuborildi — ${where}.`, `Сообщение ${r.one.name} отправлено — ${where}.`), { name: r.one.name, telegram: sent.telegram, inApp: true });
   },
 };
 
@@ -121,16 +115,16 @@ export function ensureRelayJob(q: JobQueue | null): void {
   registeredOn.add(q);
   if (q.registeredTypes().includes(RELAY_JOB)) return;
   q.register(RELAY_JOB, async ({ job, queue }) => {
-    const p = (job.payload || {}) as { text?: string; lang?: 'uz' | 'ru' };
+    const p = (job.payload || {}) as { text?: string; lang?: 'uz' | 'ru'; fromUserId?: string };
     await runRelay({
       companyId: String(job.companyId || ''), employeeId: String(job.employeeId || ''), correlationId: job.correlationId || newCorrelationId(),
-      text: String(p.text || '').slice(0, 500), lang: p.lang === 'ru' ? 'ru' : 'uz',
+      text: String(p.text || '').slice(0, 500), lang: p.lang === 'ru' ? 'ru' : 'uz', fromUserId: p.fromUserId,
       attemptNo: Number(job.attempts) || 1, maxAttempts: Number(job.maxAttempts) || 3,
     }, queue.now());
   }, { concurrency: 2, maxAttempts: 3, backoffBaseMs: 60_000 });
 }
 
-export async function runRelay(p: { companyId: string; employeeId: string; correlationId: string; text: string; lang: 'uz' | 'ru'; attemptNo: number; maxAttempts: number }, now: Date): Promise<'calling' | 'texted' | 'skipped'> {
+export async function runRelay(p: { companyId: string; employeeId: string; correlationId: string; text: string; lang: 'uz' | 'ru'; attemptNo: number; maxAttempts: number; fromUserId?: string }, now: Date): Promise<'calling' | 'texted' | 'skipped'> {
   if (!p.companyId || !(await isAiActive(p.companyId))) return 'skipped';
   const ctx: ChannelCtx = { companyId: p.companyId, employeeId: p.employeeId, correlationId: p.correlationId, purpose: 'reminder', lang: p.lang, now, attemptNo: p.attemptNo };
   let retry = false;
@@ -148,8 +142,9 @@ export async function runRelay(p: { companyId: string; employeeId: string; corre
     }
   }
   if (retry && p.attemptNo < p.maxAttempts) throw new Error('relay_retry');
-  // Qo'ng'iroq bo'lmadi — xabar matn bo'lib boradi (yo'qolmasin)
-  await sendToUser(p.employeeId, `📞 ${p.text}`, { companyId: p.companyId }).catch(() => undefined);
+  // Qo'ng'iroq bo'lmadi — xabar matn bo'lib boradi (yo'qolmasin): ilovadagi chat (+ Telegram), yuboruvchi nomidan
+  const posted = p.fromUserId ? await postChatDm({ companyId: p.companyId, fromUserId: p.fromUserId, toUserId: p.employeeId, text: `📞 ${p.text}` }) : { ok: false };
+  if (!posted.ok) await sendToUser(p.employeeId, `📞 ${p.text}`, { companyId: p.companyId }).catch(() => undefined);
   return 'texted';
 }
 
@@ -187,7 +182,7 @@ export const callEmployee: AiToolDef<Args> = {
     const runAt = new Date(q.now().getTime() + (inCall ? 20_000 : 3_000));
     await q.enqueue({
       type: RELAY_JOB, companyId: ctx.companyId, employeeId: r.one.id, refId: r.one.id,
-      payload: { text, lang }, runAt, maxAttempts: 3, correlationId: ctx.correlationId,
+      payload: { text, lang, fromUserId: ctx.userId }, runAt, maxAttempts: 3, correlationId: ctx.correlationId,
       dedupeKey: `airelay:${r.one.id}:${Math.floor(runAt.getTime() / 120_000)}`,
     });
     const note = inCall

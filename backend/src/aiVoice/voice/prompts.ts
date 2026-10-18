@@ -139,8 +139,16 @@ export function startTurnText(lang: AiLang, purpose: Purpose): string {
  *  • keyingi safarlar — faqat ism bilan qisqa salom: "Assalomu alaykum, Imom aka! Bugun qandaysiz? Sizga qanday yordam bera olaman?"
  * aka/opa — model ismga qarab tanlaydi (bilmasa faqat ism). Ko'p gap yo'q.
  */
-export function greetingTurn(lang: AiLang, o: { name?: string; firstTime: boolean; disclosure: string; inbound: boolean }): string {
+export function greetingTurn(lang: AiLang, o: { name?: string; firstTime: boolean; disclosure: string; inbound: boolean; reason?: string }): string {
   const name = sanitizeForPrompt(o.name, 40);
+  const reason = sanitizeForPrompt(o.reason, 300);
+  // Owner 2026-10-19: AI o'zi (kelishilgan vaqtda) qo'ng'iroq qildi — salomdan keyin DARHOL sababini aytsin
+  if (!o.inbound && reason) {
+    const hon = lang === 'ru' ? '' : " (ismga qarab \"aka\"/\"opa\")";
+    return lang === 'ru'
+      ? `[СИСТЕМА] Звонок соединён. ВЫ позвонили сами — пользователь раньше просил перезвонить. Причина: «${reason}». Коротко поздоровайтесь${name ? ` по имени «${name}»` : ''} и СРАЗУ скажите, зачем звоните (например: «Вы просили перезвонить через минуту — …»), затем спросите, чем помочь.`
+      : `[TIZIM] Qo'ng'iroq ulandi. Bu qo'ng'iroqni SIZ qildingiz — foydalanuvchi oldin so'ragan edi. Sabab: «${reason}». Qisqa salomlashing${name ? ` («${name}»${hon})` : ''} va DARHOL nega qo'ng'iroq qilganingizni ayting, masalan: «Bir daqiqadan keyin qo'ng'iroq qilishimni so'ragan edingiz — …». Keyin «Sizga qanday yordam bera olaman?» deb so'rang. Tanishtiruv shart emas.`;
+  }
   if (lang === 'ru') {
     const who = name ? `по имени («${name}») — с уважением` : 'без имени';
     return o.firstTime

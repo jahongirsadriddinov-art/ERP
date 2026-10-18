@@ -106,7 +106,6 @@ export default defineConfig({
             return 'vendor-i18n';
           }
           // Other large vendors
-          if (id.includes('node_modules/date-fns')) return 'vendor-date';
           if (id.includes('node_modules/sonner')) return 'vendor-toast';
           // Remaining node_modules
           if (id.includes('node_modules')) return 'vendor';

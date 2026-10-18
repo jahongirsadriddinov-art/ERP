@@ -92,6 +92,12 @@ export class TelegramTransport implements VoiceTransport {
     this.capTimer.unref?.();
   }
 
+  activity(a: { tool: string; phase: 'start' | 'end'; status?: string }): void {
+    if (this.closed || !this.sessionId) return;
+    callWorker('call.avatar', { sessionId: this.sessionId, tool: String(a.tool).slice(0, 40), phase: a.phase, ...(a.status ? { status: String(a.status).slice(0, 24) } : {}) })
+      .catch(() => undefined);
+  }
+
   close(reason: AivEndReason): void {
     if (this.closed) return;
     this.closed = true;

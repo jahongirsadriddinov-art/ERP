@@ -54,6 +54,12 @@ class FaceParams:
     viseme: str = "rest"
     emotion: str = "neutral"
     caption: tuple[str, ...] = ()
+    # 3D emoji avatar (owner 2026-10-19): AI hozir nima qilyapti (tool) va oqim boshidan vaqt
+    activity: str = ""
+    activity_phase: str = ""
+    activity_status: str = ""
+    activity_age: float = 0.0
+    stream_age: float = 99.0
 
 
 def pcm_features(pcm: bytes) -> tuple[float, float]:
@@ -240,6 +246,8 @@ class AvatarState:
         self.phase = self.rng.uniform(0, 100)
         # Owner 2026-10-19: subtitr standart O'CHIQ — "subtitrni yoq" deyilsa yoqiladi (kayfiyat baribir matndan)
         self.show_captions = False
+        self.t0 = t0
+        self._activity: Optional[tuple[str, str, str, float]] = None
 
     # ── kirishlar ──
     def feed_audio(self, pcm: bytes) -> None:
@@ -256,6 +264,10 @@ class AvatarState:
         self._user_env += (lv - self._user_env) * (0.5 if lv > self._user_env else 0.2)
         if self._user_env > 0.15:
             self.user_last_voice_t = t
+
+    def set_activity(self, tool: str, phase: str, status: str = "") -> None:
+        """Tool boshlandi/tugadi — avatar pozasi va belgisi (izquvar + 🌐, ✅, 🤷 ...)."""
+        self._activity = (str(tool or "")[:40], "start" if phase == "start" else "end", str(status or "")[:24], self.clock())
 
     def set_caption(self, text: str, emotion: Optional[str] = None) -> None:
         t = self.clock()
@@ -320,4 +332,17 @@ class AvatarState:
             brow_asym=self.emo.mix("brow_asym"), smile=self.emo.mix("smile"), blush=self.emo.mix("blush"),
             mouth_open=max(0.0, min(1.0, self._mouth)), mouth_width=self._mouth_w, viseme=vis,
             emotion=self.emo.dominant(), caption=self._caption_page(t),
+            **self._activity_fields(t), stream_age=t - self.t0,
         )
+
+    def _activity_fields(self, t: float) -> dict:
+        a = self._activity
+        if not a:
+            return {}
+        tool, phase, status, at = a
+        age = t - at
+        # Boshlangan, lekin 25 s'dan ortiq tugamagan — eskirgan (javob kelmay qolgan)
+        if (phase == "start" and age > 25) or (phase == "end" and age > 4):
+            self._activity = None
+            return {}
+        return {"activity": tool, "activity_phase": phase, "activity_status": status, "activity_age": age}

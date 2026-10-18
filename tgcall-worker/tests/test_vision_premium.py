@@ -4,7 +4,8 @@ import io
 import numpy as np
 from PIL import Image
 
-from app.avatar.premium import LOOKS, OrbRenderer, PersonRenderer, get_renderer, normalize_look
+from app.avatar.emoji3d import EmojiRenderer, TOOL_LOOK
+from app.avatar.premium import LOOKS, OrbRenderer, get_renderer, normalize_look
 from app.avatar.state import FaceParams
 from app.avatar.face import i420_size
 from app.vision import i420_to_jpeg, video_frame
@@ -39,7 +40,7 @@ def test_i420_odd_size_and_short_frame():
 def test_premium_looks_render_valid_frames():
     for lk in LOOKS:
         r = get_renderer(lk, 320)
-        assert isinstance(r, OrbRenderer if lk == "orb" else PersonRenderer)
+        assert isinstance(r, OrbRenderer if lk == "orb" else EmojiRenderer)
         for p in (FaceParams(t=1), FaceParams(t=2, mouth_open=0.8, smile=0.7, blink=1.0, tilt_deg=4, caption=("Salom",))):
             im = r.render(p)
             assert im.size == (320, 320) and im.mode == "RGB"
@@ -47,11 +48,40 @@ def test_premium_looks_render_valid_frames():
     assert normalize_look("xyz") == "female" and get_renderer("female", 320) is get_renderer("female", 320)
 
 
-def test_mouth_moves_on_person():
+def test_emoji_avatar_reacts_to_voice_and_activity():
     r = get_renderer("male", 320)
-    a = np.asarray(r.render(FaceParams(t=1, mouth_open=0.0)), dtype=np.int16)
-    b = np.asarray(r.render(FaceParams(t=1, mouth_open=0.9)), dtype=np.int16)
-    assert np.abs(a - b).sum() > 1000
+    a = np.asarray(r.render(FaceParams(t=20, mouth_open=0.0, stream_age=20)), dtype=np.int16)
+    b = np.asarray(r.render(FaceParams(t=20.3, mouth_open=0.9, viseme="A", stream_age=20.3)), dtype=np.int16)
+    assert np.abs(a - b).sum() > 1000                       # gapirganda harakat + ovoz to'lqini
+    assert r.choose(FaceParams(t=1, stream_age=1)) == ("wave", "")
+    assert r.choose(FaceParams(t=30, stream_age=30, activity="searchWeb", activity_phase="start")) == ("detective", "globe")
+    assert r.choose(FaceParams(t=30, stream_age=30, activity="getWeather", activity_phase="end", activity_status="ok", activity_age=0.5)) == ("ok", "done")
+    assert r.choose(FaceParams(t=30, stream_age=30, activity="x", activity_phase="end", activity_status="error", activity_age=0.5)) == ("shrug", "question")
+    assert r.choose(FaceParams(t=30, stream_age=30, emotion="thinking")) == ("office", "thinking")
+    assert r.choose(FaceParams(t=30, stream_age=30, emotion="concerned")) == ("sad", "")
+    assert TOOL_LOOK["getExchangeRate"] == ("explain", "dollar")
+
+
+def test_state_activity_window():
+    from app.avatar.state import AvatarState
+
+    class Clk:
+        t = 0.0
+
+        def __call__(self):
+            return self.t
+
+    c = Clk()
+    st = AvatarState(c, seed=1)
+    st.set_activity("searchWeb", "start")
+    c.t = 2
+    p = st.params()
+    assert p.activity == "searchWeb" and p.activity_phase == "start"
+    st.set_activity("searchWeb", "end", "ok")
+    c.t = 3
+    assert st.params().activity_status == "ok"
+    c.t = 9
+    assert st.params().activity == ""
 
 
 def test_calls_on_video_throttles_and_sends():

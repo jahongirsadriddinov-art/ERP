@@ -177,7 +177,7 @@ async def amain() -> int:
         "binding.expect": h_binding, "call.place": h_place, "call.hangup": h_hangup, "udp.probe": h_udp,
         "incoming.config": h_incoming_config,
         "call.caption": lambda p: calls.caption(p), "call.video_rate": lambda p: calls.video_rate(p),
-        "call.subtitles": lambda p: calls.subtitles(p),
+        "call.subtitles": lambda p: calls.subtitles(p), "call.avatar": lambda p: calls.avatar_event(p),
     }
 
     async def on_lost(reason: str) -> None:

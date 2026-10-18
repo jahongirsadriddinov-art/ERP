@@ -14,6 +14,8 @@ export interface VoiceTransport {
   flushAudio(): void;
   sendEvent(event: string, payload: unknown): void;
   close(reason: AivEndReason): void;
+  /** AI tool ishlatyapti (video avatar uchun; ixtiyoriy). */
+  activity?(a: { tool: string; phase: 'start' | 'end'; status?: string }): void;
   /** P5 qo'shimchasi (ixtiyoriy): transportda hali yuborilmagan baytlar — chiqish navbati cap'i (A10) uchun. */
   backlogBytes?(): number;
 }

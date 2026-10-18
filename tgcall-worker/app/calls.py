@@ -476,6 +476,13 @@ class CallManager:
         finally:
             c.video_busy = False
 
+    # ── RPC: call.avatar — AI hozir nima qilyapti (tool boshlandi/tugadi) → avatar pozasi ──
+    async def avatar_event(self, p: dict) -> dict:
+        c = self.active
+        if c and c.session_id == str(p.get("sessionId") or "") and c.avatar is not None:
+            c.avatar.set_activity(str(p.get("tool") or "")[:40], str(p.get("phase") or "end"), str(p.get("status") or "")[:24])
+        return {"ok": True}
+
     # ── RPC: call.subtitles — avatar subtitri (standart o'chiq) ──
     async def subtitles(self, p: dict) -> dict:
         c = self.active

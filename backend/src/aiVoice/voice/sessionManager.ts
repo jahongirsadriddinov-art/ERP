@@ -552,6 +552,7 @@ class ManagedVoiceSession implements VoiceSessionHandle {
     const name = String(c.name || '').slice(0, 64);
     this.pendingTools.set(id, name);
     this.ev('tool_call', { id, name, args: c.args });
+    try { this.transport.activity?.({ tool: name, phase: 'start' }); } catch { /* avatar — ixtiyoriy */ }
     let result: ToolResult;
     let pending: PendingActionInfo | undefined;
     let revoke = false;
@@ -576,6 +577,7 @@ class ManagedVoiceSession implements VoiceSessionHandle {
     this.ev('tool_result', { id, name, status: result.status, message: result.message });
     if (this.isOver()) { this.pendingTools.delete(id); return; }
     this.safeSend(AIV_SERVER_EVENTS.tool, { sessionId: this.sessionId, name, status: result.status, message: result.message });
+    try { this.transport.activity?.({ tool: name, phase: 'end', status: result.status }); } catch { /* avatar — ixtiyoriy */ }
     if (pending) this.sendConfirmCard(pending);
     // Avval "kutilmoqda" holatidan chiqaramiz, keyin javob — shundan keyingi model ovozi o'tadi
     this.pendingTools.delete(id);

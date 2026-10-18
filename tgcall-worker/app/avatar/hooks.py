@@ -204,6 +204,10 @@ class AvatarSession:
         if self.streamer is not None:
             self.streamer.feed_user_audio(pcm48)
 
+    def set_activity(self, tool: str, phase: str, status: str = "") -> None:
+        if self.streamer is not None:
+            self.streamer.state.set_activity(tool, phase, status)
+
     def set_subtitles(self, on: bool) -> None:
         self.subtitles = bool(on)
         if self.streamer is not None:

@@ -30,6 +30,7 @@ const DEFAULT_TIMEOUT_MS: Record<WorkerRpcMethod, number> = {
   'call.caption': 3_000,
   'call.video_rate': 3_000,
   'call.subtitles': 3_000,
+  'call.avatar': 3_000,
 };
 
 const CODE_RE = /^[A-Za-z0-9_.:-]{1,64}$/;

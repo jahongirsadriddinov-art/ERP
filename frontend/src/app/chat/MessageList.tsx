@@ -41,6 +41,8 @@ export interface MessageListProps {
   onRetry: (m: Msg) => void;
   onStartVideoChat: (g: Group) => void;
   onBackgroundClick: () => void;
+  /** Chat foni (sozlamalardan); berilmasa — standart nuqtali fon. */
+  wallpaper?: React.CSSProperties;
 }
 
 // Suhbat foni — mavzu ranglaridan (yorug'/qorong'i rejimga mos), mayda nuqtali naqsh
@@ -49,6 +51,9 @@ const WALLPAPER: React.CSSProperties = {
   backgroundImage: "radial-gradient(color-mix(in srgb, var(--foreground) 8%, transparent) 1px, transparent 1.3px)",
   backgroundSize: "20px 20px",
 };
+
+/** Tizim yozuvi: yangi xabarlarda `system`, eskilarida — AI'ning guruhga qo'shildi/chiqarildi matni. */
+const isSystemMsg = (m?: Msg) => !!m && (!!m.system || (m.fromUserId === "ai-assistant" && /^🤖\s*(AI yordamchi guruh|ИИ-помощник (добавлен|удалён))/u.test(m.text || "")));
 
 const fmtSize = (n?: number) => (n == null ? "" : n > 1e6 ? `${(n / 1e6).toFixed(1)} MB` : `${Math.round(n / 1e3)} KB`);
 
@@ -127,7 +132,7 @@ export function MessageList(p: MessageListProps) {
     const day = tashkentDayKey(t0);
     const prevDay = prev ? tashkentDayKey(Date.parse(prev.timestamp)) : null;
     const nextDay = next ? tashkentDayKey(Date.parse(next.timestamp)) : null;
-    const sys = (x?: Msg) => x?.type === "video_event";
+    const sys = (x?: Msg) => x?.type === "video_event" || isSystemMsg(x);
     const firstOfRun = !prev || sys(prev) || prev.fromUserId !== m.fromUserId || prevDay !== day || t0 - Date.parse(prev.timestamp) > RUN_GAP_MS;
     const lastOfRun = !next || sys(next) || next.fromUserId !== m.fromUserId || nextDay !== day || Date.parse(next.timestamp) - t0 > RUN_GAP_MS;
     return { day, newDay: prevDay !== day, t0, firstOfRun, lastOfRun };
@@ -239,7 +244,7 @@ export function MessageList(p: MessageListProps) {
   return (
     <div className="flex-1 min-h-0 relative">
       <div ref={scrollRef} onScroll={onScroll} onClick={p.onBackgroundClick} data-testid="chat-thread-scroll"
-        className="absolute inset-0 overflow-y-auto overflow-x-hidden overscroll-contain scrollbar-hide" style={WALLPAPER}>
+        className="absolute inset-0 overflow-y-auto overflow-x-hidden overscroll-contain scrollbar-hide" style={p.wallpaper || WALLPAPER}>
         <div className="min-h-full flex flex-col justify-end max-w-3xl mx-auto w-full px-2 sm:px-4 pt-3 pb-2">
           {p.thread.length === 0 && (
             <div className="self-center my-auto text-center text-sm text-muted-foreground bg-card/80 rounded-2xl px-4 py-3 shadow-sm">{t("chatUi.noMessagesYet")}</div>
@@ -254,6 +259,15 @@ export function MessageList(p: MessageListProps) {
             const marker = p.firstUnreadId === m.id && (
               <div data-unread-marker className="my-2 -mx-4 py-1 bg-card/70 text-center text-[12px] font-medium text-primary">{t("chatUi.newBelow")}</div>
             );
+            if (isSystemMsg(m)) {
+              return (
+                <Fragment key={m.id}>{sep}{marker}
+                  <div className="flex justify-center my-1.5 px-6" data-testid="chat-system-msg">
+                    <span className="text-[12px] text-center leading-snug text-foreground/85 bg-card/85 backdrop-blur rounded-2xl px-3 py-1.5 shadow-sm max-w-[34rem]">{m.text.replace(/^🤖\s*/u, "")}</span>
+                  </div>
+                </Fragment>
+              );
+            }
             if (m.type === "video_event") {
               const ev = m.videoEvent;
               const label = ev?.kind === "ended"

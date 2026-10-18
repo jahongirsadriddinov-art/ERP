@@ -77,11 +77,12 @@ async function emitGroup(groupId: string, event: string, payload: unknown): Prom
 }
 
 /** Guruhga AI nomidan xabar (odatdagi Message — hamma qurilmada, tarixda ko'rinadi). */
-async function postAiMessage(g: GroupDoc, text: string, replyToId?: string): Promise<string> {
+async function postAiMessage(g: GroupDoc, text: string, replyToId?: string, system = false): Promise<string> {
   const msg: any = await Message.create({
     fromUserId: AI_SENDER_ID, toUserId: '', groupId: String(g._id), text: text.slice(0, 4000),
     timestamp: new Date().toISOString(), read: false, type: 'text', companyId: g.companyId,
     ...(replyToId ? { replyToId } : {}),
+    ...(system ? { system: true } : {}),
   } as any);
   await emitGroup(String(g._id), 'message:new', { ...msg.toObject(), id: msg._id });
   return String(msg._id);
@@ -132,7 +133,7 @@ router.put('/:groupId', wrap(async (req, res) => {
       ? L(lang,
         "🤖 AI yordamchi guruhga qo'shildi (Beta). Savol berish uchun xabarni «@AI» yoki «AI,» bilan boshlang yoki AI xabariga javob yozing. Shaxsiy ma'lumotlar guruhda ko'rsatilmaydi — ular so'ragan odamga shaxsiy chatda yuboriladi.",
         '🤖 ИИ-помощник добавлен в группу (Beta). Чтобы спросить, начните сообщение с «@AI» или «AI,» либо ответьте на сообщение ИИ. Личные данные в группе не показываются — они отправляются спросившему в личный чат.')
-      : L(lang, '🤖 AI yordamchi guruhdan chiqarildi.', '🤖 ИИ-помощник удалён из группы.'));
+      : L(lang, '🤖 AI yordamchi guruhdan chiqarildi.', '🤖 ИИ-помощник удалён из группы.'), undefined, true);
     await emitGroup(groupId, 'ai:group', { groupId, enabled });
   }
   res.json({ enabled, canManage: canManage(m, g, enabled ? (cur.enabled ? cur.addedBy : m.userId) : undefined) });

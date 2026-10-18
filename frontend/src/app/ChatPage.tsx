@@ -29,6 +29,7 @@ import { Composer, useKeyboardInset, type AttachKind } from "./chat/Composer";
 import { MessageList } from "./chat/MessageList";
 import { GroupCreateModal, GroupSettingsModal } from "./chat/GroupModals";
 import { useChatPrefs } from "./chat/chatPrefs";
+import { loadCustomWallpaper, wallpaperStyle } from "./chat/wallpaper";
 import { buildEntries, groupKey, isDmUnread, isGroupUnread, userKey, type ChatEntry } from "./chat/chatModel";
 
 // App.tsx'dan ajratilgan — faqat shu sahifa ochilganda yuklanadi (boshlang'ich yuklanish tezroq).
@@ -79,6 +80,10 @@ export default function ChatPage({ currentUser, users, messages, groups, onlineU
 
   const { t: tChat } = useTranslation();
   const [prefs, updatePrefs] = useChatPrefs(currentUser.id);
+  const wallpaperCss = useMemo(
+    () => wallpaperStyle(prefs.wallpaper, prefs.wallpaper === "custom" ? loadCustomWallpaper(currentUser.id) : null),
+    [prefs.wallpaper, prefs.wallpaperRev, currentUser.id],
+  );
   const keyboardInset = useKeyboardInset();
   const contacts = useMemo(() => users.filter(u => u.id !== currentUser.id), [users, currentUser.id]);
   const userById = useCallback((id: string) => users.find(u => u.id === id) || (aiSenderUser(id) as AppUser | undefined), [users]);
@@ -375,6 +380,7 @@ export default function ChatPage({ currentUser, users, messages, groups, onlineU
             )}
 
             <MessageList
+              wallpaper={wallpaperCss}
               threadKey={selectedKey!}
               thread={thread}
               me={currentUser}

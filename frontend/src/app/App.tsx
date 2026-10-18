@@ -285,6 +285,7 @@ export interface Msg {
   text: string; timestamp: string; read: boolean;
   type?: 'text'|'image'|'video'|'file'|'audio'|'location'|'video_invite'|'video_event';
   videoEvent?: { kind: 'started'|'ended'; durationSec?: number; by?: string }; // guruhdagi tizim xabari
+  system?: boolean; // tizim yozuvi (AI qo'shildi/chiqarildi) — markazda kichik yozuv
   mediaUrl?: string; fileName?: string; fileSize?: number;
   location?: { lat: number; lng: number };
   videoChatGroupId?: string; // 'video_invite' xabari — qaysi guruhning video chatiga taklif

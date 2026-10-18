@@ -200,7 +200,7 @@ export function ChatList({ me, entries, onlineUsers, selectedKey, aiOpen, prefs,
         <div className="h-3" />
       </div>
 
-      {settings && <ChatSettingsSheet prefs={prefs} update={update} onClose={() => setSettings(false)} />}
+      {settings && <ChatSettingsSheet uid={me.id} prefs={prefs} update={update} onClose={() => setSettings(false)} />}
     </div>
   );
 }

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Msg } from "../App";
 import { TOGGLEABLE_FOLDERS, groupKey, userKey, type FolderId, type SortMode } from "./chatModel";
+import { WALLPAPERS, type WallpaperId } from "./wallpaper";
 
 export interface ChatPrefs {
   v: 1;
@@ -14,12 +15,14 @@ export interface ChatPrefs {
   groupSeen: Record<string, number>;      // guruh → oxirgi ko'rilgan vaqt (ms)
   baseline: number;                       // birinchi ochilish — undan oldingi guruh xabarlari o'qilgan hisoblanadi
   readAllAt: number;                      // "Hammasini o'qildi qilish" bosilgan vaqt
+  wallpaper: WallpaperId;                 // chat foni (owner 2026-10-19)
+  wallpaperRev: number;                   // o'z rasmi o'zgarganda — qayta o'qish uchun
 }
 
 const KEY = (uid: string) => `erp_chatPrefs:${uid}`;
 
 export function defaultPrefs(now = Date.now()): ChatPrefs {
-  return { v: 1, hiddenFolders: [], sort: "recent", compact: false, pinned: [], muted: [], groupSeen: {}, baseline: now, readAllAt: 0 };
+  return { v: 1, hiddenFolders: [], sort: "recent", compact: false, pinned: [], muted: [], groupSeen: {}, baseline: now, readAllAt: 0, wallpaper: "dots", wallpaperRev: 0 };
 }
 
 export function loadPrefs(uid: string): ChatPrefs {
@@ -39,6 +42,8 @@ export function loadPrefs(uid: string): ChatPrefs {
       groupSeen: p.groupSeen && typeof p.groupSeen === "object" ? p.groupSeen : {},
       baseline: Number(p.baseline) || d.baseline,
       readAllAt: Number(p.readAllAt) || 0,
+      wallpaper: p.wallpaper === "custom" || (WALLPAPERS as readonly string[]).includes(p.wallpaper) ? p.wallpaper : "dots",
+      wallpaperRev: Number(p.wallpaperRev) || 0,
     };
   } catch { return d; }
 }

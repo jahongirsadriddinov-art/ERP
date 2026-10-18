@@ -1,6 +1,9 @@
 // "Chat sozlamalari" — jildlarni ko'rsatish/yashirish, saralash, ixcham ro'yxat (shu qurilmada saqlanadi).
 // document.body'ga portal: sahifa animatsiyasi (will-change: transform) ichida fixed joylashuv buzilmasin.
 import { createPortal } from "react-dom";
+import { useState } from "react";
+import { toast } from "sonner";
+import { WALLPAPERS, clearCustomWallpaper, loadCustomWallpaper, saveCustomWallpaper, wallpaperStyle } from "./wallpaper";
 import { useTranslation } from "react-i18next";
 import { MorphIcon } from "morphicons/react";
 import X from "@hugeicons/core-free-icons/Cancel01Icon";
@@ -17,10 +20,23 @@ function Switch({ on, onChange, label, testId }: { on: boolean; onChange: (v: bo
   );
 }
 
-export function ChatSettingsSheet({ prefs, update, onClose }: {
-  prefs: ChatPrefs; update: (fn: (p: ChatPrefs) => ChatPrefs) => void; onClose: () => void;
+export function ChatSettingsSheet({ uid, prefs, update, onClose }: {
+  uid: string; prefs: ChatPrefs; update: (fn: (p: ChatPrefs) => ChatPrefs) => void; onClose: () => void;
 }) {
   const { t } = useTranslation();
+  const [busy, setBusy] = useState(false);
+  const hasCustom = !!loadCustomWallpaper(uid);
+  const pickImage = async (f?: File | null) => {
+    if (!f) return;
+    setBusy(true);
+    try {
+      await saveCustomWallpaper(uid, f);
+      update((p) => ({ ...p, wallpaper: "custom", wallpaperRev: Date.now() }));
+    } catch {
+      toast.error(t("chatUi.wallpaperError"));
+    } finally { setBusy(false); }
+  };
+  const removeImage = () => { clearCustomWallpaper(uid); update((p) => ({ ...p, wallpaper: "dots", wallpaperRev: Date.now() })); };
   const toggleFolder = (f: FolderId, show: boolean) => update((p) => ({
     ...p, hiddenFolders: show ? p.hiddenFolders.filter((x) => x !== f) : [...p.hiddenFolders.filter((x) => x !== f), f],
   }));
@@ -49,6 +65,28 @@ export function ChatSettingsSheet({ prefs, update, onClose }: {
                 </label>
               ))}
             </div>
+          </section>
+          <section data-testid="chat-settings-wallpaper">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">{t("chatUi.wallpaper")}</p>
+            <div role="radiogroup" aria-label={t("chatUi.wallpaper")} className="grid grid-cols-4 gap-2">
+              {WALLPAPERS.map((w) => (
+                <button key={w} type="button" role="radio" aria-checked={prefs.wallpaper === w} aria-label={t(`chatUi.wallpapers.${w}`)}
+                  data-testid={`chat-wallpaper-${w}`} onClick={() => update((p) => ({ ...p, wallpaper: w }))}
+                  className={`h-16 rounded-xl border-2 transition-all ${prefs.wallpaper === w ? "border-primary scale-[1.03] shadow-md" : "border-border/60"}`}
+                  style={wallpaperStyle(w, null)} />
+              ))}
+            </div>
+            <div className="flex items-center gap-2 mt-2">
+              <label className={`flex-1 h-10 rounded-xl border border-dashed border-primary/50 text-primary text-sm font-semibold flex items-center justify-center gap-2 cursor-pointer ${busy ? "opacity-60" : ""}`}>
+                {busy ? "…" : t("chatUi.wallpaperUpload")}
+                <input type="file" accept="image/*" className="hidden" disabled={busy} data-testid="chat-wallpaper-upload"
+                  onChange={(e) => { void pickImage(e.target.files?.[0]); e.target.value = ""; }} />
+              </label>
+              {hasCustom && (
+                <button type="button" onClick={removeImage} className="h-10 px-3 rounded-xl border border-border text-sm">{t("chatUi.wallpaperRemove")}</button>
+              )}
+            </div>
+            {prefs.wallpaper === "custom" && <p className="text-xs text-muted-foreground mt-1">{t("chatUi.wallpaperCustomOn")}</p>}
           </section>
           <section>
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">{t("chatUi.sortBy")}</p>

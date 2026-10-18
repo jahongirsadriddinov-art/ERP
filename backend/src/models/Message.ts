@@ -18,6 +18,8 @@ export interface IMessage extends Document {
   edited?: boolean;
   pinned?: boolean;
   deleted?: boolean;
+  /** Tizim yozuvi (masalan "AI guruhga qo'shildi") — chatda markazda kichik yozuv bo'lib ko'rinadi. */
+  system?: boolean;
   companyId?: string; // v1.2 multi-tenant (nullable)
 }
 
@@ -43,6 +45,7 @@ const MessageSchema: Schema = new Schema({
   edited: { type: Boolean, default: false },
   pinned: { type: Boolean, default: false },
   deleted: { type: Boolean, default: false },
+  system: { type: Boolean },
   companyId: { type: String, index: true }, // v1.2 multi-tenant
 }, { timestamps: true });
 

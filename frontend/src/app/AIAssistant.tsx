@@ -243,10 +243,36 @@ export default function AIAssistant({ currentUser, users, token, open, onClose, 
   };
   useEffect(() => () => stopRecording(), []);
 
-  const speak = (text: string, idx: number) => {
-    if (!speechSynthesisSupported) return;
-    window.speechSynthesis.cancel();
+  // "Ovozda o'qish" (owner 2026-10-19): avval AI'ning o'z ovozi (server Gemini TTS — o'zbekcha tabiiy);
+  // ishlamasa (AI o'chiq/limit/tarmoq) — eski brauzer ovozi zaxira sifatida.
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const stopAudio = () => { try { audioRef.current?.pause(); } catch { /* yo'q */ } audioRef.current = null; };
+  useEffect(() => () => stopAudio(), []);
+  const speak = async (text: string, idx: number) => {
+    window.speechSynthesis?.cancel();
+    stopAudio();
     if (speakingIdx === idx) { setSpeakingIdx(null); return; }
+    setSpeakingIdx(idx);
+    try {
+      const target = i18n.language?.startsWith('ru') ? 'ru' : 'uz';
+      const r = await fetch(`${API_BASE}/api/ai-voice/me/chat/tts`, {
+        method: 'POST', headers: { ...authHdr, 'Content-Type': 'application/json' }, body: JSON.stringify({ text, lang: target }),
+      });
+      if (r.ok) {
+        const url = URL.createObjectURL(await r.blob());
+        const a = new Audio(url);
+        audioRef.current = a;
+        a.onended = () => { URL.revokeObjectURL(url); setSpeakingIdx((cur) => (cur === idx ? null : cur)); };
+        a.onerror = () => { URL.revokeObjectURL(url); setSpeakingIdx((cur) => (cur === idx ? null : cur)); };
+        await a.play();
+        return;
+      }
+    } catch { /* zaxira — brauzer ovozi */ }
+    speakBrowser(text, idx);
+  };
+  const speakBrowser = (text: string, idx: number) => {
+    if (!speechSynthesisSupported) { setSpeakingIdx(null); return; }
+    window.speechSynthesis.cancel();
     const target = i18n.language?.startsWith('ru') ? 'ru' : 'uz';
     const voice = pickVoice(target);
     const clean = text.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu, '').replace(/[*_#`>|]/g, ' ');

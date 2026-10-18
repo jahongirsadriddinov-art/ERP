@@ -12,6 +12,9 @@ import {
   AGENT_TIMEOUT_MS, CHAT_SESSION_PREFIX, MAX_TEXT, RATE_WINDOW_MS, aiLang, appendMessages, langOf, me, roleOf, wrap, writeGate, type Me,
 } from './chatShared';
 import groupChatRoutes from './groupChatRoutes';
+import crypto from 'crypto';
+import { aiConfig } from '../config';
+import { pcm16ToWav } from '../voice/audio';
 
 // Chatdagi "AI yordamchi" kontakti (egasi so'rovi #6): /api/ai-voice/me/chat (bootstrap: requireAuth +
 // blockDeveloper). /me ostida — workGate ALLOW; smena qoidasini shu yerning o'zi tekshiradi (423 emas,
@@ -139,5 +142,44 @@ router.post('/confirm', wrap(async (req, res) => {
 }));
 
 // Tarixni foydalanuvchi o'chira olmaydi — bu audit yozuvi (egasi so'rovi #3: 7 kun bazada, keyin arxiv).
+
+// ───────────── POST /tts — "Ovozda o'qish" (owner 2026-10-19) ─────────────
+// Brauzer ovozi (speechSynthesis) o'zbekchani bilmaydi — robotdek, "boshqa tilda" o'qirdi. Endi AI'ning O'Z
+// ovozi (sozlamadagi Gemini ovozi, qo'ng'iroqdagi bilan bir xil). WAV qaytadi; 30 daqiqa xotirada kesh.
+const ttsCache = new Map<string, { at: number; wav: Buffer }>();
+const TTS_TTL_MS = 30 * 60_000;
+const TTS_STYLE = {
+  uz: "Quyidagi matnni tabiiy, samimiy, jonli o'zbek talaffuzida (Toshkent shevasi), oddiy odam gapirgandek o'qing: ",
+  ru: 'Прочитай естественно и тепло, как живой человек: ',
+};
+router.post('/tts', wrap(async (req, res) => {
+  const m = me(req);
+  const raw = typeof req.body?.text === 'string' ? req.body.text : '';
+  const text = raw.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu, '').replace(/[*_#`>|]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 1200);
+  if (!text) return res.status(400).json({ error: 'bad_request' });
+  const lang = langOf(req.body?.lang) === 'ru' ? 'ru' : 'uz';
+  const rate = await hitRate(`aiv:tts:${m.userId}`, 40, RATE_WINDOW_MS);
+  if (!rate.allowed) return res.status(429).json({ error: 'rate', retryAfterSec: rate.retryAfterSec });
+  const settings = await getSettings(m.companyId);
+  const voiceName = settings.voiceName || 'Kore';
+  const key = crypto.createHash('sha256').update(`${voiceName}\n${lang}\n${text}`).digest('hex');
+  const hit = ttsCache.get(key);
+  let wav = hit && Date.now() - hit.at < TTS_TTL_MS ? hit.wav : null;
+  if (!wav) {
+    try {
+      const { GeminiTts } = await import('../voice/geminiSpeech');
+      const pcm = await new GeminiTts().synth(TTS_STYLE[lang] + text, { voiceName, lang, model: settings.provider.ttsModel || aiConfig.models.tts });
+      wav = pcm16ToWav(pcm, 24_000);
+      ttsCache.set(key, { at: Date.now(), wav });
+      while (ttsCache.size > 60) ttsCache.delete(ttsCache.keys().next().value as string);
+    } catch (e) {
+      console.warn('[aiVoice/tts] ishlamadi:', (e as Error).message?.slice(0, 80));
+      return res.status(503).json({ error: 'tts_unavailable' });
+    }
+  }
+  res.setHeader('Content-Type', 'audio/wav');
+  res.setHeader('Cache-Control', 'private, max-age=1800');
+  res.send(wav);
+}));
 
 export default router;

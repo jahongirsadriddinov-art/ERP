@@ -319,7 +319,7 @@ def test_session_decides_video(monkeypatch):
     monkeypatch.setattr(H, "DETECT_WAIT_S", 0.1)
     e = Eng(True)
     asyncio.run(run(e))
-    assert e.enabled and e.enabled[0][1] == 640 and e.frames >= 2
+    assert e.enabled and e.enabled[0][1] == 720 and e.frames >= 2
     e = Eng(False)
     asyncio.run(run(e))
     assert not e.enabled and e.frames == 0

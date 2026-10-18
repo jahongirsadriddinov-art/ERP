@@ -140,7 +140,7 @@ class AvatarSession:
         self.user_id = int(user_id)
         self.want_video = bool(want_video)
         # Telegram p2p video: ko'pi bilan 720p / 30 kadr/s. Standart 640 / 30 (sekin CPU'da streamer o'zi pasaytiradi)
-        self.size = _int_env("AVATAR_SIZE", 640, 160, 720) // 2 * 2
+        self.size = _int_env("AVATAR_SIZE", 720, 160, 720) // 2 * 2
         self.fps = _int_env("AVATAR_FPS", 30, 5, 30)
         self.subtitles = False
         self.streamer: Optional[AvatarStreamer] = None

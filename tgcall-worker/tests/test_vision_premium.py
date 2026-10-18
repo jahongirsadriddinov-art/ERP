@@ -122,7 +122,7 @@ def test_calls_on_video_throttles_and_sends():
 def test_real3d_frames_follow_voice_emotion_and_activity():
     r = RealRenderer("female", 320)
     assert len(r.frames) == 40
-    assert r.choose(FaceParams(t=1, stream_age=1))[0] == "happy_rest_open"            # salom — tabassum
+    assert r.choose(FaceParams(t=1, stream_age=1))[0] == "happy_rest_open"            # salom — yengil tabassum
     assert r.choose(FaceParams(t=20, stream_age=20, mouth_open=0.8, viseme="A"))[0] == "neutral_A_open"
     assert r.choose(FaceParams(t=20, stream_age=20, mouth_open=0.35, viseme="O"))[0] == "neutral_U_open"
     assert r.choose(FaceParams(t=20, stream_age=20, blink=1.0))[0] == "neutral_rest_closed"

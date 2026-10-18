@@ -10,16 +10,18 @@ import json
 import os
 
 EXPRESSIONS: dict[str, dict[str, float]] = {
-    "neutral": {"mouthSmileLeft": 0.18, "mouthSmileRight": 0.18},
-    "happy": {"mouthSmileLeft": 1.0, "mouthSmileRight": 1.0, "cheekSquintLeft": 0.7, "cheekSquintRight": 0.7,
-              "eyeSquintLeft": 0.35, "eyeSquintRight": 0.35, "browInnerUp": 0.2, "mouthDimpleLeft": 0.3, "mouthDimpleRight": 0.3},
-    "thinking": {"browInnerUp": 0.3, "browOuterUpLeft": 0.9, "browDownRight": 0.35, "eyeLookUpLeft": 0.7,
-                 "eyeLookUpRight": 0.7, "eyeLookOutLeft": 0.45, "eyeLookInRight": 0.45, "mouthPressLeft": 0.6,
-                 "mouthRight": 0.35, "eyeSquintRight": 0.2},
-    "concerned": {"browInnerUp": 1.0, "browDownLeft": 0.2, "browDownRight": 0.2, "mouthFrownLeft": 0.6,
-                  "mouthFrownRight": 0.6, "mouthStretchLeft": 0.2, "mouthStretchRight": 0.2, "mouthPressLeft": 0.2, "mouthPressRight": 0.2},
-    "surprised": {"eyeWideLeft": 0.9, "eyeWideRight": 0.9, "browInnerUp": 0.9, "browOuterUpLeft": 0.9,
-                  "browOuterUpRight": 0.9, "jawOpen": 0.2, "mouthFunnel": 0.2},
+    # Owner 2026-10-19: "g'alati kulib turibdi — jiddiyroq bo'lsin": oddiy holat — jiddiy, xotirjam (tabassumsiz)
+    "neutral": {"mouthPressLeft": 0.08, "mouthPressRight": 0.08},
+    # Yengil, samimiy tabassum (tirjayish emas)
+    "happy": {"mouthSmileLeft": 0.38, "mouthSmileRight": 0.38, "cheekSquintLeft": 0.2, "cheekSquintRight": 0.2,
+              "eyeSquintLeft": 0.12, "eyeSquintRight": 0.12},
+    "thinking": {"browInnerUp": 0.25, "browOuterUpLeft": 0.7, "browDownRight": 0.3, "eyeLookUpLeft": 0.6,
+                 "eyeLookUpRight": 0.6, "eyeLookOutLeft": 0.4, "eyeLookInRight": 0.4, "mouthPressLeft": 0.45,
+                 "mouthRight": 0.25, "eyeSquintRight": 0.15},
+    "concerned": {"browInnerUp": 0.8, "browDownLeft": 0.15, "browDownRight": 0.15, "mouthFrownLeft": 0.4,
+                  "mouthFrownRight": 0.4, "mouthStretchLeft": 0.12, "mouthStretchRight": 0.12},
+    "surprised": {"eyeWideLeft": 0.7, "eyeWideRight": 0.7, "browInnerUp": 0.7, "browOuterUpLeft": 0.7,
+                  "browOuterUpRight": 0.7, "jawOpen": 0.15},
 }
 
 # Gapirish shakllari (lab sinxroni uchun yetarli to'plam)

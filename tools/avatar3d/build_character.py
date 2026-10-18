@@ -187,7 +187,7 @@ def setup_scene(basemesh):
     scene.view_settings.view_transform = "AgX"
     scene.view_settings.look = "AgX - Medium High Contrast"
     ee = scene.eevee
-    for attr, val in (("taa_render_samples", 64), ("use_raytracing", True), ("use_shadows", True)):
+    for attr, val in (("taa_render_samples", 128), ("use_raytracing", True), ("use_shadows", True)):
         if hasattr(ee, attr):
             setattr(ee, attr, val)
 
@@ -198,8 +198,8 @@ def setup_scene(basemesh):
     cam = bpy.data.objects.new("cam", cam_data)
     scene.collection.objects.link(cam)
     aim = target.copy()
-    aim.z -= 0.075                                  # ko'zlar kadrning yuqori ~40% ida, yelkalar pastda
-    cam.location = (0.0, -1.45, aim.z + 0.02)
+    aim.z -= 0.06                                   # yaqinroq portret: yuz katta va tiniq, yelka qisman
+    cam.location = (0.0, -1.18, aim.z + 0.02)
     direction = aim - cam.location
     cam.rotation_euler = direction.to_track_quat("-Z", "Y").to_euler()
     scene.camera = cam

@@ -429,11 +429,14 @@ export type SaveResult = { ok: true; value: AiSettingsData } | { ok: false; conf
 export async function saveSettings(companyId: string, next: AiSettingsData, expectedVersion: number, updatedBy: string): Promise<SaveResult> {
   const { companyId: _c, version: _v, updatedBy: _u, ...body } = next;
   const $set = { ...body, timezone: AI_TIMEZONE, updatedBy };
+  // Bo'shatilgan ixtiyoriy maydon bazadan ham o'chirilsin (aks holda eski matn qaytib chiqardi — owner 2026-10-19)
+  const $unset: Record<string, 1> = {};
+  if (!body.disclosureText) { delete ($set as any).disclosureText; $unset.disclosureText = 1; }
   let doc: any = null;
   try {
     doc = await AiAssistantSettings.findOneAndUpdate(
       { companyId, ...(expectedVersion === 0 ? { $or: [{ version: 0 }, { version: { $exists: false } }] } : { version: expectedVersion }) },
-      { $set, $inc: { version: 1 } },
+      { $set, $inc: { version: 1 }, ...(Object.keys($unset).length ? { $unset } : {}) },
       { returnDocument: 'after', upsert: expectedVersion === 0, setDefaultsOnInsert: false },
     ).lean();
   } catch (e: any) {

@@ -25,7 +25,7 @@ import { GeminiLiveProvider } from './geminiLive';
 import { GeminiTranscriber, GeminiTts } from './geminiSpeech';
 import { OutQueue } from './outQueue';
 import {
-  buildVoiceSystemPrompt, confirmResultText, disclosureTextFor, firstTurnWithDisclosure, startTurnText, wrapUpText,
+  buildVoiceSystemPrompt, confirmResultText, disclosureTextFor, firstTurnWithDisclosure, greetingTurn, startTurnText, wrapUpText,
 } from './prompts';
 import { openFirstAvailable, openWithTimeout, type ProviderCandidate, type ProviderKind } from './provider';
 import { ATTENDANCE_TOOL, attendanceToolDeclaration, runAttendanceTool } from './sessionTools';
@@ -448,6 +448,19 @@ class ManagedVoiceSession implements VoiceSessionHandle {
   private async playDisclosure() {
     const text = this.disclosureText();
     // Ogohlantirish matni DARHOL ko'rinadi; klip qisqa kutiladi (isitilgan bo'lsa — keshdan bir zumda)
+    // Owner 2026-10-19: yordamchi qo'ng'iroq — birinchi marta tanishtiruv, keyin ism bilan qisqa salom (model aytadi, bitta ovoz)
+    // (clipOnLive — eski deterministik klip yo'li; faqat testlar/maxsus sozlama)
+    if (this.purpose === 'assistant' && !this.deps.clipOnLive) {
+      const firstTime = !(await AiCallSession.exists({
+        companyId: this.companyId, employeeId: this.employeeId, answeredAt: { $ne: null }, _id: { $ne: this.sessionId },
+      }).catch(() => null));
+      if (this.state !== 'connected' || !this.vs) return;
+      this.disclosureDone = true;
+      this.uplinkOpenAt = Date.now() + 1_500;
+      this.ev('state', { state: 'disclosure', mode: firstTime ? 'intro' : 'greeting' });
+      this.vs.sendText(greetingTurn(this.lang, { name: this.actorName, firstTime, disclosure: text, inbound: this.direction === 'inbound' }));
+      return;
+    }
     this.safeSend(AIV_SERVER_EVENTS.transcript, { sessionId: this.sessionId, role: 'assistant', text, final: true });
     this.log.add('assistant', text);
     // Owner 2026-10-18: "ovoz ikki xil — biri yo'g'on, biri ingichka, baland-past". TTS klipining ovozi Gemini

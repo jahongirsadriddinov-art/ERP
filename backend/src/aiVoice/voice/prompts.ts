@@ -133,6 +133,27 @@ export function startTurnText(lang: AiLang, purpose: Purpose): string {
   return `[TIZIM] Qo'ng'iroq ulandi (${purpose}). Salom va tanishtiruv ALLAQACHON aytildi — QAYTA salomlashmang va o'zingizni tanishtirmang. ${next}`;
 }
 
+/**
+ * Yordamchi qo'ng'iroqning birinchi so'zi (owner 2026-10-19):
+ *  • BIRINCHI marta — qisqa tanishtiruv: kimligi (AI yordamchi) va nima qila olishi, keyin "qanday yordam bera olaman?";
+ *  • keyingi safarlar — faqat ism bilan qisqa salom: "Assalomu alaykum, Imom aka! Bugun qandaysiz? Sizga qanday yordam bera olaman?"
+ * aka/opa — model ismga qarab tanlaydi (bilmasa faqat ism). Ko'p gap yo'q.
+ */
+export function greetingTurn(lang: AiLang, o: { name?: string; firstTime: boolean; disclosure: string; inbound: boolean }): string {
+  const name = sanitizeForPrompt(o.name, 40);
+  if (lang === 'ru') {
+    const who = name ? `по имени («${name}») — с уважением` : 'без имени';
+    return o.firstTime
+      ? `[СИСТЕМА] Звонок соединён. Это ПЕРВЫЙ разговор с этим человеком. Коротко (2 предложения): поздоровайтесь ${who}, скажите, что вы — ${o.disclosure.replace(/^Здравствуйте,?\s*/i, '')}, и что можете: задачи, график, объекты, напоминания, сообщения сотрудникам, звонки, погода, курс, поиск в интернете. Закончите: «Чем могу помочь?»`
+      : `[СИСТЕМА] Звонок соединён. Вы уже знакомы — НЕ представляйтесь. Одно короткое приветствие ${who}, например: «Здравствуйте, ${name || '…'}! Как вы сегодня? Чем могу помочь?» — и ждите.`;
+  }
+  const hon = "ismiga qarab \"aka\" (erkak) yoki \"opa\" (ayol) qo'shing; aniq bilmasangiz faqat ism";
+  const who = name ? `ismi bilan («${name}»; ${hon})` : 'ismsiz';
+  return o.firstTime
+    ? `[TIZIM] Qo'ng'iroq ulandi. Bu shu odam bilan BIRINCHI suhbat. Qisqa (2 jumla): ${who} salomlashing, o'zingiz ${o.disclosure.replace(/^Assalomu alaykum,?\s*/i, '')} ekaningizni va nima qila olishingizni ayting: vazifalar, jadval, obyektlar, eslatmalar, xodimlarga xabar va qo'ng'iroq, ob-havo, valyuta kursi, internetdan qidirish. Oxirida: «Sizga qanday yordam bera olaman?»`
+    : `[TIZIM] Qo'ng'iroq ulandi. Siz tanishsiz — o'zingizni TANISHTIRMANG. Bitta qisqa salom ${who}, masalan: «Assalomu alaykum, ${name || '…'} aka! Bugun qandaysiz? Sizga qanday yordam bera olaman?» — va javobni kuting. Ko'p gapirmang.`;
+}
+
 /** TTS klip bo'lmasa: model BIRINCHI bo'lib aynan shu jumlani aytsin (zaxira yo'l, A8). */
 export function firstTurnWithDisclosure(lang: AiLang, purpose: Purpose, disclosure: string): string {
   if (lang === 'ru') {

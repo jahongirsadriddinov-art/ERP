@@ -61,12 +61,12 @@ const noteTool: AiToolDef = {
   handler: async () => { noteCalls++; return { status: 'ok', message: 'yuborildi', retryable: false }; },
 };
 
-function mk(o: { live?: FakeVoiceProvider | null; cascade?: FakeVoiceProvider | null; clip?: Buffer | null } = {}) {
+function mk(o: { live?: FakeVoiceProvider | null; cascade?: FakeVoiceProvider | null; clip?: Buffer | null; clipOnLive?: boolean } = {}) {
   const live = o.live === undefined ? new FakeVoiceProvider() : o.live;
   const cascade = o.cascade === undefined ? null : o.cascade;
   const mgr = new VoiceSessionManager({
     providerFor: (kind: ProviderKind) => (kind === 'gemini_live' ? live : cascade),
-    clipOnLive: true, disclosure: { getClip: async () => (o.clip === undefined ? CLIP : o.clip) },
+    clipOnLive: o.clipOnLive ?? true, disclosure: { getClip: async () => (o.clip === undefined ? CLIP : o.clip) },
     setupTimeoutMs: 1_000, touchMs: 200, disclosureTimeoutMs: 500,
   });
   return { mgr, live: live!, cascade };
@@ -336,6 +336,25 @@ describe('VoiceSessionManager', () => {
     expect(transport.audioBytes).toBe(0);
     expect(fs.texts[0]).toMatch(/AYNAN shu jumla bilan boshlang/);
     expect(fs.texts[0]).toMatch(/sun'iy intellekt/);
+  });
+
+  it("salom (owner 2026-10-19): birinchi marta — tanishtiruv; keyin — ism bilan qisqa salom, klip yo'q", async () => {
+    await AiCallSession.deleteMany({ employeeId: A.worker2Id });
+    const { mgr, live } = mk({ clipOnLive: false });
+    const first = await startCall(mgr, { employeeId: A.worker2Id });
+    if (!first.r.ok) throw new Error('start');
+    const fs1 = await connect(first.r.handle, live);
+    expect(first.transport.audioBytes).toBe(0);
+    expect(fs1.texts[0]).toMatch(/BIRINCHI suhbat/);
+    expect(fs1.texts[0]).toMatch(/P5A-ishchi2/);
+    await first.r.handle.end('completed_remote');
+    await AiCallSession.updateOne({ _id: first.r.handle.sessionId }, { $set: { answeredAt: new Date() } });
+    const second = await startCall(mgr, { employeeId: A.worker2Id });
+    if (!second.r.ok) throw new Error('start2');
+    const fs2 = await connect(second.r.handle, live);
+    expect(fs2.texts[0]).toMatch(/TANISHTIRMANG/);
+    expect(fs2.texts[0]).toMatch(/aka.*opa|opa/);
+    expect(fs2.texts[0]).toMatch(/qanday yordam bera olaman/);
   });
 
   it('barge-in: interrupted — kutayotgan audio tashlanadi, mijozga aiv:interrupted', async () => {

@@ -5,7 +5,7 @@ import numpy as np
 from PIL import Image
 
 from app.avatar.emoji3d import EmojiRenderer, TOOL_LOOK
-from app.avatar.premium import LOOKS, OrbRenderer, get_renderer, normalize_look
+from app.avatar.premium import LOOKS, OrbRenderer, PersonRenderer, get_renderer, normalize_look
 from app.avatar.state import FaceParams
 from app.avatar.face import i420_size
 from app.vision import i420_to_jpeg, video_frame
@@ -40,7 +40,7 @@ def test_i420_odd_size_and_short_frame():
 def test_premium_looks_render_valid_frames():
     for lk in LOOKS:
         r = get_renderer(lk, 320)
-        assert isinstance(r, OrbRenderer if lk == "orb" else EmojiRenderer)
+        assert isinstance(r, OrbRenderer if lk == "orb" else PersonRenderer)
         for p in (FaceParams(t=1), FaceParams(t=2, mouth_open=0.8, smile=0.7, blink=1.0, tilt_deg=4, caption=("Salom",))):
             im = r.render(p)
             assert im.size == (320, 320) and im.mode == "RGB"
@@ -49,7 +49,7 @@ def test_premium_looks_render_valid_frames():
 
 
 def test_emoji_avatar_reacts_to_voice_and_activity():
-    r = get_renderer("male", 320)
+    r = EmojiRenderer("male", 320)
     a = np.asarray(r.render(FaceParams(t=20, mouth_open=0.0, stream_age=20)), dtype=np.int16)
     b = np.asarray(r.render(FaceParams(t=20.3, mouth_open=0.9, viseme="A", stream_age=20.3)), dtype=np.int16)
     assert np.abs(a - b).sum() > 1000                       # gapirganda harakat + ovoz to'lqini

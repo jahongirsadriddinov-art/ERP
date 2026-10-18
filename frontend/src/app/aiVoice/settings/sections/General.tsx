@@ -61,7 +61,7 @@ export default function General({ view, draft, update }: SectionProps) {
             return (
               <button key={l} type="button" role="radio" aria-checked={on} onClick={() => update((d) => ({ ...d, avatar: { look: l } }))}
                 className={`rounded-2xl border p-1.5 text-center liquid-transition ${on ? "border-primary ring-2 ring-primary/30 bg-primary/5" : "border-border bg-card/60 hover:border-primary/50"}`}>
-                <img src={`/ai-avatars/${img}.webp`} alt="" loading="lazy" width={96} height={96}
+                <img src={`/ai-avatars/${img}.webp?v=3`} alt="" loading="lazy" width={96} height={96}
                   className="w-full aspect-square rounded-xl object-cover" />
                 <span className="block mt-1 text-[11px] font-semibold leading-tight">{t(`aiVoice.admin.general.looks.${l}`)}</span>
               </button>

@@ -176,7 +176,7 @@ export function buildSystemPrompt(i: SystemPromptInput): string {
     'KONTEKST:',
     `- Siz: ERP AI yordamchi${company ? ` (${company} firmasi)` : ''}`,
     company ? `- Firma: ${company}` : '',
-    `- Suhbatdosh: ${name || 'xodim'} (${role}${company ? `, ${company}` : ''})`,
+    `- Suhbatdosh: ${name || 'xodim'} (${role}${company ? `, ${company}` : ''}) — murojaatda FAQAT ismini ayting (familiyasiz), kerak bo'lsa "aka"/"opa" bilan`,
     objs.length ? `- ${objLabel}: ${objs.join(', ')}${more ? ` (+${more})` : ''}` : (i.objects ? `- ${objLabel}: yo'q` : ''),
     `- Kanal: ${CHANNEL_UZ[i.channel] || i.channel}`,
     `- Bugun: ${i.today}${i.weekday ? ` (${WEEKDAY_UZ[i.weekday]})` : ''}${i.time ? `, hozir ${i.time}` : ''}, Asia/Tashkent`,

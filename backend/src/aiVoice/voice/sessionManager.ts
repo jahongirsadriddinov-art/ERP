@@ -221,7 +221,8 @@ class ManagedVoiceSession implements VoiceSessionHandle {
     this.lang = opts.lang === 'ru' ? 'ru' : 'uz';
     this.transport = opts.transport;
     this.toolChannel = opts.channel === 'telegram_call' ? 'telegram_call' : 'inapp_call';
-    this.actorName = actor.name;
+    // Murojaat — faqat ism (familiyasiz)
+    this.actorName = actor.firstName || actor.name;
     this.actorRole = actor.role;
     this.actorIsOwner = actor.isOwner;
     this.out = new OutQueue({

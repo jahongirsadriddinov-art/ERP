@@ -14,6 +14,8 @@ export interface ActorState {
   isBlocked: boolean;
   companyId: string | null;
   name: string;
+  /** Faqat ism — murojaat uchun (owner 2026-10-19: "ism-familiya emas, faqat ism"). */
+  firstName?: string;
   companyActive: boolean;
   hasFeature: boolean;
 }
@@ -41,6 +43,7 @@ export async function loadActor(userId: string): Promise<ActorState | null> {
         isBlocked: !!u.isBlocked,
         companyId,
         name: [u.firstName, u.lastName].filter(Boolean).join(' ').trim(),
+        firstName: String(u.firstName || '').trim() || undefined,
         companyActive: st.exists && st.active,
         hasFeature: st.hasFeature,
       };

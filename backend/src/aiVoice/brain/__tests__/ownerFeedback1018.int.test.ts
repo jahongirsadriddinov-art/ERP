@@ -6,6 +6,8 @@ import { buildVoiceSystemPrompt } from '../../voice/prompts';
 import { executeTool } from '../../tools/executor';
 import { getTool } from '../../tools/registry';
 import { currencyCode, setKnowledgeFetch, setSearchFn } from '../../tools/general/knowledge';
+import { setWeatherFetch } from '../../tools/general/getWeather';
+import GpsLocation from '../../../models/GpsLocation';
 import { langLabel } from '../../tools/general/translator';
 import { findEmployee } from '../../tools/erp/contactEmployee';
 import { mergePersona, personaPromptLine, resolveAvatarLook, voiceGender } from '../../persona';
@@ -15,7 +17,7 @@ import { ctxFor, resetCaches, setupErp, teardownErp, type Env } from '../../tool
 
 let env: Env;
 beforeAll(async () => { env = await setupErp(); }, 120_000);
-afterAll(async () => { setKnowledgeFetch(null); setSearchFn(null); await teardownErp(env); });
+afterAll(async () => { setKnowledgeFetch(null); setSearchFn(null); setWeatherFetch(null); await teardownErp(env); });
 beforeEach(() => resetCaches());
 
 const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4, 0xff, 0xd9]);
@@ -41,6 +43,25 @@ describe('valyuta va internet', () => {
     expect(out.result.status).toBe('ok');
     expect(JSON.stringify(out.result.data)).toContain('untrusted_text');
     expect(JSON.stringify(out.result.data)).toContain('metro narxi');
+  });
+});
+
+describe("ob-havo (owner 2026-10-19): zaxira manba va joylashuv", () => {
+  it("Open-Meteo ishlamasa — wttr.in; shahar aytilmasa — foydalanuvchining GPS nuqtasi", async () => {
+    const urls: string[] = [];
+    setWeatherFetch(async (url) => {
+      urls.push(url);
+      if (url.includes('open-meteo')) throw new Error('HTTP_429');
+      return { ok: true, status: 200, json: async () => ({
+        current_condition: [{ temp_C: '14', FeelsLikeC: '12', weatherCode: '113', windspeedKmph: '7', humidity: '30' }],
+        weather: [{ date: '2026-10-19', maxtempC: '18', mintempC: '6', hourly: [{ chanceofrain: '0', weatherCode: '113' }] }],
+      }) };
+    });
+    await GpsLocation.create({ userId: env.A.workerId, lat: 39.74, lng: 64.18, timestamp: new Date() } as any);
+    const out = await executeTool(ctxFor(env.A.workerId, env.A.companyId, { channel: 'telegram_call' }), 'getWeather', {});
+    expect(out.result.status).toBe('ok');
+    expect(out.result.message).toMatch(/Joylashuvingiz: hozir 14°C/);
+    expect(urls.some((u) => u.startsWith('https://wttr.in/39.740,64.180'))).toBe(true);
   });
 });
 

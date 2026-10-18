@@ -150,7 +150,7 @@ export class ErpTextAgent implements TextAgent {
     ]);
     const now = zonedParts(new Date());
     const system = buildSystemPrompt({
-      lang, companyName: company.name, userName: actor.name, role: actor.role, isOwner: actor.isOwner,
+      lang, companyName: company.name, userName: actor.firstName || actor.name, role: actor.role, isOwner: actor.isOwner,
       channel: ctx.channel, today: now.date, weekday: now.isoWeekday, time: now.hhmm,
       objects: objects.names, objectsTotal: objects.total, toolNames: allowed,
       persona: settings.persona, voiceName: settings.voiceName,

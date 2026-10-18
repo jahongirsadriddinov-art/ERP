@@ -10,6 +10,7 @@ import type { PersonaSettings } from '../persona';
 
 const VOICE_RULES = {
   uz: `OVOZLI SUHBAT QOIDALARI:
+- TIL: butun qo'ng'iroq davomida o'zbek tilida (lotin). Hech qachon turk, qozoq, ozarbayjon, ingliz yoki boshqa tilga o'tmang — hatto foydalanuvchi so'zlari o'xshash eshitilsa ham. Faqat foydalanuvchi aniq rus tilida gapirsa — rus tilida.
 - Bu jonli ovozli qo'ng'iroq. Juda qisqa gapiring: odatda 1–2 jumla, oddiy so'zlar, raqamlarni aniq ayting.
 - Har doim o'zbek tilida (LOTIN yozuvi) gapiring. Foydalanuvchi rus tilida gapirsa — rus tilida javob bering. Boshqa tilga (turk, ingliz) o'tmang.
 - ESHITISH (owner 2026-10-18): suhbatdosh O'ZBEKCHA gapiradi — ko'cha tili, sheva (Toshkent, Farg'ona, Samarqand, Buxoro, Xorazm, Surxondaryo), qisqartirilgan so'zlar ("qilvoring", "nima gap", "ketvotti", "obkeling", "kere", "zo'r") va rus so'zlari aralash ("короче", "щас", "давай", "объект", "прораб"). Uni turk, qozoq, qirg'iz, tojik, fors yoki arab tili deb QABUL QILMANG — har doim o'zbekcha deb tushuning va o'zbekcha javob bering. Ma'nosini kontekstdan toping; umuman tushunmasangiz — "Qaytaring-chi, yaxshi eshitmadim" deb qisqa so'rang, taxmin bilan amal bajarmang.
@@ -147,7 +148,7 @@ export function greetingTurn(lang: AiLang, o: { name?: string; firstTime: boolea
     const hon = lang === 'ru' ? '' : " (ismga qarab \"aka\"/\"opa\")";
     return lang === 'ru'
       ? `[СИСТЕМА] Звонок соединён. ВЫ позвонили сами — пользователь раньше просил перезвонить. Причина: «${reason}». Коротко поздоровайтесь${name ? ` по имени «${name}»` : ''} и СРАЗУ скажите, зачем звоните (например: «Вы просили перезвонить через минуту — …»), затем спросите, чем помочь.`
-      : `[TIZIM] Qo'ng'iroq ulandi. Bu qo'ng'iroqni SIZ qildingiz — foydalanuvchi oldin so'ragan edi. Sabab: «${reason}». Qisqa salomlashing${name ? ` («${name}»${hon})` : ''} va DARHOL nega qo'ng'iroq qilganingizni ayting, masalan: «Bir daqiqadan keyin qo'ng'iroq qilishimni so'ragan edingiz — …». Keyin «Sizga qanday yordam bera olaman?» deb so'rang. Tanishtiruv shart emas.`;
+      : `[TIZIM] Faqat o'zbek tilida (lotin) gapiring, boshqa tilga o'tmang. Qo'ng'iroq ulandi. Bu qo'ng'iroqni SIZ qildingiz — foydalanuvchi oldin so'ragan edi. Sabab: «${reason}». Qisqa salomlashing${name ? ` («${name}»${hon})` : ''} va DARHOL nega qo'ng'iroq qilganingizni ayting, masalan: «Bir daqiqadan keyin qo'ng'iroq qilishimni so'ragan edingiz — …». Keyin «Sizga qanday yordam bera olaman?» deb so'rang. Tanishtiruv shart emas.`;
   }
   if (lang === 'ru') {
     const who = name ? `по имени («${name}») — с уважением` : 'без имени';
@@ -156,10 +157,11 @@ export function greetingTurn(lang: AiLang, o: { name?: string; firstTime: boolea
       : `[СИСТЕМА] Звонок соединён. Вы уже знакомы — НЕ представляйтесь. Одно короткое приветствие ${who}, например: «Здравствуйте, ${name || '…'}! Как вы сегодня? Чем могу помочь?» — и ждите.`;
   }
   const hon = "ismiga qarab \"aka\" (erkak) yoki \"opa\" (ayol) qo'shing; aniq bilmasangiz faqat ism";
+  const keep = " Butun suhbat davomida FAQAT o'zbek tilida (lotin) gapiring — turk, qozoq, ingliz yoki boshqa tilga O'TMANG (foydalanuvchi rus tilida gapirsagina — rus tilida).";
   const who = name ? `ismi bilan («${name}»; ${hon})` : 'ismsiz';
   return o.firstTime
-    ? `[TIZIM] Qo'ng'iroq ulandi. Bu shu odam bilan BIRINCHI suhbat. Qisqa (2 jumla): ${who} salomlashing, o'zingiz ${o.disclosure.replace(/^Assalomu alaykum,?\s*/i, '')} ekaningizni va nima qila olishingizni ayting: vazifalar, jadval, obyektlar, eslatmalar, xodimlarga xabar va qo'ng'iroq, ob-havo, valyuta kursi, internetdan qidirish. Oxirida: «Sizga qanday yordam bera olaman?»`
-    : `[TIZIM] Qo'ng'iroq ulandi. Siz tanishsiz — o'zingizni TANISHTIRMANG. Bitta qisqa salom ${who}, masalan: «Assalomu alaykum, ${name || '…'} aka! Bugun qandaysiz? Sizga qanday yordam bera olaman?» — va javobni kuting. Ko'p gapirmang.`;
+    ? `[TIZIM]${keep} Qo'ng'iroq ulandi. Bu shu odam bilan BIRINCHI suhbat. Qisqa (2 jumla): ${who} salomlashing, o'zingiz ${o.disclosure.replace(/^Assalomu alaykum,?\s*/i, '')} ekaningizni va nima qila olishingizni ayting: vazifalar, jadval, obyektlar, eslatmalar, xodimlarga xabar va qo'ng'iroq, ob-havo, valyuta kursi, internetdan qidirish. Oxirida: «Sizga qanday yordam bera olaman?»`
+    : `[TIZIM]${keep} Qo'ng'iroq ulandi. Siz tanishsiz — o'zingizni TANISHTIRMANG. Bitta qisqa salom ${who}, masalan: «Assalomu alaykum, ${name || '…'} aka! Bugun qandaysiz? Sizga qanday yordam bera olaman?» — va javobni kuting. Ko'p gapirmang.`;
 }
 
 /** TTS klip bo'lmasa: model BIRINCHI bo'lib aynan shu jumlani aytsin (zaxira yo'l, A8). */

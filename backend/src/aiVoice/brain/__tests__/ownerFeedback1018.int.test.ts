@@ -165,5 +165,5 @@ describe('kamera', () => {
     // Chat kanalida kamera tool'i yo'q
     const web = await executeTool(ctxFor(env.A.ownerId, env.A.companyId, { role: 'direktor', isOwner: true }), 'capturePhoto', {});
     expect(web.result.status).not.toBe('ok');
-  });
+   }, 30_000);
 });

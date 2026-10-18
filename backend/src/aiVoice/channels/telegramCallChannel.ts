@@ -11,7 +11,7 @@ import { getVoiceSessionManager } from '../voice/sessionManager';
 import {
   companyQuotaOk, dailyCount, floodWaitActive, getConnection, releaseDailyCall, reserveDailyCall, workerRecentlySeen,
 } from '../telegram/accountService';
-import { registerBridge, TelegramTransport, unregisterBridge } from '../telegram/callBridge';
+import { reapStaleTelegramSessions, registerBridge, TelegramTransport, unregisterBridge } from '../telegram/callBridge';
 import { callWorker, WorkerRpcFailure } from '../telegram/workerRpc';
 import { ensureContactTgUserId } from '../telegram/tgLink';
 import { workerConnectedHere } from '../telegram/workerNamespace';
@@ -26,7 +26,7 @@ import { workerConnectedHere } from '../telegram/workerNamespace';
 // Qo'ng'iroq natijasi keyin call.state voqeasi (callBridge → finishSession → onSessionsEnded) orqali keladi.
 
 const DEFER_MS = 15_000;
-const BUSY_DEFER_MS = 60_000;
+const BUSY_DEFER_MS = 20_000;     // owner 2026-10-19: "qo'ng'iroq juda sekin keladi" — 60 s edi
 
 type Avail = { ok: true } | { ok: false; reason: string };
 
@@ -108,7 +108,11 @@ export const telegramCallChannel: ChannelAdapter = {
     // C3: worker socket'i boshqa instansiyada yoki qayta ulanmoqda — fallback emas, qayta navbat
     if (!workerConnectedHere()) return unavailable('worker_not_here', new Date(now.getTime() + DEFER_MS));
     // A1: akkaunt bo'yicha bir vaqtda 1 ta qo'ng'iroq
-    if (!(await telegramCapacity())) return unavailable('account_busy', new Date(now.getTime() + BUSY_DEFER_MS));
+    // Tugagan, lekin bazada "faol" qolgan qo'ng'iroq akkauntni "band" ko'rsatmasin — darhol tozalanadi
+    if (!(await telegramCapacity())) {
+      await reapStaleTelegramSessions(now).catch(() => 0);
+      if (!(await telegramCapacity())) return unavailable('account_busy', new Date(now.getTime() + BUSY_DEFER_MS));
+    }
     if (!(await reserveDailyCall(now))) return unavailable('daily_cap');
 
     const settings = { ring: Math.min(90, Math.max(15, Number(r?.ringTimeoutSec) || 45)), max: Math.min(600, Math.max(30, Number(r?.maxDurationSec) || 120)) };

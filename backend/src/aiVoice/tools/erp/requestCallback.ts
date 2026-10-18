@@ -25,6 +25,16 @@ const SOON_MS = 90_000;                 // shundan yaqin — "hozir" (kanal hozi
 const CALL_CHANNELS: ChannelName[] = ['inapp_call', 'telegram_call'];
 /** Bir oz kutib o'tib ketadigan sabablar — qo'ng'iroq baribir navbatga qo'yiladi. */
 const TRANSIENT = new Set(['not_on_this_instance', 'flood_wait', 'account_busy', 'worker_not_here']);
+/** Ilova yopiq/fonda (owner 2026-10-19: "Telegram'dan ilovaga qil" ishlamasdi) — push yuborib, ochilishini kutamiz. */
+const APP_WAKE = new Set(['offline', 'not_visible']);
+
+async function wakeApp(ctx: ChannelCtx): Promise<void> {
+  await getChannel('push')?.attempt(ctx, {
+    kind: 'test',
+    title: ctx.lang === 'ru' ? '📞 AI хочет позвонить' : "📞 AI qo'ng'iroq qilmoqchi",
+    text: ctx.lang === 'ru' ? 'Откройте приложение — звонок начнётся сразу.' : "Ilovani oching — qo'ng'iroq darhol boshlanadi.",
+  }).catch(() => undefined);
+}
 
 export function callbackOrder(pref: 'inapp' | 'telegram' | undefined, from: ToolCtx['channel']): ChannelName[] {
   const first: ChannelName = pref === 'telegram' ? 'telegram_call' : pref === 'inapp' ? 'inapp_call'
@@ -120,7 +130,7 @@ export function ensureCallbackJob(q: JobQueue | null): void {
       attemptNo: Number(job.attempts) || 1, maxAttempts: Number(job.maxAttempts) || 2,
       reason: typeof p.reason === 'string' ? p.reason.slice(0, 300) : undefined,
     }, queue.now());
-  }, { concurrency: 2, maxAttempts: 2, backoffBaseMs: 60_000 });
+  }, { concurrency: 2, maxAttempts: 6, backoffBaseMs: 15_000 });
 }
 
 export type CallbackOutcome = 'calling' | 'retry' | 'unreachable' | 'skipped';
@@ -142,7 +152,16 @@ export async function runCallback(p: {
     if (!ch) { reasons[name] = 'not_registered'; continue; }
     try {
       const av = await ch.isAvailable(ctx);
-      if (!av.ok) { reasons[name] = av.reason || 'unavailable'; if (TRANSIENT.has(String(av.reason))) retry = true; continue; }
+      if (!av.ok) {
+        reasons[name] = av.reason || 'unavailable';
+        if (TRANSIENT.has(String(av.reason))) retry = true;
+        // Ilova yopiq — birinchi urinishda push, keyin ochilishini kutib qayta urinamiz
+        if (name === 'inapp_call' && APP_WAKE.has(String(av.reason))) {
+          retry = true;
+          if (p.attemptNo === 1) await wakeApp(ctx);
+        }
+        continue;
+      }
       const r = await ch.attempt(ctx, { kind: 'test', maxDurationSec: 600, ...(p.reason ? { text: p.reason } : {}) });
       if (r.sessionId || r.outcome === 'answered' || r.outcome === 'delivered') return 'calling';
       if (r.retryable || r.retryAt) retry = true;
@@ -215,7 +234,9 @@ export const requestCallback: AiToolDef<{ channel?: 'inapp' | 'telegram'; delayM
     const pre = await precheckChannels(chCtx, order);
     const first = order[0];
     const firstReason = pre.reasons[first];
-    const transient = order.some((c) => TRANSIENT.has(String(pre.reasons[c])));
+    const transient = order.some((c) => TRANSIENT.has(String(pre.reasons[c])))
+      // Ilova so'ralgan, lekin yopiq — push yuboriladi va ochilishi kutiladi (rad etilmaydi)
+      || (order[0] === 'inapp_call' && APP_WAKE.has(String(pre.reasons.inapp_call)));
 
     // Qo'ng'iroq ichida kanal "band" ko'rinadi (aynan shu qo'ng'iroq) — bu to'siq emas
     if (soon && !pre.available.length && !transient && !inCall) {
@@ -224,7 +245,9 @@ export const requestCallback: AiToolDef<{ channel?: 'inapp' | 'telegram'; delayM
       return { status: 'error', message: msg, retryable: false, data: { missing: pre.reasons } };
     }
     // Hozir mavjud kanal birinchi bo'lsin (so'ralgan kanal mavjud bo'lmasa — boshqasi orqali)
-    if (soon && pre.available.length && !pre.available.includes(first)) order = [pre.available[0], ...order.filter((c) => c !== pre.available[0])];
+    // (ilova aniq so'ralgan va u faqat yopiq bo'lsa — Telegram'ga almashtirmaymiz: push yuborib ilovani kutamiz)
+    const wantsAppWake = args.channel === 'inapp' && APP_WAKE.has(String(pre.reasons.inapp_call));
+    if (soon && pre.available.length && !pre.available.includes(first) && !wantsAppWake) order = [pre.available[0], ...order.filter((c) => c !== pre.available[0])];
 
     const r = await q.enqueue({
       type: CALLBACK_JOB, companyId: ctx.companyId, employeeId: ctx.userId, refId: ctx.userId,
@@ -234,7 +257,7 @@ export const requestCallback: AiToolDef<{ channel?: 'inapp' | 'telegram'; delayM
         reason: (args.reason && String(args.reason).trim().slice(0, 300))
           || L(ctx, `foydalanuvchi ${args.when ? `soat ${args.when} da` : args.delayMinutes ? `${args.delayMinutes} daqiqadan keyin` : 'keyinroq'} qayta qo'ng'iroq qilishni so'ragan`, `пользователь попросил перезвонить ${args.when ? `в ${args.when}` : args.delayMinutes ? `через ${args.delayMinutes} мин` : 'позже'}`),
       },
-      runAt, maxAttempts: 2, correlationId: ctx.correlationId,
+      runAt, maxAttempts: 6, correlationId: ctx.correlationId,
       // Bir foydalanuvchiga 2 daqiqalik oynada bitta qo'ng'iroq (takror bosish / model takrori)
       dedupeKey: `aicb:${ctx.userId}:${Math.floor(runAt.getTime() / 120_000)}`,
     });
@@ -249,7 +272,10 @@ export const requestCallback: AiToolDef<{ channel?: 'inapp' | 'telegram'; delayM
         ? L(ctx, `(Telegram orqali emas: ${why}.)`, `(Не через Telegram: ${why}.)`)
         : L(ctx, `(Ilova orqali emas: ${why}.)`, `(Не в приложении: ${why}.)`));
     }
-    if (!soon && !pre.available.length) {
+    if (order[0] === 'inapp_call' && APP_WAKE.has(String(pre.reasons.inapp_call)) && !pre.available.includes('inapp_call')) {
+      msg = L(ctx, "Ilovaga bildirishnoma yuboraman — ilovani ochishingiz bilan qo'ng'iroq qilaman (2 daqiqa kutaman).",
+        'Отправлю уведомление — позвоню, как только откроете приложение (жду 2 минуты).');
+    } else if (!soon && !pre.available.length) {
       msg += ' ' + L(ctx, `Hozircha: ${missingText(order[0], String(pre.reasons[order[0]]), ctx)}.`, `Пока что: ${missingText(order[0], String(pre.reasons[order[0]]), ctx)}.`);
     }
     return ok(msg, { scheduledAt: runAt.toISOString(), localTime: at.hhmm, channel: order[0], duplicate: !!r?.duplicate });

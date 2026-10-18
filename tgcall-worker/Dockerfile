@@ -11,7 +11,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app ./app
 RUN useradd -r -u 10001 worker && mkdir -p /data && chown worker /data
 USER worker
-VOLUME ["/data"]
 
-# Maxfiy kalit va shifrlangan sessiya /data da (doimiy disk ulang). TG_SESSION_KEY — muhit o'zgaruvchisi.
+# Maxfiy kalit va shifrlangan sessiya /data da — doimiy diskni platformada ulang (Railway Volume, mount /data;
+# Railway Dockerfile VOLUME qatorini qabul qilmaydi). TG_SESSION_KEY — muhit o'zgaruvchisi.
 CMD ["python", "-m", "app.main"]

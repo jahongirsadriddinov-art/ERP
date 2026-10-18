@@ -96,7 +96,8 @@ fn install_update(app: tauri::AppHandle) -> Result<(), String> {
     if !path.exists() {
         return Err("Yangilanish fayli topilmadi".into());
     }
-    let direct = std::process::Command::new(&path).args(["/P", "/UPDATE"]).spawn();
+    // /R — o'rnatish tugagach ilova avtomatik qayta ochiladi (owner 2026-10-19; Tauri NSIS: passive rejimda ishlaydi)
+    let direct = std::process::Command::new(&path).args(["/P", "/UPDATE", "/R"]).spawn();
     if let Err(e) = direct {
         // Masalan, administrator ruxsati (UAC) kerak bo'lsa (os error 740) — ShellExecute orqali
         // ishga tushiramiz, Windows o'zi ruxsat so'raydi.
@@ -105,7 +106,7 @@ fn install_update(app: tauri::AppHandle) -> Result<(), String> {
             use std::os::windows::process::CommandExt;
             const CREATE_NO_WINDOW: u32 = 0x0800_0000;
             std::process::Command::new("cmd")
-                .args(["/C", "start", "", &path.to_string_lossy(), "/P", "/UPDATE"])
+                .args(["/C", "start", "", &path.to_string_lossy(), "/P", "/UPDATE", "/R"])
                 .creation_flags(CREATE_NO_WINDOW)
                 .spawn()
                 .map_err(|e2| format!("{} / {}", e, e2))?;

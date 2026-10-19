@@ -439,6 +439,8 @@ export interface VoiceOpenOpts {
   resumptionHandle?: string;
   apiKey?: string;
   signal?: AbortSignal;
+  /** Telefon (Telegram) qo'ng'irog'i: aks-sado/shovqin ko'p — nutq boshlanishiga sezgirlik past (AI o'zini bo'lmasin). */
+  telephony?: boolean;
 }
 
 export interface VoiceUsage { tokensIn: number; tokensOut: number; audioInSec: number; audioOutSec: number }

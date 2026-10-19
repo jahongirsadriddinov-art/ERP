@@ -94,7 +94,7 @@ describe("soxta worker → VoiceSessionManager → worker", () => {
     const seqs = frames.map((f) => f.d.seq);
     expect(seqs).toEqual([...seqs].sort((a, b) => a - b));        // tartib saqlanadi
     const span = frames[frames.length - 1].at - frames[0].at;
-    expect(span).toBeGreaterThanOrEqual(CLIP_MS - 400 - 150);     // ~leadMs (400) oldinda, qolgani real vaqtda
+    expect(span).toBeGreaterThanOrEqual(Math.max(0, CLIP_MS - 1500 - 150));     // Telegram: ~leadMs (1500) oldinda, qolgani real vaqtda
     expect(frames[frames.length - 1].at - tConnected).toBeLessThan(CLIP_MS + 1_500);
     expect(live.last).toBeTruthy();
     const vs = live.last!;

@@ -210,6 +210,8 @@ class ManagedVoiceSession implements VoiceSessionHandle {
   private actorName = '';
   private actorRole: string;
   private actorIsOwner: boolean;
+  /** Qo'ng'iroq diagnostikasi (owner 2026-10-19: "sekin, bo'linib gapiradi") — yakunda logga yoziladi. */
+  private stats = { connectedAt: 0, firstAudioAt: 0, interruptions: 0, userTurns: 0, toolCalls: 0, lastUserAt: 0, replyMs: [] as number[] };
   /** Mehmon sinov qo'ng'irog'i — firmasiz, faqat umumiy tool'lar (owner 2026-10-19). */
   private readonly guest: boolean;
 
@@ -236,6 +238,9 @@ class ManagedVoiceSession implements VoiceSessionHandle {
     this.actorRole = this.guest ? 'dasturchi' : actor.role;
     this.actorIsOwner = this.guest ? false : actor.isOwner;
     this.out = new OutQueue({
+      // Telegram: worker o'zi 10 ms'lik kadrlarni bir tekis yuboradi — unga ~1.5 s zaxira beramiz (Render'dagi Node
+      // biror ishga band bo'lib qolsa ovoz "bo'linib" qolmasin). Gap bo'linsa worker buferi flushAudio bilan tozalanadi.
+      leadMs: opts.channel === 'telegram_call' ? 1500 : 400,
       maxBytes: LIMITS.audioOutQueueMaxBytes,
       backlogBytes: () => { try { return this.transport.backlogBytes?.() ?? 0; } catch { return 0; } },
       send: (f) => this.safe(() => this.transport.sendAudio(f)),
@@ -318,6 +323,7 @@ class ManagedVoiceSession implements VoiceSessionHandle {
       });
       const base: Omit<VoiceOpenOpts, 'model'> = {
         systemInstruction, tools: decls, lang: this.lang, voiceName: this.settings.voiceName, ptt: this.opts.ptt,
+        telephony: this.opts.channel === 'telegram_call',
       };
       // Owner 2026-10-16: qo'ng'iroq "limit" bilan to'xtamasin — kaskad (transkripsiya → TextAgent → TTS)
       // doim oxirgi zaxira (sozlamadagi fallback='none' bo'lsa ham). Live semafori to'lgan bo'lsa — faqat kaskad.
@@ -413,6 +419,7 @@ class ManagedVoiceSession implements VoiceSessionHandle {
     s.on('transcript', (t) => { if (s === this.vs) this.onTranscript(t); });
     s.on('toolCall', (c) => { if (s === this.vs) void this.onToolCall(c); });
     s.on('interrupted', () => {
+      this.stats.interruptions++;
       if (s !== this.vs || this.state !== 'connected') return;
       this.out.clear();
       this.safe(() => this.transport.flushAudio());
@@ -713,6 +720,9 @@ class ManagedVoiceSession implements VoiceSessionHandle {
 
   // ───────────── Yakun ─────────────
   end(reason: AivEndReason): Promise<void> {
+    if (!this.endPromise) {
+      console.log(`[aiVoice] qo'ng'iroq statistikasi ${this.sessionId}: kanal=${this.opts.channel} bo'linishlar=${this.stats.interruptions} sabab=${reason}`);
+    }
     if (!this.endPromise) this.endPromise = this.finish(reason, true);
     return this.endPromise;
   }

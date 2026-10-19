@@ -1,4 +1,4 @@
-import { Behavior, GoogleGenAI, Modality, Type } from '@google/genai';
+import { Behavior, GoogleGenAI, Modality, Type, StartSensitivity } from '@google/genai';
 import type { JsonSchema, ToolDeclaration, ToolResult } from '../contracts';
 import { GeminiQuotaError, isAuthError, isQuotaError, withGeminiKey } from '../lib/geminiKeys';
 import { VoiceEmitter, parseDurationMs } from './provider';
@@ -91,7 +91,8 @@ const thinkingUnsupported = new Set<string>();
 export function liveThinkingFor(model: string): Record<string, unknown> | undefined {
   if (process.env.AI_LIVE_THINKING === '1' || thinkingUnsupported.has(model)) return undefined;
   const raw = Number(process.env.AI_LIVE_THINKING_BUDGET);
-  const budget = Number.isFinite(raw) && raw >= 0 ? Math.min(8192, Math.round(raw)) : 512;
+  // Owner 2026-10-19 (yana): "juda sekin javob beradi" — standart 0 (tezlik). Aniqlik ko'rsatmalar bilan ta'minlanadi.
+  const budget = Number.isFinite(raw) && raw >= 0 ? Math.min(8192, Math.round(raw)) : 0;
   if (/flash-lite|3\.1-flash-live/.test(model)) return { thinkingLevel: budget === 0 ? 'minimal' : 'low' };
   return { thinkingBudget: budget };
 }
@@ -118,8 +119,14 @@ export function buildLiveConfig(opts: VoiceOpenOpts, o: { search?: boolean; thin
     outputAudioTranscription: {},
     realtimeInputConfig: opts.ptt
       ? { automaticActivityDetection: { disabled: true } }
-      // 750 ms: o'zbekcha gap orasidagi qisqa pauzada buyruq yarmida kesilib qolmasin (600 da bo'linardi)
-      : { automaticActivityDetection: { silenceDurationMs: 750, prefixPaddingMs: 200 } },
+      // 700 ms: gap orasidagi qisqa pauzada buyruq yarmida kesilmasin. Telefonda (owner 2026-10-19: "bo'linib
+      // gapiradi, aytganimni eshitmayapti") — telefon aks-sadosi/shovqin "foydalanuvchi gapirdi" deb AI'ni o'z gapini
+      // to'xtatishga majbur qilardi: nutq boshlanishiga sezgirlik past va 300 ms uzluksiz ovoz talab qilinadi.
+      : { automaticActivityDetection: {
+          silenceDurationMs: 700,
+          prefixPaddingMs: opts.telephony ? 300 : 200,
+          ...(opts.telephony && process.env.AI_LIVE_START_SENSITIVITY !== 'default' ? { startOfSpeechSensitivity: StartSensitivity.START_SENSITIVITY_LOW } : {}),
+        } },
     contextWindowCompression: { slidingWindow: {} },
     // Har doim yoqiladi — server SessionResumptionUpdate yuboradi (GoAway'da qayta ulanish uchun)
     sessionResumption: opts.resumptionHandle ? { handle: opts.resumptionHandle } : {},

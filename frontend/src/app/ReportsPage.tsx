@@ -11,6 +11,8 @@ import { toast } from "sonner";
 import { Project, Expense, AppUser, ExpType, EXP_LABELS, fmt, exportExpensesToCsv, expLabel } from "./App";
 import { API_BASE } from "./api";
 import { saveOrShareBlob } from "./platform";
+import { lazy, Suspense } from "react";
+const ControlPanel = lazy(() => import("./ControlPanel"));
 
 // Yorqin, bir-biridan aniq ajraladigan ranglar (qorong'i va yorug' fonda ham o'qiladi)
 const PALETTE = ["#6366F1", "#F97316", "#10B981", "#F43F5E", "#06B6D4", "#EAB308", "#A855F7", "#3B82F6"];
@@ -61,6 +63,8 @@ export default function ReportsPage({ projects, expenses, incomes, users, showIn
   const [customTo, setCustomTo] = useState("");
   const [exporting, setExporting] = useState(false);
   const [sortBy, setSortBy] = useState<"date" | "amount">("date");
+  // Owner 2026-10-19: "Nazorat" — o'g'irlik, narx, hujjat muddati, texnika va funksiyalar sozlamasi
+  const [view, setView] = useState<"finance" | "control">("finance");
 
   const today = iso(new Date());
   const [dateFrom, dateTo] = useMemo((): [string, string] => {
@@ -174,11 +178,34 @@ export default function ReportsPage({ projects, expenses, incomes, users, showIn
     { label: t('reports.perDay', { defaultValue: "Kunlik o'rtacha" }), value: fmt(Math.round(total / spanDays)), sub: `${filtExp.length} ${t('reports.ops', { defaultValue: "ta amal" })}`, tone: "text-muted-foreground", grad: "from-indigo-500/20 to-violet-500/10" },
   ];
 
+  const viewToggle = (
+    <div className="relative flex p-0.5 rounded-full bg-muted/60 flex-shrink-0" role="tablist">
+      {(["finance", "control"] as const).map(v => (
+        <button key={v} type="button" role="tab" aria-selected={view === v} onClick={() => setView(v)}
+          className={`relative z-10 text-xs font-semibold px-3 py-1.5 rounded-full liquid-transition ${view === v ? "text-white" : "text-muted-foreground"}`}>
+          {view === v && <motion.span layoutId="reportsViewPill" className="absolute inset-0 -z-10 rounded-full bg-primary" transition={{ type: "spring", stiffness: 480, damping: 34 }} />}
+          {t(v === "finance" ? 'control.tabFinance' : 'control.tabControl')}
+        </button>
+      ))}
+    </div>
+  );
+  if (view === "control") {
+    return (
+      <div className="flex flex-col h-full p-3 gap-3 overflow-hidden">
+        <div className="surface border border-border rounded-2xl px-4 py-3 flex items-center justify-between gap-2.5 flex-shrink-0">
+          <h2 className="text-base font-bold font-['Roboto_Slab',serif]">{t('control.title')}</h2>
+          {viewToggle}
+        </div>
+        <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide"><Suspense fallback={null}><ControlPanel /></Suspense></div>
+      </div>
+    );
+  }
   return (
     <div className="flex flex-col h-full p-3 gap-3 overflow-hidden">
       <div className="surface border border-border rounded-2xl px-4 py-3 flex flex-col gap-2.5 flex-shrink-0">
         <div className="flex flex-col sm:flex-row sm:items-center gap-2.5">
           <h2 className="text-base font-bold font-['Roboto_Slab',serif] flex-shrink-0">{t('reports.title')}</h2>
+          {viewToggle}
           <div className="flex flex-1 flex-wrap items-center gap-2 sm:justify-end">
             <select className="text-sm md:text-xs border border-border rounded-full px-3 py-1.5 bg-input-background focus:outline-none" value={selProj} onChange={e => setSelProj(e.target.value)}>
               <option value="all">{t('reports.allProjects')}</option>

@@ -88,6 +88,7 @@ import { connectSocket, getSocket, disconnectSocket } from "./socket";
 import { isAiCallActive, decideCallOffer } from "./aiVoice/bus";
 import { motion, AnimatePresence } from "motion/react";
 import { PlanFactCard, PlanFactOverview } from "./PlanFact";
+import { EquipmentDetails } from "./EquipmentExtras";
 import { setSiteLanguage, SiteLang, langLabel } from "./i18n";
 import { isTelegramMiniApp, getTelegramInitData, markManualLogout, clearManualLogout, telegramAutoLoginAllowed } from "./telegramWebApp";
 import { isChatMuted, useChatPrefs } from "./chat/chatPrefs";
@@ -2281,6 +2282,9 @@ const i18n_common_close = "Yopish";
 function EquipmentModal({ projects, onClose }: { projects: Project[]; onClose: () => void }) {
   const { t } = useTranslation();
   const [list, setList] = useState<any[]>([]);
+  const [openEq, setOpenEq] = useState<string | null>(null);
+  const meRole = (() => { try { return JSON.parse(localStorage.getItem('currentUser') || '{}'); } catch { return {}; } })();
+  const canManageEq = isAdmin(meRole.role) || !!meRole.isOwner;
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState(""); const [type, setType] = useState(""); const [objectId, setObjectId] = useState("");
   const [adding, setAdding] = useState(false);
@@ -2329,15 +2333,24 @@ function EquipmentModal({ projects, onClose }: { projects: Project[]; onClose: (
       ) : (
         <div className="space-y-1.5">
           {list.map(e => (
-            <div key={e.id} className="flex items-center gap-2 border border-border/50 rounded-xl px-3 py-2">
-              <div className="flex-1 min-w-0">
+            <div key={e.id} className="border border-border/50 rounded-xl px-3 py-2">
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={() => setOpenEq(openEq === e.id ? null : e.id)} className="flex-1 min-w-0 text-left" aria-expanded={openEq === e.id}>
                 <p className="text-sm font-medium truncate">{e.name}{e.type ? ` — ${e.type}` : ''}</p>
-                {e.objectId && <p className="text-[10px] text-muted-foreground truncate">{projects.find(p=>p.id===e.objectId)?.name || ''}</p>}
-              </div>
+                <p className="text-[10px] text-muted-foreground truncate">
+                  {e.objectId ? (projects.find(p=>p.id===e.objectId)?.name || '') : ''}
+                  {e.nextServiceDate ? ` · ${t('equipmentX.serviceShort')} ${e.nextServiceDate}` : ''}
+                  {e.engineHours ? ` · ${e.engineHours} m/h` : ''}
+                </p>
+              </button>
               <select value={e.status} onChange={ev=>setStatus(e.id, ev.target.value)} className={`text-[10px] font-semibold rounded-full px-2 py-1 border-none focus:outline-none ${statusColor[e.status]}`}>
                 {Object.keys(statusLabel).map(k => <option key={k} value={k}>{statusLabel[k]}</option>)}
               </select>
               <button onClick={()=>remove(e.id)} aria-label={t('common.delete')} className="p-1 text-muted-foreground hover:text-destructive"><MorphIcon icon={Trash} className="w-3.5 h-3.5" /></button>
+            </div>
+            <AnimatePresence initial={false}>
+              {openEq === e.id && <EquipmentDetails key="d" eq={e} canManage={canManageEq} onChanged={load} />}
+            </AnimatePresence>
             </div>
           ))}
         </div>
@@ -2425,8 +2438,16 @@ function DocumentsModal({ projects, currentUser, onClose }: { projects: Project[
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [category, setCategory] = useState("contract"); const [objectId, setObjectId] = useState("");
+  const [expiry, setExpiry] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   const canSign = isAdmin(currentUser.role);
+  const setDocExpiry = async (id: string, v: string) => {
+    try {
+      const r = await fetch(`${API_BASE}/api/documents/${id}/expiry`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ expiresAt: v || null }) });
+      if (r.ok) load(); else toast.error(t('common.error'));
+    } catch { toast.error(t('common.error')); }
+  };
+  const daysLeft = (d: string) => Math.ceil((new Date(d).getTime() - Date.now()) / 86_400_000);
 
   const load = async () => {
     setLoading(true);
@@ -2448,7 +2469,7 @@ function DocumentsModal({ projects, currentUser, onClose }: { projects: Project[
     setUploading(true);
     try {
       const up = await uploadChatMedia(file, file.name);
-      const r = await fetch(`${API_BASE}/api/documents`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: file.name, fileUrl: up.url, fileName: file.name, category, objectId: objectId || undefined }) });
+      const r = await fetch(`${API_BASE}/api/documents`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...(expiry ? { expiresAt: expiry } : {}), title: file.name, fileUrl: up.url, fileName: file.name, category, objectId: objectId || undefined }) });
       if (r.ok) load(); else toast.error(t('common.error'));
     } catch { toast.error(t('common.error')); }
     setUploading(false);
@@ -2471,6 +2492,10 @@ function DocumentsModal({ projects, currentUser, onClose }: { projects: Project[
             {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
         </div>
+        <label className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span className="flex-shrink-0">{t('docsX.expiresAt')}</span>
+          <input type="date" value={expiry} onChange={e=>setExpiry(e.target.value)} className="flex-1 text-sm border border-border rounded-lg px-3 py-1.5 bg-input-background focus:outline-none" />
+        </label>
         <input ref={fileRef} type="file" className="hidden" onChange={upload} />
         <button onClick={()=>fileRef.current?.click()} disabled={uploading} className="btn btn-primary w-full py-2 text-sm disabled:opacity-50 flex items-center justify-center gap-2">
           {uploading ? <MorphIcon icon={Loader2} className="w-4 h-4 animate-spin" /> : <MorphIcon icon={Upload} className="w-4 h-4" />}
@@ -2491,6 +2516,15 @@ function DocumentsModal({ projects, currentUser, onClose }: { projects: Project[
                   <p className="text-sm font-medium truncate">{d.title}</p>
                   <p className="text-[10px] text-muted-foreground">{catLabel[d.category]} · {d.uploadedBy?.name}</p>
                 </button>
+                {d.expiresAt && (
+                  <span className={`text-[9px] font-bold rounded-full px-2 py-0.5 flex-shrink-0 ${daysLeft(d.expiresAt) < 0 ? 'text-red-600 bg-red-500/10' : daysLeft(d.expiresAt) <= 7 ? 'text-amber-700 bg-amber-500/10' : 'text-muted-foreground bg-muted'}`}>
+                    {daysLeft(d.expiresAt) < 0 ? t('docsX.expired') : t('docsX.until', { date: String(d.expiresAt).slice(0, 10) })}
+                  </span>
+                )}
+                {canSign && (
+                  <input type="date" aria-label={t('docsX.expiresAt')} title={t('docsX.expiresAt')} value={d.expiresAt ? String(d.expiresAt).slice(0, 10) : ''}
+                    onChange={ev => setDocExpiry(d.id, ev.target.value)} className="w-7 sm:w-auto text-[10px] bg-transparent border border-border/60 rounded-md px-1 py-0.5 text-muted-foreground" />
+                )}
                 {canSign && !iSigned && (
                   <button onClick={()=>sign(d.id)} title={t('management.docSignBtn')} aria-label={t('management.docSignBtn')} className="p-1 text-muted-foreground hover:text-primary"><MorphIcon icon={Check} className="w-3.5 h-3.5" /></button>
                 )}
@@ -2785,7 +2819,7 @@ function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSe
   const [deletingProject, setDeletingProject] = useState(false);
   // Ish jarayoni rasm/video — BARCHA xodim (ishchi, brigadir, prorab ham)
   // qo'sha oladi, faqat direktor/o'rinbosar emas (aniq talab).
-  const [mediaItems, setMediaItems] = useState<{ id: string; type: 'image'|'video'; url: string; caption?: string; uploadedBy: { userId: string; name: string; role: string }; createdAt: string }[]>([]);
+  const [mediaItems, setMediaItems] = useState<{ id: string; type: 'image'|'video'; url: string; caption?: string; uploadedBy: { userId: string; name: string; role: string }; createdAt: string; aiAnalysis?: { stage?: string; progressPercent?: number | null; workVisible?: string; safety?: Array<{ issue: string; severity: string }>; quality?: string[] } }[]>([]);
   const [mediaLoading, setMediaLoading] = useState(false);
   const [uploadingMedia, setUploadingMedia] = useState(false);
   const mediaFileRef = useRef<HTMLInputElement>(null);
@@ -3149,6 +3183,16 @@ function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSe
                           className="w-full text-xs rounded-lg border border-border bg-background/60 px-2 py-1.5 resize-none focus:outline-none focus:ring-2 focus:ring-primary/40" />
                       ) : m.caption ? (
                         <p className="text-xs text-foreground/85 leading-snug line-clamp-3 break-words whitespace-pre-wrap">{m.caption}</p>
+                      ) : null}
+                      {/* AI foto-nazorat bahosi (bosqich, foiz, xavfsizlik) */}
+                      {m.aiAnalysis && (m.aiAnalysis.stage || m.aiAnalysis.safety?.length) ? (
+                        <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }} className="rounded-lg bg-primary/[0.06] px-2 py-1.5 text-[10.5px] leading-snug space-y-0.5">
+                          <p className="font-semibold text-primary">🤖 {m.aiAnalysis.stage || t('objectDetail.aiPhoto')}{typeof m.aiAnalysis.progressPercent === 'number' ? ` · ~${m.aiAnalysis.progressPercent}%` : ''}</p>
+                          {(m.aiAnalysis.safety || []).filter(s => s.severity !== 'low').slice(0, 2).map((s, i) => (
+                            <p key={i} className="text-red-600 dark:text-red-400">⚠️ {s.issue}</p>
+                          ))}
+                          {(m.aiAnalysis.quality || []).slice(0, 1).map((q, i) => <p key={i} className="text-amber-700 dark:text-amber-300">• {q}</p>)}
+                        </motion.div>
                       ) : null}
                       <div className="mt-auto flex items-center gap-1.5 min-w-0">
                         <div className="flex-1 min-w-0">

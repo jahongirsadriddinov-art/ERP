@@ -59,8 +59,14 @@ async function check(c: ChannelCtx, now: Date): Promise<Avail & { peer?: Peer }>
     return { ok: false, reason: 'not_resolved' };
   }
   if (!workerConnectedHere() && !workerRecentlySeen(conn, now)) return { ok: false, reason: 'worker_offline' };
-  if (!(await companyQuotaOk(c.companyId, now))) return { ok: false, reason: 'company_quota' };
+  // Owner 2026-10-19: "o'rinbosar va direktorga limit qo'yma" — rahbarga (va egasiga) qo'ng'iroq firma limitiga bog'liq emas
+  if (!(await isBossEmployee(c.companyId, c.employeeId)) && !(await companyQuotaOk(c.companyId, now))) return { ok: false, reason: 'company_quota' };
   return { ok: true, peer: { tgUserId, resolved: st === 'resolved', username: typeof tg?.username === 'string' ? tg.username : undefined } };
+}
+
+async function isBossEmployee(companyId: string, employeeId: string): Promise<boolean> {
+  const u: any = await User.findOne({ _id: employeeId, companyId }).select('role isOwner').lean().catch(() => null);
+  return !!u && (!!u.isOwner || u.role === 'direktor' || u.role === 'orinbosar');
 }
 
 /** Peer noma'lum bo'lsa — SHU qo'ng'iroq uchun xodim telefoni (worker bitta importContacts qiladi, id mos kelishi shart). */

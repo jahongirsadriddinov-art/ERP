@@ -379,3 +379,55 @@ export class GeminiLiveProvider implements VoiceProvider {
     } finally { if (t) clearTimeout(t); }
   }
 }
+
+/**
+ * Matnni Live modelining o'z ovozida o'qitish (owner 2026-10-19: "sozlamalardagi ovoz bilan telefondagi ovoz ikki xil" —
+ * namuna alohida TTS modelidan kelardi, qo'ng'iroq esa Live'da). Qaytaradi: PCM16 mono 24 kHz.
+ */
+export async function liveSpeak(text: string, o: { voiceName: string; lang: 'uz' | 'ru'; model: string; timeoutMs?: number },
+  connector: LiveConnector = defaultLiveConnector): Promise<Buffer> {
+  const instr = o.lang === 'ru'
+    ? 'Прочитай вслух ровно текст пользователя, естественно, ничего не добавляя.'
+    : "Foydalanuvchi yozgan matnni aynan o'zini, tabiiy o'zbekcha talaffuz bilan ovoz chiqarib o'qing. Hech narsa qo'shmang.";
+  return withGeminiKey(async (key) => {
+    const chunks: Buffer[] = [];
+    let live: LiveSessionLike | null = null;
+    // setupComplete connect() promise'idan oldin kelishi mumkin — ikkalasi tayyor bo'lganda bir marta yuboramiz
+    let ready = false, sent = false;
+    const send = () => {
+      if (!ready || !live || sent) return;
+      sent = true;
+      live.sendClientContent({ turns: [{ role: 'user', parts: [{ text }] }], turnComplete: true });
+    };
+    let timer: NodeJS.Timeout | undefined;
+    try {
+      return await new Promise<Buffer>((resolve, reject) => {
+        timer = setTimeout(() => (chunks.length ? resolve(Buffer.concat(chunks)) : reject(new Error('SETUP_TIMEOUT'))), o.timeoutMs ?? 15_000);
+        connector.connect(key, {
+          model: o.model,
+          config: {
+            responseModalities: [Modality.AUDIO],
+            systemInstruction: { parts: [{ text: instr }] },
+            speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: o.voiceName } } },
+          },
+          callbacks: {
+            onmessage: (m: any) => {
+              if (m?.setupComplete) { ready = true; send(); }
+              const sc = m?.serverContent;
+              for (const p of (Array.isArray(sc?.modelTurn?.parts) ? sc.modelTurn.parts : [])) {
+                const d = p?.inlineData;
+                if (d?.data && /^audio\//i.test(String(d.mimeType || 'audio/pcm'))) chunks.push(Buffer.from(String(d.data), 'base64'));
+              }
+              if (sc?.turnComplete) resolve(Buffer.concat(chunks));
+            },
+            onerror: (e: any) => reject(new Error(String(e?.message || e))),
+            onclose: (e: any) => (chunks.length ? resolve(Buffer.concat(chunks)) : reject(new Error(`LIVE_CLOSED_BEFORE_SETUP_${e?.code || ''}: ${String(e?.reason || '').slice(0, 150)}`))),
+          },
+        }).then((s) => { live = s; send(); }, reject);
+      });
+    } finally {
+      if (timer) clearTimeout(timer);
+      try { (live as LiveSessionLike | null)?.close(); } catch { /* yopilgan */ }
+    }
+  }, { scope: o.model });
+}

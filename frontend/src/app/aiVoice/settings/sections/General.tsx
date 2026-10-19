@@ -106,7 +106,7 @@ function VoicePreview({ voice, lang }: { voice: string; lang: "uz" | "ru" }) {
       const token = localStorage.getItem("token");
       const r = await fetch(`${API_BASE}/api/ai-voice/me/chat/tts`, {
         method: "POST", headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({ text: sample, lang, voiceName: voice }),
+        body: JSON.stringify({ text: sample, lang, voiceName: voice, live: true }),
       });
       if (!r.ok) throw new Error(String(r.status));
       const url = URL.createObjectURL(await r.blob());

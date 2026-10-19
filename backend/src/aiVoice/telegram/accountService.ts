@@ -175,7 +175,9 @@ export async function releaseDailyCall(now: Date = new Date()): Promise<void> {
 
 export async function companyCallsToday(companyId: string, now: Date = new Date()): Promise<number> {
   const dayStart = zonedToUtc(localDate(now), '00:00');
-  return AiCallSession.countDocuments({ companyId, channel: 'telegram_call', createdAt: { $gte: dayStart } });
+  // Owner 2026-10-19 ("bugungi limit tugagan" deyapti): faqat AI O'ZI qilgan (chiquvchi) qo'ng'iroqlar sanaladi —
+  // xodimning AI'ga qilgan kiruvchi qo'ng'iroqlari firma limitini yemasin
+  return AiCallSession.countDocuments({ companyId, channel: 'telegram_call', direction: 'outbound', createdAt: { $gte: dayStart } });
 }
 
 export async function companyQuotaOk(companyId: string, now: Date = new Date()): Promise<boolean> {

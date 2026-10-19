@@ -164,13 +164,22 @@ router.post('/tts', wrap(async (req, res) => {
   // Sozlamalarda ovozni tanlashdan oldin tinglab ko'rish (owner 2026-10-19) — faqat Gemini ovoz nomi shaklida
   const want = typeof req.body?.voiceName === 'string' && /^[A-Z][a-z]{2,15}$/.test(req.body.voiceName) ? req.body.voiceName : '';
   const voiceName = want || settings.voiceName || 'Kore';
-  const key = crypto.createHash('sha256').update(`${voiceName}\n${lang}\n${text}`).digest('hex');
+  // live=true — sozlamadagi "Ovozni tinglash": qo'ng'iroqdagi bilan BIR XIL eshitilishi uchun Live modelining o'zida o'qitiladi
+  const live = req.body?.live === true;
+  const key = crypto.createHash('sha256').update(`${live ? 'live' : 'tts'}\n${voiceName}\n${lang}\n${text}`).digest('hex');
   const hit = ttsCache.get(key);
   let wav = hit && Date.now() - hit.at < TTS_TTL_MS ? hit.wav : null;
   if (!wav) {
     try {
+      let pcm: Buffer | null = null;
+      if (live) {
+        const { liveSpeak } = await import('../voice/geminiLive');
+        pcm = await liveSpeak(text, { voiceName, lang, model: settings.provider.liveModel || aiConfig.models.live })
+          .catch((e) => { console.warn('[aiVoice/tts] Live namuna ishlamadi, TTS bilan:', (e as Error).message?.slice(0, 80)); return null; });
+        if (pcm && pcm.length < 4800) pcm = null;
+      }
       const { GeminiTts } = await import('../voice/geminiSpeech');
-      const pcm = await new GeminiTts().synth(TTS_STYLE[lang] + text, { voiceName, lang, model: settings.provider.ttsModel || aiConfig.models.tts });
+      if (!pcm) pcm = await new GeminiTts().synth(TTS_STYLE[lang] + text, { voiceName, lang, model: settings.provider.ttsModel || aiConfig.models.tts });
       wav = pcm16ToWav(pcm, 24_000);
       ttsCache.set(key, { at: Date.now(), wav });
       while (ttsCache.size > 60) ttsCache.delete(ttsCache.keys().next().value as string);

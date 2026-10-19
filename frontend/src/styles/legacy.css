@@ -1,0 +1,27 @@
+/* Eski brauzerlar (Chrome/WebView < 111, eski planshet va telefonlar) — owner 2026-10-19: "dizayniga nima qildi".
+   Ular color-mix() va gradientdagi "in oklab"ni bilmaydi: Tailwind shaffof ranglarni QALIN rangga almashtiradi
+   (xira fon "dog'lari" katta sariq doiraga aylanadi), "in oklab" gradientlar esa butunlay yo'qoladi (gradient
+   matn ko'rinmaydi, tugmalar foni yo'q). Bu blok FAQAT shunday brauzerlarda ishlaydi — zamonaviylarda o'zgarish yo'q. */
+@supports not (color: color-mix(in lab, red, red)) {
+  /* Bezak uchun xira "dog'"lar — eski brauzerda yashiriladi (qalin rangda chiqmasin) */
+  .pointer-events-none[class*="blur-"]:not([class*="backdrop-blur"]),
+  .blob-anim { display: none !important; }
+
+  /* Gradient yo'nalishi — "in oklab"siz */
+  .bg-gradient-to-r { --tw-gradient-position: to right; }
+  .bg-gradient-to-l { --tw-gradient-position: to left; }
+  .bg-gradient-to-t { --tw-gradient-position: to top; }
+  .bg-gradient-to-b { --tw-gradient-position: to bottom; }
+  .bg-gradient-to-tr { --tw-gradient-position: to top right; }
+  .bg-gradient-to-tl { --tw-gradient-position: to top left; }
+  .bg-gradient-to-br { --tw-gradient-position: to bottom right; }
+  .bg-gradient-to-bl { --tw-gradient-position: to bottom left; }
+
+  /* color-mix bilan yozilgan asosiy elementlar — oddiy rangli zaxira */
+  .btn-primary { background: var(--primary); }
+  .btn-accent, .dark .btn-accent { background: var(--accent); }
+  .glass, .glass-btn, .ai-glass-panel, .ai-glass-bubble, .expense-glass { background: var(--card); }
+  .icon-chip { background: var(--secondary); }
+  .icon-chip-accent { background: var(--secondary); }
+  .with-bg main { background: var(--background); }
+}

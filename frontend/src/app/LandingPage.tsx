@@ -124,8 +124,8 @@ export type LandingFocus = 'features' | 'steps' | 'audience' | 'faq';
 const FOCUS_PATH: Record<LandingFocus, string> = {
   features: '/xususiyatlar', steps: '/qanday-ishlaydi', audience: '/kimlar-uchun', faq: '/savollar',
 };
-const DEFAULT_TITLE = 'QurilishERP — Qurilish firmalari uchun boshqaruv tizimi';
-const DEFAULT_DESC = "Qurilish firmasini raqamlashtirish (elektronlashtirish) uchun zamonaviy ERP tizimi. Loyihalar, smeta, materiallar hisobi, moliya, xodimlar davomati va GPS nazorati, real-time chat, AI yordamchi va Telegram bot integratsiyasi — bittа tizimda.";
+const DEFAULT_TITLE = 'QurilishERP — qurilish firmasi uchun ERP dastur: smeta, ombor, xodimlar hisobi';
+const DEFAULT_DESC = "Qurilish firmasini elektronlashtirish va raqamlashtirish uchun ERP dastur: obyektlar, smeta, materiallar va ombor hisobi, xarajatlar, ishchilar davomati va maosh, GPS nazorat, AI yordamchi va Telegram bot. Sayt, Android va Windows. Birinchi oy bepul.";
 
 export default function LandingPage({ onLogin, onRegister, focus }: { onLogin: () => void; onRegister: () => void; focus?: LandingFocus }) {
   const { t, i18n } = useTranslation();
@@ -174,6 +174,10 @@ export default function LandingPage({ onLogin, onRegister, focus }: { onLogin: (
     { q: t('landing.faq2Q'), a: t('landing.faq2A') },
     { q: t('landing.faq3Q'), a: t('landing.faq3A') },
     { q: t('landing.faq4Q'), a: t('landing.faq4A') },
+    { q: t('landing.faq5Q'), a: t('landing.faq5A') },
+    { q: t('landing.faq6Q'), a: t('landing.faq6A') },
+    { q: t('landing.faq7Q'), a: t('landing.faq7A') },
+    { q: t('landing.faq8Q'), a: t('landing.faq8A') },
   ];
 
   // SEO: focus'ga xos <title>/meta description/canonical. index.html'dagi
@@ -516,6 +520,17 @@ export default function LandingPage({ onLogin, onRegister, focus }: { onLogin: (
         </div>
       </section>}
 
+      {/* ── SEO matni (owner 2026-10-19: "qidiruvda tez chiqsin") — odamlar qidiradigan so'zlar tabiiy matnda,
+          ko'rinadigan holda (yashirin kalit so'zlar Google'da jazolanadi). ───────────────────────────── */}
+      {!focus && <section className="max-w-3xl mx-auto px-5 pt-16 md:pt-24">
+        <h2 className="text-2xl md:text-3xl font-bold font-['Roboto_Slab',serif] tracking-tight text-center mb-6">{t('landing.seoTitle')}</h2>
+        <div className="space-y-4 text-sm md:text-base text-muted-foreground leading-relaxed">
+          <p>{t('landing.seoP1')}</p>
+          <p>{t('landing.seoP2')}</p>
+          <p>{t('landing.seoP3')}</p>
+        </div>
+      </section>}
+
       {/* ── FAQ ─────────────────────────────────────────────────────────── */}
       {(!focus || focus === 'faq') && <section className="max-w-3xl mx-auto px-5 py-16 md:py-24">
         {!focus && <div className="text-center mb-10">
@@ -532,11 +547,12 @@ export default function LandingPage({ onLogin, onRegister, focus }: { onLogin: (
                   <MorphIcon icon={ChevronDown} className="w-4 h-4"  />
                 </div>
               </button>
-              {openFaq === i && (
+              {/* Javob DOM'da doim bor (qidiruv tizimlari o'qisin), yopiqda — hidden */}
+              {openFaq === i ? (
                 <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}>
                   <p className="px-5 pb-4 text-sm text-muted-foreground leading-relaxed">{f.a}</p>
                 </motion.div>
-              )}
+              ) : <p hidden>{f.a}</p>}
             </div>
           ))}
         </div>

@@ -51,6 +51,8 @@ export interface StartVoiceSessionOpts {
    * companyId = PLATFORM_SCOPE, employeeId = qo'ng'iroqni boshlagan dasturchi; firma/ERP tool'lari va ma'lumoti yo'q.
    */
   guest?: { name?: string };
+  /** AI Telegram akkaunti ismi (owner 2026-10-19) — AI shu qo'ng'iroqda o'zini shu ism bilan tanishtiradi. */
+  aiName?: string;
 }
 
 export type StartVoiceSessionResult =

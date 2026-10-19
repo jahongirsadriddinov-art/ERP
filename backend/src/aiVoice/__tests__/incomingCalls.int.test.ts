@@ -161,20 +161,16 @@ describe("kiruvchi qo'ng'iroq qarori", () => {
     await vi.waitFor(async () => expect((await AiCallSession.findById(ack.sessionId).lean() as any)).toMatchObject({ isActive: false, status: 'completed' }));
   });
 
-  it("firma akkauntiga kiruvchi (owner 2026-10-19): Ochiq muloqot o'chiq bo'lsa ham qabul; boshqa firma xodimi / noma'lum akkaunt — rad; band akkaunt — busy", async () => {
-    const own = await AiTgAccount.create({ companyId: A.companyId, status: 'connected', lastHealthAt: new Date() });
-    const own2 = await AiTgAccount.create({ companyId: A.companyId, status: 'connected', lastHealthAt: new Date() });
-    const other = await AiTgAccount.create({ companyId: OFF.companyId, status: 'connected', lastHealthAt: new Date() });
-    expect(await w.incoming({ tgUserId: '880001', account: String(other._id) })).toEqual({ accept: false, reason: 'other_company' });
+  it("umumiy AI akkauntiga kiruvchi (owner 2026-10-19): Ochiq muloqot o'chiq bo'lsa ham qabul (firma bot bog'lanishidan); noma'lum akkaunt — rad; band — busy", async () => {
+    const acc = await AiTgAccount.create({ label: 'Sarvar', status: 'connected', lastHealthAt: new Date() });
     expect(await w.incoming({ tgUserId: '880001', account: '0123456789abcdef01234567' })).toEqual({ accept: false, reason: 'unknown_account' });
-    const ack = await w.incoming({ tgUserId: '880001', account: String(own._id) });
+    const ack = await w.incoming({ tgUserId: '880001', account: String(acc._id) });
     expect(ack).toMatchObject({ accept: true });
     if (!ack.accept) throw new Error('accept kutilgan');
-    expect((await AiCallSession.findById(ack.sessionId).lean() as any).tgAccountId).toBe(String(own._id));
-    // Shu akkaunt band; boshqa akkaunt va platforma alohida
-    expect(await w.incoming({ tgUserId: '880005', account: String(own._id) })).toMatchObject({ accept: false, reason: 'busy' });
+    const s: any = await AiCallSession.findById(ack.sessionId).lean();
+    expect(s).toMatchObject({ tgAccountId: String(acc._id), companyId: A.companyId });
+    expect(await w.incoming({ tgUserId: '880005', account: String(acc._id) })).toMatchObject({ accept: false, reason: 'busy' });
     await AiTgAccount.deleteMany({});
-    void own2;
   });
 
   it("notanish / rozilik yo'q / bloklangan / AI o'chiq firma / worker band — rad, sessiya yaratilmaydi", async () => {

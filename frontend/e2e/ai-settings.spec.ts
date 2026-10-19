@@ -63,17 +63,18 @@ const CORS = {
 type Calls = { puts: any[]; patches: { url: string; body: any }[]; platformPuts: { url: string; body: any }[]; settingsGets: number; saved?: any };
 const newCalls = (): Calls => ({ puts: [], patches: [], platformPuts: [], settingsGets: 0 });
 
-test("Refresh: dasturchi paneli tabi, AI tabi va ochilgan firma o'z joyida qoladi (owner 2026-10-19)", async ({ page }) => {
+test("Refresh: dasturchi paneli tabi va AI tabi o'z joyida qoladi; AI akkaunti ismini o'zgartirish (owner 2026-10-19)", async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   const calls = newCalls();
   await mockApi(page, calls);
-  const CID = 'aaaaaaaaaaaaaaaaaaaaaaaa';
-  await page.route(/\/api\/ai-voice\/platform\/(companies-lite|companies\/[0-9a-f]{24}\/tg-accounts)/, (route) => {
-    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: CORS });
-    const url = route.request().url();
-    if (url.includes('companies-lite')) return route.fulfill({ headers: CORS, json: { companies: [{ id: CID, name: 'Jondor Iris Stroy', accounts: 1, connected: 1 }] } });
-    return route.fulfill({ headers: CORS, json: { accounts: [{ id: 'bbbbbbbbbbbbbbbbbbbbbbbb', label: 'Ofis 1', status: 'connected', username: 'ofis_ai', busy: false }], workerConnected: true, max: 20 } });
+  const patches: any[] = [];
+  let label = 'Jasur';
+  await page.route(/\/api\/ai-voice\/platform\/tg-accounts/, async (route) => {
+    const req = route.request();
+    if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: CORS });
+    if (req.method() === 'PATCH') { const b = req.postDataJSON(); patches.push(b); label = b.name; }
+    return route.fulfill({ headers: CORS, json: { accounts: [{ id: 'bbbbbbbbbbbbbbbbbbbbbbbb', label, status: 'connected', username: 'ofis_ai', busy: false }], workerConnected: true, max: 50 } });
   });
   await seed(page, { id: 'd1', name: 'Dasturchi', role: 'dasturchi', phone: '+998900000009', projectIds: [], language: 'uz' }, 'dashboard');
   await page.goto('/');
@@ -81,14 +82,17 @@ test("Refresh: dasturchi paneli tabi, AI tabi va ochilgan firma o'z joyida qolad
   await expect(tab).toBeVisible({ timeout: 20_000 });
   await tab.click();
   await page.getByTestId('ai-pf-tab-tgAccounts').click();
-  await page.getByTestId('ai-tg-company-item').first().click();
-  await expect(page.getByTestId('ai-tg-company-account')).toContainText('Ofis 1');
+  await expect(page.getByTestId('ai-tg-company-account')).toContainText('Jasur');
 
   await page.reload();
   await expect(page.getByTestId('ai-pf-tab-tgAccounts')).toHaveAttribute('aria-selected', 'true', { timeout: 20_000 });
-  await expect(page.getByTestId('ai-tg-company-account')).toContainText('Ofis 1');
-  await page.getByTestId('ai-tg-company-back').click();
-  await expect(page.getByTestId('ai-tg-company-item')).toBeVisible();
+  await expect(page.getByTestId('ai-tg-company-account')).toContainText('Jasur');
+  await page.getByTestId('ai-tg-account-rename').click();
+  await page.getByTestId('ai-tg-company-account').locator('input').fill('Sarvar');
+  await page.getByTestId('ai-tg-company-account').getByRole('button', { name: 'Saqlash' }).click();
+  await expect.poll(() => patches.length).toBe(1);
+  expect(patches[0]).toEqual({ name: 'Sarvar' });
+  await expect(page.getByTestId('ai-tg-company-account')).toContainText('Sarvar');
   expect(errors, errors.join('\n')).toEqual([]);
 });
 

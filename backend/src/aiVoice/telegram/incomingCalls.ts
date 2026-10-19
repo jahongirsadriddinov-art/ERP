@@ -105,7 +105,7 @@ export async function decideIncomingCall(req: IncomingCallRequest, now: Date = n
   let actor: { name: string; role: string } | undefined;
   const decide = async (): Promise<IncomingDecision> => {
     if (!aiConfig.enabled) return { accept: false, reason: 'disabled' };
-    // Firma akkauntiga kelgan qo'ng'iroq (owner 2026-10-19) — doim ochiq, lekin faqat SHU firma xodimi
+    // Umumiy AI akkauntiga kelgan qo'ng'iroq (owner 2026-10-19) — doim ochiq; firma ERP bot bog'lanishidan aniqlanadi
     const accId = typeof req.account === 'string' && req.account ? req.account : null;
     const acc: any = accId ? await getAccount(accId) : null;
     if (accId && !acc) return { accept: false, reason: 'unknown_account' };
@@ -121,7 +121,6 @@ export async function decideIncomingCall(req: IncomingCallRequest, now: Date = n
     }
     const { companyId, employeeId } = who;
     const base = { companyId, employeeId };
-    if (acc && String(acc.companyId) !== String(companyId)) return { ...base, accept: false, reason: 'other_company' };
     const ct: any = await AiEmployeeContact.findOne({ companyId, employeeId }).select('telegram.callConsent optOut').lean();
     const consent = await getCallConsent(companyId, employeeId, { incoming: true, contact: ct });
     if (!consent.allowed) return { ...base, accept: false, reason: consent.reason || 'no_consent' };
@@ -157,6 +156,7 @@ export async function decideIncomingCall(req: IncomingCallRequest, now: Date = n
     const started = await getVoiceSessionManager().start({
       companyId, employeeId, purpose: 'assistant', channel: 'telegram_call', lang, ptt: false, transport,
       userInitiated: true, workerInstanceId: INSTANCE_ID, ringTimeoutSec: INCOMING_RING_FALLBACK_SEC, maxDurationSec,
+      ...(acc?.label ? { aiName: String(acc.label) } : {}),
     });
     if (!started.ok) return { ...base, accept: false, reason: started.reason };
     const h = started.handle;

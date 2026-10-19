@@ -187,14 +187,13 @@ describe('mavjudlik: rozilik, maxfiylik, akkaunt, chegaralar', () => {
 });
 
 describe("firma Telegram akkauntlari (owner 2026-10-19)", () => {
-  it("firmaning bo'sh akkaunti ishlatiladi; band bo'lsa keyingisi; hammasi band — platforma (zaxira); platforma ulanmagan bo'lsa ham ishlaydi", async () => {
+  it("umumiy hovuzdagi bo'sh akkaunt ishlatiladi (AI shu akkaunt ismini oladi); band bo'lsa keyingisi; hammasi band — platforma (zaxira)", async () => {
     const w = await worker();
     await contact(A.workerId); await contact(A.worker2Id); await contact(A.prorabId);
     // Platforma akkaunti ULANMAGAN — firma akkaunti bilan baribir mavjud
     const fresh = { status: 'connected', lastHealthAt: new Date() };
-    const a1 = await AiTgAccount.create({ companyId: A.companyId, ...fresh });
-    const a2 = await AiTgAccount.create({ companyId: A.companyId, ...fresh });
-    await AiTgAccount.create({ companyId: 'boshqa-firma', ...fresh });
+    const a1 = await AiTgAccount.create({ label: 'Jasur', ...fresh });
+    const a2 = await AiTgAccount.create({ label: 'Sarvar', ...fresh });
     expect(await reason(A.workerId)).toBe('ok');
 
     const r1 = await telegramCallChannel.attempt(ctx(A.workerId), req);
@@ -205,6 +204,8 @@ describe("firma Telegram akkauntlari (owner 2026-10-19)", () => {
     expect(place.map((p: any) => p.params.account)).toEqual([String(a1._id), String(a2._id)]);
     expect((await AiCallSession.findById(r1.sessionId).lean() as any).tgAccountId).toBe(String(a1._id));
     expect((await AiCallSession.findById(r2.sessionId).lean() as any).tgAccountId).toBe(String(a2._id));
+    // AI ismi — akkaunt ismi (persona.name o'rniga)
+    expect((mgr.get(r1.sessionId!) as any)?.persona?.()?.name).toBe('Jasur');
 
     // Ikkalasi band, platforma ulanmagan — kutib qayta urinish
     const r3 = await telegramCallChannel.attempt(ctx(A.prorabId), req);

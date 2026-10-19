@@ -6,16 +6,16 @@ import { isObjectIdString } from '../lib/ids';
 import { callWorker, WorkerRpcFailure } from './workerRpc';
 import { workerConnectedHere, workerHub } from './workerNamespace';
 
-// Firma Telegram akkauntlari (owner 2026-10-19). Har firma o'z akkauntlarini qo'shadi (dasturchi panelida);
-// qo'ng'iroq shu firmaning BO'SH akkaunti orqali ketadi (bitta akkaunt — bir vaqtda bitta qo'ng'iroq, Telegram
-// cheklovi), hammasi band yoki ulanmagan bo'lsa — platforma akkaunti (zaxira). Kiruvchi qo'ng'iroq firma
-// akkauntiga kelsa — faqat SHU firma xodimi qabul qilinadi.
+// AI Telegram akkauntlari — UMUMIY hovuz (owner 2026-10-19: "har firma uchun emas, hammaga ishlaydigan; ism
+// berilsin, AI shu ismni aytadi"). Dasturchi panelida hohlagancha qo'shiladi; har qo'ng'iroq BO'SH akkaunt orqali ketadi
+// (bitta akkaunt — bir vaqtda bitta qo'ng'iroq, Telegram cheklovi), hammasi band/ulanmagan — platforma akkaunti (zaxira).
+// Kiruvchi qo'ng'iroqda qo'ng'iroq qiluvchining firmasi ERP botdagi bog'lanishdan (/start + telefon) aniqlanadi.
 
 const TG_ID_RE = /^\d{1,20}$/;
 const UN_RE = /^[A-Za-z][A-Za-z0-9_]{3,31}$/;
 /** Worker health shu muddatda kelgan bo'lsa — akkaunt "tirik". */
 const FRESH_MS = 180_000;
-export const MAX_ACCOUNTS_PER_COMPANY = 20;
+export const MAX_POOL_ACCOUNTS = 50;
 
 export interface TgAccountDto {
   id: string; label?: string; status: string; username?: string; displayName?: string; phoneMasked?: string;
@@ -28,8 +28,8 @@ const busyIds = async (ids: string[]): Promise<Set<string>> => {
   return new Set(rows.map((r) => String(r.tgAccountId)));
 };
 
-export async function listCompanyAccounts(companyId: string): Promise<TgAccountDto[]> {
-  const rows: any[] = await AiTgAccount.find({ companyId }).sort({ createdAt: 1 }).lean();
+export async function listPoolAccounts(): Promise<TgAccountDto[]> {
+  const rows: any[] = await AiTgAccount.find({}).sort({ createdAt: 1 }).lean();
   const busy = await busyIds(rows.map((r) => String(r._id)));
   const now = Date.now();
   return rows.map((r) => ({
@@ -57,14 +57,22 @@ export async function syncAccountsToWorker(): Promise<boolean> {
   }
 }
 
-export async function createCompanyAccount(companyId: string, label: string | undefined, by: string): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
-  if ((await AiTgAccount.countDocuments({ companyId })) >= MAX_ACCOUNTS_PER_COMPANY) return { ok: false, error: 'too_many' };
-  const doc = await AiTgAccount.create({ companyId, label: label?.trim().slice(0, 60) || undefined, createdBy: by });
+export const cleanAiName = (v: unknown): string | undefined =>
+  typeof v === 'string' && v.trim() ? v.replace(/[\u0000-\u001f<>{}]/g, '').trim().slice(0, 30) || undefined : undefined;
+
+export async function createPoolAccount(name: string | undefined, by: string): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  if ((await AiTgAccount.countDocuments({})) >= MAX_POOL_ACCOUNTS) return { ok: false, error: 'too_many' };
+  const doc = await AiTgAccount.create({ label: cleanAiName(name), createdBy: by });
   await syncAccountsToWorker();
   return { ok: true, id: String(doc._id) };
 }
 
-export async function removeCompanyAccount(id: string): Promise<{ ok: boolean; error?: string }> {
+export async function setAccountName(id: string, name: string | undefined): Promise<void> {
+  const n = cleanAiName(name);
+  await AiTgAccount.updateOne({ _id: id }, n ? { $set: { label: n } } : { $unset: { label: 1 } });
+}
+
+export async function removePoolAccount(id: string): Promise<{ ok: boolean; error?: string }> {
   if (await AiCallSession.exists({ isActive: true, channel: 'telegram_call', tgAccountId: id })) return { ok: false, error: 'busy' };
   if (workerConnectedHere()) {
     try {
@@ -122,24 +130,24 @@ export async function recordAccountsHealth(list: WorkerStatus['accounts'], now: 
   }
 }
 
-/** Firmaning ulangan (tirik) akkauntlari bormi — kanal mavjudligi uchun. */
-export async function companyHasLiveAccount(companyId: string, now: Date = new Date()): Promise<boolean> {
+/** Hovuzda ulangan (tirik) akkaunt bormi — kanal mavjudligi uchun. */
+export async function poolHasLiveAccount(now: Date = new Date()): Promise<boolean> {
   return !!(await AiTgAccount.exists({
-    companyId, status: 'connected', lastHealthAt: { $gt: new Date(now.getTime() - FRESH_MS) },
+    status: 'connected', lastHealthAt: { $gt: new Date(now.getTime() - FRESH_MS) },
     $or: [{ floodWaitUntil: null }, { floodWaitUntil: { $lte: now } }],
   }));
 }
 
-/** Firmaning BO'SH akkaunti (eng kam ishlatilgani birinchi emas — yaratilish tartibida). Yo'q bo'lsa null. */
-export async function pickCompanyAccount(companyId: string, now: Date = new Date()): Promise<string | null> {
+/** Hovuzdagi BO'SH akkaunt (yaratilish tartibida) va uning AI ismi. Yo'q bo'lsa null. */
+export async function pickPoolAccount(now: Date = new Date()): Promise<{ id: string; name?: string } | null> {
   const rows: any[] = await AiTgAccount.find({
-    companyId, status: 'connected', lastHealthAt: { $gt: new Date(now.getTime() - FRESH_MS) },
+    status: 'connected', lastHealthAt: { $gt: new Date(now.getTime() - FRESH_MS) },
     $or: [{ floodWaitUntil: null }, { floodWaitUntil: { $lte: now } }],
-  }).sort({ createdAt: 1 }).select('_id').lean();
+  }).sort({ createdAt: 1 }).select('_id label').lean();
   if (!rows.length) return null;
   const busy = await busyIds(rows.map((r) => String(r._id)));
   const free = rows.find((r) => !busy.has(String(r._id)));
-  return free ? String(free._id) : null;
+  return free ? { id: String(free._id), ...(free.label ? { name: String(free.label) } : {}) } : null;
 }
 
 export async function accountBusy(id: string): Promise<boolean> {

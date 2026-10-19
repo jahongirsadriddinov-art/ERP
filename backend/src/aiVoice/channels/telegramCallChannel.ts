@@ -15,7 +15,7 @@ import { reapStaleTelegramSessions, registerBridge, TelegramTransport, unregiste
 import { callWorker, WorkerRpcFailure } from '../telegram/workerRpc';
 import { ensureContactTgUserId } from '../telegram/tgLink';
 import { workerConnectedHere, workerHub } from '../telegram/workerNamespace';
-import { companyHasLiveAccount, markSessionAccount, pickCompanyAccount } from '../telegram/companyAccounts';
+import { markSessionAccount, pickPoolAccount, poolHasLiveAccount } from '../telegram/companyAccounts';
 import { PLATFORM_SCOPE } from '../platform';
 import { avatarEnabled, avatarParam } from '../telegram/incomingCalls';
 
@@ -41,8 +41,8 @@ type Peer = { tgUserId: string; resolved: boolean; username?: string };
 async function check(c: ChannelCtx, now: Date): Promise<Avail & { peer?: Peer; ownAccounts?: boolean }> {
   if (!aiConfig.enabled) return { ok: false, reason: 'disabled' };
   if (!c || typeof c.companyId !== 'string' || !c.companyId || !isObjectIdString(c.employeeId)) return { ok: false, reason: 'bad_ctx' };
-  // Firmaning o'z Telegram akkaunti bo'lsa — platforma akkaunti holati/limiti unga ta'sir qilmaydi
-  const ownAccounts = await companyHasLiveAccount(c.companyId, now);
+  // Umumiy AI akkauntlari hovuzida tirik akkaunt bo'lsa — platforma akkaunti holati/limiti unga ta'sir qilmaydi
+  const ownAccounts = await poolHasLiveAccount(now);
   if (!ownAccounts) {
     const conn: any = await getConnection();
     if (!conn || conn.status !== 'connected') return { ok: false, reason: 'account_not_connected' };
@@ -129,12 +129,13 @@ export const telegramCallChannel: ChannelAdapter = {
     if (!av.ok) return unavailable(av.reason);
     // C3: worker socket'i boshqa instansiyada yoki qayta ulanmoqda — fallback emas, qayta navbat
     if (!workerConnectedHere()) return unavailable('worker_not_here', new Date(now.getTime() + DEFER_MS));
-    // Owner 2026-10-19: firmaning o'z akkauntlaridan BO'SHI; hammasi band/yo'q bo'lsa — platforma akkaunti (zaxira)
-    let account = av.ownAccounts ? await pickCompanyAccount(c.companyId, now) : null;
-    if (av.ownAccounts && !account) {
+    // Owner 2026-10-19: umumiy hovuzdagi BO'SH akkaunt; hammasi band/yo'q bo'lsa — platforma akkaunti (zaxira)
+    let picked = av.ownAccounts ? await pickPoolAccount(now) : null;
+    if (av.ownAccounts && !picked) {
       await reapStaleTelegramSessions(now).catch(() => 0);
-      account = await pickCompanyAccount(c.companyId, now);
+      picked = await pickPoolAccount(now);
     }
+    const account = picked?.id || null;
     let reserved = false;
     if (!account) {
       const conn: any = await getConnection();
@@ -162,6 +163,7 @@ export const telegramCallChannel: ChannelAdapter = {
         ringTimeoutSec: settings.ring + 20, maxDurationSec: settings.max,
         // Eslatma/xabar matni qo'ng'iroqda aytilsin (ilova kanalidagi kabi; avval Telegram'da yo'q edi)
         requestText: r?.kind === 'reminder' || r?.kind === 'test' ? r.text : undefined,
+        ...(picked?.name ? { aiName: picked.name } : {}),
       });
     } catch (e) {
       await releaseDaily();

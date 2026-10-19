@@ -300,6 +300,12 @@ class ManagedVoiceSession implements VoiceSessionHandle {
     return (this.opts.userInitiated ?? (this.opts.purpose === 'assistant' && this.opts.channel === 'inapp_call')) ? 'inbound' : 'outbound';
   }
 
+  /** Firma persona sozlamasi; qo'ng'iroq AI Telegram akkaunti orqali bo'lsa — AI ismi akkaunt ismi. */
+  private persona() {
+    const name = typeof this.opts.aiName === 'string' && this.opts.aiName.trim() ? this.opts.aiName.trim().slice(0, 30) : '';
+    return name ? { ...(this.settings.persona || { style: 'friendly' as const }), name } : this.settings.persona;
+  }
+
   private async openProvider(): Promise<boolean> {
     try {
       const st = this.guest ? { name: '' } : await getCompanyAiState(this.companyId);
@@ -315,12 +321,12 @@ class ManagedVoiceSession implements VoiceSessionHandle {
       this.allowedTools = new Set(decls.map((d) => d.name));
       const zp = zonedParts(new Date());
       const systemInstruction = this.guest ? buildGuestVoicePrompt({
-        lang: this.lang, name: this.actorName, today: zp.date, time: zp.hhmm, persona: this.settings.persona, voiceName: this.settings.voiceName,
+        lang: this.lang, name: this.actorName, today: zp.date, time: zp.hhmm, persona: this.persona(), voiceName: this.settings.voiceName,
       }) : buildVoiceSystemPrompt({
         lang: this.lang, purpose: this.purpose, channel: this.toolChannel, companyName: this.companyName,
         userName: this.actorName, role: this.actorRole, isOwner: this.actorIsOwner, today: zp.date, weekday: zp.isoWeekday,
         requestText: this.opts.requestText, direction: this.direction, time: zp.hhmm,
-        persona: this.settings.persona, voiceName: this.settings.voiceName,
+        persona: this.persona(), voiceName: this.settings.voiceName,
       });
       const base: Omit<VoiceOpenOpts, 'model'> = {
         systemInstruction, tools: decls, lang: this.lang, voiceName: this.settings.voiceName, ptt: this.opts.ptt,

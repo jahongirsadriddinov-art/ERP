@@ -3,6 +3,7 @@ import ObjectModel from '../models/Object';
 import ProjectMedia from '../models/ProjectMedia';
 import Material from '../models/Material';
 import { checkRate } from '../utils/rateLimit';
+import { computePlanFact } from '../services/planFact';
 
 const router = Router();
 
@@ -32,13 +33,21 @@ router.get('/client-view/:token', async (req, res) => {
     // nisbati) ko'rsatkich, mijoz uchun tushunarli va xavfsiz.
     const totalNeeded = materials.reduce((s, m) => s + (m.needed || 0), 0);
     const totalSent = materials.reduce((s, m) => s + (m.sent || 0), 0);
-    const progressPercent = totalNeeded > 0 ? Math.min(100, Math.round((totalSent / totalNeeded) * 100)) : 0;
+    // Plan-fakt bahosi (qo'lda foiz > AI foto-baho > material nisbati) — pulsiz; mijoz uchun tushunarli
+    const pf = computePlanFact(obj, materials, { confirmed: 0, pending: 0 });
+    const progressPercent = pf.progressSource === 'none'
+      ? (totalNeeded > 0 ? Math.min(100, Math.round((totalSent / totalNeeded) * 100)) : 0)
+      : Math.round(pf.progressPct);
 
     res.json({
       name: obj.name,
       location: obj.location,
       status: obj.status,
       progressPercent,
+      progressSource: pf.progressSource,
+      startDate: pf.startDate,
+      endDate: pf.endDate,
+      aiNote: (obj as any).progressAi?.note ? String((obj as any).progressAi.note).slice(0, 300) : undefined,
       media: media.map(m => ({ type: m.type, url: m.url, caption: m.caption, createdAt: m.createdAt })),
     });
   } catch (err) {

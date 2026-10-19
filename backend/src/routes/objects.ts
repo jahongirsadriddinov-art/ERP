@@ -12,6 +12,7 @@ import { getTenant } from '../middleware/tenantContext';
 import User from '../models/User';
 import { getBackendUrl } from '../utils/backendUrl';
 import { randomBytes } from 'crypto';
+import { planFactFor, type PlanFact } from '../services/planFact';
 
 const coordsFromBody = (lat: any, lng: any, radius: any) => {
   const out: any = {};
@@ -209,6 +210,49 @@ router.post('/:id/smeta', upload.single('smeta'), async (req: Request, res: Resp
 });
 
 // Get Objects
+// ── Plan-fakt (owner 2026-10-19) ────────────────────────────────────────────────────────────────────────────
+// Rahbar — barcha obyektlar va pul ko'rsatkichlari; prorab — faqat o'z obyektlari, pulsiz (bajarilish/muddat/material).
+function planFactVisible(list: PlanFact[], boss: boolean) {
+  if (boss) return list;
+  return list.map((p) => ({ ...p, budget: null, spent: 0, pendingSpend: 0, spentPct: null, forecastCost: null, forecastOverrun: null,
+    notes: p.notes.filter((n) => !/byudjet/i.test(n)) }));
+}
+async function planFactScope(): Promise<{ filter: Record<string, unknown>; boss: boolean } | null> {
+  const t = getTenant();
+  const boss = !!t?.isOwner || ['direktor', 'orinbosar'].includes(String(t?.role));
+  if (boss) return { filter: scoped({}), boss };
+  if (['prorab', 'brigadir'].includes(String(t?.role))) {
+    const me: any = await User.findById(t?.userId).select('projectIds').lean().catch(() => null);
+    const ids = (me?.projectIds || []).map(String);
+    return { filter: scoped({ $or: [{ foremanId: String(t?.userId) }, { _id: { $in: ids } }] }), boss };
+  }
+  return null;
+}
+router.get('/plan-fact', async (_req, res) => {
+  try {
+    const sc = await planFactScope();
+    if (!sc) return res.status(403).json({ error: "Ruxsat yo'q" });
+    const list = await planFactFor({ ...sc.filter, status: { $ne: 'completed' } });
+    res.json(planFactVisible(list, sc.boss));
+  } catch (err) {
+    console.error('[plan-fact]', err);
+    res.status(500).json({ error: 'Server xatoligi' });
+  }
+});
+router.get('/:id/plan-fact', async (req, res) => {
+  try {
+    if (!/^[a-f0-9]{24}$/i.test(String(req.params.id))) return res.status(400).json({ error: "Noto'g'ri id" });
+    const sc = await planFactScope();
+    if (!sc) return res.status(403).json({ error: "Ruxsat yo'q" });
+    const [one] = await planFactFor({ ...sc.filter, _id: req.params.id });
+    if (!one) return res.status(404).json({ error: 'Obyekt topilmadi' });
+    res.json(planFactVisible([one], sc.boss)[0]);
+  } catch (err) {
+    console.error('[plan-fact]', err);
+    res.status(500).json({ error: 'Server xatoligi' });
+  }
+});
+
 router.get('/', async (req, res) => {
   try {
     const objects = await ObjectModel.find(scoped()).sort({ createdAt: -1 }).lean();
@@ -230,7 +274,7 @@ router.get('/', async (req, res) => {
 // yo'l yo'q edi).
 router.patch('/:id', requireOwnerOrAdmin, async (req, res) => {
   try {
-    const { name, budget, location, foremanId, lat, lng, geofenceRadius } = req.body || {};
+    const { name, budget, location, foremanId, lat, lng, geofenceRadius, startDate, endDate, progressManual } = req.body || {};
     const before = await ObjectModel.findOne(scoped({ _id: req.params.id })).lean();
     if (!before) return res.status(404).json({ error: 'Obyekt topilmadi' });
 
@@ -251,6 +295,17 @@ router.patch('/:id', requireOwnerOrAdmin, async (req, res) => {
     }
     if (location !== undefined) update.location = location ? String(location).trim() : undefined;
     if (foremanId !== undefined) update.foremanId = foremanId || undefined;
+    // Plan-fakt: reja muddati (YYYY-MM-DD) va qo'lda bajarilish foizi (null — AI/material bahosiga qaytish)
+    const asDate = (v: unknown) => (v === null || v === '' ? null : /^\d{4}-\d{2}-\d{2}/.test(String(v)) && !isNaN(Date.parse(String(v))) ? new Date(String(v)) : undefined);
+    if (startDate !== undefined) { const d = asDate(startDate); if (d === undefined) return res.status(400).json({ error: "Boshlanish sanasi noto'g'ri" }); update.startDate = d; }
+    if (endDate !== undefined) { const d = asDate(endDate); if (d === undefined) return res.status(400).json({ error: "Tugash sanasi noto'g'ri" }); update.endDate = d; }
+    if (progressManual !== undefined) {
+      if (progressManual === null || progressManual === '') update.progressManual = null;
+      else { const n = Number(progressManual); if (!Number.isFinite(n) || n < 0 || n > 100) return res.status(400).json({ error: "Foiz 0-100 oralig'ida bo'lsin" }); update.progressManual = Math.round(n); }
+    }
+    const sd = update.startDate !== undefined ? update.startDate : before.startDate;
+    const ed = update.endDate !== undefined ? update.endDate : before.endDate;
+    if (sd && ed && new Date(ed) <= new Date(sd)) return res.status(400).json({ error: "Tugash sanasi boshlanishdan keyin bo'lsin" });
     Object.assign(update, coordsFromBody(lat, lng, geofenceRadius));
     // Manzil o'zgarib, yangi nuqta berilmasa — eski nuqta noto'g'ri bo'lib qoladi: tozalaymiz (keyin manzildan qayta aniqlanadi)
     if (location !== undefined && lat === undefined && String(location || '').trim() !== String(before.location || '').trim()) { update.lat = undefined; update.lng = undefined; }

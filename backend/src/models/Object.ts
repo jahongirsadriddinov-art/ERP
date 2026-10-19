@@ -14,6 +14,11 @@ export interface IObject extends Document {
   smeta?: any; // to'liq deterministik parser natijasi (ParseResult) — qurilmalar orasida sinxron bo'lishi uchun
   companyId?: string; // v1.2 multi-tenant (nullable)
   clientShareToken?: string; // mijoz portali — login talab qilmaydigan ochiq havola (routes/publicClient.ts)
+  // Plan-fakt (owner 2026-10-19): reja muddati va bajarilish foizi
+  startDate?: Date;
+  endDate?: Date;
+  progressManual?: number;           // rahbar/prorab qo'lda kiritgan foiz (bo'lsa — ustun)
+  progressAi?: { percent: number; at: Date; note?: string; mediaId?: string };   // AI foto-nazorat bahosi
   createdAt: Date;
   updatedAt: Date;
 }
@@ -32,6 +37,10 @@ const ObjectSchema: Schema = new Schema({
   smeta: { type: Schema.Types.Mixed },
   companyId: { type: String, index: true }, // v1.2 multi-tenant
   clientShareToken: { type: String, index: true, sparse: true },
+  startDate: { type: Date },
+  endDate: { type: Date },
+  progressManual: { type: Number, min: 0, max: 100 },
+  progressAi: { type: Schema.Types.Mixed },
 }, { timestamps: true });
 
 // Search uchun indekslar

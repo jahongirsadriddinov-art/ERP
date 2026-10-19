@@ -87,6 +87,7 @@ import { AnnouncementComposer, AnnouncementContent, AnnouncementPopup, type Anno
 import { connectSocket, getSocket, disconnectSocket } from "./socket";
 import { isAiCallActive, decideCallOffer } from "./aiVoice/bus";
 import { motion, AnimatePresence } from "motion/react";
+import { PlanFactCard, PlanFactOverview } from "./PlanFact";
 import { setSiteLanguage, SiteLang, langLabel } from "./i18n";
 import { isTelegramMiniApp, getTelegramInitData, markManualLogout, clearManualLogout, telegramAutoLoginAllowed } from "./telegramWebApp";
 import { isChatMuted, useChatPrefs } from "./chat/chatPrefs";
@@ -2047,6 +2048,7 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
               </div>
             ))}
           </div>
+          <div className="mb-3"><PlanFactOverview onOpen={(id) => { const pr = projects.find(x => x.id === id); if (pr) onSelectProject(pr); }} /></div>
           {projects.map(p => {
             const pend = transfers.filter(t=>t.projectId===p.id&&t.status==="pending").length;
             const foreman = users.find(u=>u.id===p.foremanId);
@@ -2207,6 +2209,7 @@ function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onS
                         </div>
                       ))}
                     </div>
+                    <div className="mb-4"><PlanFactOverview onOpen={(id) => { const pr = projects.find(x => x.id === id); if (pr) onSelectProject(pr); }} /></div>
                     {projects.map(p => {
                       const pend = transfers.filter(t=>t.projectId===p.id&&t.status==="pending").length;
                       const foreman = users.find(u=>u.id===p.foremanId);
@@ -2776,7 +2779,8 @@ function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSe
     onDeleteProject: (pid: string) => void;
   }) {
   const { t } = useTranslation();
-  const [tab, setTab] = useState<"required"|"smeta"|"pending"|"confirmed"|"media">("required");
+  const canPlanFact = isAdmin(currentUser.role) || !!currentUser.isOwner || currentUser.role === "prorab" || currentUser.role === "brigadir";
+  const [tab, setTab] = useState<"plan"|"required"|"smeta"|"pending"|"confirmed"|"media">(canPlanFact ? "plan" : "required");
   const [showEditProject, setShowEditProject] = useState(false);
   const [deletingProject, setDeletingProject] = useState(false);
   // Ish jarayoni rasm/video — BARCHA xodim (ishchi, brigadir, prorab ham)
@@ -2973,18 +2977,19 @@ function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSe
         </div>
       </div>
       <div className="glass border-b border-border px-3 py-2 flex gap-1 overflow-x-auto scrollbar-hide">
-        {([["required",t('objectDetail.tabRequired'),project.requiredMaterials.length], ...(project.smeta ? [["smeta",t('objectDetail.tabSmeta'),project.smeta.resources.length] as [string,string,number]] : []), ["pending",t('objectDetail.tabPending'),pendT.length],["confirmed",t('objectDetail.tabConfirmed'),confT.length],["media",t('objectDetail.tabMedia'),mediaItems.length]] as [string,string,number][]).map(([k,l,c])=>(
+        {([...(canPlanFact ? [["plan",t('planFact.tab'),NaN] as [string,string,number]] : []),["required",t('objectDetail.tabRequired'),project.requiredMaterials.length], ...(project.smeta ? [["smeta",t('objectDetail.tabSmeta'),project.smeta.resources.length] as [string,string,number]] : []), ["pending",t('objectDetail.tabPending'),pendT.length],["confirmed",t('objectDetail.tabConfirmed'),confT.length],["media",t('objectDetail.tabMedia'),mediaItems.length]] as [string,string,number][]).map(([k,l,c])=>(
           <button key={k} onClick={()=>setTab(k as any)} className={`relative flex items-center gap-1.5 text-sm md:text-xs py-2 px-3 rounded-full font-medium liquid-transition whitespace-nowrap ${tab===k?"text-primary":"text-muted-foreground hover:text-foreground"}`}>
             {tab===k && (
               <motion.div layoutId="objectDetailTabPill" className="absolute inset-0 rounded-full bg-primary/10 -z-10"
                 transition={{ type: "spring", stiffness: 480, damping: 34 }}  />
             )}
-            {l}<span className={`text-[9px] px-1.5 py-0.5 rounded-full font-semibold ${tab===k?"bg-primary text-white":"bg-muted text-muted-foreground"}`}>{c}</span>
+            {l}{Number.isFinite(c) && <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-semibold ${tab===k?"bg-primary text-white":"bg-muted text-muted-foreground"}`}>{c}</span>}
           </button>
         ))}
       </div>
       </div>
       <div className="flex-1 flex flex-col min-h-0">
+        {tab==="plan" && <div className="flex-1 min-h-0 overflow-y-auto"><PlanFactCard objectId={project.id} canEdit={isAdmin(currentUser.role) || !!currentUser.isOwner} /></div>}
         {tab==="smeta" && project.smeta && <SmetaResultView smeta={project.smeta}/>}
         {tab==="required" && (
           <div className="flex-1 flex flex-col min-h-0">
@@ -4243,7 +4248,11 @@ export function ClientViewPage({ token }: { token: string }) {
           <div className="h-2.5 rounded-full bg-muted overflow-hidden">
             <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${data.progressPercent}%` }} />
           </div>
-          <p className="text-[11px] text-muted-foreground mt-2">Material yetkazib berish progressi (moliyaviy ma'lumot ko'rsatilmaydi)</p>
+          <p className="text-[11px] text-muted-foreground mt-2">
+            {(data as any).progressSource === 'ai_photo' ? "Bajarilish — obyekt rasmlari bo'yicha AI bahosi" : (data as any).progressSource === 'manual' ? "Bajarilish — prorab/rahbar bahosi" : "Material yetkazib berish progressi"} (moliyaviy ma'lumot ko'rsatilmaydi)
+            {(data as any).endDate && <> · Reja bo'yicha tugash: <b>{(data as any).endDate}</b></>}
+          </p>
+          {(data as any).aiNote && <p className="text-xs mt-2 rounded-xl bg-muted/50 px-3 py-2">🤖 {(data as any).aiNote}</p>}
         </div>
 
         <div>

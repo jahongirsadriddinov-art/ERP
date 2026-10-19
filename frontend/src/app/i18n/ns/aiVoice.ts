@@ -563,6 +563,12 @@ export const uz = {
       health: "Worker holati, UDP tekshiruvi va kunlik qo'ng'iroq limiti",
     },
     // "Ochiq muloqot" — kiruvchi qo'ng'iroqlar
+    avatar: {
+      title: "Video avatar",
+      label: "Video qo'ng'iroqda AI avatarini ko'rsatish",
+      hint: "O'chirilsa, AI video avatarsiz ishlaydi (tezroq, server yuki kam). Kamerangizni ko'rish, rasm/video olish va boshqa hamma funksiyalar ishlayveradi.",
+      onToast: "Video avatar yoqildi", offToast: "Video avatar o'chirildi",
+    },
     open: {
       title: "Ochiq muloqot",
       label: "Xodimlar AI akkauntiga o'zlari qo'ng'iroq qila olsin",
@@ -1244,6 +1250,12 @@ export const ru = {
       health: "Состояние воркера, проверка UDP и дневной лимит звонков",
     },
     // "Открытый разговор" — входящие звонки
+    avatar: {
+      title: "Видео-аватар",
+      label: "Показывать аватар AI в видеозвонке",
+      hint: "Если выключить, AI работает без видео-аватара (быстрее, меньше нагрузка). Просмотр камеры, фото/видео и все остальные функции работают.",
+      onToast: "Видео-аватар включён", offToast: "Видео-аватар выключен",
+    },
     open: {
       title: "Открытый разговор",
       label: "Сотрудники могут сами звонить AI-аккаунту",

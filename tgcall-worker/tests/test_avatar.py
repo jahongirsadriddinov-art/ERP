@@ -310,7 +310,10 @@ def test_session_decides_video(monkeypatch):
     async def run(eng, want=False):
         s = H.AvatarSession(eng, 42, want)
         s.start()
-        await asyncio.sleep(1.5)
+        for _ in range(80):                       # renderer tayyorlanishi (540p) — 8 s gacha kutamiz
+            await asyncio.sleep(0.1)
+            if eng.frames >= 2 or (not eng.vid and not want and _ > 15):
+                break
         s.set_caption("Rahmat!")
         await s.stop()
         return s
@@ -319,13 +322,14 @@ def test_session_decides_video(monkeypatch):
     monkeypatch.setattr(H, "DETECT_WAIT_S", 0.1)
     e = Eng(True)
     asyncio.run(run(e))
-    assert e.enabled and e.enabled[0][1] == 720 and e.frames >= 2
+    assert e.enabled and e.enabled[0][1] == 540 and e.enabled[0][3] == 24 and e.frames >= 2
     e = Eng(False)
     asyncio.run(run(e))
     assert not e.enabled and e.frames == 0
     e = Eng(False)
     asyncio.run(run(e, want=True))
     assert e.enabled
+    assert H.start_for_call(Eng(True), 1, look="off") is None      # dasturchi panelida avatar o'chirilgan
     monkeypatch.setenv("AVATAR_VIDEO", "off")
     assert H.start_for_call(Eng(True), 1) is None
 

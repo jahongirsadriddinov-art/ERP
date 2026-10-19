@@ -24,7 +24,7 @@ interface TgAccount {
 interface TgView {
   aiVoiceEnabled?: boolean; account?: TgAccount | null; worker?: { connectedHere?: boolean; workerId?: string; leaseActive?: boolean };
   lastError?: string; udpCheckedAt?: string; connectedAt?: string; limits?: { loginPer10Min?: number; testCallsPerHour?: number };
-  openConversation?: boolean; openConversationAt?: string;
+  openConversation?: boolean; openConversationAt?: string; avatarEnabled?: boolean;
 }
 interface TestTarget { userId: string; name: string; companyId: string; companyName: string; resolveStatus: string }
 interface Res<T> { ok: boolean; status: number; data: T; error: string; body: any }
@@ -113,6 +113,15 @@ export default function TelegramAccountPanel() {
     toast.success(k(enabled ? "open.onToast" : "open.offToast"));
     if (r.data?.workerSynced === false) toast.message(k("open.notSynced"));
   };
+  // Video avatar (owner 2026-10-19): o'chirilsa — avatar ko'rsatilmaydi, AI kamerani ko'rish va boshqa hammasini qiladi
+  const toggleAvatar = async (enabled: boolean) => {
+    setBusy("avatar");
+    const r = await api<{ ok: boolean; avatarEnabled: boolean }>("POST", "/avatar", { enabled });
+    setBusy("");
+    if (!r.ok) { toast.error(errText(r)); return; }
+    setV((p) => (p ? { ...p, avatarEnabled: !!r.data?.avatarEnabled } : p));
+    toast.success(k(enabled ? "avatar.onToast" : "avatar.offToast"));
+  };
   const logout = async () => {
     if (!window.confirm(k("logout.confirm"))) return;
     setBusy("logout");
@@ -148,6 +157,10 @@ export default function TelegramAccountPanel() {
             <Toggle checked={!!v.openConversation} disabled={!!busy} onChange={toggleOpen} testId="ai-tg-open-toggle"
               label={k("open.label")} hint={k("open.hint")} />
             <p className="text-[11px] text-muted-foreground mt-1">{k("open.rules")}</p>
+          </Card>
+          <Card icon={Telegram} title={k("avatar.title")} testId="ai-tg-avatar">
+            <Toggle checked={v.avatarEnabled !== false} disabled={!!busy} onChange={toggleAvatar} testId="ai-tg-avatar-toggle"
+              label={k("avatar.label")} hint={k("avatar.hint")} />
           </Card>
           <Card icon={Computer} title={k("actions.title")}>
             <div className="flex flex-wrap gap-2">

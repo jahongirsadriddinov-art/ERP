@@ -78,6 +78,24 @@ async function auditIncoming(tgUserId: string, d: IncomingDecision, actor?: { na
   }).catch(() => undefined);
 }
 
+/** Video avatar dasturchi panelida yoqilganmi (standart — ha). O'chiq bo'lsa workerga "off" boradi. 30 s kesh. */
+let avatarCache: { at: number; on: boolean } | null = null;
+export async function avatarEnabled(): Promise<boolean> {
+  if (avatarCache && Date.now() - avatarCache.at < 30_000) return avatarCache.on;
+  const c: any = await AiChannelConnection.findOne(PLATFORM_TG).select('avatarEnabled').lean().catch(() => null);
+  avatarCache = { at: Date.now(), on: c?.avatarEnabled !== false };
+  return avatarCache.on;
+}
+export async function setAvatarEnabled(enabled: boolean): Promise<void> {
+  await ensurePlatformConnection();
+  await AiChannelConnection.updateOne(PLATFORM_TG, { $set: { avatarEnabled: enabled } });
+  avatarCache = { at: Date.now(), on: enabled };
+}
+/** Workerga yuboriladigan avatar qiymati: o'chiq bo'lsa "off", aks holda firma tanlagan ko'rinish. */
+export async function avatarParam(look: string | undefined): Promise<string | undefined> {
+  return (await avatarEnabled()) ? look : 'off';
+}
+
 /** Qaror (testlar to'g'ridan-to'g'ri chaqiradi). Sessiya faqat qabulda yaratiladi. */
 export async function decideIncomingCall(req: IncomingCallRequest, now: Date = new Date()): Promise<IncomingDecision> {
   const tgUserId = String(req?.tgUserId || '');
@@ -133,7 +151,7 @@ export async function decideIncomingCall(req: IncomingCallRequest, now: Date = n
     const h = started.handle;
     transport.bind(h.sessionId);
     registerBridge({ sessionId: h.sessionId, handle: h, employeeId, companyId });
-    return { ...base, accept: true, sessionId: h.sessionId, maxDurationSec, avatar: resolveAvatarLook(settings) };
+    return { ...base, accept: true, sessionId: h.sessionId, maxDurationSec, avatar: await avatarParam(resolveAvatarLook(settings)) };
   };
   let d: IncomingDecision;
   try {

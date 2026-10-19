@@ -18,7 +18,7 @@ import { ensurePlatformConnection } from '../lib/workerLease';
 import {
   accountDto, maskPhone, setConnectedAccount, setFloodWait, setLoggedOut, setLoginState,
 } from '../telegram/accountService';
-import { setOpenConversation } from '../telegram/incomingCalls';
+import { setAvatarEnabled, setOpenConversation } from '../telegram/incomingCalls';
 import { callWorker, WorkerRpcFailure } from '../telegram/workerRpc';
 import { getActiveWorker } from '../telegram/workerNamespace';
 
@@ -120,7 +120,7 @@ const audit = (req: Request, dev: Dev, action: 'create' | 'update' | 'delete', d
 
 export async function platformStatusView() {
   const conn: any = await AiChannelConnection.findOne(PLATFORM_TG)
-    .select('status lastError workerId leaseUntil udpProbe connectedAt openConversation openConversationAt').lean();
+    .select('status lastError workerId leaseUntil udpProbe connectedAt openConversation openConversationAt avatarEnabled').lean();
   const w = getActiveWorker();
   return {
     aiVoiceEnabled: aiConfig.enabled,
@@ -136,6 +136,7 @@ export async function platformStatusView() {
     limits: { loginPer10Min: LOGIN_MAX, testCallsPer10Min: TEST_CALL_MAX, testCallCooldownSec: TEST_CALL_COOLDOWN_SEC, concurrentCalls: 1 },
     notes: { oneCallAtATime: ONE_CALL_NOTE },
     openConversation: conn?.openConversation === true,
+    avatarEnabled: conn?.avatarEnabled !== false,
     openConversationAt: conn?.openConversationAt ? new Date(conn.openConversationAt).toISOString() : undefined,
   };
 }
@@ -255,6 +256,16 @@ router.post('/telegram-account/open-conversation', wrap(async (req, res) => {
   const workerSynced = await setOpenConversation(enabled, dev.userId);
   audit(req, dev, 'update', `AI Telegram: "Ochiq muloqot" ${enabled ? 'yoqildi' : "o'chirildi"}`);
   res.json({ ok: true, openConversation: enabled, workerSynced });
+}));
+
+// ───────────── Video avatar (owner 2026-10-19): o'chirilsa — avatar yo'q, kamera ko'rish va boshqa hammasi ishlaydi ─────────────
+router.post('/telegram-account/avatar', wrap(async (req, res) => {
+  const dev = await developer(req);
+  const enabled = isObj(req.body) ? req.body.enabled : undefined;
+  if (typeof enabled !== 'boolean') return res.status(400).json({ error: 'invalid', errors: ['enabled'] });
+  await setAvatarEnabled(enabled);
+  audit(req, dev, 'update', `AI Telegram: video avatar ${enabled ? 'yoqildi' : "o'chirildi"}`);
+  res.json({ ok: true, avatarEnabled: enabled });
 }));
 
 // ───────────── UDP tekshiruv ─────────────

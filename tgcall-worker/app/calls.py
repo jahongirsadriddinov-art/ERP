@@ -231,6 +231,12 @@ class CallManager:
             done_wait.cancel()
         except asyncio.CancelledError:
             c.end_reason = c.end_reason or "error"
+        if c.sender is not None:
+            # Diagnostika: sukunat bilan to'ldirilgan kadrlar (backend ovozi kechikdi) va jadval qayta boshlanishi (CPU band)
+            sent = max(1, getattr(c.sender, "frames_sent", 0))
+            log.info("qo'ng'iroq audio: %d kadr, sukunat %d%%, resync %d, avatar=%s", sent,
+                     100 * getattr(c.sender, "silence_frames", 0) // sent, getattr(c.sender, "resyncs", 0),
+                     "ha" if c.avatar is not None and getattr(c.avatar, "active", False) else "yo'q")
         await self._stop_sender(c)
         if c.end_reason not in ("completed_remote",):
             await self._safe_hangup(c)

@@ -16,6 +16,7 @@ import { callWorker, WorkerRpcFailure } from '../telegram/workerRpc';
 import { ensureContactTgUserId } from '../telegram/tgLink';
 import { workerConnectedHere } from '../telegram/workerNamespace';
 import { PLATFORM_SCOPE } from '../platform';
+import { avatarEnabled, avatarParam } from '../telegram/incomingCalls';
 
 // Telegram qo'ng'iroq kanali (AI platforma user-account'i orqali, Python worker).
 // Mavjudlik (design §5 + review A1/A2/C3):
@@ -70,7 +71,7 @@ async function employeePhone(c: ChannelCtx): Promise<string | undefined> {
 }
 
 async function placeCall(c: ChannelCtx, sessionId: string, peer: Peer, ring: number, max: number, now: Date) {
-  const avatar = await getSettings(c.companyId).then((s) => resolveAvatarLook(s)).catch(() => undefined);
+  const avatar = await avatarParam(await getSettings(c.companyId).then((s) => resolveAvatarLook(s)).catch(() => undefined));
   const base = { sessionId, tgUserId: peer.tgUserId, timeoutSec: ring, maxDurationSec: max, ...(peer.username ? { username: peer.username } : {}), ...(avatar ? { avatar } : {}) };
   // Avval telefonsiz (worker: kesh → dialoglar → username); worker peer'ni bilmasa — bir marta telefon bilan
   let phoneSent = false;
@@ -225,6 +226,7 @@ export async function placeGuestCall(p: { developerId: string; target: { usernam
     const res = await callWorker('call.place', {
       sessionId: handle.sessionId, tgUserId: found.tgUserId, timeoutSec: ring, maxDurationSec: max,
       ...(p.target.username ? { username: p.target.username } : {}),
+      ...((await avatarEnabled()) ? {} : { avatar: 'off' }),
     });
     if (!res?.accepted) {
       unregisterBridge(handle.sessionId);

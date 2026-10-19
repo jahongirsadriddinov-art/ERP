@@ -31,6 +31,7 @@ export interface IAiChannelConnection extends Document {
   connectedAt?: Date;
   /** "Ochiq muloqot": bog'langan xodimlarning kiruvchi qo'ng'iroqlarini AI qabul qiladi (standart o'chiq). */
   openConversation?: boolean;
+  avatarEnabled?: boolean;   // video avatar (dasturchi o'chirsa — kamera ko'rish baribir ishlaydi)
   openConversationBy?: string;
   openConversationAt?: Date;
   createdAt: Date;
@@ -64,6 +65,7 @@ const AiChannelConnectionSchema = new Schema<IAiChannelConnection>({
   connectedBy: String,
   connectedAt: Date,
   openConversation: { type: Boolean, default: false },
+  avatarEnabled: { type: Boolean, default: true },
   openConversationBy: String,
   openConversationAt: Date,
 }, { timestamps: true });

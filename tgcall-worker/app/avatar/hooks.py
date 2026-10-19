@@ -56,6 +56,10 @@ class VideoCallTracker:
     def on_phone_call(self, pc: Any, me_id: Optional[int]) -> None:
         if not getattr(pc, "video", False) or type(pc).__name__ == "PhoneCallDiscarded":
             return
+        # Owner 2026-10-19: "oddiy telefonda ham avatar ishlayapti, sekin" — AI'ning O'ZI qilgan qo'ng'iroqda (admin = biz)
+        # video belgisi kamera qabul qilish uchun qo'yiladi; avatar faqat suhbatdosh kamerasidan kadr kelganda yoqiladi.
+        if me_id is not None and getattr(pc, "admin_id", None) == me_id:
+            return
         ids = {getattr(pc, "admin_id", None), getattr(pc, "participant_id", None)}
         for uid in ids:
             if isinstance(uid, int) and uid > 0 and uid != me_id:
@@ -140,8 +144,9 @@ class AvatarSession:
         self.user_id = int(user_id)
         self.want_video = bool(want_video)
         # Telegram p2p video: ko'pi bilan 720p / 30 kadr/s. Standart 640 / 30 (sekin CPU'da streamer o'zi pasaytiradi)
-        self.size = _int_env("AVATAR_SIZE", 720, 160, 720) // 2 * 2
-        self.fps = _int_env("AVATAR_FPS", 30, 5, 30)
+        # 2026-10-19: 720p/30 Railway protsessorida ovozni "bo'lib" qo'yardi — standart 540p/24 (telefonda farq sezilmaydi)
+        self.size = _int_env("AVATAR_SIZE", 540, 160, 720) // 2 * 2
+        self.fps = _int_env("AVATAR_FPS", 24, 5, 30)
         self.subtitles = False
         self.streamer: Optional[AvatarStreamer] = None
         self.active = False
@@ -232,7 +237,8 @@ class AvatarSession:
 
 
 def start_for_call(engine: Any, user_id: int, want_video: bool = False, look: str = "") -> Optional[AvatarSession]:
-    if mode() == "off":
+    # look="off" — dasturchi panelida avatar o'chirilgan: video avatar yo'q (kamera ko'rish baribir ishlaydi)
+    if mode() == "off" or look == "off":
         return None
     s = AvatarSession(engine, user_id, want_video, look)
     s.start()

@@ -76,12 +76,14 @@ export async function confirmTransactionAction(i: TxActionInput): Promise<TxActi
   let expenseTx: any = null;
   if (tx.type === 'transfer' && tx.projectId && tx.materialName && tx.quantity) {
     try {
+      // XAVFSIZLIK (audit 2026-10-19): faqat shu firmaning materiali
+      const matScope = tx.companyId ? { companyId: tx.companyId } : {};
       await Material.findOneAndUpdate(
-        { objectId: tx.projectId, name: tx.materialName },
+        { objectId: tx.projectId, name: tx.materialName, ...matScope },
         { $inc: { sent: tx.quantity, remaining: -tx.quantity } },
       );
       // Yuboruvchi kiritgan narx (tx.price) katalogdagi Material.price'dan ustuvor
-      const mat = await Material.findOne({ objectId: tx.projectId, name: tx.materialName });
+      const mat = await Material.findOne({ objectId: tx.projectId, name: tx.materialName, ...matScope });
       const unitPrice = tx.price ?? mat?.price;
       if (unitPrice) {
         // AI yo'lida tenant konteksti bo'lmasligi mumkin — firma tranzaksiyaning o'zidan (route'da ular bir xil)

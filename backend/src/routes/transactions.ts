@@ -111,6 +111,21 @@ router.post('/', async (req, res) => {
 
     // Transfer specific fields
     if (data.type === 'transfer') {
+      // XAVFSIZLIK (audit 2026-10-19): yuboruvchi — faqat o'zi; qabul qiluvchi — shu firmadagi BOSHQA odam;
+      // obyekt — shu firmaniki; holat — doim 'pending' (o'ziga yuborib tasdiqlab, tasdiqsiz chiqim yaratib bo'lmasin)
+      const me = getTenant()?.userId ? String(getTenant()!.userId) : (data.fromUserId ? String(data.fromUserId) : '');
+      if (getTenant()?.userId) {
+        if (!data.toUserId || String(data.toUserId) === me) {
+          return res.status(400).json({ success: false, errors: [{ field: 'toUserId', message: "O'zingizga yuborib bo'lmaydi" }] });
+        }
+        const rcpt = await User.findOne(scoped({ _id: String(data.toUserId) })).select('_id firstName lastName').lean().catch(() => null);
+        if (!rcpt) return res.status(400).json({ success: false, errors: [{ field: 'toUserId', message: 'Qabul qiluvchi topilmadi' }] });
+        if (data.projectId && !(await ObjectForHints.exists(scoped({ _id: String(data.projectId) })).catch(() => null))) {
+          return res.status(400).json({ success: false, errors: [{ field: 'projectId', message: 'Obyekt topilmadi' }] });
+        }
+        data.fromUserId = me;
+      }
+      txData.status = 'pending';
       txData.materialName = data.materialName;
       txData.quantity = data.quantity;
       txData.unit = data.unit;

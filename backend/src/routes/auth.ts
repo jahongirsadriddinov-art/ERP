@@ -161,7 +161,10 @@ router.post('/send-otp', async (req, res) => {
     // production'da hech qachon yoqilmaydi), kodni javobga ham qo'shamiz.
     // ESKIZ_TEST_MODE=false bo'lsa (haqiqiy akkount) bu qator ishlamaydi —
     // kod faqat SMS orqali yetadi, spec talabi to'liq saqlanadi.
-    const isTestMode = (process.env.ESKIZ_TEST_MODE || '').toLowerCase() === 'true';
+    // XAVFSIZLIK (audit 2026-10-19): kod HECH QACHON serverda (Render) javobda qaytmaydi — aks holda istalgan kishi
+    // istalgan raqam uchun kod olib, o'sha akkauntga kirardi. Faqat mahalliy ishlab chiqishda (NODE_ENV=development).
+    const isTestMode = (process.env.ESKIZ_TEST_MODE || '').toLowerCase() === 'true'
+      && process.env.NODE_ENV === 'development' && process.env.RENDER !== 'true';
     return res.json({
       success: true,
       message: 'Tasdiqlash kodi yuborildi',

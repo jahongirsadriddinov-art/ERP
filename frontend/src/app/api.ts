@@ -131,6 +131,13 @@ function installAuthFetch() {
     }
     return authFetch(input, init);
   };
+  function isOwnApiUrl(u: string): boolean {
+    try {
+      const base = new URL(API_BASE || window.location.origin, window.location.href);
+      const target = new URL(u, window.location.href);
+      return target.origin === base.origin && target.pathname.startsWith(base.pathname.replace(/\/$/, '') || '/');
+    } catch { return false; }
+  }
   async function authFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
     let isOwnApi = false;
     try {
@@ -138,8 +145,9 @@ function installAuthFetch() {
         typeof input === 'string' ? input :
         input instanceof URL ? input.href :
         (input as Request).url;
-      // Faqat o'z API'imizga (API_BASE) yuborilgan so'rovlarga token qo'shamiz.
-      if (url && url.indexOf(API_BASE) === 0) {
+      // Faqat o'z API'imizga (API_BASE) yuborilgan so'rovlarga token qo'shamiz. XAVFSIZLIK (audit 2026-10-19):
+      // satr prefiksi emas — origin aniq solishtiriladi ("…onrender.com.evil.com" ga token ketmasin).
+      if (url && isOwnApiUrl(url)) {
         isOwnApi = true;
         const token = localStorage.getItem('token');
         const headers = new Headers(

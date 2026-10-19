@@ -134,6 +134,21 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage, limits: { fileSize: 60 * 1024 * 1024 } });
 
+/** Chat xabaridagi media havolasi: o'z backend domenimiz yoki o'z Cloudinary hisobimiz, faqat http(s). */
+export function isAllowedMediaUrl(v: unknown): boolean {
+  if (typeof v !== 'string' || v.length > 2000) return false;
+  try {
+    const u = new URL(v);
+    if (u.protocol !== 'https:' && !(u.protocol === 'http:' && /^(localhost|127\.0\.0\.1)$/.test(u.hostname))) return false;
+    if (u.hostname === new URL(getBackendUrl()).hostname) return true;
+    if (u.hostname === 'res.cloudinary.com') {
+      const cloud = process.env.CLOUDINARY_CLOUD_NAME;
+      return !cloud || u.pathname.startsWith(`/${cloud}/`);
+    }
+    return false;
+  } catch { return false; }
+}
+
 const shape = (m: any) => ({ ...m.toObject(), id: m._id });
 
 // Saytdan yuborilgan xabarni Telegramga TO'LIQ ko'rinishda (matn EMAS, haqiqiy
@@ -304,6 +319,11 @@ router.post('/', async (req, res) => {
     const fromUserId = getTenant()?.userId;
     if (!fromUserId || (!toUserId && !groupId) || (!text?.trim() && !mediaUrl && !location)) {
       return res.status(400).json({ error: 'Avtorizatsiya va (toUserId yoki groupId) va text/media kerak' });
+    }
+    // XAVFSIZLIK (audit 2026-10-19): mediaUrl — faqat o'z serverimiz yoki o'z Cloudinary hisobimiz (https).
+    // Aks holda "javascript:..." yoki begona havola chatda/dasturchi panelida bosilganda XSS bo'lardi.
+    if (mediaUrl !== undefined && mediaUrl !== null && mediaUrl !== '' && !isAllowedMediaUrl(mediaUrl)) {
+      return res.status(400).json({ error: "Media manzili noto'g'ri" });
     }
     // 'video_event' — faqat server (socket.ts) yaratadi; mijoz soxta tizim xabari yubora olmasin.
     if (type === 'video_event') return res.status(400).json({ error: "Noto'g'ri xabar turi" });

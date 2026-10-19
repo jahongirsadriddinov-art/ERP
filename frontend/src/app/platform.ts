@@ -216,6 +216,8 @@ export async function saveOrShareBlob(filename: string, blob: Blob): Promise<{ o
 // oddiy window.open — brauzer/WebView2 o'zi to'g'ri saqlash oynasini
 // ko'rsatadi (bu yerda muammo yo'q, faqat Android WebView buzilgan edi).
 export async function openExternalUrl(url: string): Promise<void> {
+  // XAVFSIZLIK (audit 2026-10-19): faqat http(s)/mailto/tel — "javascript:" va boshqa sxemalar ochilmaydi
+  if (!/^(https?:|mailto:|tel:)/i.test(String(url || '').trim())) return;
   // Windows ilovasi: window.open WebView2'da hech narsa qilmaydi — tizim brauzerida ochiladi
   if (isTauri()) {
     try {

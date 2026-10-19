@@ -93,8 +93,9 @@ router.post('/backup/import', requireFeature('backup'), async (req, res) => {
     const tenant = getTenant();
     if (!tenant?.userId) return res.status(401).json({ error: 'Autentifikatsiya talab etiladi' });
     const actor = await User.findById(tenant.userId).lean().catch(() => null);
-    if (!actor || !['direktor', 'orinbosar'].includes(actor.role)) {
-      return res.status(403).json({ error: "Faqat direktor yoki o'rinbosar tiklashi mumkin" });
+    // XAVFSIZLIK (audit 2026-10-19): butun firmani almashtiradi — faqat firma egasi yoki direktor
+    if (!actor || !((actor as any).isOwner || actor.role === 'direktor')) {
+      return res.status(403).json({ error: "Faqat firma egasi yoki direktor tiklashi mumkin" });
     }
     const cid = actor.companyId || tenant.companyId;
     if (!cid) return res.status(400).json({ error: 'Kompaniya topilmadi' });
@@ -106,7 +107,31 @@ router.post('/backup/import', requireFeature('backup'), async (req, res) => {
       return res.status(400).json({ error: "Bu backup fayli boshqa firmaga tegishli — faqat o'z firmangiz zaxirasini tiklashingiz mumkin" });
     }
 
-    const { users = [], objects = [], transactions = [], materials = [], attendance = [], auditLogs = [] } = data;
+    // XAVFSIZLIK (audit 2026-10-19): fayl ichidagi yozuvlarga ISHONILMAYDI — har biri majburan SHU firmaga
+    // muhrlanadi; foydalanuvchi roli faqat firma rollaridan (dasturchi/super-admin yaratib bo'lmaydi);
+    // boshqa firmaga tegishli _id/telefon/Telegram bog'lanishi bilan to'qnashuv — o'tkazib yuboriladi.
+    const arr = (v: unknown) => (Array.isArray(v) ? v.filter((x) => x && typeof x === 'object' && !Array.isArray(x)).slice(0, 50_000) : []);
+    const stamp = (docs: any[]) => docs.map((d) => {
+      const { __v: _v, ...rest } = d;
+      for (const k of Object.keys(rest)) if (k.startsWith('$')) delete (rest as any)[k];
+      return { ...rest, companyId: cid };
+    });
+    const COMPANY_ROLES = ['direktor', 'orinbosar', 'prorab', 'brigadir', 'ishchi'];
+    const foreignUsers = new Set<string>();
+    const rawUsers = arr(data.users);
+    const ids = rawUsers.map((u: any) => String(u?._id || '')).filter(Boolean);
+    const phones = rawUsers.map((u: any) => String(u?.phone || '')).filter(Boolean);
+    const others: any[] = await User.find({ companyId: { $ne: cid }, $or: [{ _id: { $in: ids.filter((x) => /^[a-f0-9]{24}$/i.test(x)) } }, { phone: { $in: phones } }] })
+      .select('_id phone').lean().catch(() => []);
+    for (const o of others) { foreignUsers.add(String(o._id)); foreignUsers.add(String(o.phone)); }
+    const users = stamp(rawUsers)
+      .filter((u: any) => COMPANY_ROLES.includes(String(u.role)) && !foreignUsers.has(String(u._id)) && !foreignUsers.has(String(u.phone)))
+      .map((u: any) => { const { isDeveloper: _d, ...rest } = u; return rest; });
+    const objects = stamp(arr(data.objects));
+    const transactions = stamp(arr(data.transactions));
+    const materials = stamp(arr(data.materials));
+    const attendance = stamp(arr(data.attendance));
+    const auditLogs = stamp(arr(data.auditLogs));
 
     // ── Wipe'dan OLDIN joriy holatni saqlab qo'yamiz (qo'lda tiklash imkoni uchun) ──
     const filter = { companyId: cid };

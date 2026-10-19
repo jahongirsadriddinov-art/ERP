@@ -77,8 +77,10 @@ router.post('/scan', async (req, res) => {
       return res.status(400).json({ error: 'Noto\'g\'ri QR format' });
     }
 
-    const { type, id } = parsed;
-    if (!type || !id) return res.status(400).json({ error: 'QR ma\'lumoti noto\'g\'ri' });
+    const { type, id } = parsed || {};
+    // XAVFSIZLIK (audit 2026-10-19): qrData satr bo'lib keladi va keyin JSON qilinadi — global $-operator
+    // tozalagichi buni ko'rmaydi. id faqat ObjectId satri (operator in'ektsiyasi bo'lmasin).
+    if (!type || typeof id !== 'string' || !/^[a-f0-9]{24}$/i.test(id)) return res.status(400).json({ error: "QR ma'lumoti noto'g'ri" });
 
     const actor = await User.findById(tenant.userId).lean();
     if (!actor) return res.status(401).json({ error: 'Foydalanuvchi topilmadi' });
@@ -105,7 +107,10 @@ router.post('/scan', async (req, res) => {
       entityData = await ObjectModel.findOne(scoped({ _id: id })).lean();
       if (!entityData) return res.status(404).json({ error: 'Obyekt topilmadi' });
     } else if (type === 'transaction') {
-      entityData = await Transaction.findOne(scoped({ _id: id })).lean();
+      // GET /api/transactions bilan bir xil ko'rinish: rahbar — hammasi; boshqalar — faqat o'zi ishtirok etgan
+      const boss = (actor as any).isOwner || ['direktor', 'orinbosar'].includes(String(actor.role));
+      const me = String(actor._id);
+      entityData = await Transaction.findOne(scoped(boss ? { _id: id } : { _id: id, $or: [{ createdById: me }, { fromUserId: me }, { toUserId: me }] })).lean();
       if (!entityData) return res.status(404).json({ error: 'Tranzaksiya topilmadi' });
     } else {
       return res.status(400).json({ error: 'Noma\'lum QR turi' });

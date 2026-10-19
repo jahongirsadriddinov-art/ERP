@@ -74,8 +74,21 @@ export function toFunctionDeclarations(tools: ToolDeclaration[]) {
 }
 
 /** Live ulanish konfiguratsiyasi (test uchun eksport). */
-export function buildLiveConfig(opts: VoiceOpenOpts): Record<string, unknown> {
+/**
+ * Live ichidagi Google qidiruvi (owner 2026-10-19: "tezroq va aniq javob"): alohida searchWeb so'rovisiz.
+ * Model qabul qilmasa — shu jarayonda o'sha model uchun o'chiriladi va sessiya qidiruvsiz qayta ochiladi.
+ * AI_LIVE_GOOGLE_SEARCH=0 — butunlay o'chirish.
+ */
+const searchUnsupported = new Set<string>();
+export const liveSearchEnabled = (model: string): boolean => process.env.AI_LIVE_GOOGLE_SEARCH !== '0' && !searchUnsupported.has(model);
+/** Faqat testlar uchun. */
+export function __resetLiveSearchForTests(): void { searchUnsupported.clear(); }
+
+export function buildLiveConfig(opts: VoiceOpenOpts, o: { search?: boolean } = {}): Record<string, unknown> {
   const decls = toFunctionDeclarations(opts.tools || []);
+  const tools: Record<string, unknown>[] = [];
+  if (decls.length) tools.push({ functionDeclarations: decls });
+  if (o.search) tools.push({ googleSearch: {} });
   return {
     responseModalities: [Modality.AUDIO],
     systemInstruction: { parts: [{ text: opts.systemInstruction }] },
@@ -88,7 +101,7 @@ export function buildLiveConfig(opts: VoiceOpenOpts): Record<string, unknown> {
     contextWindowCompression: { slidingWindow: {} },
     // Har doim yoqiladi — server SessionResumptionUpdate yuboradi (GoAway'da qayta ulanish uchun)
     sessionResumption: opts.resumptionHandle ? { handle: opts.resumptionHandle } : {},
-    ...(decls.length ? { tools: [{ functionDeclarations: decls }] } : {}),
+    ...(tools.length ? { tools } : {}),
     ...(opts.signal ? { abortSignal: opts.signal } : {}),
   };
 }
@@ -243,8 +256,9 @@ export class GeminiLiveProvider implements VoiceProvider {
   }
 
   async open(opts: VoiceOpenOpts): Promise<VoiceSession> {
-    const config = buildLiveConfig(opts);
-    const connectWith = async (key: string): Promise<VoiceSession> => {
+    const model = String(opts.model || '');
+    const connectOnce = async (key: string, search: boolean): Promise<VoiceSession> => {
+      const config = buildLiveConfig(opts, { search });
       const s = new GeminiLiveSession();
       try {
         const live = await this.connector.connect(key, {
@@ -262,6 +276,19 @@ export class GeminiLiveProvider implements VoiceProvider {
       } catch (e) {
         void s.close('setup_failed');
         throw e;
+      }
+    };
+    // Avval Google qidiruvi bilan; kvota/kalit xatosidan boshqa sabab bilan ochilmasa — qidiruvsiz (bir marta)
+    const connectWith = async (key: string): Promise<VoiceSession> => {
+      if (!liveSearchEnabled(model)) return connectOnce(key, false);
+      try {
+        return await connectOnce(key, true);
+      } catch (e) {
+        if (isQuotaError(e) || isAuthError(e)) throw e;
+        const s = await connectOnce(key, false);
+        searchUnsupported.add(model);
+        console.warn(`[aiVoice] ${model}: Live Google qidiruvi qabul qilinmadi — o'chirildi (${(e as Error)?.message?.slice(0, 80)})`);
+        return s;
       }
     };
     if (opts.apiKey) return connectWith(opts.apiKey);

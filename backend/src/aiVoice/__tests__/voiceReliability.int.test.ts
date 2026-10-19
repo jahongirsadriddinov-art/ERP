@@ -19,7 +19,7 @@ import {
 } from '../voice/voiceErrors';
 import { seedCompany, startMongo, stopMongo, type SeedCompany } from './helpers';
 import { __resetGeminiKeysForTests, GeminiQuotaError } from '../lib/geminiKeys';
-import { GeminiLiveProvider, type LiveConnector } from '../voice/geminiLive';
+import { __resetLiveSearchForTests, buildLiveConfig, GeminiLiveProvider, type LiveConnector } from '../voice/geminiLive';
 import { CascadeProvider, type CascadeSession } from '../voice/cascade';
 import { silence } from '../voice/audio';
 import type { ProviderSessionCtx } from '../voice/sessionManager';
@@ -290,6 +290,29 @@ describe('GeminiLiveProvider — kalit aylanishi', () => {
     return { c, tried };
   }
   const opts = { model: 'live-m', systemInstruction: 's', tools: [], lang: 'uz' as const, voiceName: 'Kore', ptt: false };
+
+  it("Live Google qidiruvi (owner 2026-10-19): avval qidiruv bilan; model rad etsa — qidiruvsiz ochiladi va keyin so'ralmaydi", async () => {
+    process.env.GEMINI_API_KEYS = 'k1';
+    __resetGeminiKeysForTests();
+    __resetLiveSearchForTests();
+    const seen: boolean[] = [];
+    const c: LiveConnector = {
+      connect: async (_key, prm: any) => {
+        const hasSearch = JSON.stringify(prm.config.tools || []).includes('googleSearch');
+        seen.push(hasSearch);
+        if (hasSearch) throw new Error('LIVE_CLOSED_BEFORE_SETUP_1007: Invalid tool googleSearch');
+        setTimeout(() => prm.callbacks.onmessage({ setupComplete: {} } as any), 5);
+        return { sendRealtimeInput() {}, sendClientContent() {}, sendToolResponse() {}, close() {} };
+      },
+    };
+    const p = new GeminiLiveProvider({ connector: c, setupTimeoutMs: 500 });
+    await (await p.open({ ...opts, model: 'search-m' })).close('t');
+    expect(seen).toEqual([true, false]);
+    seen.length = 0;
+    await (await p.open({ ...opts, model: 'search-m' })).close('t');
+    expect(seen).toEqual([false]);
+    expect(JSON.stringify(buildLiveConfig({ ...opts, model: 'x' }, { search: true }).tools)).toContain('googleSearch');
+  });
 
   it("1-va 2-kalit kvotada — 3-kalit bilan ulanadi; keyingi ochilish kvotadagi kalitlarni o'tkazadi", async () => {
     process.env.GEMINI_API_KEYS = 'k1,k2,k3';

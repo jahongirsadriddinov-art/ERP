@@ -17,7 +17,10 @@ export function normalizeMeteredAppName(raw: string | undefined): string | undef
 }
 const APP_NAME = normalizeMeteredAppName(process.env.METERED_APP_NAME);
 const SECRET_KEY = process.env.METERED_SECRET_KEY;
-const configured = !!(APP_NAME && SECRET_KEY);
+// Owner 2026-10-19: bepul (Free Tier) tarifda API orqali credential YARATIB bo'lmaydi (400 "not available with the
+// Free Tier"). Shunda Metered panelidagi tayyor credential'ning API kaliti (METERED_API_KEY) bilan ICE ro'yxati olinadi.
+const API_KEY = process.env.METERED_API_KEY?.trim() || '';
+const configured = !!(APP_NAME && (SECRET_KEY || API_KEY));
 
 const CREDENTIAL_TTL_SECONDS = 24 * 60 * 60; // 24 soat
 const REFRESH_INTERVAL_MS = 12 * 60 * 60 * 1000; // muddati tugashidan 12 soat oldin yangilanadi
@@ -85,8 +88,23 @@ async function createCredential(): Promise<Response> {
   });
 }
 
+/** Tayyor credential API kaliti bilan ICE serverlar ro'yxati. */
+async function fetchIceServers(apiKey: string): Promise<IceServer[]> {
+  const listRes = await fetch(`${baseUrl()}/credentials?apiKey=${encodeURIComponent(apiKey)}`, { signal: withTimeout(8000) });
+  if (!listRes.ok) throw new Error(`Metered ICE server ro'yxatini olish muvaffaqiyatsiz: ${listRes.status}`);
+  const list = await listRes.json() as IceServer[];
+  if (!Array.isArray(list) || !list.length) throw new Error("Metered ICE server ro'yxati bo'sh");
+  return list;
+}
+
 async function mintAndCache(): Promise<void> {
   if (!configured) return;
+  if (API_KEY) {
+    cachedIceServers = await fetchIceServers(API_KEY);
+    cachedUsername = cachedIceServers.find((s) => s.username)?.username || null;
+    console.log('[meteredTurn] TURN serverlar METERED_API_KEY bilan keshlandi');
+    return;
+  }
   // Avval eskilarni tozalaymiz (joriy ishlatilayotgani + 1 ta zaxira qoladi)
   await pruneOwnCredentials(1);
   let createRes = await createCredential();
@@ -94,14 +112,16 @@ async function mintAndCache(): Promise<void> {
     // Chegara to'lgan bo'lishi mumkin — hammasini (joriydan tashqari) o'chirib bir marta qayta urinamiz
     if (await pruneOwnCredentials(0)) createRes = await createCredential();
   }
-  if (!createRes.ok) throw new Error(`Metered credential yaratish muvaffaqiyatsiz: ${createRes.status} ${(await createRes.text().catch(() => '')).slice(0, 200)}`);
+  if (!createRes.ok) {
+    const body = (await createRes.text().catch(() => '')).slice(0, 200);
+    if (/Free Tier/i.test(body)) {
+      throw new Error("Metered bepul tarifda API orqali credential yaratib bo'lmaydi — Metered panelidagi credential'ning API kalitini Render'ga METERED_API_KEY sifatida qo'shing");
+    }
+    throw new Error(`Metered credential yaratish muvaffaqiyatsiz: ${createRes.status} ${body}`);
+  }
   const cred = await createRes.json() as { username: string; password: string; apiKey: string };
 
-  const listRes = await fetch(`${baseUrl()}/credentials?apiKey=${encodeURIComponent(cred.apiKey)}`, { signal: withTimeout(8000) });
-  if (!listRes.ok) throw new Error(`Metered ICE server ro'yxatini olish muvaffaqiyatsiz: ${listRes.status}`);
-  const iceServers = await listRes.json() as IceServer[];
-
-  cachedIceServers = iceServers;
+  cachedIceServers = await fetchIceServers(cred.apiKey);
   cachedUsername = cred.username;
   console.log('[meteredTurn] Yangi TURN credential keshlandi:', cred.username);
 }
@@ -127,7 +147,7 @@ export async function getIceServers(): Promise<IceServer[] | null> {
 // Joriy credential qancha trafik (GB) sarflaganini ko'rsatadi — admin
 // panelda "TURN sarfi" kabi kuzatuv uchun.
 export async function getTurnUsageGB(): Promise<number | null> {
-  if (!configured || !cachedUsername) return null;
+  if (!configured || !cachedUsername || !SECRET_KEY) return null;
   try {
     const res = await fetch(`${baseUrl()}/current_usage_for_user?secretKey=${encodeURIComponent(SECRET_KEY!)}&username=${encodeURIComponent(cachedUsername)}`);
     if (!res.ok) return null;
@@ -142,7 +162,7 @@ export async function getTurnUsageGB(): Promise<number | null> {
 // Server ishga tushganda + har 12 soatda bir marta chaqiriladi (index.ts).
 export function startMeteredTurnRefreshLoop(): void {
   if (!configured) {
-    console.log('[meteredTurn] METERED_APP_NAME/METERED_SECRET_KEY sozlanmagan — eski bepul TURN ishlatiladi.');
+    console.log('[meteredTurn] METERED_APP_NAME va METERED_SECRET_KEY/METERED_API_KEY sozlanmagan — eski bepul TURN ishlatiladi.');
     return;
   }
   mintAndCache().catch(err => console.error("[meteredTurn] boshlang'ich credential olishda xato:", err));

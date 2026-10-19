@@ -273,6 +273,7 @@ describe('GeminiLiveProvider — kalit aylanishi', () => {
   afterEach(() => {
     if (savedKeys === undefined) delete process.env.GEMINI_API_KEYS; else process.env.GEMINI_API_KEYS = savedKeys;
     __resetGeminiKeysForTests();
+    delete process.env.AI_LIVE_GOOGLE_SEARCH;
   });
 
   function connector(behave: (key: string) => 'quota' | 'auth' | 'ok') {
@@ -293,6 +294,7 @@ describe('GeminiLiveProvider — kalit aylanishi', () => {
 
   it("Live Google qidiruvi (owner 2026-10-19): avval qidiruv bilan; model rad etsa — qidiruvsiz ochiladi va keyin so'ralmaydi", async () => {
     process.env.GEMINI_API_KEYS = 'k1';
+    process.env.AI_LIVE_GOOGLE_SEARCH = '1';   // standart o'chiq (bepul tarifda kvota xatosi) — bu test yoqilgan holat uchun
     __resetGeminiKeysForTests();
     __resetLiveSearchForTests();
     const seen: boolean[] = [];
@@ -312,6 +314,48 @@ describe('GeminiLiveProvider — kalit aylanishi', () => {
     await (await p.open({ ...opts, model: 'search-m' })).close('t');
     expect(seen).toEqual([false]);
     expect(JSON.stringify(buildLiveConfig({ ...opts, model: 'x' }, { search: true }).tools)).toContain('googleSearch');
+  });
+
+  it("qidiruv kvotada (1011 quota) — kalit chetga surilmaydi, shu kalit bilan qidiruvsiz ulanadi; standart qidiruv o'chiq", async () => {
+    process.env.GEMINI_API_KEYS = 'k1,k2';
+    process.env.AI_LIVE_GOOGLE_SEARCH = '1';
+    __resetGeminiKeysForTests();
+    __resetLiveSearchForTests();
+    const seen: string[] = [];
+    const c: LiveConnector = {
+      connect: async (key, prm: any) => {
+        const hasSearch = JSON.stringify(prm.config.tools || []).includes('googleSearch');
+        seen.push(`${key}:${hasSearch}`);
+        if (hasSearch) throw new Error('LIVE_CLOSED_BEFORE_SETUP_1011: You exceeded your current quota');
+        setTimeout(() => prm.callbacks.onmessage({ setupComplete: {} } as any), 5);
+        return { sendRealtimeInput() {}, sendClientContent() {}, sendToolResponse() {}, close() {} };
+      },
+    };
+    const p = new GeminiLiveProvider({ connector: c, setupTimeoutMs: 500 });
+    await (await p.open({ ...opts, model: 'q-m' })).close('t');
+    expect(seen).toEqual(['k1:true', 'k1:false']);
+    delete process.env.AI_LIVE_GOOGLE_SEARCH;
+    __resetLiveSearchForTests();
+    seen.length = 0;
+    await (await p.open({ ...opts, model: 'q-m2' })).close('t');
+    expect(seen).toEqual(['k1:false']);
+  });
+
+  it("ulanish osilib qolsa (WebSocket ochilmasa) — setup muddatida keyingi kalitga o'tadi", async () => {
+    process.env.GEMINI_API_KEYS = 'h1,h2';
+    __resetGeminiKeysForTests();
+    const tried: string[] = [];
+    const c: LiveConnector = {
+      connect: (key, prm: any) => {
+        tried.push(key);
+        if (key === 'h1') return new Promise(() => undefined);
+        setTimeout(() => prm.callbacks.onmessage({ setupComplete: {} } as any), 5);
+        return Promise.resolve({ sendRealtimeInput() {}, sendClientContent() {}, sendToolResponse() {}, close() {} });
+      },
+    };
+    const p = new GeminiLiveProvider({ connector: c, setupTimeoutMs: 150 });
+    await (await p.open({ ...opts, model: 'hang-m' })).close('t');
+    expect(tried).toEqual(['h1', 'h2']);
   });
 
   it("1-va 2-kalit kvotada — 3-kalit bilan ulanadi; keyingi ochilish kvotadagi kalitlarni o'tkazadi", async () => {

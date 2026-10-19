@@ -80,7 +80,9 @@ export function toFunctionDeclarations(tools: ToolDeclaration[]) {
  * AI_LIVE_GOOGLE_SEARCH=0 — butunlay o'chirish.
  */
 const searchUnsupported = new Set<string>();
-export const liveSearchEnabled = (model: string): boolean => process.env.AI_LIVE_GOOGLE_SEARCH !== '0' && !searchUnsupported.has(model);
+// Owner 2026-10-19 ("haliyam kaskad"): bepul tarifda Live + googleSearch → darhol "1011 You exceeded your current
+// quota" — har qo'ng'iroq kaskadga tushardi. Standart — O'CHIQ (searchWeb tool'i ishlaydi); AI_LIVE_GOOGLE_SEARCH=1 yoqadi.
+export const liveSearchEnabled = (model: string): boolean => process.env.AI_LIVE_GOOGLE_SEARCH === '1' && !searchUnsupported.has(model);
 /**
  * Qisqa fikrlash (owner 2026-10-19): standartda model har navbatdan oldin uzoq fikrlaydi ("bitta buyruqni ancha
  * o'ylayapti"), butunlay o'chirilsa — gapni yomonroq tushunadi ("aniq javob bermayapti"). O'rtasi: 512 tokenlik
@@ -290,7 +292,9 @@ export class GeminiLiveProvider implements VoiceProvider {
       const config = buildLiveConfig(opts, { search, thinking: thinking ? liveThinkingFor(model) : undefined, plain });
       const s = new GeminiLiveSession();
       try {
-        const live = await this.connector.connect(key, {
+        // Ulanishning o'zi osilib qolsa ham (WebSocket ochilmasa) — setup muddatidan oshmasin, keyingi kalitga o'tilsin
+        let connTimer: NodeJS.Timeout | undefined;
+        const live = await Promise.race([this.connector.connect(key, {
           model: opts.model,
           config,
           callbacks: {
@@ -298,7 +302,8 @@ export class GeminiLiveProvider implements VoiceProvider {
             onerror: (e) => s.handleError(e),
             onclose: (e) => s.handleClose(e),
           },
-        });
+        }), new Promise<never>((_, rej) => { connTimer = setTimeout(() => rej(new Error('SETUP_TIMEOUT')), this.setupTimeoutMs); })])
+          .finally(() => { if (connTimer) clearTimeout(connTimer); });
         s.attach(live);
         await this.waitSetup(s);
         return s;
@@ -332,6 +337,8 @@ export class GeminiLiveProvider implements VoiceProvider {
         } catch (e) {
           console.warn(`[aiVoice] Live ${model} ulanmadi (qidiruv=${sq}, o'ylash=${th}): ${String((e as Error)?.message || e).slice(0, 140)}`);
           // Taymaut — bu kalit/ulanish javob bermayapti: sozlamani o'zgartirib vaqt yo'qotmasdan keyingi kalitga
+          // Qidiruv bilan kvota xatosi — kalit emas, qidiruv kvotasi: shu model uchun qidiruvni o'chirib davom etamiz
+          if (sq && isQuotaError(e) && i < plan.length - 1) { searchUnsupported.add(model); lastErr = e; continue; }
           if (isQuotaError(e) || isAuthError(e) || /SETUP_TIMEOUT/.test(String((e as Error)?.message)) || i === plan.length - 1) throw e;
           lastErr = e;
         }

@@ -4,6 +4,8 @@ import Clock from "@hugeicons/core-free-icons/Time04Icon";
 import type { SectionProps } from "../sectionProps";
 import type { AvatarLook, PersonaStyle } from "../api";
 import { Chip, Field, SelectField, TextField, Toggle } from "../ui";
+import { useRef, useState } from "react";
+import { API_BASE } from "../../../api";
 
 // "Til, ovoz va xarakter" (Qo'shimcha sozlamalar ichida): til, ovoz, AI xarakteri (uslub, ism, ko'rsatma),
 // video qo'ng'iroqdagi avatar, ogohlantirish matni, eski eslatma, o'rinbosar huquqi.
@@ -30,9 +32,12 @@ export default function General({ view, draft, update }: SectionProps) {
         <SelectField label={k("language")} value={draft.language}
           options={(["uz", "ru", "auto"] as const).map((v) => ({ value: v, label: t(`aiVoice.admin.general.languages.${v}`) }))}
           onChange={(v) => update((d) => ({ ...d, language: v }))} />
-        <SelectField label={k("voice")} value={draft.voiceName}
-          options={voices.map(([v, g]) => ({ value: v, label: `${v} (${k(g)})` }))}
-          onChange={(v) => update((d) => ({ ...d, voiceName: v }))} />
+        <div>
+          <SelectField label={k("voice")} value={draft.voiceName}
+            options={voices.map(([v, g]) => ({ value: v, label: `${v} (${k(g)})` }))}
+            onChange={(v) => update((d) => ({ ...d, voiceName: v }))} />
+          <VoicePreview voice={draft.voiceName} lang={draft.language === "ru" ? "ru" : "uz"} />
+        </div>
       </div>
       <p className="text-[11px] text-muted-foreground inline-flex items-center gap-1.5" data-testid="ai-timezone">
         <MorphIcon icon={Clock} className="w-3.5 h-3.5" />{t("aiVoice.ui.general.tz")}
@@ -83,5 +88,44 @@ export default function General({ view, draft, update }: SectionProps) {
           onChange={(v) => update((d) => ({ ...d, attendance: { ...d.attendance, orinbosarCanEditSchedule: v } }))} />
       </div>
     </div>
+  );
+}
+
+/** Ovozni saqlashdan oldin tinglab ko'rish (owner 2026-10-19): tanlangan ovoz bilan qisqa namuna. */
+function VoicePreview({ voice, lang }: { voice: string; lang: "uz" | "ru" }) {
+  const { t } = useTranslation();
+  const [state, setState] = useState<"idle" | "loading" | "playing" | "error">("idle");
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const sample = lang === "ru"
+    ? "Здравствуйте! Я ваш AI-помощник. Чем могу помочь?"
+    : "Assalomu alaykum! Men sizning sun'iy intellekt yordamchingizman. Bugun qurilishda nima ishlar qilamiz?";
+  const play = async () => {
+    if (state === "playing") { audioRef.current?.pause(); setState("idle"); return; }
+    setState("loading");
+    try {
+      const token = localStorage.getItem("token");
+      const r = await fetch(`${API_BASE}/api/ai-voice/me/chat/tts`, {
+        method: "POST", headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ text: sample, lang, voiceName: voice }),
+      });
+      if (!r.ok) throw new Error(String(r.status));
+      const url = URL.createObjectURL(await r.blob());
+      audioRef.current?.pause();
+      const a = new Audio(url);
+      audioRef.current = a;
+      a.onended = () => { setState("idle"); URL.revokeObjectURL(url); };
+      await a.play();
+      setState("playing");
+    } catch {
+      setState("error");
+      setTimeout(() => setState("idle"), 2500);
+    }
+  };
+  return (
+    <button type="button" onClick={play} disabled={state === "loading"} data-testid="ai-voice-preview"
+      className="mt-1.5 text-xs font-semibold text-primary hover:underline disabled:opacity-60">
+      {state === "loading" ? t("aiVoice.admin.general.previewLoading") : state === "playing" ? `⏹ ${t("aiVoice.admin.general.previewStop")}`
+        : state === "error" ? t("aiVoice.admin.general.previewError") : `▶ ${t("aiVoice.admin.general.preview")}`}
+    </button>
   );
 }

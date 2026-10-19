@@ -161,7 +161,9 @@ router.post('/tts', wrap(async (req, res) => {
   const rate = await hitRate(`aiv:tts:${m.userId}`, 40, RATE_WINDOW_MS);
   if (!rate.allowed) return res.status(429).json({ error: 'rate', retryAfterSec: rate.retryAfterSec });
   const settings = await getSettings(m.companyId);
-  const voiceName = settings.voiceName || 'Kore';
+  // Sozlamalarda ovozni tanlashdan oldin tinglab ko'rish (owner 2026-10-19) — faqat Gemini ovoz nomi shaklida
+  const want = typeof req.body?.voiceName === 'string' && /^[A-Z][a-z]{2,15}$/.test(req.body.voiceName) ? req.body.voiceName : '';
+  const voiceName = want || settings.voiceName || 'Kore';
   const key = crypto.createHash('sha256').update(`${voiceName}\n${lang}\n${text}`).digest('hex');
   const hit = ttsCache.get(key);
   let wav = hit && Date.now() - hit.at < TTS_TTL_MS ? hit.wav : null;

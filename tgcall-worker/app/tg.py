@@ -475,6 +475,25 @@ class TelegramRuntime:
             log.debug("peer %s: %s", mask_id(user_id), type(e).__name__)
             return "not_found"
 
+    # ── contact.lookup (mehmon sinov qo'ng'irog'i, owner 2026-10-19) ──
+    async def lookup_contact(self, p: dict) -> dict:
+        from .errors import RpcError
+        if not self.client:
+            raise RpcError("not_connected")
+        try:
+            st, uid = await self.peers.lookup(p.get("username"), p.get("phone"))
+        except Exception as e:
+            fs = self._note_flood(e)
+            if fs:
+                return {"status": "flood_wait", "retryAfterSec": fs}
+            if map_call_error(e) == "privacy":
+                return {"status": "privacy_restricted"}
+            log.debug("lookup: %s", type(e).__name__)
+            return {"status": "not_found"}
+        if st == "resolved" and uid:
+            return {"status": "resolved", "tgUserId": str(uid)}
+        return {"status": st}
+
     # ── contact.resolve (A2) ──
     async def resolve_contact(self, p: dict) -> dict:
         from .errors import RpcError

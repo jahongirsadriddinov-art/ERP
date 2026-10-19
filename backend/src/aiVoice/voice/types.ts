@@ -46,6 +46,11 @@ export interface StartVoiceSessionOpts {
   requestText?: string;
   /** P5 qo'shimchasi (ixtiyoriy): foydalanuvchi o'zi qo'ng'iroq qildi (chat AI kontakti / aiv:start). */
   userInitiated?: boolean;
+  /**
+   * Mehmon sinov qo'ng'irog'i (owner 2026-10-19): dasturchi panelidan ERP'ga aloqasi yo'q odamga oddiy AI suhbati.
+   * companyId = PLATFORM_SCOPE, employeeId = qo'ng'iroqni boshlagan dasturchi; firma/ERP tool'lari va ma'lumoti yo'q.
+   */
+  guest?: { name?: string };
 }
 
 export type StartVoiceSessionResult =

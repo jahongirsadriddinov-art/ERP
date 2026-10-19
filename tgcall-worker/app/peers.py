@@ -143,3 +143,33 @@ class PeerResolver:
             log.info("telefon boshqa foydalanuvchiga tegishli — rad: kutilgan %s", mask_id(expected))
             return "mismatch"
         return "not_found" if result == "not_found" else result
+
+    async def lookup(self, username: Any = None, phone: Any = None) -> tuple[str, Optional[int]]:
+        """Mehmon sinov qo'ng'irog'i (owner 2026-10-19): kutilgan id'siz — @username yoki telefon bo'yicha id.
+        ('resolved', id) | ('not_found', None) | ('import_limited', None). Import qilingan kontakt darhol o'chiriladi."""
+        un = _clean_username(username)
+        if un:
+            try:
+                got = await self.ops.username_id(un)
+            except (ValueError, TypeError):
+                got = None
+            if got:
+                return "resolved", int(got)
+        ph = _clean_phone(phone)
+        if not ph:
+            return "not_found", None
+        if not self.limiter.take():
+            log.info("import chegarasi (soatiga %d) — mehmon keyinroq", self.limiter.max)
+            return "import_limited", None
+        before = await self.ops.contact_ids()
+        ids = await self.ops.import_phone(ph)
+        added = [i for i in ids if i not in before]
+        if added:
+            try:
+                await self.ops.delete_contacts(added)
+            except Exception as e:
+                log.debug("kontakt o'chirilmadi: %s", type(e).__name__)
+        if len(ids) == 1:
+            log.info("mehmon telefon orqali aniqlandi: %s", mask_id(ids[0]))
+            return "resolved", int(ids[0])
+        return "not_found", None

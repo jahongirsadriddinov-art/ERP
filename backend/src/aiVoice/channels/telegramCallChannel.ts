@@ -15,6 +15,7 @@ import { reapStaleTelegramSessions, registerBridge, TelegramTransport, unregiste
 import { callWorker, WorkerRpcFailure } from '../telegram/workerRpc';
 import { ensureContactTgUserId } from '../telegram/tgLink';
 import { workerConnectedHere } from '../telegram/workerNamespace';
+import { PLATFORM_SCOPE } from '../platform';
 
 // Telegram qo'ng'iroq kanali (AI platforma user-account'i orqali, Python worker).
 // Mavjudlik (design §5 + review A1/A2/C3):
@@ -173,5 +174,71 @@ export const telegramCallChannel: ChannelAdapter = {
     };
   },
 };
+
+/**
+ * Mehmon sinov qo'ng'irog'i (owner 2026-10-19): dasturchi panelida Telegram raqami yoki @username kiritiladi,
+ * AI o'sha odamga qo'ng'iroq qilib oddiy suhbat quradi — firma/ERP ma'lumoti va tool'lari yo'q (sessionManager guest).
+ * Mehmon ERP'da yo'q, shuning uchun keyin o'zi qo'ng'iroq qilsa — incomingCalls 'unknown_caller' bilan rad etadi.
+ */
+export type GuestCallResult =
+  | { placed: true; sessionId: string }
+  | { placed: false; errorCode: string; retryAfterSec?: number };
+
+export async function placeGuestCall(p: { developerId: string; target: { username?: string; phone?: string }; name?: string; lang: 'uz' | 'ru' }): Promise<GuestCallResult> {
+  const now = new Date();
+  if (!aiConfig.enabled) return { placed: false, errorCode: 'disabled' };
+  const conn: any = await getConnection();
+  if (!conn || conn.status !== 'connected') return { placed: false, errorCode: 'account_not_connected' };
+  if (floodWaitActive(conn, now)) return { placed: false, errorCode: 'flood_wait' };
+  if (!workerConnectedHere()) return { placed: false, errorCode: 'worker_not_here' };
+  if (!(await telegramCapacity())) {
+    await reapStaleTelegramSessions(now).catch(() => 0);
+    if (!(await telegramCapacity())) return { placed: false, errorCode: 'account_busy' };
+  }
+  // Telegram id — worker @username yoki telefon bo'yicha aniqlaydi (telefon saqlanmaydi, log qilinmaydi)
+  let found;
+  try {
+    found = await callWorker('contact.lookup', { ...(p.target.username ? { username: p.target.username } : {}), ...(p.target.phone ? { phone: p.target.phone } : {}) });
+  } catch (e) {
+    return { placed: false, errorCode: e instanceof WorkerRpcFailure ? `worker_${e.code}` : 'error' };
+  }
+  if (found?.status !== 'resolved' || !found.tgUserId) {
+    return { placed: false, errorCode: String(found?.status || 'not_found'), ...(found?.retryAfterSec ? { retryAfterSec: found.retryAfterSec } : {}) };
+  }
+  if (!(await reserveDailyCall(now))) return { placed: false, errorCode: 'daily_cap' };
+  const ring = 45;
+  const max = 300;
+  const transport = new TelegramTransport();
+  const started = await getVoiceSessionManager().start({
+    companyId: PLATFORM_SCOPE, employeeId: p.developerId, purpose: 'assistant', channel: 'telegram_call', lang: p.lang,
+    ptt: false, transport, userInitiated: false, workerInstanceId: INSTANCE_ID, ringTimeoutSec: ring + 20, maxDurationSec: max,
+    guest: { name: p.name },
+  }).catch(() => ({ ok: false as const, reason: 'error' as const }));
+  if (!started.ok) {
+    await releaseDailyCall(now);
+    return { placed: false, errorCode: started.reason };
+  }
+  const handle = started.handle;
+  transport.bind(handle.sessionId);
+  registerBridge({ sessionId: handle.sessionId, handle, employeeId: p.developerId, companyId: PLATFORM_SCOPE });
+  try {
+    const res = await callWorker('call.place', {
+      sessionId: handle.sessionId, tgUserId: found.tgUserId, timeoutSec: ring, maxDurationSec: max,
+      ...(p.target.username ? { username: p.target.username } : {}),
+    });
+    if (!res?.accepted) {
+      unregisterBridge(handle.sessionId);
+      await handle.end('error').catch(() => undefined);
+      await releaseDailyCall(now);
+      return { placed: false, errorCode: String(res?.reason || 'rejected').slice(0, 60) };
+    }
+  } catch (e) {
+    unregisterBridge(handle.sessionId);
+    await handle.end('error').catch(() => undefined);
+    await releaseDailyCall(now);
+    return { placed: false, errorCode: e instanceof WorkerRpcFailure ? `worker_${e.code}` : 'error' };
+  }
+  return { placed: true, sessionId: handle.sessionId };
+}
 
 export default telegramCallChannel;

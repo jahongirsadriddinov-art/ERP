@@ -142,6 +142,10 @@ async def amain() -> int:
         need_tg()
         return await runtime.resolve_contact(p)
 
+    async def h_lookup(p: dict) -> dict:
+        need_tg()
+        return await runtime.lookup_contact(p)
+
     async def h_binding(p: dict) -> dict:
         try:
             binding.expect(str(p.get("employeeId") or ""), str(p.get("codeHash") or ""),
@@ -173,7 +177,7 @@ async def amain() -> int:
 
     handlers = {
         "auth.start": h_auth_start, "auth.code": h_auth_code, "auth.password": h_auth_password,
-        "auth.logout": h_auth_logout, "status": h_status, "contact.resolve": h_resolve,
+        "auth.logout": h_auth_logout, "status": h_status, "contact.resolve": h_resolve, "contact.lookup": h_lookup,
         "binding.expect": h_binding, "call.place": h_place, "call.hangup": h_hangup, "udp.probe": h_udp,
         "incoming.config": h_incoming_config,
         "call.caption": lambda p: calls.caption(p), "call.video_rate": lambda p: calls.video_rate(p),

@@ -22,6 +22,7 @@ const DEFAULT_TIMEOUT_MS: Record<WorkerRpcMethod, number> = {
   'auth.logout': 15_000,
   status: 5_000,
   'contact.resolve': 15_000,
+  'contact.lookup': 15_000,
   'binding.expect': 5_000,
   'call.place': 10_000,
   'call.hangup': 5_000,

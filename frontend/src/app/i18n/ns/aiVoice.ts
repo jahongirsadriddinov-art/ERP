@@ -610,6 +610,15 @@ export const uz = {
       placed: "Qo'ng'iroq terildi — telefoningizni tekshiring",
       failed: "Qo'ng'iroq qilinmadi: {{reason}}",
     },
+    guest: {
+      title: "Istalgan odamga sinov qo'ng'irog'i",
+      hint: "Telegram raqami yoki @username kiriting — AI qo'ng'iroq qilib oddiy suhbat quradi. Firma va ERP ma'lumotlariga ulanmaydi; u odam keyin AI'ga o'zi qo'ng'iroq qila olmaydi.",
+      target: "Telefon (+998…) yoki @username",
+      name: "Ismi (ixtiyoriy)",
+      call: "Qo'ng'iroq qilish",
+      placed: "Qo'ng'iroq terildi",
+      invalid: "Telefon raqami yoki @username noto'g'ri",
+    },
     resolve: { resolved: "Tayyor", unknown: "Tanilmagan", not_found: "Topilmadi", privacy_restricted: "Maxfiylik yopiq", blocked: "Bloklangan" },
     errors: {
       generic: "Xato ({{code}})",
@@ -640,6 +649,9 @@ export const uz = {
       worker_not_here: "Worker qayta ulanmoqda — bir daqiqadan keyin urinib ko'ring",
       disabled: "AI bu firmada o'chiq",
       peer_unknown: "AI xodimni hali tanimaydi",
+      import_limited: "Raqam bo'yicha qidirish soatiga 5 ta — keyinroq urinib ko'ring yoki @username kiriting",
+      denied: "Ruxsat yo'q",
+      platform_cap: "AI hozir band — birozdan keyin",
     },
     help: {
       title: "Qanday ulanadi?",
@@ -1262,6 +1274,15 @@ export const ru = {
       placed: "Звонок отправлен — проверьте телефон",
       failed: "Звонок не выполнен: {{reason}}",
     },
+    guest: {
+      title: "Тестовый звонок любому человеку",
+      hint: "Введите номер Telegram или @username — ИИ позвонит и поговорит как обычный помощник. Без доступа к компании и ERP; этот человек потом не сможет сам позвонить ИИ.",
+      target: "Телефон (+998…) или @username",
+      name: "Имя (необязательно)",
+      call: "Позвонить",
+      placed: "Звонок отправлен",
+      invalid: "Неверный номер или @username",
+    },
     resolve: { resolved: "Готов", unknown: "Не распознан", not_found: "Не найден", privacy_restricted: "Закрыт приватностью", blocked: "Заблокирован" },
     errors: {
       generic: "Ошибка ({{code}})",
@@ -1292,6 +1313,9 @@ export const ru = {
       worker_not_here: "Воркер переподключается — попробуйте через минуту",
       disabled: "AI выключен в этой фирме",
       peer_unknown: "AI ещё не знает сотрудника",
+      import_limited: "Поиск по номеру — 5 раз в час; попробуйте позже или введите @username",
+      denied: "Нет доступа",
+      platform_cap: "ИИ сейчас занят — попробуйте чуть позже",
     },
     help: {
       title: "Как подключить?",

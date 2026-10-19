@@ -25,7 +25,7 @@ import { GeminiLiveProvider } from './geminiLive';
 import { GeminiTranscriber, GeminiTts } from './geminiSpeech';
 import { OutQueue } from './outQueue';
 import {
-  buildVoiceSystemPrompt, confirmResultText, disclosureTextFor, firstTurnWithDisclosure, greetingTurn, startTurnText, wrapUpText,
+  buildGuestVoicePrompt, buildVoiceSystemPrompt, confirmResultText, disclosureTextFor, firstTurnWithDisclosure, greetingTurn, startTurnText, wrapUpText,
 } from './prompts';
 import { openFirstAvailable, openWithTimeout, type ProviderCandidate, type ProviderKind } from './provider';
 import { ATTENDANCE_TOOL, attendanceToolDeclaration, runAttendanceTool } from './sessionTools';
@@ -34,6 +34,8 @@ import { clearVision, pushFrame } from './vision';
 import { pureYesNo } from '../brain/style';
 import { getTool } from '../tools/registry';
 import { VISION_GUIDE } from '../brain/systemPrompt';
+import { loadDeveloperActor, PLATFORM_SCOPE, platformSettings } from '../platform';
+import { generalToolNames } from '../tools/rbac';
 import {
   classifyVoiceError, FAIL_TEXT, failCodeFor, LIVE_FALLBACK_MODELS, liveModelDown, modelChain, noteLiveFailure, noteLiveOk,
   worthNextModel, type VoiceErrorKind,
@@ -137,6 +139,9 @@ function defaultProviderFor(kind: ProviderKind, c: ProviderSessionCtx): VoicePro
 }
 
 /** Ovozli sessiya tili: xodimning AI sozlamasi → interfeys tili → firma standarti. */
+/** Mehmon qo'ng'irog'ida ruxsat etilgan umumiy tool'lar — firma/xodimga tegadigan hech narsa yo'q. */
+const GUEST_TOOLS = new Set(['endCall', 'getWeather', 'getExchangeRate', 'searchWeb', 'setSubtitles']);
+
 export async function resolveVoiceLang(companyId: string, userId: string, settings?: AiSettingsData): Promise<AiLang> {
   const contact: any = await AiEmployeeContact.findOne({ companyId, employeeId: userId }).select('languageOverride').lean().catch(() => null);
   if (contact?.languageOverride === 'ru' || contact?.languageOverride === 'uz') return contact.languageOverride;
@@ -205,6 +210,8 @@ class ManagedVoiceSession implements VoiceSessionHandle {
   private actorName = '';
   private actorRole: string;
   private actorIsOwner: boolean;
+  /** Mehmon sinov qo'ng'irog'i — firmasiz, faqat umumiy tool'lar (owner 2026-10-19). */
+  private readonly guest: boolean;
 
   constructor(
     private mgr: VoiceSessionManager,
@@ -224,9 +231,10 @@ class ManagedVoiceSession implements VoiceSessionHandle {
     this.transport = opts.transport;
     this.toolChannel = opts.channel === 'telegram_call' ? 'telegram_call' : 'inapp_call';
     // Murojaat — faqat ism (familiyasiz)
-    this.actorName = actor.firstName || actor.name;
-    this.actorRole = actor.role;
-    this.actorIsOwner = actor.isOwner;
+    this.guest = !!opts.guest;
+    this.actorName = this.guest ? String(opts.guest?.name || '').slice(0, 40) : (actor.firstName || actor.name);
+    this.actorRole = this.guest ? 'dasturchi' : actor.role;
+    this.actorIsOwner = this.guest ? false : actor.isOwner;
     this.out = new OutQueue({
       maxBytes: LIMITS.audioOutQueueMaxBytes,
       backlogBytes: () => { try { return this.transport.backlogBytes?.() ?? 0; } catch { return 0; } },
@@ -267,7 +275,7 @@ class ManagedVoiceSession implements VoiceSessionHandle {
   private toolCtx(role?: string, isOwner?: boolean): ToolCtx {
     const own = isOwner ?? this.actorIsOwner;
     return {
-      companyId: this.companyId, userId: this.employeeId, role: (own ? 'direktor' : (role ?? this.actorRole)) as AiRole, isOwner: own,
+      companyId: this.companyId, userId: this.employeeId, role: (this.guest ? 'dasturchi' : own ? 'direktor' : (role ?? this.actorRole)) as AiRole, isOwner: this.guest ? false : own,
       lang: this.lang, tz: 'Asia/Tashkent', channel: this.toolChannel, purpose: this.purpose,
       sessionId: this.sessionId, correlationId: this.correlationId,
     };
@@ -288,17 +296,21 @@ class ManagedVoiceSession implements VoiceSessionHandle {
 
   private async openProvider(): Promise<boolean> {
     try {
-      const st = await getCompanyAiState(this.companyId);
+      const st = this.guest ? { name: '' } : await getCompanyAiState(this.companyId);
       this.companyName = st.name;
       // Disclosure klipini oldindan isitish — faqat kaskad asosiy bo'lsa (Live'da klip ishlatilmaydi)
       if (this.settings.provider.primary !== 'gemini_live' || this.deps.clipOnLive) void this.deps.disclosure.getClip(this.clipReq(), 15_000).catch(() => null);
 
-      const names = effectiveToolNames(this.settings, this.actorRole, this.actorIsOwner, { channel: this.toolChannel, purpose: this.purpose });
+      const names = this.guest
+        ? generalToolNames({ channel: this.toolChannel, purpose: this.purpose }).filter((n) => GUEST_TOOLS.has(n))
+        : effectiveToolNames(this.settings, this.actorRole, this.actorIsOwner, { channel: this.toolChannel, purpose: this.purpose });
       const decls: ToolDeclaration[] = toolDeclarations(names, this.lang);
       if (this.purpose === 'attendance' && this.opts.confirmationId) decls.push(attendanceToolDeclaration(this.lang));
       this.allowedTools = new Set(decls.map((d) => d.name));
       const zp = zonedParts(new Date());
-      const systemInstruction = buildVoiceSystemPrompt({
+      const systemInstruction = this.guest ? buildGuestVoicePrompt({
+        lang: this.lang, name: this.actorName, today: zp.date, time: zp.hhmm, persona: this.settings.persona, voiceName: this.settings.voiceName,
+      }) : buildVoiceSystemPrompt({
         lang: this.lang, purpose: this.purpose, channel: this.toolChannel, companyName: this.companyName,
         userName: this.actorName, role: this.actorRole, isOwner: this.actorIsOwner, today: zp.date, weekday: zp.isoWeekday,
         requestText: this.opts.requestText, direction: this.direction, time: zp.hhmm,
@@ -454,7 +466,7 @@ class ManagedVoiceSession implements VoiceSessionHandle {
     // Owner 2026-10-19: yordamchi qo'ng'iroq — birinchi marta tanishtiruv, keyin ism bilan qisqa salom (model aytadi, bitta ovoz)
     // (clipOnLive — eski deterministik klip yo'li; faqat testlar/maxsus sozlama)
     if (this.purpose === 'assistant' && !this.deps.clipOnLive) {
-      const firstTime = !(await AiCallSession.exists({
+      const firstTime = this.guest || !(await AiCallSession.exists({
         companyId: this.companyId, employeeId: this.employeeId, answeredAt: { $ne: null }, _id: { $ne: this.sessionId },
       }).catch(() => null));
       if (this.state !== 'connected' || !this.vs) return;
@@ -577,7 +589,10 @@ class ManagedVoiceSession implements VoiceSessionHandle {
     let pending: PendingActionInfo | undefined;
     let revoke = false;
     try {
-      const ac = await checkActor(this.employeeId, this.companyId);                 // B2: har chaqiruvda
+      // B2: har chaqiruvda. Mehmon qo'ng'irog'i — uni boshlagan dasturchi hamon faol bo'lishi shart
+      const ac = this.guest
+        ? await loadDeveloperActor(this.employeeId).then((a) => (a ? { ok: true as const, actor: a } : { ok: false as const, code: 'denied' as const }))
+        : await checkActor(this.employeeId, this.companyId);
       if (!ac.ok) {
         result = { status: 'denied', message: DENIED[this.lang], retryable: false };
         revoke = ac.code !== 'feature';
@@ -796,13 +811,24 @@ export class VoiceSessionManager implements VoiceSessionManagerApi {
     try {
       if (this.draining || !aiConfig.enabled) return fail('disabled');
       if (!opts?.companyId || !opts.employeeId || !opts.transport) return fail('error');
-      if (!(await isAiActive(opts.companyId))) return fail('disabled');
-      const ac = await checkActor(opts.employeeId, opts.companyId);
-      if (!ac.ok) return fail('denied');
-      if (await budgetExceeded(opts.companyId)) return fail('budget');
-      const settings = await getSettings(opts.companyId);
+      let ac: { ok: true; actor: ActorState } | { ok: false };
+      let settings: AiSettingsData;
       const now = new Date();
-      if (await companyMinutesExceeded(opts.companyId, settings, now)) return fail('limit');
+      if (opts.guest) {
+        // Mehmon sinov qo'ng'irog'i: faqat platforma doirasida va faol dasturchi nomidan; firma byudjeti/sozlamasi yo'q
+        if (opts.companyId !== PLATFORM_SCOPE || opts.channel !== 'telegram_call') return fail('error');
+        const dev = await loadDeveloperActor(opts.employeeId);
+        if (!dev) return fail('denied');
+        ac = { ok: true, actor: dev };
+        settings = platformSettings();
+      } else {
+        if (!(await isAiActive(opts.companyId))) return fail('disabled');
+        ac = await checkActor(opts.employeeId, opts.companyId);
+        if (!ac.ok) return fail('denied');
+        if (await budgetExceeded(opts.companyId)) return fail('budget');
+        settings = await getSettings(opts.companyId);
+        if (await companyMinutesExceeded(opts.companyId, settings, now)) return fail('limit');
+      }
       let cap = await liveCapacity(opts.companyId, settings.calls.companyConcurrency);
       // Semafor "osilib" qolmasin (jarayon qulagan / Render uyqusi): eskirgan begona sessiyalarni yopib qayta tekshiramiz
       if (!cap.ok && (await this.reclaimOrphans(cap.reason === 'company_cap' ? { companyId: opts.companyId } : {}))) {
@@ -853,7 +879,7 @@ export class VoiceSessionManager implements VoiceSessionManagerApi {
         await AiCallSession.deleteOne({ _id: doc._id }).catch(() => undefined);
         return fail(over);
       }
-      const s = new ManagedVoiceSession(this, this.d, opts, settings, ac.actor, doc, limits);
+      const s = new ManagedVoiceSession(this, this.d, opts, settings, (ac as { actor: ActorState }).actor, doc, limits);
       s.liveBlocked = liveBlocked;
       this.sessions.set(s.sessionId, s);
       this.byCorrelation.set(s.correlationId, s.sessionId);

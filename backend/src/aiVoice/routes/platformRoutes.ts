@@ -6,7 +6,7 @@ import AiEmployeeContact from '../../models/AiEmployeeContact';
 import Company from '../../models/Company';
 import User from '../../models/User';
 import { logAudit } from '../../services/audit';
-import { telegramCallChannel } from '../channels/telegramCallChannel';
+import { placeGuestCall, telegramCallChannel } from '../channels/telegramCallChannel';
 import { aiConfig } from '../config';
 import { companyConsentMap, evaluateCallConsent, getCallConsent } from '../consent';
 import { isAiActive } from '../settings';
@@ -365,6 +365,49 @@ router.post('/telegram-account/test-call', wrap(async (req, res) => {
     `AI Telegram: sinov qo'ng'irog'i — ${fullName(target) || 'xodim'} (${placed ? 'terildi' : (result.errorCode || result.outcome)})`,
     { entityId: String(userId), companyId });
   res.status(placed ? 202 : 409).json({ placed, ...result });
+}));
+
+// Mehmon sinov qo'ng'irog'i (owner 2026-10-19): Telegram raqami yoki @username → AI oddiy suhbat uchun qo'ng'iroq
+// qiladi (firma/ERP'ga ulanmaydi). Sinov qo'ng'irog'i bilan BIR XIL chegara (oraliq + 10 daqiqalik oyna).
+// Telefon saqlanmaydi; auditda faqat maskalangan ko'rinish.
+const GUEST_USERNAME_RE = /^@?[A-Za-z][A-Za-z0-9_]{3,31}$/;
+export function parseGuestTarget(raw: unknown): { username?: string; phone?: string } | null {
+  const v = typeof raw === 'string' ? raw.trim() : '';
+  if (!v || v.length > 40) return null;
+  const tme = v.replace(/^(https?:\/\/)?t\.me\//i, '');
+  if (GUEST_USERNAME_RE.test(tme)) return { username: tme.replace(/^@/, '') };
+  const ph = v.replace(/[\s()-]/g, '');
+  if (/^\+?\d{9,15}$/.test(ph)) {
+    const digits = ph.replace(/^\+/, '');
+    return { phone: `+${digits.length === 9 ? `998${digits}` : digits}` };
+  }
+  return null;
+}
+
+router.post('/telegram-account/guest-call', wrap(async (req, res) => {
+  const dev = await developer(req);
+  const body = isObj(req.body) ? req.body : {};
+  const target = parseGuestTarget(body.target);
+  if (!target) return res.status(400).json({ error: 'invalid', errors: ['target'] });
+  const name = typeof body.name === 'string' ? body.name.trim().slice(0, 40) : '';
+  const lang: 'uz' | 'ru' = body.lang === 'ru' ? 'ru' : 'uz';
+  const nowMs = Date.now();
+  const last = lastTestAt.get(dev.userId) || 0;
+  const wait = Math.ceil((last + TEST_CALL_COOLDOWN_SEC * 1000 - nowMs) / 1000);
+  if (wait > 0) return res.status(429).json({ error: 'rate_limited', code: 'cooldown', retryAfterSec: wait, message: `Keyingi sinov qo'ng'irog'i ${wait} soniyadan keyin.` });
+  const used = await peekRate(`aiv:tgtest:${dev.userId}`, TEST_CALL_WINDOW_MS, new Date(nowMs));
+  if (used >= TEST_CALL_MAX) {
+    const retryAfterSec = Math.max(1, Math.ceil((TEST_CALL_WINDOW_MS - (nowMs % TEST_CALL_WINDOW_MS)) / 1000));
+    return res.status(429).json({ error: 'rate_limited', code: 'window', retryAfterSec, message: `10 daqiqada ${TEST_CALL_MAX} ta sinov qo'ng'irog'i — ${retryAfterSec} soniya kuting.` });
+  }
+  const r = await placeGuestCall({ developerId: dev.userId, target, name, lang });
+  if (r.placed) {
+    lastTestAt.set(dev.userId, Date.now());
+    await hitRate(`aiv:tgtest:${dev.userId}`, TEST_CALL_MAX, TEST_CALL_WINDOW_MS).catch(() => undefined);
+  }
+  const who = target.username ? `@${target.username}` : maskPhone(target.phone || '');
+  audit(req, dev, 'create', `AI Telegram: mehmon sinov qo'ng'irog'i — ${who} (${r.placed ? 'terildi' : r.errorCode})`, { entityId: r.placed ? r.sessionId : undefined });
+  res.status(r.placed ? 202 : 409).json(r);
 }));
 
 /** Faqat testlar uchun. */

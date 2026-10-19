@@ -357,6 +357,11 @@ export interface WorkerRpcMethods {
     params: { employeeId: string; expectedTgUserId: string; username?: string; phone?: string; allowImport: boolean };
     result: { status: 'resolved' | 'not_found' | 'privacy_restricted' | 'mismatch' | 'flood_wait'; tgUserId?: string; retryAfterSec?: number };
   };
+  /** Mehmon sinov qo'ng'irog'i (owner 2026-10-19): @username yoki telefon → Telegram id (kutilgan id'siz). */
+  'contact.lookup': {
+    params: { username?: string; phone?: string };
+    result: { status: 'resolved' | 'not_found' | 'privacy_restricted' | 'import_limited' | 'flood_wait'; tgUserId?: string; retryAfterSec?: number };
+  };
   'binding.expect': { params: { employeeId: string; codeHash: string; expectedTgUserId: string; expiresAt: number }; result: { ok: true } };
   /** phone/username — faqat peer noma'lum bo'lsa, SHU qo'ng'iroq uchun (worker saqlamaydi, log qilmaydi). */
   'call.place': { params: { sessionId: string; tgUserId: string; timeoutSec: number; maxDurationSec: number; phone?: string; username?: string; avatar?: string; video?: boolean }; result: { accepted: boolean; reason?: string } };

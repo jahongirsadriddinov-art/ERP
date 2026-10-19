@@ -143,6 +143,7 @@ export default function TelegramAccountPanel() {
       {connected && (
         <>
           <TestCallCard k={k} errText={errText} canCall={workerOn} />
+          <GuestCallCard k={k} errText={errText} canCall={workerOn} />
           <Card icon={Telegram} title={k("open.title")} testId="ai-tg-open">
             <Toggle checked={!!v.openConversation} disabled={!!busy} onChange={toggleOpen} testId="ai-tg-open-toggle"
               label={k("open.label")} hint={k("open.hint")} />
@@ -401,6 +402,49 @@ function TestCallCard({ k, errText, canCall }: { k: K; errText: ErrText; canCall
         </button>
         {result && <p role="status" className={`text-xs ${result.ok ? "text-emerald-700 dark:text-emerald-300" : "text-red-600 dark:text-red-400"}`}>{result.text}</p>}
       </div>
+    </Card>
+  );
+}
+
+/** Mehmon sinov qo'ng'irog'i (owner 2026-10-19): istalgan Telegram raqami/@username — firmasiz oddiy AI suhbati. */
+function GuestCallCard({ k, errText, canCall }: { k: K; errText: ErrText; canCall: boolean }) {
+  const [target, setTarget] = useState("");
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
+  const valid = /^(@?[A-Za-z][A-Za-z0-9_]{3,31}|(https?:\/\/)?t\.me\/[A-Za-z][A-Za-z0-9_]{3,31}|\+?[\d\s()-]{9,20})$/.test(target.trim());
+
+  const callNow = async (e: FormEvent) => {
+    e.preventDefault();
+    if (busy) return;
+    if (!valid) { setResult({ ok: false, text: k("guest.invalid") }); return; }
+    setBusy(true);
+    setResult(null);
+    const r = await api<{ placed: boolean; errorCode?: string }>("POST", "/guest-call", { target: target.trim(), name: name.trim() || undefined });
+    setBusy(false);
+    if (r.ok && r.data?.placed) {
+      setResult({ ok: true, text: k("guest.placed") });
+      toast.success(k("guest.placed"));
+    } else {
+      setResult({ ok: false, text: k("test.failed", { reason: errText(r) }) });
+    }
+  };
+
+  return (
+    <Card icon={Phone} title={k("guest.title")} hint={k("guest.hint")} testId="ai-tg-guest">
+      <form onSubmit={callNow} className="space-y-2.5">
+        <input value={target} onChange={(e) => setTarget(e.target.value)} placeholder={k("guest.target")} aria-label={k("guest.target")}
+          inputMode="text" autoComplete="off" spellCheck={false} maxLength={40} data-testid="ai-tg-guest-target" className={inputCls} />
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder={k("guest.name")} aria-label={k("guest.name")}
+          autoComplete="off" maxLength={40} data-testid="ai-tg-guest-name" className={inputCls} />
+        <div className="flex flex-wrap items-center gap-3">
+          <button type="submit" disabled={!target.trim() || busy || !canCall} className={primaryBtn} data-testid="ai-tg-guest-call">
+            <MorphIcon icon={busy ? Refresh : Phone} className={`w-4 h-4 ${busy ? "animate-spin" : ""}`} />
+            {k("guest.call")}
+          </button>
+          {result && <p role="status" className={`text-xs ${result.ok ? "text-emerald-700 dark:text-emerald-300" : "text-red-600 dark:text-red-400"}`}>{result.text}</p>}
+        </div>
+      </form>
     </Card>
   );
 }

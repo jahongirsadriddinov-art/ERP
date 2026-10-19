@@ -205,3 +205,15 @@ def test_place_resolves_with_phone_and_maps_reasons():
     assert _place("mismatch", {"phone": PHONE})[0] == {"accepted": False, "reason": "peer_mismatch"}
     assert _place("import_limited", {"phone": PHONE})[0] == {"accepted": False, "reason": "import_limited"}
     assert _place("flood_wait", {"phone": PHONE})[0] == {"accepted": False, "reason": "flood_wait"}
+
+
+def test_guest_lookup_by_username_phone_and_limit():
+    """Mehmon sinov qo'ng'irog'i: kutilgan id'siz aniqlash; import qilingan kontakt o'chiriladi; chegara amal qiladi."""
+    ops = FakeOps(phone_owner=OTHER, usernames={"guest_user": EXPECTED})
+    r = PeerResolver(ops, ImportLimiter(max_per_window=1, clock=Clock()))
+    assert asyncio.run(r.lookup("@guest_user")) == ("resolved", EXPECTED)
+    assert asyncio.run(r.lookup(None, PHONE)) == ("resolved", OTHER)
+    assert ops.deleted == [[OTHER]]
+    assert asyncio.run(r.lookup(None, PHONE)) == ("import_limited", None)
+    assert asyncio.run(r.lookup("@nobody_here")) == ("not_found", None)
+    assert asyncio.run(PeerResolver(FakeOps()).lookup(None, PHONE)) == ("not_found", None)

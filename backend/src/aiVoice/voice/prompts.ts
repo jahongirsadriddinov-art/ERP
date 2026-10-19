@@ -1,7 +1,7 @@
 import type { AiLang, Purpose, ToolChannel } from '../contracts';
 import { buildSystemPrompt } from '../brain/systemPrompt';
 import { sanitizeForPrompt, wrapUntrusted } from '../lib/untrusted';
-import type { PersonaSettings } from '../persona';
+import { personaPromptLine, type PersonaSettings } from '../persona';
 
 // Ovozli sessiya uchun system instruction va boshqaruv navbatlari. Asos — matn miyasining
 // qoidalari (brain/systemPrompt.ts: AI ekanini ochiq aytish, faqat tool natijasidan ma'lumot,
@@ -94,6 +94,30 @@ export function buildVoiceSystemPrompt(i: VoicePromptInput): string {
   const parts = [base, '', VOICE_RULES[lang], '', callContextLine({ ...i, lang }), PURPOSE_RULES[i.purpose][lang]];
   if (i.requestText) parts.push(`${lang === 'ru' ? 'Текст' : 'Matn'}: ${JSON.stringify(wrapUntrusted(i.requestText))}`);
   return parts.join('\n');
+}
+
+/**
+ * Mehmon sinov qo'ng'irog'i (owner 2026-10-19): dasturchi panelidan ERP'ga aloqasi yo'q odamga oddiy AI suhbati.
+ * Firma, xodim, platforma ma'lumoti YO'Q — faqat umumiy suhbat va umumiy tool'lar (ob-havo, valyuta, qidiruv).
+ */
+export function buildGuestVoicePrompt(i: { lang: AiLang; name?: string; today: string; time?: string; persona?: PersonaSettings; voiceName?: string }): string {
+  const lang = i.lang === 'ru' ? 'ru' : 'uz';
+  const name = sanitizeForPrompt(i.name, 40);
+  const persona = personaPromptLine(i.persona, i.voiceName);
+  if (lang === 'ru') {
+    return [
+      'Вы — голосовой ИИ-помощник (искусственный интеллект, не человек). Это пробный звонок: собеседник — гость, НЕ пользователь ERP.',
+      'ПРАВИЛА: не притворяйтесь человеком. Никаких данных о компаниях, сотрудниках, финансах и системе ERP у вас нет — не выдумывайте и не обсуждайте их. Обычный дружелюбный разговор: ответы на вопросы, советы, перевод. Погода — getWeather, курс валют — getExchangeRate, свежие факты — searchWeb. «Положи трубку», «до свидания» → коротко попрощайтесь и endCall. Не называйте ничьи телефоны и личные данные.',
+      persona, VOICE_RULES.ru,
+      `КОНТЕКСТ: собеседник — ${name || 'гость'}; сегодня ${i.today}${i.time ? `, сейчас ${i.time}` : ''} (Asia/Tashkent). Вы сами позвонили ему через Telegram.`,
+    ].filter(Boolean).join('\n');
+  }
+  return [
+    "Siz ovozli AI yordamchisiz (sun'iy intellekt, inson EMAS). Bu sinov qo'ng'irog'i: suhbatdosh — mehmon, ERP foydalanuvchisi EMAS.",
+    "QOIDALAR: o'zingizni inson deb ko'rsatmang. Sizda hech qanday firma, xodim, moliya yoki ERP ma'lumoti YO'Q — ular haqida o'ylab topmang va gapirmang. Oddiy samimiy suhbat: savollarga javob, maslahat, tarjima. Ob-havo — getWeather, valyuta kursi — getExchangeRate, yangi faktlar — searchWeb. \"Telefonni qo'y\", \"xayr\" → qisqa xayrlashing va endCall. Hech kimning telefon raqami yoki shaxsiy ma'lumotini aytmang.",
+    persona, VOICE_RULES.uz,
+    `KONTEKST: suhbatdosh — ${name || 'mehmon'}; bugun ${i.today}${i.time ? `, hozir ${i.time}` : ''} (Asia/Tashkent). Siz unga Telegram orqali o'zingiz qo'ng'iroq qildingiz.`,
+  ].filter(Boolean).join('\n');
 }
 
 // ───────────── Disclosure (A8) ─────────────

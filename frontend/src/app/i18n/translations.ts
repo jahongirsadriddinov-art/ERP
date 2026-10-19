@@ -1061,6 +1061,7 @@ const uz = {
     syncing: "Sinxronlanmoqda…",
     synced: "Hammasi yuborildi",
     pending: "{{count}} ta o'zgarish yuborilishini kutmoqda",
+    rejected: "Internetsiz qilingan bitta amal serverda qabul qilinmadi (ruxsat yoki ma'lumot xatosi)",
   },
 };
 
@@ -2119,6 +2120,7 @@ const ru: TranslationShape = {
     syncing: "Синхронизация…",
     synced: "Всё отправлено",
     pending: "{{count}} изменений ожидают отправки",
+    rejected: "Одно действие, сделанное без интернета, не принято сервером (нет прав или ошибка данных)",
   },
 };
 

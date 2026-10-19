@@ -1,5 +1,5 @@
 /* QurilishERP Service Worker v4 — cache, push, offline IndexedDB + sync queue */
-const CACHE_NAME = 'qurilish-erp-v4';
+const CACHE_NAME = 'qurilish-erp-v5';
 const STATIC_CACHE = 'qurilish-static-v4';
 const DB_NAME = 'qurilish-offline';
 const DB_VERSION = 2;
@@ -148,6 +148,10 @@ self.addEventListener('fetch', (event) => {
   if (url.protocol === 'chrome-extension:') return;
 
   const isApi = API_ORIGINS.some(o => request.url.startsWith(o));
+
+  /* Ilova o'z navbatini yuritadigan so'rovlar (api.ts, X-Offline-Queue) — SW aralashmaydi: xato ilovaga qaytadi,
+     u rasm/fayllar bilan birga IndexedDB navbatiga oladi (ikki marta saqlanmasin) */
+  if (isApi && request.method !== 'GET' && request.headers.get('X-Offline-Queue')) return;
 
   /* Non-GET API requests — queue when offline */
   if (isApi && request.method !== 'GET') {

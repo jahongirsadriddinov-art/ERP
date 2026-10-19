@@ -52,6 +52,7 @@ import geocodeRoutes from './routes/geocode';
 import { startMeteredTurnRefreshLoop } from './services/meteredTurn';
 import { initSocket } from './services/socket';
 import { optionalAuth, requireAuth, blockDeveloper, requireDeveloper } from './middleware/auth';
+import { idempotency } from './middleware/idempotency';
 // Import bot to start it + get bot instance for webhook route
 import { bot, notifyDeveloper, webhookSecret } from './services/bot';
 import { createBotWebhookHandler, BOT_WEBHOOK_PATH } from './services/botSecurity';
@@ -187,6 +188,8 @@ app.use((req, _res, next) => {
 // ── Xavfsizlik: umumiy so'rov chegarasi (IP bo'yicha, daqiqasiga 600) — middleware/apiRateLimit.ts.
 // /api/bot/webhook bundan istisno (Telegram IP'lari umumiy; o'rniga maxfiy sarlavha tekshiriladi).
 app.use('/api', createApiRateLimiter());
+// Oflayn navbatdan qayta yuborilgan amallar ikki marta bajarilmasin (X-Idempotency-Key) — middleware/idempotency.ts
+app.use('/api', idempotency());
 // Yuklangan fayllar (chat media, smeta, va h.k.) doim noyob nom bilan saqlanadi
 // (vaqt tamg'asi + tasodifiy raqam) — demak bir xil URL hech qachon boshqa
 // mazmunga o'zgarmaydi. Shuning uchun uzoq muddatli "immutable" keshni xavfsiz

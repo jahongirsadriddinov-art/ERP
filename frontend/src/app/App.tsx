@@ -4478,6 +4478,22 @@ export default function App() {
     const onAppQueue = (e: Event) => handleSWMsg({ data: { type: 'SYNC_STATUS', ...(e as CustomEvent).detail } } as MessageEvent);
     window.addEventListener('erp:offline-queue', onAppQueue);
     if (offlineQueueCount() > 0) { setSyncPending(offlineQueueCount()); setSyncStatus('pending'); }
+    // Oflayn qilingan amal serverda rad etildi (masalan ruxsat yo'q) — foydalanuvchi bilsin
+    const onRejected = () => toast.error(tApp('sync.rejected'));
+    window.addEventListener('erp:offline-rejected', onRejected);
+    // Navbat to'liq yuborildi — vaqtinchalik (oflayn) yozuvlar serverdagi haqiqiysi bilan almashsin
+    const onSynced = () => {
+      const tok = localStorage.getItem('token');
+      if (!tok) return;
+      fetch(API_BASE + "/api/transactions").then(r => r.ok ? r.json() : null).then((tData: any) => {
+        if (!Array.isArray(tData)) return;
+        const formattedT = tData.map((t: any) => ({ ...t, id: t.id || t._id }));
+        setTransfers(formattedT.filter((t: any) => t.type === 'transfer'));
+        setIncomes(formattedT.filter((t: any) => t.type === 'income'));
+        setExpenses(formattedT.filter((t: any) => t.type !== 'transfer' && t.type !== 'income'));
+      }).catch(() => {});
+    };
+    window.addEventListener('erp:offline-synced', onSynced);
 
     // Dastlabki pending count + agar hozir online bo'lsak, eskirgan
     // (stuck) navbatni ham darhol tozalashga urinamiz.
@@ -4501,6 +4517,8 @@ export default function App() {
       window.removeEventListener('offline', onOffline);
       navigator.serviceWorker?.removeEventListener?.('message', handleSWMsg);
       window.removeEventListener('erp:offline-queue', onAppQueue);
+      window.removeEventListener('erp:offline-rejected', onRejected);
+      window.removeEventListener('erp:offline-synced', onSynced);
       document.removeEventListener('visibilitychange', onVisible);
       clearInterval(retryTimer);
     };

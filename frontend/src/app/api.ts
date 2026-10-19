@@ -46,6 +46,8 @@ export const API_BASE: string =
 export const api = (path: string): string =>
   `${API_BASE}${path.startsWith('/') ? path : `/${path}`}`;
 
+import { queueAdd, queueAll, queueRemove, queueUpdate, serializeBody, deserializeBody, cachePut, cacheGet, type QueuedItem } from './lib/offlineStore';
+
 // ─── Auth interceptor ────────────────────────────────────────────────────────
 // Barcha API_BASE so'rovlariga localStorage'dagi JWT tokenni avtomatik qo'shadi.
 // Shu tufayli App.tsx dagi yuzlab inline fetch'larni o'zgartirmasdan turib,
@@ -56,57 +58,112 @@ export const api = (path: string): string =>
 // shu yerda ham xuddi o'sha naqsh: obyektdagi ishchi internet yo'qda chiqim, xabar yoki
 // davomatni yuborsa — qurilmada saqlanadi va internet qaytishi bilan o'zi yuboriladi.
 // Takror yuborilmasligi uchun har bir yozuv o'z X-Idempotency-Key kaliti bilan boradi.
-const QUEUE_KEY = 'erp_offline_queue_v1';
-const QUEUEABLE = [/\/api\/transactions$/, /\/api\/messages$/, /\/api\/attendance\/[\w-]+$/];
-type QueuedReq = { id: string; url: string; body: string; ts: number };
-const readQueue = (): QueuedReq[] => { try { return JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]'); } catch { return []; } };
-const writeQueue = (q: QueuedReq[]) => { try { localStorage.setItem(QUEUE_KEY, JSON.stringify(q)); } catch { /* */ } };
+// 2026-10-19 (owner: "oflayn rejim — hamma funksiya ishlasin"): navbat IndexedDB'da (lib/offlineStore) — rasm va
+// fayllar ham saqlanadi; deyarli barcha o'zgartiruvchi amallar (POST/PUT/PATCH/DELETE) navbatga olinadi. Kirish,
+// to'lov, real vaqt (qo'ng'iroq) kabi faqat onlayn ma'noli yo'llar bundan mustasno. Har bir amal birinchi
+// urinishdanoq X-Idempotency-Key bilan boradi — javob yo'lda yo'qolsa ham server uni ikki marta bajarmaydi.
+const LEGACY_QUEUE_KEY = 'erp_offline_queue_v1';
+const NOT_QUEUEABLE = [
+  /^\/api\/auth/, /^\/api\/register/, /^\/api\/payments/, /^\/api\/admin\/subscriptions/, /^\/api\/pin/,
+  /^\/api\/sessions/, /^\/api\/ai-voice/, /^\/api\/ai\//, /^\/api\/calls/, /^\/api\/push/, /^\/api\/errors/,
+  /^\/api\/qr/, /^\/api\/promocodes/, /^\/api\/smeta\/parse/, /^\/api\/dev\//, /^\/api\/companies/, /^\/api\/admin/,
+  /^\/api\/messages\/read/, /^\/api\/notifications/, /^\/api\/gps/,
+];
+const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+let queueCount = 0;
+try { queueCount = Number(localStorage.getItem('erp_offline_queue_count') || 0) || 0; } catch { /* */ }
+const setCount = (n: number) => { queueCount = n; try { localStorage.setItem('erp_offline_queue_count', String(n)); } catch { /* */ } };
 const emitQueue = (status: 'pending' | 'syncing' | 'synced' | 'idle') => {
-  try { window.dispatchEvent(new CustomEvent('erp:offline-queue', { detail: { count: readQueue().length, status } })); } catch { /* */ }
+  try { window.dispatchEvent(new CustomEvent('erp:offline-queue', { detail: { count: queueCount, status } })); } catch { /* */ }
 };
-export const offlineQueueCount = () => readQueue().length;
-function isQueueable(url: string, init?: RequestInit) {
-  if ((init?.method || 'GET').toUpperCase() !== 'POST' || typeof init?.body !== 'string') return false;
-  if (url.indexOf(API_BASE) !== 0) return false;
-  // SW boshqarayotgan bo'lsa (web) — navbatni o'sha yuritadi, ikki marta saqlamaymiz
-  if (typeof navigator !== 'undefined' && navigator.serviceWorker?.controller) return false;
-  const path = url.slice(API_BASE.length).split('?')[0];
-  return QUEUEABLE.some(re => re.test(path));
+export const offlineQueueCount = () => queueCount;
+const refreshCount = async () => { try { setCount((await queueAll()).length); } catch { /* */ } };
+
+function pathOf(url: string): string {
+  return url.slice(API_BASE.length).split('?')[0];
 }
-function enqueue(url: string, body: string): Response {
-  const id = `off_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-  writeQueue([...readQueue(), { id, url, body, ts: Date.now() }].slice(-200));
+function isQueueable(url: string, init?: RequestInit) {
+  const method = (init?.method || 'GET').toUpperCase();
+  if (!MUTATING.has(method) || url.indexOf(API_BASE) !== 0) return false;
+  const p = pathOf(url);
+  if (!p.startsWith('/api/')) return false;
+  return !NOT_QUEUEABLE.some(re => re.test(p));
+}
+const newId = () => `off_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+
+async function enqueue(url: string, init: RequestInit, id: string): Promise<Response> {
+  const body = await serializeBody(init.body as any);
+  if (!body) throw new TypeError('offline: bu turdagi so\'rovni saqlab bo\'lmaydi');
+  await queueAdd({ id, url, method: (init.method || 'POST').toUpperCase(), body, ts: Date.now(), attempts: 0 });
+  await refreshCount();
   emitQueue('pending');
   let echo: any = {};
-  try { echo = JSON.parse(body); } catch { /* */ }
-  // Chaqiruvchi (masalan handleAddExpense) ro'yxatga vaqtinchalik yozuv qo'sha olishi uchun
-  return new Response(JSON.stringify({ ...echo, _id: id, id, queued: true, offline: true, status: echo.status || 'pending' }),
-    { status: 202, headers: { 'Content-Type': 'application/json' } });
+  if (body.kind === 'json') { try { echo = JSON.parse(body.text); } catch { /* */ } }
+  // Chaqiruvchi (masalan handleAddExpense) ro'yxatga vaqtinchalik yozuv qo'sha olishi uchun — server javobiga o'xshash
+  return new Response(JSON.stringify({ ...(echo && typeof echo === 'object' ? echo : {}), _id: id, id, queued: true, offline: true, status: echo?.status || 'pending', ok: true }),
+    { status: 202, headers: { 'Content-Type': 'application/json', 'X-Offline-Queued': '1' } });
 }
+
+// Eski (localStorage) navbatdagi yozuvlar yangi navbatga ko'chiriladi — hech narsa yo'qolmaydi
+async function migrateLegacy() {
+  try {
+    const raw = localStorage.getItem(LEGACY_QUEUE_KEY);
+    if (!raw) return;
+    const old: Array<{ id: string; url: string; body: string; ts: number }> = JSON.parse(raw) || [];
+    for (const o of old) await queueAdd({ id: o.id, url: o.url, method: 'POST', body: { kind: 'json', text: o.body }, ts: o.ts, attempts: 0 });
+    localStorage.removeItem(LEGACY_QUEUE_KEY);
+    await refreshCount();
+  } catch { /* */ }
+}
+
 let flushing = false;
 async function flushQueue(orig: typeof fetch) {
-  if (flushing || !readQueue().length || (typeof navigator !== 'undefined' && navigator.onLine === false)) return;
+  if (flushing || (typeof navigator !== 'undefined' && navigator.onLine === false)) return;
+  let items: QueuedItem[] = [];
+  try { items = await queueAll(); } catch { return; }
+  if (!items.length) { if (queueCount) { setCount(0); emitQueue('idle'); } return; }
   flushing = true;
   emitQueue('syncing');
   let failed = false;
   try {
-    for (const item of readQueue()) {
+    for (const item of items) {
       const token = localStorage.getItem('token');
+      const headers: Record<string, string> = { 'X-Idempotency-Key': item.id, 'X-Client': CLIENT_KIND, 'X-Offline-Replay': '1' };
+      if (item.body.kind === 'json') headers['Content-Type'] = 'application/json';
+      if (token) headers.Authorization = `Bearer ${token}`;
       let r: Response;
       try {
-        r = await orig(item.url, {
-          method: 'POST', body: item.body,
-          headers: { 'Content-Type': 'application/json', 'X-Idempotency-Key': item.id, ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        });
+        r = await orig(item.url, { method: item.method, body: deserializeBody(item.body), headers });
       } catch { failed = true; break; }
-      if (r.status >= 500) { failed = true; break; }
-      // 2xx — yuborildi; 4xx — qayta urinishdan foyda yo'q (masalan ruxsat) — navbatdan chiqariladi
-      writeQueue(readQueue().filter(q => q.id !== item.id));
+      // 5xx / 409 (shu kalit hali bajarilmoqda) / 429 — keyinroq yana; 2xx va boshqa 4xx — navbatdan chiqariladi
+      if (r.status >= 500 || r.status === 409 || r.status === 429) {
+        item.attempts += 1;
+        if (item.attempts >= 20) await queueRemove(item.id).catch(() => undefined);
+        else await queueUpdate(item).catch(() => undefined);
+        failed = true; break;
+      }
+      await queueRemove(item.id).catch(() => undefined);
+      if (r.status >= 400) {
+        try { window.dispatchEvent(new CustomEvent('erp:offline-rejected', { detail: { url: item.url, status: r.status } })); } catch { /* */ }
+      }
     }
   } finally {
     flushing = false;
-    emitQueue(readQueue().length ? 'pending' : failed ? 'pending' : 'synced');
+    await refreshCount();
+    emitQueue(queueCount ? 'pending' : failed ? 'pending' : 'synced');
+    if (!queueCount && !failed) { try { window.dispatchEvent(new CustomEvent('erp:offline-synced')); } catch { /* */ } }
   }
+}
+
+// ── O'qish keshi (ilovalar: Windows/Android'da SW yo'q) — GET javoblari foydalanuvchi bo'yicha saqlanadi ──
+const CACHE_GET = [/^\/api\/(objects|users|transactions|materials|equipment|documents|payroll|attendance|messages|groups|company|dashboard|notifications\/unread-count|announcements|safety|sign-docs)/];
+function cacheKeyFor(url: string): string | null {
+  if (url.indexOf(API_BASE) !== 0) return null;
+  const p = pathOf(url);
+  if (!CACHE_GET.some(re => re.test(p))) return null;
+  const tok = localStorage.getItem('token') || '';
+  if (!tok) return null;
+  return `${tok.slice(-24)}|${url.slice(API_BASE.length)}`;
 }
 
 let _authFetchInstalled = false;
@@ -119,17 +176,38 @@ function installAuthFetch() {
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') flush(); });
   setInterval(flush, 30_000);
   setTimeout(flush, 3000);
-  window.fetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+  setTimeout(() => { void migrateLegacy().then(refreshCount).then(() => emitQueue(queueCount ? 'pending' : 'idle')); }, 500);
+  window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const rawUrl = typeof input === 'string' ? input : input instanceof URL ? input.href : (input as Request).url;
-    if (isQueueable(rawUrl, init)) {
-      if (navigator.onLine === false) return Promise.resolve(enqueue(rawUrl, init!.body as string));
-      return authFetch(input, init).catch(err => {
-        // Tarmoq xatosi (server javob bermadi) — navbatga olinadi
-        if (err instanceof TypeError) return enqueue(rawUrl, init!.body as string);
+    if (typeof input === 'string' && isQueueable(rawUrl, init)) {
+      const id = newId();
+      const headers = new Headers(init?.headers);
+      if (!headers.has('X-Idempotency-Key')) headers.set('X-Idempotency-Key', id);
+      headers.set('X-Offline-Queue', 'app');   // web'da SW bu so'rovni o'zi navbatga olmasin (navbat shu yerda)
+      const init2: RequestInit = { ...init, headers };
+      if (navigator.onLine === false) return enqueue(rawUrl, init2, headers.get('X-Idempotency-Key') || id);
+      try {
+        return await authFetch(input, init2);
+      } catch (err) {
+        // Tarmoq xatosi (server javob bermadi) — navbatga olinadi; saqlab bo'lmasa asl xato
+        if (err instanceof TypeError) {
+          try { return await enqueue(rawUrl, init2, headers.get('X-Idempotency-Key') || id); } catch { throw err; }
+        }
         throw err;
-      });
+      }
     }
-    return authFetch(input, init);
+    const method = (init?.method || (input instanceof Request ? input.method : 'GET')).toUpperCase();
+    const ck = method === 'GET' && typeof input === 'string' ? cacheKeyFor(rawUrl) : null;
+    if (!ck) return authFetch(input, init);
+    try {
+      const res = await authFetch(input, init);
+      if (res.ok) res.clone().text().then(t => cachePut(ck, t)).catch(() => {});
+      return res;
+    } catch (err) {
+      const hit = await cacheGet(ck);
+      if (hit) return new Response(hit.text, { status: 200, headers: { 'Content-Type': 'application/json', 'X-Offline-Cache': String(hit.at) } });
+      throw err;
+    }
   };
   function isOwnApiUrl(u: string): boolean {
     try {

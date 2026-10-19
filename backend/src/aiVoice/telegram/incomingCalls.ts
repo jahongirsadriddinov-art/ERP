@@ -172,6 +172,8 @@ export async function decideIncomingCall(req: IncomingCallRequest, now: Date = n
     console.error("[aiVoice/telegram] kiruvchi qo'ng'iroq qarori xatosi:", (e as Error)?.name || 'Error');
     d = { accept: false, reason: 'error' };
   }
+  // Diagnostika (owner 2026-10-19: "yangi akkauntlarga qo'ng'iroq ko'tarilmayapti") — qaysi akkaunt, qaror va sabab
+  console.log(`[aiVoice/telegram] kiruvchi → ${req.account ? `akkaunt …${String(req.account).slice(-4)}` : 'platforma'}: ${d.accept ? 'qabul' : `rad (${(d as { reason: string }).reason})`}`);
   // Spam: bitta raqamdan soatiga 10 tadan ortiq — audit yozilmaydi (rad baribir)
   if (rl.allowed) await auditIncoming(tgUserId, d, actor);
   return d;

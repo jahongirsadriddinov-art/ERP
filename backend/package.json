@@ -35,7 +35,7 @@
     "mongoose": "^9.7.1",
     "multer": "^2.2.0",
     "node-telegram-bot-api": "^0.66.0",
-    "nodemailer": "^9.0.5",
+    "nodemailer": "^10.1.7",
     "pdf-parse": "^2.4.5",
     "socket.io": "^4.8.3",
     "web-push": "^3.6.7",

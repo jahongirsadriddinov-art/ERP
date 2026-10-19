@@ -15,6 +15,7 @@ import { reapStaleTelegramSessions, registerBridge, TelegramTransport, unregiste
 import { callWorker, WorkerRpcFailure } from '../telegram/workerRpc';
 import { ensureContactTgUserId } from '../telegram/tgLink';
 import { workerConnectedHere, workerHub } from '../telegram/workerNamespace';
+import { companyHasLiveAccount, markSessionAccount, pickCompanyAccount } from '../telegram/companyAccounts';
 import { PLATFORM_SCOPE } from '../platform';
 import { avatarEnabled, avatarParam } from '../telegram/incomingCalls';
 
@@ -37,13 +38,17 @@ const RECHECK_NOT_FOUND_MS = 6 * 3600_000;
 
 type Peer = { tgUserId: string; resolved: boolean; username?: string };
 
-async function check(c: ChannelCtx, now: Date): Promise<Avail & { peer?: Peer }> {
+async function check(c: ChannelCtx, now: Date): Promise<Avail & { peer?: Peer; ownAccounts?: boolean }> {
   if (!aiConfig.enabled) return { ok: false, reason: 'disabled' };
   if (!c || typeof c.companyId !== 'string' || !c.companyId || !isObjectIdString(c.employeeId)) return { ok: false, reason: 'bad_ctx' };
-  const conn: any = await getConnection();
-  if (!conn || conn.status !== 'connected') return { ok: false, reason: 'account_not_connected' };
-  if (floodWaitActive(conn, now)) return { ok: false, reason: 'flood_wait' };
-  if (dailyCount(conn, now) >= aiConfig.tgDailyCap) return { ok: false, reason: 'daily_cap' };
+  // Firmaning o'z Telegram akkaunti bo'lsa — platforma akkaunti holati/limiti unga ta'sir qilmaydi
+  const ownAccounts = await companyHasLiveAccount(c.companyId, now);
+  if (!ownAccounts) {
+    const conn: any = await getConnection();
+    if (!conn || conn.status !== 'connected') return { ok: false, reason: 'account_not_connected' };
+    if (floodWaitActive(conn, now)) return { ok: false, reason: 'flood_wait' };
+    if (dailyCount(conn, now) >= aiConfig.tgDailyCap) return { ok: false, reason: 'daily_cap' };
+  }
   // Owner 2026-10-16: tgUserId ERP bot bog'lanishidan (kod shart emas)
   const tgUserId = await ensureContactTgUserId(c.companyId, c.employeeId);
   const ct: any = await AiEmployeeContact.findOne({ companyId: c.companyId, employeeId: c.employeeId })
@@ -55,13 +60,13 @@ async function check(c: ChannelCtx, now: Date): Promise<Avail & { peer?: Peer }>
   const st = String(tg?.resolveStatus || 'unknown');
   if (st === 'privacy_restricted' || st === 'blocked') return { ok: false, reason: st };
   // not_found — yaqinda tekshirilgan bo'lsa kutamiz; aks holda worker qo'ng'iroq paytida qayta aniqlaydi
-  if (st === 'not_found' && tg?.checkedAt && now.getTime() - new Date(tg.checkedAt).getTime() < RECHECK_NOT_FOUND_MS) {
+  if (!ownAccounts && st === 'not_found' && tg?.checkedAt && now.getTime() - new Date(tg.checkedAt).getTime() < RECHECK_NOT_FOUND_MS) {
     return { ok: false, reason: 'not_resolved' };
   }
-  if (!workerConnectedHere() && !workerRecentlySeen(conn, now)) return { ok: false, reason: 'worker_offline' };
+  if (!workerConnectedHere() && !workerRecentlySeen(await getConnection(), now)) return { ok: false, reason: 'worker_offline' };
   // Owner 2026-10-19: "o'rinbosar va direktorga limit qo'yma" — rahbarga (va egasiga) qo'ng'iroq firma limitiga bog'liq emas
   if (!(await isBossEmployee(c.companyId, c.employeeId)) && !(await companyQuotaOk(c.companyId, now))) return { ok: false, reason: 'company_quota' };
-  return { ok: true, peer: { tgUserId, resolved: st === 'resolved', username: typeof tg?.username === 'string' ? tg.username : undefined } };
+  return { ok: true, ownAccounts, peer: { tgUserId, resolved: st === 'resolved', username: typeof tg?.username === 'string' ? tg.username : undefined } };
 }
 
 async function isBossEmployee(companyId: string, employeeId: string): Promise<boolean> {
@@ -76,9 +81,18 @@ async function employeePhone(c: ChannelCtx): Promise<string | undefined> {
   return /^\+?\d{9,15}$/.test(ph) ? ph : undefined;
 }
 
-async function placeCall(c: ChannelCtx, sessionId: string, peer: Peer, ring: number, max: number, now: Date) {
+async function placeCall(c: ChannelCtx, sessionId: string, peer: Peer, ring: number, max: number, now: Date, account: string | null = null) {
   const avatar = await avatarParam(await getSettings(c.companyId).then((s) => resolveAvatarLook(s)).catch(() => undefined));
-  const base = { sessionId, tgUserId: peer.tgUserId, timeoutSec: ring, maxDurationSec: max, ...(peer.username ? { username: peer.username } : {}), ...(avatar ? { avatar } : {}) };
+  const base = { sessionId, tgUserId: peer.tgUserId, timeoutSec: ring, maxDurationSec: max, ...(peer.username ? { username: peer.username } : {}), ...(avatar ? { avatar } : {}), ...(account ? { account } : {}) };
+  if (account) {
+    // Firma akkaunti peer'ni o'zi aniqlaydi (username -> telefon bilan bitta import); platforma kontakt holatiga tegilmaydi
+    let res = await callWorker('call.place', base);
+    if (!res?.accepted && res?.reason === 'peer_unknown') {
+      const phone = await employeePhone(c);
+      if (phone) res = await callWorker('call.place', { ...base, phone });
+    }
+    return res;
+  }
   // Avval telefonsiz (worker: kesh → dialoglar → username); worker peer'ni bilmasa — bir marta telefon bilan
   let phoneSent = false;
   let res = await callWorker('call.place', base);
@@ -115,13 +129,26 @@ export const telegramCallChannel: ChannelAdapter = {
     if (!av.ok) return unavailable(av.reason);
     // C3: worker socket'i boshqa instansiyada yoki qayta ulanmoqda — fallback emas, qayta navbat
     if (!workerConnectedHere()) return unavailable('worker_not_here', new Date(now.getTime() + DEFER_MS));
-    // A1: akkaunt bo'yicha bir vaqtda 1 ta qo'ng'iroq
-    // Tugagan, lekin bazada "faol" qolgan qo'ng'iroq akkauntni "band" ko'rsatmasin — darhol tozalanadi
-    if (!(await telegramCapacity())) {
+    // Owner 2026-10-19: firmaning o'z akkauntlaridan BO'SHI; hammasi band/yo'q bo'lsa — platforma akkaunti (zaxira)
+    let account = av.ownAccounts ? await pickCompanyAccount(c.companyId, now) : null;
+    if (av.ownAccounts && !account) {
       await reapStaleTelegramSessions(now).catch(() => 0);
-      if (!(await telegramCapacity())) return unavailable('account_busy', new Date(now.getTime() + BUSY_DEFER_MS));
+      account = await pickCompanyAccount(c.companyId, now);
     }
-    if (!(await reserveDailyCall(now))) return unavailable('daily_cap');
+    let reserved = false;
+    if (!account) {
+      const conn: any = await getConnection();
+      if (!conn || conn.status !== 'connected') return unavailable('account_busy', new Date(now.getTime() + BUSY_DEFER_MS));
+      // A1: akkaunt bo'yicha bir vaqtda 1 ta qo'ng'iroq
+      // Tugagan, lekin bazada "faol" qolgan qo'ng'iroq akkauntni "band" ko'rsatmasin — darhol tozalanadi
+      if (!(await telegramCapacity())) {
+        await reapStaleTelegramSessions(now).catch(() => 0);
+        if (!(await telegramCapacity())) return unavailable('account_busy', new Date(now.getTime() + BUSY_DEFER_MS));
+      }
+      if (!(await reserveDailyCall(now))) return unavailable('daily_cap');
+      reserved = true;
+    }
+    const releaseDaily = async () => { if (reserved) await releaseDailyCall(now); };
 
     const settings = { ring: Math.min(90, Math.max(15, Number(r?.ringTimeoutSec) || 45)), max: Math.min(600, Math.max(30, Number(r?.maxDurationSec) || 120)) };
     const transport = new TelegramTransport();
@@ -137,12 +164,12 @@ export const telegramCallChannel: ChannelAdapter = {
         requestText: r?.kind === 'reminder' || r?.kind === 'test' ? r.text : undefined,
       });
     } catch (e) {
-      await releaseDailyCall(now);
+      await releaseDaily();
       console.error('[aiVoice/telegram] ovozli sessiya ochilmadi:', (e as Error).message);
       return { outcome: 'failed', retryable: true, errorCode: 'session_error' };
     }
     if (!started.ok) {
-      await releaseDailyCall(now);
+      await releaseDaily();
       switch (started.reason) {
         case 'busy': return { outcome: 'busy', retryable: true, errorCode: 'busy' };
         // A6: Live sig'imi to'lgan — kaskadga emas, kutib qayta urinish
@@ -153,14 +180,15 @@ export const telegramCallChannel: ChannelAdapter = {
     }
 
     const handle = started.handle;
+    await markSessionAccount(handle.sessionId, account);
     transport.bind(handle.sessionId);
     registerBridge({ sessionId: handle.sessionId, handle, employeeId: c.employeeId, companyId: c.companyId });
     try {
-      const res = await placeCall(c, handle.sessionId, av.peer!, settings.ring, settings.max, now);
+      const res = await placeCall(c, handle.sessionId, av.peer!, settings.ring, settings.max, now, account);
       if (!res?.accepted) {
         unregisterBridge(handle.sessionId);
         await handle.end('error').catch(() => undefined);
-        await releaseDailyCall(now);
+        await releaseDaily();
         const reason = String(res?.reason || 'rejected').slice(0, 60);
         if (reason === 'busy_worker') return unavailable('account_busy', new Date(now.getTime() + BUSY_DEFER_MS));
         return { outcome: 'unavailable', retryable: false, sessionId: handle.sessionId, errorCode: reason };
@@ -168,7 +196,7 @@ export const telegramCallChannel: ChannelAdapter = {
     } catch (e) {
       unregisterBridge(handle.sessionId);
       await handle.end('error').catch(() => undefined);
-      await releaseDailyCall(now);
+      await releaseDaily();
       const code = e instanceof WorkerRpcFailure ? e.code : 'error';
       // Worker shu orada uzildi — vaqtinchalik: qayta navbat
       if (code === 'worker_offline' || code === 'timeout') return unavailable(`worker_${code}`, new Date(now.getTime() + DEFER_MS));

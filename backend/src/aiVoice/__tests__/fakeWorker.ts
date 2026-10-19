@@ -56,6 +56,8 @@ const DEFAULT_HANDLERS: Record<string, RpcHandler> = {
   'udp.probe': () => ({ ok: true, details: 'fake' }),
   'auth.logout': () => ({ ok: true }),
   'incoming.config': (p: { open: boolean }) => ({ ok: true, open: p.open }),
+  'accounts.sync': (p: { accounts: string[] }) => ({ ok: true, accounts: p.accounts.length }),
+  'accounts.remove': () => ({ ok: true }),
 };
 
 export class FakeWorker {

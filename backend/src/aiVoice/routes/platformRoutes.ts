@@ -21,6 +21,11 @@ import {
 import { setAvatarEnabled, setOpenConversation } from '../telegram/incomingCalls';
 import { callWorker, WorkerRpcFailure } from '../telegram/workerRpc';
 import { getActiveWorker } from '../telegram/workerNamespace';
+import AiTgAccount from '../../models/AiTgAccount';
+import {
+  createCompanyAccount, getAccount, listCompanyAccounts, MAX_ACCOUNTS_PER_COMPANY, removeCompanyAccount,
+  setAccountConnected, setAccountLogin, syncAccountsToWorker,
+} from '../telegram/companyAccounts';
 
 // Platforma: /api/ai-voice/platform (bootstrap: requireAuth + requireDeveloper — faqat dasturchi).
 // AI Telegram akkaunti: holat, login (telefon → kod → 2FA), chiqish, UDP tekshiruv, sinov qo'ng'irog'i.
@@ -436,5 +441,155 @@ router.get('/telegram-account/guest-call/:sessionId', wrap(async (req, res) => {
 
 /** Faqat testlar uchun. */
 export function __resetPlatformRoutesForTests(): void { attempts.clear(); lastTestAt.clear(); }
+
+// ───────────── Firma Telegram akkauntlari (owner 2026-10-19) ─────────────
+// Dasturchi firmani tanlaydi va hohlagancha Telegram profil qo'shadi (telefon → kod → 2FA, kodlar faqat brauzerda).
+// Qo'ng'iroq shu firmaning bo'sh akkaunti orqali ketadi; kiruvchi qo'ng'iroq — faqat shu firma xodimidan.
+
+router.get('/companies-lite', wrap(async (_req, res) => {
+  const cos: any[] = await Company.find({}).select('name').sort({ name: 1 }).limit(1000).lean();
+  const counts: any[] = await AiTgAccount.aggregate([{ $group: { _id: '$companyId', n: { $sum: 1 }, connected: { $sum: { $cond: [{ $eq: ['$status', 'connected'] }, 1, 0] } } } }]);
+  const by = new Map(counts.map((c) => [String(c._id), c]));
+  res.json({ companies: cos.map((c) => ({ id: String(c._id), name: c.name || '—', accounts: by.get(String(c._id))?.n || 0, connected: by.get(String(c._id))?.connected || 0 })) });
+}));
+
+async function companyOf(req: Request, res: Response): Promise<string | null> {
+  const companyId = String(req.params.companyId || '');
+  if (!isObjectIdString(companyId) || !(await Company.exists({ _id: companyId }))) { res.status(404).json({ error: 'company_not_found' }); return null; }
+  return companyId;
+}
+
+async function accountOf(req: Request, res: Response): Promise<any | null> {
+  const companyId = await companyOf(req, res);
+  if (!companyId) return null;
+  const acc = await getAccount(String(req.params.accountId || ''));
+  if (!acc || String(acc.companyId) !== companyId) { res.status(404).json({ error: 'account_not_found' }); return null; }
+  return acc;
+}
+
+router.get('/companies/:companyId/tg-accounts', wrap(async (req, res) => {
+  const companyId = await companyOf(req, res);
+  if (!companyId) return;
+  res.json({ accounts: await listCompanyAccounts(companyId), workerConnected: !!getActiveWorker(), max: MAX_ACCOUNTS_PER_COMPANY });
+}));
+
+router.post('/companies/:companyId/tg-accounts', wrap(async (req, res) => {
+  const dev = await developer(req);
+  const companyId = await companyOf(req, res);
+  if (!companyId) return;
+  const label = isObj(req.body) && typeof req.body.label === 'string' ? req.body.label : undefined;
+  const r = await createCompanyAccount(companyId, label, dev.userId);
+  if (!r.ok) return res.status(409).json({ error: r.error });
+  audit(req, dev, 'create', 'AI Telegram: firma akkaunti qo\'shildi', { entityId: r.id, companyId });
+  res.json({ ok: true, id: r.id, accounts: await listCompanyAccounts(companyId) });
+}));
+
+router.post('/companies/:companyId/tg-accounts/:accountId/login/start', wrap(async (req, res) => {
+  const dev = await developer(req);
+  const acc = await accountOf(req, res);
+  if (!acc) return;
+  const account = String(acc._id);
+  const phone = isObj(req.body) && typeof req.body.phone === 'string' ? req.body.phone.replace(/[\s()-]/g, '') : '';
+  if (!PHONE_RE.test(phone)) return res.status(400).json({ error: 'phone_invalid' });
+  if (await limited(res, `aiv:tglogin:start:${dev.userId}`, LOGIN_MAX * 2, LOGIN_WINDOW_MS)) return;
+  if (!getActiveWorker()) return res.status(503).json({ error: 'worker_offline' });
+  await syncAccountsToWorker();
+  const loginAttemptId = crypto.randomUUID();
+  attempts.set(loginAttemptId, { userId: dev.userId, expiresAt: Date.now() + ATTEMPT_TTL_MS });
+  let r;
+  try {
+    r = await callWorker('auth.start', { loginAttemptId, phone, account });
+  } catch (e) {
+    attempts.delete(loginAttemptId);
+    return rpcError(res, e);
+  }
+  const phoneMasked = maskPhone(phone);
+  if (r.status === 'connected') {
+    attempts.delete(loginAttemptId);
+    await setAccountConnected(account, {}, dev.userId);
+    return res.json({ status: 'connected', accounts: await listCompanyAccounts(String(acc.companyId)) });
+  }
+  await setAccountLogin(account, { status: r.status, phoneMasked });
+  audit(req, dev, 'update', 'AI Telegram: firma akkauntiga kirish boshlandi', { entityId: account, companyId: String(acc.companyId) });
+  res.json({ status: r.status, loginAttemptId, phoneMasked });
+}));
+
+router.post('/companies/:companyId/tg-accounts/:accountId/login/code', wrap(async (req, res) => {
+  const dev = await developer(req);
+  const acc = await accountOf(req, res);
+  if (!acc) return;
+  const account = String(acc._id);
+  const body = isObj(req.body) ? req.body : {};
+  const code = typeof body.code === 'string' ? body.code.replace(/\D/g, '') : '';
+  if (!CODE_RE.test(code)) return res.status(400).json({ error: 'code_invalid' });
+  const loginAttemptId = ownAttempt(body.loginAttemptId, dev.userId);
+  if (!loginAttemptId) return res.status(410).json({ error: 'attempt_expired' });
+  if (await limited(res, `aiv:tglogin:code:${dev.userId}`, LOGIN_MAX * 2, LOGIN_WINDOW_MS)) return;
+  if (!getActiveWorker()) return res.status(503).json({ error: 'worker_offline' });
+  let r;
+  try {
+    r = await callWorker('auth.code', { loginAttemptId, code, account });
+  } catch (e) {
+    return rpcError(res, e);
+  }
+  if (r.status === 'connected') {
+    attempts.delete(loginAttemptId);
+    await setAccountConnected(account, r, dev.userId);
+    audit(req, dev, 'update', 'AI Telegram: firma akkaunti ulandi', { entityId: account, companyId: String(acc.companyId) });
+    return res.json({ status: 'connected', accounts: await listCompanyAccounts(String(acc.companyId)) });
+  }
+  await setAccountLogin(account, { status: 'awaiting_password' });
+  res.json({ status: 'awaiting_password', loginAttemptId });
+}));
+
+router.post('/companies/:companyId/tg-accounts/:accountId/login/password', wrap(async (req, res) => {
+  const dev = await developer(req);
+  const acc = await accountOf(req, res);
+  if (!acc) return;
+  const account = String(acc._id);
+  const body = isObj(req.body) ? req.body : {};
+  const password = typeof body.password === 'string' ? body.password : '';
+  if (!password || password.length > 256) return res.status(400).json({ error: 'password_invalid' });
+  const loginAttemptId = ownAttempt(body.loginAttemptId, dev.userId);
+  if (!loginAttemptId) return res.status(410).json({ error: 'attempt_expired' });
+  if (await limited(res, `aiv:tglogin:pw:${dev.userId}`, LOGIN_MAX * 2, LOGIN_WINDOW_MS)) return;
+  if (!getActiveWorker()) return res.status(503).json({ error: 'worker_offline' });
+  let r;
+  try {
+    r = await callWorker('auth.password', { loginAttemptId, password, account });
+  } catch (e) {
+    return rpcError(res, e);
+  }
+  attempts.delete(loginAttemptId);
+  await setAccountConnected(account, r, dev.userId);
+  audit(req, dev, 'update', 'AI Telegram: firma akkaunti ulandi', { entityId: account, companyId: String(acc.companyId) });
+  res.json({ status: 'connected', accounts: await listCompanyAccounts(String(acc.companyId)) });
+}));
+
+router.post('/companies/:companyId/tg-accounts/:accountId/logout', wrap(async (req, res) => {
+  const dev = await developer(req);
+  const acc = await accountOf(req, res);
+  if (!acc) return;
+  const account = String(acc._id);
+  if (!getActiveWorker()) return res.status(503).json({ error: 'worker_offline' });
+  try {
+    await callWorker('auth.logout', { account });
+  } catch (e) {
+    if (!(e instanceof WorkerRpcFailure && e.code === 'unknown_account')) return rpcError(res, e);
+  }
+  await setAccountLogin(account, { status: 'disconnected' }, ['tgUserId', 'username', 'displayName', 'phoneMasked', 'connectedAt', 'lastError']);
+  audit(req, dev, 'update', 'AI Telegram: firma akkauntidan chiqildi', { entityId: account, companyId: String(acc.companyId) });
+  res.json({ ok: true, accounts: await listCompanyAccounts(String(acc.companyId)) });
+}));
+
+router.delete('/companies/:companyId/tg-accounts/:accountId', wrap(async (req, res) => {
+  const dev = await developer(req);
+  const acc = await accountOf(req, res);
+  if (!acc) return;
+  const r = await removeCompanyAccount(String(acc._id));
+  if (!r.ok) return res.status(r.error === 'busy' ? 409 : r.error === 'worker_offline' ? 503 : 502).json({ error: r.error });
+  audit(req, dev, 'delete', "AI Telegram: firma akkaunti o'chirildi", { entityId: String(acc._id), companyId: String(acc.companyId) });
+  res.json({ ok: true, accounts: await listCompanyAccounts(String(acc.companyId)) });
+}));
 
 export default router;

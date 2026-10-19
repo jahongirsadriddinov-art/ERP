@@ -76,7 +76,8 @@ export async function liveCapacity(companyId: string, companyConcurrency: number
 
 /** Telegram akkaunti bo'yicha sig'im (A1: odatda 1). */
 export async function telegramCapacity(): Promise<boolean> {
-  return (await countActiveSessions({ channel: 'telegram_call' })) < aiConfig.tgMaxConcurrent;
+  // Faqat platforma akkauntidagi qo'ng'iroqlar (firma akkauntlari — telegram/companyAccounts.ts, har biri alohida)
+  return (await AiCallSession.countDocuments({ isActive: true, channel: 'telegram_call', tgAccountId: null })) < aiConfig.tgMaxConcurrent;
 }
 
 /** Sessiya tirikligini bildiradi (har ~15 s) — sweeper uni osilgan deb hisoblamasligi uchun. */

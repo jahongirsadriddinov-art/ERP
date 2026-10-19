@@ -16,6 +16,7 @@ import { getCallConsent } from '../consent';
 import { checkUserCallLimit } from '../voice/callLimits';
 import { reapStaleTelegramSessions, registerBridge, TelegramTransport } from './callBridge';
 import { findEmployeeByTgId } from './tgLink';
+import { accountBusy, getAccount, markSessionAccount } from './companyAccounts';
 import { callWorker } from './workerRpc';
 import { setIncomingCallHandler, workerConnectedHere, workerHub } from './workerNamespace';
 
@@ -104,7 +105,11 @@ export async function decideIncomingCall(req: IncomingCallRequest, now: Date = n
   let actor: { name: string; role: string } | undefined;
   const decide = async (): Promise<IncomingDecision> => {
     if (!aiConfig.enabled) return { accept: false, reason: 'disabled' };
-    if (!(await getOpenConversation())) return { accept: false, reason: 'closed' };
+    // Firma akkauntiga kelgan qo'ng'iroq (owner 2026-10-19) — doim ochiq, lekin faqat SHU firma xodimi
+    const accId = typeof req.account === 'string' && req.account ? req.account : null;
+    const acc: any = accId ? await getAccount(accId) : null;
+    if (accId && !acc) return { accept: false, reason: 'unknown_account' };
+    if (!acc && !(await getOpenConversation())) return { accept: false, reason: 'closed' };
     // Owner 2026-10-16: Telegram id ERP bot bog'lanishidan ham olinadi (kod shart emas; darhol backfill)
     const who = await findEmployeeByTgId(tgUserId);
     if (!who) {
@@ -116,6 +121,7 @@ export async function decideIncomingCall(req: IncomingCallRequest, now: Date = n
     }
     const { companyId, employeeId } = who;
     const base = { companyId, employeeId };
+    if (acc && String(acc.companyId) !== String(companyId)) return { ...base, accept: false, reason: 'other_company' };
     const ct: any = await AiEmployeeContact.findOne({ companyId, employeeId }).select('telegram.callConsent optOut').lean();
     const consent = await getCallConsent(companyId, employeeId, { incoming: true, contact: ct });
     if (!consent.allowed) return { ...base, accept: false, reason: consent.reason || 'no_consent' };
@@ -126,7 +132,12 @@ export async function decideIncomingCall(req: IncomingCallRequest, now: Date = n
     // A1: bir vaqtda 1 ta Telegram qo'ng'irog'i. Worker bo'sh desa — tugagan, lekin bazada "faol" qolgan
     // sessiyalar darhol yopiladi (owner 2026-10-17: keyingi qo'ng'iroq 'busy' bo'lmasin)
     if (req.workerBusy === true) return { ...base, accept: false, reason: 'busy' };
-    if (!(await telegramCapacity())) {
+    if (acc) {
+      if (await accountBusy(accId!)) {
+        if (workerConnectedHere()) await reapStaleTelegramSessions(now);
+        if (await accountBusy(accId!)) return { ...base, accept: false, reason: 'busy' };
+      }
+    } else if (!(await telegramCapacity())) {
       if (workerConnectedHere()) await reapStaleTelegramSessions(now);
       if (!(await telegramCapacity())) return { ...base, accept: false, reason: 'busy' };
     }
@@ -149,6 +160,7 @@ export async function decideIncomingCall(req: IncomingCallRequest, now: Date = n
     });
     if (!started.ok) return { ...base, accept: false, reason: started.reason };
     const h = started.handle;
+    await markSessionAccount(h.sessionId, accId);
     transport.bind(h.sessionId);
     registerBridge({ sessionId: h.sessionId, handle: h, employeeId, companyId });
     return { ...base, accept: true, sessionId: h.sessionId, maxDurationSec, avatar: await avatarParam(resolveAvatarLook(settings)) };

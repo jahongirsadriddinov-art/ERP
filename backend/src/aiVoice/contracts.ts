@@ -328,7 +328,7 @@ export const WORKER_EVENTS = {
 } as const;
 
 /** "Ochiq muloqot": AI akkauntiga kiruvchi shaxsiy qo'ng'iroq — qarorni backend beradi. */
-export interface IncomingCallRequest { tgUserId: string; workerBusy?: boolean; at?: number; /** worker: faol qo'ng'iroqlar / kutilayotgan kiruvchilar soni (diagnostika) */ activeCount?: number; pending?: number }
+export interface IncomingCallRequest { tgUserId: string; /** firma Telegram akkaunti id'si (yo'q — platforma akkaunti) */ account?: string; workerBusy?: boolean; at?: number; /** worker: faol qo'ng'iroqlar / kutilayotgan kiruvchilar soni (diagnostika) */ activeCount?: number; pending?: number }
 export type IncomingCallAck =
   | { accept: true; sessionId: string; maxDurationSec: number; /** video avatar ko'rinishi */ avatar?: string }
   | { accept: false; reason: string };
@@ -348,23 +348,23 @@ export type LeaseAck =
   | { ok: false; reason: 'held' | 'lost' | 'unauthenticated' | 'error'; retryAfterMs?: number };
 
 export interface WorkerRpcMethods {
-  'auth.start': { params: { loginAttemptId: string; phone: string }; result: { status: 'awaiting_code' | 'awaiting_password' | 'connected'; phoneMasked?: string } };
-  'auth.code': { params: { loginAttemptId: string; code: string }; result: { status: 'awaiting_password' | 'connected'; tgUserId?: string; username?: string; displayName?: string } };
-  'auth.password': { params: { loginAttemptId: string; password: string }; result: { status: 'connected'; tgUserId?: string; username?: string; displayName?: string } };
-  'auth.logout': { params: Record<string, never>; result: { ok: true } };
+  'auth.start': { params: { loginAttemptId: string; phone: string; account?: string }; result: { status: 'awaiting_code' | 'awaiting_password' | 'connected'; phoneMasked?: string } };
+  'auth.code': { params: { loginAttemptId: string; code: string; account?: string }; result: { status: 'awaiting_password' | 'connected'; tgUserId?: string; username?: string; displayName?: string } };
+  'auth.password': { params: { loginAttemptId: string; password: string; account?: string }; result: { status: 'connected'; tgUserId?: string; username?: string; displayName?: string } };
+  'auth.logout': { params: { account?: string }; result: { ok: true } };
   'status': { params: Record<string, never>; result: WorkerStatus };
   'contact.resolve': {
-    params: { employeeId: string; expectedTgUserId: string; username?: string; phone?: string; allowImport: boolean };
+    params: { employeeId: string; expectedTgUserId: string; username?: string; phone?: string; allowImport: boolean; account?: string };
     result: { status: 'resolved' | 'not_found' | 'privacy_restricted' | 'mismatch' | 'flood_wait'; tgUserId?: string; retryAfterSec?: number };
   };
   /** Mehmon sinov qo'ng'irog'i (owner 2026-10-19): @username yoki telefon → Telegram id (kutilgan id'siz). */
   'contact.lookup': {
-    params: { username?: string; phone?: string };
+    params: { username?: string; phone?: string; account?: string };
     result: { status: 'resolved' | 'not_found' | 'privacy_restricted' | 'import_limited' | 'flood_wait'; tgUserId?: string; retryAfterSec?: number };
   };
   'binding.expect': { params: { employeeId: string; codeHash: string; expectedTgUserId: string; expiresAt: number }; result: { ok: true } };
   /** phone/username — faqat peer noma'lum bo'lsa, SHU qo'ng'iroq uchun (worker saqlamaydi, log qilmaydi). */
-  'call.place': { params: { sessionId: string; tgUserId: string; timeoutSec: number; maxDurationSec: number; phone?: string; username?: string; avatar?: string; video?: boolean }; result: { accepted: boolean; reason?: string } };
+  'call.place': { params: { account?: string; sessionId: string; tgUserId: string; timeoutSec: number; maxDurationSec: number; phone?: string; username?: string; avatar?: string; video?: boolean }; result: { accepted: boolean; reason?: string } };
   /** AI'ning joriy gapi — video avatar subtitri va kayfiyati (owner 2026-10-18). */
   'call.caption': { params: { sessionId: string; text: string; emotion?: string }; result: { ok: true } };
   /** Kamera kadrlari tezligi (videoga olishda vaqtincha ko'proq). */
@@ -377,6 +377,9 @@ export interface WorkerRpcMethods {
   'udp.probe': { params: Record<string, never>; result: { ok: boolean; details?: string } };
   /** "Ochiq muloqot" holati (standart o'chiq) — worker 'up' bo'lganda va o'zgarganda yuboriladi. */
   'incoming.config': { params: { open: boolean }; result: { ok: true; open?: boolean } };
+  /** Firma Telegram akkauntlari (owner 2026-10-19) — worker yangilarini yaratadi; olib tashlash faqat accounts.remove. */
+  'accounts.sync': { params: { accounts: string[] }; result: { ok: true; accounts: number } };
+  'accounts.remove': { params: { account: string }; result: { ok: true } };
 }
 export type WorkerRpcMethod = keyof WorkerRpcMethods;
 export interface WorkerRpcRequest<M extends WorkerRpcMethod = WorkerRpcMethod> {
@@ -400,6 +403,10 @@ export interface WorkerStatus {
   floodWaitUntil?: number;
   /** Worker'dagi "Ochiq muloqot" holati (backend bilan solishtirish uchun). */
   openConversation?: boolean;
+  /** Platforma akkauntidagi faol qo'ng'iroqlar (activeCalls — hamma akkauntlar yig'indisi). */
+  platformActiveCalls?: number;
+  /** Firma Telegram akkauntlari holati. */
+  accounts?: Array<{ id: string; connected: boolean; tgUserId?: string; username?: string; activeCalls: number; floodWaitUntil?: number }>;
 }
 
 export type WorkerCallState = 'dialing' | 'ringing' | 'connected' | 'ended';

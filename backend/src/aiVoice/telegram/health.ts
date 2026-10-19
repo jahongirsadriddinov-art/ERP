@@ -1,6 +1,7 @@
 import type { JobQueue } from '../queue/jobQueue';
 import { initAccountService, recordHealth, runMaintenance } from './accountService';
 import { initCallBridge } from './callBridge';
+import { initCompanyAccounts, recordAccountsHealth } from './companyAccounts';
 import { initIncomingCalls } from './incomingCalls';
 import { callWorker } from './workerRpc';
 import { workerConnectedHere } from './workerNamespace';
@@ -17,6 +18,7 @@ export async function runHealthCheck(now: Date = new Date()): Promise<void> {
   try {
     const st = await callWorker('status', {});
     await recordHealth(st, now);
+    if (Array.isArray(st?.accounts)) await recordAccountsHealth(st.accounts, now);
   } catch { /* worker javob bermadi — keyingi safar */ }
   await runMaintenance(now);
 }
@@ -25,6 +27,7 @@ export function registerHandlers(q: JobQueue): void {
   initAccountService();
   initCallBridge();
   initIncomingCalls();
+  initCompanyAccounts();
   q.register(CONNECTION_HEALTH_JOB, async () => { await runHealthCheck(q.now()); }, { concurrency: 1, maxAttempts: 1, doneTtlMs: 3600_000 });
   q.scheduleRecurring(CONNECTION_HEALTH_JOB, 60_000);
 }

@@ -11,6 +11,7 @@ import Search from "@hugeicons/core-free-icons/Search01Icon";
 import Check from "@hugeicons/core-free-icons/CheckmarkCircle02Icon";
 import { API_BASE } from "../../api";
 import { Badge, Card, Field, More, Notice, Skeleton, Toggle, type Tone } from "./ui";
+import CompanyTgAccounts from "./CompanyTgAccounts";
 
 // Dasturchi paneli → AI → Telegram: AI qo'ng'iroq qiladigan platforma Telegram akkaunti (P6).
 // Worker holati, ulash (telefon → kod → 2FA), UDP tekshiruvi, sinov qo'ng'irog'i, chiqish.
@@ -158,6 +159,7 @@ export default function TelegramAccountPanel() {
               label={k("open.label")} hint={k("open.hint")} />
             <p className="text-[11px] text-muted-foreground mt-1">{k("open.rules")}</p>
           </Card>
+          <CompanyTgAccounts errText={errText} />
           <Card icon={Telegram} title={k("avatar.title")} testId="ai-tg-avatar">
             <Toggle checked={v.avatarEnabled !== false} disabled={!!busy} onChange={toggleAvatar} testId="ai-tg-avatar-toggle"
               label={k("avatar.label")} hint={k("avatar.hint")} />

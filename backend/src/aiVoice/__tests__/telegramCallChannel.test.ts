@@ -8,6 +8,7 @@ import AiChannelConnection from '../../models/AiChannelConnection';
 import AiAssistantSettings from '../../models/AiAssistantSettings';
 import AiEmployeeContact from '../../models/AiEmployeeContact';
 import User from '../../models/User';
+import AiTgAccount from '../../models/AiTgAccount';
 import { telegramCallChannel } from '../channels/telegramCallChannel';
 import { aiConfig, INSTANCE_ID } from '../config';
 import type { ChannelCtx } from '../contracts';
@@ -88,6 +89,7 @@ afterEach(async () => {
   await AiCallSession.deleteMany({});
   await AiChannelConnection.deleteMany({});
   await AiEmployeeContact.deleteMany({});
+  await AiTgAccount.deleteMany({});
 });
 
 afterAll(async () => {
@@ -181,6 +183,37 @@ describe('mavjudlik: rozilik, maxfiylik, akkaunt, chegaralar', () => {
     expect(r.retryAt!.getTime()).toBeGreaterThanOrEqual(t0 + 10_000);
     expect(await AiCallSession.countDocuments({})).toBe(0);
     expect((await conn()).dailyCallCount || 0).toBe(0);
+  });
+});
+
+describe("firma Telegram akkauntlari (owner 2026-10-19)", () => {
+  it("firmaning bo'sh akkaunti ishlatiladi; band bo'lsa keyingisi; hammasi band — platforma (zaxira); platforma ulanmagan bo'lsa ham ishlaydi", async () => {
+    const w = await worker();
+    await contact(A.workerId); await contact(A.worker2Id); await contact(A.prorabId);
+    // Platforma akkaunti ULANMAGAN — firma akkaunti bilan baribir mavjud
+    const fresh = { status: 'connected', lastHealthAt: new Date() };
+    const a1 = await AiTgAccount.create({ companyId: A.companyId, ...fresh });
+    const a2 = await AiTgAccount.create({ companyId: A.companyId, ...fresh });
+    await AiTgAccount.create({ companyId: 'boshqa-firma', ...fresh });
+    expect(await reason(A.workerId)).toBe('ok');
+
+    const r1 = await telegramCallChannel.attempt(ctx(A.workerId), req);
+    expect(r1.outcome).toBe('no_answer');
+    const r2 = await telegramCallChannel.attempt(ctx(A.worker2Id), req);
+    expect(r2.outcome).toBe('no_answer');
+    const place = w.rpcsOf('call.place');
+    expect(place.map((p: any) => p.params.account)).toEqual([String(a1._id), String(a2._id)]);
+    expect((await AiCallSession.findById(r1.sessionId).lean() as any).tgAccountId).toBe(String(a1._id));
+    expect((await AiCallSession.findById(r2.sessionId).lean() as any).tgAccountId).toBe(String(a2._id));
+
+    // Ikkalasi band, platforma ulanmagan — kutib qayta urinish
+    const r3 = await telegramCallChannel.attempt(ctx(A.prorabId), req);
+    expect(r3).toMatchObject({ outcome: 'unavailable', retryable: true, errorCode: 'account_busy' });
+    // Platforma ulangan — zaxira sifatida u ishlatiladi (account parametrisiz)
+    await account();
+    const r4 = await telegramCallChannel.attempt(ctx(A.prorabId), req);
+    expect(r4.outcome).toBe('no_answer');
+    expect((w.rpcsOf('call.place').at(-1) as any).params.account).toBeUndefined();
   });
 });
 

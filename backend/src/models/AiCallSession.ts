@@ -18,6 +18,7 @@ export interface IAiCallSession extends Document {
   attemptKey?: string;
   purpose: 'attendance' | 'assistant' | 'reminder' | 'test';
   channel: 'telegram_call' | 'inapp_call';
+  tgAccountId?: string | null;
   direction: 'outbound' | 'inbound';
   status: AiCallStatus;
   isActive: boolean;
@@ -52,6 +53,8 @@ const AiCallSessionSchema = new Schema<IAiCallSession>({
   attemptKey: { type: String },
   purpose: { type: String, enum: ['attendance', 'assistant', 'reminder', 'test'], required: true },
   channel: { type: String, enum: ['telegram_call', 'inapp_call'], required: true },
+  /** Telegram qo'ng'irog'i qaysi firma akkaunti orqali (yo'q — platforma akkaunti). */
+  tgAccountId: { type: String, default: null },
   direction: { type: String, enum: ['outbound', 'inbound'], default: 'outbound' },
   status: {
     type: String,

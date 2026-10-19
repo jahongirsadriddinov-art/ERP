@@ -28,6 +28,8 @@ const DEFAULT_TIMEOUT_MS: Record<WorkerRpcMethod, number> = {
   'call.hangup': 5_000,
   'udp.probe': 10_000,
   'incoming.config': 5_000,
+  'accounts.sync': 10_000,
+  'accounts.remove': 20_000,
   'call.caption': 3_000,
   'call.video_rate': 3_000,
   'call.subtitles': 3_000,

@@ -90,6 +90,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { PlanFactCard, PlanFactOverview } from "./PlanFact";
 import { EquipmentDetails } from "./EquipmentExtras";
 import { PieceworkTab, useCompanyFeatures } from "./Piecework";
+import { DailyReports } from "./DailyReports";
 import { setSiteLanguage, SiteLang, langLabel } from "./i18n";
 import { isTelegramMiniApp, getTelegramInitData, markManualLogout, clearManualLogout, telegramAutoLoginAllowed } from "./telegramWebApp";
 import { isChatMuted, useChatPrefs } from "./chat/chatPrefs";
@@ -3026,7 +3027,7 @@ function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSe
       </div>
       </div>
       <div className="flex-1 flex flex-col min-h-0">
-        {tab==="plan" && <div className="flex-1 min-h-0 overflow-y-auto"><PlanFactCard objectId={project.id} canEdit={isAdmin(currentUser.role) || !!currentUser.isOwner} /></div>}
+        {tab==="plan" && <div className="flex-1 min-h-0 overflow-y-auto"><PlanFactCard objectId={project.id} canEdit={isAdmin(currentUser.role) || !!currentUser.isOwner} /><DailyReports objectId={project.id} canWrite={canPlanFact} /></div>}
         {tab==="piece" && showPiecework && <div className="flex-1 min-h-0 overflow-y-auto"><PieceworkTab objectId={project.id} users={users} currentUser={currentUser} isBoss={isAdmin(currentUser.role) || !!currentUser.isOwner} isForeman={project.foremanId === currentUser.id || currentUser.role === 'prorab' || currentUser.role === 'brigadir'} /></div>}
         {tab==="smeta" && project.smeta && <SmetaResultView smeta={project.smeta}/>}
         {tab==="required" && (

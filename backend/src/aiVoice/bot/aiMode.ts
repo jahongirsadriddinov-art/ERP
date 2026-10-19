@@ -57,7 +57,7 @@ export function isMenuButtonText(text: string): boolean {
     menuLabels = new Set();
     // i18n/bot.ts'dagi kb_* kalitlari (funksiyalar emas, oddiy matnlar)
     const probe = ['kb_openSite', 'kb_chat', 'kb_pendingApprovals', 'kb_financeStatus', 'kb_objects', 'kb_staffList', 'kb_report',
-      'kb_subscriptionStatus', 'kb_incomingTransfers', 'kb_sentTransfers', 'kb_incomingPayments', 'kb_addExpense', 'kb_expenseHistory',
+      'kb_subscriptionStatus', 'kb_incomingTransfers', 'kb_sentTransfers', 'kb_incomingPayments', 'kb_addExpense', 'kb_expenseHistory', 'kb_dailyReport',
       'kb_firmsList', 'kb_allUsers', 'kb_chatHistory', 'kb_allSubscriptions', 'kb_generalStats', 'kb_language', 'kb_broadcast',
       'kb_checkIn', 'kb_checkOut', 'kb_refreshStatus', 'kb_devSettings', 'kb_subscribeGate'] as const;
     for (const l of BOT_LANGS) {

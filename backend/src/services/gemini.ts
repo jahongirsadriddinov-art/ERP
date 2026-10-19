@@ -33,7 +33,12 @@ function parseJsonLoose(text: string): any {
   throw new Error('BAD_JSON');
 }
 
-export async function geminiAudioToJson(audio: Buffer, mimeType: string, prompt: string): Promise<any> {
+/** Faqat matn (ovozsiz) — masalan botga yozilgan kunlik hisobot. */
+export async function geminiTextToJson(prompt: string): Promise<any> {
+  return geminiAudioToJson(null, '', prompt);
+}
+
+export async function geminiAudioToJson(audio: Buffer | null, mimeType: string, prompt: string): Promise<any> {
   if (!KEYS.length) throw new Error('GEMINI_API_KEY sozlanmagan');
   let lastErr: any = null;
   for (let k = 0; k < KEYS.length; k++) {
@@ -49,7 +54,7 @@ export async function geminiAudioToJson(audio: Buffer, mimeType: string, prompt:
               ...(modelName.includes('2.5') ? { thinkingConfig: { thinkingBudget: 768 } } : {}),
             } as any,
           });
-          const res = await model.generateContent([prompt, { inlineData: { mimeType, data: audio.toString('base64') } }]);
+          const res = await model.generateContent(audio ? [prompt, { inlineData: { mimeType, data: audio.toString('base64') } }] : [prompt]);
           const out = parseJsonLoose(res.response.text());
           keyIdx = ki; // ishlagan kalitda qolamiz
           return out;

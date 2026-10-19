@@ -23,6 +23,8 @@ import { tb, langLabel, BotLang } from '../i18n/bot';
 import { getBackendUrl } from '../utils/backendUrl';
 import { uploadFileToCloud } from '../config/cloudinary';
 import { todayInTashkent, tashkentHour } from '../utils/tz';
+import { formatReport, parseReportAudio, parseReportText, saveReport, type ParsedReport } from './dailyReport';
+import { isMenuButtonText } from '../aiVoice/bot/aiMode';
 import { PLAN_CONFIG, getPayablePlanKeys } from '../config/plans';
 import { createSubscriptionPaymentOrder } from './subscriptionPayments';
 import { persistUploadedFile } from './durableFiles';
@@ -207,6 +209,7 @@ const ADMIN_KEYBOARD = async (lang?: BotLang) => {
         [{ text: L('kb_staffList') }, { text: L('kb_report') }],
         [{ text: L('kb_subscriptionStatus') }],
         [{ text: L('kb_addExpense') }, { text: L('kb_expenseHistory') }],
+        [{ text: L('kb_dailyReport') }],
       ];
   return {
     keyboard: [[openSiteBtn(lang)], ...rows, [{ text: tb(lang, 'kb_language') }]],
@@ -226,6 +229,7 @@ const USER_KEYBOARD = async (lang?: BotLang) => {
         [{ text: L('kb_sentTransfers') }],
         [{ text: L('kb_incomingPayments') }],
         [{ text: L('kb_addExpense') }, { text: L('kb_expenseHistory') }],
+        [{ text: L('kb_dailyReport') }],
       ];
   return {
     keyboard: [[openSiteBtn(lang)], ...rows, [{ text: tb(lang, 'kb_language') }]],
@@ -573,8 +577,8 @@ const DEV_LABEL_KEYS = ['kb_broadcast', 'kb_disableSite', 'kb_enableSite', 'kb_d
 const DEFAULT_DEV_ORDER = ['kb_broadcast', 'siteToggle', 'appToggle', 'botToggle', 'kb_firmsList', 'kb_allUsers', 'kb_allSubscriptions', 'kb_generalStats', 'kb_chatHistory', 'kb_devSettings'];
 // Admin (direktor/orinbosar) va ishchi (worker) menyulari — bularda
 // "toggle atom" yo'q, har biri oddiy statik kalit.
-const ADMIN_LABEL_KEYS = ['kb_chat', 'kb_pendingApprovals', 'kb_financeStatus', 'kb_objects', 'kb_staffList', 'kb_report', 'kb_subscriptionStatus', 'kb_addExpense', 'kb_expenseHistory'] as const;
-const USER_LABEL_KEYS = ['kb_chat', 'kb_incomingTransfers', 'kb_sentTransfers', 'kb_incomingPayments', 'kb_addExpense', 'kb_expenseHistory'] as const;
+const ADMIN_LABEL_KEYS = ['kb_chat', 'kb_pendingApprovals', 'kb_financeStatus', 'kb_objects', 'kb_staffList', 'kb_report', 'kb_subscriptionStatus', 'kb_addExpense', 'kb_expenseHistory', 'kb_dailyReport'] as const;
+const USER_LABEL_KEYS = ['kb_chat', 'kb_incomingTransfers', 'kb_sentTransfers', 'kb_incomingPayments', 'kb_addExpense', 'kb_expenseHistory', 'kb_dailyReport'] as const;
 const ORDER_BY_SCOPE: Record<KbScope, readonly string[]> = { dev: DEFAULT_DEV_ORDER, admin: ADMIN_LABEL_KEYS, user: USER_LABEL_KEYS };
 const LABEL_KEYS_BY_SCOPE: Record<KbScope, readonly string[]> = { dev: DEV_LABEL_KEYS, admin: ADMIN_LABEL_KEYS, user: USER_LABEL_KEYS };
 const SCOPE_TITLE_KEY: Record<KbScope, 'kb_devSettingsScopeDev' | 'kb_devSettingsScopeAdmin' | 'kb_devSettingsScopeUser'> = {
@@ -1143,6 +1147,89 @@ interface ExpenseDraft {
 }
 const pendingExpenseDrafts = new Map<string, ExpenseDraft>();
 
+// ─── "📋 Kunlik hisobot" (owner 2026-10-19: "ovozli hisobot") — ovoz/matn → AI → tasdiq → saqlash ───────────
+const pendingReportEntry = new Map<number, { userId: string; at: number }>();
+const pendingReportDrafts = new Map<string, { chatId: number; userId: string; report: ParsedReport; objectId?: string; objectName?: string; createdAt: number }>();
+const RL = (user: any, uz: string, ru: string) => (user?.language === 'ru' ? ru : uz);
+
+async function startReportFlow(chatId: number, user: any) {
+  pendingReportEntry.set(chatId, { userId: String(user._id), at: Date.now() });
+  await bot.sendMessage(chatId, RL(user,
+    "📋 Bugungi ishni ovozli xabar yoki matn bilan yuboring: qaysi obyekt, nima qilindi, qancha material ishlatildi, nechta ishchi, qanday muammo bor.",
+    '📋 Отправьте голосом или текстом: какой объект, что сделано, сколько материала израсходовано, сколько рабочих, какие проблемы.'), {
+    reply_markup: { inline_keyboard: [[{ text: RL(user, '✖️ Bekor qilish', '✖️ Отмена'), callback_data: 'rptcancel' }]] },
+  });
+}
+
+async function handleReportInput(msg: any, chatId: number): Promise<boolean> {
+  const entry = pendingReportEntry.get(chatId);
+  if (!entry) return false;
+  if (!msg.voice && !msg.audio && !(msg.text && msg.text.trim() && !msg.text.startsWith('/'))) return false;
+  if (msg.text && isMenuButtonText(msg.text)) { pendingReportEntry.delete(chatId); return false; }
+  pendingReportEntry.delete(chatId);
+  const user: any = await User.findOne({ telegramChatId: chatId.toString() }).catch(() => null);
+  if (!user || !user.companyId) return true;
+  const objs: any[] = await ObjectModel.find({ companyId: user.companyId, status: { $ne: 'completed' } }).select('name').limit(60).lean().catch(() => []);
+  const names = objs.map((o) => String(o.name || ''));
+  const notice = await bot.sendMessage(chatId, RL(user, '⏳ Tahlil qilinmoqda…', '⏳ Анализирую…'));
+  let report: ParsedReport | null = null;
+  try {
+    if (msg.voice || msg.audio) {
+      const media = msg.voice || msg.audio;
+      const link = await bot.getFileLink(media.file_id);
+      const buf = Buffer.from(await (await fetch(link)).arrayBuffer());
+      report = await parseReportAudio(buf, media.mime_type || 'audio/ogg', names);
+    } else {
+      report = await parseReportText(String(msg.text), names);
+    }
+  } catch (e) {
+    console.error('[bot report]', (e as Error)?.message);
+  }
+  bot.deleteMessage(chatId, notice.message_id).catch(() => {});
+  if (!report) {
+    await bot.sendMessage(chatId, RL(user, "Tushunmadim — qaytadan aniqroq aytib ko'ring.", 'Не понял — повторите, пожалуйста, точнее.'));
+    pendingReportEntry.set(chatId, { userId: String(user._id), at: Date.now() });
+    return true;
+  }
+  // Obyekt: aytilgan nom bo'yicha, bo'lmasa — xodimning yagona obyekti
+  let obj: any = report.objectName ? await matchExpenseProject(user, report.objectName) : null;
+  if (!obj && Array.isArray(user.projectIds) && user.projectIds.length === 1) obj = await ObjectModel.findById(user.projectIds[0]).select('name').lean().catch(() => null);
+  if (!obj && objs.length === 1) obj = objs[0];
+  const id = Math.random().toString(36).slice(2, 10);
+  pendingReportDrafts.set(id, { chatId, userId: String(user._id), report, objectId: obj ? String(obj._id) : undefined, objectName: obj ? String(obj.name) : report.objectName, createdAt: Date.now() });
+  for (const [k, v] of pendingReportDrafts) if (Date.now() - v.createdAt > 30 * 60_000) pendingReportDrafts.delete(k);
+  await bot.sendMessage(chatId, formatReport({ ...report, objectName: obj ? String(obj.name) : report.objectName }, user.language === 'ru' ? 'ru' : 'uz'), {
+    reply_markup: { inline_keyboard: [[
+      { text: RL(user, '✅ Saqlash', '✅ Сохранить'), callback_data: `rptok:${id}` },
+      { text: RL(user, '✖️ Bekor', '✖️ Отмена'), callback_data: `rptno:${id}` },
+    ]] },
+  });
+  return true;
+}
+
+async function handleReportCallback(query: any, data: string, user: any, chatId: number, messageId: number) {
+  const edit = (text: string) => bot.editMessageText(text, { chat_id: chatId, message_id: messageId }).catch(() => {});
+  await bot.answerCallbackQuery(query.id).catch(() => {});
+  if (data === 'rptcancel') { pendingReportEntry.delete(chatId); await edit(RL(user, 'Bekor qilindi.', 'Отменено.')); return; }
+  const [kind, id] = data.split(':');
+  const d = pendingReportDrafts.get(id);
+  if (!d || d.userId !== String(user._id)) { await edit(RL(user, "Qoralama eskirgan — qaytadan yuboring.", 'Черновик устарел — отправьте заново.')); return; }
+  pendingReportDrafts.delete(id);
+  if (kind === 'rptno') { await edit(RL(user, 'Bekor qilindi.', 'Отменено.')); return; }
+  try {
+    await saveReport({
+      companyId: String(user.companyId), userId: String(user._id), userName: `${user.firstName} ${user.lastName || ''}`.trim(),
+      date: todayInTashkent(), objectId: d.objectId, objectName: d.objectName, source: 'bot', report: d.report,
+    });
+    await edit(`${formatReport({ ...d.report, objectName: d.objectName }, user.language === 'ru' ? 'ru' : 'uz')}
+
+✅ ${RL(user, 'Saqlandi', 'Сохранено')}`);
+  } catch (e) {
+    console.error('[bot report save]', e);
+    await edit(RL(user, "Saqlab bo'lmadi — keyinroq urinib ko'ring.", 'Не удалось сохранить — попробуйте позже.'));
+  }
+}
+
 async function startExpenseFlow(chatId: number, user: any) {
   pendingExpenseEntry.set(chatId, { userId: String(user._id) });
   const T = EXP_T[expLang(user.language)];
@@ -1667,6 +1754,7 @@ bot.on('message', async (msg: any) => {
   // ── Chiqim qo'shish oqimi (matn yoki ovoz) — voice'lar `!msg.text` tekshiruvidan
   // OLDIN ushlanishi shart, shu sabab bu yerda.
   if (pendingExpenseEntry.has(chatId) && (await handleExpenseInput(msg, chatId))) return;
+  if (pendingReportEntry.has(chatId) && (await handleReportInput(msg, chatId))) return;
 
   // ── "⚙️ Tugmalarni sozlash" ichida tugma/xabar matnini tahrirlash — tanlangan
   // kalitning KEYINGI matn xabari shu kalitga saqlanadi.
@@ -1860,6 +1948,10 @@ bot.on('message', async (msg: any) => {
   // ── Chiqim qo'shish (dasturchidan boshqa hamma rol) ───────────────────────
   if (!developer && text === SL(admin ? 'admin' : 'user', 'kb_addExpense')) {
     await startExpenseFlow(chatId, user);
+    return;
+  }
+  if (!developer && text === SL(admin ? 'admin' : 'user', 'kb_dailyReport')) {
+    await startReportFlow(chatId, user);
     return;
   }
   if (!developer && text === SL(admin ? 'admin' : 'user', 'kb_expenseHistory')) {
@@ -2795,6 +2887,10 @@ bot.on('callback_query', async (query: any) => {
     return;
   }
 
+  if (/^rpt(ok|no|cancel)/.test(data)) {
+    await handleReportCallback(query, data, user, chatId, messageId);
+    return;
+  }
   if (/^exp(ok|no|retry|cancel)/.test(data)) {
     await handleExpenseCallback(query, data, user, chatId, messageId);
     return;

@@ -7,6 +7,7 @@ import Equipment from '../models/Equipment';
 import EquipmentLog from '../models/EquipmentLog';
 import User from '../models/User';
 import Attendance from '../models/Attendance';
+import DailyReport from '../models/DailyReport';
 import { AlertLog, alertBosses } from './companyAlerts';
 import { planFactFor } from './planFact';
 import { median } from './expenseInsights';
@@ -230,6 +231,7 @@ export async function buildBriefing(companyId: string, now = new Date()): Promis
     planFactFor({ companyId, status: { $ne: 'completed' } }, now).catch(() => []),
   ]);
   const risky = pf.filter((p) => p.status !== 'ok' && p.status !== 'no_plan').slice(0, 3);
+  const reports: any[] = await DailyReport.find({ companyId, date: yDay }).select('objectName userName issues').limit(50).lean().catch(() => []);
   if (!workers && !pf.length) return null;
   const lines = [
     `☀️ Xayrli tong! Kechagi (${yDay}) xulosa:`,
@@ -237,6 +239,10 @@ export async function buildBriefing(companyId: string, now = new Date()): Promis
     `💸 Tasdiqlangan xarajat: ${money(spendRows[0]?.s || 0)}`,
     `⏳ Tasdiq kutayotganlar: ${pendingCount}`,
   ];
+  if (reports.length) {
+    const issues = reports.flatMap((r) => (r.issues || []).filter((i: any) => i.severity !== 'low').map((i: any) => `${r.objectName || r.userName}: ${i.text}`));
+    lines.push(`📋 Kunlik hisobotlar: ${reports.length} ta${issues.length ? ` (muammo: ${issues.slice(0, 3).join('; ')})` : ''}`);
+  }
   if (risky.length) {
     lines.push('', '📊 E\'tibor talab qiladigan obyektlar:');
     for (const p of risky) lines.push(`• ${p.name}: ${p.notes[0] || p.status} (bajarilish ${p.progressPct}%)`);

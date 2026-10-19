@@ -1057,6 +1057,11 @@ const uz = {
     delete: "O'chirish",
     open: "Ochish",
   },
+  reportsX: {
+    title: "Kunlik hisobotlar", placeholder: "Bugun nima qilindi: ish, ishlatilgan material, ishchilar soni, muammolar…",
+    botHint: "Telegram botda «📋 Kunlik hisobot» — ovoz bilan ham yuborish mumkin", analyze: "AI bilan tayyorlash",
+    saved: "Hisobot saqlandi", empty: "Hali hisobot yo'q", workers: "Ishchilar",
+  },
   importX: {
     title: "Excel'dan import", hint: "Xodimlar, obyektlar yoki materiallarni bitta faylda kiriting. Avval shablonni yuklab oling, to'ldiring va yuklang — saqlashdan oldin tekshiriladi.",
     kind: { employees: "Xodimlar", objects: "Obyektlar", materials: "Materiallar" },
@@ -2198,6 +2203,11 @@ const ru: TranslationShape = {
     allRead: "Все отмечены как прочитанные",
     delete: "Удалить",
     open: "Открыть",
+  },
+  reportsX: {
+    title: "Ежедневные отчёты", placeholder: "Что сделано сегодня: работы, израсходованный материал, число рабочих, проблемы…",
+    botHint: "В Telegram-боте «📋 Ежедневный отчёт» — можно голосом", analyze: "Подготовить с AI",
+    saved: "Отчёт сохранён", empty: "Отчётов пока нет", workers: "Рабочих",
   },
   importX: {
     title: "Импорт из Excel", hint: "Сотрудники, объекты или материалы одним файлом. Скачайте шаблон, заполните и загрузите — перед сохранением всё проверяется.",

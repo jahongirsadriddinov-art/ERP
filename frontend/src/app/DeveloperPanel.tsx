@@ -21,13 +21,14 @@ import { ROLE_LABELS, VoicePlayer } from "./App";
 import { SkeletonList, SkeletonMessage } from "./Skeleton";
 import { openExternalUrl } from "./platform";
 import { AnnouncementComposer, GlobalAnnouncementList } from "./AnnouncementParts";
+const ServerStatusPanel = lazy(() => import("./ServerStatusPanel"));
 // AI platforma boshqaruvi (firmalar, AI miyasi, limitlar, xarajat, Telegram hisobi, arxiv, audit) — alohida chunk
 const AiPlatformPanel = lazy(() => import("./aiVoice/settings/platform/AiPlatformPanel"));
 
 // ─── Developer Panel ────────────────────────────────────────────────────────────
 export default function DeveloperPanel({ currentUser, onLogout }: { currentUser: AppUser; onLogout: () => void }) {
   const { t } = useTranslation();
-  const [tab, setTab] = useState<"firms" | "users" | "subscriptions" | "messages" | "plans" | "promocodes" | "announcements" | "aiVoice">("subscriptions");
+  const [tab, setTab] = useState<"firms" | "users" | "subscriptions" | "messages" | "plans" | "promocodes" | "announcements" | "aiVoice" | "server">("subscriptions");
   const [annReload, setAnnReload] = useState(0);
   const [companies, setCompanies] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
@@ -355,6 +356,9 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
           <button onClick={() => setTab("aiVoice")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "aiVoice" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
             {t('aiVoice.platform.title')}
           </button>
+          <button onClick={() => setTab("server")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "server" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
+            {t('devPanel.tabs.server')}
+          </button>
         </div>
         {/* Ma'lumotlar FAQAT panel birinchi ochilganda yuklanardi — keyin
             (masalan panel ochiq turgan payt boshqa joyda yangi to'lov/
@@ -664,6 +668,8 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
               </div>
             </div>
           ))
+        ) : tab === "server" ? (
+          <Suspense fallback={<SkeletonList items={3}/>}><ServerStatusPanel /></Suspense>
         ) : tab === "aiVoice" ? (
           <Suspense fallback={<div className="h-40 rounded-2xl bg-muted/40 animate-pulse" />}><AiPlatformPanel /></Suspense>
         ) : tab === "announcements" ? (

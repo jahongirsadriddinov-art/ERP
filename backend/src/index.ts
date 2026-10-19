@@ -37,6 +37,7 @@ import qrloginRoutes from './routes/qrlogin';
 import sessionsRoutes from './routes/sessions';
 import deployRoutes from './routes/deploy';
 import paymentsRoutes from './routes/payments';
+import uptimeRoutes from './routes/uptime';
 import filesRoutes from './routes/files';
 import statusRoutes from './routes/status';
 import equipmentRoutes from './routes/equipment';
@@ -299,6 +300,7 @@ app.use('/api/payroll',         requireAuth, blockDeveloper, payrollRoutes);
 app.use('/api/export1c',        requireAuth, blockDeveloper, export1cRoutes);
 app.use('/api/announcements',   requireAuth, blockDeveloper, announcementsRoutes);
 app.use('/api/dev-announcements', requireAuth, requireDeveloper, devAnnouncementsRoutes);
+app.use('/api/dev/uptime',      requireAuth, requireDeveloper, uptimeRoutes); // UptimeRobot holati (read-only kalit)
 // publicClientRoutes — mijoz portali, ATAYLAB auth shart emas (mijoz tizim
 // foydalanuvchisi emas) — o'zining ichida taxmin qilib bo'lmaydigan token bilan himoyalangan.
 app.use('/api/public',          publicClientRoutes);

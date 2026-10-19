@@ -196,7 +196,7 @@ async function expectReachable(page: Page, testId: string) {
     const hit = document.elementFromPoint(r.left + Math.min(20, r.width / 2), r.top + r.height / 2);
     return hit && (el === hit || el.contains(hit)) ? 'ok' : `covered by ${hit?.tagName}.${String((hit as HTMLElement)?.className).slice(0, 50)}`;
   }, testId);
-  expect(ok).toBe('ok');
+  expect(ok, testId).toBe('ok');
 }
 
 const noOverflow = async (page: Page) => {
@@ -295,7 +295,10 @@ test('AI sozlamalari: skroll oxirigacha; xodimga alohida jadval', async ({ page 
   await openAdvanced(page, 'employees');
   await expect(page.getByTestId('ai-emp-u2')).toBeVisible();
   await expect(page.getByTestId('ai-emp-more')).toBeVisible();          // 45 ta → 30 + "Yana ko'rsatish"
-  await scrollToEnd(page, 'ai-emp-more');
+  // Ro'yxat oxiridagi tugma — unga qadar surilganda hech narsa (sarlavha, pastki menyu) yopmaydi.
+  // (Sahifani butunlay oxirigacha surish — tugmadan keyingi bo'limlar uzun bo'lsa uni sarlavha ostiga olib chiqardi.)
+  await page.getByTestId('ai-emp-more').evaluate((el) => el.scrollIntoView({ block: 'center' }));
+  await page.waitForTimeout(150);
   await expectReachable(page, 'ai-emp-more');
   await page.screenshot({ path: `test-results/ai-scroll-end-${info.project.name}.png` });
 

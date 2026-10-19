@@ -3801,8 +3801,13 @@ function LoginScreen({ onLogin, onRegister, onBack }: { onLogin: (u: any, compan
   const [phone, setPhone] = useState("+998 ");
   const [code, setCode] = useState("");
   const [password, setPassword] = useState("");
-  const [step, setStep] = useState<"phone" | "code" | "devpass" | "blocked" | "qr">("phone");
-  const [blockedReason, setBlockedReason] = useState<'pending'|'expired'|'rejected'|null>(null);
+  // Ish jarayonida obuna tugasa (API 402) — kirish ekrani darhol "obuna" holatida ochiladi
+  const [initialBlocked] = useState<'pending'|'expired'|'rejected'|null>(() => {
+    try { const v = sessionStorage.getItem('erp_subBlocked'); sessionStorage.removeItem('erp_subBlocked');
+      return v === 'pending' || v === 'expired' || v === 'rejected' ? v : null; } catch { return null; }
+  });
+  const [step, setStep] = useState<"phone" | "code" | "devpass" | "blocked" | "qr">(initialBlocked ? "blocked" : "phone");
+  const [blockedReason, setBlockedReason] = useState<'pending'|'expired'|'rejected'|null>(initialBlocked);
   const [error, setError] = useState("");
   // Dasturchi paroli "unutdim" oqimi — devpass qadamida qo'shimcha holat.
   const [devResetStage, setDevResetStage] = useState<"none" | "requested" | "done">("none");
@@ -4315,6 +4320,15 @@ export default function App() {
     }
     return "landing";
   });
+  // Obuna tugagan/rad etilgan (API 402) — sessiya yopiladi, kirish ekranida obuna holati ko'rsatiladi
+  useEffect(() => {
+    const onSubBlocked = () => {
+      localStorage.removeItem("currentUser"); localStorage.removeItem("token");
+      setCurrentUser(null); setAuthView("login");
+    };
+    window.addEventListener('erp:subscription-blocked', onSubBlocked);
+    return () => window.removeEventListener('erp:subscription-blocked', onSubBlocked);
+  }, []);
   const [projects, setProjects] = useState<Project[]>([]);
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -5558,22 +5572,27 @@ export default function App() {
       setMessages(p=>p.map(m=>(m.fromUserId===fromUserId&&m.toUserId===liveUser.id)?{...m,read:true}:m));
     } catch (err) { console.error(err); }
   };
-  const handleEditMsg = async (id: string, newText: string) => {
-    setMessages(p => p.map(m => m.id === id ? {...m, text: newText, edited: true} : m));
-    try { await fetch(`${API_BASE}/api/messages/${id}`, { method: "PATCH", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ text: newText }) }); }
-    catch (err) { console.error(err); }
+  // Tahrirlash/o'chirish/qadash — darhol ko'rsatiladi; server rad etsa (ruxsat yo'q, tarmoq) eski holat qaytadi
+  const patchMsgOptimistic = async (id: string, apply: (m: Msg) => Msg, req: () => Promise<Response>) => {
+    const before = messages.find(m => m.id === id);
+    setMessages(p => p.map(m => m.id === id ? apply(m) : m));
+    let errText = '';
+    try {
+      const r = await req();
+      if (r.ok) return;
+      errText = (await r.json().catch(() => null))?.error || '';
+    } catch (err) { console.error(err); }
+    if (before) setMessages(p => p.map(m => m.id === id ? before : m));
+    toast.error(errText || tApp('chat.actionFailed'));
   };
-  const handleDeleteMsg = async (id: string) => {
-    setMessages(p => p.map(m => m.id === id ? {...m, deleted: true, text: ''} : m));
-    try { await fetch(`${API_BASE}/api/messages/${id}`, { method: "DELETE" }); }
-    catch (err) { console.error(err); }
-  };
-  const handlePinMsg = async (id: string) => {
-    const cur = messages.find(m => m.id === id);
-    const next = !cur?.pinned;
-    setMessages(p => p.map(m => m.id === id ? {...m, pinned: next} : m));
-    try { await fetch(`${API_BASE}/api/messages/${id}`, { method: "PATCH", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ pinned: next }) }); }
-    catch (err) { console.error(err); }
+  const handleEditMsg = (id: string, newText: string) => patchMsgOptimistic(id, m => ({ ...m, text: newText, edited: true }),
+    () => fetch(`${API_BASE}/api/messages/${id}`, { method: "PATCH", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ text: newText }) }));
+  const handleDeleteMsg = (id: string) => patchMsgOptimistic(id, m => ({ ...m, deleted: true, text: '' }),
+    () => fetch(`${API_BASE}/api/messages/${id}`, { method: "DELETE" }));
+  const handlePinMsg = (id: string) => {
+    const next = !messages.find(m => m.id === id)?.pinned;
+    return patchMsgOptimistic(id, m => ({ ...m, pinned: next }),
+      () => fetch(`${API_BASE}/api/messages/${id}`, { method: "PATCH", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ pinned: next }) }));
   };
   const handleCreateGroup = async (name: string, memberIds: string[]) => {
     try {

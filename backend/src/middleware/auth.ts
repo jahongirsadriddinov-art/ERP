@@ -5,6 +5,7 @@ import User from '../models/User';
 import AppSettings from '../models/AppSettings';
 import Session from '../models/Session';
 import { isOnShift, workGateBlocks, CHECKIN_REQUIRED } from './workGate';
+import { subscriptionBlockOf, subscriptionGateApplies, subscriptionBlockedResponse } from './subscriptionGate';
 
 // JWT payload — login vaqtida shu maydonlar imzolanadi.
 export interface JwtPayload {
@@ -180,6 +181,11 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     // kerak bo'lgani uchun) o'tolmaydi.
     if (!fresh.isDeveloper && !(await surfaceEnabled(req))) {
       return res.status(503).json(maintenanceResponse(req));
+    }
+    // Obuna tugagan/rad etilgan/kutilayotgan firma — ochiq sessiya ham to'xtaydi (faqat kirish/to'lov yo'llari ochiq)
+    if (!fresh.isDeveloper && fresh.companyId && subscriptionGateApplies(req)) {
+      const blockedSub = await subscriptionBlockOf(String(fresh.companyId));
+      if (blockedSub) return res.status(402).json(subscriptionBlockedResponse(blockedSub));
     }
     // Smena yopiq ishchi — faqat ruxsat etilgan yo'llar
     if (!fresh.isDeveloper && workGateBlocks(req, fresh.role) && !(await isOnShift(String(fresh.userId)))) {

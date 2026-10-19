@@ -40,4 +40,12 @@ const SubscriptionSchema: Schema = new Schema({
   rejectedBy: { type: String },
 }, { timestamps: true });
 
+// Obuna o'zgarganda (tasdiq/rad/uzaytirish/to'lov) middleware/subscriptionGate.ts keshi darhol eskiradi
+let changeGen = 0;
+export const subscriptionChangeGen = () => changeGen;
+const bump = () => { changeGen++; };
+SubscriptionSchema.post('save', bump);
+SubscriptionSchema.post(['updateOne', 'updateMany', 'findOneAndUpdate', 'deleteOne', 'deleteMany', 'findOneAndDelete'], bump);
+SubscriptionSchema.post('insertMany', bump);
+
 export default mongoose.model<ISubscription>('Subscription', SubscriptionSchema);

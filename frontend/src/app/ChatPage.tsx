@@ -13,6 +13,7 @@ import CornerDownLeft from "@hugeicons/core-free-icons/CornerDownLeftIcon";
 import Share2 from "@hugeicons/core-free-icons/Share01Icon";
 import SquareCheck from "@hugeicons/core-free-icons/CheckmarkSquare01Icon";
 import Trash2 from "@hugeicons/core-free-icons/Delete02Icon";
+import CopyIcon from "@hugeicons/core-free-icons/Copy01Icon";
 import Pin from "@hugeicons/core-free-icons/PinIcon";
 import PinOff from "@hugeicons/core-free-icons/PinOffIcon";
 import MessageCircle from "@hugeicons/core-free-icons/Message01Icon";
@@ -357,8 +358,8 @@ export default function ChatPage({ currentUser, users, messages, groups, onlineU
                   <span className="text-xs text-muted-foreground mr-1">{tChat('chat.selectedCount', { count: selected.size })}</span>
                   {selected.size>0 && <>
                     <button aria-label={tChat('chat.forward')} onClick={() => { const msg=messages.find(m=>m.id===[...selected][0]); if(msg) setShowForward(msg); }} className="w-9 h-9 flex items-center justify-center hover:bg-muted rounded-full text-muted-foreground"><MorphIcon icon={Share2} className="w-4 h-4" /></button>
-                    {/* O'chirish — faqat direktor/o'rinbosar (kontekst-menyudagi kabi) */}
-                    {canModifyMessages && (
+                    {/* O'chirish — o'z xabarlari, boshqanikini faqat direktor/o'rinbosar (kontekst-menyudagi kabi) */}
+                    {(canModifyMessages || [...selected].every(id => messages.find(m => m.id === id)?.fromUserId === currentUser.id)) && (
                       <button aria-label={tChat('chat.deleteSelectedAria')} onClick={() => { selected.forEach(id=>onDelete(id)); setSelectMode(false); setSelected(new Set()); }} className="w-9 h-9 flex items-center justify-center hover:bg-red-500/10 rounded-full text-red-500"><MorphIcon icon={Trash2} className="w-4 h-4" /></button>
                     )}
                   </>}
@@ -419,10 +420,14 @@ export default function ChatPage({ currentUser, users, messages, groups, onlineU
           aks holda position:fixed shu ota-elementga nisbatan joylashib, kesilib qolardi. */}
       {ctxMenu && ctxMsg && createPortal(
         (() => {
-          const canEdit = canModifyMessages && !ctxMsg.deleted;
-          const rows = 4 + (canEdit ? 1 : 0) + (canModifyMessages ? 1 : 0);
+          // Telegram'dagidek: matnni faqat yozgan odam tahrirlaydi; o'z xabarini o'zi, boshqanikini rahbar o'chiradi
+          const mine = ctxMsg.fromUserId === currentUser.id;
+          const canEdit = mine && !ctxMsg.deleted && (!ctxMsg.type || ctxMsg.type === 'text');
+          const canDelete = !ctxMsg.deleted && (mine || !!canModifyMessages);
+          const canCopy = !ctxMsg.deleted && !!ctxMsg.text;
+          const rows = 4 + (canCopy ? 1 : 0) + (canEdit ? 1 : 0) + (canDelete ? 1 : 0);
           const menuW = 200;
-          const menuH = rows * 42 + 12 + (canModifyMessages ? 9 : 0);
+          const menuH = rows * 42 + 12 + (canDelete ? 9 : 0);
           const vw = window.innerWidth, vh = window.innerHeight;
           const left = Math.min(Math.max(8, ctxMenu.x), vw - menuW - 8);
           const top = Math.min(Math.max(8, ctxMenu.y), vh - menuH - 8);
@@ -435,6 +440,12 @@ export default function ChatPage({ currentUser, users, messages, groups, onlineU
               style={{ top, left, width: menuW }}
               onClick={e=>e.stopPropagation()}>
               <div role="menuitem" onClick={()=>{setReplyTo(ctxMsg);setEditingId(null);setCtxMenu(null);}} className={itemCls}><MorphIcon icon={CornerDownLeft} className="w-4 h-4" />{tChat('chat.reply')}</div>
+              {canCopy && (
+                <div role="menuitem" onClick={()=>{
+                  const txt = ctxMsg.text; setCtxMenu(null);
+                  navigator.clipboard?.writeText(txt).then(() => toast.success(tChat('chat.copied'))).catch(() => toast.error(tChat('chat.actionFailed')));
+                }} className={itemCls}><MorphIcon icon={CopyIcon} className="w-4 h-4" />{tChat('chat.copy')}</div>
+              )}
               {canEdit && (
                 <div role="menuitem" onClick={()=>{setEditingId(ctxMsg.id);setEditText(ctxMsg.text);setReplyTo(null);setCtxMenu(null);}} className={itemCls}><MorphIcon icon={Edit} className="w-4 h-4" />{tChat('chat.edit')}</div>
               )}
@@ -443,7 +454,7 @@ export default function ChatPage({ currentUser, users, messages, groups, onlineU
               </div>
               <div role="menuitem" onClick={()=>{setShowForward(ctxMsg);setCtxMenu(null);}} className={itemCls}><MorphIcon icon={Share2} className="w-4 h-4" />{tChat('chat.forward')}</div>
               <div role="menuitem" onClick={()=>{setSelectMode(true);setSelected(new Set([ctxMsg.id]));setCtxMenu(null);}} className={itemCls}><MorphIcon icon={SquareCheck} className="w-4 h-4" />{tChat('chat.select')}</div>
-              {canModifyMessages && (
+              {canDelete && (
                 <>
                   <div className="h-px bg-border/60 my-0.5"/>
                   <div role="menuitem" onClick={()=>{onDelete(ctxMsg.id);setCtxMenu(null);}} className="flex items-center gap-3 px-3 py-2.5 hover:bg-red-500/10 text-red-500 rounded-xl cursor-pointer text-sm transition-colors"><MorphIcon icon={Trash2} className="w-4 h-4" />{tChat('chat.delete')}</div>

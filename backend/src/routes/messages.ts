@@ -483,17 +483,34 @@ router.patch('/read', async (req, res) => {
 });
 
 // Tahrirlash / pin — faqat direktor/o'rinbosar/dasturchi
+// Tahrirlash / qadash. Telegram'dagidek (owner 2026-10-19): matnni FAQAT yozgan odam o'zgartiradi
+// (rahbar boshqaning so'zini o'zgartira olmaydi); qadashni suhbat ishtirokchisi yoki rahbar qiladi.
+const isBoss = (u: any) => !!u && (u.isDeveloper || u.role === 'direktor' || u.role === 'orinbosar');
+async function isParticipant(msg: any, uid: string): Promise<boolean> {
+  if (String(msg.fromUserId) === uid || String(msg.toUserId) === uid) return true;
+  if (!msg.groupId) return false;
+  const g: any = await Group.findById(String(msg.groupId)).select('memberIds').lean().catch(() => null);
+  return !!g && (g.memberIds || []).map(String).includes(uid);
+}
+
 router.patch('/:id', async (req, res) => {
   try {
     const u = req.user;
-    if (u && !u.isDeveloper && u.role !== 'direktor' && u.role !== 'orinbosar') {
-      return res.status(403).json({ error: 'Xabarni tahrirlash ruxsati yo\'q' });
-    }
-    const { text, pinned } = req.body;
+    const uid = String(u?.userId || '');
+    const { text, pinned } = req.body || {};
     const msg = await Message.findOne(scoped({ _id: req.params.id }));
     if (!msg) return res.status(404).json({ error: 'Xabar topilmadi' });
-    if (text !== undefined) { msg.text = String(text); msg.edited = true; }
-    if (pinned !== undefined) msg.pinned = !!pinned;
+    if (text !== undefined) {
+      if (String(msg.fromUserId) !== uid) return res.status(403).json({ error: "Faqat o'z xabaringizni tahrirlay olasiz" });
+      if (msg.deleted) return res.status(400).json({ error: "O'chirilgan xabarni tahrirlab bo'lmaydi" });
+      const t = String(text).trim();
+      if (!t || t.length > 4000) return res.status(400).json({ error: "Xabar matni bo'sh yoki juda uzun" });
+      msg.text = t; msg.edited = true;
+    }
+    if (pinned !== undefined) {
+      if (!isBoss(u) && !(await isParticipant(msg, uid))) return res.status(403).json({ error: "Bu xabarni qadash ruxsati yo'q" });
+      msg.pinned = !!pinned;
+    }
     await msg.save();
     const payload = shape(msg);
     if (msg.groupId) emitToGroup(msg.groupId, 'message:edit', payload);
@@ -505,15 +522,15 @@ router.patch('/:id', async (req, res) => {
   }
 });
 
-// O'chirish (soft delete) — faqat direktor/o'rinbosar/dasturchi
+// O'chirish (soft delete) — o'z xabarini yozgan odam, boshqanikini direktor/o'rinbosar/dasturchi
 router.delete('/:id', async (req, res) => {
   try {
     const u = req.user;
-    if (u && !u.isDeveloper && u.role !== 'direktor' && u.role !== 'orinbosar') {
-      return res.status(403).json({ error: 'Xabarni o\'chirish ruxsati yo\'q' });
-    }
     const msg = await Message.findOne(scoped({ _id: req.params.id }));
     if (!msg) return res.status(404).json({ error: 'Xabar topilmadi' });
+    if (String(msg.fromUserId) !== String(u?.userId || '') && !isBoss(u)) {
+      return res.status(403).json({ error: "Xabarni o'chirish ruxsati yo'q" });
+    }
     msg.deleted = true;
     await msg.save();
     const payload = { id: String(msg._id), deleted: true };

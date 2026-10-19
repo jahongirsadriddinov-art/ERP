@@ -94,7 +94,7 @@ async function mintAndCache(): Promise<void> {
     // Chegara to'lgan bo'lishi mumkin — hammasini (joriydan tashqari) o'chirib bir marta qayta urinamiz
     if (await pruneOwnCredentials(0)) createRes = await createCredential();
   }
-  if (!createRes.ok) throw new Error(`Metered credential yaratish muvaffaqiyatsiz: ${createRes.status}`);
+  if (!createRes.ok) throw new Error(`Metered credential yaratish muvaffaqiyatsiz: ${createRes.status} ${(await createRes.text().catch(() => '')).slice(0, 200)}`);
   const cred = await createRes.json() as { username: string; password: string; apiKey: string };
 
   const listRes = await fetch(`${baseUrl()}/credentials?apiKey=${encodeURIComponent(cred.apiKey)}`, { signal: withTimeout(8000) });

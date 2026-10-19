@@ -357,11 +357,13 @@ class ManagedVoiceSession implements VoiceSessionHandle {
         this.ev('error', { stage: 'open', message: 'no_provider' });
         return this.providerFailed();
       }
+      const openStartedAt = Date.now();
       const opened = await openFirstAvailable(candidates, base, this.deps.setupTimeoutMs,
         (kind, err, model) => {
           const k = kind === 'gemini_live' ? noteLiveFailure(model, err) : classifyVoiceError(err);
           this.failKind = k;
           this.ev('error', { stage: 'open', provider: kind, model, kind: k, message: err.message.slice(0, 200) });
+          console.warn(`[aiVoice] ${kind} ${model || ''} ochilmadi (${k}): ${err.message.slice(0, 160)}`);
         },
         {
           skip: (c, err, elapsed) => {
@@ -374,6 +376,8 @@ class ManagedVoiceSession implements VoiceSessionHandle {
           },
         });
       if (opened.kind === 'gemini_live') noteLiveOk(opened.model);
+      // Diagnostika (owner 2026-10-19: "sekin, g'alati gapiradi") — qaysi yo'l: jonli (Live) yoki zaxira kaskad
+      console.log(`[aiVoice] ovoz yo'li ${this.sessionId}: ${opened.kind === 'gemini_live' ? `Live (${opened.model})` : 'KASKAD (zaxira — sekin)'}${this.liveBlocked ? " — Live sig'imi to'la (AI_LIVE_MAX_CONCURRENT)" : ''}, ulanish ${Date.now() - openStartedAt} ms`);
       this.failKind = null;
       if (this.isOver()) { void opened.session.close('ended'); return false; }
       this.vs = opened.session;

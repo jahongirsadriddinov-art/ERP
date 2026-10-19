@@ -99,7 +99,7 @@ export function liveThinkingFor(model: string): Record<string, unknown> | undefi
 /** Faqat testlar uchun. */
 export function __resetLiveSearchForTests(): void { searchUnsupported.clear(); thinkingUnsupported.clear(); }
 
-export function buildLiveConfig(opts: VoiceOpenOpts, o: { search?: boolean; thinking?: Record<string, unknown> } = {}): Record<string, unknown> {
+export function buildLiveConfig(opts: VoiceOpenOpts, o: { search?: boolean; thinking?: Record<string, unknown>; plain?: boolean } = {}): Record<string, unknown> {
   // Ichki Google qidiruvi yoqiq bo'lsa — searchWeb tool'i berilmaydi: u ALOHIDA model so'rovi (bir necha
   // soniya); Live o'zi qidiradi. Prompt'dagi "searchWeb" ishoralari ham ichki qidiruvga yo'naltiriladi.
   const toolList = o.search ? (opts.tools || []).filter((t) => t.name !== 'searchWeb') : (opts.tools || []);
@@ -125,7 +125,7 @@ export function buildLiveConfig(opts: VoiceOpenOpts, o: { search?: boolean; thin
       : { automaticActivityDetection: {
           silenceDurationMs: 700,
           prefixPaddingMs: opts.telephony ? 300 : 200,
-          ...(opts.telephony && process.env.AI_LIVE_START_SENSITIVITY !== 'default' ? { startOfSpeechSensitivity: StartSensitivity.START_SENSITIVITY_LOW } : {}),
+          ...(opts.telephony && !o.plain && process.env.AI_LIVE_START_SENSITIVITY !== 'default' ? { startOfSpeechSensitivity: StartSensitivity.START_SENSITIVITY_LOW } : {}),
         } },
     contextWindowCompression: { slidingWindow: {} },
     // Har doim yoqiladi — server SessionResumptionUpdate yuboradi (GoAway'da qayta ulanish uchun)
@@ -286,8 +286,8 @@ export class GeminiLiveProvider implements VoiceProvider {
 
   async open(opts: VoiceOpenOpts): Promise<VoiceSession> {
     const model = String(opts.model || '');
-    const connectOnce = async (key: string, search: boolean, thinking: boolean): Promise<VoiceSession> => {
-      const config = buildLiveConfig(opts, { search, thinking: thinking ? liveThinkingFor(model) : undefined });
+    const connectOnce = async (key: string, search: boolean, thinking: boolean, plain = false): Promise<VoiceSession> => {
+      const config = buildLiveConfig(opts, { search, thinking: thinking ? liveThinkingFor(model) : undefined, plain });
       const s = new GeminiLiveSession();
       try {
         const live = await this.connector.connect(key, {
@@ -314,12 +314,12 @@ export class GeminiLiveProvider implements VoiceProvider {
       const thinking = !!liveThinkingFor(model);
       const plan: Array<[boolean, boolean]> = [[search, thinking]];
       if (search) plan.push([false, thinking]);
-      if (thinking) plan.push([false, false]);
+      if (thinking || opts.telephony) plan.push([false, false]);   // oxirgisi — hech qanday qo'shimchasiz (plain)
       let lastErr: unknown;
       for (let i = 0; i < plan.length; i++) {
         const [sq, th] = plan[i];
         try {
-          const s = await connectOnce(key, sq, th);
+          const s = await connectOnce(key, sq, th, i === plan.length - 1 && i > 0);
           if (search && !sq) {
             searchUnsupported.add(model);
             console.warn(`[aiVoice] ${model}: Live Google qidiruvi qabul qilinmadi — o'chirildi (${(lastErr as Error)?.message?.slice(0, 80)})`);
@@ -330,6 +330,7 @@ export class GeminiLiveProvider implements VoiceProvider {
           }
           return s;
         } catch (e) {
+          console.warn(`[aiVoice] Live ${model} ulanmadi (qidiruv=${sq}, o'ylash=${th}): ${String((e as Error)?.message || e).slice(0, 140)}`);
           if (isQuotaError(e) || isAuthError(e) || i === plan.length - 1) throw e;
           lastErr = e;
         }

@@ -462,6 +462,20 @@ export const isOnline = (userId: string) => userSockets.has(userId);
 // — localStorage tozalash, login ekraniga qaytish), so'ng ulanish o'zi
 // ham majburan yopiladi (agar foydalanuvchi biror sababdan xabarni
 // e'tiborsiz qoldirsa ham, real-vaqt kanali darhol to'xtaydi).
+/** XAVFSIZLIK (audit 2026-10-19): bloklangan/o'chirilgan foydalanuvchining BARCHA real-vaqt ulanishlari darhol uziladi
+ * (aks holda firma GPS, guruh xabarlari va qo'ng'iroq signallarini olishda davom etardi). */
+export function kickUser(userId: string) {
+  if (!io || !userId) return;
+  io.to(`user:${userId}`).emit('session:revoked');
+  io.in(`user:${userId}`).disconnectSockets(true);
+}
+
+/** Guruhdan chiqarilgan foydalanuvchi socket'lari o'sha guruh xonasidan ham chiqariladi. */
+export function leaveGroupRoom(userId: string, groupId: string) {
+  if (!io || !userId || !groupId) return;
+  io.in(`user:${userId}`).socketsLeave(`group:${groupId}`);
+}
+
 export function kickSession(jti: string) {
   if (!io) return;
   io.to(`session:${jti}`).emit('session:revoked');

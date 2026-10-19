@@ -372,7 +372,7 @@ router.post('/execute', requireAuth, requireBoss, requireFeature('ai_assistant')
 
     // ── Xodimni o'chirish ──────────────────────────────────────────────────────
     if (action.type === 'delete_user') {
-      const { userId, userName } = action;
+      const { userId } = action;
       if (!userId) return res.status(400).json({ error: 'Xodim ID kerak' });
 
       const target = await User.findOne(scoped({ _id: String(userId) }));
@@ -390,7 +390,8 @@ router.post('/execute', requireAuth, requireBoss, requireFeature('ai_assistant')
 
       return res.json({
         ok: true,
-        result: `${userName || deleted.firstName + ' ' + (deleted.lastName || '')} tizimdan muvaffaqiyatli o'chirildi`,
+        // Natija matni — bazadagi haqiqiy ismdan (AI bergan userName emas)
+        result: `${`${deleted.firstName} ${deleted.lastName || ''}`.trim()} tizimdan muvaffaqiyatli o'chirildi`,
         deletedId: String(deleted._id),
       });
     }

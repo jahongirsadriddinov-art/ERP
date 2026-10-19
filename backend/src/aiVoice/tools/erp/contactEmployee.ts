@@ -65,11 +65,10 @@ type Args = { employeeId?: string; employeeName?: string; message: string };
 const params: AiToolDef['parameters'] = {
   type: 'object',
   properties: {
-    employeeId: { type: 'string', description: "Xodim id (listEmployees'dan; bo'lmasa employeeName)" },
-    employeeName: { type: 'string', maxLength: 60, description: 'Xodim ismi (masalan "Test", "Ali Valiyev")' },
+    employeeName: { type: 'string', minLength: 2, maxLength: 60, description: 'Xodim ismi (masalan "Test", "Ali Valiyev")' },
     message: { type: 'string', minLength: 1, maxLength: 400, description: "Yetkaziladigan gap (masalan \"menga aloqaga chiqsin\")" },
   },
-  required: ['message'],
+  required: ['employeeName', 'message'],
 };
 
 export const messageEmployee: AiToolDef<Args> = {
@@ -86,7 +85,6 @@ export const messageEmployee: AiToolDef<Args> = {
   purposes: ASSIST,
   channels: ALL_CHANNELS,
   behavior: 'BLOCKING',
-  refs: { employeeId: 'User' },
   untrustedKeys: ['name'],
   auditEntity: 'ai_employee_message',
   auditAction: 'send_push',
@@ -94,7 +92,7 @@ export const messageEmployee: AiToolDef<Args> = {
     ? `Сообщение ${a.employeeName || 'сотруднику'}: «${truncateText(a.message, 200)}»`
     : `${a.employeeName || 'Xodim'}ga xabar: «${truncateText(a.message, 200)}»`),
   handler: async (ctx, args) => {
-    const r = await findEmployee(ctx, args);
+    const r = await findEmployee(ctx, { employeeName: args.employeeName });
     if (!r.one) return whoMissing(ctx, r);
     // Owner 2026-10-19: oddiy CHAT xabari (ilovadagi chatda ko'rinadi) + Telegram + bildirishnoma
     const sent = await postChatDm({ companyId: ctx.companyId, fromUserId: ctx.userId, toUserId: r.one.id, text: truncateText(args.message, 400) });
@@ -162,7 +160,6 @@ export const callEmployee: AiToolDef<Args> = {
   purposes: ASSIST,
   channels: ALL_CHANNELS,
   behavior: 'BLOCKING',
-  refs: { employeeId: 'User' },
   untrustedKeys: ['name'],
   auditEntity: 'ai_relay_call',
   auditAction: 'create',
@@ -170,7 +167,7 @@ export const callEmployee: AiToolDef<Args> = {
     ? `Позвонить ${a.employeeName || 'сотруднику'} и сказать: «${truncateText(a.message, 200)}»`
     : `${a.employeeName || 'Xodim'}ga qo'ng'iroq qilib aytish: «${truncateText(a.message, 200)}»`),
   handler: async (ctx, args) => {
-    const r = await findEmployee(ctx, args);
+    const r = await findEmployee(ctx, { employeeName: args.employeeName });
     if (!r.one) return whoMissing(ctx, r);
     const q = getSharedQueue();
     if (!q) return { status: 'error', message: L(ctx, "Qo'ng'iroq xizmati hozir ishlamayapti.", 'Сервис звонков сейчас недоступен.'), retryable: false };

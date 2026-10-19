@@ -31,6 +31,8 @@ import { openFirstAvailable, openWithTimeout, type ProviderCandidate, type Provi
 import { ATTENDANCE_TOOL, attendanceToolDeclaration, runAttendanceTool } from './sessionTools';
 import { TranscriptLog } from './transcriptLog';
 import { clearVision, pushFrame } from './vision';
+import { pureYesNo } from '../brain/style';
+import { getTool } from '../tools/registry';
 import { VISION_GUIDE } from '../brain/systemPrompt';
 import {
   classifyVoiceError, FAIL_TEXT, failCodeFor, LIVE_FALLBACK_MODELS, liveModelDown, modelChain, noteLiveFailure, noteLiveOk,
@@ -505,6 +507,12 @@ class ManagedVoiceSession implements VoiceSessionHandle {
     this.vs.pushAudio(pcm16k);
   }
 
+  /** Pending amal so'ralgandan keyin foydalanuvchi aniq "ha" (accept) yoki "yo'q" degan bo'lsa — true. */
+  private userSaidYesNo(accept: boolean): boolean {
+    if (!this.lastPendingAt || this.lastUserAt <= this.lastPendingAt) return false;
+    return pureYesNo(this.lastUserText) === accept;
+  }
+
   // Kamera (owner 2026-10-18): kadrlar xotiraga (tool'lar uchun) va ~1 kadr/s Live modelga
   private visionOn = false;
   private lastVideoAt = 0;
@@ -534,8 +542,19 @@ class ManagedVoiceSession implements VoiceSessionHandle {
     this.out.push(f);
   }
 
+  // Ovozli tasdiq tekshiruvi (audit 2026-10-19): oxirgi foydalanuvchi gapi va oxirgi pending amal vaqti
+  private lastUserText = '';
+  private lastUserAt = 0;
+  private lastPendingAt = 0;
+
   private onTranscript(t: { role: 'user' | 'assistant'; text: string; final: boolean }) {
     if (this.state !== 'connected') return;
+    if (t.role === 'user' && t.text) {
+      // Bir navbat ichida bo'laklab keladi — yangi navbat (2 s jimlikdan keyin) bo'lsa matn qaytadan yig'iladi
+      const now = Date.now();
+      this.lastUserText = now - this.lastUserAt > 2_000 ? String(t.text) : `${this.lastUserText} ${t.text}`.slice(-200);
+      this.lastUserAt = now;
+    }
     if (t.role === 'assistant' && (this.pendingTools.size || !this.disclosureDone)) return;
     const text = String(t.text || '').slice(0, 2000);
     if (!text) return;
@@ -564,6 +583,12 @@ class ManagedVoiceSession implements VoiceSessionHandle {
         revoke = ac.code !== 'feature';
       } else if (!this.allowedTools.has(name)) {
         result = { status: 'denied', message: DENIED[this.lang], retryable: false };
+      } else if (getTool(name)?.spokenConfirm && !this.userSaidYesNo((c.args || {}).accept === true)) {
+        // XAVFSIZLIK (audit 2026-10-19): model o'zi "tasdiqladim" deya olmaydi — foydalanuvchi pending amal
+        // so'ralgandan KEYIN aniq "ha"/"yo'q" degan bo'lishi shart (kaskad yo'lidagi qoida bilan bir xil)
+        result = { status: 'error', retryable: true, message: this.lang === 'ru'
+          ? 'Пользователь ещё не ответил «да» или «нет». Спросите его и дождитесь ответа.'
+          : "Foydalanuvchi hali aniq «ha» yoki «yo'q» demadi. Undan so'rang va javobini kuting." };
       } else if (name === ATTENDANCE_TOOL) {
         result = await runAttendanceTool({ companyId: this.companyId, employeeId: this.employeeId, confirmationId: this.opts.confirmationId, lang: this.lang }, c.args || {});
       } else {
@@ -579,6 +604,7 @@ class ManagedVoiceSession implements VoiceSessionHandle {
     if (this.isOver()) { this.pendingTools.delete(id); return; }
     this.safeSend(AIV_SERVER_EVENTS.tool, { sessionId: this.sessionId, name, status: result.status, message: result.message });
     try { this.transport.activity?.({ tool: name, phase: 'end', status: result.status }); } catch { /* avatar — ixtiyoriy */ }
+    if (pending || result.status === 'needs_confirmation') this.lastPendingAt = Date.now();
     if (pending) this.sendConfirmCard(pending);
     // Avval "kutilmoqda" holatidan chiqaramiz, keyin javob — shundan keyingi model ovozi o'tadi
     this.pendingTools.delete(id);

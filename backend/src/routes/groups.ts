@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import Group from '../models/Group';
 import User from '../models/User';
-import { emitToUser, getIO } from '../services/socket';
+import { emitToUser, getIO, leaveGroupRoom } from '../services/socket';
 import { scoped, stamped } from '../middleware/scope';
 import { getTenant } from '../middleware/tenantContext';
 
@@ -15,6 +15,19 @@ const router = Router();
 // production'da real foydalanuvchida xato tashlagani Render log'ida
 // ([ClientError] "l.memberIds.length" ...) tasdiqlangan. Frontend'da ham
 // himoya qo'shildi, lekin manba — shu yerda — eng ishonchli joy.
+/**
+ * XAVFSIZLIK (audit 2026-10-19): guruhga faqat SHU firmaning xodimlari (dasturchi — qo'llab-quvvatlash uchun) qo'shiladi.
+ * Aks holda A firma xodimi B firma odamlarini guruhga qo'shib, ularga xabar/qo'ng'iroq/push yubora olardi.
+ */
+async function sameCompanyIds(ids: unknown[]): Promise<string[]> {
+  const list = Array.from(new Set((Array.isArray(ids) ? ids : []).map(String).filter((x) => /^[a-f0-9]{24}$/i.test(x)))).slice(0, 500);
+  if (!list.length) return [];
+  const t = getTenant();
+  if (t?.isDeveloper) return list;
+  const rows: any[] = await User.find({ _id: { $in: list }, $or: [{ companyId: t?.companyId }, { role: 'dasturchi' }] }).select('_id').lean();
+  return rows.map((r) => String(r._id));
+}
+
 const shape = (g: any) => ({ ...g.toObject(), id: g._id, memberIds: g.memberIds || [], adminIds: g.adminIds || [] });
 
 // Foydalanuvchi a'zo bo'lgan guruhlar
@@ -99,7 +112,7 @@ router.post('/', async (req, res) => {
     if (!creatorId) return res.status(401).json({ error: 'Autentifikatsiya talab etiladi' });
     const { name, memberIds, avatar } = req.body;
     if (!name?.trim()) return res.status(400).json({ error: 'name kerak' });
-    const members = Array.from(new Set([String(creatorId), ...(memberIds || []).map(String)]));
+    const members = Array.from(new Set([String(creatorId), ...(await sameCompanyIds(memberIds || []))]));
     const group = await Group.create(stamped({
       name: name.trim(),
       avatar,
@@ -131,7 +144,7 @@ router.post('/:id/members', async (req, res) => {
     if (!group) return res.status(404).json({ error: 'Guruh topilmadi' });
     if (!group.memberIds) group.memberIds = [];
     if (!group.memberIds.includes(String(actorId))) return res.status(403).json({ error: 'Faqat guruh a\'zosi qo\'sha oladi' });
-    const toAdd = (memberIds || []).map(String).filter((id: string) => !group.memberIds.includes(id));
+    const toAdd = (await sameCompanyIds(memberIds || [])).filter((id: string) => !group.memberIds.includes(id));
     group.memberIds.push(...toAdd);
     await group.save();
     (group.memberIds || []).forEach(uid => emitToUser(uid, 'group:update', shape(group)));
@@ -162,6 +175,7 @@ router.post('/:id/leave', async (req, res) => {
     const isGroupAdmin = (group.adminIds || []).includes(String(actorId));
     if (!isSelf && !isGroupAdmin) return res.status(403).json({ error: 'Faqat guruh admini boshqa a\'zoni chiqara oladi' });
     group.memberIds = (group.memberIds || []).filter(id => id !== leaving);
+    leaveGroupRoom(leaving, String(group._id));
     group.adminIds = (group.adminIds || []).filter(id => id !== leaving);
     await group.save();
     emitToUser(leaving, 'group:removed', { id: String(group._id) });

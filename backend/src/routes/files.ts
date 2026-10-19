@@ -27,6 +27,12 @@ router.get('/proxy', async (req, res) => {
   if (parsed.protocol !== 'https:' || !ALLOWED_HOSTS.test(parsed.hostname)) {
     return res.status(400).json({ error: 'Faqat Cloudinary manzillari proksi qilinadi' });
   }
+  // XAVFSIZLIK (audit 2026-10-19): faqat O'Z Cloudinary hisobimiz (begona hisobdagi fayl bizning domenimizdan
+  // berilmasin) va "fetch" (istalgan tashqi URL'ni olib kelish) rejimi taqiqlanadi
+  const cloud = process.env.CLOUDINARY_CLOUD_NAME;
+  if ((cloud && !parsed.pathname.startsWith(`/${cloud}/`)) || /\/(fetch|youtube|twitter|facebook)\//i.test(parsed.pathname)) {
+    return res.status(400).json({ error: "Faqat o'z fayllarimiz proksi qilinadi" });
+  }
 
   try {
     // MUHIM: video/ovoz elementlari (<video>/<audio>) brauzerda ISHLASHI
@@ -54,7 +60,9 @@ router.get('/proxy', async (req, res) => {
     // nom/turi bilan almashtiramiz — foydalanuvchi/Android/Windows uchun
     // fayl to'g'ri tanilishi uchun.
     const overrideFilename = typeof req.query.filename === 'string' ? req.query.filename : null;
-    const overrideType = typeof req.query.type === 'string' ? req.query.type : null;
+    // Turi — faqat ruxsat etilgan ro'yxatdan (ilova o'rnatuvchilari uchun); erkin "type" (masalan text/html) qabul qilinmaydi
+    const TYPE_ALLOW = new Set(['application/vnd.android.package-archive', 'application/octet-stream', 'application/x-msdownload', 'application/x-msi', 'application/java-archive', 'application/vnd.debian.binary-package', 'application/x-apple-diskimage']);
+    const overrideType = typeof req.query.type === 'string' && TYPE_ALLOW.has(req.query.type) ? req.query.type : null;
 
     const contentType = overrideType || upstream.headers.get('content-type') || 'application/octet-stream';
     res.setHeader('Content-Type', contentType);
@@ -71,7 +79,13 @@ router.get('/proxy', async (req, res) => {
     // sifatida qaytariladi (inline render/skript ishga tushmaydi), boshqa
         // barcha rasm/video turlari avvalgidek inline ko'rsatiladi.
     const isSvg = /image\/svg/i.test(contentType);
-    if (isSvg) {
+    // Faqat rasm/video/ovoz (SVG emas) brauzerda ochiladi; qolgani (HTML va h.k.) — har doim yuklab olish
+    const inlineSafe = /^(image\/(png|jpe?g|gif|webp|heic|heif|avif)|video\/|audio\/)/i.test(contentType) && !isSvg;
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
+    if (!inlineSafe && !overrideFilename) {
+      res.setHeader('Content-Disposition', 'attachment');
+    } else if (isSvg) {
       const safeName = (overrideFilename || 'image.svg').replace(/["\r\n]/g, '_');
       res.setHeader('Content-Disposition', `attachment; filename="${safeName}"`);
     } else if (overrideFilename) {

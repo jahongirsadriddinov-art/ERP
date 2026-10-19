@@ -129,6 +129,7 @@ async function setBlocked(req: any, res: any, blocked: boolean) {
     await user.save();
     // Bloklanganning faol AI ovozli sessiyalari darhol tugaydi (review B2; AI o'chiq bo'lsa no-op)
     if (blocked && aiConfig.enabled) void aiEndSessionsForUser(String(user._id), 'blocked');
+    if (blocked) { try { (await import('../services/socket')).kickUser(String(user._id)); } catch { /* socket yo'q */ } }
 
     if (tenant?.userId) {
       const actor = await User.findById(tenant.userId).lean().catch(() => null);
@@ -238,6 +239,7 @@ router.delete('/:id', async (req, res) => {
     }, target, 'delete');
     if (accessErr) return res.status(accessErr.status).json({ error: accessErr.error });
     const user = await User.findOneAndDelete({ _id: target._id });
+    if (user) { try { (await import('../services/socket')).kickUser(String(user._id)); } catch { /* socket yo'q */ } }
     if (!user) return res.status(404).json({ error: 'Foydalanuvchi topilmadi' });
 
     if (tenant?.userId) {

@@ -358,7 +358,9 @@ export default function AIAssistant({ currentUser, users, token, open, onClose, 
   // Tasdiqlash oynasi matni: kim, qanday o'zgarish — foydalanuvchi aniq ko'rib tasdiqlashi uchun
   const describeDirectAction = (a: AiAction): string => {
     const ru = i18n.language?.startsWith('ru');
-    const name = a.userName || users.find(u => u.id === String(a.userId))?.name || '';
+    // XAVFSIZLIK (audit 2026-10-19): ism faqat haqiqiy userId bo'yicha (AI bergan userName'ga ishonilmaydi —
+    // injeksiya bilan "Ali o'chirilsinmi?" deb boshqa odamni o'chirtirib yuborish mumkin edi)
+    const name = users.find(u => u.id === String(a.userId))?.name || (a.userId ? `#${String(a.userId).slice(-6)}` : '');
     if (a.type === 'delete_user') {
       return tr('ai.confirmDeleteUser', "{{name}} tizimdan o'chirilsinmi? Bu amalni qaytarib bo'lmaydi.", "Удалить {{name}} из системы? Это действие необратимо.", { name });
     }
@@ -621,8 +623,8 @@ export default function AIAssistant({ currentUser, users, token, open, onClose, 
                   <p className="text-[13px] font-medium">"{pending.action.text}"</p>
                 </div>
               )}
-              {pending.action.toUserName && (
-                <p className="text-[11px] text-muted-foreground">{t('ai.recipientLabel')}: <span className="font-semibold text-foreground">{pending.action.toUserName}</span></p>
+              {pending.action.toUserId && (
+                <p className="text-[11px] text-muted-foreground">{t('ai.recipientLabel')}: <span className="font-semibold text-foreground">{users.find(u => u.id === String(pending.action.toUserId))?.name || '—'}</span></p>
               )}
               <div className="flex gap-2 pt-1">
                 <button onClick={confirm}

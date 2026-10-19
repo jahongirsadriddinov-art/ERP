@@ -1021,6 +1021,21 @@ export async function keyboardForUser(user: any, lang?: BotLang) {
 }
 
 // ─── /start command ────────────────────────────────────────────────────────────
+/**
+ * XAVFSIZLIK (audit 2026-10-19): bloklangan xodim bot orqali ham ishlay olmasin (sayt/ilova 403 qaytaradi,
+ * bot esa avval isBlocked'ni umuman tekshirmasdi — tasdiqlash, chiqim, hisobotlar ochiq qolardi).
+ * true — bloklangan (xabar yuborildi, ishlov to'xtatilsin).
+ */
+async function blockedInBot(chatId: number | string | undefined, callbackId?: string): Promise<boolean> {
+  if (chatId === undefined || chatId === null) return false;
+  const u: any = await User.findOne({ telegramChatId: String(chatId) }).select('isBlocked language').lean().catch(() => null);
+  if (!u?.isBlocked) return false;
+  const text = u.language === 'ru' ? '⛔ Ваш аккаунт заблокирован. Обратитесь к руководителю.' : "⛔ Hisobingiz bloklangan. Rahbaringizga murojaat qiling.";
+  if (callbackId) await bot.answerCallbackQuery(callbackId, { text, show_alert: true }).catch(() => {});
+  else await bot.sendMessage(String(chatId), text).catch(() => {});
+  return true;
+}
+
 bot.onText(/\/start/, async (msg: any) => {
   const chatId = msg.chat.id;
   // Deep-link token bilan /start bo'lsa (masalan "/start abc123") — registration
@@ -1471,6 +1486,7 @@ bot.setMyCommands([
 
 bot.on('message', async (msg: any) => {
   const chatId = msg.chat.id;
+  if (msg.chat?.type === 'private' && await blockedInBot(chatId)) return;
 
   if (msg.chat?.type === 'private' && /^\/res(@\w+)?\s*$/i.test(String(msg.text || ''))) {
     await resetChatState(chatId);
@@ -2343,6 +2359,7 @@ bot.on('callback_query', async (query: any) => {
 
   const user = await User.findOne({ telegramChatId: chatId?.toString() }).catch(() => null);
   const lang = user?.language as BotLang | undefined;
+  if ((user as any)?.isBlocked) { await blockedInBot(chatId, query.id); return; }
 
   // ── Texnik ishlar rejimi — tugma bosishlari ham shu tekshiruvdan o'tadi.
   if (!user || !isDev(user.role)) {

@@ -7,8 +7,11 @@ import type { ToolResult } from '../contracts';
 //    Tool natijasidagi matn (untrusted) yoki modelning o'zi qaror qila olmaydi (prompt-injection himoyasi).
 //  • capToolResult — modelga qaytadigan natija hajmi chegarasi (tezlik + token tejash).
 
-export const APPROVE_RE = /tasdiq|ma['ʻ’`]?qulla|qabul\s*qil|approve|confirm|утверд|одобр|подтверд|прими|принять|приму/i;
-export const REJECT_RE = /rad\s*(et|qil|qilin)|qaytar|reject|decline|отклон|отказ/i;
+// XAVFSIZLIK (audit 2026-10-19): faqat BUYRUQ shakli ("tasdiqla", "tasdiqlang", "tasdiqlayman"). Savol/ot shakli
+// ("tasdiqlash kerak bo'lganlar qaysi?", "tasdiqlanmagan", "tasdiq kutyapti") o'tmaydi — aks holda injeksiya qilingan
+// ERP matni shunchaki ro'yxat so'ralganda ham tranzaksiyani tasdiqlatib yuborishi mumkin edi.
+export const APPROVE_RE = /tasdiqla(?!sh)(?!n(?!g))|tasdiqlab\s*(ber|qo['ʻ’`]?y)|ma['ʻ’`]?qulla(?!sh)(?!n(?!g))|qabul\s*qil(?![ia]n)|\bapprove\b|утверди(?!т)|утверждаю|одобри|одобряю|подтверди|подтверждаю|прими(?![а-яё])|принимаю/i;
+export const REJECT_RE = /rad\s*(et(?!il)|qil(?![ia]n))|qaytar(?!il)|\breject\b|\bdecline\b|отклони|отклоняю|откажи/i;
 const AFFIRM_RE = /^\s*(ha|xa|haa+|ok|okey|mayli|albatta|bo['ʻ’`]?pti|roziman|да|ага|хорошо|конечно|давай)(?=$|[\s.,!])/i;
 
 export type DecisionKind = 'approve' | 'reject';

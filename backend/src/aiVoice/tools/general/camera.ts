@@ -141,7 +141,6 @@ export const forwardMedia: AiToolDef<FwdArgs> = {
     properties: {
       mediaId: { type: 'string', maxLength: 20 },
       to: { type: 'string', enum: ['manager', 'employee'] },
-      employeeId: { type: 'string' },
       employeeName: { type: 'string', maxLength: 60 },
       caption: { type: 'string', maxLength: 300 },
     },
@@ -154,7 +153,6 @@ export const forwardMedia: AiToolDef<FwdArgs> = {
   purposes: ASSIST,
   channels: ALL_CHANNELS,
   behavior: 'BLOCKING',
-  refs: { employeeId: 'User' },
   untrustedKeys: ['name'],
   auditEntity: 'ai_media_forward',
   auditAction: 'send_push',
@@ -174,7 +172,7 @@ export const forwardMedia: AiToolDef<FwdArgs> = {
       if (!targets.length) return { status: 'not_found', retryable: false, message: L(ctx, "Sizning rahbaringiz topilmadi — kimga yuborishni ism bilan ayting.", 'Руководитель не найден — назовите получателя.') };
     } else {
       if (ctx.role === 'ishchi' && !ctx.isOwner) return { status: 'denied', retryable: false, message: L(ctx, 'Ishchi faqat rahbariga yubora oladi.', 'Рабочий может отправить только руководителю.') };
-      const r = await findEmployee(ctx, args);
+      const r = await findEmployee(ctx, { employeeName: args.employeeName });
       if (!r.one) {
         const names = r.many?.map((w) => w.name).join(', ');
         return { status: names ? 'error' : 'not_found', retryable: false, message: names ? L(ctx, `Bir nechta: ${names}. Qaysi biri?`, `Несколько: ${names}. Кто?`) : L(ctx, 'Bunday xodim topilmadi.', 'Сотрудник не найден.') };

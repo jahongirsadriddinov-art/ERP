@@ -167,7 +167,8 @@ export function buildSystemPrompt(i: SystemPromptInput): string {
   const lines = [
     STATIC_RULES,
     '',
-    capabilitiesLine(i.toolNames, i.channel),
+    // Ovozda — TUSHUNISH/ISHCHI LUG'ATI bilan bir xil (takror, javobni sekinlashtiradi)
+    isVoiceChannel(i.channel) ? '' : capabilitiesLine(i.toolNames, i.channel),
     personaPromptLine(i.persona, i.voiceName),
     i.vision ? VISION_GUIDE : '',
     roleGuideFor(i.role, i.isOwner),
@@ -180,7 +181,10 @@ export function buildSystemPrompt(i: SystemPromptInput): string {
     objs.length ? `- ${objLabel}: ${objs.join(', ')}${more ? ` (+${more})` : ''}` : (i.objects ? `- ${objLabel}: yo'q` : ''),
     `- Kanal: ${CHANNEL_UZ[i.channel] || i.channel}`,
     `- Bugun: ${i.today}${i.weekday ? ` (${WEEKDAY_UZ[i.weekday]})` : ''}${i.time ? `, hozir ${i.time}` : ''}, Asia/Tashkent`,
-    `- Standart javob tili: ${i.lang === 'ru' ? 'rus' : "o'zbek"} (foydalanuvchi boshqa tilda yozsa — o'sha tilda). Javob qisqa, og'zaki, jadval/markdown'siz.`,
+    isVoiceChannel(i.channel)
+      // Ovozda "boshqa tilda gapirsa — o'sha tilda" model o'zbekchani turkcha deb eshitib tilni almashtirardi
+      ? `- Javob tili: ${i.lang === 'ru' ? 'rus' : "o'zbek"} (faqat o'zbek yoki rus). Javob qisqa, og'zaki.`
+      : `- Standart javob tili: ${i.lang === 'ru' ? 'rus' : "o'zbek"} (foydalanuvchi boshqa tilda yozsa — o'sha tilda). Javob qisqa, og'zaki, jadval/markdown'siz.`,
   ];
   return lines.filter((l) => l !== '').join('\n').replace('KONTEKST:', '\nKONTEKST:');
 }

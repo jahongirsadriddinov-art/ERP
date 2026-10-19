@@ -81,23 +81,42 @@ export function toFunctionDeclarations(tools: ToolDeclaration[]) {
  */
 const searchUnsupported = new Set<string>();
 export const liveSearchEnabled = (model: string): boolean => process.env.AI_LIVE_GOOGLE_SEARCH !== '0' && !searchUnsupported.has(model);
+/**
+ * Minimal fikrlash (owner 2026-10-19: "bitta buyruqni ancha vaqt o'ylayapdi"): Live modeli standartda
+ * har navbatdan oldin fikrlaydi — ovozli suhbatda bu sezilarli pauza. Model qabul qilmasa — shu jarayonda
+ * o'sha model uchun o'chiriladi. AI_LIVE_THINKING=1 — model standarti (fikrlash yoqiq).
+ */
+const thinkingUnsupported = new Set<string>();
+export function liveThinkingFor(model: string): Record<string, unknown> | undefined {
+  if (process.env.AI_LIVE_THINKING === '1' || thinkingUnsupported.has(model)) return undefined;
+  if (/flash-lite|3\.1-flash-live/.test(model)) return { thinkingLevel: 'minimal' };
+  return { thinkingBudget: 0 };
+}
 /** Faqat testlar uchun. */
-export function __resetLiveSearchForTests(): void { searchUnsupported.clear(); }
+export function __resetLiveSearchForTests(): void { searchUnsupported.clear(); thinkingUnsupported.clear(); }
 
-export function buildLiveConfig(opts: VoiceOpenOpts, o: { search?: boolean } = {}): Record<string, unknown> {
-  const decls = toFunctionDeclarations(opts.tools || []);
+export function buildLiveConfig(opts: VoiceOpenOpts, o: { search?: boolean; thinking?: Record<string, unknown> } = {}): Record<string, unknown> {
+  // Ichki Google qidiruvi yoqiq bo'lsa — searchWeb tool'i berilmaydi: u ALOHIDA model so'rovi (bir necha
+  // soniya); Live o'zi qidiradi. Prompt'dagi "searchWeb" ishoralari ham ichki qidiruvga yo'naltiriladi.
+  const toolList = o.search ? (opts.tools || []).filter((t) => t.name !== 'searchWeb') : (opts.tools || []);
+  const decls = toFunctionDeclarations(toolList);
   const tools: Record<string, unknown>[] = [];
   if (decls.length) tools.push({ functionDeclarations: decls });
   if (o.search) tools.push({ googleSearch: {} });
+  const text = o.search && toolList.length !== (opts.tools || []).length
+    ? opts.systemInstruction.replace(/searchWeb(\([^)]*\))?/g, "Google qidiruvingiz")
+    : opts.systemInstruction;
   return {
     responseModalities: [Modality.AUDIO],
-    systemInstruction: { parts: [{ text: opts.systemInstruction }] },
+    systemInstruction: { parts: [{ text }] },
+    ...(o.thinking ? { thinkingConfig: o.thinking } : {}),
     speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: opts.voiceName || 'Kore' } } },
     inputAudioTranscription: {},
     outputAudioTranscription: {},
     realtimeInputConfig: opts.ptt
       ? { automaticActivityDetection: { disabled: true } }
-      : { automaticActivityDetection: { silenceDurationMs: 600, prefixPaddingMs: 200 } },
+      // 750 ms: o'zbekcha gap orasidagi qisqa pauzada buyruq yarmida kesilib qolmasin (600 da bo'linardi)
+      : { automaticActivityDetection: { silenceDurationMs: 750, prefixPaddingMs: 200 } },
     contextWindowCompression: { slidingWindow: {} },
     // Har doim yoqiladi — server SessionResumptionUpdate yuboradi (GoAway'da qayta ulanish uchun)
     sessionResumption: opts.resumptionHandle ? { handle: opts.resumptionHandle } : {},
@@ -257,8 +276,8 @@ export class GeminiLiveProvider implements VoiceProvider {
 
   async open(opts: VoiceOpenOpts): Promise<VoiceSession> {
     const model = String(opts.model || '');
-    const connectOnce = async (key: string, search: boolean): Promise<VoiceSession> => {
-      const config = buildLiveConfig(opts, { search });
+    const connectOnce = async (key: string, search: boolean, thinking: boolean): Promise<VoiceSession> => {
+      const config = buildLiveConfig(opts, { search, thinking: thinking ? liveThinkingFor(model) : undefined });
       const s = new GeminiLiveSession();
       try {
         const live = await this.connector.connect(key, {
@@ -278,18 +297,34 @@ export class GeminiLiveProvider implements VoiceProvider {
         throw e;
       }
     };
-    // Avval Google qidiruvi bilan; kvota/kalit xatosidan boshqa sabab bilan ochilmasa — qidiruvsiz (bir marta)
+    // Avval to'liq (Google qidiruvi + minimal fikrlash); kvota/kalit xatosidan boshqa sabab bilan ochilmasa —
+    // avval qidiruvsiz, keyin fikrlash sozlamasisiz ham (har biri shu model uchun bir marta)
     const connectWith = async (key: string): Promise<VoiceSession> => {
-      if (!liveSearchEnabled(model)) return connectOnce(key, false);
-      try {
-        return await connectOnce(key, true);
-      } catch (e) {
-        if (isQuotaError(e) || isAuthError(e)) throw e;
-        const s = await connectOnce(key, false);
-        searchUnsupported.add(model);
-        console.warn(`[aiVoice] ${model}: Live Google qidiruvi qabul qilinmadi — o'chirildi (${(e as Error)?.message?.slice(0, 80)})`);
-        return s;
+      const search = liveSearchEnabled(model);
+      const thinking = !!liveThinkingFor(model);
+      const plan: Array<[boolean, boolean]> = [[search, thinking]];
+      if (search) plan.push([false, thinking]);
+      if (thinking) plan.push([false, false]);
+      let lastErr: unknown;
+      for (let i = 0; i < plan.length; i++) {
+        const [sq, th] = plan[i];
+        try {
+          const s = await connectOnce(key, sq, th);
+          if (search && !sq) {
+            searchUnsupported.add(model);
+            console.warn(`[aiVoice] ${model}: Live Google qidiruvi qabul qilinmadi — o'chirildi (${(lastErr as Error)?.message?.slice(0, 80)})`);
+          }
+          if (thinking && !th) {
+            thinkingUnsupported.add(model);
+            console.warn(`[aiVoice] ${model}: Live thinkingConfig qabul qilinmadi — o'chirildi`);
+          }
+          return s;
+        } catch (e) {
+          if (isQuotaError(e) || isAuthError(e) || i === plan.length - 1) throw e;
+          lastErr = e;
+        }
       }
+      throw lastErr;
     };
     if (opts.apiKey) return connectWith(opts.apiKey);
     // Umumiy kalit aylanishi (lib/geminiKeys): kvota kalit × model bo'yicha (scope) — Live 429 matn

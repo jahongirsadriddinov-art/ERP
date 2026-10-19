@@ -294,11 +294,20 @@ describe('VoiceSessionManager', () => {
   });
 
   it('platforma cap (AI_LIVE_MAX_CONCURRENT=1): ikkinchi xodim — platform_cap', async () => {
+    process.env.AI_LIVE_MAX_CONCURRENT = '1';
     const { mgr } = mk();
     const a = await startCall(mgr);
     expect(a.r.ok).toBe(true);
     const b = await startCall(mgr, { employeeId: A.prorabId });
     expect(b.r).toEqual({ ok: false, reason: 'platform_cap' });
+    delete process.env.AI_LIVE_MAX_CONCURRENT;
+  });
+
+  it("standart Live sig'imi — kamida 3 (ikkinchi xodim ham ulanadi)", async () => {
+    delete process.env.AI_LIVE_MAX_CONCURRENT;
+    const { mgr } = mk();
+    expect((await startCall(mgr)).r.ok).toBe(true);
+    expect((await startCall(mgr, { employeeId: A.prorabId })).r.ok).toBe(true);
   });
 
   it('SIGTERM drain: sessiyalar interrupted (shutdown)', async () => {

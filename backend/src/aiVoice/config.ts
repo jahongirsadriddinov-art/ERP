@@ -37,7 +37,12 @@ export const aiConfig = {
    * Platforma bo'yicha bir vaqtdagi Gemini Live sessiyalari chegarasi (A6). Standart 1 — owner qarori
    * (2026-10-14): pilot Render FREE (0.1 CPU) da, Starter+ ga o'tilganda env bilan oshiriladi.
    */
-  get liveMaxConcurrent() { return int('AI_LIVE_MAX_CONCURRENT', 1, 1, 100); },
+  // Owner 2026-10-19: "kimdir ilovada AI bilan gaplashsa, boshqalar qo'ng'iroq qila olmayapti" — standart endi
+  // kalitlar soniga qarab (har Gemini kaliti ~3 ta parallel Live sessiya), 3..10. Env berilsa — o'sha.
+  get liveMaxConcurrent() {
+    const keys = new Set(`${process.env.GEMINI_API_KEYS || ''},${process.env.GEMINI_API_KEY || ''}`.split(',').map((k) => k.trim()).filter(Boolean)).size;
+    return int('AI_LIVE_MAX_CONCURRENT', Math.min(10, Math.max(3, keys * 3)), 1, 100);
+  },
   /** Telegram akkaunti bo'yicha bir vaqtdagi qo'ng'iroqlar (A1: rasmiy mijozlarda 1 ta). */
   get tgMaxConcurrent() { return int('AI_TG_MAX_CONCURRENT', 1, 1, 2); },
   /** Telegram akkauntining platforma bo'yicha kunlik qo'ng'iroq chegarasi. */

@@ -11,6 +11,7 @@ import { validate } from './validate';
 import { applyCategories } from './categorize';
 import { parseNum } from './normalize';
 import { ExtractedLine, ParseResult, ResourceRow, SmetaMeta } from './types';
+import { groupOf, parseExcelTable } from './excelTable';
 
 function parseMeta(lines: ExtractedLine[], filename: string): SmetaMeta {
   const text = lines.map(l => l.text);
@@ -101,7 +102,7 @@ function parseExcelDirect(lines: ExtractedLine[], filename: string): ParseResult
       index, shifr: null, shifrNote: null,
       rawName, shortName: rawName.split(' ').slice(0, 4).join(' '),
       spec: null, unit: cells[unitIdx],
-      qty, price, total, group: 'material',
+      qty, price, total, group: groupOf(cells[unitIdx], '', rawName),
       rawLine: ln.text, warnings: [],
     });
   }
@@ -134,6 +135,14 @@ export async function parseSmeta(input: Buffer | string, filename = 'smeta.pdf')
 
   // Excel uchun — to'g'ridan-to'g'ri strukturaviy parser (tekst-pattern yo'q)
   if (ext === '.xlsx' || ext === '.xls') {
+    // Avval ustun sarlavhalari bo'yicha (aniqroq); sarlavha topilmasa — eski "birlik katagi" yo'li
+    try {
+      const buf = Buffer.isBuffer(input) ? input : require('fs').readFileSync(input);
+      const table = parseExcelTable(buf, filename);
+      if (table && table.resources.length) return table;
+    } catch (e) {
+      console.warn('[smeta] Excel jadvalini sarlavha bo\'yicha o\'qib bo\'lmadi:', (e as Error)?.message);
+    }
     const ex = await extractText(input, filename);
     return parseExcelDirect(ex.lines, filename);
   }

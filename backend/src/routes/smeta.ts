@@ -5,6 +5,7 @@ import fs from 'fs';
 import path from 'path';
 import { parseSmeta } from '../smeta';
 import ObjectModel from '../models/Object';
+import { aiSmetaFallback } from '../smeta/aiFallback';
 import { scoped } from '../middleware/scope';
 import { getTenant } from '../middleware/tenantContext';
 
@@ -33,7 +34,12 @@ router.post('/parse', upload.single('smeta'), async (req: Request, res: Response
 
   try {
     const buf = fs.readFileSync(file.path);
-    const result = await parseSmeta(buf, file.originalname || 'smeta.pdf');
+    let result = await parseSmeta(buf, file.originalname || 'smeta.pdf');
+    // Deterministik yo'l hech narsa topmadi (skanerlangan PDF, notanish jadval) — AI zaxirasi (Gemini) bilan urinamiz
+    if (!result.resources?.length && ['.pdf', '.docx', '.xlsx', '.xls'].includes(ext)) {
+      const ai = await aiSmetaFallback(file.path, file.mimetype, ext, file.originalname || 'smeta').catch(() => null);
+      if (ai) result = ai;
+    }
 
     // XAVFSIZLIK (audit 2026-10-19): obyekt smetasi/byudjetini faqat rahbar yoki o'sha obyekt prorabi yangilaydi;
     // objectId — faqat ObjectId satri (multipart tanasi global $-tozalagichdan o'tmaydi)

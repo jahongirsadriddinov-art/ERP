@@ -123,6 +123,10 @@ async function setBlocked(req: any, res: any, blocked: boolean) {
     if (!tenant?.isDeveloper && (user.isOwner || user.role === 'dasturchi')) {
       return res.status(403).json({ error: 'Bu foydalanuvchini bloklay olmaysiz' });
     }
+    // XAVFSIZLIK (audit 2026-10-19): o'rinbosar direktorni bloklay olmaydi (faqat ega/direktor)
+    if (!tenant?.isDeveloper && user.role === 'direktor' && tenant?.role !== 'direktor') {
+      return res.status(403).json({ error: 'Direktorni faqat firma egasi yoki direktor bloklay oladi' });
+    }
     user.isBlocked = blocked;
     user.blockedAt = blocked ? new Date() : undefined;
     user.blockedBy = blocked ? String(tenant?.userId || '') : undefined;

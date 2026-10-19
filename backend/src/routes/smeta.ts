@@ -6,6 +6,7 @@ import path from 'path';
 import { parseSmeta } from '../smeta';
 import ObjectModel from '../models/Object';
 import { scoped } from '../middleware/scope';
+import { getTenant } from '../middleware/tenantContext';
 
 const router = Router();
 const upload = multer({ dest: 'uploads/', limits: { fileSize: 50 * 1024 * 1024 } });
@@ -34,7 +35,14 @@ router.post('/parse', upload.single('smeta'), async (req: Request, res: Response
     const buf = fs.readFileSync(file.path);
     const result = await parseSmeta(buf, file.originalname || 'smeta.pdf');
 
-    const objectId = req.body.objectId as string | undefined;
+    // XAVFSIZLIK (audit 2026-10-19): obyekt smetasi/byudjetini faqat rahbar yoki o'sha obyekt prorabi yangilaydi;
+    // objectId — faqat ObjectId satri (multipart tanasi global $-tozalagichdan o'tmaydi)
+    const rawObj = req.body?.objectId;
+    const objectId = typeof rawObj === 'string' && /^[a-f0-9]{24}$/i.test(rawObj) ? rawObj : undefined;
+    const t = getTenant();
+    const boss = !!t?.isDeveloper || ['direktor', 'orinbosar'].includes(String(t?.role));
+    const canWrite = !!objectId && (boss || !!(await ObjectModel.exists(scoped({ _id: objectId, foremanId: String(t?.userId || '') })).catch(() => null)));
+    if (objectId && !canWrite) return res.status(403).json({ error: "Bu obyekt smetasini o'zgartirishga ruxsat yo'q" });
     if (objectId && result.resources?.length) {
       await ObjectModel.findOneAndUpdate(
         scoped({ _id: objectId }),

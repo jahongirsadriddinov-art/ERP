@@ -18,6 +18,9 @@ import {
   createRegistration, findActiveByRawToken,
 } from '../services/registrationService';
 
+/** XAVFSIZLIK (audit 2026-10-19): foydalanuvchi kiritgan matn HTML parse_mode'li bot xabarida — escape. */
+const escHtml = (v: unknown) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
 const router = Router();
 
 const BOT_USERNAME = process.env.BOT_USERNAME || 'qurilish_erp_bot';
@@ -300,9 +303,9 @@ router.post('/complete', async (req, res) => {
           const DEVELOPER_CHAT_ID = process.env.DEVELOPER_CHAT_ID;
           if (DEVELOPER_CHAT_ID) {
             const msgText = `🆕 <b>Yangi ro'yxatdan o'tish (onlayn to'lov kutilmoqda)</b>\n\n` +
-              `👤 ${owner.firstName} ${owner.lastName || ''}\n` +
-              `📞 ${reg.phone}\n` +
-              `🏢 ${company.name.trim()}\n` +
+              `👤 ${escHtml(`${owner.firstName} ${owner.lastName || ''}`)}\n` +
+              `📞 ${escHtml(reg.phone)}\n` +
+              `🏢 ${escHtml(company.name.trim())}\n` +
               `📦 Tarif: ${planInfo.label} — ${result.amount.toLocaleString()} so'm\n\n` +
               `Roxiy (Click/Payme/Paynet) orqali to'lov havolasi yuborildi — to'lansa FIRMA VA OBUNA AVTOMATIK yaratiladi, hech qanday harakat kerak emas.`;
             await bot.sendMessage(DEVELOPER_CHAT_ID, msgText, { parse_mode: 'HTML' }).catch((e: any) => console.error('bot developer notify error:', e));
@@ -427,12 +430,12 @@ router.post('/complete', async (req, res) => {
       const methodLine = isFreePlan
         ? `Bepul sinov — tasdiqlash/rad etish uchun pastdagi tugmalarni bosing:`
         : payError
-          ? `Onlayn to'lov yaratilmadi (${payError}) — pastdagi tugmalar orqali qo'lda tasdiqlang/rad eting:`
+          ? `Onlayn to'lov yaratilmadi (${escHtml(payError)}) — pastdagi tugmalar orqali qo'lda tasdiqlang/rad eting:`
           : `"Admin orqali" to'lovni tanladi — tasdiqlash yoki rad etish uchun pastdagi tugmalarni bosing:`;
       const msgText = `🆕 <b>Yangi obuna so'rovi!</b>\n\n` +
-        `👤 ${ownerUser.firstName} ${ownerUser.lastName || ''}\n` +
-        `📞 ${ownerUser.phone}\n` +
-        `🏢 ${createdCompany.name} (${createdCompany.branchId})\n` +
+        `👤 ${escHtml(`${ownerUser.firstName} ${ownerUser.lastName || ''}`)}\n` +
+        `📞 ${escHtml(ownerUser.phone)}\n` +
+        `🏢 ${escHtml(createdCompany.name)} (${escHtml(createdCompany.branchId)})\n` +
         `${priceLine}\n\n${methodLine}`;
       await bot.sendMessage(DEVELOPER_CHAT_ID, msgText, {
         parse_mode: 'HTML',

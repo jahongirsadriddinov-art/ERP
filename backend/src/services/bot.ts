@@ -2925,12 +2925,12 @@ export async function notifyUser(userId: string, message: string) {
 // firma admin emas) ogohlantirish — avval bunday mexanizm YO'Q edi, xato
 // haqida FAQAT Render loglarini qo'lda tekshirsangiz yoki foydalanuvchi
 // shikoyat qilsa bilib olardingiz.
-export async function notifyDeveloper(message: string) {
+export async function notifyDeveloper(message: string, opts: { plain?: boolean } = {}) {
   try {
     const devs = await User.find({ role: 'dasturchi', telegramChatId: { $exists: true, $ne: '' } }).select('telegramChatId').lean();
     for (const dev of devs) {
       if (!dev.telegramChatId) continue;
-      await bot.sendMessage(dev.telegramChatId, message, { parse_mode: 'Markdown' }).catch(() => {});
+      await bot.sendMessage(dev.telegramChatId, message, opts.plain ? { disable_web_page_preview: true } : { parse_mode: 'Markdown' }).catch(() => {});
     }
   } catch (err) {
     console.error('notifyDeveloper error:', err);

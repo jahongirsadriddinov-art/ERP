@@ -30,20 +30,29 @@ function openDB() {
   });
 }
 
-async function idbGet(url) {
+// XAVFSIZLIK (audit 2026-10-19): kesh egasi — so'rovdagi token xeshi. Boshqa foydalanuvchi (logout → login)
+// avvalgi foydalanuvchining keshlangan javoblarini oflayn holatda ham ko'rmaydi.
+async function authKey(request) {
+  const h = request.headers.get('Authorization') || '';
+  if (!h) return '';
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(h));
+  return Array.from(new Uint8Array(buf)).slice(0, 12).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function idbGet(url, owner) {
   const db = await openDB();
   return new Promise(resolve => {
     const req = db.transaction('api-cache', 'readonly').objectStore('api-cache').get(url);
-    req.onsuccess = () => resolve(req.result?.data || null);
+    req.onsuccess = () => resolve(req.result && req.result.owner === owner ? req.result.data : null);
     req.onerror = () => resolve(null);
   });
 }
 
-async function idbPut(url, data) {
+async function idbPut(url, data, owner) {
   const db = await openDB();
   return new Promise(resolve => {
     const tx = db.transaction('api-cache', 'readwrite');
-    tx.objectStore('api-cache').put({ url, data, timestamp: Date.now() });
+    tx.objectStore('api-cache').put({ url, data, owner, timestamp: Date.now() });
     tx.oncomplete = resolve;
     tx.onerror = resolve;
   });
@@ -168,13 +177,13 @@ self.addEventListener('fetch', (event) => {
           if (resp.ok) {
             try {
               const data = await resp.clone().json();
-              await idbPut(request.url, data);
+              await idbPut(request.url, data, await authKey(request));
             } catch {}
           }
           return resp;
         })
         .catch(async () => {
-          const cached = await idbGet(request.url);
+          const cached = await idbGet(request.url, await authKey(request));
           if (cached) {
             return new Response(JSON.stringify(cached), {
               headers: { 'Content-Type': 'application/json', 'X-From-Cache': 'true' }

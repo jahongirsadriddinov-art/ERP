@@ -110,7 +110,10 @@ router.patch('/object/:objectId/by-name', requireOwnerOrAdmin, async (req, res) 
 // Send material
 router.post('/send', async (req, res) => {
   try {
-    const { materialId, amount, receiverId } = req.body;
+    const { materialId, receiverId } = req.body;
+    // XAVFSIZLIK (audit 2026-10-19): miqdor — faqat musbat son (manfiy son qoldiqni sun'iy oshirardi)
+    const amount = Number(req.body?.amount);
+    if (!Number.isFinite(amount) || amount <= 0 || amount > 1e9) return res.status(400).json({ error: "Miqdor musbat son bo'lishi kerak" });
     // XAVFSIZLIK — TOPILMA (audit): senderId avval to'g'ridan-to'g'ri
     // so'rov tanasidan olinardi — messages.ts'dagi fromUserId muammosi bilan
     // bir xil turdagi soxta-jo'natuvchi (impersonatsiya) zaifligi: istalgan

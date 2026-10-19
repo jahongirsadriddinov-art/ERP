@@ -270,7 +270,9 @@ router.get('/me', async (req, res) => {
 // production'ni bekorga yiqitib qo'yish xavfi bor edi) — lekin Render
 // loglarida DARHOL ko'rinadigan ogohlantirish chiqaradi.
 const DEVELOPER_PHONE = normalizePhone(process.env.DEVELOPER_PHONE || '+998900960890');
-const DEVELOPER_PASSWORD = process.env.DEVELOPER_PASSWORD || 'Dasturchi_2026';
+// XAVFSIZLIK (audit 2026-10-19): serverda (Render) kodda yozilgan ommaviy parol HECH QACHON ishlamaydi —
+// faqat Render'dagi DEVELOPER_PASSWORD yoki bazada o'rnatilgan parol (dasturchi paneli → parolni almashtirish).
+const DEVELOPER_PASSWORD = process.env.DEVELOPER_PASSWORD || (process.env.RENDER === 'true' ? '' : 'Dasturchi_2026');
 if (!process.env.DEVELOPER_PHONE || !process.env.DEVELOPER_PASSWORD) {
   console.error('🚨🚨🚨 XAVFSIZLIK OGOHLANTIRISHI: DEVELOPER_PHONE va/yoki DEVELOPER_PASSWORD .env\'da ' +
     'o\'rnatilmagan! Standart (kodda yozilgan, OMMAVIY MA\'LUM) qiymatlar ishlatilmoqda — bu holatda ' +
@@ -479,7 +481,7 @@ router.post('/dev-login', async (req, res) => {
     // (orqaga mos, hozirgi parolni sindirmaydi).
     const passwordOk = dev.passwordHash
       ? await verifyPassword(password, dev.passwordHash)
-      : password === DEVELOPER_PASSWORD;
+      : !!DEVELOPER_PASSWORD && password === DEVELOPER_PASSWORD;
     if (!passwordOk) {
       return res.status(401).json({ error: 'Telefon yoki parol noto\'g\'ri' });
     }

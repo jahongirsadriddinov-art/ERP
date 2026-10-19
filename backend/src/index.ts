@@ -194,7 +194,15 @@ app.use('/api', createApiRateLimiter());
 // helmet standarti CORP "same-origin" — frontend (erp-firma.uz / tauri.localhost / Android) boshqa origin'da,
 // shu sabab rasm/video/ovoz BLOKLANARDI. Faqat fayl yo'llari uchun "cross-origin" (API javoblari himoyada qoladi).
 app.use(['/uploads', '/api/files'], (_req, res, next) => { res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin'); next(); });
-app.use('/uploads', express.static('uploads', { maxAge: '365d', immutable: true }));
+// XAVFSIZLIK (audit 2026-10-19): yuklangan fayllar — nosniff; media/pdf'dan boshqasi brauzerda OCHILMAYDI (html → XSS bo'lardi)
+const INLINE_UPLOAD = /\.(png|jpe?g|gif|webp|heic|heif|avif|mp4|webm|mov|m4v|ogg|oga|opus|mp3|m4a|wav|aac|pdf)$/i;
+app.use('/uploads', express.static('uploads', {
+  maxAge: '365d', immutable: true,
+  setHeaders: (res, filePath) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    if (!INLINE_UPLOAD.test(filePath)) res.setHeader('Content-Disposition', 'attachment');
+  },
+}));
 app.get('/uploads/:name', serveDurableUpload); // diskda yo'q bo'lsa (deploy'dan keyin) MongoDB nusxasidan
 
 // Health-check — Render/uptime monitoring uchun. commit/deployedAt maydonlari

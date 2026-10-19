@@ -27,7 +27,9 @@ async function alertIfNew(message: string, platform: string, version: string, ur
   if (!checkRate('clienterr-alert', 15, 60 * 60 * 1000).allowed) return;
   const { notifyDeveloper } = await import('../services/bot');
   const path = (() => { try { return new URL(url).pathname; } catch { return ''; } })();
-  await notifyDeveloper(`🐞 Yangi frontend xatosi (${platform}${version ? ' ' + version : ''}${kind ? ', ' + kind : ''})\n${message.slice(0, 300)}\n📄 ${path || '—'}${userId ? `\n👤 ${userId}` : ''}`);
+  // XAVFSIZLIK (audit 2026-10-19): autentifikatsiyasiz kelgan matn — oddiy matn (Markdown/havola emas)
+  const clean = (v: string) => String(v || '').replace(/https?:\/\/\S+/gi, '[url]').replace(/@\w+/g, '[@]');
+  await notifyDeveloper(`🐞 Yangi frontend xatosi (${clean(platform)}${version ? ' ' + clean(version) : ''}${kind ? ', ' + clean(kind) : ''})\n${clean(message).slice(0, 300)}\n📄 ${path || '—'}${userId ? `\n👤 ${clean(userId)}` : ''}`, { plain: true });
 }
 
 // POST /api/errors/log — receives frontend error reports

@@ -29,6 +29,12 @@ export const PushSubscription = mongoose.model<PushSubDoc>('PushSubscription', P
 
 export async function sendPushToUser(userId: string, payload: { title: string; body: string; icon?: string; url?: string; tag?: string }) {
   if (!VAPID_PUBLIC || !VAPID_PRIVATE) return;
+  // XAVFSIZLIK (audit 2026-10-19): bloklangan/o'chirilgan foydalanuvchiga push bormaydi
+  try {
+    const { default: User } = await import('../models/User');
+    const u: any = await User.findById(userId).select('isBlocked').lean();
+    if (!u || u.isBlocked) return;
+  } catch { /* tekshirib bo'lmasa — eski xatti-harakat */ }
   const subs = await PushSubscription.find({ userId });
   const data = JSON.stringify({ ...payload, icon: payload.icon || '/favicon.svg', badge: '/favicon.svg' });
   await Promise.allSettled(

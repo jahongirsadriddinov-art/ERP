@@ -4327,7 +4327,15 @@ export default function App() {
       setCurrentUser(null); setAuthView("login");
     };
     window.addEventListener('erp:subscription-blocked', onSubBlocked);
-    return () => window.removeEventListener('erp:subscription-blocked', onSubBlocked);
+    // Hisob o'chirilgan yoki sessiya bekor qilingan (401) — xuddi shunday chiqish, faqat kirgan bo'lsa
+    const onSessionEnded = () => {
+      if (!localStorage.getItem("token")) return;
+      localStorage.removeItem("currentUser"); localStorage.removeItem("token");
+      setCurrentUser(null); setAuthView("login");
+      toast.message(tApp('profile.sessionRevokedNotice'));
+    };
+    window.addEventListener('erp:session-ended', onSessionEnded);
+    return () => { window.removeEventListener('erp:subscription-blocked', onSubBlocked); window.removeEventListener('erp:session-ended', onSessionEnded); };
   }, []);
   const [projects, setProjects] = useState<Project[]>([]);
   const [transfers, setTransfers] = useState<Transfer[]>([]);

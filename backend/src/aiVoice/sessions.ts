@@ -3,7 +3,8 @@ import AiCallEvent, { type IAiCallEvent } from '../models/AiCallEvent';
 import { aiConfig } from './config';
 import { invalidateActor } from './actor';
 import { redact, redactText } from './lib/redact';
-import { getSettings } from './settings';
+import { getSettings, invalidateSettings } from './settings';
+import AiJob from '../models/AiJob';
 
 /**
  * Qo'ng'iroq voqeasini yozish — data DOIM redact()'dan o'tadi, expiresAt firma sozlamasidan
@@ -149,4 +150,26 @@ export async function aiEndSessionsForUser(userId: string, reason = 'revoked'): 
     console.error('[aiVoice] aiEndSessionsForUser xatosi:', (e as Error).message);
     return 0;
   }
+}
+
+/**
+ * Xodim yoki butun firma o'chirilganda / to'xtatilganda (owner 2026-10-19: "o'chirilgan odam AI'dan hech narsadan
+ * darhol foydalana olmasin"): aktyor/sozlama keshi tozalanadi, faol AI qo'ng'iroqlari yakunlanadi va navbatdagi
+ * AI ishlari (qayta qo'ng'iroq, xodimga qo'ng'iroq, eslatma qo'ng'irog'i) bekor qilinadi.
+ */
+export async function aiRevokeAccess(p: { userIds?: string[]; companyId?: string; reason?: string }): Promise<void> {
+  const ids = (p.userIds || []).map(String).filter(Boolean);
+  for (const id of ids) invalidateActor(id);
+  if (p.companyId) invalidateSettings(String(p.companyId));
+  const or: Record<string, unknown>[] = [];
+  if (ids.length) or.push({ employeeId: { $in: ids } });
+  if (p.companyId) or.push({ companyId: String(p.companyId) });
+  if (!or.length) return;
+  const reason = String(p.reason || 'revoked').slice(0, 60);
+  try {
+    await endActiveSessions({ $or: or }, 'interrupted', reason, new Date(), { onlyIfUnchanged: false });
+  } catch (e) {
+    console.error('[aiVoice] aiRevokeAccess sessiyalar:', (e as Error).message);
+  }
+  await AiJob.updateMany({ $or: or, status: 'queued' }, { $set: { status: 'cancelled' } }).catch(() => undefined);
 }

@@ -163,7 +163,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     const payload = jwt.verify(token, JWT_SECRET) as JwtPayload;
     const fresh = await loadFreshUser(payload);
     if (!fresh) {
-      return res.status(401).json({ error: 'Hisobingiz topilmadi — qayta kiring' });
+      return res.status(401).json({ error: 'Hisobingiz topilmadi — qayta kiring', accountGone: true });
     }
     // Bloklangan foydalanuvchi — HAR so'rovda tekshiriladi (yuqoridagi
     // izohda tushuntirilgan "eskirgan token" muammosi bilan bir xil sabab),
@@ -202,7 +202,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     };
     return runWithTenant(ctx, () => next());
   } catch {
-    return res.status(401).json({ error: 'Token yaroqsiz yoki muddati tugagan' });
+    return res.status(401).json({ error: 'Token yaroqsiz yoki muddati tugagan', tokenInvalid: true });
   }
 }
 

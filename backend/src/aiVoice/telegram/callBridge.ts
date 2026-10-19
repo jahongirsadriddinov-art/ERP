@@ -173,7 +173,7 @@ export function mapEndReason(reason: WorkerCallEndReason | undefined, answered: 
     case 'declined': return { status: 'declined', aiv: 'declined' };
     case 'timeout': return { status: 'no_answer', aiv: 'timeout' };
     // Qayta urinib foyda yo'q — 'cancelled' (P3: failed, retryable:false) → keyingi kanal
-    case 'privacy': case 'blocked': case 'outdated': case 'flood_wait': return { status: 'cancelled', aiv: 'error' };
+    case 'privacy': case 'blocked': case 'outdated': case 'flood_wait': case 'spam_limited': return { status: 'cancelled', aiv: 'error' };
     case 'network': case 'error': default:
       return answered ? { status: 'interrupted', aiv: 'error' } : { status: 'failed', aiv: 'error' };
   }

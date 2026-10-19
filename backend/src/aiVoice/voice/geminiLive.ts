@@ -82,15 +82,18 @@ export function toFunctionDeclarations(tools: ToolDeclaration[]) {
 const searchUnsupported = new Set<string>();
 export const liveSearchEnabled = (model: string): boolean => process.env.AI_LIVE_GOOGLE_SEARCH !== '0' && !searchUnsupported.has(model);
 /**
- * Minimal fikrlash (owner 2026-10-19: "bitta buyruqni ancha vaqt o'ylayapdi"): Live modeli standartda
- * har navbatdan oldin fikrlaydi — ovozli suhbatda bu sezilarli pauza. Model qabul qilmasa — shu jarayonda
- * o'sha model uchun o'chiriladi. AI_LIVE_THINKING=1 — model standarti (fikrlash yoqiq).
+ * Qisqa fikrlash (owner 2026-10-19): standartda model har navbatdan oldin uzoq fikrlaydi ("bitta buyruqni ancha
+ * o'ylayapti"), butunlay o'chirilsa — gapni yomonroq tushunadi ("aniq javob bermayapti"). O'rtasi: 512 tokenlik
+ * byudjet (~1 s gacha). AI_LIVE_THINKING_BUDGET — son (0 = o'chiq); AI_LIVE_THINKING=1 — model standarti.
+ * Model qabul qilmasa — shu jarayonda o'sha model uchun o'chiriladi.
  */
 const thinkingUnsupported = new Set<string>();
 export function liveThinkingFor(model: string): Record<string, unknown> | undefined {
   if (process.env.AI_LIVE_THINKING === '1' || thinkingUnsupported.has(model)) return undefined;
-  if (/flash-lite|3\.1-flash-live/.test(model)) return { thinkingLevel: 'minimal' };
-  return { thinkingBudget: 0 };
+  const raw = Number(process.env.AI_LIVE_THINKING_BUDGET);
+  const budget = Number.isFinite(raw) && raw >= 0 ? Math.min(8192, Math.round(raw)) : 512;
+  if (/flash-lite|3\.1-flash-live/.test(model)) return { thinkingLevel: budget === 0 ? 'minimal' : 'low' };
+  return { thinkingBudget: budget };
 }
 /** Faqat testlar uchun. */
 export function __resetLiveSearchForTests(): void { searchUnsupported.clear(); thinkingUnsupported.clear(); }

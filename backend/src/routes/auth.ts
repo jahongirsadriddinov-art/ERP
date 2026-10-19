@@ -752,6 +752,8 @@ router.delete('/users/:id', requireAuth, requireOwnerOrAdmin, async (req, res) =
 
     const user = await User.findOneAndDelete({ _id: target._id });
     if (user) { try { (await import('../services/socket')).kickUser(String(user._id)); } catch { /* socket yo'q */ } }
+    // O'chirilgan xodim AI'dan ham darhol uziladi: faol qo'ng'iroq yakunlanadi, navbatdagi AI ishlari bekor (owner 2026-10-19)
+    if (user) void import('../aiVoice/sessions').then((m) => m.aiRevokeAccess({ userIds: [String(user._id)], reason: 'user_deleted' })).catch(() => undefined);
     if (!user) return res.status(404).json({ error: 'Foydalanuvchi topilmadi' });
     await auditUserAction(caller, req, {
       action: 'delete', entityId: String(user._id),

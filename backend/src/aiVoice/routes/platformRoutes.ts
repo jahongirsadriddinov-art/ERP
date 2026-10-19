@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import AiAssistantSettings from '../../models/AiAssistantSettings';
+import AiCallSession from '../../models/AiCallSession';
 import AiChannelConnection from '../../models/AiChannelConnection';
 import AiEmployeeContact from '../../models/AiEmployeeContact';
 import Company from '../../models/Company';
@@ -408,6 +409,18 @@ router.post('/telegram-account/guest-call', wrap(async (req, res) => {
   const who = target.username ? `@${target.username}` : maskPhone(target.phone || '');
   audit(req, dev, 'create', `AI Telegram: mehmon sinov qo'ng'irog'i — ${who} (${r.placed ? 'terildi' : r.errorCode})`, { entityId: r.placed ? r.sessionId : undefined });
   res.status(r.placed ? 202 : 409).json(r);
+}));
+
+// Mehmon qo'ng'irog'i natijasi (owner 2026-10-19: "terildi, lekin telefon jiringlamadi") — panel kuzatadi:
+// holat, javob berildimi va Telegram/worker bergan sabab (privacy, peer_flood, network ...)
+router.get('/telegram-account/guest-call/:sessionId', wrap(async (req, res) => {
+  const dev = await developer(req);
+  const id = String(req.params.sessionId || '');
+  if (!isObjectIdString(id)) return res.status(400).json({ error: 'invalid' });
+  const s: any = await AiCallSession.findOne({ _id: id, companyId: 'platform', employeeId: dev.userId })
+    .select('status isActive answeredAt endReason errorCode durationSec').lean();
+  if (!s) return res.status(404).json({ error: 'not_found' });
+  res.json({ status: s.status, active: !!s.isActive, answered: !!s.answeredAt, endReason: s.endReason || '', errorCode: s.errorCode || '', durationSec: s.durationSec || 0 });
 }));
 
 /** Faqat testlar uchun. */

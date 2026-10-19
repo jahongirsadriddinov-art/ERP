@@ -166,6 +166,12 @@ function installAuthFetch() {
     const res = await orig(input as any, init);
     // Ish jarayonida texnik ishlar yoqilsa — ilova/sayt darhol "texnik ishlar" ekraniga o'tsin
     if (isOwnApi && res.status === 423) window.dispatchEvent(new CustomEvent('erp:checkin-required'));
+    // Hisob o'chirilgan / sessiya bekor / token yaroqsiz (masalan dasturchi firmani o'chirdi) — darhol chiqish
+    if (isOwnApi && res.status === 401) {
+      res.clone().json().then(d => {
+        if (d?.accountGone || d?.sessionRevoked || d?.tokenInvalid) window.dispatchEvent(new CustomEvent('erp:session-ended'));
+      }).catch(() => {});
+    }
     if (isOwnApi && res.status === 402) {
       res.clone().json().then(d => {
         if (!d?.subscriptionStatus) return;

@@ -64,6 +64,9 @@ def map_call_error(exc: BaseException, discard_reason: Optional[str] = None) -> 
         return "declined"
     if n & {"UserPrivacyRestrictedError", "PrivacyRestrictedError"}:
         return "privacy"
+    # Telegram AI akkauntini notanishlarga yozish/qo'ng'iroq qilishdan cheklagan (spam cheklovi, @SpamBot)
+    if n & {"PeerFloodError", "PeerFlood"}:
+        return "spam_limited"
     if n & {"UserIsBlockedError", "InputUserDeactivatedError", "UserDeactivatedError", "UserBlockedError"}:
         return "blocked"
     if n & {"ParticipantVersionOutdatedError", "CallProtocolFlagsInvalidError", "CallProtocolLayerInvalidError"}:

@@ -58,3 +58,8 @@ export async function markLoginDevice(req: { headers: any }, userId: string) {
     await TrialMark.updateOne({ kind, value }, { $setOnInsert: { kind, value, reason: 'login', userId } }, { upsert: true }).catch(() => {});
   }
 }
+
+/** Dasturchi firmani o'chirganda (owner 2026-10-19): o'sha firma/xodimlarga bog'liq sinov belgilari olinadi — qayta firma ocha olsin. */
+export async function clearTrialMarks(companyId: string, userIds: string[]) {
+  await TrialMark.deleteMany({ $or: [{ companyId }, ...(userIds.length ? [{ userId: { $in: userIds } }] : [])] }).catch(() => {});
+}

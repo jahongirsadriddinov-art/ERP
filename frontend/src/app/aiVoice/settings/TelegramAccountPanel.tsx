@@ -408,11 +408,31 @@ function TestCallCard({ k, errText, canCall }: { k: K; errText: ErrText; canCall
 
 /** Mehmon sinov qo'ng'irog'i (owner 2026-10-19): istalgan Telegram raqami/@username — firmasiz oddiy AI suhbati. */
 function GuestCallCard({ k, errText, canCall }: { k: K; errText: ErrText; canCall: boolean }) {
+  const { i18n } = useTranslation();
+  const i18nHas = (key: string) => i18n.exists(`aiVoice.telegram.${key}`);
   const [target, setTarget] = useState("");
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
   const valid = /^(@?[A-Za-z][A-Za-z0-9_]{3,31}|(https?:\/\/)?t\.me\/[A-Za-z][A-Za-z0-9_]{3,31}|\+?[\d\s()-]{9,20})$/.test(target.trim());
+
+  // Qo'ng'iroq natijasini kuzatish (owner 2026-10-19: "terildi, lekin jiringlamadi" — sababi ko'rinsin)
+  const watchRef = useRef(0);
+  useEffect(() => () => { watchRef.current++; }, []);
+  const watch = async (sessionId: string) => {
+    const my = ++watchRef.current;
+    for (let i = 0; i < 60 && watchRef.current === my; i++) {
+      await new Promise((ok) => window.setTimeout(ok, 3000));
+      if (watchRef.current !== my) return;
+      const r = await api<{ status: string; active: boolean; answered: boolean; errorCode: string }>("GET", `/guest-call/${sessionId}`);
+      if (!r.ok || !r.data) continue;
+      const d = r.data;
+      if (d.active) { setResult({ ok: true, text: k(d.status === "connected" ? "guest.live" : "guest.ringing") }); continue; }
+      const why = d.errorCode && i18nHas(`guest.why.${d.errorCode}`) ? k(`guest.why.${d.errorCode}`) : (d.errorCode || d.status);
+      setResult({ ok: d.answered, text: d.answered ? k("guest.done") : k("guest.notConnected", { reason: why }) });
+      return;
+    }
+  };
 
   const callNow = async (e: FormEvent) => {
     e.preventDefault();
@@ -420,13 +440,14 @@ function GuestCallCard({ k, errText, canCall }: { k: K; errText: ErrText; canCal
     if (!valid) { setResult({ ok: false, text: k("guest.invalid") }); return; }
     setBusy(true);
     setResult(null);
-    const r = await api<{ placed: boolean; errorCode?: string }>("POST", "/guest-call", { target: target.trim(), name: name.trim() || undefined });
+    const r = await api<{ placed: boolean; errorCode?: string; sessionId?: string }>("POST", "/guest-call", { target: target.trim(), name: name.trim() || undefined });
     setBusy(false);
     if (r.ok && r.data?.placed) {
       setResult({ ok: true, text: k("guest.placed") });
-      toast.success(k("guest.placed"));
+      if (r.data.sessionId) void watch(r.data.sessionId);
     } else {
-      setResult({ ok: false, text: k("test.failed", { reason: errText(r) }) });
+      const code = String(r.body?.errorCode || "");
+      setResult({ ok: false, text: code === "not_found" ? k("guest.notFound") : k("test.failed", { reason: errText(r) }) });
     }
   };
 

@@ -10,8 +10,21 @@ import Subscription from '../models/Subscription';
 import CompanyBackup from '../models/CompanyBackup';
 import { requireDeveloper } from '../middleware/auth';
 import { logAudit } from '../services/audit';
+import Session from '../models/Session';
+import { clearTrialMarks } from '../services/trialGuard';
+import { kickUser } from '../services/socket';
+import { aiRevokeAccess } from '../aiVoice/sessions';
 
 const router = Router();
+
+/** Firma xodimlarining barcha sessiyalari bekor qilinadi va ochiq socket'lari uziladi (ilova darhol chiqadi). */
+async function endCompanySessions(companyId: string, userIds?: string[]) {
+  const ids = userIds ?? (await User.find({ companyId }).select('_id').lean()).map((u: any) => String(u._id));
+  if (!ids.length) return;
+  await Session.updateMany({ userId: { $in: ids }, revoked: { $ne: true } }, { $set: { revoked: true } }).catch(() => undefined);
+  for (const id of ids) kickUser(id);
+  await aiRevokeAccess({ userIds: ids, companyId, reason: 'company_removed' });
+}
 
 // Barcha company route'lari FAQAT dasturchi (super-admin) uchun.
 router.use(requireDeveloper);
@@ -53,9 +66,12 @@ router.put('/:id', async (req, res) => {
     const c = await Company.findById(req.params.id);
     if (!c) return res.status(404).json({ error: 'Firma topilmadi' });
     if (name?.trim()) c.name = name.trim();
+    const suspending = status === 'SUSPENDED' && c.status !== 'SUSPENDED';
     if (status && ['PENDING', 'ACTIVE', 'SUSPENDED'].includes(status)) c.status = status;
     if (plan && ['FREE', 'PRO', 'ENTERPRISE'].includes(plan)) c.plan = plan;
     await c.save();
+    // To'xtatilgan firma xodimlari ochiq turgan ilova/saytdan darhol chiqariladi (owner 2026-10-19)
+    if (suspending) await endCompanySessions(String(c._id));
     res.json({ id: String(c._id), branchId: c.branchId, name: c.name, status: c.status, plan: c.plan });
   } catch (err) {
     res.status(500).json({ error: 'Server xatoligi' });
@@ -111,6 +127,10 @@ router.delete('/:id', async (req, res) => {
       Subscription.deleteMany({ companyId: cidStr }),
     ]);
     await Company.findByIdAndDelete(cid);
+    // Owner 2026-10-19: "firmani o'chirdim, lekin xodimlar chiqib ketmayapti" — sessiyalar bekor, socket'lar uziladi
+    await endCompanySessions(cidStr, users.map((x: any) => String(x._id)));
+    // Firma o'chirilgach o'sha odamlar qaytadan firma ocha olsin: shu firmaga bog'liq bepul sinov belgilari olinadi
+    await clearTrialMarks(cidStr, users.map((x: any) => String(x._id)));
 
     await logAudit({
       userId: actingUserId || 'unknown',

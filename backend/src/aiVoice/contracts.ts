@@ -404,7 +404,7 @@ export interface WorkerStatus {
 
 export type WorkerCallState = 'dialing' | 'ringing' | 'connected' | 'ended';
 export type WorkerCallEndReason =
-  | 'completed' | 'busy' | 'declined' | 'timeout' | 'privacy' | 'blocked' | 'outdated' | 'flood_wait' | 'network' | 'hangup' | 'error';
+  | 'completed' | 'busy' | 'declined' | 'timeout' | 'privacy' | 'blocked' | 'outdated' | 'flood_wait' | 'spam_limited' | 'network' | 'hangup' | 'error';
 export type WorkerEvent =
   | { type: 'call.state'; sessionId: string; state: WorkerCallState; reason?: WorkerCallEndReason; at: number; /** ulanmaslik bosqichi: accept | key_exchange | p2p_connect | connect_timeout | record */ stage?: string }
   | { type: 'health'; status: WorkerStatus; at: number }

@@ -180,6 +180,11 @@ export default function CompanyTgAccounts({ errText: errTextProp }: { errText?: 
                     <p className="text-[11px] text-muted-foreground mt-0.5">
                       {[a.username ? `@${a.username}` : "", a.phoneMasked || ""].filter(Boolean).join(" · ")}
                     </p>
+                    {a.lastError && (
+                      <p className="text-[11px] text-red-600 dark:text-red-400 mt-0.5">
+                        {i18n.exists(`aiVoice.telegram.company.err.${a.lastError}`) ? k(`err.${a.lastError}`) : a.lastError}
+                      </p>
+                    )}
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {a.status !== "connected" && (

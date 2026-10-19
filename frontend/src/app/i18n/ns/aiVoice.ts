@@ -576,6 +576,10 @@ export const uz = {
       logoutConfirm: "Bu Telegram akkauntidan chiqilsinmi? Qo'ng'iroqlar boshqa akkauntlardan davom etadi.",
       removeConfirm: "Akkaunt o'chirilsinmi? Telegram'dan chiqiladi va worker'dagi sessiya o'chiriladi.",
       removeBusy: "Akkaunt hozir qo'ng'iroqda — tugagach o'chiring",
+      err: {
+        duplicate_account: "Bu Telegram akkaunt boshqa joyda ham ulangan (platforma akkaunti yoki boshqa firma akkaunti). Bir akkaunt ikki joyda bo'lsa qo'ng'iroq \"band\" bo'lib qoladi — shu yerdan o'chiring yoki boshqa raqam ulang.",
+        worker_not_authorized: "Telegram sessiyasi bekor qilingan — qayta ulang",
+      },
       step: { phone: "Telefon raqami (+998…)", code: "Telegram yuborgan kod", password: "2 bosqichli parol" },
       stepHint: {
         phone: "Shu raqamli Telegram akkauntga kod keladi. Kod va parol faqat shu oynada — hech qayerga saqlanmaydi.",
@@ -1285,6 +1289,10 @@ export const ru = {
       logoutConfirm: "Выйти из этого Telegram-аккаунта? Звонки продолжатся с других аккаунтов.",
       removeConfirm: "Удалить аккаунт? Будет выполнен выход из Telegram и удалена сессия на воркере.",
       removeBusy: "Аккаунт сейчас на звонке — удалите после завершения",
+      err: {
+        duplicate_account: "Этот Telegram-аккаунт подключён ещё в другом месте (аккаунт платформы или другой фирмы). Если один аккаунт в двух местах, звонок получает «занято» — удалите его здесь или подключите другой номер.",
+        worker_not_authorized: "Сессия Telegram отозвана — подключите заново",
+      },
       step: { phone: "Номер телефона (+998…)", code: "Код от Telegram", password: "Пароль двухэтапной проверки" },
       stepHint: {
         phone: "Код придёт в Telegram с этим номером. Код и пароль только в этом окне — нигде не сохраняются.",

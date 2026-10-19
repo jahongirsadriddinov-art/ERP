@@ -406,7 +406,7 @@ export interface WorkerStatus {
   /** Platforma akkauntidagi faol qo'ng'iroqlar (activeCalls — hamma akkauntlar yig'indisi). */
   platformActiveCalls?: number;
   /** Firma Telegram akkauntlari holati. */
-  accounts?: Array<{ id: string; connected: boolean; tgUserId?: string; username?: string; activeCalls: number; floodWaitUntil?: number }>;
+  accounts?: Array<{ id: string; connected: boolean; tgUserId?: string; username?: string; activeCalls: number; floodWaitUntil?: number; /** masalan duplicate_account */ error?: string }>;
 }
 
 export type WorkerCallState = 'dialing' | 'ringing' | 'connected' | 'ended';

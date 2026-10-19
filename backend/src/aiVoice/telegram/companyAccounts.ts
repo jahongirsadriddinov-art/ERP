@@ -1,5 +1,6 @@
 import AiCallSession from '../../models/AiCallSession';
 import AiTgAccount from '../../models/AiTgAccount';
+import AiChannelConnection from '../../models/AiChannelConnection';
 import type { WorkerEvent, WorkerStatus } from '../contracts';
 import { isObjectIdString } from '../lib/ids';
 import { callWorker, WorkerRpcFailure } from './workerRpc';
@@ -89,6 +90,14 @@ export async function setAccountConnected(id: string, info: { tgUserId?: string;
   if (typeof info.username === 'string' && UN_RE.test(info.username.replace(/^@/, ''))) set.username = info.username.replace(/^@/, '');
   if (typeof info.displayName === 'string' && info.displayName.trim()) set.displayName = info.displayName.trim().slice(0, 80);
   await AiTgAccount.updateOne({ _id: id }, { $set: set, $unset: { lastError: 1 } });
+  // Shu Telegram akkaunt platforma akkaunti yoki boshqa firma akkaunti sifatida ham ulangan bo'lsa — darhol ko'rsatamiz
+  // (worker ikkinchi sessiyani to'xtatadi; aks holda qo'ng'iroq "band" bo'lib qolardi)
+  const tg = typeof set.tgUserId === 'string' ? set.tgUserId : '';
+  if (tg) {
+    const dupPlatform = await AiChannelConnection.exists({ scope: 'platform', companyId: null, type: 'telegram_user', status: 'connected', tgUserId: tg });
+    const dupOther = await AiTgAccount.exists({ _id: { $ne: id }, tgUserId: tg, status: 'connected' });
+    if (dupPlatform || dupOther) await AiTgAccount.updateOne({ _id: id }, { $set: { status: 'error', lastError: 'duplicate_account' } });
+  }
 }
 
 /** Worker health'idagi firma akkauntlari holati. Login jarayonidagi (awaiting_*) holat buzilmaydi. */
@@ -103,6 +112,9 @@ export async function recordAccountsHealth(list: WorkerStatus['accounts'], now: 
       if (typeof a.tgUserId === 'string' && TG_ID_RE.test(a.tgUserId)) set.tgUserId = a.tgUserId;
       if (typeof a.username === 'string' && UN_RE.test(a.username)) set.username = a.username;
       await AiTgAccount.updateOne({ _id: a.id }, { $set: set });
+    } else if (a.error === 'duplicate_account') {
+      // Shu Telegram akkaunt boshqa joyda (platforma yoki boshqa firma akkaunti) ulangan — worker bu sessiyani to'xtatdi
+      await AiTgAccount.updateOne({ _id: a.id }, { $set: { ...set, status: 'error', lastError: 'duplicate_account' } });
     } else {
       await AiTgAccount.updateOne({ _id: a.id, status: 'connected' }, { $set: { ...set, status: 'disconnected', lastError: 'worker_not_authorized' } });
       await AiTgAccount.updateOne({ _id: a.id }, { $set: { lastHealthAt: now } });

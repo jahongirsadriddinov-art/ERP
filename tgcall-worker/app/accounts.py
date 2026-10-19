@@ -55,6 +55,8 @@ class Account:
         st = build_status(self.runtime, self.calls, None)
         st.pop("version", None)
         st["id"] = self.id
+        if not st.get("connected") and self.runtime.last_error:
+            st["error"] = str(self.runtime.last_error)[:40]
         return st
 
 
@@ -65,7 +67,8 @@ class AccountSet:
         self._dir = Path(accounts_dir)
         self._key = session_key
         self._holding = holding
-        self.items: dict[str, Account] = {PLATFORM: make(PLATFORM, platform_store)}
+        self.items: dict[str, Account] = {}
+        self._add(PLATFORM, platform_store)
 
     @property
     def platform(self) -> Account:
@@ -93,6 +96,38 @@ class AccountSet:
                 return a
         return self.platform
 
+    def _add(self, acc_id: str, store: SessionStore) -> Account:
+        a = self._make(acc_id, store)
+        # Login muvaffaqiyatli bo'lgach — bir xil Telegram akkaunti ikki marta ulanmasin (dedupe)
+        inner = a.login._on_success
+
+        async def on_success(session: str) -> None:
+            await inner(session)
+            await self.dedupe()
+
+        a.login._on_success = on_success
+        self.items[acc_id] = a
+        return a
+
+    async def dedupe(self) -> int:
+        """Bitta Telegram akkaunti ikki joyda ulangan bo'lsa (masalan platforma akkaunti firma akkaunti sifatida ham
+        qo'shilgan) — ikkala sessiya bir qo'ng'iroqni oladi, biri "band" deb rad etadi va Telegram butun qo'ng'iroqni
+        "busy" bilan tugatadi (owner 2026-10-19). Birinchisi (platforma, keyin qo'shilish tartibi) qoladi, qolgani to'xtaydi."""
+        seen: dict[int, Account] = {}
+        stopped = 0
+        for a in self.all():
+            me = a.runtime.me_id
+            if not me:
+                continue
+            if me in seen:
+                log.warning("%s — %s bilan bir xil Telegram akkaunt: ikkinchi sessiya to'xtatildi", a.label, seen[me].label)
+                await a.runtime.stop("duplicate")
+                a.runtime.last_error = "duplicate_account"
+                stopped += 1
+            else:
+                seen[me] = a
+        return stopped
+
     def _store(self, acc_id: str) -> SessionStore:
         return SessionStore(self._dir / f"{acc_id}.enc", self._key)
 
@@ -105,11 +140,11 @@ class AccountSet:
                 continue
             if len(self.items) > MAX_ACCOUNTS:
                 break
-            a = self._make(acc_id, self._store(acc_id))
-            self.items[acc_id] = a
+            a = self._add(acc_id, self._store(acc_id))
             added += 1
             if self._holding():
                 await a.runtime.start()
+                await self.dedupe()
         if added:
             log.info("firma akkauntlari: +%d (jami %d)", added, len(self.items) - 1)
         return {"ok": True, "accounts": len(self.items) - 1}
@@ -131,6 +166,7 @@ class AccountSet:
                 await a.runtime.start()
             except Exception as e:
                 log.warning("%s ishga tushmadi: %s", a.label, type(e).__name__)
+        await self.dedupe()
 
     async def stop_all(self, reason: str) -> None:
         for a in self.all():

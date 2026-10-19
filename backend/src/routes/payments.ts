@@ -1,4 +1,5 @@
-import { Router } from 'express';
+import crypto from 'crypto';
+import express, { Router, type Request } from 'express';
 import Payment from '../models/Payment';
 import Subscription from '../models/Subscription';
 import Company from '../models/Company';
@@ -27,84 +28,113 @@ function singleString(v: unknown): string | undefined {
   return undefined;
 }
 
-// GET /api/payments/roxiy/webhook?status=paid&order_id=..&order_hash=..&amount=..&note=..&wt=..
-// To'lov tugagach Roxiy shu yerga qaytadi.
-router.get('/roxiy/webhook', async (req, res) => {
-  try {
-    const webhookToken = singleString(req.query.wt);
-    if (!webhookToken) return res.status(400).send('missing token');
+// ── Roxiy imzosi (owner 2026-10-19: kassa sozlamasida "Webhook imzo siri", sarlavha X-Rox-Signature) ──────────
+// Imzo formati Roxiy hujjatlarida yozilmagan — keng tarqalgan HMAC-SHA256 variantlari tekshiriladi (xom tana yoki
+// so'rov satri; hex/base64; "sha256=", "t=…,v1=…"; sir "whsec_" bilan/siz). Natija logga yoziladi (sir va imzoning
+// o'zi yozilmaydi). ROXIY_WEBHOOK_SECRET — Render'da; ROXIY_REQUIRE_SIGNATURE=1 — imzosiz/noto'g'ri xabar to'lovni
+// faollashtira olmaydi (sinov to'lovida logda "imzo: valid" ko'ringach yoqiladi).
+type SigState = 'valid' | 'invalid' | 'missing' | 'no_secret';
+const roxiySecret = () => (process.env.ROXIY_WEBHOOK_SECRET || '').trim();
+const signatureRequired = () => process.env.ROXIY_REQUIRE_SIGNATURE === '1' && !!roxiySecret();
 
-    // `wt` — shu BITTA to'lov uchun generatsiya qilingan, boshqa hech qanday
-    // yozuvga mos kelmaydigan token (services/subscriptionPayments.ts). Bu
-    // topilmasa — so'rov soxta yoki eskirgan.
-    const payment = await Payment.findOne({ webhookToken, provider: 'roxiy' });
-    if (!payment) {
-      console.warn('roxiy webhook: unknown webhookToken');
-      return res.status(404).send('order not found');
+function safeEq(a: string, b: string): boolean {
+  const x = Buffer.from(a);
+  const y = Buffer.from(b);
+  return x.length === y.length && crypto.timingSafeEqual(x, y);
+}
+
+export function verifyRoxiySignature(secret: string, header: string, messages: string[], timestamp?: string): boolean {
+  if (!secret || !header) return false;
+  const h = header.trim();
+  // Imzo qiymatlari: "sha256=<sig>", "t=<ts>,v1=<sig>", "v1,<sig>" yoki to'g'ridan-to'g'ri "<sig>"
+  const parts = h.split(/[,\s]+/).filter(Boolean);
+  let ts = timestamp || '';
+  const sigs: string[] = [];
+  for (const part of parts) {
+    const m = /^([a-z0-9]+)=(.+)$/i.exec(part);
+    if (m && m[1].toLowerCase() === 't') ts = ts || m[2];
+    else if (m) sigs.push(m[2]);
+    else if (!/^v\d$/i.test(part)) sigs.push(part);
+  }
+  if (!sigs.length) sigs.push(h);
+  const keys: Buffer[] = [Buffer.from(secret)];
+  if (secret.startsWith('whsec_')) {
+    keys.push(Buffer.from(secret.slice(6)));
+    const b = Buffer.from(secret.slice(6), 'base64');
+    if (b.length >= 16) keys.push(b);
+  }
+  const msgs = new Set<string>();
+  for (const m of messages) {
+    if (typeof m !== 'string') continue;
+    msgs.add(m);
+    if (ts) { msgs.add(`${ts}.${m}`); msgs.add(`${ts}${m}`); }
+  }
+  for (const key of keys) {
+    for (const msg of msgs) {
+      const d = crypto.createHmac('sha256', key).update(msg).digest();
+      const hex = d.toString('hex');
+      const b64 = d.toString('base64');
+      for (const sig of sigs) {
+        if (safeEq(sig.toLowerCase(), hex) || safeEq(sig, b64) || safeEq(sig, b64.replace(/=+$/, ''))) return true;
+      }
     }
+  }
+  return false;
+}
 
-    const status = singleString(req.query.status)?.toLowerCase();
-    const orderHash = singleString(req.query.order_hash);
-    // order_hash — qo'shimcha (himoya qatlami sifatida) tekshiruv: token
-    // to'g'ri bo'lsa-yu, lekin Roxiy boshqa buyurtma haqida xabar bersa
-    // (masalan ichki xatolik), bu moslikni ushlab qoladi.
+function signatureState(req: Request): SigState {
+  const secret = roxiySecret();
+  if (!secret) return 'no_secret';
+  const header = String(req.headers['x-rox-signature'] || '');
+  if (!header) return 'missing';
+  const raw = (req as any).rawBody;
+  const rawBody = Buffer.isBuffer(raw) ? raw.toString('utf8') : typeof req.body === 'string' ? req.body : '';
+  const url = String(req.originalUrl || '');
+  const query = url.includes('?') ? url.slice(url.indexOf('?') + 1) : '';
+  const ts = String(req.headers['x-rox-timestamp'] || '');
+  return verifyRoxiySignature(secret, header, [rawBody, query, url].filter((m) => m !== ''), ts || undefined) ? 'valid' : 'invalid';
+}
+
+function logWebhook(req: Request, sig: SigState, note: string) {
+  const body = req.body && typeof req.body === 'object' ? Object.keys(req.body).slice(0, 20) : [];
+  console.log(`[roxiy] webhook ${req.method} imzo: ${sig} — ${note} (content-type: ${String(req.headers['content-type'] || '-').slice(0, 60)}; maydonlar: ${body.join(',') || '-'})`);
+}
+
+/**
+ * To'lovni yakunlash (GET qaytish manzili va imzolangan POST uchun umumiy). Atomik "pending → paid": takroriy
+ * xabar obunani ikki marta uzaytirmaydi.
+ */
+async function settleRoxiy(payment: any, p: { status?: string; orderHash?: string; amount: number }, done: () => unknown, fail: (code: number, msg: string) => unknown) {
+    const status = p.status;
+    const orderHash = p.orderHash;
+    // order_hash — qo'shimcha tekshiruv: Roxiy boshqa buyurtma haqida xabar bersa, moslikni ushlab qoladi
     if (orderHash && payment.externalId && orderHash !== payment.externalId) {
-      console.error('roxiy webhook order_hash mismatch for valid token', { expected: payment.externalId, got: orderHash });
-      return res.status(400).send('order_hash mismatch');
+      console.error('roxiy webhook order_hash mismatch', { expected: payment.externalId, got: orderHash });
+      return fail(400, 'order_hash mismatch');
     }
-
     if (status !== 'paid') {
-      // Roxiy'ning to'liq status lug'ati hujjatlashtirilmagan (faqat "paid"
-      // misoli berilgan). XATO TUZATILDI: avval "failed/cancelled/expired"
-      // kabi statuslarda Payment'ni darhol 'failed'ga o'tkazardik — lekin
-      // agar bunday oraliq/vaqtinchalik status HAQIQIY "paid" xabaridan
-      // OLDIN kelib qolsa (masalan foydalanuvchi avval bekor qilib, keyin
-      // qaytib to'lasa), keyinroq kelgan haqiqiy "paid" webhooki pastdagi
-      // atomik filtr `status:'pending'`ga mos kelmay, MUVAFFAQIYATLI
-      // to'lov ABADIY faollashtirilmay qolardi. Shu sabab endi bu yerda
-      // HECH NARSA yozilmaydi — faqat "paid"dan boshqa hech qanday status
-      // Payment holatini o'zgartirmaydi (yozuv 'pending'da qoladi, keyin
-      // haqiqiy "paid" kelsa muammosiz ishlaydi).
+      // Faqat "paid" Payment holatini o'zgartiradi (oraliq statuslar keyingi haqiqiy "paid"ni to'smasin)
       console.warn('roxiy webhook: non-paid status, ignoring', { orderHash, status });
-      return res.status(200).send('ok');
+      return done();
     }
-
-    const amountRaw = singleString(req.query.amount);
-    const amount = amountRaw === undefined ? NaN : Number(amountRaw);
-    if (!Number.isFinite(amount)) return res.status(400).send('invalid amount');
-
-    // Atomik "pending -> paid" o'tishi: Roxiy webhookni qayta yuborsa
-    // (odatiy retry xatti-harakati) yoki ikkita so'rov bir vaqtda kelsa
-    // ham, FAQAT BITTASI shu filtrga mos kelib topadi — shu sabab obuna
-    // muddati ikki marta uzaytirilmaydi va Telegram xabari ikki marta
-    // yuborilmaydi. `new: false` — eski (pending) hujjatni qaytaradi,
-    // pastda subscriptionId/plan/days shundan olinadi.
+    const amount = p.amount;
+    if (!Number.isFinite(amount)) return fail(400, 'invalid amount');
     const claimed = await Payment.findOneAndUpdate(
-      { webhookToken, provider: 'roxiy', status: 'pending', amount },
+      { _id: payment._id, provider: 'roxiy', status: 'pending', amount },
       { status: 'paid' },
       { new: false }
     );
-
     if (!claimed) {
-      // MUHIM: bu "server-to-server" webhook sifatida hujjatlashtirilgan,
-      // lekin callback_url'ning haqiqatda foydalanuvchi brauzeri qaytadigan
-      // manzil ham bo'lishi (Roxiy tomonidan aniq ko'rsatilmagan) ehtimolini
-      // yopish uchun — yakuniy (muvaffaqiyatli) holatlarda saytga
-      // yo'naltiramiz, aks holda brauzer bu yerda xom matn ko'rib qolardi.
-      if (payment.status === 'paid') return res.redirect(302, SITE_URL);
+      if (payment.status === 'paid') return done();
       console.error('roxiy webhook amount mismatch', { orderHash, expected: payment.amount, got: amount });
-      return res.status(400).send('amount mismatch');
+      return fail(400, 'amount mismatch');
     }
 
-    // ── RO'YXATDAN O'TISH to'lovi: firma/foydalanuvchi HALI YO'Q, faqat
-    // HOZIR (to'lov muvaffaqiyatli tasdiqlangach) yaratiladi — services/
-    // registrationPayments.ts va models/PendingRegistration.ts'dagi
-    // izohlarga qarang (nega firma to'lovdan OLDIN emas, KEYIN yaratiladi).
     if (claimed.pendingRegistrationId) {
       const pending = await PendingRegistration.findById(claimed.pendingRegistrationId);
       if (!pending) {
         console.error('roxiy webhook: pendingRegistrationId topilmadi (allaqachon o\'chirilganmi?)', claimed.pendingRegistrationId);
-        return res.redirect(302, SITE_URL);
+        return done();
       }
       try {
         // Juda kam uchraydigan poyga holati: shu oraliqda boshqa yo'l bilan
@@ -202,7 +232,7 @@ router.get('/roxiy/webhook', async (req, res) => {
           ).catch(() => {});
         }
       }
-      return res.redirect(302, SITE_URL);
+      return done();
     }
 
     if (claimed.subscriptionId) {
@@ -246,10 +276,78 @@ router.get('/roxiy/webhook', async (req, res) => {
       }
     }
 
-    res.redirect(302, SITE_URL);
+    return done();
+}
+
+const firstStr = (...vals: unknown[]): string | undefined => {
+  for (const v of vals) {
+    if (typeof v === 'string' && v) return v;
+    if (typeof v === 'number' && Number.isFinite(v)) return String(v);
+  }
+  return undefined;
+};
+
+// GET /api/payments/roxiy/webhook?status=paid&order_id=..&order_hash=..&amount=..&note=..&wt=..
+// To'lov tugagach Roxiy shu yerga qaytadi (callback_url). `wt` — shu BITTA to'lovga berilgan token.
+router.get('/roxiy/webhook', async (req, res) => {
+  try {
+    const webhookToken = singleString(req.query.wt);
+    if (!webhookToken) return res.status(400).send('missing token');
+    const payment = await Payment.findOne({ webhookToken, provider: 'roxiy' });
+    if (!payment) {
+      console.warn('roxiy webhook: unknown webhookToken');
+      return res.status(404).send('order not found');
+    }
+    const sig = signatureState(req);
+    if (signatureRequired() && sig !== 'valid') {
+      // Imzo majburiy: imzosiz qaytish (masalan brauzer) to'lovni faollashtirmaydi — imzolangan xabar kutiladi
+      logWebhook(req, sig, 'imzo majburiy — GET faollashtirmadi');
+      return res.redirect(302, SITE_URL);
+    }
+    if (sig !== 'no_secret') logWebhook(req, sig, 'GET');
+    const amountRaw = singleString(req.query.amount);
+    return await settleRoxiy(payment, {
+      status: singleString(req.query.status)?.toLowerCase(),
+      orderHash: singleString(req.query.order_hash),
+      amount: amountRaw === undefined ? NaN : Number(amountRaw),
+    }, () => res.redirect(302, SITE_URL), (code, msg) => res.status(code).send(msg));
   } catch (err) {
     console.error('roxiy webhook error:', err);
     res.status(500).send('error');
+  }
+});
+
+// POST /api/payments/roxiy/webhook — Roxiy kassa sozlamasidagi webhook (X-Rox-Signature bilan imzolangan).
+// Imzosiz POST faqat shu to'lovning `wt` tokeni bilan qabul qilinadi (aks holda order_hash'ni bilgan har kim yozardi).
+router.post('/roxiy/webhook', express.text({ type: () => true, limit: '64kb' }), async (req, res) => {
+  try {
+    let body: any = req.body;
+    if (typeof body === 'string') {
+      try { body = JSON.parse(body); } catch { body = Object.fromEntries(new URLSearchParams(body)); }
+    }
+    if (!body || typeof body !== 'object') body = {};
+    const d = body.data && typeof body.data === 'object' ? body.data : body;
+    const sig = signatureState(req);
+    const wt = singleString(req.query.wt) || firstStr(d.wt);
+    const orderHash = firstStr(d.order_hash, d.orderHash, d.hash);
+    let payment: any = null;
+    if (wt) payment = await Payment.findOne({ webhookToken: wt, provider: 'roxiy' });
+    if (!payment && orderHash) payment = await Payment.findOne({ externalId: orderHash, provider: 'roxiy' });
+    if (!payment) { logWebhook(req, sig, "to'lov topilmadi"); return res.status(404).json({ ok: false, error: 'order not found' }); }
+    const tokenOk = !!wt && payment.webhookToken === wt;
+    if (sig !== 'valid' && (signatureRequired() || !tokenOk)) {
+      logWebhook(req, sig, "rad etildi (imzo yoki token yo'q)");
+      return res.status(401).json({ ok: false, error: 'bad signature' });
+    }
+    logWebhook(req, sig, 'POST qabul qilindi');
+    return await settleRoxiy(payment, {
+      status: firstStr(d.status, d.state)?.toLowerCase(),
+      orderHash,
+      amount: Number(firstStr(d.amount, d.sum)),
+    }, () => res.status(200).json({ ok: true }), (code, msg) => res.status(code).json({ ok: false, error: msg }));
+  } catch (err) {
+    console.error('roxiy webhook POST error:', err);
+    res.status(500).json({ ok: false, error: 'error' });
   }
 });
 

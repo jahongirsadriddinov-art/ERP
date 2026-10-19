@@ -167,7 +167,8 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   credentials: true,
 }));
-app.use(express.json({ limit: '60mb' }));
+// Roxiy webhook imzosi xom tana bo'yicha tekshiriladi — faqat /api/payments uchun asl baytlar saqlanadi
+app.use(express.json({ limit: '60mb', verify: (req: any, _res, buf) => { if (String(req.url || '').startsWith('/api/payments/')) req.rawBody = Buffer.from(buf); } }));
 // ── Xavfsizlik: NoSQL-in'ektsiyadan himoya — so'rov tanasi/parametrlaridagi "$" bilan boshlanuvchi kalitlar
 // ($gt, $ne, $where ...) olib tashlanadi (masalan login'da {"phone":{"$ne":""}} kabi hiyla ishlamasin).
 // Nuqtali kalitlar (hujjat matni "s1.h" kabi) tegilmaydi.

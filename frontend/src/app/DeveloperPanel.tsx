@@ -1,5 +1,6 @@
 import { confirmDialog } from "./lib/confirmDialog";
 import { useState, useRef, useEffect, lazy, Suspense } from "react";
+import { oneOf, usePersistentState } from "./lib/persistentState";
 import { useTranslation } from "react-i18next";
 import LogOut from "@hugeicons/core-free-icons/Logout01Icon";
 import Loader2 from "@hugeicons/core-free-icons/Loading03Icon";
@@ -28,7 +29,8 @@ const AiPlatformPanel = lazy(() => import("./aiVoice/settings/platform/AiPlatfor
 // ─── Developer Panel ────────────────────────────────────────────────────────────
 export default function DeveloperPanel({ currentUser, onLogout }: { currentUser: AppUser; onLogout: () => void }) {
   const { t } = useTranslation();
-  const [tab, setTab] = useState<"firms" | "users" | "subscriptions" | "messages" | "plans" | "promocodes" | "announcements" | "aiVoice" | "server">("subscriptions");
+  const [tab, setTab] = usePersistentState<"firms" | "users" | "subscriptions" | "messages" | "plans" | "promocodes" | "announcements" | "aiVoice" | "server">(
+    "dev.tab", "subscriptions", oneOf(["firms", "users", "subscriptions", "messages", "plans", "promocodes", "announcements", "aiVoice", "server"]));
   const [annReload, setAnnReload] = useState(0);
   const [companies, setCompanies] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
@@ -129,7 +131,11 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
   // eslint-disable-next-line
   }, [currentUser.id, selDevGroup?.id]);
 
-  useEffect(() => { devMsgBottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [devMsgs]);
+  // Faqat xabarlar ro'yxatining o'zi pastga suriladi (scrollIntoView butun sahifani ham pastga tortardi — owner 2026-10-19)
+  useEffect(() => {
+    const box = devMsgBottomRef.current?.parentElement;
+    if (box) box.scrollTo({ top: box.scrollHeight, behavior: 'smooth' });
+  }, [devMsgs]);
 
   const sendDevMsg = async () => {
     if (!devMsgText.trim() || !selDevGroup) return;

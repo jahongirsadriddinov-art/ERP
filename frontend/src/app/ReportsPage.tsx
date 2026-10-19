@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { oneOf, usePersistentState } from "./lib/persistentState";
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   AreaChart, Area, CartesianGrid, Legend,
@@ -64,7 +65,7 @@ export default function ReportsPage({ projects, expenses, incomes, users, showIn
   const [exporting, setExporting] = useState(false);
   const [sortBy, setSortBy] = useState<"date" | "amount">("date");
   // Owner 2026-10-19: "Nazorat" — o'g'irlik, narx, hujjat muddati, texnika va funksiyalar sozlamasi
-  const [view, setView] = useState<"finance" | "control">("finance");
+  const [view, setView] = usePersistentState<"finance" | "control">("reports.view", "finance", oneOf(["finance", "control"]));
 
   const today = iso(new Date());
   const [dateFrom, dateTo] = useMemo((): [string, string] => {

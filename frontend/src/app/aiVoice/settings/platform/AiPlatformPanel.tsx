@@ -26,6 +26,7 @@ import UsageView from "./UsageView";
 import AuditLog from "../sections/AuditLog";
 import Archives from "../sections/Archives";
 import CompanyEditor from "./CompanyEditor";
+import { oneOf, usePersistentState } from "../../../lib/persistentState";
 
 // Dasturchi paneli → AI: butun platforma boshqaruvi (faqat dasturchi). Holat (server kaliti, kalitlar, navbat,
 // worker), firmalar (AI kaliti, AI miyasi, limitlar, oylik xarajat), xarajat (firma kesimida + tafsilot), Telegram
@@ -47,7 +48,7 @@ const settle = <T,>(r: { ok: boolean; status: number; data: T }): Loadable<T> =>
 
 export default function AiPlatformPanel() {
   const { t } = useTranslation();
-  const [tab, setTab] = useState<Tab>("overview");
+  const [tab, setTab] = usePersistentState<Tab>("aiPlatform.tab", "overview", oneOf(TABS.map((x) => x.key)));
   return (
     <div className="space-y-4" data-testid="ai-platform-panel">
       <div className="surface no-lift border border-border rounded-2xl p-4 flex items-start gap-3">

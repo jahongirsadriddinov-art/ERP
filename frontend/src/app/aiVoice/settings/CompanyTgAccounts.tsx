@@ -9,6 +9,7 @@ import Delete from "@hugeicons/core-free-icons/Delete02Icon";
 import Add from "@hugeicons/core-free-icons/Add01Icon";
 import { API_BASE } from "../../api";
 import { Badge, Card, type Tone } from "./ui";
+import { usePersistentState } from "../../lib/persistentState";
 
 // Dasturchi paneli → AI → Telegram → "Firma Telegram akkauntlari" (owner 2026-10-19): firmani tanlab hohlagancha
 // Telegram profil qo'shiladi; qo'ng'iroq shu firmaning bo'sh akkaunti orqali ketadi (biri band bo'lsa — keyingisi).
@@ -49,7 +50,7 @@ export default function CompanyTgAccounts({ errText: errTextProp }: { errText?: 
   });
   const [companies, setCompanies] = useState<Company[] | null | false>(null);
   const [q, setQ] = useState("");
-  const [companyId, setCompanyId] = useState("");
+  const [companyId, setCompanyId] = usePersistentState<string>("tgAccounts.company", "", (v) => typeof v === "string" && /^([0-9a-f]{24})?$/.test(v));
   const [accounts, setAccounts] = useState<Acc[] | null>(null);
   const [label, setLabel] = useState("");
   const [busy, setBusy] = useState("");

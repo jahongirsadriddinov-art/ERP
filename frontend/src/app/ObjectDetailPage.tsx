@@ -1,5 +1,6 @@
 import { confirmDialog } from "./lib/confirmDialog";
 import { useState, useRef, useEffect } from "react";
+import { oneOf, usePersistentState } from "./lib/persistentState";
 import Building2 from "@hugeicons/core-free-icons/Building02Icon";
 import Package from "@hugeicons/core-free-icons/Package01Icon";
 import ArrowLeft from "@hugeicons/core-free-icons/ArrowLeft01Icon";
@@ -41,7 +42,8 @@ export function ObjectDetailPage({ project, currentUser, users, transfers, onBac
   const canPlanFact = isAdmin(currentUser.role) || !!currentUser.isOwner || currentUser.role === "prorab" || currentUser.role === "brigadir";
   const companyFeatures = useCompanyFeatures();
   const showPiecework = !!companyFeatures?.piecework;
-  const [tab, setTab] = useState<"plan"|"required"|"smeta"|"pending"|"confirmed"|"media"|"piece">(canPlanFact ? "plan" : "required");
+  const [tab, setTab] = usePersistentState<"plan"|"required"|"smeta"|"pending"|"confirmed"|"media"|"piece">(
+    `object.tab:${project.id}`, canPlanFact ? "plan" : "required", oneOf(["plan", "required", "smeta", "pending", "confirmed", "media", "piece"]));
   const [showEditProject, setShowEditProject] = useState(false);
   const [deletingProject, setDeletingProject] = useState(false);
   // Ish jarayoni rasm/video — BARCHA xodim (ishchi, brigadir, prorab ham)

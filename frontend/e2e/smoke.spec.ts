@@ -46,8 +46,11 @@ test('kirish sahifasi: telefon raqam maydoni bor va sahifa yon tomonga siljimayd
   await page.goto('/');
   // Landing bo'lsa — "Kirish" tugmasi orqali login sahifasiga
   const loginBtn = page.getByRole('button', { name: /kirish|войти/i }).first();
+  const phone = page.locator('input[type="tel"], input[inputmode="tel"], input[placeholder*="998"]').first();
+  // Landing yoki login — qaysi biri yuklanishini kutamiz (darhol tekshirish poyga edi: landing hali chizilmagan bo'lardi)
+  await expect(phone.or(loginBtn)).toBeVisible({ timeout: 15_000 });
   if (await loginBtn.isVisible().catch(() => false)) await loginBtn.click();
-  await expect(page.locator('input[type="tel"], input[inputmode="tel"], input[placeholder*="998"]').first()).toBeVisible({ timeout: 15_000 });
+  await expect(phone).toBeVisible({ timeout: 15_000 });
   await noHorizontalOverflow(page);
 });
 

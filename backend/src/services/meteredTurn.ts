@@ -165,7 +165,14 @@ export function startMeteredTurnRefreshLoop(): void {
     console.log('[meteredTurn] METERED_APP_NAME va METERED_SECRET_KEY/METERED_API_KEY sozlanmagan — eski bepul TURN ishlatiladi.');
     return;
   }
-  mintAndCache().catch(err => console.error("[meteredTurn] boshlang'ich credential olishda xato:", err));
+  // Ishga tushishda tarmoq vaqtincha yo'q bo'lishi mumkin (ETIMEDOUT) — 12 soat kutmasdan har daqiqa qayta urinamiz (≤10 marta)
+  const first = (attempt: number): void => {
+    mintAndCache().catch((err) => {
+      console.error(`[meteredTurn] boshlang'ich credential olishda xato (${attempt}-urinish):`, (err as Error)?.message || err);
+      if (attempt < 10) setTimeout(() => first(attempt + 1), 60_000).unref?.();
+    });
+  };
+  first(1);
   setInterval(() => {
     mintAndCache().catch(err => console.error('[meteredTurn] credential yangilashda xato:', err));
   }, REFRESH_INTERVAL_MS);

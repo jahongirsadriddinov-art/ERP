@@ -145,6 +145,33 @@ export default function ChatPage({ currentUser, users, messages, groups, onlineU
   const openGroup = (g: Group) => { switchDraft(groupKey(g.id)); resetThreadUi(); setFirstUnread(null); setSelGroup(g); setSelUser(null); };
 
   useEffect(() => { onChatOpen(!!(selUser || selGroup || aiOpen)); }, [selUser, selGroup, aiOpen]);
+  // Refreshda ochiq suhbat qayta ochiladi (owner 2026-10-19: "qayerda bo'lsa o'sha joyda tursin")
+  const restoredRef = useRef(false);
+  useEffect(() => {
+    if (!restoredRef.current) return;
+    try {
+      const v = selGroup ? `g:${selGroup.id}` : selUser ? `u:${selUser.id}` : "";
+      if (v) sessionStorage.setItem("erp_ui:chat.open", v); else sessionStorage.removeItem("erp_ui:chat.open");
+    } catch { /* */ }
+  }, [selUser, selGroup]);
+  useEffect(() => {
+    if (restoredRef.current) return;
+    let want = "";
+    try { want = sessionStorage.getItem("erp_ui:chat.open") || ""; } catch { /* */ }
+    if (!want) { restoredRef.current = true; return; }
+    const id = want.slice(2);
+    if (want.startsWith("g:")) {
+      const g = groups.find((x) => x.id === id);
+      if (g) { restoredRef.current = true; openGroup(g); }
+    } else {
+      const u = users.find((x) => x.id === id);
+      if (u) { restoredRef.current = true; switchDraft(want); resetThreadUi(); setSelUser(u); setSelGroup(null); }
+    }
+    // Ro'yxatlar keldi, lekin suhbat endi yo'q — tiklashdan voz kechamiz (keyingi tanlovlar saqlanaversin)
+    if (!restoredRef.current && users.length && groups.length) restoredRef.current = true;
+    // Ro'yxatlar hali kelmagan bo'lishi mumkin — kelganda qayta urinadi
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groups, users]);
   // Guruh ma'lumoti yangilansa yoki guruh o'chirilsa/undan chiqilsa — ochiq oyna eskirgan nusxani ko'rsatmasin
   useEffect(() => {
     if (!selGroup) return;

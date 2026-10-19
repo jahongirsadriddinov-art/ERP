@@ -1,6 +1,7 @@
 import { confirmDialog } from "./lib/confirmDialog";
 import { startBackground, stopBackground } from "./lib/background";
 import { useState, useRef, useEffect, useMemo, lazy, Suspense } from "react";
+import { useScrollMemory } from "./lib/persistentState";
 import Building2 from "@hugeicons/core-free-icons/Building02Icon";
 import Users from "@hugeicons/core-free-icons/UserMultipleIcon";
 import HardHat from "@hugeicons/core-free-icons/HardHatIcon";
@@ -2603,6 +2604,8 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem("page", page);
   }, [page]);
+  // Refreshda yoki sahifaga qaytganda skroll joyi tiklanadi (owner 2026-10-19); chat o'z skrolini o'zi boshqaradi
+  const pageScrollRef = useScrollMemory(page === "chat" ? "chat-off" : `${page}:${selProject?.id || ""}`);
 
   // Backend global search (debounced, permission-aware)
   useEffect(() => {
@@ -3541,7 +3544,7 @@ export default function App() {
       </div>
 
       {/* Main */}
-      <main key={`${page}:${selProject?.id || ''}`} className={`page-enter main-fade bg-background flex-1 overflow-hidden flex flex-col relative ${(page === 'chat' && chatIsOpen) ? '' : 'main-pb-safe'}`}>
+      <main ref={page === "chat" ? undefined : pageScrollRef} key={`${page}:${selProject?.id || ''}`} className={`page-enter main-fade bg-background flex-1 overflow-hidden flex flex-col relative ${(page === 'chat' && chatIsOpen) ? '' : 'main-pb-safe'}`}>
         {/* Admin dashboard */}
         {page==="dashboard" && admin && !selProject && (
           <Suspense fallback={<SkeletonPage variant="dashboard" />}>

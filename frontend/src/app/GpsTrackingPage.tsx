@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { oneOf, usePersistentState } from "./lib/persistentState";
 import MapPin from "@hugeicons/core-free-icons/PinLocation01Icon";
 import Users2 from "@hugeicons/core-free-icons/UserGroup02Icon";
 import Clock from "@hugeicons/core-free-icons/Clock01Icon";
@@ -50,7 +51,7 @@ export default function GpsTrackingPage({ users, gpsLocations, refreshing, onRef
   // o'rniga IKKI ALOHIDA yorliq (ObjectDetailPage'dagi tab pattern'i bilan
   // bir xil): "map" = faqat jonli xarita, "list" = ishchilar ro'yxati
   // (bosilganda batafsil profil ochiladi).
-  const [tab, setTab] = useState<'map' | 'list'>('map');
+  const [tab, setTab] = usePersistentState<'map' | 'list'>('gps.tab', 'map', oneOf(['map', 'list']));
   // "Jonli xarita" yorlig'ining o'zida ham qisqa xodim tanlash ro'yxati —
   // bosilganda FULL profil OCHMAYDI (bu "Ishchilar ro'yxati"ga xos), faqat
   // xaritani o'sha xodimga suzib olib boradi.

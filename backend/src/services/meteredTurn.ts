@@ -35,17 +35,65 @@ function baseUrl() {
 // Metered javob bermasa so'rov abadiy osilib qolmasin (qo'ng'iroq shu javobni kutadi)
 const withTimeout = (ms: number): AbortSignal => { const c = new AbortController(); setTimeout(() => c.abort(), ms).unref?.(); return c.signal; };
 
-async function mintAndCache(): Promise<void> {
-  if (!configured) return;
-  const createRes = await fetch(`${baseUrl()}/credential?secretKey=${encodeURIComponent(SECRET_KEY!)}`, {
+const LABEL_PREFIX = 'qurilisherp-';
+type MeteredCred = { username?: string; label?: string; createdAt?: string; created?: string; expiryAt?: string };
+
+/** Akkauntdagi credential'lar (javob shakli: massiv yoki { data: [...] }). Xato bo'lsa — bo'sh ro'yxat. */
+async function listCredentials(): Promise<MeteredCred[]> {
+  try {
+    const r = await fetch(`${baseUrl()}/credentials?secretKey=${encodeURIComponent(SECRET_KEY!)}`, { signal: withTimeout(8000) });
+    if (!r.ok) return [];
+    const j: any = await r.json();
+    const arr = Array.isArray(j) ? j : Array.isArray(j?.data) ? j.data : [];
+    return arr.filter((c: any) => c && typeof c.username === 'string');
+  } catch { return []; }
+}
+
+async function deleteCredential(username: string): Promise<boolean> {
+  try {
+    const r = await fetch(`${baseUrl()}/credential?secretKey=${encodeURIComponent(SECRET_KEY!)}&username=${encodeURIComponent(username)}`, { method: 'DELETE', signal: withTimeout(8000) });
+    return r.ok;
+  } catch { return false; }
+}
+
+/**
+ * Owner 2026-10-19: "Metered 403" — har qayta ishga tushishda yangi credential yaratilib, eskilari o'chirilmasdi;
+ * sinov tarifidagi credential chegarasi (10 ta) to'lgach Metered yaratishni 403 bilan rad etdi. Endi o'zimiz
+ * yaratgan (label "qurilisherp-…") eski credential'lar o'chiriladi, eng yangi `keep` tasi qoldiriladi.
+ */
+async function pruneOwnCredentials(keep: number): Promise<number> {
+  const own = (await listCredentials()).filter((c) => String(c.label || '').startsWith(LABEL_PREFIX));
+  const ts = (c: MeteredCred) => Date.parse(String(c.createdAt || c.created || c.expiryAt || '')) || 0;
+  own.sort((a, b) => ts(b) - ts(a));
+  let removed = 0;
+  for (const c of own.slice(Math.max(0, keep))) {
+    if (c.username && c.username !== cachedUsername && (await deleteCredential(c.username))) removed++;
+  }
+  if (removed) console.log(`[meteredTurn] ${removed} ta eski TURN credential o'chirildi`);
+  return removed;
+}
+
+async function createCredential(): Promise<Response> {
+  return fetch(`${baseUrl()}/credential?secretKey=${encodeURIComponent(SECRET_KEY!)}`, {
     method: 'POST',
     signal: withTimeout(8000),
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       expiryInSeconds: CREDENTIAL_TTL_SECONDS,
-      label: `qurilisherp-${new Date().toISOString().slice(0, 10)}`,
+      label: `${LABEL_PREFIX}${new Date().toISOString().slice(0, 10)}`,
     }),
   });
+}
+
+async function mintAndCache(): Promise<void> {
+  if (!configured) return;
+  // Avval eskilarni tozalaymiz (joriy ishlatilayotgani + 1 ta zaxira qoladi)
+  await pruneOwnCredentials(1);
+  let createRes = await createCredential();
+  if (createRes.status === 403 || createRes.status === 429) {
+    // Chegara to'lgan bo'lishi mumkin — hammasini (joriydan tashqari) o'chirib bir marta qayta urinamiz
+    if (await pruneOwnCredentials(0)) createRes = await createCredential();
+  }
   if (!createRes.ok) throw new Error(`Metered credential yaratish muvaffaqiyatsiz: ${createRes.status}`);
   const cred = await createRes.json() as { username: string; password: string; apiKey: string };
 

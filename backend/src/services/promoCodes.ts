@@ -43,5 +43,14 @@ export async function checkPromoCode(rawCode: string, planKey: string, amount: n
 // bosqichida EMAS) — checkPromoCode izohiga qarang.
 export async function consumePromoCode(code: string): Promise<void> {
   if (!code) return;
-  await PromoCode.updateOne({ code: code.trim().toUpperCase() }, { $inc: { usedCount: 1 } }).catch(() => {});
+  const c = code.trim().toUpperCase();
+  // Limit atomik (audit 2026-10-19): bir nechta kutilayotgan buyurtma bir vaqtda to'lansa, limitdan oshganini ko'ramiz
+  const r = await PromoCode.updateOne(
+    { code: c, $or: [{ maxUses: null }, { maxUses: { $exists: false } }, { $expr: { $lt: ['$usedCount', '$maxUses'] } }] },
+    { $inc: { usedCount: 1 } },
+  ).catch(() => null);
+  if (r && r.matchedCount === 0) {
+    await PromoCode.updateOne({ code: c }, { $inc: { usedCount: 1 } }).catch(() => {});
+    console.warn(`[promo] ${c}: limitdan oshib ishlatildi (bir vaqtda bir nechta to'lov) — dasturchi tekshirsin`);
+  }
 }

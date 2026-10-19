@@ -39,7 +39,7 @@
     "pdf-parse": "^2.4.5",
     "socket.io": "^4.8.3",
     "web-push": "^3.6.7",
-    "xlsx": "^0.18.5"
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",

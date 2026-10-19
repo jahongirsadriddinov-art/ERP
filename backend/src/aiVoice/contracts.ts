@@ -380,6 +380,12 @@ export interface WorkerRpcMethods {
   /** Firma Telegram akkauntlari (owner 2026-10-19) — worker yangilarini yaratadi; olib tashlash faqat accounts.remove. */
   'accounts.sync': { params: { accounts: string[] }; result: { ok: true; accounts: number } };
   'accounts.remove': { params: { account: string }; result: { ok: true } };
+  /** AI akkaunti profili (owner 2026-10-19): rasm (base64, kichik), ism, familiya, bio, username. */
+  'profile.get': { params: { account?: string }; result: { firstName: string; lastName: string; username: string; about: string; photo?: string } };
+  'profile.update': {
+    params: { account?: string; firstName?: string; lastName?: string; about?: string; username?: string; photo?: string };
+    result: { ok: true; changed: string[]; username: string; displayName: string };
+  };
 }
 export type WorkerRpcMethod = keyof WorkerRpcMethods;
 export interface WorkerRpcRequest<M extends WorkerRpcMethod = WorkerRpcMethod> {

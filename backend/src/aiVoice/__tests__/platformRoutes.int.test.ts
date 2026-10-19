@@ -315,3 +315,37 @@ describe("sinov qo'ng'irog'i (B7)", () => {
     expect(st.body.notes.oneCallAtATime.uz).toMatch(/bitta qo'ng'iroq/);
   });
 });
+
+describe("AI akkauntlari profili (owner 2026-10-19): bittalab va hammasiga birdan", () => {
+  it("ism/familiya/username/rasm workerga boradi; ism AI ismiga ham yoziladi; birdan — username'siz; xato kodi aniq", async () => {
+    const dev = await newDev();
+    const w = await worker();
+    const { default: AiTgAccount } = await import('../../models/AiTgAccount');
+    const a1 = await AiTgAccount.create({ label: 'Eski', status: 'connected', lastHealthAt: new Date() });
+    const a2 = await AiTgAccount.create({ status: 'connected', lastHealthAt: new Date() });
+    const seen: any[] = [];
+    w.handlers['profile.update'] = (p: any) => {
+      seen.push(p);
+      if (p.username === 'band_nom') throw Object.assign(new Error('x'), { code: 'username_occupied' });
+      return { ok: true, changed: ['first_name'], username: p.username || '', displayName: [p.firstName, p.lastName].filter(Boolean).join(' ') };
+    };
+    const Q = '/api/ai-voice/platform/tg-accounts';
+    const photo = 'data:image/jpeg;base64,' + Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]).toString('base64');
+    const r1 = await request(app).post(`${Q}/${a1._id}/profile`).set('Authorization', tok(dev)).send({ firstName: 'Jasur', lastName: 'AI', username: '@jasur_ai', photo });
+    expect(r1.status).toBe(200);
+    expect(seen[0]).toMatchObject({ account: String(a1._id), firstName: 'Jasur', lastName: 'AI', username: '@jasur_ai', photo });
+    const d1: any = await AiTgAccount.findById(a1._id).lean();
+    expect(d1).toMatchObject({ label: 'Jasur', displayName: 'Jasur AI' });
+
+    const bulk = await request(app).post(`${Q}/profile-bulk`).set('Authorization', tok(dev)).send({ ids: [String(a1._id), String(a2._id)], lastName: 'ERP', username: 'hammaga' });
+    expect(bulk.status).toBe(200);
+    expect(bulk.body.results).toEqual([{ id: String(a1._id), ok: true }, { id: String(a2._id), ok: true }]);
+    expect(seen.slice(1).map((p) => [p.account, p.lastName, p.username])).toEqual([[String(a1._id), 'ERP', undefined], [String(a2._id), 'ERP', undefined]]);
+
+    const bad = await request(app).post(`${Q}/${a2._id}/profile`).set('Authorization', tok(dev)).send({ username: 'band_nom' });
+    expect(bad.status).toBe(409);
+    expect(bad.body.error).toBe('username_occupied');
+    expect((await request(app).post(`${Q}/${a2._id}/profile`).set('Authorization', tok(dev)).send({ username: '1yomon' })).status).toBe(400);
+    await AiTgAccount.deleteMany({});
+  });
+});

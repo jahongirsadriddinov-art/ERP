@@ -8,6 +8,8 @@ import Logout from "@hugeicons/core-free-icons/Logout01Icon";
 import Delete from "@hugeicons/core-free-icons/Delete02Icon";
 import Add from "@hugeicons/core-free-icons/Add01Icon";
 import Edit from "@hugeicons/core-free-icons/Edit02Icon";
+import UserEdit from "@hugeicons/core-free-icons/UserEdit01Icon";
+import TgProfileEditor from "./TgProfileEditor";
 import { API_BASE } from "../../api";
 import { Badge, Card, type Tone } from "./ui";
 
@@ -54,6 +56,15 @@ export default function CompanyTgAccounts() {
   const [login, setLogin] = useState<{ id: string; step: "phone" | "code" | "password"; attempt?: string } | null>(null);
   const [value, setValue] = useState("");
   const [rename, setRename] = useState<{ id: string; v: string } | null>(null);
+  // Profil: bitta akkaunt (profileFor) yoki tanlanganlarga birdan (sel + bulk)
+  const [profileFor, setProfileFor] = useState<string | null>(null);
+  const [sel, setSel] = useState<Set<string>>(new Set());
+  const [bulk, setBulk] = useState(false);
+  const toggleSel = (id: string) => setSel((p) => { const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const profileDone = (list?: unknown) => {
+    setProfileFor(null); setBulk(false);
+    if (Array.isArray(list)) setAccounts(list as Acc[]); else load();
+  };
 
   const load = useCallback(async () => {
     const r = await api<{ accounts: Acc[] }>("GET", "");
@@ -61,9 +72,9 @@ export default function CompanyTgAccounts() {
   }, []);
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
-    const id = window.setInterval(() => { if (!document.hidden && !busy && !login && !rename) load(); }, 15_000);
+    const id = window.setInterval(() => { if (!document.hidden && !busy && !login && !rename && !profileFor && !bulk) load(); }, 15_000);
     return () => window.clearInterval(id);
-  }, [busy, login, rename, load]);
+  }, [busy, login, rename, profileFor, bulk, load]);
 
   const add = async () => {
     setBusy("add");
@@ -142,7 +153,12 @@ export default function CompanyTgAccounts() {
             <ul className="space-y-2">
               {accounts.map((a) => (
                 <li key={a.id} className="rounded-xl border border-border p-3 flex flex-wrap items-center gap-2 justify-between" data-testid="ai-tg-company-account">
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex items-start gap-2.5">
+                    {a.status === "connected" && (
+                      <input type="checkbox" checked={sel.has(a.id)} onChange={() => toggleSel(a.id)} aria-label={k("select")}
+                        className="mt-1 w-4 h-4 accent-[var(--primary)]" data-testid="ai-tg-account-select" />
+                    )}
+                    <div className="min-w-0">
                     {rename?.id === a.id ? (
                       <form onSubmit={saveName} className="flex flex-wrap items-center gap-2">
                         <input autoFocus value={rename.v} onChange={(e) => setRename({ id: a.id, v: e.target.value })} maxLength={30}
@@ -170,11 +186,17 @@ export default function CompanyTgAccounts() {
                         {i18n.exists(`aiVoice.telegram.company.err.${a.lastError}`) ? k(`err.${a.lastError}`) : a.lastError}
                       </p>
                     )}
+                    </div>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {a.status !== "connected" && (
                       <button type="button" className={smallBtn} disabled={!!busy} onClick={() => { setValue(""); setLogin({ id: a.id, step: "phone" }); }}>
                         <MorphIcon icon={Telegram} className="w-3.5 h-3.5" />{k("connect")}
+                      </button>
+                    )}
+                    {a.status === "connected" && (
+                      <button type="button" className={smallBtn} disabled={!!busy} onClick={() => { setBulk(false); setProfileFor(profileFor === a.id ? null : a.id); }} data-testid="ai-tg-account-profile">
+                        <MorphIcon icon={UserEdit} className="w-3.5 h-3.5" />{k("profile")}
                       </button>
                     )}
                     {a.status === "connected" && (
@@ -186,6 +208,7 @@ export default function CompanyTgAccounts() {
                       <MorphIcon icon={busy === `rm:${a.id}` ? Refresh : Delete} className={`w-3.5 h-3.5 ${busy === `rm:${a.id}` ? "animate-spin" : ""}`} />{k("remove")}
                     </button>
                   </div>
+                  {profileFor === a.id && <TgProfileEditor mode="one" ids={[a.id]} onDone={profileDone} onCancel={() => setProfileFor(null)} />}
                   {login?.id === a.id && (
                     <form onSubmit={submit} className="w-full flex flex-wrap gap-2 pt-2">
                       <input
@@ -205,6 +228,18 @@ export default function CompanyTgAccounts() {
                 </li>
               ))}
             </ul>
+            {accounts.some((a) => a.status === "connected") && (
+              <div className="flex flex-wrap items-center gap-2">
+                <button type="button" className={smallBtn} onClick={() => {
+                  const ids = accounts.filter((a) => a.status === "connected").map((a) => a.id);
+                  setSel(sel.size === ids.length ? new Set() : new Set(ids));
+                }} data-testid="ai-tg-select-all">{k("selectAll")}</button>
+                <button type="button" className={smallBtn} disabled={!sel.size} onClick={() => { setProfileFor(null); setBulk(!bulk); }} data-testid="ai-tg-bulk-open">
+                  <MorphIcon icon={UserEdit} className="w-3.5 h-3.5" />{k("bulkEdit", { n: sel.size })}
+                </button>
+              </div>
+            )}
+            {bulk && sel.size > 0 && <TgProfileEditor mode="bulk" ids={[...sel]} onDone={profileDone} onCancel={() => setBulk(false)} />}
             <div className="flex flex-wrap gap-2">
               <input value={name} onChange={(e) => setName(e.target.value)} maxLength={30} placeholder={k("namePh")} aria-label={k("namePh")} className={`${inputCls} flex-1 min-w-[12rem]`} data-testid="ai-tg-account-name" />
               <button type="button" className={primaryBtn} disabled={!!busy} onClick={add} data-testid="ai-tg-company-add">

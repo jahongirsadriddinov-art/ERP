@@ -100,6 +100,8 @@ async def handle_phone_call_update(rt: "TelegramRuntime", pc: Any) -> None:
     name = _type_name(pc)
     if name == "PhoneCallRequested":
         caller = int(getattr(pc, "admin_id", 0) or 0)
+        log.info("kiruvchi qo'ng'iroq keldi → %s (ochiq=%s)", getattr(rt, "label", "?"),
+                 bool(rt.calls is not None and getattr(rt.calls, "open_incoming", False)))
         if caller and rt.calls is not None and getattr(rt.calls, "open_incoming", False):
             # Ochiq muloqot: bu yerda rad etilmaydi — qaror pytgcalls INCOMING_CALL voqeasida (backend)
             rt.call_users[pc.id] = (caller, pc.access_hash)
@@ -145,6 +147,7 @@ class TelegramRuntime:
         self.emit = emit
         self.binding = binding
         self.calls = None            # CallManager (main.py ulaydi)
+        self.label = "platforma akkaunti"   # diagnostika (accounts.py qo'yadi)
         self.client = None
         self.pytg = None
         self.me_id: Optional[int] = None
@@ -274,7 +277,7 @@ class TelegramRuntime:
         self.username = getattr(me, "username", None)
         self.display_name = " ".join(x for x in [getattr(me, "first_name", None), getattr(me, "last_name", None)] if x) or None
         self.last_error = None
-        log.info("Telegram ulandi")
+        log.info("Telegram ulandi — %s", self.label)
         # StringSession entity keshini diskda saqlamaydi — qayta ishga tushgandan keyin bog'langan xodimlar
         # (ular akkauntga DM yozgan) "peer_unknown" bo'lib qolmasin: dialoglar bir marta o'qiladi
         asyncio.ensure_future(self._warm_peers(client))

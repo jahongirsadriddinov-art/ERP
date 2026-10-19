@@ -23,7 +23,7 @@ import { callWorker, WorkerRpcFailure } from '../telegram/workerRpc';
 import { getActiveWorker } from '../telegram/workerNamespace';
 import {
   createPoolAccount, getAccount, listPoolAccounts, MAX_POOL_ACCOUNTS, removePoolAccount,
-  setAccountConnected, setAccountLogin, setAccountName, syncAccountsToWorker,
+  cleanAiName, setAccountConnected, setAccountLogin, setAccountName, syncAccountsToWorker,
 } from '../telegram/companyAccounts';
 
 // Platforma: /api/ai-voice/platform (bootstrap: requireAuth + requireDeveloper — faqat dasturchi).
@@ -571,6 +571,92 @@ router.post('/tg-accounts/:accountId/logout', wrap(async (req, res) => {
   await setAccountLogin(account, { status: 'disconnected' }, ['tgUserId', 'username', 'displayName', 'phoneMasked', 'connectedAt', 'lastError']);
   audit(req, dev, 'update', 'AI Telegram: akkauntdan chiqildi', { entityId: account });
   res.json({ ok: true, accounts: await listPoolAccounts() });
+}));
+
+// ── Profil: rasm, ism-familiya, bio, username (owner 2026-10-19) — bittalab yoki hammasiga birdan ──
+const PROFILE_PHOTO_MAX_B64 = 3 * 1024 * 1024;   // ~2 MB rasm
+type ProfilePatch = { firstName?: string; lastName?: string; about?: string; username?: string; photo?: string };
+function profilePatch(body: unknown, allowUsername: boolean): ProfilePatch | null {
+  if (!isObj(body)) return null;
+  const out: ProfilePatch = {};
+  for (const [k, max] of [['firstName', 64], ['lastName', 64], ['about', 70]] as const) {
+    const v = body[k];
+    if (v === undefined || v === null) continue;
+    if (typeof v !== 'string' || v.length > max) return null;
+    out[k] = v;
+  }
+  if (allowUsername && body.username !== undefined && body.username !== null) {
+    if (typeof body.username !== 'string' || !/^@?([A-Za-z][A-Za-z0-9_]{3,31})?$/.test(body.username.trim())) return null;
+    out.username = body.username.trim();
+  }
+  if (body.photo !== undefined && body.photo !== null) {
+    if (typeof body.photo !== 'string' || body.photo.length > PROFILE_PHOTO_MAX_B64) return null;
+    out.photo = body.photo;
+  }
+  return out;
+}
+const PROFILE_HTTP: Record<string, number> = { username_occupied: 409, username_invalid: 400, name_invalid: 400, about_too_long: 400, photo_invalid: 400 };
+
+async function applyProfile(accountId: string, patch: ProfilePatch): Promise<{ ok: true } | { ok: false; error: string; retryAfterSec?: number }> {
+  try {
+    const r = await callWorker('profile.update', { account: accountId, ...patch });
+    const set: Record<string, unknown> = {};
+    if (r.displayName) set.displayName = r.displayName.slice(0, 80);
+    if (patch.username !== undefined) set.username = r.username || undefined;
+    // AI o'zini Telegram'dagi ism bilan tanishtiradi — ism o'zgarsa AI ismi ham
+    const cleaned = cleanAiName(patch.firstName);
+    if (cleaned) set.label = cleaned;
+    if (Object.keys(set).length) await setAccountLogin(accountId, set);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof WorkerRpcFailure ? e.code : 'error', ...(e instanceof WorkerRpcFailure && e.retryAfterSec ? { retryAfterSec: e.retryAfterSec } : {}) };
+  }
+}
+
+router.get('/tg-accounts/:accountId/profile', wrap(async (req, res) => {
+  const acc = await accountOf(req, res);
+  if (!acc) return;
+  if (!getActiveWorker()) return res.status(503).json({ error: 'worker_offline' });
+  try {
+    res.json(await callWorker('profile.get', { account: String(acc._id) }));
+  } catch (e) {
+    return rpcError(res, e);
+  }
+}));
+
+router.post('/tg-accounts/:accountId/profile', wrap(async (req, res) => {
+  const dev = await developer(req);
+  const acc = await accountOf(req, res);
+  if (!acc) return;
+  const patch = profilePatch(req.body, true);
+  if (!patch || !Object.keys(patch).length) return res.status(400).json({ error: 'invalid' });
+  if (await limited(res, `aiv:tgprofile:${dev.userId}`, 60, LOGIN_WINDOW_MS)) return;
+  if (!getActiveWorker()) return res.status(503).json({ error: 'worker_offline' });
+  const r = await applyProfile(String(acc._id), patch);
+  if (!r.ok) return res.status(PROFILE_HTTP[r.error] || RPC_HTTP[r.error] || 502).json({ error: r.error, ...(r.retryAfterSec ? { retryAfterSec: r.retryAfterSec } : {}) });
+  audit(req, dev, 'update', `AI Telegram: profil o'zgardi (${Object.keys(patch).filter((k) => k !== 'photo').concat(patch.photo ? ['rasm'] : []).join(', ')})`, { entityId: String(acc._id) });
+  res.json({ ok: true, accounts: await listPoolAccounts() });
+}));
+
+// Hammasiga birdan: rasm / familiya / bio (va xohlansa ism). Username birdan qo'yilmaydi — har akkauntda noyob bo'lishi shart.
+router.post('/tg-accounts/profile-bulk', wrap(async (req, res) => {
+  const dev = await developer(req);
+  const body = isObj(req.body) ? req.body : {};
+  const ids: string[] = Array.isArray(body.ids) ? body.ids.filter((x: unknown) => typeof x === 'string' && isObjectIdString(x)).slice(0, 50) : [];
+  const patch = profilePatch(body, false);
+  if (!ids.length || !patch || !Object.keys(patch).length) return res.status(400).json({ error: 'invalid' });
+  if (await limited(res, `aiv:tgprofile:${dev.userId}`, 60, LOGIN_WINDOW_MS)) return;
+  if (!getActiveWorker()) return res.status(503).json({ error: 'worker_offline' });
+  const results: { id: string; ok: boolean; error?: string }[] = [];
+  for (const id of ids) {
+    const acc = await getAccount(id);
+    if (!acc) { results.push({ id, ok: false, error: 'account_not_found' }); continue; }
+    const r = await applyProfile(id, patch);
+    results.push(r.ok ? { id, ok: true } : { id, ok: false, error: r.error });
+    if (!r.ok && r.error === 'flood_wait') break;   // Telegram cheklasa — qolganlariga urinmaymiz
+  }
+  audit(req, dev, 'update', `AI Telegram: ${results.filter((x) => x.ok).length} ta akkaunt profili birdan o'zgardi`, {});
+  res.json({ ok: true, results, accounts: await listPoolAccounts() });
 }));
 
 router.delete('/tg-accounts/:accountId', wrap(async (req, res) => {

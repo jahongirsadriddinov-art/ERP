@@ -15,6 +15,7 @@ import time
 from . import __version__
 from . import config as cfgmod
 from .accounts import Account, AccountSet
+from .profile import get_profile, update_profile
 from .binding import BindingMatcher
 from .bridge import Bridge
 from .errors import RpcError
@@ -181,6 +182,16 @@ async def amain() -> int:
             raise RpcError("bad_request")
         return await accounts.sync(ids)
 
+    async def h_profile_get(p: dict) -> dict:
+        a = accounts.get(p)
+        need_tg(a)
+        return await get_profile(a.runtime)
+
+    async def h_profile_update(p: dict) -> dict:
+        a = accounts.get(p)
+        need_tg(a)
+        return await update_profile(a.runtime, p)
+
     def by_session(name: str):
         return lambda p: getattr(accounts.by_session(p.get("sessionId")).calls, name)(p)
 
@@ -190,6 +201,7 @@ async def amain() -> int:
         "binding.expect": h_binding, "call.place": h_place, "call.hangup": h_hangup, "udp.probe": h_udp,
         "incoming.config": h_incoming_config,
         "accounts.sync": h_accounts_sync, "accounts.remove": lambda p: accounts.remove(p),
+        "profile.get": h_profile_get, "profile.update": h_profile_update,
         "call.caption": by_session("caption"), "call.video_rate": by_session("video_rate"),
         "call.subtitles": by_session("subtitles"), "call.avatar": by_session("avatar_event"),
     }

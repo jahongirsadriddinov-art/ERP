@@ -89,6 +89,7 @@ import { isAiCallActive, decideCallOffer } from "./aiVoice/bus";
 import { motion, AnimatePresence } from "motion/react";
 import { PlanFactCard, PlanFactOverview } from "./PlanFact";
 import { EquipmentDetails } from "./EquipmentExtras";
+import { PieceworkTab, useCompanyFeatures } from "./Piecework";
 import { setSiteLanguage, SiteLang, langLabel } from "./i18n";
 import { isTelegramMiniApp, getTelegramInitData, markManualLogout, clearManualLogout, telegramAutoLoginAllowed } from "./telegramWebApp";
 import { isChatMuted, useChatPrefs } from "./chat/chatPrefs";
@@ -2588,7 +2589,7 @@ function PayrollModal({ users, onClose }: { users: AppUser[]; onClose: () => voi
                 <p className="text-sm font-semibold truncate">{r.userName}</p>
                 <span className="text-sm font-mono font-bold text-primary">{r.netPay.toLocaleString()} so'm</span>
               </div>
-              <p className="text-[10px] text-muted-foreground mb-1.5">{t('management.payDaysWorked', { days: r.presentDays })} · {t('management.payBase', { amount: r.baseSalary.toLocaleString() })}</p>
+              <p className="text-[10px] text-muted-foreground mb-1.5">{t('management.payDaysWorked', { days: r.presentDays })} · {t('management.payBase', { amount: r.baseSalary.toLocaleString() })}{r.pieceworkPay ? ` · ${t('piecework.payCol')}: ${Number(r.pieceworkPay).toLocaleString()}` : ''}</p>
               <div className="grid grid-cols-3 gap-1.5">
                 <input type="number" defaultValue={r.bonuses} placeholder={t('management.payBonus') as string} disabled={r.status==='paid'}
                   onBlur={e=>patch(r.id, { bonuses: Number(e.target.value)||0 })} className="text-xs border border-border rounded-lg px-2 py-1.5 bg-input-background focus:outline-none disabled:opacity-50" />
@@ -2814,7 +2815,9 @@ function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSe
   }) {
   const { t } = useTranslation();
   const canPlanFact = isAdmin(currentUser.role) || !!currentUser.isOwner || currentUser.role === "prorab" || currentUser.role === "brigadir";
-  const [tab, setTab] = useState<"plan"|"required"|"smeta"|"pending"|"confirmed"|"media">(canPlanFact ? "plan" : "required");
+  const companyFeatures = useCompanyFeatures();
+  const showPiecework = !!companyFeatures?.piecework;
+  const [tab, setTab] = useState<"plan"|"required"|"smeta"|"pending"|"confirmed"|"media"|"piece">(canPlanFact ? "plan" : "required");
   const [showEditProject, setShowEditProject] = useState(false);
   const [deletingProject, setDeletingProject] = useState(false);
   // Ish jarayoni rasm/video — BARCHA xodim (ishchi, brigadir, prorab ham)
@@ -3011,7 +3014,7 @@ function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSe
         </div>
       </div>
       <div className="glass border-b border-border px-3 py-2 flex gap-1 overflow-x-auto scrollbar-hide">
-        {([...(canPlanFact ? [["plan",t('planFact.tab'),NaN] as [string,string,number]] : []),["required",t('objectDetail.tabRequired'),project.requiredMaterials.length], ...(project.smeta ? [["smeta",t('objectDetail.tabSmeta'),project.smeta.resources.length] as [string,string,number]] : []), ["pending",t('objectDetail.tabPending'),pendT.length],["confirmed",t('objectDetail.tabConfirmed'),confT.length],["media",t('objectDetail.tabMedia'),mediaItems.length]] as [string,string,number][]).map(([k,l,c])=>(
+        {([...(canPlanFact ? [["plan",t('planFact.tab'),NaN] as [string,string,number]] : []),["required",t('objectDetail.tabRequired'),project.requiredMaterials.length], ...(project.smeta ? [["smeta",t('objectDetail.tabSmeta'),project.smeta.resources.length] as [string,string,number]] : []), ["pending",t('objectDetail.tabPending'),pendT.length],["confirmed",t('objectDetail.tabConfirmed'),confT.length],["media",t('objectDetail.tabMedia'),mediaItems.length], ...(showPiecework ? [["piece",t('piecework.tab'),NaN] as [string,string,number]] : [])] as [string,string,number][]).map(([k,l,c])=>(
           <button key={k} onClick={()=>setTab(k as any)} className={`relative flex items-center gap-1.5 text-sm md:text-xs py-2 px-3 rounded-full font-medium liquid-transition whitespace-nowrap ${tab===k?"text-primary":"text-muted-foreground hover:text-foreground"}`}>
             {tab===k && (
               <motion.div layoutId="objectDetailTabPill" className="absolute inset-0 rounded-full bg-primary/10 -z-10"
@@ -3024,6 +3027,7 @@ function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSe
       </div>
       <div className="flex-1 flex flex-col min-h-0">
         {tab==="plan" && <div className="flex-1 min-h-0 overflow-y-auto"><PlanFactCard objectId={project.id} canEdit={isAdmin(currentUser.role) || !!currentUser.isOwner} /></div>}
+        {tab==="piece" && showPiecework && <div className="flex-1 min-h-0 overflow-y-auto"><PieceworkTab objectId={project.id} users={users} currentUser={currentUser} isBoss={isAdmin(currentUser.role) || !!currentUser.isOwner} isForeman={project.foremanId === currentUser.id || currentUser.role === 'prorab' || currentUser.role === 'brigadir'} /></div>}
         {tab==="smeta" && project.smeta && <SmetaResultView smeta={project.smeta}/>}
         {tab==="required" && (
           <div className="flex-1 flex flex-col min-h-0">

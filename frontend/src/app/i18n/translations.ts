@@ -1057,6 +1057,11 @@ const uz = {
     delete: "O'chirish",
     open: "Ochish",
   },
+  piecework: {
+    tab: "Ishbay", worker: "Xodim", workName: "Ish nomi (masalan: g'isht terish)", unit: "Birlik", volume: "Hajm", rate: "1 birlik narxi (so'm)",
+    add: "Qo'shish", added: "Yozildi", listTitle: "Bajarilgan ishlar", approvedTotal: "Tasdiqlangan", empty: "Hali yozuv yo'q",
+    approve: "Tasdiqlash", reject: "Rad etish", status: { pending: "kutilmoqda", approved: "tasdiqlangan", rejected: "rad etilgan" }, payCol: "Ishbay",
+  },
   equipmentX: {
     saved: "Saqlandi", logged: "Jurnalga yozildi", date: "Sana", hours: "Ishladi (soat)", fuel: "Yoqilg'i (l)", engineHours: "Motor-soat",
     addLog: "Jurnalga yozish", logTitle: "Ish jurnali", serviceTitle: "Servis va me'yor", serviceShort: "servis",
@@ -2187,6 +2192,11 @@ const ru: TranslationShape = {
     allRead: "Все отмечены как прочитанные",
     delete: "Удалить",
     open: "Открыть",
+  },
+  piecework: {
+    tab: "Сдельно", worker: "Сотрудник", workName: "Работа (например: кладка кирпича)", unit: "Ед.", volume: "Объём", rate: "Расценка за ед. (сум)",
+    add: "Добавить", added: "Записано", listTitle: "Выполненные работы", approvedTotal: "Подтверждено", empty: "Пока нет записей",
+    approve: "Подтвердить", reject: "Отклонить", status: { pending: "ожидает", approved: "подтверждено", rejected: "отклонено" }, payCol: "Сдельно",
   },
   equipmentX: {
     saved: "Сохранено", logged: "Записано в журнал", date: "Дата", hours: "Отработано (ч)", fuel: "Топливо (л)", engineHours: "Моточасы",

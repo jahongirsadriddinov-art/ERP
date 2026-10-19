@@ -6,6 +6,7 @@ import { scoped, stamped } from '../middleware/scope';
 import { getTenant } from '../middleware/tenantContext';
 import { requireOwnerOrAdmin } from '../middleware/auth';
 import { logAudit } from '../services/audit';
+import { pieceworkTotals } from './worklogs';
 
 const router = Router();
 
@@ -33,6 +34,10 @@ router.post('/calculate', requireOwnerOrAdmin, async (req, res) => {
     const users = await User.find(scoped({ role: { $ne: 'dasturchi' } }) as any).lean();
     const workDays = workingDaysInMonth(period);
     const results = [];
+    // Ishbay (ixtiyoriy, firma yoqgan bo'lsa) — tasdiqlangan hajm × narx
+    const piece = t?.companyId ? await pieceworkTotals(String(t.companyId), period) : new Map<string, number>();
+    const existing = new Map((await PayrollRecord.find({ companyId: t?.companyId, period }).select('userId bonuses deductions status').lean())
+      .map((r: any) => [String(r.userId), r]));
 
     for (const u of users) {
       const attendance = await Attendance.find({ userId: String(u._id), date: { $regex: `^${period}` } }).lean();
@@ -40,14 +45,18 @@ router.post('/calculate', requireOwnerOrAdmin, async (req, res) => {
       const totalWorkHours = attendance.reduce((s, a) => s + (a.workHours || 0), 0);
       const baseSalary = u.baseSalary || 0;
       const dailyRate = workDays > 0 ? baseSalary / workDays : 0;
-      const netPay = Math.round(dailyRate * presentDays);
+      const pieceworkPay = Math.round(piece.get(String(u._id)) || 0);
+      const prev: any = existing.get(String(u._id));
+      if (prev?.status === 'paid') continue;   // to'langan oylik qayta hisoblanmaydi
+      // XATO TUZATILDI: qayta hisoblashda avval kiritilgan bonus/ushlab qolish yakuniy summadan tushib qolardi
+      const netPay = Math.max(0, Math.round(dailyRate * presentDays) + pieceworkPay + (prev?.bonuses || 0) - (prev?.deductions || 0));
 
       const rec = await PayrollRecord.findOneAndUpdate(
         { companyId: t?.companyId, userId: String(u._id), period },
         {
           $set: {
             companyId: t?.companyId, userId: String(u._id), userName: `${u.firstName} ${u.lastName || ''}`.trim(),
-            period, baseSalary, presentDays, totalWorkHours,
+            period, baseSalary, presentDays, totalWorkHours, pieceworkPay,
             netPay, status: 'draft',
           },
           $setOnInsert: { bonuses: 0, deductions: 0 },
@@ -104,7 +113,7 @@ router.patch('/:id', requireOwnerOrAdmin, async (req, res) => {
     const workDays = workingDaysInMonth(rec.period);
     const dailyRate = workDays > 0 ? rec.baseSalary / workDays : 0;
     const basePay = Math.round(dailyRate * rec.presentDays);
-    rec.netPay = Math.max(0, basePay + (rec.bonuses || 0) - (rec.deductions || 0));
+    rec.netPay = Math.max(0, basePay + ((rec as any).pieceworkPay || 0) + (rec.bonuses || 0) - (rec.deductions || 0));
     if (status !== undefined && ['draft', 'finalized', 'paid'].includes(status)) rec.status = status;
     await rec.save();
 

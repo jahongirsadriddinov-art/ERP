@@ -39,6 +39,7 @@ import deployRoutes from './routes/deploy';
 import paymentsRoutes from './routes/payments';
 import uptimeRoutes from './routes/uptime';
 import insightsRoutes from './routes/insights';
+import worklogsRoutes from './routes/worklogs';
 import filesRoutes from './routes/files';
 import statusRoutes from './routes/status';
 import equipmentRoutes from './routes/equipment';
@@ -301,6 +302,7 @@ app.use('/api/equipment',       requireAuth, blockDeveloper, equipmentRoutes);
 app.use('/api/safety',          requireAuth, blockDeveloper, safetyRoutes);
 app.use('/api/documents',       requireAuth, blockDeveloper, documentsRoutes);
 app.use('/api/payroll',         requireAuth, blockDeveloper, payrollRoutes);
+app.use('/api/worklogs',        requireAuth, blockDeveloper, worklogsRoutes); // ishbay hisob (ixtiyoriy)
 app.use('/api/export1c',        requireAuth, blockDeveloper, export1cRoutes);
 app.use('/api/announcements',   requireAuth, blockDeveloper, announcementsRoutes);
 app.use('/api/dev-announcements', requireAuth, requireDeveloper, devAnnouncementsRoutes);

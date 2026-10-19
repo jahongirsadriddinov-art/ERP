@@ -12,6 +12,7 @@ export interface IPayrollRecord extends Document {
   baseSalary: number;
   presentDays: number;
   totalWorkHours: number;
+  pieceworkPay?: number;   // tasdiqlangan ishbay (WorkLog) summasi
   bonuses: number;
   deductions: number;
   netPay: number;
@@ -29,6 +30,7 @@ const PayrollRecordSchema: Schema = new Schema({
   baseSalary: { type: Number, default: 0 },
   presentDays: { type: Number, default: 0 },
   totalWorkHours: { type: Number, default: 0 },
+  pieceworkPay: { type: Number, default: 0 },
   bonuses: { type: Number, default: 0 },
   deductions: { type: Number, default: 0 },
   netPay: { type: Number, default: 0 },

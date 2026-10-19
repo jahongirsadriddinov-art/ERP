@@ -1057,6 +1057,12 @@ const uz = {
     delete: "O'chirish",
     open: "Ochish",
   },
+  importX: {
+    title: "Excel'dan import", hint: "Xodimlar, obyektlar yoki materiallarni bitta faylda kiriting. Avval shablonni yuklab oling, to'ldiring va yuklang — saqlashdan oldin tekshiriladi.",
+    kind: { employees: "Xodimlar", objects: "Obyektlar", materials: "Materiallar" },
+    template: "Shablonni yuklab olish", choose: "Excel faylni tanlash", validRows: "{{count}} ta qator tayyor", errorRows: "{{count}} ta xato",
+    row: "{{row}}-qator", confirm: "{{count}} ta qatorni saqlash", done: "{{count}} ta yozuv qo'shildi",
+  },
   piecework: {
     tab: "Ishbay", worker: "Xodim", workName: "Ish nomi (masalan: g'isht terish)", unit: "Birlik", volume: "Hajm", rate: "1 birlik narxi (so'm)",
     add: "Qo'shish", added: "Yozildi", listTitle: "Bajarilgan ishlar", approvedTotal: "Tasdiqlangan", empty: "Hali yozuv yo'q",
@@ -2192,6 +2198,12 @@ const ru: TranslationShape = {
     allRead: "Все отмечены как прочитанные",
     delete: "Удалить",
     open: "Открыть",
+  },
+  importX: {
+    title: "Импорт из Excel", hint: "Сотрудники, объекты или материалы одним файлом. Скачайте шаблон, заполните и загрузите — перед сохранением всё проверяется.",
+    kind: { employees: "Сотрудники", objects: "Объекты", materials: "Материалы" },
+    template: "Скачать шаблон", choose: "Выбрать Excel-файл", validRows: "Готово строк: {{count}}", errorRows: "ошибок: {{count}}",
+    row: "строка {{row}}", confirm: "Сохранить {{count}} строк", done: "Добавлено записей: {{count}}",
   },
   piecework: {
     tab: "Сдельно", worker: "Сотрудник", workName: "Работа (например: кладка кирпича)", unit: "Ед.", volume: "Объём", rate: "Расценка за ед. (сум)",

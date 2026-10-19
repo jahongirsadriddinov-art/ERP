@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { motion } from "motion/react";
 import { toast } from "sonner";
 import { API_BASE } from "./api";
+import ImportExcel from "./ImportExcel";
 
 // ─── Nazorat paneli (owner 2026-10-19) ────────────────────────────────────────────────────────────────────────
 // Material o'g'irligi belgilari, narx o'zgarishlari, tugayotgan hujjatlar, servis kerak bo'lgan texnika va firma
@@ -109,6 +110,7 @@ export default function ControlPanel() {
         )}
       </Section>
 
+      <div className="lg:col-span-2"><ImportExcel /></div>
       <div className="lg:col-span-2"><FeatureToggles /></div>
     </div>
   );

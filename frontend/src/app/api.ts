@@ -68,6 +68,7 @@ const NOT_QUEUEABLE = [
   /^\/api\/sessions/, /^\/api\/ai-voice/, /^\/api\/ai\//, /^\/api\/calls/, /^\/api\/push/, /^\/api\/errors/,
   /^\/api\/qr/, /^\/api\/promocodes/, /^\/api\/smeta\/parse/, /^\/api\/dev\//, /^\/api\/companies/, /^\/api\/admin/,
   /^\/api\/messages\/read/, /^\/api\/notifications/, /^\/api\/gps/,
+  /^\/api\/import/, /^\/api\/insights/, /^\/api\/objects\/[^/]+\/(media\/[^/]+\/analyze|client-link)/,
 ];
 const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 let queueCount = 0;

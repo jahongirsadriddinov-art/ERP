@@ -39,10 +39,16 @@ const inputCls = "h-11 w-full rounded-xl border border-border bg-card/70 px-3 te
 const primaryBtn = "h-11 px-5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-50 inline-flex items-center justify-center gap-2";
 const smallBtn = "h-9 px-3 rounded-lg border border-border text-xs font-semibold inline-flex items-center gap-1.5 disabled:opacity-50";
 
-export default function CompanyTgAccounts({ errText }: { errText: (r: { error: string; body: any }) => string }) {
-  const { t } = useTranslation();
+export default function CompanyTgAccounts({ errText: errTextProp }: { errText?: (r: { error: string; body: any }) => string }) {
+  const { t, i18n } = useTranslation();
   const k: K = useCallback((s, o) => t(`aiVoice.telegram.company.${s}`, o as any) as string, [t]);
-  const [companies, setCompanies] = useState<Company[] | null>(null);
+  const errText = errTextProp || ((r: { error: string; body: any }) => {
+    const code = String(r.body?.errorCode || r.error || "error");
+    const key = `aiVoice.telegram.errors.${code}`;
+    return i18n.exists(key) ? (t(key, { mins: 1 }) as string) : (t("aiVoice.telegram.errors.generic", { code }) as string);
+  });
+  const [companies, setCompanies] = useState<Company[] | null | false>(null);
+  const [q, setQ] = useState("");
   const [companyId, setCompanyId] = useState("");
   const [accounts, setAccounts] = useState<Acc[] | null>(null);
   const [label, setLabel] = useState("");
@@ -52,7 +58,7 @@ export default function CompanyTgAccounts({ errText }: { errText: (r: { error: s
 
   const loadCompanies = useCallback(async () => {
     const r = await api<{ companies: Company[] }>("GET", "/companies-lite");
-    setCompanies(r.ok ? r.data?.companies || [] : []);
+    setCompanies(r.ok ? r.data?.companies || [] : false);
   }, []);
   const loadAccounts = useCallback(async (id: string) => {
     if (!id) { setAccounts(null); return; }
@@ -122,12 +128,38 @@ export default function CompanyTgAccounts({ errText }: { errText: (r: { error: s
   return (
     <Card icon={Telegram} title={k("title")} hint={k("hint")} testId="ai-tg-company-accounts">
       <div className="space-y-3">
-        <select value={companyId} onChange={(e) => setCompanyId(e.target.value)} className={inputCls} aria-label={k("pickCompany")} data-testid="ai-tg-company-select">
-          <option value="">{companies === null ? k("loading") : k("pickCompany")}</option>
-          {(companies || []).map((c) => (
-            <option key={c.id} value={c.id}>{c.name}{c.accounts ? ` — ${k("countShort", { connected: c.connected, total: c.accounts })}` : ""}</option>
-          ))}
-        </select>
+        {companies === null && <p className="text-xs text-muted-foreground">{k("loading")}</p>}
+        {companies === false && (
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-xs text-red-600 dark:text-red-400">{k("loadError")}</p>
+            <button type="button" className={smallBtn} onClick={() => { setCompanies(null); loadCompanies(); }}>
+              <MorphIcon icon={Refresh} className="w-3.5 h-3.5" />{k("retry")}
+            </button>
+          </div>
+        )}
+        {companies && !companyId && (
+          <>
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={k("search")} aria-label={k("search")} className={inputCls} data-testid="ai-tg-company-search" />
+            {companies.length === 0 && <p className="text-xs text-muted-foreground">{k("noCompanies")}</p>}
+            <ul className="grid gap-2 sm:grid-cols-2">
+              {companies.filter((c) => !q.trim() || c.name.toLowerCase().includes(q.trim().toLowerCase())).map((c) => (
+                <li key={c.id}>
+                  <button type="button" onClick={() => setCompanyId(c.id)} data-testid="ai-tg-company-item"
+                    className="w-full text-left rounded-xl border border-border p-3 hover:border-primary liquid-transition flex items-center justify-between gap-2">
+                    <span className="text-sm font-semibold truncate">{c.name}</span>
+                    <Badge tone={c.connected ? "green" : "gray"}>{k("countShort", { connected: c.connected, total: c.accounts })}</Badge>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+        {companies && companyId && (
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm font-bold truncate">{companies.find((c) => c.id === companyId)?.name || ""}</p>
+            <button type="button" className={smallBtn} onClick={() => setCompanyId("")} data-testid="ai-tg-company-back">{k("back")}</button>
+          </div>
+        )}
 
         {companyId && accounts === null && <p className="text-xs text-muted-foreground">{k("loading")}</p>}
 

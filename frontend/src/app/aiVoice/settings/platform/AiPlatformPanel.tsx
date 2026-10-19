@@ -6,6 +6,7 @@ import AiPhone from "@hugeicons/core-free-icons/AiPhone01Icon";
 import Building from "@hugeicons/core-free-icons/Building03Icon";
 import Chart from "@hugeicons/core-free-icons/ChartBarLineIcon";
 import Telegram from "@hugeicons/core-free-icons/TelegramIcon";
+import Users from "@hugeicons/core-free-icons/UserMultiple02Icon";
 import Archive from "@hugeicons/core-free-icons/Archive02Icon";
 import History from "@hugeicons/core-free-icons/File01Icon";
 import Search from "@hugeicons/core-free-icons/Search01Icon";
@@ -31,11 +32,13 @@ import CompanyEditor from "./CompanyEditor";
 // hisobi (P6 paneli), suhbatlar arxivi va audit — barcha firmalar bo'yicha. /api/ai-voice/platform/* yo'li
 // serverda hali bo'lmasa (tanasiz 404/501) — yumshoq xabar; sahifa yiqilmaydi.
 const TelegramAccountPanel = lazy(() => import("../TelegramAccountPanel"));
+// Firma Telegram akkauntlari — alohida bo'lim (owner 2026-10-19)
+const CompanyTgAccounts = lazy(() => import("../CompanyTgAccounts"));
 
-type Tab = "overview" | "companies" | "usage" | "telegram" | "archives" | "audit";
+type Tab = "overview" | "companies" | "usage" | "telegram" | "tgAccounts" | "archives" | "audit";
 const TABS: { key: Tab; icon: any }[] = [
   { key: "overview", icon: Pulse }, { key: "companies", icon: Building }, { key: "usage", icon: Chart },
-  { key: "telegram", icon: Telegram }, { key: "archives", icon: Archive }, { key: "audit", icon: History },
+  { key: "telegram", icon: Telegram }, { key: "tgAccounts", icon: Users }, { key: "archives", icon: Archive }, { key: "audit", icon: History },
 ];
 const fetchArchives = () => platformApi.getArchives();
 const fetchAudit = (p: { page: number; limit: number; status?: string }) => platformApi.getAudit(p);
@@ -66,6 +69,7 @@ export default function AiPlatformPanel() {
       {tab === "companies" && <Companies />}
       {tab === "usage" && <Usage />}
       {tab === "telegram" && <Suspense fallback={<Skeleton />}><TelegramAccountPanel /></Suspense>}
+      {tab === "tgAccounts" && <Suspense fallback={<Skeleton />}><CompanyTgAccounts /></Suspense>}
       {tab === "archives" && <ArchivesTab />}
       {tab === "audit" && <AuditLog fetcher={fetchAudit} title={t("aiVoice.platform.tabs.audit")} testId="ai-pf-audit" />}
     </div>

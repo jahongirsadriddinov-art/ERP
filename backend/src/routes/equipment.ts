@@ -5,6 +5,10 @@ import { scoped, stamped } from '../middleware/scope';
 import { getTenant } from '../middleware/tenantContext';
 import { requireOwnerOrAdmin } from '../middleware/auth';
 import { logAudit } from '../services/audit';
+import EquipmentLog from '../models/EquipmentLog';
+import { todayInTashkent } from '../utils/tz';
+import { getBackendUrl } from '../utils/backendUrl';
+import { randomBytes } from 'crypto';
 
 const router = Router();
 
@@ -38,7 +42,7 @@ router.post('/', requireOwnerOrAdmin, async (req, res) => {
 router.patch('/:id', requireOwnerOrAdmin, async (req, res) => {
   try {
     const { name, type, serialNumber, status, assignedToUserId, objectId, purchaseDate, notes } = req.body || {};
-    const eq = await Equipment.findOne(scoped({ _id: req.params.id }));
+    const eq: any = await Equipment.findOne(scoped({ _id: req.params.id }));
     if (!eq) return res.status(404).json({ error: 'Topilmadi' });
     if (name !== undefined) eq.name = String(name).trim();
     if (type !== undefined) eq.type = type;
@@ -48,6 +52,16 @@ router.patch('/:id', requireOwnerOrAdmin, async (req, res) => {
     if (objectId !== undefined) eq.objectId = objectId || undefined;
     if (purchaseDate !== undefined) eq.purchaseDate = purchaseDate;
     if (notes !== undefined) eq.notes = notes;
+    // Texnika nazorati (owner 2026-10-19): servis sanasi/oralig'i, motor-soat, yoqilg'i me'yori
+    const b = req.body || {};
+    const numOrNull = (v: unknown) => (v === null || v === '' ? undefined : Number.isFinite(Number(v)) && Number(v) >= 0 ? Number(v) : NaN);
+    for (const k of ['serviceIntervalHours', 'lastServiceEngineHours', 'engineHours', 'fuelNormPerHour']) {
+      if (b[k] === undefined) continue;
+      const v = numOrNull(b[k]);
+      if (Number.isNaN(v)) return res.status(400).json({ error: `${k} noto'g'ri` });
+      eq[k] = v;
+    }
+    if (b.nextServiceDate !== undefined) eq.nextServiceDate = /^\d{4}-\d{2}-\d{2}$/.test(String(b.nextServiceDate)) ? String(b.nextServiceDate) : undefined;
     await eq.save();
 
     const t = getTenant();
@@ -63,6 +77,52 @@ router.patch('/:id', requireOwnerOrAdmin, async (req, res) => {
     }
 
     res.json({ ...eq.toObject(), id: eq._id });
+  } catch (err) {
+    res.status(500).json({ error: 'Server xatoligi' });
+  }
+});
+
+// ── Texnika jurnali: ishlagan soat, yoqilg'i (prorab/rahbar qo'lda) ──
+router.get('/:id/logs', async (req, res) => {
+  try {
+    const eq = await Equipment.findOne(scoped({ _id: req.params.id })).select('_id').lean();
+    if (!eq) return res.status(404).json({ error: 'Topilmadi' });
+    const logs = await EquipmentLog.find({ equipmentId: String(req.params.id) }).sort({ date: -1, createdAt: -1 }).limit(120).lean();
+    res.json(logs.map((l: any) => ({ ...l, id: l._id })));
+  } catch (err) {
+    res.status(500).json({ error: 'Server xatoligi' });
+  }
+});
+router.post('/:id/logs', async (req, res) => {
+  try {
+    const t = getTenant();
+    if (!['direktor', 'orinbosar', 'prorab', 'brigadir'].includes(String(t?.role)) && !t?.isOwner) return res.status(403).json({ error: "Ruxsat yo'q" });
+    const eq: any = await Equipment.findOne(scoped({ _id: req.params.id }));
+    if (!eq) return res.status(404).json({ error: 'Topilmadi' });
+    const b = req.body || {};
+    const n = (v: unknown, max: number) => (v === undefined || v === null || v === '' ? undefined : Number.isFinite(Number(v)) && Number(v) >= 0 && Number(v) <= max ? Number(v) : NaN);
+    const hours = n(b.hours, 24), fuel = n(b.fuel, 5000), engineHours = n(b.engineHours, 1e7);
+    if ([hours, fuel, engineHours].some((x) => Number.isNaN(x))) return res.status(400).json({ error: "Qiymatlar noto'g'ri" });
+    if (hours === undefined && fuel === undefined && engineHours === undefined) return res.status(400).json({ error: "Soat, yoqilg'i yoki motor-soat kiriting" });
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(String(b.date || '')) ? String(b.date) : todayInTashkent();
+    const log = await EquipmentLog.create(stamped({
+      equipmentId: String(eq._id), objectId: eq.objectId, date, hours, fuel, engineHours, source: 'manual',
+      note: b.note ? String(b.note).slice(0, 300) : undefined, createdBy: String(t?.userId || ''),
+    }));
+    if (engineHours !== undefined && engineHours > (eq.engineHours || 0)) { eq.engineHours = engineHours; await eq.save(); }
+    res.status(201).json({ ...log.toObject(), id: log._id });
+  } catch (err) {
+    res.status(500).json({ error: 'Server xatoligi' });
+  }
+});
+// GPS-treker tokeni (rahbar) — trekerga /api/public/telemetry/<token> manzili yoziladi
+router.post('/:id/tracker-token', requireOwnerOrAdmin, async (req, res) => {
+  try {
+    const eq: any = await Equipment.findOne(scoped({ _id: req.params.id }));
+    if (!eq) return res.status(404).json({ error: 'Topilmadi' });
+    eq.trackerToken = randomBytes(18).toString('hex');
+    await eq.save();
+    res.json({ token: eq.trackerToken, url: `${getBackendUrl()}/api/public/telemetry/${eq.trackerToken}` });
   } catch (err) {
     res.status(500).json({ error: 'Server xatoligi' });
   }

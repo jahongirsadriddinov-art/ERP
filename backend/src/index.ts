@@ -38,6 +38,7 @@ import sessionsRoutes from './routes/sessions';
 import deployRoutes from './routes/deploy';
 import paymentsRoutes from './routes/payments';
 import uptimeRoutes from './routes/uptime';
+import insightsRoutes from './routes/insights';
 import filesRoutes from './routes/files';
 import statusRoutes from './routes/status';
 import equipmentRoutes from './routes/equipment';
@@ -51,7 +52,7 @@ import callsRoutes from './routes/calls';
 import geocodeRoutes from './routes/geocode';
 import { startMeteredTurnRefreshLoop } from './services/meteredTurn';
 import { initSocket } from './services/socket';
-import { optionalAuth, requireAuth, blockDeveloper, requireDeveloper } from './middleware/auth';
+import { optionalAuth, requireAuth, blockDeveloper, requireDeveloper, requireOwnerOrAdmin } from './middleware/auth';
 import { idempotency } from './middleware/idempotency';
 // Import bot to start it + get bot instance for webhook route
 import { bot, notifyDeveloper, webhookSecret } from './services/bot';
@@ -310,6 +311,7 @@ app.use('/api/public',          publicClientRoutes);
 app.use('/api/public',          publicSignRouter); // mijoz hujjatni login'siz imzolaydi (/api/public/sign/:token)
 app.use('/api/sign-docs', requireAuth, blockDeveloper, signDocsRoutes); // elektron hujjatlar va imzo
 app.use('/api/dashboard',       requireAuth, blockDeveloper, dashboardRoutes);
+app.use('/api/insights',        requireAuth, blockDeveloper, requireOwnerOrAdmin, insightsRoutes); // Nazorat: o'g'irlik, narx, hujjat, texnika
 app.use('/api/errors',          optionalAuth, clientErrorRoutes); // login ekranidan oldingi xatolar ham yozilishi kerak
 app.use('/api/admin',           requireAuth, backupRoutes);
 // deployRoutes o'zining maxfiy kalit (X-Deploy-Secret) tekshiruvini o'zi
@@ -386,6 +388,10 @@ mongoose.connect(MONGODB_URI)
     startAutoSnapshots();
     // AI ovozli yordamchi (AI_VOICE_ENABLED o'chiq bo'lsa hech narsa qilmaydi)
     startAiVoice();
+    // Jiddiy ogohlantirish o'qilmasa AI qo'ng'iroq qiladi — navbat ishlovchisi (services/companyAlerts.ts)
+    void import('./services/companyAlerts').then((m) => m.ensureEscalationJob()).catch(() => undefined);
+    // Biznes nazoratchilari: o'g'irlik/anomaliya, narx, hujjat muddatlari, texnika, kunlik brifing (services/insights)
+    void import('./services/insights').then((m) => m.startInsights()).catch((e) => console.error('[insights] ishga tushmadi:', e?.message));
     console.log('✅ Tarif keshi yuklandi');
   })
   .catch((err) => console.error('MongoDB connection error:', err?.message || err));

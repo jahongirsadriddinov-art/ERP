@@ -13,6 +13,7 @@ import User from '../models/User';
 import { getBackendUrl } from '../utils/backendUrl';
 import { randomBytes } from 'crypto';
 import { planFactFor, type PlanFact } from '../services/planFact';
+import { analyzeMedia } from '../services/photoAnalysis';
 
 const coordsFromBody = (lat: any, lng: any, radius: any) => {
   const out: any = {};
@@ -447,6 +448,22 @@ router.post('/:id/media', async (req, res) => {
     }));
 
     res.status(201).json({ id: media._id, type: media.type, url: media.url, caption: media.caption, uploadedBy: media.uploadedBy, createdAt: media.createdAt });
+    // AI foto-nazorat — fonda (javobni kutdirmaydi): bosqich, foiz, xavfsizlik (services/photoAnalysis.ts)
+    if (type === 'image') setImmediate(() => { analyzeMedia(String(media._id)).catch((e) => console.warn('[photoAnalysis]', e?.message)); });
+  } catch (err) {
+    res.status(500).json({ error: 'Server xatoligi' });
+  }
+});
+
+// POST /api/objects/:id/media/:mediaId/analyze — AI foto-tahlilni qayta ishga tushirish (rahbar)
+router.post('/:id/media/:mediaId/analyze', requireOwnerOrAdmin, async (req, res) => {
+  try {
+    const m: any = await ProjectMedia.findOne(scoped({ _id: req.params.mediaId, objectId: req.params.id })).select('_id type').lean();
+    if (!m) return res.status(404).json({ error: 'Rasm topilmadi' });
+    if (m.type !== 'image') return res.status(400).json({ error: 'Faqat rasm tahlil qilinadi' });
+    const a = await analyzeMedia(String(m._id), { force: true });
+    if (!a) return res.status(503).json({ error: "AI tahlil hozir mavjud emas (kunlik chegara yoki AI sozlanmagan)" });
+    res.json(a);
   } catch (err) {
     res.status(500).json({ error: 'Server xatoligi' });
   }

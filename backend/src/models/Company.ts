@@ -18,6 +18,7 @@ export interface ICompany extends Document {
   ownerUserId?: string;    // User._id (firma egasi)
   status: 'PENDING' | 'ACTIVE' | 'SUSPENDED';
   plan: 'FREE' | 'PRO' | 'ENTERPRISE'; // hozir hamma FREE
+  features?: { briefing?: boolean; theft?: boolean; prices?: boolean; docs?: boolean; equipment?: boolean; photoAi?: boolean; piecework?: boolean };
   trialEndsAt?: Date;      // hozir null / uzoq sana
   createdAt: Date;
   updatedAt: Date;
@@ -42,6 +43,16 @@ const CompanySchema: Schema = new Schema({
   plan: { type: String, enum: ['FREE', 'PRO', 'ENTERPRISE'], default: 'FREE' },
   trialEndsAt: { type: Date },
   lastMonthlySummary: { type: String }, // 'YYYY-MM' — oylik xulosa yuborilgan oxirgi oy
+  // Ixtiyoriy funksiyalar (owner 2026-10-19): firma o'zi yoqadi/o'chiradi — services/insights.ts, ishbay hisob
+  features: {
+    briefing: { type: Boolean, default: true },     // ertalabki kunlik brifing (xabar)
+    theft: { type: Boolean, default: true },        // material o'g'irligi/anomaliya nazorati
+    prices: { type: Boolean, default: true },       // material narxi monitoringi
+    docs: { type: Boolean, default: true },         // hujjat muddatlari
+    equipment: { type: Boolean, default: true },    // texnika nazorati
+    photoAi: { type: Boolean, default: true },      // AI foto-nazorat
+    piecework: { type: Boolean, default: false },   // ishbay (bajarilgan hajm × narx) — ixtiyoriy
+  },
 }, { timestamps: true });
 
 export default mongoose.model<ICompany>('Company', CompanySchema);

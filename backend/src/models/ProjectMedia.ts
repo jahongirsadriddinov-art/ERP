@@ -12,6 +12,7 @@ export interface IProjectMedia extends Document {
   url: string;
   caption?: string;
   uploadedBy: { userId: string; name: string; role: string };
+  aiAnalysis?: any;   // AI foto-nazorat natijasi (services/photoAnalysis.ts)
   createdAt: Date;
 }
 
@@ -22,6 +23,7 @@ const ProjectMediaSchema: Schema = new Schema({
   url: { type: String, required: true },
   caption: { type: String },
   uploadedBy: { type: Schema.Types.Mixed, required: true },
+  aiAnalysis: { type: Schema.Types.Mixed },
 }, { timestamps: true });
 
 export default mongoose.model<IProjectMedia>('ProjectMedia', ProjectMediaSchema);

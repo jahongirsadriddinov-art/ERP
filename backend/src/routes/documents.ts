@@ -36,7 +36,9 @@ router.post('/', async (req, res) => {
   try {
     const t = getTenant();
     if (!t?.userId) return res.status(401).json({ error: 'Autentifikatsiya talab etiladi' });
-    const { objectId, category, title, fileUrl, fileName } = req.body || {};
+    const { objectId, category, title, fileUrl, fileName, expiresAt } = req.body || {};
+    // Hujjat muddati (owner 2026-10-19) — tugashidan 30/7/1 kun oldin eslatiladi (services/insights.ts)
+    const exp = typeof expiresAt === 'string' && /^\d{4}-\d{2}-\d{2}/.test(expiresAt) && !isNaN(Date.parse(expiresAt)) ? new Date(expiresAt) : undefined;
     if (!title || !String(title).trim()) return res.status(400).json({ error: 'Sarlavha kerak' });
     if (!fileUrl || !isOwnFileUrl(String(fileUrl))) return res.status(400).json({ error: "Fayl avval /api/messages/upload orqali yuklanishi kerak" });
 
@@ -48,6 +50,7 @@ router.post('/', async (req, res) => {
       category: ['contract', 'permit', 'invoice', 'other'].includes(category) ? category : 'other',
       title: String(title).trim(),
       fileUrl, fileName,
+      ...(exp ? { expiresAt: exp } : {}),
       uploadedBy: { userId: t.userId, name: `${actor.firstName} ${actor.lastName || ''}`.trim(), role: actor.role },
     }));
 
@@ -68,6 +71,20 @@ router.post('/', async (req, res) => {
 // (masalan DocuSign) hech narsa yuborilmaydi — faqat "kim, qachon"
 // bizning bazamizda qayd etiladi, bu qurilish firmasining ICHKI hujjat
 // tasdiqlash izini yetarlicha ta'minlaydi.
+// PATCH /api/documents/:id/expiry — muddatni o'rnatish/o'chirish (rahbar)
+router.patch('/:id/expiry', requireOwnerOrAdmin, async (req, res) => {
+  try {
+    const v = req.body?.expiresAt;
+    const exp = v === null || v === '' ? null : typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v) && !isNaN(Date.parse(v)) ? new Date(v) : undefined;
+    if (exp === undefined) return res.status(400).json({ error: "Sana noto'g'ri" });
+    const doc = await CompanyDocument.findOneAndUpdate(scoped({ _id: req.params.id }), exp ? { $set: { expiresAt: exp } } : { $unset: { expiresAt: 1 } }, { new: true }).lean();
+    if (!doc) return res.status(404).json({ error: 'Topilmadi' });
+    res.json({ ...doc, id: (doc as any)._id });
+  } catch (err) {
+    res.status(500).json({ error: 'Server xatoligi' });
+  }
+});
+
 router.post('/:id/sign', requireOwnerOrAdmin, async (req, res) => {
   try {
     const t = getTenant();

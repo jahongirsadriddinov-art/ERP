@@ -26,6 +26,29 @@ router.get('/me', requireAuth, async (_req, res) => {
   }
 });
 
+// GET/PATCH /api/company/features — ixtiyoriy funksiyalar (owner 2026-10-19): brifing, o'g'irlik nazorati, narx,
+// hujjat muddati, texnika, AI foto-nazorat, ishbay hisob. Hamma ko'radi (UI shunga qarab), faqat rahbar o'zgartiradi.
+const FEATURE_KEYS = ['briefing', 'theft', 'prices', 'docs', 'equipment', 'photoAi', 'piecework'] as const;
+const FEATURE_DEFAULTS: Record<string, boolean> = { briefing: true, theft: true, prices: true, docs: true, equipment: true, photoAi: true, piecework: false };
+router.get('/features', requireAuth, async (_req, res) => {
+  const t = getTenant();
+  if (!t?.companyId) return res.json(FEATURE_DEFAULTS);
+  const c: any = await Company.findById(t.companyId).select('features').lean().catch(() => null);
+  const out: Record<string, boolean> = {};
+  for (const k of FEATURE_KEYS) out[k] = typeof c?.features?.[k] === 'boolean' ? c.features[k] : FEATURE_DEFAULTS[k];
+  res.json(out);
+});
+router.patch('/features', requireAuth, requireOwnerOrAdmin, async (req, res) => {
+  const t = getTenant();
+  if (!t?.companyId) return res.status(400).json({ error: 'Firma konteksti topilmadi' });
+  const set: Record<string, boolean> = {};
+  for (const k of FEATURE_KEYS) if (typeof req.body?.[k] === 'boolean') set[`features.${k}`] = req.body[k];
+  if (!Object.keys(set).length) return res.status(400).json({ error: "Hech narsa o'zgartirilmadi" });
+  const c: any = await Company.findByIdAndUpdate(t.companyId, { $set: set }, { new: true }).select('features').lean();
+  emitToCompany(t.companyId, 'company:features', c?.features || {});
+  res.json(c?.features || {});
+});
+
 // PATCH /api/company/me — nom/logo o'zgartirish. MUHIM: avval bu FAQAT
 // mahalliy (localStorage) qiymat sifatida saqlanardi — o'zgartirgan
 // odamning O'Z brauzeridan boshqa hech kimga (hatto o'sha shaxsning boshqa

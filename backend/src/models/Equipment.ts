@@ -25,6 +25,16 @@ const EquipmentSchema: Schema = new Schema({
   assignedToUserId: { type: String },
   objectId: { type: String },
   purchaseDate: { type: String },
+  // Texnika nazorati (owner 2026-10-19): servis muddati, motor-soat, GPS-treker tokeni
+  nextServiceDate: { type: String },          // YYYY-MM-DD
+  serviceIntervalHours: { type: Number },     // har N motor-soatda servis
+  lastServiceEngineHours: { type: Number },
+  engineHours: { type: Number },              // oxirgi ma'lum motor-soat
+  fuelNormPerHour: { type: Number },          // me'yor: litr/soat (bo'lmasa tarixiy medianadan)
+  trackerToken: { type: String, index: true, sparse: true },
+  lastSeenAt: { type: Date },
+  lastLat: { type: Number },
+  lastLng: { type: Number },
   notes: { type: String },
 }, { timestamps: true });
 

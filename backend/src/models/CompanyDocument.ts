@@ -26,6 +26,8 @@ const CompanyDocumentSchema: Schema = new Schema({
   title: { type: String, required: true },
   fileUrl: { type: String, required: true },
   fileName: { type: String },
+  // Hujjat muddati (owner 2026-10-19): litsenziya, ruxsatnoma, sug'urta, shartnoma — tugashidan oldin eslatiladi
+  expiresAt: { type: Date },
   uploadedBy: { type: Schema.Types.Mixed, required: true },
   signatures: { type: [Schema.Types.Mixed], default: [] },
 }, { timestamps: true });

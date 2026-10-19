@@ -631,7 +631,7 @@ export const uz = {
       notConnected: "Ulanmadi: {{reason}}",
       why: {
         privacy: "u odamning Telegram sozlamasi notanishlardan qo'ng'iroqni taqiqlaydi (Maxfiylik → Qo'ng'iroqlar)",
-        spam_limited: "Telegram AI akkauntini notanishlarga qo'ng'iroq qilishdan cheklagan (spam cheklovi) — AI akkauntidan @SpamBot'ga yozib tekshiring",
+        spam_limited: "Telegram bu odamga qo'ng'iroqni vaqtincha chekladi (notanishga qo'ng'iroq — PEER_FLOOD; @SpamBot buni ko'rsatmaydi). U odam AI akkauntiga Telegram'da bir marta yozsin yoki bir necha soatdan keyin urinib ko'ring",
         timeout: "javob berilmadi",
         declined: "rad etildi",
         busy: "band",
@@ -1319,7 +1319,7 @@ export const ru = {
       notConnected: "Не соединилось: {{reason}}",
       why: {
         privacy: "настройки Telegram этого человека запрещают звонки от незнакомых (Конфиденциальность → Звонки)",
-        spam_limited: "Telegram ограничил аккаунт ИИ в звонках незнакомым (спам-ограничение) — проверьте через @SpamBot",
+        spam_limited: "Telegram временно ограничил звонок этому человеку (звонок незнакомому — PEER_FLOOD; @SpamBot это не показывает). Пусть человек один раз напишет аккаунту ИИ в Telegram или попробуйте через несколько часов",
         timeout: "не ответили",
         declined: "отклонено",
         busy: "занято",

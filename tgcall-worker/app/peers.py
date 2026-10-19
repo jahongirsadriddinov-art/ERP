@@ -161,14 +161,9 @@ class PeerResolver:
         if not self.limiter.take():
             log.info("import chegarasi (soatiga %d) — mehmon keyinroq", self.limiter.max)
             return "import_limited", None
-        before = await self.ops.contact_ids()
+        # Owner 2026-10-19: kontakt O'CHIRILMAYDI — Telegram notanishga qo'ng'iroqni PEER_FLOOD bilan cheklaydi
+        # (@SpamBot buni ko'rsatmaydi), kontaktdagi odamga qo'ng'iroq ancha erkin
         ids = await self.ops.import_phone(ph)
-        added = [i for i in ids if i not in before]
-        if added:
-            try:
-                await self.ops.delete_contacts(added)
-            except Exception as e:
-                log.debug("kontakt o'chirilmadi: %s", type(e).__name__)
         if len(ids) == 1:
             log.info("mehmon telefon orqali aniqlandi: %s", mask_id(ids[0]))
             return "resolved", int(ids[0])

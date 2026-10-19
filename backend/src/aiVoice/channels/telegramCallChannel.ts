@@ -14,7 +14,7 @@ import {
 import { reapStaleTelegramSessions, registerBridge, TelegramTransport, unregisterBridge } from '../telegram/callBridge';
 import { callWorker, WorkerRpcFailure } from '../telegram/workerRpc';
 import { ensureContactTgUserId } from '../telegram/tgLink';
-import { workerConnectedHere } from '../telegram/workerNamespace';
+import { workerConnectedHere, workerHub } from '../telegram/workerNamespace';
 import { PLATFORM_SCOPE } from '../platform';
 import { avatarEnabled, avatarParam } from '../telegram/incomingCalls';
 
@@ -187,6 +187,17 @@ export const telegramCallChannel: ChannelAdapter = {
  * AI o'sha odamga qo'ng'iroq qilib oddiy suhbat quradi — firma/ERP ma'lumoti va tool'lari yo'q (sessionManager guest).
  * Mehmon ERP'da yo'q, shuning uchun keyin o'zi qo'ng'iroq qilsa — incomingCalls 'unknown_caller' bilan rad etadi.
  */
+/** Worker shu instansiyaga qayta ulanishini kutish (deploy paytida). true — ulandi. */
+export function waitForWorker(ms: number): Promise<boolean> {
+  if (workerConnectedHere()) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    const done = (v: boolean) => { clearTimeout(t); workerHub.off('up', onUp); resolve(v); };
+    const onUp = () => done(true);
+    const t = setTimeout(() => done(workerConnectedHere()), ms);
+    workerHub.on('up', onUp);
+  });
+}
+
 export type GuestCallResult =
   | { placed: true; sessionId: string }
   | { placed: false; errorCode: string; retryAfterSec?: number };
@@ -197,7 +208,9 @@ export async function placeGuestCall(p: { developerId: string; target: { usernam
   const conn: any = await getConnection();
   if (!conn || conn.status !== 'connected') return { placed: false, errorCode: 'account_not_connected' };
   if (floodWaitActive(conn, now)) return { placed: false, errorCode: 'flood_wait' };
-  if (!workerConnectedHere()) return { placed: false, errorCode: 'worker_not_here' };
+  // Owner 2026-10-19 ("ulanishda limit qo'yma"): backend qayta ishga tushganda worker ~1 daqiqa qayta ulanadi —
+  // darhol rad etmasdan 25 s kutamiz
+  if (!workerConnectedHere() && !(await waitForWorker(25_000))) return { placed: false, errorCode: 'worker_not_here' };
   if (!(await telegramCapacity())) {
     await reapStaleTelegramSessions(now).catch(() => 0);
     if (!(await telegramCapacity())) return { placed: false, errorCode: 'account_busy' };
@@ -212,7 +225,6 @@ export async function placeGuestCall(p: { developerId: string; target: { usernam
   if (found?.status !== 'resolved' || !found.tgUserId) {
     return { placed: false, errorCode: String(found?.status || 'not_found'), ...(found?.retryAfterSec ? { retryAfterSec: found.retryAfterSec } : {}) };
   }
-  if (!(await reserveDailyCall(now))) return { placed: false, errorCode: 'daily_cap' };
   const ring = 45;
   const max = 300;
   const transport = new TelegramTransport();
@@ -221,10 +233,7 @@ export async function placeGuestCall(p: { developerId: string; target: { usernam
     ptt: false, transport, userInitiated: false, workerInstanceId: INSTANCE_ID, ringTimeoutSec: ring + 20, maxDurationSec: max,
     guest: { name: p.name },
   }).catch(() => ({ ok: false as const, reason: 'error' as const }));
-  if (!started.ok) {
-    await releaseDailyCall(now);
-    return { placed: false, errorCode: started.reason };
-  }
+  if (!started.ok) return { placed: false, errorCode: started.reason };
   const handle = started.handle;
   transport.bind(handle.sessionId);
   registerBridge({ sessionId: handle.sessionId, handle, employeeId: p.developerId, companyId: PLATFORM_SCOPE });
@@ -237,13 +246,11 @@ export async function placeGuestCall(p: { developerId: string; target: { usernam
     if (!res?.accepted) {
       unregisterBridge(handle.sessionId);
       await handle.end('error').catch(() => undefined);
-      await releaseDailyCall(now);
       return { placed: false, errorCode: String(res?.reason || 'rejected').slice(0, 60) };
     }
   } catch (e) {
     unregisterBridge(handle.sessionId);
     await handle.end('error').catch(() => undefined);
-    await releaseDailyCall(now);
     return { placed: false, errorCode: e instanceof WorkerRpcFailure ? `worker_${e.code}` : 'error' };
   }
   return { placed: true, sessionId: handle.sessionId };

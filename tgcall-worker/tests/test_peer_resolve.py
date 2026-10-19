@@ -213,7 +213,7 @@ def test_guest_lookup_by_username_phone_and_limit():
     r = PeerResolver(ops, ImportLimiter(max_per_window=1, clock=Clock()))
     assert asyncio.run(r.lookup("@guest_user")) == ("resolved", EXPECTED)
     assert asyncio.run(r.lookup(None, PHONE)) == ("resolved", OTHER)
-    assert ops.deleted == [[OTHER]]
+    assert ops.deleted == []   # kontakt qoladi: notanishga qo'ng'iroq PEER_FLOOD bilan cheklanadi
     assert asyncio.run(r.lookup(None, PHONE)) == ("import_limited", None)
     assert asyncio.run(r.lookup("@nobody_here")) == ("not_found", None)
     assert asyncio.run(PeerResolver(FakeOps()).lookup(None, PHONE)) == ("not_found", None)

@@ -14,17 +14,15 @@ import time
 
 from . import __version__
 from . import config as cfgmod
-from .auth_flow import LoginFlow
+from .accounts import Account, AccountSet
 from .binding import BindingMatcher
 from .bridge import Bridge
-from .calls import CallManager
 from .errors import RpcError
-from .health import build_status, health_loop
+from .health import health_loop
 from .keys import ensure_session_key, load_or_create_private_key, print_public_key, public_key_b64
 from .lease import LeaseManager
 from .rpc import dispatch
 from .session_store import SessionStore, SessionStoreError
-from .tg import TelegramRuntime
 from .udp_probe import probe
 
 log = logging.getLogger("tgw")
@@ -86,8 +84,6 @@ async def amain() -> int:
     async def emit(ev: dict) -> None:
         await bridge.emit_event(ev)
 
-    runtime = TelegramRuntime(cfg, store, emit, binding)
-
     async def send_up(frame: bytes) -> None:
         await bridge.send_audio(frame)
 
@@ -100,51 +96,53 @@ async def amain() -> int:
     async def send_video(frame: bytes) -> None:
         await bridge.send_video(frame)
 
-    calls = CallManager(runtime, emit, send_up, ask_incoming=ask_incoming, send_video=send_video)
-    runtime.calls = calls
+    # Owner 2026-10-19: platforma akkaunti + har firmaning o'z Telegram akkauntlari (accounts.py)
+    def make_account(acc_id: str, st: SessionStore) -> Account:
+        return Account(acc_id, cfg, st, emit, binding, send_up, send_video, ask_incoming, lambda: lease.holding)
 
-    async def on_login_success(session: str) -> None:
-        await runtime.adopt_session(session)
-
-    login = LoginFlow(lambda: runtime.make_client(None), on_login_success, lambda: lease.holding)
+    accounts = AccountSet(make_account, store, cfg.session_path.parent / "accounts", cfg.session_key, lambda: lease.holding)
 
     def need_lease() -> None:
         if not lease.holding:
             raise RpcError("not_leased", "Worker lease olmagan")
 
-    def need_tg() -> None:
+    def need_tg(a: Account) -> None:
         need_lease()
-        if not runtime.ready:
+        if not a.runtime.ready:
             raise RpcError("not_authorized", "Telegram akkaunti ulanmagan")
 
     async def h_auth_start(p: dict) -> dict:
         need_lease()
-        if runtime.ready:
+        a = accounts.get(p)
+        if a.runtime.ready:
             raise RpcError("already_connected", "Akkaunt allaqachon ulangan — avval chiqing")
-        return await login.start(p)
+        return await a.login.start(p)
 
     async def h_auth_code(p: dict) -> dict:
-        return await login.code(p)
+        return await accounts.get(p).login.code(p)
 
     async def h_auth_password(p: dict) -> dict:
-        return await login.password(p)
+        return await accounts.get(p).login.password(p)
 
-    async def h_auth_logout(_p: dict) -> dict:
+    async def h_auth_logout(p: dict) -> dict:
         need_lease()
-        await login.cancel()
-        await runtime.logout()
+        a = accounts.get(p)
+        await a.login.cancel()
+        await a.runtime.logout()
         return {"ok": True}
 
     async def h_status(_p: dict) -> dict:
-        return build_status(runtime, calls, udp_state["ok"])
+        return accounts.status(udp_state["ok"])
 
     async def h_resolve(p: dict) -> dict:
-        need_tg()
-        return await runtime.resolve_contact(p)
+        a = accounts.get(p)
+        need_tg(a)
+        return await a.runtime.resolve_contact(p)
 
     async def h_lookup(p: dict) -> dict:
-        need_tg()
-        return await runtime.lookup_contact(p)
+        a = accounts.get(p)
+        need_tg(a)
+        return await a.runtime.lookup_contact(p)
 
     async def h_binding(p: dict) -> dict:
         try:
@@ -155,16 +153,18 @@ async def amain() -> int:
         return {"ok": True}
 
     async def h_place(p: dict) -> dict:
-        need_tg()
-        return await calls.place(p)
+        a = accounts.get(p)
+        need_tg(a)
+        return await a.calls.place(p)
 
     async def h_hangup(p: dict) -> dict:
-        return await calls.hangup(p)
+        return await accounts.by_session(p.get("sessionId")).calls.hangup(p)
 
     async def h_incoming_config(p: dict) -> dict:
         v = p.get("open")
         if not isinstance(v, bool):
             raise RpcError("bad_request")
+        calls = accounts.platform.calls
         if calls.open_incoming != v:
             log.info("Ochiq muloqot: %s", "yoqildi" if v else "o'chirildi")
         calls.open_incoming = v
@@ -175,28 +175,37 @@ async def amain() -> int:
         udp_state["ok"] = bool(r.get("ok"))
         return r
 
+    async def h_accounts_sync(p: dict) -> dict:
+        ids = p.get("accounts")
+        if not isinstance(ids, list):
+            raise RpcError("bad_request")
+        return await accounts.sync(ids)
+
+    def by_session(name: str):
+        return lambda p: getattr(accounts.by_session(p.get("sessionId")).calls, name)(p)
+
     handlers = {
         "auth.start": h_auth_start, "auth.code": h_auth_code, "auth.password": h_auth_password,
         "auth.logout": h_auth_logout, "status": h_status, "contact.resolve": h_resolve, "contact.lookup": h_lookup,
         "binding.expect": h_binding, "call.place": h_place, "call.hangup": h_hangup, "udp.probe": h_udp,
         "incoming.config": h_incoming_config,
-        "call.caption": lambda p: calls.caption(p), "call.video_rate": lambda p: calls.video_rate(p),
-        "call.subtitles": lambda p: calls.subtitles(p), "call.avatar": lambda p: calls.avatar_event(p),
+        "accounts.sync": h_accounts_sync, "accounts.remove": lambda p: accounts.remove(p),
+        "call.caption": by_session("caption"), "call.video_rate": by_session("video_rate"),
+        "call.subtitles": by_session("subtitles"), "call.avatar": by_session("avatar_event"),
     }
 
     async def on_lost(reason: str) -> None:
-        await login.cancel()
-        await runtime.stop(reason)
+        await accounts.stop_all(reason)
 
     bridge = Bridge(
         cfg.backend_url, cfg.worker_id, key,
         on_rpc=lambda req: dispatch(handlers, req),
-        on_audio=calls.on_backend_audio,
+        on_audio=accounts.on_backend_audio,
         on_authenticated=lambda: lease.on_authenticated(),
         on_down=lambda: lease.on_socket_down(),
         on_revoked=lambda lid: lease.on_revoked(lid),
     )
-    lease = LeaseManager(call=lambda ev, data: bridge.call(ev, data), on_acquired=runtime.start, on_lost=on_lost)
+    lease = LeaseManager(call=lambda ev, data: bridge.call(ev, data), on_acquired=accounts.start_all, on_lost=on_lost)
 
     # Birinchi UDP tekshiruv (Telegram qo'ng'iroqlari uchun UDP chiqishi kerak)
     try:
@@ -222,7 +231,7 @@ async def amain() -> int:
     tasks = [
         asyncio.ensure_future(bridge.run()),
         asyncio.ensure_future(lease.run()),
-        asyncio.ensure_future(health_loop(lambda: build_status(runtime, calls, udp_state["ok"]), emit, lambda: bridge.authed)),
+        asyncio.ensure_future(health_loop(lambda: accounts.status(udp_state["ok"]), emit, lambda: bridge.authed)),
     ]
     try:
         await stop.wait()
@@ -230,7 +239,7 @@ async def amain() -> int:
         log.info("to'xtatilmoqda...")
         lease.stop()
         try:
-            await asyncio.wait_for(runtime.stop("shutdown"), timeout=15)
+            await asyncio.wait_for(accounts.stop_all("shutdown"), timeout=20)
         except Exception:
             pass
         try:

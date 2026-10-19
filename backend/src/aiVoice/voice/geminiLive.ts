@@ -331,7 +331,8 @@ export class GeminiLiveProvider implements VoiceProvider {
           return s;
         } catch (e) {
           console.warn(`[aiVoice] Live ${model} ulanmadi (qidiruv=${sq}, o'ylash=${th}): ${String((e as Error)?.message || e).slice(0, 140)}`);
-          if (isQuotaError(e) || isAuthError(e) || i === plan.length - 1) throw e;
+          // Taymaut — bu kalit/ulanish javob bermayapti: sozlamani o'zgartirib vaqt yo'qotmasdan keyingi kalitga
+          if (isQuotaError(e) || isAuthError(e) || /SETUP_TIMEOUT/.test(String((e as Error)?.message)) || i === plan.length - 1) throw e;
           lastErr = e;
         }
       }
@@ -344,13 +345,19 @@ export class GeminiLiveProvider implements VoiceProvider {
     let sawQuota = false;
     let authErr: unknown = null;
     try {
+      let keyNo = 0;
       return await withGeminiKey(async (key) => {
-        try { return await connectWith(key); } catch (e) {
+        keyNo++;
+        try {
+          const s = await connectWith(key);
+          if (keyNo > 1) console.log(`[aiVoice] Live ${model}: ${keyNo}-kalit bilan ulandi`);
+          return s;
+        } catch (e) {
           if (isQuotaError(e)) sawQuota = true;
           else if (isAuthError(e)) authErr = e;
           throw e;
         }
-      }, { scope: opts.model });
+      }, { scope: opts.model, rotateOnAnyError: true });
     } catch (e) {
       // Hamma kalit RUXSAT xatosi bilan yiqildi — "limit" emas, "kalit noto'g'ri" (aniq sabab mijozga)
       if (e instanceof GeminiQuotaError && authErr && !sawQuota) throw authErr;

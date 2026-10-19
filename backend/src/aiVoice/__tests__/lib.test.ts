@@ -159,6 +159,22 @@ describe('Gemini kalitlari (yagona rotatsiya)', () => {
     await expect(withGeminiKey(async () => { throw new Error('boshqa xato'); })).rejects.toThrow('boshqa xato');
   });
 
+  it('rotateOnAnyError (Live): istalgan xatoda keyingi kalit; hammasi yiqilsa — haqiqiy xato', async () => {
+    delete process.env.GEMINI_API_KEY;
+    process.env.GEMINI_API_KEYS = 'a0,a1,a2';
+    const used: string[] = [];
+    const r = await withGeminiKey(async (k) => {
+      used.push(k);
+      if (k !== 'a2') throw new Error('SETUP_TIMEOUT');
+      return k;
+    }, { scope: 'live-x', rotateOnAnyError: true });
+    expect(r).toBe('a2');
+    expect(used).toEqual(['a0', 'a1', 'a2']);
+    process.env.GEMINI_API_KEYS = 'b0,b1';
+    await expect(withGeminiKey(async () => { throw new Error('1011 internal'); }, { scope: 'live-y', rotateOnAnyError: true }))
+      .rejects.toThrow('1011 internal');
+  });
+
   it('kalit yo\'q — GEMINI_NOT_CONFIGURED', async () => {
     delete process.env.GEMINI_API_KEYS;
     delete process.env.GEMINI_API_KEY;

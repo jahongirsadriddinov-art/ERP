@@ -85,7 +85,13 @@ export class GeminiQuotaError extends Error {
   }
 }
 
-export interface WithKeyOpts { scope?: string; now?: () => number }
+export interface WithKeyOpts {
+  scope?: string; now?: () => number;
+  /** Kvota/ruxsatdan boshqa xatoda ham keyingi kalitga o'tish (Live, owner 2026-10-19: "birinchisi ochilmasa darhol
+   *  boshqa API'ga o'tsin"). Shu kalit shu model uchun `otherCooldownMs` chetda turadi; hammasi yiqilsa — oxirgi xato. */
+  rotateOnAnyError?: boolean;
+  otherCooldownMs?: number;
+}
 
 /**
  * fn'ni kalitlar bo'yicha aylantirib chaqiradi: kvota/ruxsat xatosida keyingi kalitga o'tadi.
@@ -100,6 +106,7 @@ export async function withGeminiKey<T>(fn: (key: string) => Promise<T>, opts: Wi
   const now = opts.now || Date.now;
   const tried = new Set<number>();
   let anyDaily = false;
+  let otherErr: unknown = null;
   for (let i = 0; i < n; i++) {
     const k = pickGeminiKey(now(), scope);
     if (!k || tried.has(k.index) || until(k.index, scope) > now()) break;
@@ -116,9 +123,16 @@ export async function withGeminiKey<T>(fn: (key: string) => Promise<T>, opts: Wi
         markGeminiKeyFailed(k.index, daily ? DAILY_COOLDOWN_MS : MINUTE_COOLDOWN_MS, now(), scope);
         continue;
       }
+      if (opts.rotateOnAnyError && i < n - 1) {
+        otherErr = e;
+        markGeminiKeyFailed(k.index, opts.otherCooldownMs ?? 30_000, now(), scope);
+        continue;
+      }
       throw e;
     }
   }
+  // Kvotadan boshqa sabab bilan yiqilgan bo'lsa — o'sha haqiqiy xato (menejer to'g'ri tasniflasin)
+  if (otherErr) throw otherErr;
   // Hammasi sovushda: eng tez tiklanish vaqti; kunlik — agar biror kalit shu model uchun kunlik limitda bo'lsa
   let soonest = Infinity;
   for (let i = 0; i < n; i++) {

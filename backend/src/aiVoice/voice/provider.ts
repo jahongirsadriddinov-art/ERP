@@ -63,6 +63,8 @@ export interface ProviderCandidate {
   kind: ProviderKind;
   model: string;
   provider: VoiceProvider;
+  /** Shu nomzod uchun ochilish muddati (Live — bir nechta kalit sinalishi uchun uzunroq). */
+  timeoutMs?: number;
 }
 
 export interface OpenedProvider { session: VoiceSession; kind: ProviderKind; model: string; provider: VoiceProvider }
@@ -87,7 +89,7 @@ export async function openFirstAvailable(
   for (const c of candidates) {
     if (o.skip?.(c, last, now() - t0)) continue;
     try {
-      const session = await openWithTimeout(c.provider, { ...base, model: c.model }, timeoutMs);
+      const session = await openWithTimeout(c.provider, { ...base, model: c.model }, c.timeoutMs ?? timeoutMs);
       return { session, kind: c.kind, model: c.model, provider: c.provider };
     } catch (e) {
       last = e as Error;

@@ -36,6 +36,7 @@ import { getTool } from '../tools/registry';
 import { VISION_GUIDE } from '../brain/systemPrompt';
 import { loadDeveloperActor, PLATFORM_SCOPE, platformSettings } from '../platform';
 import { generalToolNames } from '../tools/rbac';
+import { geminiKeyCount } from '../lib/geminiKeys';
 import {
   classifyVoiceError, FAIL_TEXT, failCodeFor, LIVE_FALLBACK_MODELS, liveModelDown, modelChain, noteLiveFailure, noteLiveOk,
   worthNextModel, type VoiceErrorKind,
@@ -346,7 +347,9 @@ class ManagedVoiceSession implements VoiceSessionHandle {
           // "O'chirgich"dagi modellar o'tkaziladi; hammasi o'chiq va kaskad yo'q bo'lsa — baribir birinchisi
           const healthy = models.liveChain.filter((m) => !liveModelDown(m));
           const list = healthy.length ? healthy : (cascadeProvider ? [] : models.liveChain.slice(0, 1));
-          for (const m of list) candidates.push({ kind: k, model: m, provider });
+          // Har kalit sinalishi uchun vaqt (owner: "birinchi kalit ochilmasa darhol boshqasiga") — ko'pi bilan 3 kalit
+          const liveTimeout = this.deps.setupTimeoutMs * Math.min(3, Math.max(1, geminiKeyCount()));
+          for (const m of list) candidates.push({ kind: k, model: m, provider, timeoutMs: liveTimeout });
         } else if (cascadeProvider) {
           this.cascade = { kind: k, model: aiConfig.models.text, provider: cascadeProvider };
           candidates.push(this.cascade);

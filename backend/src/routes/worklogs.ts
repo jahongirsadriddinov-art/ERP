@@ -7,6 +7,7 @@ import { scoped, stamped } from '../middleware/scope';
 import { getTenant } from '../middleware/tenantContext';
 import { todayInTashkent } from '../utils/tz';
 import { createNotification } from '../services/notifications';
+import { logAudit } from '../services/audit';
 
 // Ishbay hisob (owner 2026-10-19, ixtiyoriy): bajarilgan hajm × narx. Firma features.piecework yoqmagan bo'lsa —
 // yozish mumkin emas (o'qish ham bo'sh). Kiritadi: rahbar, prorab, brigadir; tasdiqlaydi: rahbar yoki o'sha
@@ -99,6 +100,47 @@ router.patch('/:id/:decision', async (req, res) => {
   }
 });
 
+async function auditWorkLog(req: any, action: 'update' | 'delete', log: any, extra: Record<string, unknown> = {}) {
+  const t = getTenant();
+  const actor: any = t?.userId ? await User.findById(t.userId).select('firstName lastName role').lean().catch(() => null) : null;
+  if (!actor) return;
+  logAudit({
+    userId: String(t!.userId), userName: `${actor.firstName} ${actor.lastName || ''}`.trim(), userRole: actor.role,
+    action, entity: 'worklog', entityId: String(log._id),
+    description: `Ishbay yozuvi ${action === 'delete' ? "o'chirildi" : "o'zgartirildi"}: ${log.userName} — ${log.workName}`, companyId: t!.companyId, req, ...extra,
+  }).catch(() => {});
+}
+
+// PATCH /api/worklogs/:id — hajm/narx/ish nomi/sana/izohni tuzatish (owner 2026-10-22): kiritgan xodim — yozuv hali
+// kutilayotgan (pending) bo'lsa; rahbar — har doim (tasdiqlangan oylikka ta'sir qiladi — faqat rahbar).
+router.patch('/:id', async (req, res) => {
+  try {
+    const t = getTenant();
+    const log: any = await WorkLog.findOne(scoped({ _id: req.params.id }));
+    if (!log) return res.status(404).json({ error: 'Topilmadi' });
+    const own = String(log.createdBy?.userId) === String(t?.userId);
+    if (!isBoss(t) && !own) return res.status(403).json({ error: "Ruxsat yo'q" });
+    if (!isBoss(t) && log.status !== 'pending') return res.status(409).json({ error: "Hal qilingan yozuvni faqat direktor yoki o'rinbosar o'zgartira oladi" });
+    const b = req.body || {};
+    const set: Record<string, unknown> = {};
+    if (b.volume !== undefined) { const v = Number(b.volume); if (!(v > 0 && v < 1e7)) return res.status(400).json({ error: "Hajm noto'g'ri" }); set.volume = v; }
+    if (b.rate !== undefined) { const r = Number(b.rate); if (!(r >= 0 && r < 1e10)) return res.status(400).json({ error: "Narx noto'g'ri" }); set.rate = r; }
+    if (b.workName !== undefined) { const w = String(b.workName || '').trim(); if (w.length < 2) return res.status(400).json({ error: 'Ish nomi kerak' }); set.workName = w.slice(0, 200); }
+    if (b.unit !== undefined) { const u = String(b.unit || '').trim(); if (!u) return res.status(400).json({ error: 'Birlik kerak' }); set.unit = u.slice(0, 20); }
+    if (b.date !== undefined) { if (!/^\d{4}-\d{2}-\d{2}$/.test(String(b.date))) return res.status(400).json({ error: "Sana noto'g'ri" }); set.date = String(b.date); }
+    if (b.note !== undefined) set.note = b.note ? String(b.note).slice(0, 300) : undefined;
+    if (!Object.keys(set).length) return res.status(400).json({ error: "O'zgartirish yo'q" });
+    const before = Object.fromEntries(Object.keys(set).map((k) => [k, log[k]]));
+    log.set(set);
+    log.amount = Math.round(Number(log.volume) * Number(log.rate));
+    await log.save();
+    await auditWorkLog(req, 'update', log, { oldValue: before, newValue: set });
+    res.json({ ...log.toObject(), id: log._id });
+  } catch (err) {
+    res.status(500).json({ error: 'Server xatoligi' });
+  }
+});
+
 router.delete('/:id', async (req, res) => {
   try {
     const t = getTenant();
@@ -106,7 +148,9 @@ router.delete('/:id', async (req, res) => {
     if (!log) return res.status(404).json({ error: 'Topilmadi' });
     const own = String(log.createdBy?.userId) === String(t?.userId);
     if (!isBoss(t) && !(own && log.status === 'pending')) return res.status(403).json({ error: "Ruxsat yo'q" });
+    const snapshot = log.toObject();
     await log.deleteOne();
+    await auditWorkLog(req, 'delete', log, { oldValue: snapshot });
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: 'Server xatoligi' });

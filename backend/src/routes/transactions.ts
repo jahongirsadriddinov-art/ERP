@@ -145,6 +145,8 @@ router.post('/', async (req, res) => {
       txData.toUserId = data.toUserId ? String(data.toUserId) : undefined;
       txData.toUserName = data.toUserName;
       txData.note = data.note;
+      // Yukxatni kim qo'shgani (owner 2026-10-22: o'zi qo'shganini o'zi tahrirlaydi/o'chiradi) — faqat JWT'dan
+      if (getTenant()?.userId) txData.createdById = String(getTenant()!.userId);
     } else {
       // Expense types: oylik, material, jihozlar, transport, boshqa, expense, income
       txData.amount = Number(data.amount) || 0;
@@ -365,6 +367,16 @@ router.post('/scan-receipt', async (req, res) => {
 // Tasdiqlangan yozuvni faqat direktor/o'rinbosar o'zgartiradi (o'chirish qoidasi bilan bir xil); eski qiymat auditda qoladi.
 // Tur faqat chiqim turlari ichida almashadi (yukxat ↔ chiqim ↔ kirim emas).
 const EXPENSE_TYPES = ['expense', 'oylik', 'material', 'jihozlar', 'transport', 'boshqa'];
+// Yozuvga egalik (PATCH/DELETE uchun): rahbar (direktor/o'rinbosar/ega) — hammasi; aks holda faqat qo'shgan xodim.
+// Yukxatda createdById eski yozuvlarda yo'q — yuboruvchi (fromUserId) qo'shgan hisoblanadi.
+// Kirim: o'rinbosar faqat o'zi kiritganini ko'radi — demak faqat o'zinikini o'zgartiradi/o'chiradi (direktorniki ko'rinmaydi).
+function txAccess(tx: any, actor: any, actingUserId: string): { isBoss: boolean; allowed: boolean } {
+  const isBoss = !!actor && (['direktor', 'orinbosar'].includes(actor.role) || !!actor.isOwner);
+  const me = String(actingUserId);
+  const isCreator = String(tx.createdById || '') === me || (tx.type === 'transfer' && !tx.createdById && String(tx.fromUserId || '') === me);
+  if (tx.type === 'income' && actor?.role === 'orinbosar' && !actor?.isOwner && !isCreator) return { isBoss, allowed: false };
+  return { isBoss, allowed: isBoss || isCreator };
+}
 router.patch('/:id', async (req, res) => {
   try {
     const actingUserId = getTenant()?.userId;
@@ -372,9 +384,8 @@ router.patch('/:id', async (req, res) => {
     const tx: any = await Transaction.findOne(scoped({ _id: req.params.id }));
     if (!tx) return res.status(404).json({ error: 'Topilmadi' });
     const actor = await User.findById(actingUserId).catch(() => null);
-    const isBoss = !!actor && (['direktor', 'orinbosar'].includes(actor.role) || !!(actor as any).isOwner);
-    const isCreator = String(tx.createdById) === String(actingUserId);
-    if (!isBoss && !isCreator) return res.status(403).json({ error: "Faqat direktor, o'rinbosar yoki yozuvni qo'shgan xodim o'zgartira oladi" });
+    const { isBoss, allowed } = txAccess(tx, actor, actingUserId);
+    if (!allowed) return res.status(403).json({ error: "Faqat direktor, o'rinbosar yoki yozuvni qo'shgan xodim o'zgartira oladi" });
     if (tx.status === 'confirmed' && !isBoss) return res.status(409).json({ error: "Tasdiqlangan yozuvni faqat direktor yoki o'rinbosar o'zgartira oladi" });
     const b = req.body || {};
     const errors: { field: string; message: string }[] = [];
@@ -435,9 +446,8 @@ router.delete('/:id', async (req, res) => {
     const tx = await Transaction.findOne(scoped({ _id: req.params.id }));
     if (!tx) return res.status(404).json({ error: 'Topilmadi' });
     const actor = await User.findById(actingUserId).catch(() => null);
-    const isBoss = actor && ['direktor', 'orinbosar'].includes(actor.role);
-    const isCreator = String(tx.createdById) === String(actingUserId);
-    if (!isBoss && !isCreator) {
+    const { isBoss, allowed } = txAccess(tx, actor, actingUserId);
+    if (!allowed) {
       return res.status(403).json({ error: 'Faqat direktor, orinbosar yoki yozuvni yaratgan xodim o\'chira oladi' });
     }
     // XAVFSIZLIK/MOLIYAVIY BUTUNLIK — TOPILMA (audit): tasdiqlangan

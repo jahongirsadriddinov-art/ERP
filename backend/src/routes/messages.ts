@@ -489,7 +489,16 @@ router.patch('/read', async (req, res) => {
 // Tahrirlash / pin — faqat direktor/o'rinbosar/dasturchi
 // Tahrirlash / qadash. Telegram'dagidek (owner 2026-10-19): matnni FAQAT yozgan odam o'zgartiradi
 // (rahbar boshqaning so'zini o'zgartira olmaydi); qadashni suhbat ishtirokchisi yoki rahbar qiladi.
-const isBoss = (u: any) => !!u && (u.isDeveloper || u.role === 'direktor' || u.role === 'orinbosar');
+// Moderator: direktor/o'rinbosar — faqat o'z firmasida (scoped() buni kafolatlaydi). Dasturchi uchun scoped()
+// firma filtrini olib tashlaydi — shu sabab u faqat "Dasturchi bilan aloqa" guruhidagi xabarlarni boshqaradi,
+// boshqa firmalarning ichki yozishmalarini emas (owner 2026-10-22: hech kim boshqa firma ma'lumotini o'zgartirmaydi).
+const isBossRole = (u: any) => !!u && (u.role === 'direktor' || u.role === 'orinbosar');
+async function isModerator(u: any, msg: any): Promise<boolean> {
+  if (isBossRole(u)) return true;
+  if (!u?.isDeveloper || !msg.groupId) return false;
+  const g: any = await Group.findById(String(msg.groupId)).select('devSupport').lean().catch(() => null);
+  return !!g?.devSupport;
+}
 async function isParticipant(msg: any, uid: string): Promise<boolean> {
   if (String(msg.fromUserId) === uid || String(msg.toUserId) === uid) return true;
   if (!msg.groupId) return false;
@@ -512,7 +521,7 @@ router.patch('/:id', async (req, res) => {
       msg.text = t; msg.edited = true;
     }
     if (pinned !== undefined) {
-      if (!isBoss(u) && !(await isParticipant(msg, uid))) return res.status(403).json({ error: "Bu xabarni qadash ruxsati yo'q" });
+      if (!(await isModerator(u, msg)) && !(await isParticipant(msg, uid))) return res.status(403).json({ error: "Bu xabarni qadash ruxsati yo'q" });
       msg.pinned = !!pinned;
     }
     await msg.save();
@@ -532,7 +541,7 @@ router.delete('/:id', async (req, res) => {
     const u = req.user;
     const msg = await Message.findOne(scoped({ _id: req.params.id }));
     if (!msg) return res.status(404).json({ error: 'Xabar topilmadi' });
-    if (String(msg.fromUserId) !== String(u?.userId || '') && !isBoss(u)) {
+    if (String(msg.fromUserId) !== String(u?.userId || '') && !(await isModerator(u, msg))) {
       return res.status(403).json({ error: "Xabarni o'chirish ruxsati yo'q" });
     }
     msg.deleted = true;

@@ -203,7 +203,8 @@ export function ObjectDetailPage({ project, currentUser, users, transfers, onBac
         {headerMenu && (
           <ActionSheet title={project.name} onClose={() => setHeaderMenu(false)} actions={[
             ...(isAdmin(currentUser.role) ? [{ key: "edit", label: t('objectDetail.editProject'), icon: Edit, onClick: () => setShowEditProject(true) }] : []),
-            { key: "smeta", label: t('objectDetail.smetaUpload'), icon: Download, onClick: () => { if (!uploadingSmeta) document.getElementById('smeta-upload')?.click(); } },
+            // Smeta butun material ro'yxatini almashtiradi — faqat rahbar yoki obyekt prorabi (backend ham tekshiradi)
+            ...(isAdmin(currentUser.role) || !!currentUser.isOwner || project.foremanId === currentUser.id ? [{ key: "smeta", label: t('objectDetail.smetaUpload'), icon: Download, onClick: () => { if (!uploadingSmeta) document.getElementById('smeta-upload')?.click(); } }] : []),
             ...(isAdmin(currentUser.role) ? [{ key: "link", label: t('objectDetail.clientLinkBtn'), icon: Share2, onClick: async () => {
               try {
                 const res = await fetch(`${API_BASE}/api/objects/${project.id}/client-link`, { method: 'POST' });

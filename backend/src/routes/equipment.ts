@@ -38,6 +38,15 @@ router.post('/', requireOwnerOrAdmin, async (req, res) => {
       status: ['available', 'in_use', 'maintenance', 'broken'].includes(status) ? status : 'available',
       assignedToUserId: assignedToUserId || undefined, purchaseDate, notes,
     }));
+    const t = getTenant();
+    const actor = t?.userId ? await User.findById(t.userId).lean().catch(() => null) : null;
+    if (actor) {
+      logAudit({
+        userId: t!.userId, userName: `${actor.firstName} ${actor.lastName || ''}`.trim(), userRole: actor.role,
+        action: 'create', entity: 'equipment', entityId: String(eq._id),
+        description: `Jihoz qo'shildi: "${eq.name}"`, companyId: t!.companyId, req,
+      }).catch(() => {});
+    }
     res.status(201).json({ ...eq.toObject(), id: eq._id });
   } catch (err) {
     res.status(500).json({ error: 'Server xatoligi' });
@@ -120,6 +129,67 @@ router.post('/:id/logs', async (req, res) => {
     res.status(500).json({ error: 'Server xatoligi' });
   }
 });
+// Jurnal yozuvini tuzatish/o'chirish (owner 2026-10-22): o'zi kiritganini — o'zi, hammasini — direktor/o'rinbosar.
+// Treker (avtomatik) yozuvlarini faqat rahbar o'chiradi.
+async function logAccess(req: any, res: any): Promise<any | null> {
+  const t = getTenant();
+  if (!t?.userId) { res.status(401).json({ error: 'Autentifikatsiya talab etiladi' }); return null; }
+  const eq = await Equipment.findOne(scoped({ _id: req.params.id })).select('_id').lean().catch(() => null);
+  if (!eq) { res.status(404).json({ error: 'Topilmadi' }); return null; }
+  const log: any = await EquipmentLog.findOne(scoped({ _id: req.params.logId, equipmentId: String(req.params.id) })).catch(() => null);
+  if (!log) { res.status(404).json({ error: 'Topilmadi' }); return null; }
+  const isBoss = !!t.isOwner || ['direktor', 'orinbosar'].includes(String(t.role));
+  if (!isBoss && String(log.createdBy || '') !== String(t.userId)) { res.status(403).json({ error: "Faqat yozuvni kiritgan xodim yoki admin o'zgartira oladi" }); return null; }
+  return log;
+}
+async function auditLog(req: any, action: 'update' | 'delete', log: any, extra: Record<string, unknown> = {}) {
+  const t = getTenant();
+  const actor = t?.userId ? await User.findById(t.userId).lean().catch(() => null) : null;
+  if (!actor) return;
+  logAudit({
+    userId: t!.userId, userName: `${actor.firstName} ${actor.lastName || ''}`.trim(), userRole: actor.role,
+    action, entity: 'equipment_log', entityId: String(log._id),
+    description: `Texnika jurnali ${action === 'delete' ? "o'chirildi" : "o'zgartirildi"}: ${log.date}`, companyId: t!.companyId, req, ...extra,
+  }).catch(() => {});
+}
+router.patch('/:id/logs/:logId', async (req, res) => {
+  try {
+    const log = await logAccess(req, res);
+    if (!log) return;
+    const b = req.body || {};
+    const n = (v: unknown, max: number) => (v === null || v === '' ? undefined : Number.isFinite(Number(v)) && Number(v) >= 0 && Number(v) <= max ? Number(v) : NaN);
+    const set: Record<string, unknown> = {};
+    for (const [k, max] of [['hours', 24], ['fuel', 5000], ['engineHours', 1e7]] as const) {
+      if (b[k] === undefined) continue;
+      const v = n(b[k], max);
+      if (Number.isNaN(v)) return res.status(400).json({ error: "Qiymatlar noto'g'ri" });
+      set[k] = v;
+    }
+    if (b.date !== undefined) { if (!/^\d{4}-\d{2}-\d{2}$/.test(String(b.date))) return res.status(400).json({ error: "Sana noto'g'ri" }); set.date = String(b.date); }
+    if (b.note !== undefined) set.note = b.note ? String(b.note).slice(0, 300) : undefined;
+    if (!Object.keys(set).length) return res.status(400).json({ error: "O'zgartirish yo'q" });
+    const before = Object.fromEntries(Object.keys(set).map((k) => [k, log[k]]));
+    log.set(set);
+    await log.save();
+    await auditLog(req, 'update', log, { oldValue: before, newValue: set });
+    res.json({ ...log.toObject(), id: log._id });
+  } catch (err) {
+    res.status(500).json({ error: 'Server xatoligi' });
+  }
+});
+router.delete('/:id/logs/:logId', async (req, res) => {
+  try {
+    const log = await logAccess(req, res);
+    if (!log) return;
+    const snapshot = log.toObject();
+    await log.deleteOne();
+    await auditLog(req, 'delete', log, { oldValue: snapshot });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Server xatoligi' });
+  }
+});
+
 // GPS-treker tokeni (rahbar) — trekerga /api/public/telemetry/<token> manzili yoziladi
 router.post('/:id/tracker-token', requireOwnerOrAdmin, async (req, res) => {
   try {
@@ -137,6 +207,15 @@ router.delete('/:id', requireOwnerOrAdmin, async (req, res) => {
   try {
     const eq = await Equipment.findOneAndDelete(scoped({ _id: req.params.id }));
     if (!eq) return res.status(404).json({ error: 'Topilmadi' });
+    const t = getTenant();
+    const actor = t?.userId ? await User.findById(t.userId).lean().catch(() => null) : null;
+    if (actor) {
+      logAudit({
+        userId: t!.userId, userName: `${actor.firstName} ${actor.lastName || ''}`.trim(), userRole: actor.role,
+        action: 'delete', entity: 'equipment', entityId: String(eq._id),
+        description: `Jihoz o'chirildi: "${eq.name}"`, oldValue: eq.toObject(), companyId: t!.companyId, req,
+      }).catch(() => {});
+    }
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: 'Server xatoligi' });

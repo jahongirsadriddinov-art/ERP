@@ -32,7 +32,14 @@ function workerDivIcon(name: string, live: boolean, stale: boolean) {
   });
 }
 
-export default function WorkerMap({ users, gpsLocations, focusUserId }: { users: AppUser[]; gpsLocations: GpsPoint[]; focusUserId?: string | null }) {
+export interface TrackPoint { lat: number; lng: number; timestamp: string; accuracy?: number }
+
+// Kuzatuv (owner 2026-10-22): telefonda xarita butun ekran (className bilan balandlik beriladi), markerni bosish —
+// onSelect (ro'yxatdagi xodimni tanlash), tanlangan xodimning bugungi izi — track (chiziq + boshlanish/oxirgi nuqta).
+export default function WorkerMap({ users, gpsLocations, focusUserId, track, onSelect, className }: {
+  users: AppUser[]; gpsLocations: GpsPoint[]; focusUserId?: string | null;
+  track?: TrackPoint[] | null; onSelect?: (userId: string) => void; className?: string;
+}) {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -46,6 +53,9 @@ export default function WorkerMap({ users, gpsLocations, focusUserId }: { users:
   // — shunchalik noaniq joylashuv.
   const circlesRef = useRef<Record<string, L.Circle>>({});
   const [navTarget, setNavTarget] = useState<{ lat: number; lng: number; name: string } | null>(null);
+  const trackLayerRef = useRef<L.LayerGroup | null>(null);
+  const onSelectRef = useRef(onSelect);
+  onSelectRef.current = onSelect;
 
   // Xarita — bir marta yaratiladi
   useEffect(() => {
@@ -62,7 +72,10 @@ export default function WorkerMap({ users, gpsLocations, focusUserId }: { users:
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
     }).addTo(map);
     mapRef.current = map;
-    return () => { map.remove(); mapRef.current = null; markersRef.current = {}; circlesRef.current = {}; };
+    // Konteyner o'lchami o'zgarsa (telefonda pastki panel, burilish) — plitalar kulrang bo'lib qolmasin
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => map.invalidateSize()) : null;
+    ro?.observe(containerRef.current);
+    return () => { ro?.disconnect(); map.remove(); trackLayerRef.current = null; mapRef.current = null; markersRef.current = {}; circlesRef.current = {}; };
   }, []);
 
   // Markerlar — gpsLocations o'zgarganda yangilanadi (yangi socket yangilanishi kelganda ham)
@@ -85,7 +98,11 @@ export default function WorkerMap({ users, gpsLocations, focusUserId }: { users:
         existing.setIcon(icon);
       } else {
         const marker = L.marker([loc.lat, loc.lng], { icon }).addTo(map);
-        marker.on('click', () => setNavTarget({ lat: loc.lat, lng: loc.lng, name: user.name }));
+        marker.on('click', () => {
+          if (onSelectRef.current) { onSelectRef.current(loc.userId); return; }
+          const ll = marker.getLatLng();
+          setNavTarget({ lat: ll.lat, lng: ll.lng, name: user.name });
+        });
         markersRef.current[loc.userId] = marker;
       }
       const veryRough = (loc.accuracy || 0) > 300; // ~300m'dan katta — odatda tarmoq/IP-asosli, GPS chip emas
@@ -141,6 +158,31 @@ export default function WorkerMap({ users, gpsLocations, focusUserId }: { users:
     marker.openTooltip();
   }, [focusUserId, gpsLocations]);
 
+  // Tanlangan xodimning bugungi izi
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    trackLayerRef.current?.remove();
+    trackLayerRef.current = null;
+    const pts = (track || []).filter(p => (p.accuracy ?? 0) <= 200).map(p => [p.lat, p.lng] as [number, number]);
+    if (!pts.length) return;
+    const g = L.layerGroup();
+    if (pts.length > 1) {
+      L.polyline(pts, { color: '#ffffff', weight: 7, opacity: 0.7 }).addTo(g);
+      let primary = '#2563eb';
+      try { primary = getComputedStyle(document.documentElement).getPropertyValue('--primary').trim() || primary; } catch { /* */ }
+      L.polyline(pts, { color: primary, weight: 4, opacity: 0.95 }).addTo(g);
+    }
+    L.circleMarker(pts[0], { radius: 6, color: '#fff', weight: 2, fillColor: '#22c55e', fillOpacity: 1 }).bindTooltip(t('gps.trailStart')).addTo(g);
+    g.addTo(map);
+    trackLayerRef.current = g;
+    // Iz va xodimning hozirgi joyi birga ko'rinsin
+    const cur = focusUserId ? markersRef.current[focusUserId]?.getLatLng() : undefined;
+    const all = cur ? [...pts, [cur.lat, cur.lng] as [number, number]] : pts;
+    if (all.length > 1) map.fitBounds(all, { padding: [56, 56], maxZoom: 17 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [track, t]);
+
   // Jonli (live) deb hisoblanadigan xodimlar soni — xarita ustidagi
   // yorliqda ko'rsatish uchun (foydali ma'lumot + "premium" texnik detal,
   // LandingPage'dagi bilan bir xil monospace/burchak-belgi uslubida).
@@ -148,7 +190,7 @@ export default function WorkerMap({ users, gpsLocations, focusUserId }: { users:
   const liveCount = gpsLocations.filter(l => isLiveSource(l.source) && (nowTs - new Date(l.timestamp).getTime()) <= 15 * 60 * 1000).length;
 
   return (
-    <div className="wm-map relative w-full h-[340px] rounded-2xl overflow-hidden surface">
+    <div data-testid="worker-map" className={`wm-map relative w-full overflow-hidden surface ${className || 'h-[340px] rounded-2xl'}`}>
       <div ref={containerRef} className="w-full h-full" />
 
       {/* Chizma-uslubidagi burchak-belgilar — LandingPage'dagi CornerMarks bilan

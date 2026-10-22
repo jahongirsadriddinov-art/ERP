@@ -143,6 +143,7 @@ test('Hisobotlar: Excel yuklanadi — muqova + tartibli varaqlar, kirim ham bor'
 
 test('Hisobotlar (telefon 360/390/430): filtr yig\'iladi, hech narsa ekrandan chiqmaydi; Nazorat ham sig\'adi', async ({ page }, info) => {
   test.skip(info.project.name !== 'telefon', 'faqat telefon');
+  test.setTimeout(120_000); // uch xil kenglik bitta sinovda
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await mock(page);
@@ -181,7 +182,7 @@ test('Hisobotlar (telefon 360/390/430): filtr yig\'iladi, hech narsa ekrandan ch
 
     await page.getByRole('tab', { name: 'Nazorat' }).click();
     await expect(page.getByTestId('reports-header')).toBeVisible();
-    await expect(page.getByTestId('reports-control')).toContainText('Ekskavator');
+    await expect(page.getByTestId('reports-control')).toContainText('Ekskavator', { timeout: 15_000 });
     await noHorizontalOverflow(page);
     await page.screenshot({ path: info.outputPath(`reports-${w}-control.png`), fullPage: true });
     await page.getByRole('tab', { name: 'Moliya' }).click();

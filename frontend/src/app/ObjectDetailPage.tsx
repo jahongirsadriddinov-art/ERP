@@ -1,6 +1,7 @@
 import { confirmDialog } from "./lib/confirmDialog";
 import { useState, useRef, useEffect } from "react";
 import { oneOf, usePersistentState } from "./lib/persistentState";
+import { ActionSheet } from "./components/SwipeRow";
 import Building2 from "@hugeicons/core-free-icons/Building02Icon";
 import Package from "@hugeicons/core-free-icons/Package01Icon";
 import ArrowLeft from "@hugeicons/core-free-icons/ArrowLeft01Icon";
@@ -43,9 +44,10 @@ export function ObjectDetailPage({ project, currentUser, users, transfers, onBac
   const companyFeatures = useCompanyFeatures();
   const showPiecework = !!companyFeatures?.piecework;
   const [tab, setTab] = usePersistentState<"plan"|"required"|"smeta"|"pending"|"confirmed"|"media"|"piece">(
-    `object.tab:${project.id}`, canPlanFact ? "plan" : "required", oneOf(["plan", "required", "smeta", "pending", "confirmed", "media", "piece"]));
+    `object.tab:${project.id}`, "required", oneOf(["plan", "required", "smeta", "pending", "confirmed", "media", "piece"]));
   const [showEditProject, setShowEditProject] = useState(false);
   const [deletingProject, setDeletingProject] = useState(false);
+  const [headerMenu, setHeaderMenu] = useState(false);
   // Ish jarayoni rasm/video — BARCHA xodim (ishchi, brigadir, prorab ham)
   // qo'sha oladi, faqat direktor/o'rinbosar emas (aniq talab).
   const [mediaItems, setMediaItems] = useState<{ id: string; type: 'image'|'video'; url: string; caption?: string; uploadedBy: { userId: string; name: string; role: string }; createdAt: string; aiAnalysis?: { stage?: string; progressPercent?: number | null; workVisible?: string; safety?: Array<{ issue: string; severity: string }>; quality?: string[] } }[]>([]);
@@ -130,117 +132,101 @@ export function ObjectDetailPage({ project, currentUser, users, transfers, onBac
           ko'rinish). Endi ikkalasi BITTA sticky konteynerda — header
           balandligidan qat'i nazar tab-panel doim to'g'ri joyda turadi. */}
       <div className="flex-shrink-0 z-10 sticky top-0">
-      <div className="glass border-b border-border px-4 py-3 flex flex-wrap items-center gap-3">
-        <button onClick={onBack} className="flex items-center gap-1.5 text-sm md:text-xs text-muted-foreground hover:text-foreground transition-colors"><MorphIcon icon={ArrowLeft} className="w-4 h-4" />{t('common.back')}</button>
-        <div className="w-px h-4 bg-border"/>
-        <MorphIcon icon={Building2} className="w-4 h-4 text-primary flex-shrink-0" />
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold flex items-center gap-2">
-            {/* MUHIM: truncate avval butun qatorga (matn + select'ga birga)
-                qo'yilgan edi — nom uzun bo'lsa, `overflow:hidden` butun
-                qatorni qirqib, status tanlovini ko'rinmas qilib qo'yardi
-                ("obyekt statusini o'zgartiradigan tugma yo'qolib qoldi").
-                Endi faqat nomning o'zi qirqiladi, select doim ko'rinadi. */}
-            <span className="truncate min-w-0">{project.name}</span>
-            {isAdmin(currentUser.role) && (
-              <button type="button" onClick={() => setShowEditProject(true)} aria-label={t('objectDetail.editProject')} title={t('objectDetail.editProject')}
-                className="p-1 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-full flex-shrink-0 liquid-transition">
-                <MorphIcon icon={Edit} className="w-3.5 h-3.5" />
-              </button>
-            )}
-            {isAdmin(currentUser.role) && (
-              <button type="button" onClick={async () => {
-                try {
-                  const res = await fetch(`${API_BASE}/api/objects/${project.id}/client-link`, { method: 'POST' });
-                  const data = await res.json();
-                  if (res.ok && data.url) {
-                    await navigator.clipboard.writeText(data.url).catch(() => {});
-                    toast.success(t('objectDetail.clientLinkCopied'));
-                  } else toast.error(t('common.error'));
-                } catch { toast.error(t('common.error')); }
-              }} aria-label={t('objectDetail.clientLinkBtn')} title={t('objectDetail.clientLinkBtn')}
-                className="p-1 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-full flex-shrink-0 liquid-transition">
-                <MorphIcon icon={Share2} className="w-3.5 h-3.5" />
-              </button>
-            )}
-            {isAdmin(currentUser.role) && (
-              <button type="button" disabled={deletingProject} onClick={async () => {
-                if (!await confirmDialog(t('objectDetail.confirmDeleteProject', { name: project.name }))) return;
-                setDeletingProject(true);
-                try {
-                  const res = await fetch(`${API_BASE}/api/objects/${project.id}`, { method: 'DELETE' });
-                  if (res.ok) {
-                    toast.success(t('objectDetail.deleteProjectSuccess'));
-                    onDeleteProject(project.id);
-                    onBack();
-                  } else toast.error(t('objectDetail.deleteProjectError'));
-                } catch { toast.error(t('objectDetail.deleteProjectError')); }
-                setDeletingProject(false);
-              }} aria-label={t('objectDetail.deleteProject')} title={t('objectDetail.deleteProject')}
-                className="p-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-full flex-shrink-0 liquid-transition disabled:opacity-50">
-                {deletingProject ? <MorphIcon icon={Loader2} className="w-3.5 h-3.5 animate-spin" /> : <MorphIcon icon={Trash} className="w-3.5 h-3.5" />}
-              </button>
-            )}
-            <select
-              className="text-xs bg-transparent border-none font-semibold focus:outline-none cursor-pointer liquid-transition outline-none flex-shrink-0"
-              style={{ color: project.status === "active" ? "#22c55e" : project.status === "paused" ? "#f59e0b" : "#3b82f6" }}
-              value={project.status}
-              onChange={async (e) => {
-                const newStatus = e.target.value as "active"|"paused"|"completed";
-                try {
-                  const res = await fetch(`${API_BASE}/api/objects/${project.id}/status`, {
-                    method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: newStatus })
-                  });
-                  if (res.ok) { onUpdateStatus(project.id, newStatus); }
-                } catch(err) { toast.error(t('common.error')); }
-              }}
-            >
-              <option value="active" className="text-green-600">{t('objectDetail.statusActive')}</option>
-              <option value="paused" className="text-amber-500">{t('objectDetail.statusPaused')}</option>
-              <option value="completed" className="text-blue-500">{t('objectDetail.statusCompleted')}</option>
-            </select>
-          </p>
-          <p className="text-sm md:text-xs text-muted-foreground">{project.location}</p>
+      {/* Owner 2026-10-22: telefonda tepa qism pastdagini siqib qo'yardi — endi ixcham: orqaga, nom+holat, "Yuborish"
+          va ⋯ menyu (tahrirlash, mijoz havolasi, smeta yuklash, o'chirish). Kompyuterda tugmalar ham ko'rinadi. */}
+      <div className="glass border-b border-border px-3 sm:px-4 py-2 sm:py-3">
+        <div className="flex items-center gap-2 min-w-0">
+          <button onClick={onBack} aria-label={t('common.back')} className="h-10 w-10 sm:w-auto sm:px-2 -ml-1 flex items-center justify-center gap-1.5 rounded-full text-sm text-muted-foreground hover:text-foreground hover:bg-muted/60 flex-shrink-0">
+            <MorphIcon icon={ArrowLeft} className="w-5 h-5 sm:w-4 sm:h-4" /><span className="hidden sm:inline">{t('common.back')}</span>
+          </button>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-[15px] sm:text-sm font-semibold truncate min-w-0" title={project.name}>{project.name}</span>
+              <select
+                aria-label={t('objectDetail.statusLabel', { defaultValue: 'Holat' })}
+                className="text-xs bg-transparent border-none font-semibold focus:outline-none cursor-pointer outline-none flex-shrink-0"
+                style={{ color: project.status === "active" ? "#22c55e" : project.status === "paused" ? "#f59e0b" : "#3b82f6" }}
+                value={project.status}
+                disabled={!isAdmin(currentUser.role)}
+                onChange={async (e) => {
+                  const newStatus = e.target.value as "active"|"paused"|"completed";
+                  try {
+                    const res = await fetch(`${API_BASE}/api/objects/${project.id}/status`, {
+                      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: newStatus })
+                    });
+                    if (res.ok) { onUpdateStatus(project.id, newStatus); }
+                  } catch { toast.error(t('common.error')); }
+                }}
+              >
+                <option value="active">{t('objectDetail.statusActive')}</option>
+                <option value="paused">{t('objectDetail.statusPaused')}</option>
+                <option value="completed">{t('objectDetail.statusCompleted')}</option>
+              </select>
+            </div>
+            {project.location && <p className="text-xs text-muted-foreground truncate">{project.location}</p>}
+          </div>
+          <button onClick={()=>{setInitialTransferData(undefined);setShowSend(true);}} aria-label={t('common.send')}
+            className="h-10 px-3 sm:px-3.5 rounded-full bg-primary text-white text-sm font-semibold inline-flex items-center gap-1.5 flex-shrink-0 shadow-sm">
+            <MorphIcon icon={Send} className="w-4 h-4" /><span className="hidden min-[400px]:inline">{t('common.send')}</span>
+          </button>
+          <button type="button" onClick={() => setHeaderMenu(true)} aria-label={t('objectDetail.more', { defaultValue: 'Boshqa amallar' })} data-testid="object-more"
+            className="h-10 w-10 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 flex-shrink-0">
+            <span className="text-xl leading-none">⋯</span>
+          </button>
         </div>
-        {/* Tor ekranda (telefon) bu qator status-select bilan "qo'shilib
-            ketardi" — endi w-full bilan navbatdagi qatorga tushadi, katta
-            ekranda (sm+) xuddi eskisidek bir qatorda turaveradi. */}
-        <div className="flex items-center gap-2 flex-shrink-0 w-full sm:w-auto justify-end">
-          <input type="file" id="smeta-upload" className="hidden" accept=".pdf,.xlsx,.xls,.docx,.doc,.csv,.txt" onChange={async e=>{
-            const file = e.target.files?.[0];
-            if(!file) return;
-            setUploadingSmeta(true); setSmetaMsg(t('objectDetail.analyzing')); setSmetaPercent(40);
-            try {
-              const result = await parseSmetaFile(file, project.id);
-              onSmetaUploaded(project.id, result);
-              const matN = result.resources.filter((r:any)=>r.group==='material').length;
-              setSmetaMsg(`✓ ${result.resources.length} resurs, ${matN} material`);
-              setSmetaPercent(100);
-              setTab("smeta");
-              setTimeout(() => { setUploadingSmeta(false); setSmetaMsg(''); setSmetaPercent(0); }, 2500);
-            } catch (err) {
-              setSmetaMsg(`✗ ${(err as Error).message || t('objectDetail.smetaFailedGeneric')}`);
-              setSmetaPercent(0);
-              setTimeout(() => { setUploadingSmeta(false); setSmetaMsg(''); }, 4000);
-            }
-            e.target.value='';
-          }}/>
-          <label htmlFor="smeta-upload" className={`flex flex-col items-center gap-0.5 text-sm md:text-xs px-2.5 py-1.5 rounded-lg font-medium cursor-pointer liquid-transition min-w-[120px] ${uploadingSmeta ? (smetaMsg.startsWith('✓') ? "bg-green-500/15 text-green-800 dark:text-green-400 cursor-not-allowed" : smetaMsg.startsWith('✗') ? "bg-destructive/15 text-destructive cursor-not-allowed" : "bg-accent text-white cursor-wait dark:bg-accent/10 dark:text-accent") : "bg-accent text-white hover:bg-accent/90 dark:bg-accent/10 dark:text-accent dark:hover:bg-accent/20"}`}>
-            {uploadingSmeta ? (
-              <>
-                <div className="flex items-center gap-1 text-center">
-                  {smetaMsg.startsWith('✓') ? <MorphIcon icon={CheckCircle} className="w-3.5 h-3.5 flex-shrink-0" /> : smetaMsg.startsWith('✗') ? <MorphIcon icon={AlertCircle} className="w-3.5 h-3.5 flex-shrink-0" /> : <MorphIcon icon={Loader2} className="w-3.5 h-3.5 animate-spin flex-shrink-0" />}
-                  <span className="truncate max-w-[180px]">{smetaMsg.replace(/^[✓✗]\s*/, '') || t('objectDetail.uploading')}</span>
-                </div>
-                {smetaPercent > 0 && !smetaMsg.startsWith('✗') && <div className="w-full bg-accent/20 rounded-full h-1 mt-0.5"><div className={`${smetaMsg.startsWith('✓') ? 'bg-green-500' : 'bg-accent'} h-1 rounded-full liquid-transition`} style={{width:`${smetaPercent}%`}}/></div>}
-              </>
-            ) : <><MorphIcon icon={Download} className="w-3.5 h-3.5" />{t('objectDetail.smetaUpload')}</>}
-          </label>
-          <button onClick={()=>{setInitialTransferData(undefined);setShowSend(true);}} className="flex items-center gap-1 text-sm md:text-xs bg-primary text-white px-2.5 py-1.5 rounded hover:bg-primary/90 font-medium liquid-transition shadow-sm"><MorphIcon icon={Send} className="w-3.5 h-3.5" />{t('common.send')}</button>
-        </div>
+        <input type="file" id="smeta-upload" className="hidden" accept=".pdf,.xlsx,.xls,.docx,.doc,.csv,.txt" onChange={async e=>{
+          const file = e.target.files?.[0];
+          if(!file) return;
+          setUploadingSmeta(true); setSmetaMsg(t('objectDetail.analyzing')); setSmetaPercent(40);
+          try {
+            const result = await parseSmetaFile(file, project.id);
+            onSmetaUploaded(project.id, result);
+            const matN = result.resources.filter((r:any)=>r.group==='material').length;
+            setSmetaMsg(`✓ ${result.resources.length} resurs, ${matN} material`);
+            setSmetaPercent(100);
+            setTab("smeta");
+            setTimeout(() => { setUploadingSmeta(false); setSmetaMsg(''); setSmetaPercent(0); }, 2500);
+          } catch (err) {
+            setSmetaMsg(`✗ ${(err as Error).message || t('objectDetail.smetaFailedGeneric')}`);
+            setSmetaPercent(0);
+            setTimeout(() => { setUploadingSmeta(false); setSmetaMsg(''); }, 4000);
+          }
+          e.target.value='';
+        }}/>
+        {uploadingSmeta && (
+          <div className={`mt-2 rounded-xl px-3 py-2 text-xs font-medium flex items-center gap-2 ${smetaMsg.startsWith('✓') ? "bg-green-500/15 text-green-800 dark:text-green-400" : smetaMsg.startsWith('✗') ? "bg-destructive/15 text-destructive" : "bg-accent/10 text-accent"}`}>
+            {smetaMsg.startsWith('✓') ? <MorphIcon icon={CheckCircle} className="w-4 h-4 flex-shrink-0" /> : smetaMsg.startsWith('✗') ? <MorphIcon icon={AlertCircle} className="w-4 h-4 flex-shrink-0" /> : <MorphIcon icon={Loader2} className="w-4 h-4 animate-spin flex-shrink-0" />}
+            <span className="flex-1 min-w-0 truncate">{smetaMsg.replace(/^[✓✗]\s*/, '') || t('objectDetail.uploading')}</span>
+            {smetaPercent > 0 && !smetaMsg.startsWith('✗') && <div className="w-16 bg-accent/20 rounded-full h-1"><div className={`${smetaMsg.startsWith('✓') ? 'bg-green-500' : 'bg-accent'} h-1 rounded-full`} style={{width:`${smetaPercent}%`}}/></div>}
+          </div>
+        )}
+        {headerMenu && (
+          <ActionSheet title={project.name} onClose={() => setHeaderMenu(false)} actions={[
+            ...(isAdmin(currentUser.role) ? [{ key: "edit", label: t('objectDetail.editProject'), icon: Edit, onClick: () => setShowEditProject(true) }] : []),
+            { key: "smeta", label: t('objectDetail.smetaUpload'), icon: Download, onClick: () => { if (!uploadingSmeta) document.getElementById('smeta-upload')?.click(); } },
+            ...(isAdmin(currentUser.role) ? [{ key: "link", label: t('objectDetail.clientLinkBtn'), icon: Share2, onClick: async () => {
+              try {
+                const res = await fetch(`${API_BASE}/api/objects/${project.id}/client-link`, { method: 'POST' });
+                const data = await res.json();
+                if (res.ok && data.url) { await navigator.clipboard.writeText(data.url).catch(() => {}); toast.success(t('objectDetail.clientLinkCopied')); }
+                else toast.error(t('common.error'));
+              } catch { toast.error(t('common.error')); }
+            } }] : []),
+            ...(isAdmin(currentUser.role) ? [{ key: "del", label: t('objectDetail.deleteProject'), icon: Trash, tone: "danger" as const, onClick: async () => {
+              if (deletingProject || !await confirmDialog(t('objectDetail.confirmDeleteProject', { name: project.name }))) return;
+              setDeletingProject(true);
+              try {
+                const res = await fetch(`${API_BASE}/api/objects/${project.id}`, { method: 'DELETE' });
+                if (res.ok) { toast.success(t('objectDetail.deleteProjectSuccess')); onDeleteProject(project.id); onBack(); }
+                else toast.error(t('objectDetail.deleteProjectError'));
+              } catch { toast.error(t('objectDetail.deleteProjectError')); }
+              setDeletingProject(false);
+            } }] : []),
+          ]} />
+        )}
       </div>
       <div className="glass border-b border-border px-3 py-2 flex gap-1 overflow-x-auto scrollbar-hide">
-        {([...(canPlanFact ? [["plan",t('planFact.tab'),NaN] as [string,string,number]] : []),["required",t('objectDetail.tabRequired'),project.requiredMaterials.length], ...(project.smeta ? [["smeta",t('objectDetail.tabSmeta'),project.smeta.resources.length] as [string,string,number]] : []), ["pending",t('objectDetail.tabPending'),pendT.length],["confirmed",t('objectDetail.tabConfirmed'),confT.length],["media",t('objectDetail.tabMedia'),mediaItems.length], ...(showPiecework ? [["piece",t('piecework.tab'),NaN] as [string,string,number]] : [])] as [string,string,number][]).map(([k,l,c])=>(
+        {([["required",t('objectDetail.tabRequired'),project.requiredMaterials.length], ["pending",t('objectDetail.tabPending'),pendT.length],["confirmed",t('objectDetail.tabConfirmed'),confT.length], ...(project.smeta ? [["smeta",t('objectDetail.tabSmeta'),project.smeta.resources.length] as [string,string,number]] : []), ["media",t('objectDetail.tabMedia'),mediaItems.length], ...(showPiecework ? [["piece",t('piecework.tab'),NaN] as [string,string,number]] : []), ...(canPlanFact ? [["plan",t('planFact.tab'),NaN] as [string,string,number]] : [])] as [string,string,number][]).map(([k,l,c])=>(
           <button key={k} onClick={()=>setTab(k as any)} className={`relative flex items-center gap-1.5 text-sm md:text-xs py-2 px-3 rounded-full font-medium liquid-transition whitespace-nowrap ${tab===k?"text-primary":"text-muted-foreground hover:text-foreground"}`}>
             {tab===k && (
               <motion.div layoutId="objectDetailTabPill" className="absolute inset-0 rounded-full bg-primary/10 -z-10"

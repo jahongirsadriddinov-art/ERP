@@ -18,7 +18,12 @@ const router = Router();
 router.get('/', async (req, res) => {
   try {
     const list = await Equipment.find(scoped()).sort({ createdAt: -1 }).lean();
-    res.json(list.map(e => ({ ...e, id: e._id })));
+    // XAVFSIZLIK (audit 2026-10-22): treker tokeni bilan login'siz motor-soat/joylashuv yoziladi
+    // (/api/public/telemetry/:token) — oddiy xodim uni olib, soxta ma'lumot (yoqilg'i o'g'irligini
+    // yashirish uchun motor-soat) yubora olardi. Token faqat rahbarga qaytariladi.
+    const t = getTenant();
+    const boss = !!t?.isDeveloper || !!t?.isOwner || ['direktor', 'orinbosar'].includes(String(t?.role));
+    res.json(list.map(({ trackerToken, ...e }: any) => ({ ...e, ...(boss && trackerToken ? { trackerToken } : {}), id: e._id })));
   } catch (err) {
     res.status(500).json({ error: 'Server xatoligi' });
   }

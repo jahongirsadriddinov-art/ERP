@@ -152,3 +152,21 @@ describe("kirim (owner 2026-10-22): faqat direktor/o'rinbosar kiritadi; direktor
     expect((await list('prorab')).body.some((t: any) => t.type === 'income')).toBe(false);
   });
 });
+
+describe("xavfsizlik (audit 2026-10-22): rahbar tasdig'i kerak bo'lgan chiqimni qabul qiluvchi o'zi tasdiqlay olmaydi", () => {
+  const add = (k: string, body: any) => request(app).post('/api/transactions').set('Authorization', tok(k)).send(body);
+  it("ishchi o'zini qabul qiluvchi qilib yozgan chiqimni /confirm bilan tasdiqlay olmaydi — faqat tanlangan rahbar", async () => {
+    const r = await add('ish', { type: 'material', amount: 90_000_000, description: 'Soxta chiqim', toUserId: ids.ish, approverId: ids.owner });
+    expect(r.status).toBe(201);
+    expect(r.body.requiresAdminApproval).toBe(true);
+    const c = await patch('ish', String(r.body.id), 'confirm');
+    expect(c.status).toBe(403);
+    expect((await Transaction.findById(r.body.id).lean() as any).status).toBe('pending');
+    expect((await patch('owner', String(r.body.id), 'approve')).status).toBe(200);
+  });
+
+  it("chiqimni boshqa firma xodimiga yo'naltirib bo'lmaydi (toUserId shu firmadan bo'lishi shart)", async () => {
+    const r = await add('ish', { type: 'material', amount: 10_000, description: 'x', toUserId: ids.other, approverId: ids.owner });
+    expect(r.status).toBe(400);
+  });
+});

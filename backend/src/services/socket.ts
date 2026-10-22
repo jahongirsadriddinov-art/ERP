@@ -165,6 +165,7 @@ export function initSocket(httpServer: HttpServer): Server {
       socket.data.userId = fresh.userId;
       socket.data.companyId = fresh.companyId;
       socket.data.role = fresh.role;
+      socket.data.isOwner = !!fresh.isOwner;
       socket.data.jti = payload.jti;
       next();
     } catch {
@@ -189,6 +190,8 @@ export function initSocket(httpServer: HttpServer): Server {
     const cid = companyId ? String(companyId) : undefined;
     const isDev = socket.data.role === 'dasturchi';
     if (cid) socket.join(`company:${cid}`);
+    // XAVFSIZLIK (audit 2026-10-22): rahbarlar xonasi — jonli GPS faqat shu yerga (HTTP /api/gps/latest bilan bir xil qoida)
+    if (cid && (socket.data.isOwner || socket.data.role === 'direktor' || socket.data.role === 'orinbosar')) socket.join(`company-boss:${cid}`);
     if (isDev) socket.join(DEV_ROOM);
     addUserSocket(userId, socket.id);
     trackPresence(cid, userId, isDev, 1);
@@ -453,6 +456,12 @@ export const broadcast = (event: string, payload: any) =>
 export const emitToCompany = (companyId: string | undefined, event: string, payload: any) => {
   if (!companyId) return;
   io?.to(`company:${companyId}`).emit(event, payload);
+};
+/** XAVFSIZLIK (audit 2026-10-22): xodimlarning jonli joylashuvi FAQAT firma rahbarlariga (direktor/o'rinbosar/ega).
+ * Avval emitToCompany bilan butun firmaga ketardi — oddiy ishchi direktor va hamkasblarini kuzata olardi. */
+export const emitToCompanyBosses = (companyId: string | undefined, event: string, payload: any) => {
+  if (!companyId) return;
+  io?.to(`company-boss:${companyId}`).emit(event, payload);
 };
 export const getIO = () => io;
 export const isOnline = (userId: string) => userSockets.has(userId);

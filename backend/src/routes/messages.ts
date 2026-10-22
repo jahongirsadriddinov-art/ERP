@@ -151,6 +151,10 @@ export function isAllowedMediaUrl(v: unknown): boolean {
 
 const shape = (m: any) => ({ ...m.toObject(), id: m._id });
 
+// XAVFSIZLIK (audit 2026-10-22): HTML rejimidagi bot xabarida foydalanuvchi matni/ismi escape qilinadi —
+// aks holda xodim rasmiy bot nomidan soxta havola (<a href>) yoki buzuq teg (xabar umuman yetmaydi) yubora olardi.
+const escHtml = (v: unknown) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
 // Saytdan yuborilgan xabarni Telegramga TO'LIQ ko'rinishda (matn EMAS, haqiqiy
 // rasm/video/ovoz/fayl/lokatsiya sifatida) qayta jo'natadi — mediaUrl allaqachon
 // ochiq /uploads orqali xizmat qilinayotgani uchun qayta yuklab olish shart emas,
@@ -229,12 +233,12 @@ export async function relayMessageToTelegram(chatId: string, senderName: string,
         break;
       case 'location':
         if (m.location) {
-          await bot.sendMessage(chatId, `💬 <b>${senderName}</b> lokatsiya yubordi:`, { parse_mode: 'HTML' });
+          await bot.sendMessage(chatId, `💬 <b>${escHtml(senderName)}</b> lokatsiya yubordi:`, { parse_mode: 'HTML' });
           await bot.sendLocation(chatId, m.location.lat, m.location.lng);
         }
         break;
       default:
-        await bot.sendMessage(chatId, `💬 <b>${senderName}</b>:\n\n${m.text?.trim() || ''}`, { parse_mode: 'HTML' });
+        await bot.sendMessage(chatId, `💬 <b>${escHtml(senderName)}</b>:\n\n${escHtml(m.text?.trim() || '')}`, { parse_mode: 'HTML' });
     }
   } catch (err) {
     console.error('[telegram relay]', err);

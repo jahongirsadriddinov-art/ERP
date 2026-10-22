@@ -2,7 +2,7 @@ import { Router } from 'express';
 import GpsLocation from '../models/GpsLocation';
 import { scoped, stamped } from '../middleware/scope';
 import { getTenant } from '../middleware/tenantContext';
-import { emitToCompany } from '../services/socket';
+import { emitToCompanyBosses } from '../services/socket';
 import { requireFeature } from '../middleware/requireFeature';
 
 const router = Router();
@@ -90,7 +90,7 @@ router.post('/', requireFeature('gps_tracking'), async (req, res) => {
       speed: pt.speed, heading: pt.heading, battery: pt.battery, charging: pt.charging, network: pt.network,
       timestamp: loc.timestamp, projectId: pt.projectId, source: 'site' as const,
     };
-    emitToCompany(tenant.companyId, 'gps:update', payload);
+    emitToCompanyBosses(tenant.companyId, 'gps:update', payload);
 
     res.json({ ok: true, id: loc._id });
   } catch { res.status(500).json({ error: 'Server xatoligi' }); }
@@ -107,7 +107,7 @@ router.post('/batch', requireFeature('gps_tracking'), async (req, res) => {
     if (!pts.length) return res.status(400).json({ error: "Nuqtalar yo'q" });
     const docs = await GpsLocation.insertMany(pts.map(pt => stamped({ userId: tenant.userId, ...pt, source: 'site' as const })));
     const last: any = docs[docs.length - 1];
-    emitToCompany(tenant.companyId, 'gps:update', {
+    emitToCompanyBosses(tenant.companyId, 'gps:update', {
       userId: tenant.userId, companyId: tenant.companyId, lat: last.lat, lng: last.lng, accuracy: last.accuracy,
       speed: last.speed, heading: last.heading, battery: last.battery, charging: last.charging, network: last.network,
       timestamp: last.timestamp, source: 'site' as const,

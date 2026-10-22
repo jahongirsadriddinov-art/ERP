@@ -10,6 +10,18 @@ router.get('/vapidPublicKey', (_, res) => {
   res.json({ key: getVapidPublicKey() });
 });
 
+// XAVFSIZLIK (audit 2026-10-22): push yuborilganda server shu endpoint'ga POST qiladi — istalgan URL
+// qabul qilinsa ichki tarmoq / bulut metadata xizmatiga so'rov yuborish (SSRF) mumkin edi. Faqat
+// ma'lum Web Push xizmatlari (Chrome/Edge/Opera/Yandex — FCM, Firefox — Mozilla, Windows — WNS, Safari — Apple).
+const PUSH_HOST_RE = /(^|\.)(fcm\.googleapis\.com|android\.googleapis\.com|push\.services\.mozilla\.com|notify\.windows\.com|push\.apple\.com)$/i;
+export function isAllowedPushEndpoint(v: unknown): boolean {
+  if (typeof v !== 'string' || v.length > 2000) return false;
+  try {
+    const u = new URL(v);
+    return u.protocol === 'https:' && (u.port === '' || u.port === '443') && PUSH_HOST_RE.test(u.hostname);
+  } catch { return false; }
+}
+
 // POST /api/push/subscribe — push subscription saqlash
 router.post('/subscribe', async (req, res) => {
   try {
@@ -18,6 +30,9 @@ router.post('/subscribe', async (req, res) => {
     const { endpoint, keys } = req.body;
     if (!endpoint || !keys?.p256dh || !keys?.auth) {
       return res.status(400).json({ error: "endpoint va keys (p256dh, auth) talab etiladi" });
+    }
+    if (!isAllowedPushEndpoint(endpoint) || typeof keys.p256dh !== 'string' || typeof keys.auth !== 'string') {
+      return res.status(400).json({ error: "Push manzili noto'g'ri" });
     }
     await PushSubscription.findOneAndUpdate(
       { endpoint },

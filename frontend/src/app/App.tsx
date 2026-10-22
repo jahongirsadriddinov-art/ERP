@@ -875,7 +875,7 @@ export function SendTransferModal({ currentUser, projects, allUsers, onClose, on
   return (
     <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
       <EscClose onClose={onClose} />
-      <div className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-sm max-h-[88vh] overflow-hidden animate-slide-up-fade flex flex-col" onClick={e => e.stopPropagation()}>
+      <div className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-sm max-h-[88vh] supports-[height:1dvh]:max-h-[88dvh] overflow-hidden animate-slide-up-fade flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-4 py-3.5 border-b border-border flex-shrink-0" style={{ background: "linear-gradient(to right, rgba(27,58,107,0.06), transparent)" }}>
           <h3 className="font-bold text-sm flex items-center gap-2"><MorphIcon icon={Send} className="w-4 h-4 text-primary" />{t('sendTransfer.title')}</h3>
           <button aria-label={t('sendTransfer.close')} onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted liquid-transition"><MorphIcon icon={X} className="w-4 h-4 text-muted-foreground" /></button>
@@ -1276,7 +1276,7 @@ export function ManagementModalShell({ icon, title, onClose, children }: { icon:
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 modal-backdrop animate-fade-in p-4" >
       <EscClose onClose={onClose} />
-      <div className="glass-modal rounded-2xl w-full max-w-lg p-5 animate-slide-up-fade max-h-[85vh] overflow-y-auto scrollbar-hide" onClick={e => e.stopPropagation()}>
+      <div className="glass-modal rounded-2xl w-full max-w-lg p-5 animate-slide-up-fade max-h-[85vh] supports-[height:1dvh]:max-h-[85dvh] overflow-y-auto scrollbar-hide" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-bold text-sm flex items-center gap-2"><MorphIcon icon={icon} className="w-4 h-4 text-primary" />{title}</h3>
           <button aria-label={i18n_common_close} onClick={onClose} className="p-1.5 hover:bg-muted rounded-full"><MorphIcon icon={X} className="w-4 h-4" /></button>
@@ -1509,7 +1509,7 @@ export function resizeImageFile(file: File, maxDim: number, quality = 0.85): Pro
 }
 
 // ─── Bottom Finance Bar ──────────────────────────────────────────────────────────────
-function BottomFinanceBar({ expenses, projects }: { expenses: Expense[]; projects: Project[] }) {
+function BottomFinanceBar({ expenses, projects, incomes = [], users = [] }: { expenses: Expense[]; projects: Project[]; incomes?: Expense[]; users?: AppUser[] }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const barRef = useRef<HTMLDivElement>(null);
@@ -1536,21 +1536,42 @@ function BottomFinanceBar({ expenses, projects }: { expenses: Expense[]; project
   const total = confirmed.reduce((a,e)=>a+e.amount,0);
   const byProj = projects.map(p=>({name:p.name,amount:confirmed.filter(e=>e.projectId===p.id).reduce((a,e)=>a+e.amount,0)})).filter(d=>d.amount>0);
   const byType = (Object.keys(EXP_LABELS) as ExpType[]).map(k=>({name:expLabel(t, k),amount:confirmed.filter(e=>e.type===k).reduce((a,e)=>a+e.amount,0)})).filter(d=>d.amount>0);
+  // Kirimlar alohida (owner 2026-10-22) — kim kiritgani bo'yicha va oxirgilari ro'yxat bo'lib
+  const incTotal = incomes.reduce((a,e)=>a+(e.amount||0),0);
+  const incByPerson = Object.values(incomes.reduce((m: Record<string,{name:string;amount:number}>, e) => {
+    const id = e.createdById || "—";
+    const name = users.find(u=>u.id===id)?.name || "—";
+    (m[id] ||= { name, amount: 0 }).amount += e.amount || 0;
+    return m;
+  }, {})).sort((a,b)=>b.amount-a.amount);
+  const incRecent = [...incomes].sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0, 5);
   return (
     <div ref={barRef} className="expense-glass flex-shrink-0 overflow-hidden text-white z-20">
       {open&&(
-        <div className="border-b border-white/10 px-4 py-3 grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="border-b border-white/10 px-4 py-3 grid grid-cols-1 sm:grid-cols-2 gap-4 max-h-[60vh] supports-[height:1dvh]:max-h-[60dvh] overflow-y-auto">
           <div><p className="text-sm md:text-xs font-semibold text-white/50 uppercase tracking-wider mb-2">{t('finance.byProject')}</p>
             {byProj.map(d=><div key={d.name} className="flex items-center justify-between py-0.5"><span className="text-sm md:text-xs text-white/80 truncate mr-4">{d.name}</span><span className="text-sm md:text-xs font-mono font-semibold text-white flex-shrink-0">{fmt(d.amount)}</span></div>)}
           </div>
           <div><p className="text-sm md:text-xs font-semibold text-white/50 uppercase tracking-wider mb-2">{t('finance.byType')}</p>
             {byType.map(d=><div key={d.name} className="flex items-center justify-between py-0.5"><span className="text-sm md:text-xs text-white/80">{d.name}</span><span className="text-sm md:text-xs font-mono font-semibold text-white">{fmt(d.amount)}</span></div>)}
           </div>
+          {incomes.length > 0 && (
+            <div className="sm:col-span-2 rounded-xl bg-black/15 p-3" data-testid="bar-incomes">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm md:text-xs font-semibold text-white/60 uppercase tracking-wider">{t('income.tab')}</p>
+                <span className="text-sm font-mono font-bold">+{fmt(incTotal)}</span>
+              </div>
+              {incByPerson.map(p=><div key={p.name} className="flex items-center justify-between py-0.5"><span className="text-sm md:text-xs text-white/80 truncate mr-4">👤 {p.name}</span><span className="text-sm md:text-xs font-mono font-semibold flex-shrink-0">+{fmt(p.amount)}</span></div>)}
+              <div className="mt-2 pt-2 border-t border-white/10 space-y-0.5">
+                {incRecent.map(e=><div key={e.id} className="flex items-center justify-between gap-3"><span className="text-xs text-white/70 truncate">{e.date} · {e.description || t('income.noNote')}</span><span className="text-xs font-mono flex-shrink-0">+{fmt(e.amount)}</span></div>)}
+              </div>
+            </div>
+          )}
         </div>
       )}
       <button onClick={()=>setOpen(!open)} className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-white/5 transition-colors">
         <div className="flex items-center gap-2"><MorphIcon icon={TrendingDown} className="w-4 h-4 text-white/90" /><span className="text-sm md:text-xs text-white/90">{t('finance.totalExpenses')}</span></div>
-        <div className="flex items-center gap-2"><span className="text-sm font-bold font-mono">{fmt(total)}</span><MorphIcon icon={open ? ChevronUp : ChevronDown} className="w-4 h-4 text-white/60" /></div>
+        <div className="flex items-center gap-2 min-w-0"><span className="text-sm font-bold font-mono truncate">{fmt(total)}</span>{incTotal > 0 && <span className="hidden min-[380px]:inline text-xs font-mono font-semibold text-white/90 bg-black/15 rounded-full px-2 py-0.5 flex-shrink-0">+{fmt(incTotal)}</span>}<MorphIcon icon={open ? ChevronUp : ChevronDown} className="w-4 h-4 text-white/60 flex-shrink-0" /></div>
       </button>
     </div>
   );
@@ -3559,7 +3580,7 @@ export default function App() {
 
       {/* Top bar — admin only (Mobile/Tablet only) */}
       <div className="block lg:hidden">
-        {admin && <BottomFinanceBar expenses={expenses} projects={projects}/>}
+        {admin && <BottomFinanceBar expenses={expenses} projects={projects} incomes={incomes} users={users}/>}
       </div>
 
       {/* Main */}
@@ -3669,7 +3690,7 @@ export default function App() {
           pastkisi oddiy hujjat oqimida suzuvchi pastki navbar orqasida
           "sizib chiqib" turardi. Endi ikkalasi ham bir xil `lg` chegarada. */}
       <div className="hidden lg:block">
-        {admin && <BottomFinanceBar expenses={expenses} projects={projects}/>}
+        {admin && <BottomFinanceBar expenses={expenses} projects={projects} incomes={incomes} users={users}/>}
       </div>
 
       {/* Global send modal for non-admin */}
@@ -3827,7 +3848,7 @@ export default function App() {
               <button onClick={()=>{setGlobalSearch(false);setSearchQuery("");setSearchResults(null);}} aria-label="Yopish" className="p-1 rounded hover:bg-muted"><MorphIcon icon={X} className="w-4 h-4 text-muted-foreground" /></button>
             </div>
             {searchQuery.length > 1 ? (
-              <div className="max-h-[60vh] overflow-y-auto scrollbar-hide p-3 space-y-3">
+              <div className="max-h-[60vh] supports-[height:1dvh]:max-h-[60dvh] overflow-y-auto scrollbar-hide p-3 space-y-3">
                 {searchResults ? (<>
                   {/* Backend results: Users */}
                   {(searchResults.users||[]).length > 0 && (

@@ -56,7 +56,7 @@ export default function MediaViewer() {
       <div className={`w-full h-full flex items-center justify-center p-3 sm:p-8 ${zoom ? "overflow-auto" : "overflow-hidden"}`}
         onClick={e => { if (e.target === e.currentTarget) setMedia(null); else e.stopPropagation(); }}>
         {media.type === "video" ? (
-          <div className="w-[94vw] max-w-5xl aspect-video max-h-[85vh]" onClick={e => e.stopPropagation()}>
+          <div className="w-[94vw] max-w-5xl aspect-video max-h-[85vh] supports-[height:1dvh]:max-h-[85dvh]" onClick={e => e.stopPropagation()}>
             <VideoPlayer src={media.url} autoPlay className="w-full h-full" />
           </div>
         ) : (

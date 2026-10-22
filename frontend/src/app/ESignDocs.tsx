@@ -178,7 +178,7 @@ function CropEditor({ src, initial, title, onDone, onCancel }: { src: string; in
       <p className="text-white text-sm font-semibold text-center">{title}</p>
       <div ref={wrap} className="relative max-w-full touch-none select-none" style={{ maxHeight: "70vh" }}
         onPointerMove={onMove} onPointerUp={() => { drag.current = null; }} onPointerCancel={() => { drag.current = null; }}>
-        <img src={src} alt="" draggable={false} className="block max-w-full max-h-[70vh] object-contain pointer-events-none" />
+        <img src={src} alt="" draggable={false} className="block max-w-full max-h-[70vh] supports-[height:1dvh]:max-h-[70dvh] object-contain pointer-events-none" />
         <div onPointerDown={start("move")} className="absolute border-2 border-sky-400 cursor-move touch-none"
           style={{ left: `${b.x * 100}%`, top: `${b.y * 100}%`, width: `${b.w * 100}%`, height: `${b.h * 100}%`, boxShadow: "0 0 0 9999px rgba(0,0,0,0.55)" }}>
           {handle("nw", { left: 0, top: 0 })}{handle("ne", { right: 0, top: 0 })}{handle("sw", { left: 0, bottom: 0 })}{handle("se", { right: 0, bottom: 0 })}

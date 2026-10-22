@@ -42,7 +42,7 @@ export function GroupSettingsModal({ group, users, currentUser, contacts, onClos
   return createPortal(
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 modal-backdrop animate-fade-in p-4" >
       <EscClose onClose={onClose} />
-      <div className="glass-modal rounded-2xl w-full max-w-sm p-5 animate-slide-up-fade max-h-[80vh] overflow-y-auto scrollbar-hide" onClick={e => e.stopPropagation()}>
+      <div className="glass-modal rounded-2xl w-full max-w-sm p-5 animate-slide-up-fade max-h-[80vh] supports-[height:1dvh]:max-h-[80dvh] overflow-y-auto scrollbar-hide" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-bold text-sm flex items-center gap-2"><MorphIcon icon={Users2} className="w-4 h-4 text-primary" />{t('groupSettings.title')}</h3>
           <button aria-label={t('groupCreate.close')} onClick={onClose} className="p-1.5 hover:bg-muted rounded-full"><MorphIcon icon={X} className="w-4 h-4" /></button>

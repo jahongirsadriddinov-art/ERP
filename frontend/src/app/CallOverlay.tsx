@@ -642,7 +642,7 @@ export default function CallOverlay({ currentUser, users, call, onClose, onSendM
         )}
         {showInvite && (
           <div className="absolute inset-0 bg-black/70 flex items-end sm:items-center justify-center p-4 z-10" onClick={() => setShowInvite(false)}>
-            <div className="bg-[#131A2C] rounded-2xl w-full max-w-sm max-h-[70vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="bg-[#131A2C] rounded-2xl w-full max-w-sm max-h-[70vh] supports-[height:1dvh]:max-h-[70dvh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
                 <p className="text-white text-sm font-bold">{t('call.inviteToVideoChat')}</p>
                 <button onClick={() => setShowInvite(false)} aria-label={t('call.close')} className="text-white/60 hover:text-white p-1"><MorphIcon icon={X} className="w-4 h-4" /></button>
@@ -763,7 +763,7 @@ export default function CallOverlay({ currentUser, users, call, onClose, onSendM
       {/* Taklif qilish — guruh a'zolaridan hali xonada yo'qlarni tanlash */}
       {showInvite && (
         <div className="absolute inset-0 bg-black/70 flex items-end sm:items-center justify-center p-4 z-10" onClick={() => setShowInvite(false)}>
-          <div className="bg-[#131A2C] rounded-2xl w-full max-w-sm max-h-[70vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+          <div className="bg-[#131A2C] rounded-2xl w-full max-w-sm max-h-[70vh] supports-[height:1dvh]:max-h-[70dvh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
               <p className="text-white text-sm font-bold">{t('call.inviteToVideoChat')}</p>
               <button onClick={() => setShowInvite(false)} aria-label={t('call.close')} className="text-white/60 hover:text-white p-1"><MorphIcon icon={X} className="w-4 h-4" /></button>

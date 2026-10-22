@@ -31,6 +31,8 @@ export function FinancePage({ currentUser, users, projects, expenses, onAddExpen
   const { t } = useTranslation();
   const [showAdd, setShowAdd] = useState(false);
   const [editExp, setEditExp] = useState<Expense|null>(null);
+  // Owner 2026-10-22: tepadagi filtrlar ochilib-yopiladi (pastdagi asosiy ro'yxat ko'rinsin)
+  const [filtersOpen, setFiltersOpen] = useState(false);
   // Owner 2026-10-22: o'zi qo'shganini — o'zi (tasdiqlanmaguncha), hammasini — direktor/o'rinbosar (backend bilan bir xil qoida)
   const isBoss = ['direktor','orinbosar'].includes(currentUser.role) || !!(currentUser as any).isOwner;
   // Kirim bo'limi — faqat direktor/o'rinbosar (owner 2026-10-22)
@@ -137,8 +139,17 @@ export function FinancePage({ currentUser, users, projects, expenses, onAddExpen
       )}
 
       {/* Filters */}
+      {/* Filtr: yig'ilgan holatda bitta qator (tanlangan obyekt/tur), bosilsa ochiladi */}
+      <button type="button" onClick={() => setFiltersOpen(v => !v)} aria-expanded={filtersOpen} data-testid="finance-filters-toggle"
+        className="surface px-4 h-11 flex items-center gap-2 flex-shrink-0 min-w-0 text-sm">
+        <span className="font-semibold flex-shrink-0">{t('finance.filter', { defaultValue: 'Filtr' })}</span>
+        <span className="text-muted-foreground truncate min-w-0">
+          {(projFilter === "all" ? t('finance.allObjects') : projects.find(p => p.id === projFilter)?.name || "—")} · {filter === "all" ? t('finance.all') : expLabel(t, filter)}
+        </span>
+        <span className={`ml-auto text-muted-foreground transition-transform flex-shrink-0 ${filtersOpen ? "rotate-180" : ""}`}>▾</span>
+      </button>
       {/* Owner 2026-10-22: telefonda tanlov ekrandan chiqib ketardi — to'liq kenglikda, matn qisqaradi; turlar gorizontal suriladi */}
-      <div className="surface px-3 py-2.5 flex flex-col gap-2 flex-shrink-0 min-w-0 overflow-hidden">
+      {filtersOpen && <div className="surface px-3 py-2.5 flex flex-col gap-2 flex-shrink-0 min-w-0 overflow-hidden animate-slide-up-fade">
         <select className="w-full min-w-0 max-w-full truncate h-10 text-sm border border-border rounded-full px-3 bg-input-background focus:outline-none" value={projFilter} onChange={e=>setProjFilter(e.target.value)}>
           <option value="all">{t('finance.allObjects')}</option>
           {projects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
@@ -147,7 +158,7 @@ export function FinancePage({ currentUser, users, projects, expenses, onAddExpen
           <button onClick={()=>setFilter("all")} className={`flex-shrink-0 h-9 text-sm px-3.5 rounded-full font-medium liquid-transition ${filter==="all"?"bg-primary text-white":"bg-muted text-muted-foreground hover:bg-secondary"}`}>{t('finance.all')}</button>
           {(Object.keys(EXP_LABELS) as ExpType[]).map(k=><button key={k} onClick={()=>setFilter(k)} className={`flex-shrink-0 h-9 text-sm px-3.5 rounded-full font-medium liquid-transition ${filter===k?"bg-primary text-white":"bg-muted text-muted-foreground hover:bg-secondary"}`}>{expLabel(t, k)}</button>)}
         </div>
-      </div>
+      </div>}
 
       {/* List */}
       <div className="flex-1 overflow-y-auto space-y-2.5 scrollbar-hide">
@@ -295,7 +306,7 @@ export function AddExpenseModal({ currentUser, projects, allUsers, onClose, onAd
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" >
       <EscClose onClose={onClose} />
-      <div className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-sm max-h-[88vh] overflow-y-auto scrollbar-hide animate-slide-up-fade" onClick={e => e.stopPropagation()}>
+      <div className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-sm max-h-[88vh] supports-[height:1dvh]:max-h-[88dvh] overflow-y-auto scrollbar-hide animate-slide-up-fade" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-4 py-3.5 border-b border-border" style={{ background: "linear-gradient(to right, rgba(217,70,15,0.06), transparent)" }}>
           <h3 className="font-bold text-sm flex items-center gap-2"><MorphIcon icon={TrendingDown} className="w-4 h-4 text-accent" />{t('addExpense.title')}</h3>
           <button aria-label={t('addExpense.close')} onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted liquid-transition"><MorphIcon icon={X} className="w-4 h-4 text-muted-foreground" /></button>

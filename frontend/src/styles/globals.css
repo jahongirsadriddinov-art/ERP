@@ -781,3 +781,12 @@ button, [role="button"], a { touch-action: manipulation; }
   }
   body.modal-open { overscroll-behavior: contain; }
 }
+
+/* Owner 2026-10-22: telefonda (ayniqsa iPhone/Telegram) sana maydonlari va tanlovlar konteyneridan chiqib ketardi —
+   har qanday maydon o'z joyiga sig'adi; iOS sana/vaqt maydonining o'z minimal kengligi o'chiriladi. */
+input, select, textarea { max-width: 100%; min-width: 0; }
+input[type="date"], input[type="time"], input[type="datetime-local"], input[type="month"] {
+  -webkit-appearance: none; appearance: none; display: block; width: 100%; min-height: 2.75rem;
+}
+input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-date-and-time-value { text-align: left; margin: 0; }
+select { text-overflow: ellipsis; }

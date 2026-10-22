@@ -292,7 +292,7 @@ export function AnnouncementPopup() {
   if (!current) return null;
   return (
     <div className="fixed inset-0 z-[120] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
-      <div className="bg-card rounded-3xl w-full max-w-md max-h-[88vh] overflow-hidden flex flex-col shadow-2xl border border-border/40 animate-slide-up-fade">
+      <div className="bg-card rounded-3xl w-full max-w-md max-h-[88vh] supports-[height:1dvh]:max-h-[88dvh] overflow-hidden flex flex-col shadow-2xl border border-border/40 animate-slide-up-fade">
         <div className="flex items-center gap-2.5 px-5 py-4 border-b border-border/40 flex-shrink-0">
           <span className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'color-mix(in srgb, var(--primary) 14%, transparent)' }}>
             <MorphIcon icon={Megaphone} className="w-[18px] h-[18px]" style={{ color: 'var(--primary)' }} />

@@ -546,6 +546,12 @@ const uz = {
     acceptBtn: "Qabul qilish",
     rejectBtn: "Rad",
   },
+  income: {
+    tab: "Kirimlar", expensesTab: "Chiqimlar", add: "Kirim", addTitle: "Yangi kirim", added: "Kirim qo'shildi",
+    totalAll: "Jami kirim (hamma)", totalMine: "Siz kiritgan kirim", everyone: "Hammasi", count: "{{count}} ta",
+    empty: "Hali kirim yo'q", noNote: "Kirim", by: "Kiritdi:", amount: "Summa (so'm)", source: "Kimdan / nima uchun",
+    sourcePh: "Masalan: Buyurtmachidan avans", deleteConfirm: "Bu kirim o'chirilsinmi?",
+  },
   finance: {
     title: "Moliya — Chiqimlar",
     totalConfirmed: "Jami tasdiqlangan:",
@@ -1692,6 +1698,12 @@ const ru: TranslationShape = {
     defectPlaceholder: "Замечание (необязательно)...",
     acceptBtn: "Принять",
     rejectBtn: "Отклонить",
+  },
+  income: {
+    tab: "Приходы", expensesTab: "Расходы", add: "Приход", addTitle: "Новый приход", added: "Приход добавлен",
+    totalAll: "Всего приходов (все)", totalMine: "Внесено вами", everyone: "Все", count: "{{count}} шт.",
+    empty: "Приходов пока нет", noNote: "Приход", by: "Внёс:", amount: "Сумма (сум)", source: "От кого / за что",
+    sourcePh: "Например: аванс от заказчика", deleteConfirm: "Удалить этот приход?",
   },
   finance: {
     title: "Финансы — Расходы",

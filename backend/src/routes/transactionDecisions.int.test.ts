@@ -136,3 +136,19 @@ describe("tahrirlash (owner 2026-10-22): o'zi qo'shganini â€” o'zi, hammasini â€
     expect((await edit('other', id, { amount: 3 })).status).toBe(404);
   });
 });
+
+describe("kirim (owner 2026-10-22): faqat direktor/o'rinbosar kiritadi; direktor hammasini, o'rinbosar o'zinikini ko'radi", () => {
+  const list = (k: string) => request(app).get('/api/transactions').set('Authorization', tok(k));
+  const add = (k: string, body: any) => request(app).post('/api/transactions').set('Authorization', tok(k)).send(body);
+  it('kiritish va ko\'rish qoidalari', async () => {
+    expect((await add('prorab', { type: 'income', amount: 5_000_000, description: 'Avans' })).status).toBe(403);
+    const r1 = await add('orin', { type: 'income', amount: 7_000_000, description: "Mijozdan to'lov" });
+    expect(r1.status).toBeLessThan(300);
+    await mkTx({ type: 'income', amount: 9_000_000, createdById: ids.owner, description: 'Direktor kirimi' });
+    const own = (await list('owner')).body.filter((t: any) => t.type === 'income').map((t: any) => t.description).sort();
+    expect(own).toEqual(['Direktor kirimi', "Mijozdan to'lov"]);
+    const orin = (await list('orin')).body.filter((t: any) => t.type === 'income').map((t: any) => t.description);
+    expect(orin).toEqual(["Mijozdan to'lov"]);
+    expect((await list('prorab')).body.some((t: any) => t.type === 'income')).toBe(false);
+  });
+});

@@ -102,3 +102,47 @@ test("Moliya (telefon): chapga surish — o'zgartirish/o'chirish tugmalari chiqa
   await expect(del).toBeVisible();
   await expect(row.getByRole('button', { name: 'Tahrirlash' })).toBeVisible();
 });
+
+test("Kirim (direktor): kim qancha kirim qilgani ko'rinadi; yangi kirim qo'shiladi", async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  const posted: any[] = [];
+  await page.route(/\/api\//, async (route) => {
+    const req = route.request();
+    const url = req.url();
+    const method = req.method();
+    if (method === 'OPTIONS') return route.fulfill({ status: 204, headers: CORS });
+    const ok = (o: any) => route.fulfill({ ...o, headers: CORS });
+    if (url.includes('/api/status')) return ok({ json: { siteEnabled: true, appEnabled: true, botEnabled: true } });
+    if (url.includes('/api/deploy/latest')) return ok({ json: { available: false } });
+    if (url.includes('/api/attendance/today')) return ok({ json: { status: 'present', checkIn: new Date().toISOString() } });
+    if (url.includes('/api/users') && method === 'GET') return ok({ json: [{ _id: 'u1', id: 'u1', firstName: 'Ali', name: 'Ali', role: 'direktor', phone: '+998900000001' }, { _id: 'u3', id: 'u3', firstName: 'Vali', name: 'Vali', role: 'orinbosar', phone: '+998900000003' }] });
+    if (url.includes('/api/transactions') && method === 'POST') {
+      const b = req.postDataJSON(); posted.push(b);
+      return ok({ json: { ...b, _id: 'n1' } });
+    }
+    if (url.includes('/api/transactions') && method === 'GET') {
+      return ok({ json: [
+        tx('i1', { type: 'income', status: 'confirmed', amount: 7_000_000, description: 'Avans', createdById: 'u3' }),
+        tx('i2', { type: 'income', status: 'confirmed', amount: 2_000_000, description: "Qoldiq to'lov", createdById: 'u1' }),
+      ] });
+    }
+    if (method === 'GET') return ok({ json: [] });
+    return ok({ json: {} });
+  });
+  await seed(page, 'direktor');
+  await page.goto('/');
+  await page.getByTestId('finance-section').getByRole('tab', { name: 'Kirimlar' }).click({ timeout: 20_000 });
+  const panel = page.getByTestId('income-panel');
+  await expect(panel).toContainText(/9[\s,.]000[\s,.]000/);
+  await expect(page.getByTestId('income-people')).toContainText(/7[\s,.]000[\s,.]000/);
+  await page.getByTestId('income-add').click();
+  const modal = page.getByTestId('income-modal');
+  await modal.locator('input').nth(0).fill('500000');
+  await modal.locator('input').nth(1).fill('Bonus');
+  await page.getByTestId('income-save').click();
+  await expect.poll(() => posted.length).toBe(1);
+  expect(posted[0]).toMatchObject({ type: 'income', amount: 500000, description: 'Bonus', status: 'confirmed' });
+  await expect(page.getByTestId('income-row').filter({ hasText: 'Bonus' })).toBeVisible();
+  expect(errors, errors.join('\n')).toEqual([]);
+});

@@ -3602,7 +3602,7 @@ export default function App() {
         )}
         {page==="finance" && (
           <Suspense fallback={<SkeletonPage variant="list" />}>
-          <FinancePage allowIncome={hasFeature('income')} currentUser={liveUser} users={users} projects={projects} expenses={expenses}
+          <FinancePage allowIncome={false} incomes={incomes} onIncomeAdded={(x)=>setIncomes(p=>[...p, x])} currentUser={liveUser} users={users} projects={projects} expenses={expenses}
             onAddExpense={handleAddExpense} onConfirm={handleConfirmExpense}
             onApprove={handleApproveExpense} onReject={handleRejectExpense}
             onUpdated={(x)=>{ if (x.type === 'income') setIncomes(p=>p.map(e=>e.id===x.id?x:e)); else setExpenses(p=>p.map(e=>e.id===x.id?x:e)); }}
@@ -3611,7 +3611,7 @@ export default function App() {
         )}
         {page==="reports" && admin && (
           <Suspense fallback={<SkeletonPage variant="dashboard" />}>
-            <ReportsPage projects={projects} expenses={expenses} incomes={hasFeature('income') ? incomes : []} showIncome={hasFeature('income')} users={users}/>
+            <ReportsPage projects={projects} expenses={expenses} incomes={incomes} showIncome={incomes.length > 0} users={users}/>
           </Suspense>
         )}
         {page==="chat" && (

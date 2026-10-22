@@ -15,6 +15,8 @@ import Edit from "@hugeicons/core-free-icons/Edit02Icon";
 import Trash from "@hugeicons/core-free-icons/Delete02Icon";
 import { MorphIcon } from "morphicons/react";
 import { SwipeRow } from "./components/SwipeRow";
+import { IncomePanel } from "./IncomePanel";
+import { usePersistentState, oneOf } from "./lib/persistentState";
 import { confirmDialog } from "./lib/confirmDialog";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
@@ -23,14 +25,17 @@ import { guessExpType } from "./lib/expense";
 import { EXP_LABELS, EscClose, LIVE_EUR_RATE, LIVE_RATE_DATE, LIVE_USD_RATE, expLabel, exportExpensesToCsv, fmt, fmtUsd, isAdmin, resizeImageFile, roleLabel, type AppUser, type ExpType, type Expense, type Project } from "./App";
 
 // ─── Finance Page ──────────────────────────────────────────────────────────────
-export function FinancePage({ currentUser, users, projects, expenses, onAddExpense, onConfirm, onApprove, onReject, allowIncome, onUpdated, onDeleted }:
+export function FinancePage({ currentUser, users, projects, expenses, onAddExpense, onConfirm, onApprove, onReject, allowIncome, onUpdated, onDeleted, incomes = [], onIncomeAdded }:
   { currentUser: AppUser; users: AppUser[]; projects: Project[]; expenses: Expense[]; onAddExpense: (e: Expense) => void; onConfirm: (id: string) => void; onApprove?: (id: string, note?: string) => void; onReject?: (id: string) => void; allowIncome?: boolean;
-    onUpdated?: (e: Expense) => void; onDeleted?: (id: string) => void }) {
+    onUpdated?: (e: Expense) => void; onDeleted?: (id: string) => void; incomes?: Expense[]; onIncomeAdded?: (e: Expense) => void }) {
   const { t } = useTranslation();
   const [showAdd, setShowAdd] = useState(false);
   const [editExp, setEditExp] = useState<Expense|null>(null);
   // Owner 2026-10-22: o'zi qo'shganini — o'zi (tasdiqlanmaguncha), hammasini — direktor/o'rinbosar (backend bilan bir xil qoida)
   const isBoss = ['direktor','orinbosar'].includes(currentUser.role) || !!(currentUser as any).isOwner;
+  // Kirim bo'limi — faqat direktor/o'rinbosar (owner 2026-10-22)
+  const [section, setSection] = usePersistentState<"exp" | "inc">("finance.section", "exp", oneOf(["exp", "inc"]));
+  const showIncome = isBoss && section === "inc";
   const canEdit = (e: Expense) => isBoss || (e.createdById === currentUser.id && e.status !== "confirmed");
   const removeExp = async (e: Expense) => {
     if (!(await confirmDialog(t('finance.deleteConfirm', { defaultValue: "Bu yozuv o'chirilsinmi?" }), { danger: true, okText: t('common.delete', { defaultValue: "O'chirish" }) }))) return;
@@ -64,8 +69,26 @@ export function FinancePage({ currentUser, users, projects, expenses, onAddExpen
     boshqa:"bg-muted text-muted-foreground"
   };
 
+  const sectionTabs = isBoss && (
+    <div className="flex p-1 rounded-full bg-muted flex-shrink-0" role="tablist" data-testid="finance-section">
+      {(["exp", "inc"] as const).map((s) => (
+        <button key={s} type="button" role="tab" aria-selected={section === s} onClick={() => setSection(s)}
+          className={`flex-1 h-10 rounded-full text-sm font-semibold liquid-transition ${section === s ? (s === "inc" ? "bg-emerald-600 text-white" : "bg-primary text-white") : "text-muted-foreground"}`}>
+          {s === "exp" ? t('income.expensesTab') : t('income.tab')}
+        </button>
+      ))}
+    </div>
+  );
+  if (showIncome) return (
+    <div className="flex flex-col h-full p-3 gap-3 overflow-hidden">
+      {sectionTabs}
+      <IncomePanel currentUser={currentUser} users={users} projects={projects} incomes={incomes}
+        onAdded={(x) => onIncomeAdded?.(x)} onUpdated={(x) => onUpdated?.(x)} onDeleted={(id) => onDeleted?.(id)} />
+    </div>
+  );
   return (
     <div className="flex flex-col h-full p-3 gap-3 overflow-hidden">
+      {sectionTabs}
       {/* Header */}
       <div className="surface px-4 py-3 flex items-center justify-between flex-shrink-0">
         <div>

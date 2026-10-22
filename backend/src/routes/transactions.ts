@@ -1,4 +1,3 @@
-import { companyHasFeature } from '../middleware/requireFeature';
 import { receiptToExpense } from '../services/botExpense';
 import { todayInTashkent } from '../utils/tz';
 import { checkRate } from '../utils/rateLimit';
@@ -48,9 +47,15 @@ router.get('/', async (req, res) => {
   try {
     const tenant = getTenant();
     const isFinanceAdmin = tenant?.isDeveloper || tenant?.role === 'direktor' || tenant?.role === 'orinbosar';
+    // Kirim (owner 2026-10-22): direktor (va firma egasi) — hammaning kirimini; o'rinbosar — faqat o'zi kiritganini;
+    // boshqa rollar kirimni ko'rmaydi
+    const isDirector = !!tenant?.isDeveloper || tenant?.role === 'direktor' || !!tenant?.isOwner;
+    const incomeRule: Record<string, unknown> = isDirector ? {} : tenant?.role === 'orinbosar' && tenant?.userId
+      ? { $or: [{ type: { $ne: 'income' } }, { createdById: tenant.userId }] }
+      : { type: { $ne: 'income' } };
     const filter = isFinanceAdmin || !tenant?.userId
-      ? scoped()
-      : scoped({ $or: [{ createdById: tenant.userId }, { toUserId: tenant.userId }, { fromUserId: tenant.userId }] });
+      ? scoped(incomeRule)
+      : scoped({ $and: [incomeRule, { $or: [{ createdById: tenant.userId }, { toUserId: tenant.userId }, { fromUserId: tenant.userId }] }] });
     const transactions = await Transaction.find(filter).sort({ createdAt: -1 });
     res.json(transactions.map(t => ({ ...t.toObject(), id: t._id })));
   } catch (err) {
@@ -66,8 +71,12 @@ router.post('/', async (req, res) => {
 
     // Validate required fields
     const VALID_TYPES = ['transfer', 'expense', 'income', 'oylik', 'material', 'jihozlar', 'transport', 'boshqa'];
-    if (req.body?.type === 'income' && !(await companyHasFeature('income'))) {
-      return res.status(403).json({ error: "Kirimlar hisobi sizning tarifingizga kirmaydi", featureRequired: 'income' });
+    // Kirimni faqat direktor va o'rinbosar kiritadi (owner 2026-10-22); tarifga bog'liq emas
+    if (req.body?.type === 'income') {
+      const tn = getTenant();
+      const me = tn?.userId ? await User.findById(tn.userId).select('role isOwner').lean().catch(() => null) as any : null;
+      const boss = !!tn?.isDeveloper || (me && (['direktor', 'orinbosar'].includes(me.role) || me.isOwner));
+      if (!boss) return res.status(403).json({ error: "Kirimni faqat direktor yoki o'rinbosar kirita oladi" });
     }
     if (!data.type) {
       return res.status(400).json({ success: false, errors: [{ field: 'type', message: 'Tur kiritilishi shart' }] });

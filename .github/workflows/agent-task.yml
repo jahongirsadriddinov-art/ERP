@@ -1,0 +1,119 @@
+# AI ofis — code agentlari (owner 2026-10-22). Backend (Dasturchi paneli → AI → AI ofis) repository_dispatch
+# yuboradi: event_type "agent-task", client_payload {taskId, agentKey, agentName, rolePrompt, text, callbackUrl}.
+# Claude Code (anthropics/claude-code-action) agent roli + vazifa bilan ishlaydi, o'zgarishlar alohida
+# agent/<taskId> branch'iga commit qilinadi va PR ochiladi — main'ga HECH QACHON push qilinmaydi.
+# Holat backend'ga qaytariladi: POST callbackUrl, sarlavha X-Agent-Secret (AGENT_CALLBACK_SECRET).
+#
+# Kerakli repository secrets (Settings → Secrets and variables → Actions):
+#   ANTHROPIC_API_KEY      — Claude API kaliti
+#   AGENT_CALLBACK_SECRET  — backend'dagi AGENT_CALLBACK_SECRET bilan bir xil qiymat
+# XAVFSIZLIK: payload matnlari hech qachon `run:` ichiga ${{ }} bilan qo'yilmaydi — faqat env orqali (injection yo'q).
+name: AI agent task
+
+on:
+  repository_dispatch:
+    types: [agent-task]
+
+permissions:
+  contents: write
+  pull-requests: write
+  id-token: write
+
+concurrency:
+  group: agent-task-${{ github.event.client_payload.taskId }}
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      TASK_ID: ${{ github.event.client_payload.taskId }}
+      AGENT_KEY: ${{ github.event.client_payload.agentKey }}
+      AGENT_NAME: ${{ github.event.client_payload.agentName }}
+      ROLE_PROMPT: ${{ github.event.client_payload.rolePrompt }}
+      TASK_TEXT: ${{ github.event.client_payload.text }}
+      CALLBACK_URL: ${{ github.event.client_payload.callbackUrl }}
+      CALLBACK_SECRET: ${{ secrets.AGENT_CALLBACK_SECRET }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - name: Validate payload
+        run: |
+          [[ "$TASK_ID" =~ ^[0-9a-f]{24}$ ]] || { echo "bad taskId"; exit 1; }
+          [[ "$AGENT_KEY" =~ ^[a-z0-9-]{1,40}$ ]] || { echo "bad agentKey"; exit 1; }
+          [[ "$CALLBACK_URL" =~ ^https?:// ]] || { echo "bad callbackUrl"; exit 1; }
+
+      - name: Report running
+        run: |
+          jq -n --arg id "$TASK_ID" --arg run "$RUN_URL" '{taskId:$id,status:"running",runUrl:$run,log:"GitHub Actions ishga tushdi"}' \
+            | curl -fsS -m 20 -X POST "$CALLBACK_URL" -H 'Content-Type: application/json' -H "X-Agent-Secret: $CALLBACK_SECRET" --data @- || true
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Build prompt
+        id: prompt
+        run: |
+          DELIM="EOF_$(openssl rand -hex 8)"
+          {
+            echo "text<<$DELIM"
+            printf '%s\n\n' "$ROLE_PROMPT"
+            printf 'Vazifa (dasturchidan, %s agentiga):\n%s\n\n' "$AGENT_NAME" "$TASK_TEXT"
+            printf '%s\n' "Ishni shu repozitoriyada bajar. git commit/push QILMA — o'zgarishlarni ishchi papkada qoldir (workflow o'zi PR ochadi)."
+            printf '%s\n' "Oxirida ishchi papka ildizida AGENT_SUMMARY.md faylini yoz: 3-8 qator oddiy o'zbek tilida — nima qilindi, qanday tekshirildi, egasi nimaga e'tibor berishi kerak."
+            echo "$DELIM"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Run Claude Code
+        id: claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          prompt: ${{ steps.prompt.outputs.text }}
+          claude_args: >-
+            --max-turns 80
+            --allowedTools "Read,Edit,Write,Glob,Grep,Bash(npm ci:*),Bash(npm install:*),Bash(npm run:*),Bash(npx:*),Bash(node:*),Bash(git status:*),Bash(git diff:*),Bash(ls:*),Bash(cat:*),Bash(python:*),Bash(pytest:*)"
+
+      - name: Open pull request
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "qurilish-ai-agent"
+          git config user.email "agent@users.noreply.github.com"
+          SUMMARY=""
+          if [ -f AGENT_SUMMARY.md ]; then SUMMARY="$(head -c 3500 AGENT_SUMMARY.md)"; rm -f AGENT_SUMMARY.md; fi
+          BRANCH="agent/${AGENT_KEY}-${TASK_ID}"
+          git checkout -B "$BRANCH"
+          git add -A
+          git reset -q -- .env '**/.env' 2>/dev/null || true
+          if git diff --cached --quiet && [ "$(git rev-list --count origin/${{ github.event.repository.default_branch }}..HEAD)" = "0" ]; then
+            echo "Hech qanday o'zgarish yo'q"
+            [ -n "$SUMMARY" ] || SUMMARY="O'zgarish kerak bo'lmadi"
+            printf 'summary<<SUMEOF\n%s\nSUMEOF\n' "$SUMMARY" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff --cached --quiet || git commit -q -m "agent(${AGENT_KEY}): ${TASK_TEXT:0:60}" -m "AI ofis vazifasi ${TASK_ID}"
+          # Faqat agent/* branch'iga push — main'ga hech qachon
+          git push -f origin "HEAD:refs/heads/$BRANCH"
+          BODY="$(printf '**Agent:** %s\n\n**Vazifa:**\n%s\n\n**Xulosa:**\n%s\n\n[Actions run](%s)' "$AGENT_NAME" "$TASK_TEXT" "$SUMMARY" "$RUN_URL")"
+          URL="$(gh pr list --head "$BRANCH" --json url -q '.[0].url')"
+          if [ -z "$URL" ]; then
+            URL="$(gh pr create --base "${{ github.event.repository.default_branch }}" --head "$BRANCH" --title "[AI ${AGENT_NAME}] ${TASK_TEXT:0:70}" --body "$BODY")"
+          fi
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          printf 'summary<<SUMEOF\n%s\nSUMEOF\n' "$SUMMARY" >> "$GITHUB_OUTPUT"
+
+      - name: Report result
+        if: always()
+        env:
+          PR_URL: ${{ steps.pr.outputs.url }}
+          SUMMARY: ${{ steps.pr.outputs.summary }}
+          JOB_OK: ${{ job.status == 'success' }}
+        run: |
+          STATUS=done; [ "$JOB_OK" = "true" ] || STATUS=failed
+          jq -n --arg id "$TASK_ID" --arg st "$STATUS" --arg pr "$PR_URL" --arg run "$RUN_URL" --arg sum "$SUMMARY" \
+            '{taskId:$id,status:$st,runUrl:$run} + (if $pr != "" then {prUrl:$pr} else {} end) + (if $sum != "" then {summary:$sum} else {} end)' \
+            | curl -fsS -m 20 -X POST "$CALLBACK_URL" -H 'Content-Type: application/json' -H "X-Agent-Secret: $CALLBACK_SECRET" --data @-

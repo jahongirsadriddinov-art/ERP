@@ -11,6 +11,7 @@ import { logAudit } from '../../services/audit';
 import { placeGuestCall, telegramCallChannel } from '../channels/telegramCallChannel';
 import { aiConfig } from '../config';
 import { companyConsentMap, evaluateCallConsent, getCallConsent } from '../consent';
+import { officeSnapshot } from '../office';
 import { isAiActive } from '../settings';
 import { botLinkedTgId } from '../telegram/tgLink';
 import { isObjectIdString, newCorrelationId } from '../lib/ids';
@@ -706,6 +707,11 @@ router.delete('/tg-accounts/:accountId', wrap(async (req, res) => {
   if (!r.ok) return res.status(r.error === 'busy' ? 409 : r.error === 'worker_offline' ? 503 : 502).json({ error: r.error });
   audit(req, dev, 'delete', "AI Telegram: akkaunt o'chirildi", { entityId: String(acc._id) });
   res.json({ ok: true, accounts: await listPoolAccounts() });
+}));
+
+// AI ofis (owner 2026-10-22): agentlar holati 3D ofis uchun — arzon, 5 s kesh (office.ts)
+router.get('/office', wrap(async (_req, res) => {
+  res.json(await officeSnapshot());
 }));
 
 export default router;

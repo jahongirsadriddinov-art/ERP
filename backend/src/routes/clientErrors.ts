@@ -1,9 +1,11 @@
 import { Router } from 'express';
 import fs from 'fs';
 import path from 'path';
-import crypto from 'crypto';
+import mongoose from 'mongoose';
 import { requireDeveloper } from '../middleware/auth';
 import { checkRate } from '../utils/rateLimit';
+import { captureError, normalizePath, redact } from '../services/errorTracker';
+import ErrorEvent from '../models/ErrorEvent';
 
 const router = Router();
 
@@ -14,45 +16,52 @@ function ensureLogDir() {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }
 
-// Monitoring: YANGI turdagi frontend xatosi (oxirgi 6 soatda ko'rilmagan) — dasturchiga botda
-// darhol xabar. Raqamlar/ID'lar olib tashlangan "imzo" bo'yicha guruhlanadi; soatiga ≤15 ta xabar.
-const seenErrors = new Map<string, { at: number; count: number }>();
-async function alertIfNew(message: string, platform: string, version: string, url: string, userId: string, kind: string) {
-  const sig = crypto.createHash('sha1').update(message.replace(/\d+/g, '#').replace(/[0-9a-f]{24}/gi, 'ID').slice(0, 300)).digest('hex');
-  const prev = seenErrors.get(sig);
-  const now = Date.now();
-  if (prev && now - prev.at < 6 * 60 * 60 * 1000) { prev.count++; return; }
-  seenErrors.set(sig, { at: now, count: 1 });
-  if (seenErrors.size > 500) seenErrors.delete(seenErrors.keys().next().value as string);
-  if (!checkRate('clienterr-alert', 15, 60 * 60 * 1000).allowed) return;
-  const { notifyDeveloper } = await import('../services/bot');
-  const path = (() => { try { return new URL(url).pathname; } catch { return ''; } })();
-  // XAVFSIZLIK (audit 2026-10-19): autentifikatsiyasiz kelgan matn — oddiy matn (Markdown/havola emas)
-  const clean = (v: string) => String(v || '').replace(/https?:\/\/\S+/gi, '[url]').replace(/@\w+/g, '[@]');
-  await notifyDeveloper(`🐞 Yangi frontend xatosi (${clean(platform)}${version ? ' ' + clean(version) : ''}${kind ? ', ' + clean(kind) : ''})\n${clean(message).slice(0, 300)}\n📄 ${path || '—'}${userId ? `\n👤 ${clean(userId)}` : ''}`, { plain: true });
-}
-
 // POST /api/errors/log — receives frontend error reports
 router.post('/log', (req, res) => {
   try {
-    const { message, stack, url, userAgent, timestamp, appVersion, platform, userId, kind } = req.body || {};
+    const b = req.body || {};
+    const { message, stack, url, userAgent, timestamp, appVersion, platform } = b;
     if (!message) return res.status(400).json({ error: 'message required' });
     const rl = checkRate(`clienterr:${req.ip}`, 30, 10 * 60 * 1000);
     if (!rl.allowed) return res.status(429).json({ error: 'too many' });
+    // Kim — token'dan (ishonchli); tokensiz (login ekranidan oldin) bo'lsa body'dagi userId faqat ma'lumot uchun
+    const u = req.user;
+    const userId = u?.userId || (b.userId ? String(b.userId).slice(0, 40) : undefined);
 
     const entry = JSON.stringify({
       timestamp: timestamp || new Date().toISOString(),
-      message: String(message).slice(0, 2000),
-      stack: stack ? String(stack).slice(0, 5000) : undefined,
-      url: url ? String(url).slice(0, 500) : undefined,
+      message: redact(message, 2000),
+      stack: stack ? redact(stack, 5000) : undefined,
+      url: url ? redact(url, 500) : undefined,
       userAgent: userAgent ? String(userAgent).slice(0, 300) : undefined,
       appVersion: appVersion ? String(appVersion).slice(0, 40) : undefined,
       platform: platform ? String(platform).slice(0, 20) : undefined,
-      userId: userId ? String(userId).slice(0, 40) : undefined,
+      userId,
     });
 
+    const kind = b.kind ? String(b.kind).slice(0, 40) : 'js';
+    const api = b.api && typeof b.api === 'object' ? b.api : null;
+    const page = [b.screen ? String(b.screen).slice(0, 60) : '', url ? normalizePath(String(url)) : ''].filter(Boolean).join(' · ');
+    void (async () => {
+      // Mijoz xabar bergan 5xx: server o'zi ham shu marshrutni yozib, dasturchiga xabar bergan bo'ladi — takror xabar shart emas
+      let silent = false;
+      if (kind === 'api' && api && Number(api.status) >= 500 && mongoose.connection.readyState === 1) {
+        silent = !!(await ErrorEvent.exists({ source: 'server', method: String(api.method || '').toUpperCase(), route: normalizePath(api.path), lastSeen: { $gte: new Date(Date.now() - 5 * 60 * 1000) } }).catch(() => null));
+      }
+      await captureError({
+        source: 'client', kind, message: String(message), stack: stack ? String(stack) : undefined,
+        componentStack: b.componentStack ? String(b.componentStack) : undefined,
+        route: api ? String(api.path || '') : undefined, method: api ? String(api.method || '') : undefined,
+        status: api && Number.isFinite(Number(api.status)) ? Number(api.status) : undefined,
+        page, action: b.action ? String(b.action) : undefined,
+        breadcrumbs: Array.isArray(b.breadcrumbs) ? b.breadcrumbs.slice(-5).map((x: unknown) => String(x).slice(0, 150)) : undefined,
+        userId, companyId: u?.companyId, role: u?.role,
+        appVersion: appVersion ? String(appVersion) : undefined, platform: platform ? String(platform) : 'web',
+        userAgent: userAgent ? String(userAgent) : undefined, silent,
+      });
+    })().catch(() => {});
+
     console.error('[ClientError]', entry);
-    alertIfNew(String(message), String(platform || 'web'), String(appVersion || ''), String(url || ''), userId ? String(userId) : '', String(kind || '')).catch(() => {});
 
     try {
       ensureLogDir();
@@ -89,6 +98,66 @@ router.get('/log', requireDeveloper, (req, res) => {
     res.json({ lines: lines.reverse() });
   } catch {
     res.json({ lines: [] });
+  }
+});
+
+// ─── Dasturchi paneli → "Xatolar" (faqat dasturchi) ─────────────────────────
+const isId = (v: unknown) => typeof v === 'string' && /^[0-9a-f]{24}$/i.test(v);
+const LIST_FIELDS = 'fingerprint source kind message where topFrame route method status page count userIds firstSeen lastSeen resolved resolvedAt reopenedCount platform appVersion';
+
+// GET /api/errors/events?source=client&status=open|resolved|all&q=...&limit=50&skip=0
+router.get('/events', requireDeveloper, async (req, res) => {
+  try {
+    const filter: Record<string, unknown> = {};
+    const source = String(req.query.source || '');
+    if (['server', 'client', 'bot', 'worker'].includes(source)) filter.source = source;
+    const status = String(req.query.status || 'open');
+    if (status === 'open') filter.resolved = false;
+    else if (status === 'resolved') filter.resolved = true;
+    const q = String(req.query.q || '').trim().slice(0, 100);
+    if (q) {
+      const re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      filter.$or = [{ message: re }, { where: re }, { topFrame: re }, { page: re }];
+    }
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 50));
+    const skip = Math.max(0, Number(req.query.skip) || 0);
+    const [rows, total, open] = await Promise.all([
+      ErrorEvent.find(filter).sort({ lastSeen: -1 }).skip(skip).limit(limit).select(LIST_FIELDS).lean(),
+      ErrorEvent.countDocuments(filter),
+      ErrorEvent.countDocuments({ resolved: false }),
+    ]);
+    const items = rows.map(({ userIds, ...r }: any) => ({ ...r, id: String(r._id), _id: undefined, users: userIds?.length || 0 }));
+    res.json({ items, total, open });
+  } catch {
+    res.status(500).json({ error: 'Server xatoligi' });
+  }
+});
+
+// GET /api/errors/events/:id — to'liq ma'lumot (stack, kontekst, oxirgi holatlar)
+router.get('/events/:id', requireDeveloper, async (req, res) => {
+  if (!isId(req.params.id)) return res.status(400).json({ error: "Noto'g'ri ID" });
+  try {
+    const ev: any = await ErrorEvent.findById(req.params.id).lean();
+    if (!ev) return res.status(404).json({ error: 'Topilmadi' });
+    const { userIds, companyIds, _id, __v, ...rest } = ev;
+    res.json({ ...rest, id: String(_id), users: userIds?.length || 0, companies: companyIds?.length || 0, occurrences: (ev.occurrences || []).slice().reverse() });
+  } catch {
+    res.status(500).json({ error: 'Server xatoligi' });
+  }
+});
+
+// PATCH /api/errors/events/:id { resolved: boolean } — "Hal qilindi" (qayta chiqsa dasturchiga yana xabar boradi)
+router.patch('/events/:id', requireDeveloper, async (req, res) => {
+  if (!isId(req.params.id)) return res.status(400).json({ error: "Noto'g'ri ID" });
+  const resolved = req.body?.resolved !== false;
+  try {
+    const ev = await ErrorEvent.findByIdAndUpdate(req.params.id,
+      { $set: { resolved, resolvedAt: resolved ? new Date() : null, resolvedBy: resolved ? (req.user?.userId || null) : null } },
+      { returnDocument: 'after' }).select('resolved resolvedAt').lean();
+    if (!ev) return res.status(404).json({ error: 'Topilmadi' });
+    res.json({ ok: true, resolved: ev.resolved, resolvedAt: ev.resolvedAt });
+  } catch {
+    res.status(500).json({ error: 'Server xatoligi' });
   }
 });
 

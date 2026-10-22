@@ -34,6 +34,7 @@ import {
   WORKER_OFFSHIFT_CALLBACK_RE, AI_BOT_COMMANDS, aiBotButtonText,
 } from '../aiVoice/bot/botHooks';
 import { aiConfig } from '../aiVoice/config';
+import { captureError } from './errorTracker';
 import { onBotLinked as onAiBotLinked } from '../aiVoice/telegram/tgLink';
 
 dotenv.config();
@@ -100,6 +101,7 @@ bot.on('polling_error', (err: any) => {
     console.warn('⚠️ Telegram polling to\'xtatildi (EFATAL):', err?.message);
   } else {
     console.error('Telegram polling xatosi:', err?.message || err);
+    void captureError({ source: 'bot', kind: 'polling', message: String(err?.message || err), stack: err?.stack });
   }
 });
 

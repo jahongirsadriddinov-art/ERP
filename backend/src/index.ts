@@ -58,10 +58,10 @@ import { initSocket } from './services/socket';
 import { optionalAuth, requireAuth, blockDeveloper, requireDeveloper, requireOwnerOrAdmin } from './middleware/auth';
 import { idempotency } from './middleware/idempotency';
 // Import bot to start it + get bot instance for webhook route
-import { bot, notifyDeveloper, webhookSecret } from './services/bot';
+import { bot, webhookSecret } from './services/bot';
 import { createBotWebhookHandler, BOT_WEBHOOK_PATH } from './services/botSecurity';
 import { createApiRateLimiter } from './middleware/apiRateLimit';
-import { checkRate } from './utils/rateLimit';
+import { hookConsoleError, errorCaptureMiddleware, markRequestError, captureProcessError } from './services/errorTracker';
 import { serveDurableUpload } from './services/durableFiles';
 import { cloudinaryEnabled } from './config/cloudinary';
 import pinRoutes from './routes/pin';
@@ -71,24 +71,16 @@ import { startAiVoice, mountAiVoiceRoutes } from './aiVoice/bootstrap';
 
 dotenv.config();
 
-// KUZATUV — avval xato/ishdan chiqish haqida FAQAT Render loglarini qo'lda
-// tekshirsangiz yoki foydalanuvchi shikoyat qilsa bilib olardingiz (proaktiv
-// ogohlantirish yo'q edi). Endi har ikkala holatda ham dasturchiga (Telegram
-// bot orqali, allaqachon ulangan) DARHOL xabar boradi. `checkRate` bilan
-// soatiga max 10 ta xabarga cheklanadi — bitta xato "storm" (masalan bir
-// zaiflik tez-tez qaytarilsa) Telegramni to'ldirib tashlamasin.
-function alertDeveloperOnce(kind: string, detail: string) {
-  const rl = checkRate('crash-alert', 10, 60 * 60 * 1000);
-  if (!rl.allowed) return;
-  notifyDeveloper(`🚨 *Server xatosi* (${kind})\n\n\`${detail.slice(0, 500)}\``).catch(() => {});
-}
+// KUZATUV — process darajasidagi xatolar ham markaziy xato jurnaliga (services/errorTracker.ts → ErrorEvent)
+// yoziladi; YANGI turdagi xato bo'lsa dasturchiga Telegram botda qisqa xabar boradi (soatiga ≤20 ta).
+hookConsoleError();
 
 // Himoya to'ri: catch qilinmagan Promise xatolari (masalan Telegram API 400/bloklangan
 // foydalanuvchi) SERVERNI O'LDIRMASIN — faqat log qilamiz.
 process.on('unhandledRejection', (reason: any) => {
   const detail = reason?.stack || reason?.message || String(reason);
   console.error('⚠️ Unhandled Rejection (server tirik qoldi):', detail);
-  alertDeveloperOnce('unhandledRejection', detail);
+  void captureProcessError('unhandledRejection', reason);
 });
 // AVVAL BU HECH QAYERDA TUTILMAGAN edi — uncaughtException Node'ning standart
 // xatti-harakati bo'yicha butun processni DARHOL to'xtatadi. Buni tutish
@@ -98,7 +90,7 @@ process.on('unhandledRejection', (reason: any) => {
 process.on('uncaughtException', (err: any) => {
   const detail = err?.stack || err?.message || String(err);
   console.error('🚨 Uncaught Exception (server qayta ishga tushmoqda):', detail);
-  alertDeveloperOnce('uncaughtException', detail);
+  void captureProcessError('uncaughtException', err);
   // Node'ning rasmiy tavsiyasi: uncaughtException'dan keyin davom ETTIRMASLIK
   // kerak (holat noaniq bo'lishi mumkin) — Telegram xabari yuborilishi uchun
   // qisqa kechikish bilan chiqamiz, Render/PM2 avtomatik qayta ishga tushiradi.
@@ -122,6 +114,9 @@ const app = express();
 // qaytaradi — mijoz zanjirning old qismiga nima qo'shsa ham e'tiborga
 // olinmaydi.
 app.set('trust proxy', 1);
+
+// Har so'rov konteksti + javob 5xx bo'lsa xato jurnaliga yozish (qayerda/nima/kim) — services/errorTracker.ts
+app.use(errorCaptureMiddleware());
 
 app.use(helmet({
   crossOriginEmbedderPolicy: false,  // WebRTC + socket.io uchun kerak
@@ -348,6 +343,7 @@ app.use((_req, res) => {
 app.use((err: any, _req: any, res: any, _next: any) => {
   console.error('[Global Error]', err?.message || err);
   const status = err?.status || err?.statusCode || 500;
+  if (status >= 500) markRequestError(res, err);
   res.status(status).json({
     success: false,
     error: status === 500 ? 'Server xatoligi' : (err?.message || 'Xatolik yuz berdi'),

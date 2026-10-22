@@ -230,6 +230,9 @@ export function AddExpenseModal({ currentUser, projects, allUsers, onClose, onAd
   const [form, setForm] = useState({ type: "oylik" as ExpType, amount: "", projectId: projects[0]?.id || "", description: "", toUserId: "", approverId: "", date: new Date().toISOString().split("T")[0] });
   const [err, setErr] = useState("");
   const [boshqaRows, setBoshqaRows] = useState<{ name: string; price: string }[]>([{ name: "", price: "" }]);
+  // "Boshqa" — nima ekanini qo'lda yozish yoki avval yozilganlardan tanlash (owner 2026-10-22); bo'sh — "Boshqa"
+  const [otherLabel, setOtherLabel] = useState("");
+  const savedLabels: string[] = (() => { try { return JSON.parse(localStorage.getItem("erp_otherLabels") || "[]"); } catch { return []; } })();
   // Chek/nakladnoy suratidan to'ldirish — AI summa, sana, tavsif va turni o'qiydi; foydalanuvchi tekshirib yuboradi
   const receiptRef = useRef<HTMLInputElement>(null);
   const [scanning, setScanning] = useState(false);
@@ -272,11 +275,14 @@ export function AddExpenseModal({ currentUser, projects, allUsers, onClose, onAd
         toUserId: form.toUserId || undefined,
         approverId: needsApprover ? form.approverId : undefined,
         projectId: form.projectId,
-        description: valid.map(r => `${r.name}: ${Number(r.price).toLocaleString()} so'm`).join("; "),
+        description: (otherLabel.trim() ? `${otherLabel.trim()} — ` : "") + valid.map(r => `${r.name}: ${Number(r.price).toLocaleString()} so'm`).join("; "),
         date: form.date,
         status: form.toUserId ? "pending" : "confirmed",
         createdById: currentUser.id
       });
+      if (otherLabel.trim()) {
+        try { localStorage.setItem("erp_otherLabels", JSON.stringify([otherLabel.trim(), ...savedLabels.filter(l => l !== otherLabel.trim())].slice(0, 15))); } catch { /* */ }
+      }
       onClose();
       return;
     }
@@ -343,15 +349,20 @@ export function AddExpenseModal({ currentUser, projects, allUsers, onClose, onAd
           {/* Boshqa: dynamic material rows — replaces amount + description fields */}
           {form.type === "boshqa" ? (
             <div>
+              <label className="text-[10px] font-bold block mb-1.5 text-muted-foreground uppercase tracking-wider">{t('addExpense.otherKind', "Bu nima? (ixtiyoriy)")}</label>
+              <input list="erp-other-labels" value={otherLabel} onChange={e => setOtherLabel(e.target.value)} maxLength={60}
+                placeholder={t('addExpense.otherKindPh', "Masalan: Ovqat, Ijara, Kommunal — bo'sh bo'lsa \"Boshqa\"")}
+                className="w-full min-w-0 h-11 text-base sm:text-sm border border-border rounded-xl px-3 bg-input-background focus:outline-none mb-3" data-testid="other-label" />
+              <datalist id="erp-other-labels">{savedLabels.map(l => <option key={l} value={l} />)}</datalist>
               <label className="text-[10px] font-bold block mb-2 text-muted-foreground uppercase tracking-wider">{t('addExpense.materialsLabel')}</label>
               <div className="space-y-2">
                 {boshqaRows.map((row, i) => (
                   <div key={i} className="flex gap-1.5 items-center">
                     <input placeholder={t('addExpense.materialPlaceholder', { n: i + 1 })}
-                      className="flex-1 text-sm border border-border rounded-lg px-2.5 py-2 bg-input-background focus:outline-none"
+                      className="flex-1 min-w-0 text-base sm:text-sm border border-border rounded-lg px-2.5 h-11 bg-input-background focus:outline-none"
                       value={row.name} onChange={e => { const r = [...boshqaRows]; r[i] = {...r[i], name: e.target.value}; setBoshqaRows(r); }}/>
                     <input type="number" min="0" placeholder={t('addExpense.pricePlaceholder')}
-                      className="w-28 text-sm border border-border rounded-lg px-2.5 py-2 bg-input-background focus:outline-none"
+                      className="w-24 flex-shrink-0 text-base sm:text-sm border border-border rounded-lg px-2.5 h-11 bg-input-background focus:outline-none"
                       value={row.price} onChange={e => { const r = [...boshqaRows]; r[i] = {...r[i], price: e.target.value}; setBoshqaRows(r); }}/>
                     {boshqaRows.length > 1 && (
                       <button type="button" onClick={() => setBoshqaRows(rows => rows.filter((_, j) => j !== i))}

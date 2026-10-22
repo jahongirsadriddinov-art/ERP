@@ -710,7 +710,7 @@ export function ProjectEditModal({ project, users, onClose, onSave }:
   const [budget, setBudget] = useState(project.budget ? String(project.budget) : "");
   const [location, setLocation] = useState(project.location || "");
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
-  const [radius, setRadius] = useState(String((project as any).geofenceRadius || 300));
+  const [radius, setRadius] = useState((project as any).geofenceRadius ? String((project as any).geofenceRadius) : "");
   const [foremanId, setForemanId] = useState(project.foremanId || "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -722,18 +722,18 @@ export function ProjectEditModal({ project, users, onClose, onSave }:
     try {
       const res = await fetch(`${API_BASE}/api/objects/${project.id}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim(), budget: budget ? Number(budget) : null, location: location.trim(), foremanId: foremanId || null, ...(coords ? { lat: coords.lat, lng: coords.lng } : {}), geofenceRadius: Number(radius) || 300 }),
+        body: JSON.stringify({ name: name.trim(), budget: budget ? Number(budget) : null, location: location.trim(), foremanId: foremanId || null, ...(coords ? { lat: coords.lat, lng: coords.lng } : {}), geofenceRadius: radius.trim() ? Number(radius) : null }),
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error || t('common.error')); return; }
-      onSave({ name: name.trim(), budget: budget ? Number(budget) : 0, location: location.trim(), foremanId: foremanId || undefined });
+      onSave({ name: name.trim(), budget: budget ? Number(budget) : 0, location: location.trim(), foremanId: foremanId || undefined, geofenceRadius: data.geofenceRadius ?? 0, ...(data.lat != null ? { lat: data.lat, lng: data.lng } : {}) } as any);
     } catch { setError(t('common.error')); } finally { setSaving(false); }
   };
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 modal-backdrop animate-fade-in p-4" >
       <EscClose onClose={onClose} />
-      <div className="glass-modal rounded-2xl w-full max-w-sm p-5 animate-slide-up-fade" onClick={e => e.stopPropagation()}>
+      <div className="glass-modal rounded-2xl w-full max-w-sm p-5 animate-slide-up-fade max-h-[90vh] supports-[height:1dvh]:max-h-[90dvh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-bold text-sm flex items-center gap-2"><MorphIcon icon={Edit} className="w-4 h-4 text-primary" />{t('objectDetail.editProject')}</h3>
           <button aria-label={t('groupCreate.close')} onClick={onClose} className="p-1.5 hover:bg-muted rounded-full"><MorphIcon icon={X} className="w-4 h-4" /></button>
@@ -754,8 +754,9 @@ export function ProjectEditModal({ project, users, onClose, onSave }:
             <label className="text-xs text-muted-foreground block mb-1">{t('objectDetail.editLocationLabel')}</label>
             <LocationInput value={location} onChange={setLocation} onCoords={setCoords} />
             <label className="text-xs text-muted-foreground block mt-2">{t('addObject.geofence', "\"Ishga keldim\" radiusi (metr)")}</label>
-            <input type="number" min={50} max={5000} step={50} value={radius} onChange={e => setRadius(e.target.value)}
+            <input type="number" inputMode="numeric" min={50} max={100000} step={50} placeholder={t('addObject.geofenceOff', "Bo'sh — tekshirilmaydi")} value={radius} onChange={e => setRadius(e.target.value)}
               className="w-full text-sm border border-border rounded-xl px-3 py-2 bg-input-background focus:outline-none focus:ring-2 focus:ring-primary/40 mt-1" />
+            <p className="text-[11px] text-muted-foreground mt-1">{t('addObject.geofenceOffHint', "Bo'sh qoldirsangiz — \"Ishga keldim\" joyi tekshirilmaydi. Prorablarga tekshiruv qo'llanmaydi.")}</p>
           </div>
           <div>
             <label className="text-xs text-muted-foreground block mb-1">{t('objectDetail.editForemanLabel')}</label>

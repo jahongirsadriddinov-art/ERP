@@ -713,7 +713,7 @@ export function AddObjectModal({ users, onClose, onAdd }:
   const { t } = useTranslation();
   const [form, setForm] = useState({ name: "", budget: "", location: "", foremanId: "" });
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
-  const [radius, setRadius] = useState("300");
+  const [radius, setRadius] = useState("");
   const [smeta, setSmeta] = useState<File|null>(null);
   const [loading, setLoading] = useState(false);
   const [smetaMsg, setSmetaMsg] = useState("");
@@ -725,7 +725,7 @@ export function AddObjectModal({ users, onClose, onAdd }:
     try {
       const res = await fetch(API_BASE + '/api/objects', {
         method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({name: form.name, budget: form.budget ? Number(form.budget) : undefined, location: form.location || undefined, foremanId: form.foremanId || undefined, ...(coords ? { lat: coords.lat, lng: coords.lng } : {}), geofenceRadius: Number(radius) || 300})
+        body: JSON.stringify({name: form.name, budget: form.budget ? Number(form.budget) : undefined, location: form.location || undefined, foremanId: form.foremanId || undefined, ...(coords ? { lat: coords.lat, lng: coords.lng } : {}), geofenceRadius: radius.trim() ? Number(radius) : null})
       });
       if (!res.ok) throw new Error();
       const obj = await res.json();
@@ -777,7 +777,8 @@ export function AddObjectModal({ users, onClose, onAdd }:
           <div><label className="text-sm md:text-xs font-medium block mb-1">{t('addObject.nameLabel')}</label><input className="w-full text-sm md:text-xs border border-border rounded px-3 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary" placeholder={t('addObject.namePlaceholder')} value={form.name} onChange={e=>setForm({...form,name:e.target.value})} required/></div>
           <div><label className="text-sm md:text-xs font-medium block mb-1">{t('addObject.locationLabel')}</label><LocationInput placeholder={t('addObject.locationPlaceholder')} value={form.location} onChange={v=>setForm({...form,location:v})} onCoords={setCoords}/></div>
           <div><label className="text-sm md:text-xs font-medium block mb-1">{t('addObject.geofence', "\"Ishga keldim\" radiusi (metr)")}</label>
-            <input type="number" min={50} max={5000} step={50} className="w-full text-sm md:text-xs border border-border rounded px-3 py-2 bg-input-background focus:outline-none" value={radius} onChange={e=>setRadius(e.target.value)}/>
+            <input type="number" inputMode="numeric" min={50} max={100000} step={50} placeholder={t('addObject.geofenceOff', "Bo'sh — tekshirilmaydi")} className="w-full text-base sm:text-sm border border-border rounded-xl px-3 h-11 bg-input-background focus:outline-none" value={radius} onChange={e=>setRadius(e.target.value)}/>
+            <p className="text-[11px] text-muted-foreground mt-1">Bo'sh qoldirsangiz — "Ishga keldim" joyi tekshirilmaydi. Prorablarga tekshiruv qo'llanmaydi.</p>
             <p className="text-[11px] text-muted-foreground mt-1">{coords ? t('addObject.geofenceOk', "✓ Obyekt nuqtasi tanlandi — ishchilar faqat shu radius ichida ishga kela oladi") : t('addObject.geofenceHint', "Manzilni xaritadan tanlang — shunda ishchilar faqat obyektda \"Ishga keldim\" bosa oladi")}</p></div>
           <div><label className="text-sm md:text-xs font-medium block mb-1">{t('addObject.budgetLabel')}</label><input type="number" className="w-full text-sm md:text-xs border border-border rounded px-3 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary" placeholder="50000000" value={form.budget} onChange={e=>setForm({...form,budget:e.target.value})}/></div>
           <div>

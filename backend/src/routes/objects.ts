@@ -19,8 +19,13 @@ const coordsFromBody = (lat: any, lng: any, radius: any) => {
   const out: any = {};
   const la = Number(lat), lo = Number(lng);
   if (lat != null && lng != null && Number.isFinite(la) && Number.isFinite(lo) && Math.abs(la) <= 90 && Math.abs(lo) <= 180) { out.lat = la; out.lng = lo; }
-  const r = Number(radius);
-  if (radius != null && Number.isFinite(r) && r >= 50 && r <= 5000) out.geofenceRadius = Math.round(r);
+  // Owner 2026-10-22: radius ixtiyoriy — bo'sh/0 = "Ishga keldim" joyi tekshirilmaydi; 50 m – 100 km
+  if (radius === null || radius === '' || Number(radius) === 0) out.geofenceRadius = 0;
+  else if (radius !== undefined) {
+    const r = Number(radius);
+    if (!Number.isFinite(r) || r < 50 || r > 100_000) out.radiusError = "Radius 50 metrdan 100 km gacha bo'lsin (yoki bo'sh qoldiring — tekshirilmaydi)";
+    else out.geofenceRadius = Math.round(r);
+  }
   return out;
 };
 
@@ -74,7 +79,7 @@ router.post('/', requireOwnerOrAdmin, async (req, res) => {
       budget: budget ? Number(budget) : undefined,
       location: location?.trim() || undefined,
       foremanId: foremanId || undefined,
-      ...coordsFromBody(lat, lng, geofenceRadius),
+      ...(({ radiusError: _e, ...g }) => g)(coordsFromBody(lat, lng, geofenceRadius)),
     }));
     await obj.save();
 
@@ -336,7 +341,9 @@ router.patch('/:id', requireOwnerOrAdmin, async (req, res) => {
     const sd = update.startDate !== undefined ? update.startDate : before.startDate;
     const ed = update.endDate !== undefined ? update.endDate : before.endDate;
     if (sd && ed && new Date(ed) <= new Date(sd)) return res.status(400).json({ error: "Tugash sanasi boshlanishdan keyin bo'lsin" });
-    Object.assign(update, coordsFromBody(lat, lng, geofenceRadius));
+    const geo = coordsFromBody(lat, lng, geofenceRadius);
+    if (geo.radiusError) return res.status(400).json({ error: geo.radiusError });
+    Object.assign(update, geo);
     // Manzil o'zgarib, yangi nuqta berilmasa — eski nuqta noto'g'ri bo'lib qoladi: tozalaymiz (keyin manzildan qayta aniqlanadi)
     if (location !== undefined && lat === undefined && String(location || '').trim() !== String(before.location || '').trim()) { update.lat = undefined; update.lng = undefined; }
 

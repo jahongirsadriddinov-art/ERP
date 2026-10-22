@@ -31,7 +31,9 @@ export type GeofenceResult = { ok: true; objectName?: string; distance?: number 
 /** Ishchining joylashuvi uning obyektlaridan birining hududida-mi? */
 export async function checkGeofence(userId: string, companyId: string | undefined, lat: number, lng: number): Promise<GeofenceResult> {
   if (!companyId) return { ok: true };
-  const user: any = await User.findById(userId).select('projectIds').lean().catch(() => null);
+  const user: any = await User.findById(userId).select('projectIds role').lean().catch(() => null);
+  // Owner 2026-10-22: prorablarga joy tekshiruvi qo'llanmaydi (ular bir necha obyekt orasida yuradi)
+  if (user?.role === 'prorab') return { ok: true };
   const assigned: string[] = (user?.projectIds || []).map(String);
   const q: any = { companyId, status: { $ne: 'completed' } };
   if (assigned.length) q._id = { $in: assigned };
@@ -47,16 +49,18 @@ export async function checkGeofence(userId: string, companyId: string | undefine
       if (c) { o.lat = c.lat; o.lng = c.lng; ObjectModel.updateOne({ _id: o._id }, { $set: { lat: c.lat, lng: c.lng } }).catch(() => {}); }
     }
   }
+  // Radius belgilanmagan (yoki 0) obyekt — tekshiruv yo'q (owner 2026-10-22: "yozmasa belgilanmasin")
+  if (objs.some(o => !(Number(o.geofenceRadius) > 0))) return { ok: true };
   const withCoords = objs.filter(o => Number.isFinite(o.lat) && Number.isFinite(o.lng));
   if (!withCoords.length) return { ok: true };
   let best: { o: any; d: number } | null = null;
   for (const o of withCoords) {
     const d = distanceM({ lat, lng }, { lat: o.lat, lng: o.lng });
-    const r = Number(o.geofenceRadius) || DEFAULT_GEOFENCE_M;
+    const r = Number(o.geofenceRadius);
     if (d <= r) return { ok: true, objectName: o.name, distance: Math.round(d) };
     if (!best || d < best.d) best = { o, d };
   }
-  return { ok: false, nearestName: best!.o.name, distance: Math.round(best!.d), radius: Number(best!.o.geofenceRadius) || DEFAULT_GEOFENCE_M };
+  return { ok: false, nearestName: best!.o.name, distance: Math.round(best!.d), radius: Number(best!.o.geofenceRadius) };
 }
 
 export const geofenceMessage = (r: Extract<GeofenceResult, { ok: false }>, ru?: boolean) => {

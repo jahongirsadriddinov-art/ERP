@@ -569,3 +569,22 @@ describe('AI sozlamalari va dasturchi yo\'llari', () => {
     expect(r.body.length).toBeGreaterThanOrEqual(2);
   });
 });
+
+describe("owner 2026-10-22 qarorlari: byudjet/mijoz havolasi faqat rahbarga; o'rinbosar egani o'zgartira olmaydi", () => {
+  it("obyektlar ro'yxati: rahbar byudjetni ko'radi, prorab/ishchi — yo'q", async () => {
+    await ObjectModel.updateOne({ _id: objA }, { $set: { budget: 900_000_000, clientShareToken: 'tok123' } });
+    const boss = (await get('orin', '/api/objects')).body.find((o: any) => String(o._id) === objA);
+    expect(boss).toMatchObject({ budget: 900_000_000, clientShareToken: 'tok123' });
+    for (const k of ['prorab', 'ish']) {
+      const o = (await get(k, '/api/objects')).body.find((x: any) => String(x._id) === objA);
+      expect(o).toBeTruthy();
+      expect(o.budget).toBeUndefined();
+      expect(o.clientShareToken).toBeUndefined();
+    }
+  });
+  it("o'rinbosar egasi/direktor ismini o'zgartira olmaydi; egasi — o'zini; o'rinbosar — ishchini", async () => {
+    expect((await put('orin', `/api/users/${ids.owner}`, { firstName: 'Buzildi' })).status).toBe(403);
+    expect((await put('owner', `/api/users/${ids.owner}`, { firstName: 'Ega' })).status).toBe(200);
+    expect((await put('orin', `/api/users/${ids.ish}`, { firstName: 'Ishchi' })).status).toBe(200);
+  });
+});

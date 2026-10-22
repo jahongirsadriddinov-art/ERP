@@ -291,10 +291,15 @@ router.get('/:id/plan-fact', async (req, res) => {
 router.get('/', async (req, res) => {
   try {
     const objects = await ObjectModel.find(scoped()).sort({ createdAt: -1 }).lean();
+    // Owner 2026-10-22: byudjet va mijoz havolasi — faqat rahbarlarga (direktor/o'rinbosar/egasi)
+    const tn = getTenant();
+    const boss = !!tn?.isOwner || ['direktor', 'orinbosar'].includes(String(tn?.role)) || !!tn?.isDeveloper;
     const objectsWithMaterials = await Promise.all(
-      objects.map(async (obj) => {
+      objects.map(async (obj: any) => {
         const materials = await Material.find({ objectId: obj._id }).lean();
-        return { ...obj, materials };
+        if (boss) return { ...obj, materials };
+        const { budget: _b, budgetAlertLevel: _l, clientShareToken: _t, ...rest } = obj;
+        return { ...rest, materials };
       })
     );
     res.json(objectsWithMaterials);

@@ -181,27 +181,31 @@ export function FinancePage({ currentUser, users, projects, expenses, onAddExpen
                     { key: "edit", label: t('common.edit', { defaultValue: "O'zgartirish" }), icon: Edit, tone: "primary", onClick: () => setEditExp(e) },
                     { key: "del", label: t('common.delete', { defaultValue: "O'chirish" }), icon: Trash, tone: "danger", onClick: () => { void removeExp(e); } },
                   ] : []}>
-                <div className="w-full text-left surface rounded-2xl p-3 text-sm md:text-xs hover:bg-muted/20 liquid-transition" style={{ borderLeft: `4px solid ${borderColor}` }}>
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-                        <span className={`text-[9px] px-1.5 py-0.5 rounded font-semibold ${typeClr[e.type] || "bg-muted text-muted-foreground"}`}>{expLabel(t, e.type as ExpType) || e.type}</span>
-                        {e.requiresAdminApproval&&e.status==="pending"&&<span className="text-[9px] px-1.5 py-0.5 rounded font-semibold bg-accent/15 text-accent">{t('approvalChain.needsApproval')}</span>}
-                      </div>
-                      <p className="font-semibold text-foreground">{e.anomaly && <span className="mr-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600 dark:text-amber-400">⚠ {t('finance.anomaly', { defaultValue: "G'ayrioddiy" })}</span>}{e.description || expLabel(t, e.type as ExpType)}</p>
-                      <p className="text-sm md:text-xs text-muted-foreground mt-0.5">{proj?.name || e.objectLabel || "—"}{e.recipientName ? ` • 👤 ${e.recipientName}` : ""} • {e.date}</p>
-                      {to&&<p className="text-sm md:text-xs text-muted-foreground">{t('finance.to')} <span className="font-medium">{to.name}</span></p>}
-                      {creator&&<p className="text-sm md:text-xs text-muted-foreground">{t('finance.createdBy')} {creator.name}</p>}
-                      {approver&&e.status==="pending"&&<p className="text-sm md:text-xs text-muted-foreground">{t('approvalChain.approver')} <span className="font-medium">{approver.name}</span></p>}
+                {/* Owner 2026-10-22: kartochka ixcham — summa va holat tepada, nom 2 qatorgacha, qolgani bitta kulrang qatorda */}
+                <div className="w-full text-left surface rounded-2xl p-3.5 hover:bg-muted/20 liquid-transition relative overflow-hidden">
+                  <span aria-hidden className="absolute left-0 top-3 bottom-3 w-1 rounded-r-full" style={{ background: borderColor }} />
+                  <div className="flex items-center justify-between gap-2 pl-1.5">
+                    <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+                      <span className={`text-[11px] px-2 py-0.5 rounded-full font-semibold ${typeClr[e.type] || "bg-muted text-muted-foreground"}`}>{expLabel(t, e.type as ExpType) || e.type}</span>
+                      {e.anomaly && <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400">⚠ {t('finance.anomaly', { defaultValue: "G'ayrioddiy" })}</span>}
+                      {e.requiresAdminApproval&&e.status==="pending"&&<span className="text-[11px] px-2 py-0.5 rounded-full font-semibold bg-accent/15 text-accent">{t('approvalChain.needsApproval')}</span>}
                     </div>
-                    <div className="text-right flex-shrink-0">
-                      <p className="font-bold text-accent">{fmt(e.amount)}</p>
-                      <p className="text-[10px] text-muted-foreground font-mono">{fmtUsd(e.amount)}</p>
-                      {e.status==="confirmed"
-                        ?<p className="text-[9px] text-green-800 dark:text-green-400 font-semibold mt-1 flex items-center gap-0.5 justify-end"><MorphIcon icon={CheckCircle} className="w-2.5 h-2.5" />{t('finance.confirmed')}</p>
-                        :<p className="text-[9px] text-amber-800 dark:text-amber-400 font-semibold mt-1 flex items-center gap-0.5 justify-end"><MorphIcon icon={Clock} className="w-2.5 h-2.5" />{t('finance.pending')}</p>}
-                    </div>
+                    {e.status==="confirmed"
+                      ?<span className="text-[11px] text-emerald-700 dark:text-emerald-400 font-semibold flex items-center gap-1 flex-shrink-0"><MorphIcon icon={CheckCircle} className="w-3.5 h-3.5" />{t('finance.confirmed')}</span>
+                      :<span className="text-[11px] text-amber-700 dark:text-amber-400 font-semibold flex items-center gap-1 flex-shrink-0"><MorphIcon icon={Clock} className="w-3.5 h-3.5" />{t('finance.pending')}</span>}
                   </div>
+                  <div className="flex items-end justify-between gap-3 mt-2 pl-1.5">
+                    <p className="text-[15px] font-semibold leading-snug text-foreground line-clamp-2 min-w-0">{e.description || expLabel(t, e.type as ExpType)}</p>
+                    <p className="text-[17px] font-bold text-accent whitespace-nowrap tabular-nums flex-shrink-0">{fmt(e.amount)}</p>
+                  </div>
+                  <p className="text-[13px] text-muted-foreground mt-1.5 pl-1.5 truncate">
+                    {[proj?.name || e.objectLabel, e.date].filter(Boolean).join(" · ")}
+                  </p>
+                  {(to || e.recipientName || creator || (approver && e.status==="pending")) && (
+                    <p className="text-[12px] text-muted-foreground/90 mt-0.5 pl-1.5 truncate">
+                      {[(to?.name || e.recipientName) ? `→ ${to?.name || e.recipientName}` : "", creator ? `✍ ${creator.name}` : "", approver && e.status==="pending" ? `⏳ ${approver.name}` : ""].filter(Boolean).join("   ")}
+                    </p>
+                  )}
                   {canConfirm&&<button onClick={e2=>{e2.stopPropagation();onConfirm(e.id);}} className="mt-2 w-full text-sm md:text-xs bg-green-600 text-white rounded py-1.5 hover:bg-green-700 font-semibold flex items-center justify-center gap-1"><MorphIcon icon={Check} className="w-3 h-3" />{t('finance.confirmAction')}</button>}
                   {canAdminApprove&&(
                     <div className="mt-2 flex gap-2" onClick={e2=>e2.stopPropagation()}>

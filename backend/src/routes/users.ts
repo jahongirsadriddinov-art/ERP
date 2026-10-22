@@ -64,6 +64,13 @@ router.put('/:id', async (req, res) => {
     const { firstName, lastName, companyId, language, avatar } = req.body;
     const user = await User.findOne(scoped({ _id: req.params.id }));
     if (!user) return res.status(404).json({ error: 'Foydalanuvchi topilmadi' });
+    // Owner 2026-10-22: o'rinbosar egasi va direktorni, (egasi bo'lmagan) direktor egasini o'zgartira olmaydi
+    if (!tenant?.isDeveloper && String(req.params.id) !== String(tenant?.userId)) {
+      const target: any = user;
+      const actorOwner = !!tenant?.isOwner;
+      if (target.isOwner && !actorOwner) return res.status(403).json({ error: "Firma egasining ma'lumotlarini faqat o'zi o'zgartiradi" });
+      if (tenant?.role === 'orinbosar' && target.role === 'direktor') return res.status(403).json({ error: "O'rinbosar direktor ma'lumotlarini o'zgartira olmaydi" });
+    }
 
     if (firstName) user.firstName = firstName;
     if (lastName !== undefined) user.lastName = lastName;

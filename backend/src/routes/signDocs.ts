@@ -83,14 +83,22 @@ const recomputeStatus = (sigs: any[]) => {
 };
 const shareUrl = (token: string) => `${(process.env.SITE_URL || 'http://localhost:5173').replace(/\/$/, '')}/sign/${token}`;
 
+// Owner 2026-10-22: shartnoma/hujjatlar — rahbarlar hammasini, qolganlar faqat o'zi tuzganini ko'radi
+async function docScope(): Promise<Record<string, unknown>> {
+  const t = getTenant();
+  if (!t?.userId) return { _id: null };
+  const u: any = await User.findById(t.userId).select('role isOwner').lean().catch(() => null);
+  return isBossUser(u) ? {} : { createdBy: String(t.userId) };
+}
+
 router.get('/', async (_req, res) => {
-  const docs = await SignedDoc.find(scoped()).sort({ createdAt: -1 }).limit(300)
+  const docs = await SignedDoc.find(scoped(await docScope())).sort({ createdAt: -1 }).limit(300)
     .select('type number title status projectId createdByName createdAt signatures.side signatures.name signatures.signedAt').lean();
   res.json(docs.map((d: any) => ({ ...d, id: d._id })));
 });
 
 router.get('/:id', async (req, res) => {
-  const d: any = await SignedDoc.findOne(scoped({ _id: req.params.id })).lean().catch(() => null);
+  const d: any = await SignedDoc.findOne(scoped({ _id: req.params.id, ...(await docScope()) })).lean().catch(() => null);
   if (!d) return res.status(404).json({ error: 'Topilmadi' });
   res.json({ ...d, id: d._id, shareUrl: d.shareToken ? shareUrl(d.shareToken) : undefined });
 });

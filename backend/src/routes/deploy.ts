@@ -77,14 +77,20 @@ const upload = multer({ dest: 'uploads/', limits: { fileSize: 200 * 1024 * 1024 
 // '/uploads' papkasiga, O'ZGARMAS nom bilan yoziladi (Render diskidan
 // ephemeral — qayta ishga tushirilganda o'chadi, lekin bu allaqachon
 // qo'lda-broadcast yo'lida qabul qilingan cheklov, yangilik emas).
-router.post('/upload-artifact', upload.single('file'), async (req, res) => {
+// XAVFSIZLIK (audit 2026-10-22): kalit va tezlik chegarasi fayl QABUL QILINISHIDAN OLDIN tekshiriladi —
+// avval multer 200 MB gacha faylni uploads/ ga yozib bo'lgach 401 qaytarardi (va faylni o'chirmasdi):
+// autentifikatsiyasiz istalgan kishi server diskini to'ldira olardi.
+function requireDeploySecret(req: any, res: any, next: () => void) {
+  if (!checkDeploySecretRate(req)) return res.status(429).json({ error: "Juda ko'p urinish" });
+  const expected = process.env.DEPLOY_BROADCAST_SECRET;
+  if (!expected || !safeEqual(req.headers['x-deploy-secret'], expected)) {
+    return res.status(401).json({ error: 'Ruxsat yo\'q' });
+  }
+  return next();
+}
+
+router.post('/upload-artifact', requireDeploySecret, upload.single('file'), async (req, res) => {
   try {
-    if (!checkDeploySecretRate(req)) return res.status(429).json({ error: "Juda ko'p urinish" });
-    const secret = req.headers['x-deploy-secret'];
-    const expected = process.env.DEPLOY_BROADCAST_SECRET;
-    if (!expected || !safeEqual(secret, expected)) {
-      return res.status(401).json({ error: 'Ruxsat yo\'q' });
-    }
     if (!req.file) return res.status(400).json({ error: 'file talab etiladi (multipart/form-data)' });
 
     const kind = typeof req.body?.kind === 'string' ? req.body.kind : undefined;

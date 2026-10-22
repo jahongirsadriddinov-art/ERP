@@ -90,4 +90,71 @@ router.patch('/:id/status', async (req, res) => {
   }
 });
 
+// Hodisa matnini tuzatish / o'chirish (owner 2026-10-22): o'zi qayd etganini — o'zi, hammasini — direktor/o'rinbosar.
+// Hal qilingan (resolved) hodisani faqat rahbar o'zgartiradi/o'chiradi — tekshiruv izi saqlansin.
+async function incidentAccess(req: any, res: any): Promise<{ incident: any; actor: any } | null> {
+  const t = getTenant();
+  if (!t?.userId) { res.status(401).json({ error: 'Autentifikatsiya talab etiladi' }); return null; }
+  const incident: any = await SafetyIncident.findOne(scoped({ _id: req.params.id })).catch(() => null);
+  if (!incident) { res.status(404).json({ error: 'Topilmadi' }); return null; }
+  const actor: any = await User.findById(t.userId).lean().catch(() => null);
+  const isBoss = !!actor && (!!actor.isOwner || ['direktor', 'orinbosar'].includes(actor.role));
+  const isReporter = String(incident.reportedBy?.userId) === String(t.userId);
+  if (!isBoss && !isReporter) { res.status(403).json({ error: "Faqat hodisani qayd etgan xodim yoki direktor/o'rinbosar o'zgartira oladi" }); return null; }
+  if (!isBoss && incident.status === 'resolved') { res.status(409).json({ error: "Hal qilingan hodisani faqat direktor yoki o'rinbosar o'zgartira oladi" }); return null; }
+  return { incident, actor };
+}
+
+router.patch('/:id', async (req, res) => {
+  try {
+    const r = await incidentAccess(req, res);
+    if (!r) return;
+    const { incident, actor } = r;
+    const { title, description, severity, objectId, photos, occurredAt } = req.body || {};
+    const set: Record<string, unknown> = {};
+    if (title !== undefined) { const tt = String(title || '').trim().slice(0, 300); if (!tt) return res.status(400).json({ error: 'Sarlavha kerak' }); set.title = tt; }
+    if (description !== undefined) set.description = description ? String(description).slice(0, 2000) : undefined;
+    if (severity !== undefined) { if (!['low', 'medium', 'high', 'critical'].includes(severity)) return res.status(400).json({ error: "Noto'g'ri daraja" }); set.severity = severity; }
+    if (objectId !== undefined) set.objectId = objectId ? String(objectId) : undefined;
+    if (photos !== undefined) set.photos = Array.isArray(photos) ? photos.slice(0, 10).map(String) : [];
+    if (occurredAt !== undefined) { const d = new Date(occurredAt); if (isNaN(+d)) return res.status(400).json({ error: "Sana noto'g'ri" }); set.occurredAt = d; }
+    if (!Object.keys(set).length) return res.status(400).json({ error: "O'zgartirish yo'q" });
+    const before = Object.fromEntries(Object.keys(set).map((k) => [k, incident[k]]));
+    incident.set(set);
+    await incident.save();
+    const t = getTenant()!;
+    if (actor) {
+      logAudit({
+        userId: t.userId, userName: `${actor.firstName} ${actor.lastName || ''}`.trim(), userRole: actor.role,
+        action: 'update', entity: 'safety_incident', entityId: String(incident._id),
+        description: `Xavfsizlik hodisasi o'zgartirildi: "${incident.title}"`, oldValue: before, newValue: set, companyId: t.companyId, req,
+      }).catch(() => {});
+    }
+    res.json({ ...incident.toObject(), id: incident._id });
+  } catch (err) {
+    res.status(500).json({ error: 'Server xatoligi' });
+  }
+});
+
+router.delete('/:id', async (req, res) => {
+  try {
+    const r = await incidentAccess(req, res);
+    if (!r) return;
+    const { incident, actor } = r;
+    const snapshot = incident.toObject();
+    await incident.deleteOne();
+    const t = getTenant()!;
+    if (actor) {
+      logAudit({
+        userId: t.userId, userName: `${actor.firstName} ${actor.lastName || ''}`.trim(), userRole: actor.role,
+        action: 'delete', entity: 'safety_incident', entityId: String(req.params.id),
+        description: `Xavfsizlik hodisasi o'chirildi: "${snapshot.title}"`, oldValue: snapshot, companyId: t.companyId, req,
+      }).catch(() => {});
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Server xatoligi' });
+  }
+});
+
 export default router;

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import CompanyDocument from '../models/CompanyDocument';
 import User from '../models/User';
+import ObjectModel from '../models/Object';
 import { scoped, stamped } from '../middleware/scope';
 import { getTenant } from '../middleware/tenantContext';
 import { requireOwnerOrAdmin } from '../middleware/auth';
@@ -114,6 +115,52 @@ router.post('/:id/sign', requireOwnerOrAdmin, async (req, res) => {
   }
 });
 
+// PATCH /api/documents/:id — sarlavha/turkum/obyektni tuzatish (owner 2026-10-22: o'zi qo'shganini — o'zi,
+// hammasini — direktor/o'rinbosar). Fayl o'zi almashtirilmaydi (kerak bo'lsa o'chirib qayta yuklanadi);
+// imzolangan hujjat matni o'zgarmasligi uchun imzodan keyin faqat rahbar tahrirlaydi.
+router.patch('/:id', async (req, res) => {
+  try {
+    const t = getTenant();
+    if (!t?.userId) return res.status(401).json({ error: 'Autentifikatsiya talab etiladi' });
+    const doc: any = await CompanyDocument.findOne(scoped({ _id: req.params.id }));
+    if (!doc) return res.status(404).json({ error: 'Topilmadi' });
+    const isUploader = String(doc.uploadedBy?.userId) === String(t.userId);
+    const isBoss = !!t.isOwner || t.role === 'direktor' || t.role === 'orinbosar';
+    if (!isUploader && !isBoss) return res.status(403).json({ error: "Faqat yuklagan xodim yoki admin o'zgartira oladi" });
+    if (!isBoss && (doc.signatures || []).length) return res.status(409).json({ error: "Imzolangan hujjatni faqat direktor yoki o'rinbosar o'zgartira oladi" });
+    const { title, category, objectId } = req.body || {};
+    const set: Record<string, unknown> = {};
+    if (title !== undefined) {
+      const tt = String(title || '').trim().slice(0, 300);
+      if (!tt) return res.status(400).json({ error: 'Sarlavha kerak' });
+      set.title = tt;
+    }
+    if (category !== undefined) {
+      if (!['contract', 'permit', 'invoice', 'other'].includes(category)) return res.status(400).json({ error: "Noto'g'ri turkum" });
+      set.category = category;
+    }
+    if (objectId !== undefined) {
+      if (objectId && !(await ObjectModel.exists(scoped({ _id: String(objectId) })).catch(() => null))) return res.status(400).json({ error: 'Obyekt topilmadi' });
+      set.objectId = objectId ? String(objectId) : undefined;
+    }
+    if (!Object.keys(set).length) return res.status(400).json({ error: "O'zgartirish yo'q" });
+    const before = { title: doc.title, category: doc.category, objectId: doc.objectId };
+    doc.set(set);
+    await doc.save();
+    const actor = await User.findById(t.userId).lean().catch(() => null);
+    if (actor) {
+      logAudit({
+        userId: t.userId, userName: `${actor.firstName} ${actor.lastName || ''}`.trim(), userRole: actor.role,
+        action: 'update', entity: 'document', entityId: String(doc._id),
+        description: `Hujjat o'zgartirildi: "${before.title}"`, oldValue: before, newValue: set, companyId: t.companyId, req,
+      }).catch(() => {});
+    }
+    res.json({ ...doc.toObject(), id: doc._id });
+  } catch (err) {
+    res.status(500).json({ error: 'Server xatoligi' });
+  }
+});
+
 router.delete('/:id', async (req, res) => {
   try {
     const t = getTenant();
@@ -121,9 +168,18 @@ router.delete('/:id', async (req, res) => {
     const doc = await CompanyDocument.findOne(scoped({ _id: req.params.id }));
     if (!doc) return res.status(404).json({ error: 'Topilmadi' });
     const isOwner = String(doc.uploadedBy?.userId) === String(t.userId);
-    const isBoss = t.role === 'direktor' || t.role === 'orinbosar';
+    const isBoss = !!t.isOwner || t.role === 'direktor' || t.role === 'orinbosar';
     if (!isOwner && !isBoss) return res.status(403).json({ error: "Faqat yuklagan xodim yoki admin o'chira oladi" });
+    const snapshot = doc.toObject();
     await doc.deleteOne();
+    const actor = await User.findById(t.userId).lean().catch(() => null);
+    if (actor) {
+      logAudit({
+        userId: t.userId, userName: `${actor.firstName} ${actor.lastName || ''}`.trim(), userRole: actor.role,
+        action: 'delete', entity: 'document', entityId: String(req.params.id),
+        description: `Hujjat o'chirildi: "${snapshot.title}"`, oldValue: snapshot, companyId: t.companyId, req,
+      }).catch(() => {});
+    }
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: 'Server xatoligi' });

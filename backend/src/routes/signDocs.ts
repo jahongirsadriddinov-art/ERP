@@ -6,6 +6,7 @@ import { scoped, stamped } from '../middleware/scope';
 import { getTenant } from '../middleware/tenantContext';
 import { nextSequence } from '../models/Counter';
 import { checkRate } from '../utils/rateLimit';
+import { logAudit } from '../services/audit';
 
 // Elektron hujjatlar va imzo. Yaratish/imzolash — rahbar va prorab; mijoz — ochiq havola orqali.
 const router = Router();
@@ -23,6 +24,7 @@ async function canManage(): Promise<{ ok: boolean; user?: any }> {
   const u: any = await User.findById(t.userId).select('role firstName lastName isOwner').lean();
   return { ok: !!u && (u.isOwner || ['direktor', 'orinbosar', 'prorab'].includes(u.role)), user: u };
 }
+const isBossUser = (u: any) => !!u && (!!u.isOwner || ['direktor', 'orinbosar'].includes(u.role));
 const validSignature = (image: unknown) =>
   typeof image === 'string' && /^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(image) && image.length <= MAX_SIG_BYTES;
 // Pechat ixtiyoriy: berilmagan bo'lsa undefined, berilgan-u noto'g'ri bo'lsa false
@@ -118,10 +120,12 @@ router.post('/', async (req, res) => {
 // Imzo qo'yilmagan hujjatnigina tahrirlash mumkin (imzolangan matn o'zgarmasin)
 router.put('/:id', async (req, res) => {
   try {
-    const { ok } = await canManage();
+    const { ok, user } = await canManage();
     if (!ok) return res.status(403).json({ error: "Ruxsat yo'q" });
     const doc: any = await SignedDoc.findOne(scoped({ _id: req.params.id }));
     if (!doc) return res.status(404).json({ error: 'Topilmadi' });
+    // Prorab — faqat o'zi tuzgan hujjatni; direktor/o'rinbosar — hammasini (owner 2026-10-22)
+    if (!isBossUser(user) && String(doc.createdBy || '') !== String(getTenant()!.userId)) return res.status(403).json({ error: "Faqat hujjatni tuzgan xodim yoki direktor/o'rinbosar o'zgartira oladi" });
     if (doc.signatures.length) return res.status(409).json({ error: "Imzolangan hujjatni o'zgartirib bo'lmaydi" });
     doc.data = cleanData(req.body?.data);
     if (typeof req.body?.projectId === 'string') doc.projectId = req.body.projectId;
@@ -173,11 +177,20 @@ router.post('/:id/share', async (req, res) => {
 
 router.delete('/:id', async (req, res) => {
   const { ok, user } = await canManage();
-  if (!ok || !(user.isOwner || ['direktor', 'orinbosar'].includes(user.role))) return res.status(403).json({ error: "Ruxsat yo'q" });
+  if (!ok) return res.status(403).json({ error: "Ruxsat yo'q" });
   const doc: any = await SignedDoc.findOne(scoped({ _id: req.params.id }));
   if (!doc) return res.status(404).json({ error: 'Topilmadi' });
+  // O'zi tuzgan va hali hech kim imzolamagan hujjatni prorab ham o'chiradi; qolganini — faqat direktor/o'rinbosar
+  const ownDraft = String(doc.createdBy || '') === String(getTenant()!.userId) && !(doc.signatures || []).length;
+  if (!isBossUser(user) && !ownDraft) return res.status(403).json({ error: "Ruxsat yo'q" });
   if (doc.status === 'signed') return res.status(409).json({ error: "Ikki tomon imzolagan hujjatni o'chirib bo'lmaydi" });
   await doc.deleteOne();
+  const t = getTenant()!;
+  logAudit({
+    userId: t.userId, userName: `${user.firstName || ''} ${user.lastName || ''}`.trim(), userRole: user.role,
+    action: 'delete', entity: 'sign_doc', entityId: String(doc._id),
+    description: `Elektron hujjat o'chirildi: ${doc.number}`, oldValue: { number: doc.number, type: doc.type, status: doc.status }, companyId: t.companyId, req,
+  }).catch(() => {});
   res.json({ ok: true });
 });
 

@@ -97,8 +97,24 @@ router.post('/', requireOwnerOrAdmin, async (req, res) => {
   }
 });
 
+// Smetani kim yuklaydi (owner 2026-10-22): yuklash obyektning BUTUN material ro'yxatini va byudjetini
+// almashtiradi — ya'ni boshqalar qo'shgan ma'lumotni o'chiradi. Shu sabab faqat rahbar (direktor/o'rinbosar/ega)
+// yoki shu obyektning prorabi (foremanId). Tekshiruv SSE boshlanishidan OLDIN — oddiy JSON 403/404 qaytadi.
+async function canUploadSmeta(req: Request, res: Response, next: () => void) {
+  const t = getTenant();
+  const cleanup = () => { const f = (req as any).file; if (f?.path) fs.unlink(f.path, () => {}); };
+  const obj: any = await ObjectModel.findOne(scoped({ _id: req.params.id })).select('foremanId').lean().catch(() => null);
+  if (!obj) { cleanup(); return res.status(404).json({ error: 'Obyekt topilmadi' }); }
+  const boss = !!t?.isOwner || ['direktor', 'orinbosar'].includes(String(t?.role));
+  if (!boss && String(obj.foremanId || '') !== String(t?.userId || '')) {
+    cleanup();
+    return res.status(403).json({ error: "Smetani faqat direktor, o'rinbosar yoki obyekt prorabi yuklay oladi" });
+  }
+  return next();
+}
+
 // Upload Smeta to Object — SSE progress stream
-router.post('/:id/smeta', upload.single('smeta'), async (req: Request, res: Response) => {
+router.post('/:id/smeta', upload.single('smeta'), canUploadSmeta, async (req: Request, res: Response) => {
   // ── SSE setup ──────────────────────────────────────────────────────────────
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');

@@ -200,7 +200,9 @@ router.patch('/:id', async (req, res) => {
     const { name, avatar } = req.body;
     const group = await Group.findOne(scoped({ _id: req.params.id }));
     if (!group) return res.status(404).json({ error: 'Guruh topilmadi' });
-    if (!(group.memberIds || []).includes(String(actorId))) return res.status(403).json({ error: 'Faqat guruh a\'zosi o\'zgartira oladi' });
+    // Direktor/o'rinbosar — firmadagi istalgan guruhni (owner 2026-10-22); scoped() boshqa firmani yashiradi
+    const bossHere = !tenant?.isDeveloper && (tenant?.role === 'direktor' || tenant?.role === 'orinbosar');
+    if (!bossHere && !(group.memberIds || []).includes(String(actorId))) return res.status(403).json({ error: 'Faqat guruh a\'zosi o\'zgartira oladi' });
     if (name?.trim()) group.name = name.trim();
     if (avatar !== undefined) group.avatar = avatar;
     await group.save();
@@ -227,7 +229,8 @@ router.delete('/:id', async (req, res) => {
     if (group.devSupport) return res.status(400).json({ error: "Dasturchi bilan aloqa guruhini o'chirib bo'lmaydi" });
     const isCreator = String(group.createdBy) === String(actorId);
     const isGroupAdmin = (group.adminIds || []).includes(String(actorId));
-    if (!isCreator && !isGroupAdmin) return res.status(403).json({ error: "Faqat guruh yaratuvchisi yoki admini o'chira oladi" });
+    const bossHere = !tenant?.isDeveloper && (tenant?.role === 'direktor' || tenant?.role === 'orinbosar');
+    if (!isCreator && !isGroupAdmin && !bossHere) return res.status(403).json({ error: "Faqat guruh yaratuvchisi, admini yoki direktor/o'rinbosar o'chira oladi" });
     const memberIds = group.memberIds || [];
     await group.deleteOne();
     memberIds.forEach(uid => emitToUser(uid, 'group:removed', { id: String(req.params.id) }));

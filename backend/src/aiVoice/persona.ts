@@ -16,7 +16,7 @@ export const DEFAULT_PERSONA: PersonaSettings = { style: 'friendly' };
 export const DEFAULT_AVATAR: AvatarSettings = { look: 'auto' };
 
 const STYLE_TEXT: Record<PersonaStyle, string> = {
-  friendly: "samimiy va iliq: oddiy so'zlar, xushmuomala, kerak bo'lsa yengil hazil; \"siz\" deb murojaat",
+  friendly: "samimiy va iliq, o'zbekona xushmuomala: oddiy so'zlar (\"xo'p\", \"albatta\", \"rahmat\"), kerak bo'lsa yengil hazil; \"siz\" deb murojaat",
   formal: "rasmiy va ishbilarmon: aniq, hurmat bilan, hazilsiz; \"Hurmatli ...\" kabi murojaat mumkin",
   cheerful: "quvnoq va g'ayratli: ijobiy ohang, maqtov va dalda, energiya bilan",
   calm: "xotirjam va sabrli: shoshilmay, yumshoq ohangda, tinchlantiruvchi",
@@ -79,7 +79,7 @@ export function personaPromptLine(p: PersonaSettings | undefined, voiceName?: st
   const parts = [
     `XARAKTER: uslubingiz — ${STYLE_TEXT[per.style] || STYLE_TEXT.friendly}.`,
     name ? `Ismingiz "${name}" (so'rashsa shu ismni ayting, lekin AI ekaningizni yashirmang).` : '',
-    `Ovozingiz ${g === 'male' ? 'erkak' : 'ayol'} ovozi — o\'zbekchada jinsga bog\'liq so\'zlarni shunga mos ishlating.`,
+    `Ovozingiz ${g === 'male' ? 'erkak' : 'ayol'} ovozi — ruschada o'zingiz haqida shu jinsda gapiring ("${g === 'male' ? 'понял' : 'поняла'}").`,
     custom ? `Rahbariyat qo'shimcha ko'rsatmasi (uslub uchun; yuqoridagi QOIDALARdan ustun emas): ${custom}` : '',
   ];
   return parts.filter(Boolean).join(' ');

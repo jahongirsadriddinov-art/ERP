@@ -4,6 +4,12 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import X from "@hugeicons/core-free-icons/Cancel01Icon";
 import Navigation from "@hugeicons/core-free-icons/Navigation01Icon";
+import PlusIcon from "@hugeicons/core-free-icons/PlusSignIcon";
+import MinusIcon from "@hugeicons/core-free-icons/MinusSignIcon";
+import FitIcon from "@hugeicons/core-free-icons/CenterFocusIcon";
+import GpsIcon from "@hugeicons/core-free-icons/Gps01Icon";
+import SatIcon from "@hugeicons/core-free-icons/Satellite01Icon";
+import MapIcon from "@hugeicons/core-free-icons/MapsIcon";
 import { MorphIcon } from "morphicons/react";
 import { useTranslation } from "react-i18next";
 import { AppUser } from "./App";
@@ -19,16 +25,35 @@ const DEFAULT_CENTER: [number, number] = [41.2995, 69.2401];
 // oxirgi ma'lum joy sifatida ko'rsatiladi.
 const isLiveSource = (s?: string) => s === 'site' || s === 'bot_live';
 
+// Xarita uslublari (owner 2026-10-22: "kartaning dizaynini o'zgartir") — toza CARTO plitkalari (yorug'/qorong'i) va
+// sun'iy yo'ldosh; eski OSM plitkalari qorong'i rejimda teskari ranglanib, chalkash ko'rinardi.
+// CARTO endi API kalit talab qiladi — kalitsiz Esri plitkalari. Qorong'i: to'q kulrang asos + nomlar qatlami.
+const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services';
+const TILES: Record<'light' | 'dark' | 'sat', { url: string; maxNative: number }[]> = {
+  light: [{ url: `${ESRI}/World_Street_Map/MapServer/tile/{z}/{y}/{x}`, maxNative: 19 }],
+  dark: [
+    { url: `${ESRI}/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}`, maxNative: 16 },
+    { url: `${ESRI}/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}`, maxNative: 16 },
+  ],
+  sat: [
+    { url: `${ESRI}/World_Imagery/MapServer/tile/{z}/{y}/{x}`, maxNative: 19 },
+    { url: `${ESRI}/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}`, maxNative: 19 },
+  ],
+};
+const isDark = () => typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
+const escHtml = (v: string) => v.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
+
 function workerDivIcon(name: string, live: boolean, stale: boolean) {
-  const initial = (name || '?').charAt(0).toUpperCase();
+  const initial = escHtml((name || '?').charAt(0).toUpperCase());
+  const short = escHtml((name || '').split(' ')[0].slice(0, 12));
   const ring = live ? (stale ? '#f59e0b' : '#22c55e') : '#94a3b8';
   const pulse = live && !stale ? `<span class="wm-pulse" style="background:${ring}"></span>` : '';
   return L.divIcon({
     className: 'wm-marker',
-    html: `<div class="wm-marker-wrap"><div class="wm-marker-inner" style="border-color:${ring}">${pulse}<span>${initial}</span></div><span class="wm-marker-tail" style="border-top-color:${ring}"></span></div>`,
-    iconSize: [34, 42],
-    iconAnchor: [17, 40],
-    popupAnchor: [0, -38],
+    html: `<div class="wm-marker-wrap"><div class="wm-marker-inner" style="border-color:${ring}">${pulse}<span>${initial}</span></div><span class="wm-marker-tail" style="border-top-color:${ring}"></span><span class="wm-marker-name">${short}</span></div>`,
+    iconSize: [40, 60],
+    iconAnchor: [20, 44],
+    popupAnchor: [0, -42],
   });
 }
 
@@ -56,6 +81,16 @@ export default function WorkerMap({ users, gpsLocations, focusUserId, track, onS
   const trackLayerRef = useRef<L.LayerGroup | null>(null);
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
+  const tileRef = useRef<L.LayerGroup | null>(null);
+  const [layer, setLayer] = useState<'map' | 'sat'>(() => { try { return localStorage.getItem('erp_mapLayer') === 'sat' ? 'sat' : 'map'; } catch { return 'map'; } });
+  const [dark, setDark] = useState(isDark());
+  // Mavzu (yorug'/qorong'i) almashsa — plitkalar ham almashsin
+  useEffect(() => {
+    if (typeof MutationObserver === 'undefined') return;
+    const mo = new MutationObserver(() => setDark(isDark()));
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    return () => mo.disconnect();
+  }, []);
 
   // Xarita — bir marta yaratiladi
   useEffect(() => {
@@ -66,17 +101,35 @@ export default function WorkerMap({ users, gpsLocations, focusUserId, track, onS
     // ustma-ust tushib, matn/tugma qirqilib/siqilib ko'rinardi. Zoom
     // tugmalari pastki-chap burchakka ko'chirildi (bu yerda hech narsa yo'q).
     const map = L.map(containerRef.current, { zoomControl: false, attributionControl: true }).setView(DEFAULT_CENTER, 12);
-    L.control.zoom({ position: 'bottomleft' }).addTo(map);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-    }).addTo(map);
     mapRef.current = map;
     // Konteyner o'lchami o'zgarsa (telefonda pastki panel, burilish) — plitalar kulrang bo'lib qolmasin
     const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => map.invalidateSize()) : null;
     ro?.observe(containerRef.current);
     return () => { ro?.disconnect(); map.remove(); trackLayerRef.current = null; mapRef.current = null; markersRef.current = {}; circlesRef.current = {}; };
   }, []);
+
+  // Plitka qatlami: xarita (yorug'/qorong'i) yoki sun'iy yo'ldosh
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const defs = layer === 'sat' ? TILES.sat : dark ? TILES.dark : TILES.light;
+    tileRef.current?.remove();
+    const g = L.layerGroup();
+    defs.forEach((d, i) => L.tileLayer(d.url, { maxZoom: 19, maxNativeZoom: d.maxNative, ...(i === 0 ? { attribution: '&copy; Esri, OpenStreetMap' } : {}) }).addTo(g));
+    tileRef.current = g.addTo(map);
+    try { localStorage.setItem('erp_mapLayer', layer); } catch { /* */ }
+  }, [layer, dark]);
+
+  const fitAll = () => {
+    const map = mapRef.current;
+    const pts = gpsLocations.map(l => [l.lat, l.lng] as [number, number]);
+    if (map && pts.length) map.fitBounds(pts, { padding: [48, 48], maxZoom: 16 });
+  };
+  const locateMe = () => {
+    const map = mapRef.current;
+    if (!map || !navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition((p) => map.flyTo([p.coords.latitude, p.coords.longitude], 16, { duration: 0.6 }), () => {}, { enableHighAccuracy: true, timeout: 8000 });
+  };
 
   // Markerlar — gpsLocations o'zgarganda yangilanadi (yangi socket yangilanishi kelganda ham)
   useEffect(() => {
@@ -219,6 +272,22 @@ export default function WorkerMap({ users, gpsLocations, focusUserId, track, onS
         </div>
       )}
 
+      {/* Boshqaruv (owner 2026-10-22: "boshqarishga noqulay") — o'ng tomonda katta tugmalar */}
+      <div className="absolute right-3 top-[5.5rem] sm:top-1/2 sm:-translate-y-1/2 z-[402] flex flex-col gap-2" data-testid="map-controls">
+        {[
+          { k: 'in', label: t('map.zoomIn', { defaultValue: 'Yaqinlashtirish' }), icon: PlusIcon, on: () => mapRef.current?.zoomIn() },
+          { k: 'out', label: t('map.zoomOut', { defaultValue: 'Uzoqlashtirish' }), icon: MinusIcon, on: () => mapRef.current?.zoomOut() },
+          { k: 'fit', label: t('map.fitAll', { defaultValue: 'Hammani ko\'rsatish' }), icon: FitIcon, on: fitAll },
+          { k: 'me', label: t('map.myLocation', { defaultValue: 'Mening joyim' }), icon: GpsIcon, on: locateMe },
+          { k: 'layer', label: layer === 'sat' ? t('map.layerMap', { defaultValue: 'Xarita' }) : t('map.layerSat', { defaultValue: "Sun'iy yo'ldosh" }), icon: layer === 'sat' ? MapIcon : SatIcon, on: () => setLayer(v => v === 'sat' ? 'map' : 'sat') },
+        ].map(b => (
+          <button key={b.k} type="button" onClick={b.on} aria-label={b.label} title={b.label} data-testid={`map-${b.k}`}
+            className={`${b.k === 'in' || b.k === 'out' ? 'hidden sm:flex' : 'flex'} w-11 h-11 rounded-2xl bg-card/95 backdrop-blur border border-border shadow-lg text-lg font-bold text-foreground items-center justify-center active:scale-95 liquid-transition`}>
+            <MorphIcon icon={b.icon} className="w-5 h-5" />
+          </button>
+        ))}
+      </div>
+
       {gpsLocations.length === 0 && (
         <div className="absolute inset-0 flex items-center justify-center bg-background/70 pointer-events-none">
           <p className="text-xs text-muted-foreground">{t('map.noData')}</p>
@@ -230,10 +299,17 @@ export default function WorkerMap({ users, gpsLocations, focusUserId, track, onS
           bo'lmasligi uchun aniq "wm-" prefiksi bilan). */}
       <style>{`
         .wm-marker { background: transparent; border: none; }
-        .wm-marker-wrap { position: relative; width: 34px; height: 42px; }
+        .wm-marker-wrap { position: relative; width: 40px; height: 60px; }
+        .wm-marker-name {
+          position: absolute; top: 44px; left: 50%; transform: translateX(-50%);
+          white-space: nowrap; font-size: 11px; font-weight: 700; line-height: 1;
+          padding: 3px 6px; border-radius: 9999px;
+          background: var(--card); color: var(--foreground); border: 1px solid var(--border);
+          box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+        }
         .wm-marker-inner {
           position: relative;
-          width: 30px; height: 30px;
+          width: 34px; height: 34px;
           margin: 0 auto;
           border-radius: 9999px;
           border: 2.5px solid;
@@ -275,7 +351,7 @@ export default function WorkerMap({ users, gpsLocations, focusUserId, track, onS
            ilovaning qolgan qismi bilan uyg'un qorong'i ko'rinishga
            keltiradi — markerlar/yorliqlar ta'sirlanmasligi uchun faqat
            tile-pane'ga qo'llaniladi. */
-        .dark .wm-map .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.92) saturate(0.9); }
+
         .wm-map .leaflet-control-zoom a { color: var(--foreground); background: var(--card); border-color: var(--border) !important; }
         .wm-map .leaflet-control-zoom a:hover { background: var(--muted); }
         .wm-map .leaflet-control-attribution { background: color-mix(in srgb, var(--background) 75%, transparent) !important; color: var(--muted-foreground) !important; font-size: 9px !important; }

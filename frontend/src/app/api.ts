@@ -1,3 +1,4 @@
+import { reportApiFailure } from './lib/apiFailure';
 // ─── API base ────────────────────────────────────────────────────────────────
 // Production (hozir: erp-ebon-seven-91.vercel.app → qurilisherp-backend.onrender.com)
 // va local o'rtasida sozlanadigan baza. .env / .env.production dagi
@@ -242,7 +243,21 @@ function installAuthFetch() {
     } catch {
       /* interceptor hech qachon asosiy fetch'ni sindirmasin */
     }
-    const res = await orig(input as any, init);
+    const reqMethod = (init?.method || (input instanceof Request ? input.method : 'GET')).toUpperCase();
+    const reqUrl = typeof input === 'string' ? input : input instanceof URL ? input.href : (input as Request).url;
+    let res: Response;
+    try {
+      res = await orig(input as any, init);
+    } catch (err) {
+      // Tarmoq xatosi (server javob bermadi) — o'zgartiruvchi so'rov bo'lsa dasturchiga (lib/apiFailure.ts)
+      if (isOwnApi && err instanceof TypeError) reportApiFailure(reqMethod, reqUrl, 0, { offline: navigator.onLine === false });
+      throw err;
+    }
+    // Server 5xx — qaysi so'rov, qaysi ekran/tugma (texnik ishlar rejimidagi 503 emas)
+    if (isOwnApi && res.status >= 500) {
+      res.clone().json().catch(() => null).then((d: any) =>
+        reportApiFailure(reqMethod, reqUrl, res.status, { maintenance: !!d?.maintenance, serverError: typeof d?.error === 'string' ? d.error : undefined }));
+    }
     // Ish jarayonida texnik ishlar yoqilsa — ilova/sayt darhol "texnik ishlar" ekraniga o'tsin
     if (isOwnApi && res.status === 423) window.dispatchEvent(new CustomEvent('erp:checkin-required'));
     // Hisob o'chirilgan / sessiya bekor / token yaroqsiz (masalan dasturchi firmani o'chirdi) — darhol chiqish

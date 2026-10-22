@@ -23,14 +23,16 @@ import { SkeletonList, SkeletonMessage } from "./Skeleton";
 import { openExternalUrl } from "./platform";
 import { AnnouncementComposer, GlobalAnnouncementList } from "./AnnouncementParts";
 const ServerStatusPanel = lazy(() => import("./ServerStatusPanel"));
+// Xatolar jurnali (server/sayt/bot/fon ishlari) — alohida chunk
+const ErrorLogPanel = lazy(() => import("./ErrorLogPanel"));
 // AI platforma boshqaruvi (firmalar, AI miyasi, limitlar, xarajat, Telegram hisobi, arxiv, audit) — alohida chunk
 const AiPlatformPanel = lazy(() => import("./aiVoice/settings/platform/AiPlatformPanel"));
 
 // ─── Developer Panel ────────────────────────────────────────────────────────────
 export default function DeveloperPanel({ currentUser, onLogout }: { currentUser: AppUser; onLogout: () => void }) {
   const { t } = useTranslation();
-  const [tab, setTab] = usePersistentState<"firms" | "users" | "subscriptions" | "messages" | "plans" | "promocodes" | "announcements" | "aiVoice" | "server">(
-    "dev.tab", "subscriptions", oneOf(["firms", "users", "subscriptions", "messages", "plans", "promocodes", "announcements", "aiVoice", "server"]));
+  const [tab, setTab] = usePersistentState<"firms" | "users" | "subscriptions" | "messages" | "plans" | "promocodes" | "announcements" | "aiVoice" | "server" | "errors">(
+    "dev.tab", "subscriptions", oneOf(["firms", "users", "subscriptions", "messages", "plans", "promocodes", "announcements", "aiVoice", "server", "errors"]));
   const [annReload, setAnnReload] = useState(0);
   const [companies, setCompanies] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
@@ -365,6 +367,9 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
           <button onClick={() => setTab("server")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "server" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
             {t('devPanel.tabs.server')}
           </button>
+          <button onClick={() => setTab("errors")} data-testid="dev-tab-errors" className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "errors" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
+            {t('devPanel.tabs.errors')}
+          </button>
         </div>
         {/* Ma'lumotlar FAQAT panel birinchi ochilganda yuklanardi — keyin
             (masalan panel ochiq turgan payt boshqa joyda yangi to'lov/
@@ -674,6 +679,8 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
               </div>
             </div>
           ))
+        ) : tab === "errors" ? (
+          <Suspense fallback={<SkeletonList items={3}/>}><ErrorLogPanel /></Suspense>
         ) : tab === "server" ? (
           <Suspense fallback={<SkeletonList items={3}/>}><ServerStatusPanel /></Suspense>
         ) : tab === "aiVoice" ? (

@@ -3,12 +3,20 @@ vi.mock('../platform', () => ({ isTauri: () => true, isNative: () => true }));
 import { installNativeContextMenuGuard } from './nativeContextMenu';
 
 describe("ilovada brauzer menyusi chiqmaydi (owner 2026-10-22)", () => {
-  it("oddiy joyda bloklanadi, matn maydonida — yo'q", () => {
+  it("oddiy joyda bloklanadi, matn maydonida va belgilangan matnda — yo'q", () => {
+    let handler: ((e: any) => void) | null = null;
+    (globalThis as any).document = { addEventListener: (_t: string, h: any) => { handler = h; } };
+    let selected = '';
+    (globalThis as any).window = { getSelection: () => ({ toString: () => selected }) };
     installNativeContextMenuGuard();
-    const div = document.createElement('div'); const input = document.createElement('input');
-    document.body.append(div, input);
-    const fire = (el: Element) => { const e = new MouseEvent('contextmenu', { bubbles: true, cancelable: true }); el.dispatchEvent(e); return e.defaultPrevented; };
-    expect(fire(div)).toBe(true);
-    expect(fire(input)).toBe(false);
+    const fire = (editable: boolean) => {
+      const e = { target: { closest: () => (editable ? {} : null) }, defaultPrevented: false, preventDefault() { this.defaultPrevented = true; } };
+      handler!(e);
+      return e.defaultPrevented;
+    };
+    expect(fire(false)).toBe(true);
+    expect(fire(true)).toBe(false);
+    selected = 'matn';
+    expect(fire(false)).toBe(false);
   });
 });

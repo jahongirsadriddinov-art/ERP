@@ -3604,7 +3604,9 @@ export default function App() {
           <Suspense fallback={<SkeletonPage variant="list" />}>
           <FinancePage allowIncome={hasFeature('income')} currentUser={liveUser} users={users} projects={projects} expenses={expenses}
             onAddExpense={handleAddExpense} onConfirm={handleConfirmExpense}
-            onApprove={handleApproveExpense} onReject={handleRejectExpense}/>
+            onApprove={handleApproveExpense} onReject={handleRejectExpense}
+            onUpdated={(x)=>{ if (x.type === 'income') setIncomes(p=>p.map(e=>e.id===x.id?x:e)); else setExpenses(p=>p.map(e=>e.id===x.id?x:e)); }}
+            onDeleted={(id)=>{ setExpenses(p=>p.filter(e=>e.id!==id)); setIncomes(p=>p.filter(e=>e.id!==id)); }}/>
           </Suspense>
         )}
         {page==="reports" && admin && (

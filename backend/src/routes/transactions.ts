@@ -347,6 +347,73 @@ router.post('/scan-receipt', async (req, res) => {
   }
 });
 
+// Tahrirlash (owner 2026-10-22: "hamma o'zi qo'shgan narsani o'zgartira olsin; direktor va o'rinbosar — barchasini").
+// Tasdiqlangan yozuvni faqat direktor/o'rinbosar o'zgartiradi (o'chirish qoidasi bilan bir xil); eski qiymat auditda qoladi.
+// Tur faqat chiqim turlari ichida almashadi (yukxat ↔ chiqim ↔ kirim emas).
+const EXPENSE_TYPES = ['expense', 'oylik', 'material', 'jihozlar', 'transport', 'boshqa'];
+router.patch('/:id', async (req, res) => {
+  try {
+    const actingUserId = getTenant()?.userId;
+    if (!actingUserId) return res.status(401).json({ error: 'Autentifikatsiya talab etiladi' });
+    const tx: any = await Transaction.findOne(scoped({ _id: req.params.id }));
+    if (!tx) return res.status(404).json({ error: 'Topilmadi' });
+    const actor = await User.findById(actingUserId).catch(() => null);
+    const isBoss = !!actor && (['direktor', 'orinbosar'].includes(actor.role) || !!(actor as any).isOwner);
+    const isCreator = String(tx.createdById) === String(actingUserId);
+    if (!isBoss && !isCreator) return res.status(403).json({ error: "Faqat direktor, o'rinbosar yoki yozuvni qo'shgan xodim o'zgartira oladi" });
+    if (tx.status === 'confirmed' && !isBoss) return res.status(409).json({ error: "Tasdiqlangan yozuvni faqat direktor yoki o'rinbosar o'zgartira oladi" });
+    const b = req.body || {};
+    const errors: { field: string; message: string }[] = [];
+    const set: Record<string, unknown> = {};
+    const str = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : undefined);
+    if (b.description !== undefined) set.description = str(b.description, 1000) ?? '';
+    if (b.note !== undefined) set.note = str(b.note, 1000) ?? '';
+    if (b.date !== undefined) {
+      if (typeof b.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(b.date)) errors.push({ field: 'date', message: "Sana YYYY-MM-DD ko'rinishida bo'lsin" });
+      else set.date = b.date;
+    }
+    if (b.projectId !== undefined) {
+      if (b.projectId === null || b.projectId === '') set.projectId = undefined;
+      else if (!(await ObjectForHints.exists(scoped({ _id: String(b.projectId) })).catch(() => null))) errors.push({ field: 'projectId', message: 'Obyekt topilmadi' });
+      else set.projectId = String(b.projectId);
+    }
+    if (tx.type === 'transfer') {
+      if (b.materialName !== undefined) { const n = str(b.materialName, 200); if (!n) errors.push({ field: 'materialName', message: 'Material nomi kerak' }); else set.materialName = n; }
+      if (b.quantity !== undefined) { const q = Number(b.quantity); if (!Number.isFinite(q) || q <= 0) errors.push({ field: 'quantity', message: "Miqdor musbat son bo'lsin" }); else set.quantity = q; }
+      if (b.unit !== undefined) set.unit = str(b.unit, 20) ?? '';
+      if (b.price !== undefined) { const p = Number(b.price); if (b.price !== null && (!Number.isFinite(p) || p < 0)) errors.push({ field: 'price', message: "Narx noto'g'ri" }); else set.price = b.price === null ? undefined : p; }
+    } else {
+      if (b.amount !== undefined) {
+        const a = Number(b.amount);
+        if (!Number.isFinite(a) || a <= 0 || a > 1e13) errors.push({ field: 'amount', message: "Summa musbat son bo'lsin" });
+        else { set.amount = a; if (!tx.currency || tx.currency === 'UZS') { set.uzsAmount = a; set.originalAmount = a; } }
+      }
+      if (b.type !== undefined) {
+        if (tx.type === 'income' || !EXPENSE_TYPES.includes(String(b.type))) errors.push({ field: 'type', message: "Turni o'zgartirib bo'lmaydi" });
+        else set.type = String(b.type);
+      }
+    }
+    if (errors.length) return res.status(400).json({ success: false, errors });
+    if (!Object.keys(set).length) return res.status(400).json({ error: "O'zgartirish yo'q" });
+    const before = tx.toObject();
+    tx.set(set);
+    await tx.save();
+    if (actor) {
+      logAudit({
+        userId: actingUserId, userName: `${actor.firstName} ${actor.lastName || ''}`.trim(), userRole: actor.role,
+        action: 'update', entity: 'transaction', entityId: String(tx._id),
+        description: `Tranzaksiya o'zgartirildi: ${Object.keys(set).join(', ')}`,
+        oldValue: Object.fromEntries(Object.keys(set).map((k) => [k, (before as any)[k]])), newValue: set,
+        companyId: actor.companyId, req,
+      }).catch(() => {});
+    }
+    res.json({ ...tx.toObject(), id: tx._id });
+  } catch (err) {
+    console.error('[transactions PATCH]', (err as Error)?.message);
+    res.status(500).json({ error: 'Server xatoligi' });
+  }
+});
+
 router.delete('/:id', async (req, res) => {
   try {
     const actingUserId = getTenant()?.userId;

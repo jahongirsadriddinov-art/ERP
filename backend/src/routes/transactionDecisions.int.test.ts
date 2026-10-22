@@ -116,3 +116,23 @@ describe('reject', () => {
     expect((await patch('ish', recv, 'reject')).status).toBe(200);
   });
 });
+
+describe("tahrirlash (owner 2026-10-22): o'zi qo'shganini — o'zi, hammasini — direktor/o'rinbosar", () => {
+  const edit = (k: string, id: string, body: any) => request(app).patch(`/api/transactions/${id}`).set('Authorization', tok(k)).send(body);
+  it("muallif o'z kutilayotgan chiqimini o'zgartiradi; boshqasi — 403; tasdiqlanganini faqat rahbar; boshqa firma — 404", async () => {
+    const id = await mkTx({ type: 'material', createdById: ids.ish, description: 'Sement' });
+    const r1 = await edit('ish', id, { amount: 150_000, description: 'Sement 3 qop', type: 'transport', date: '2026-10-20' });
+    expect(r1.status).toBe(200);
+    expect(r1.body).toMatchObject({ amount: 150_000, description: 'Sement 3 qop', type: 'transport', date: '2026-10-20' });
+    expect((await edit('prorab', id, { amount: 1 })).status).toBe(403);
+    expect((await edit('ish', id, { type: 'income' })).status).toBe(400);
+    expect((await edit('ish', id, { amount: -5 })).status).toBe(400);
+    await Transaction.updateOne({ _id: id }, { $set: { status: 'confirmed' } });
+    expect((await edit('ish', id, { amount: 2 })).status).toBe(409);
+    const r2 = await edit('orin', id, { amount: 160_000 });
+    expect(r2.status).toBe(200);
+    expect(r2.body.amount).toBe(160_000);
+    expect(await AuditLog.countDocuments({ entity: 'transaction', entityId: id, action: 'update' })).toBe(2);
+    expect((await edit('other', id, { amount: 3 })).status).toBe(404);
+  });
+});

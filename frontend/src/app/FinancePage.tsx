@@ -11,7 +11,11 @@ import Wallet from "@hugeicons/core-free-icons/Wallet01Icon";
 import AlertCircle from "@hugeicons/core-free-icons/AlertCircleIcon";
 import Loader2 from "@hugeicons/core-free-icons/Loading03Icon";
 import Copy from "@hugeicons/core-free-icons/Copy01Icon";
+import Edit from "@hugeicons/core-free-icons/Edit02Icon";
+import Trash from "@hugeicons/core-free-icons/Delete02Icon";
 import { MorphIcon } from "morphicons/react";
+import { SwipeRow } from "./components/SwipeRow";
+import { confirmDialog } from "./lib/confirmDialog";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import { API_BASE } from "./api";
@@ -19,10 +23,25 @@ import { guessExpType } from "./lib/expense";
 import { EXP_LABELS, EscClose, LIVE_EUR_RATE, LIVE_RATE_DATE, LIVE_USD_RATE, expLabel, exportExpensesToCsv, fmt, fmtUsd, isAdmin, resizeImageFile, roleLabel, type AppUser, type ExpType, type Expense, type Project } from "./App";
 
 // ─── Finance Page ──────────────────────────────────────────────────────────────
-export function FinancePage({ currentUser, users, projects, expenses, onAddExpense, onConfirm, onApprove, onReject, allowIncome }:
-  { currentUser: AppUser; users: AppUser[]; projects: Project[]; expenses: Expense[]; onAddExpense: (e: Expense) => void; onConfirm: (id: string) => void; onApprove?: (id: string, note?: string) => void; onReject?: (id: string) => void; allowIncome?: boolean }) {
+export function FinancePage({ currentUser, users, projects, expenses, onAddExpense, onConfirm, onApprove, onReject, allowIncome, onUpdated, onDeleted }:
+  { currentUser: AppUser; users: AppUser[]; projects: Project[]; expenses: Expense[]; onAddExpense: (e: Expense) => void; onConfirm: (id: string) => void; onApprove?: (id: string, note?: string) => void; onReject?: (id: string) => void; allowIncome?: boolean;
+    onUpdated?: (e: Expense) => void; onDeleted?: (id: string) => void }) {
   const { t } = useTranslation();
   const [showAdd, setShowAdd] = useState(false);
+  const [editExp, setEditExp] = useState<Expense|null>(null);
+  // Owner 2026-10-22: o'zi qo'shganini — o'zi (tasdiqlanmaguncha), hammasini — direktor/o'rinbosar (backend bilan bir xil qoida)
+  const isBoss = ['direktor','orinbosar'].includes(currentUser.role) || !!(currentUser as any).isOwner;
+  const canEdit = (e: Expense) => isBoss || (e.createdById === currentUser.id && e.status !== "confirmed");
+  const removeExp = async (e: Expense) => {
+    if (!(await confirmDialog(t('finance.deleteConfirm', { defaultValue: "Bu yozuv o'chirilsinmi?" }), { danger: true, okText: t('common.delete', { defaultValue: "O'chirish" }) }))) return;
+    try {
+      const r = await fetch(`${API_BASE}/api/transactions/${e.id}`, { method: "DELETE" });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) { toast.error(d.error || t('common.error', { defaultValue: 'Xatolik' })); return; }
+      onDeleted?.(e.id);
+      toast.success(t('finance.deleted', { defaultValue: "O'chirildi" }));
+    } catch { toast.error(t('common.networkError', { defaultValue: "Internet bilan aloqa yo'q" })); }
+  };
   const [filter, setFilter] = useState<"all"|ExpType>("all");
   const [projFilter, setProjFilter] = useState("all");
   const [detailExp, setDetailExp] = useState<Expense|null>(null);
@@ -122,7 +141,12 @@ export function FinancePage({ currentUser, users, projects, expenses, onAddExpen
               const approver=e.approverId?users.find(u=>u.id===e.approverId):undefined;
               const borderColor = e.status==="confirmed" ? "#22c55e" : e.requiresAdminApproval ? "#e5633a" : "#f59e0b";
               return (
-                <button key={e.id} onClick={()=>setDetailExp(e)} className="w-full text-left surface rounded-2xl p-3 text-sm md:text-xs hover:bg-muted/20 liquid-transition" style={{ borderLeft: `4px solid ${borderColor}` }}>
+                <SwipeRow key={e.id} testId="finance-row" onOpen={()=>setDetailExp(e)}
+                  actions={canEdit(e) ? [
+                    { key: "edit", label: t('common.edit', { defaultValue: "O'zgartirish" }), icon: Edit, tone: "primary", onClick: () => setEditExp(e) },
+                    { key: "del", label: t('common.delete', { defaultValue: "O'chirish" }), icon: Trash, tone: "danger", onClick: () => { void removeExp(e); } },
+                  ] : []}>
+                <div className="w-full text-left surface rounded-2xl p-3 text-sm md:text-xs hover:bg-muted/20 liquid-transition" style={{ borderLeft: `4px solid ${borderColor}` }}>
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 mb-1 flex-wrap">
@@ -150,7 +174,8 @@ export function FinancePage({ currentUser, users, projects, expenses, onAddExpen
                       <button onClick={()=>onReject?.(e.id)} className="flex-1 text-sm md:text-xs bg-red-600 text-white rounded py-1.5 hover:bg-red-700 font-semibold flex items-center justify-center gap-1"><MorphIcon icon={X} className="w-3 h-3" />{t('approvalChain.reject')}</button>
                     </div>
                   )}
-                </button>
+                </div>
+                </SwipeRow>
               );
             })
         }
@@ -158,6 +183,7 @@ export function FinancePage({ currentUser, users, projects, expenses, onAddExpen
 
       {showAdd&&<AddExpenseModal currentUser={currentUser} projects={projects} allUsers={users} onClose={()=>setShowAdd(false)} onAdd={onAddExpense} allowIncome={allowIncome}/>}
       {detailExp&&<ExpenseDetailModal expense={detailExp} users={users} projects={projects} onClose={()=>setDetailExp(null)}/>}
+      {editExp&&<EditExpenseModal expense={editExp} projects={projects} onClose={()=>setEditExp(null)} onSaved={(x)=>{ setEditExp(null); onUpdated?.(x); }}/>}
     </div>
   );
 }
@@ -443,6 +469,76 @@ export function ExpenseDetailModal({ expense, users, projects, onClose }: { expe
           <button onClick={() => exportExpensesToCsv([expense], users, projects, `chiqim_${expense.date}.csv`)}
             className="btn btn-outline w-full flex items-center justify-center gap-1.5 text-sm md:text-xs py-2.5 rounded-full">
             <MorphIcon icon={Download} className="w-3.5 h-3.5" />{t('reports.exportExcel')}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+// ─── Chiqimni tahrirlash (owner 2026-10-22) ────────────────────────────────────
+export function EditExpenseModal({ expense, projects, onClose, onSaved }: { expense: Expense; projects: Project[]; onClose: () => void; onSaved: (e: Expense) => void }) {
+  const { t } = useTranslation();
+  const [amount, setAmount] = useState(String(expense.amount || ""));
+  const [description, setDescription] = useState(expense.description || "");
+  const [type, setType] = useState<string>(expense.type);
+  const [date, setDate] = useState(expense.date || "");
+  const [projectId, setProjectId] = useState(expense.projectId || "");
+  const [busy, setBusy] = useState(false);
+  const isIncome = expense.type === "income";
+  const save = async () => {
+    const body: Record<string, unknown> = {};
+    const a = Number(String(amount).replace(/\s/g, ""));
+    if (a !== expense.amount) body.amount = a;
+    if (description.trim() !== (expense.description || "")) body.description = description.trim();
+    if (!isIncome && type !== expense.type) body.type = type;
+    if (date !== expense.date) body.date = date;
+    if (projectId !== (expense.projectId || "")) body.projectId = projectId || null;
+    if (!Object.keys(body).length) { onClose(); return; }
+    setBusy(true);
+    try {
+      const r = await fetch(`${API_BASE}/api/transactions/${expense.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) { toast.error(d.errors?.[0]?.message || d.error || t('common.error', { defaultValue: 'Xatolik' })); return; }
+      toast.success(t('common.saved', { defaultValue: 'Saqlandi' }));
+      onSaved({ ...expense, ...d, id: d.id || d._id || expense.id });
+    } catch { toast.error(t('common.networkError', { defaultValue: "Internet bilan aloqa yo'q" })); }
+    finally { setBusy(false); }
+  };
+  const field = "w-full h-12 rounded-xl border border-border bg-input-background px-3 text-base sm:text-sm focus:outline-none focus:border-primary";
+  return (
+    <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center" role="dialog" aria-modal="true">
+      <EscClose onClose={onClose} />
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative w-full sm:max-w-md bg-card rounded-t-3xl sm:rounded-3xl p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] space-y-3 max-h-[92dvh] overflow-y-auto animate-slide-up-fade" data-testid="edit-expense">
+        <div className="mx-auto -mt-2 mb-1 h-1.5 w-10 rounded-full bg-muted sm:hidden" />
+        <h3 className="text-base font-bold">{isIncome ? t('finance.editIncome', { defaultValue: "Kirimni o'zgartirish" }) : t('finance.editExpense', { defaultValue: "Chiqimni o'zgartirish" })}</h3>
+        <label className="block"><span className="text-xs font-semibold text-muted-foreground">{t('finance.amount', { defaultValue: "Summa (so'm)" })}</span>
+          <input inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^\d\s]/g, ""))} className={field} /></label>
+        <label className="block"><span className="text-xs font-semibold text-muted-foreground">{t('finance.description', { defaultValue: 'Izoh' })}</span>
+          <input value={description} maxLength={1000} onChange={(e) => setDescription(e.target.value)} className={field} /></label>
+        {!isIncome && (
+          <div><span className="text-xs font-semibold text-muted-foreground">{t('finance.type', { defaultValue: 'Turi' })}</span>
+            <div className="flex flex-wrap gap-1.5 mt-1">
+              {(Object.keys(EXP_LABELS) as ExpType[]).map((k) => (
+                <button key={k} type="button" onClick={() => setType(k)} className={`h-10 px-4 rounded-full text-sm font-semibold ${type === k ? "bg-primary text-white" : "bg-muted text-muted-foreground"}`}>{expLabel(t, k)}</button>
+              ))}
+            </div></div>
+        )}
+        <div className="grid grid-cols-2 gap-2">
+          <label className="block"><span className="text-xs font-semibold text-muted-foreground">{t('finance.date', { defaultValue: 'Sana' })}</span>
+            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={field} /></label>
+          <label className="block"><span className="text-xs font-semibold text-muted-foreground">{t('finance.object', { defaultValue: 'Obyekt' })}</span>
+            <select value={projectId} onChange={(e) => setProjectId(e.target.value)} className={field}>
+              <option value="">—</option>
+              {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select></label>
+        </div>
+        <div className="flex gap-2 pt-1">
+          <button type="button" onClick={onClose} className="flex-1 h-12 rounded-xl border border-border font-semibold">{t('common.cancel', { defaultValue: 'Bekor qilish' })}</button>
+          <button type="button" disabled={busy || !Number(String(amount).replace(/\s/g, ""))} onClick={save} className="flex-1 h-12 rounded-xl bg-primary text-white font-semibold disabled:opacity-50 inline-flex items-center justify-center gap-2" data-testid="edit-expense-save">
+            {busy && <MorphIcon icon={Loader2} className="w-4 h-4 animate-spin" />}{t('common.save', { defaultValue: 'Saqlash' })}
           </button>
         </div>
       </div>

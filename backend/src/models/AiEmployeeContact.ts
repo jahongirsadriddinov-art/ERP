@@ -24,6 +24,9 @@ export interface IAiEmployeeContact extends Document {
   };
   optOut: { calls: boolean; reminders: boolean; all: boolean; at?: Date; via?: string };
   botAiModeUntil?: Date;
+  /** Owner 2026-10-22: AI oxirgi salomi (bir xil salom ketma-ket takrorlanmasin) — matn va ovoz uchun umumiy. */
+  lastGreeting?: string;
+  lastGreetingAt?: Date;
   /** Bot xabari 403 (foydalanuvchi botni bloklagan) olgan vaqt; keyingi muvaffaqiyatli yuborishda tozalanadi (P4). */
   botBlockedAt?: Date;
   /** Shaxsiy jim soatlar (P3, /me): firma jim soatlariga QO'SHIMCHA — bu oraliqda AI qo'ng'iroq qilmaydi. */
@@ -64,6 +67,8 @@ const AiEmployeeContactSchema = new Schema<IAiEmployeeContact>({
     via: String,
   },
   botAiModeUntil: Date,
+  lastGreeting: { type: String, maxlength: 300 },
+  lastGreetingAt: Date,
   botBlockedAt: Date,
   quietHours: { type: { from: String, to: String, _id: false }, default: undefined },
   scheduleOverride: {

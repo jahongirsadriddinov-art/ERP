@@ -14,9 +14,10 @@ import Chevron from "@hugeicons/core-free-icons/ArrowDown01Icon";
 import Back from "@hugeicons/core-free-icons/ArrowLeft01Icon";
 import Pulse from "@hugeicons/core-free-icons/Activity01Icon";
 import Refresh from "@hugeicons/core-free-icons/Refresh01Icon";
+import Alert from "@hugeicons/core-free-icons/Alert02Icon";
 import BetaBadge from "../../BetaBadge";
 import {
-  isNotReady, platformApi, type AiUsageSummary, type PlatformCompany, type PlatformCompanyView, type PlatformOverview,
+  AI_UNMET_REASONS, isNotReady, platformApi, type AiUnmetPage, type AiUnmetReason, type AiUsageSummary, type PlatformCompany, type PlatformCompanyView, type PlatformOverview,
   type PlatformTgStatus, type PlatformUsage, type PlatformUsageRow,
 } from "../api";
 import { todayTashkent } from "../scheduleHelpers";
@@ -36,10 +37,11 @@ const TelegramAccountPanel = lazy(() => import("../TelegramAccountPanel"));
 // Firma Telegram akkauntlari — alohida bo'lim (owner 2026-10-19)
 const CompanyTgAccounts = lazy(() => import("../CompanyTgAccounts"));
 
-type Tab = "overview" | "companies" | "usage" | "telegram" | "tgAccounts" | "archives" | "audit";
+type Tab = "overview" | "companies" | "usage" | "telegram" | "tgAccounts" | "archives" | "audit" | "unmet";
 const TABS: { key: Tab; icon: any }[] = [
   { key: "overview", icon: Pulse }, { key: "companies", icon: Building }, { key: "usage", icon: Chart },
   { key: "telegram", icon: Telegram }, { key: "tgAccounts", icon: Users }, { key: "archives", icon: Archive }, { key: "audit", icon: History },
+  { key: "unmet", icon: Alert },
 ];
 const fetchArchives = () => platformApi.getArchives();
 const fetchAudit = (p: { page: number; limit: number; status?: string }) => platformApi.getAudit(p);
@@ -72,6 +74,7 @@ export default function AiPlatformPanel() {
       {tab === "telegram" && <Suspense fallback={<Skeleton />}><TelegramAccountPanel /></Suspense>}
       {tab === "tgAccounts" && <Suspense fallback={<Skeleton />}><CompanyTgAccounts /></Suspense>}
       {tab === "archives" && <ArchivesTab />}
+      {tab === "unmet" && <UnmetTab />}
       {tab === "audit" && <AuditLog fetcher={fetchAudit} title={t("aiVoice.platform.tabs.audit")} testId="ai-pf-audit" />}
     </div>
   );
@@ -331,6 +334,67 @@ function Usage() {
         </Card>
       )}
     </div>
+  );
+}
+
+// ───────────── "AI qila olmadi" (owner 2026-10-22) ─────────────
+const UNMET_TONE: Record<AiUnmetReason, Tone> = {
+  refusal: "red", unknown_tool: "amber", bad_args: "amber", tool_error: "red", tool_denied: "amber", rounds: "amber", provider_failed: "gray", cant_reply: "sky",
+};
+function UnmetTab() {
+  const { t, i18n } = useTranslation();
+  const k = (s: string) => t(`aiVoice.platform.unmet.${s}`);
+  const [reason, setReason] = useState<AiUnmetReason | "">("");
+  const [limit, setLimit] = useState(50);
+  const [data, setData] = useState<Loadable<AiUnmetPage>>(null);
+  const load = useCallback(() => {
+    setData(null);
+    platformApi.getUnmet({ limit, ...(reason ? { reason } : {}) }).then((r) => setData(settle(r)));
+  }, [limit, reason]);
+  useEffect(() => { load(); }, [load]);
+  const fmt = (iso: string) => {
+    try { return new Date(iso).toLocaleString(i18n.language?.startsWith("ru") ? "ru-RU" : "uz-UZ", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }); } catch { return iso; }
+  };
+  const page = data && data !== "nr" ? data : null;
+  return (
+    <Card icon={Alert} title={k("title")} hint={k("hint")} testId="ai-pf-unmet" right={
+      <button type="button" onClick={load} aria-label="refresh" className="h-8 w-8 rounded-lg border border-border inline-flex items-center justify-center hover:border-primary/50">
+        <MorphIcon icon={Refresh} className="w-4 h-4" />
+      </button>
+    }>
+      <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-2 -mx-1 px-1">
+        <Chip active={!reason} onClick={() => setReason("")}>{k("all")}{page ? ` · ${page.total}` : ""}</Chip>
+        {AI_UNMET_REASONS.map((r) => (
+          <Chip key={r} active={reason === r} onClick={() => setReason(r)} testId={`ai-pf-unmet-${r}`}>
+            {k(`reasons.${r}`)}{page?.byReason7d?.[r] ? ` · ${page.byReason7d[r]}` : ""}
+          </Chip>
+        ))}
+      </div>
+      {data === null ? <Skeleton /> : data === "nr" ? <Notice>{t("aiVoice.platform.notReady")}</Notice> : data === false ? <Notice tone="warn">{t("aiVoice.common.error")}</Notice>
+        : !page?.items.length ? <p className="text-sm text-muted-foreground py-6 text-center" data-testid="ai-pf-unmet-empty">{k("empty")}</p> : (
+          <ul className="space-y-2">
+            {page.items.map((it) => (
+              <li key={it.id} className="rounded-xl border border-border p-3 space-y-1.5" data-testid="ai-pf-unmet-item">
+                <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+                  <Badge tone={UNMET_TONE[it.reason] || "gray"}>{k(`reasons.${it.reason}`)}</Badge>
+                  <span className="tabular-nums">{fmt(it.createdAt)}</span>
+                  <span>·</span><span className="truncate max-w-[40vw]">{it.companyName || it.companyId}</span>
+                  {it.userName && <><span>·</span><span className="truncate max-w-[30vw]">{it.userName}{it.userRole ? ` (${it.userRole})` : ""}</span></>}
+                  <span>·</span><span>{it.channel}</span>
+                </div>
+                <p className="text-sm break-words"><b className="text-muted-foreground font-semibold">{k("user")}:</b> {it.userText || "—"}</p>
+                <p className="text-sm break-words text-muted-foreground"><b className="font-semibold">{k("ai")}:</b> {it.aiReply || "—"}</p>
+                {it.toolName && <p className="text-xs font-mono break-words text-muted-foreground">🔧 {it.toolName}{it.toolMessage ? `: ${it.toolMessage}` : ""}</p>}
+              </li>
+            ))}
+          </ul>
+        )}
+      {page && page.items.length < page.total && limit < 200 && (
+        <button type="button" onClick={() => setLimit((l) => Math.min(200, l + 50))} className="mt-3 h-9 px-3.5 rounded-xl border border-border text-xs font-semibold">
+          {t("aiVoice.platform.loadMore")}
+        </button>
+      )}
+    </Card>
   );
 }
 

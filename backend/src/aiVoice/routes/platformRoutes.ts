@@ -6,6 +6,7 @@ import AiChannelConnection from '../../models/AiChannelConnection';
 import AiEmployeeContact from '../../models/AiEmployeeContact';
 import Company from '../../models/Company';
 import User from '../../models/User';
+import AiUnmetRequest, { AI_UNMET_REASONS } from '../../models/AiUnmetRequest';
 import { logAudit } from '../../services/audit';
 import { placeGuestCall, telegramCallChannel } from '../channels/telegramCallChannel';
 import { aiConfig } from '../config';
@@ -144,6 +145,44 @@ export async function platformStatusView() {
     openConversationAt: conn?.openConversationAt ? new Date(conn.openConversationAt).toISOString() : undefined,
   };
 }
+
+// ───────────── "AI qila olmadi" (owner 2026-10-22) ─────────────
+// AI navbati rad / noma'lum tool / tool xatosi / "qila olmayman" javobi bilan tugagan so'rovlar (brain/unmet.ts).
+// GET /unmet?limit=50&reason=tool_error&companyId=... — eng yangisi birinchi; firma va foydalanuvchi nomi bilan.
+router.get('/unmet', wrap(async (req, res) => {
+  const n = Number(req.query.limit);
+  const limit = Number.isFinite(n) ? Math.max(1, Math.min(200, Math.floor(n))) : 50;
+  const filter: Record<string, unknown> = {};
+  if (typeof req.query.reason === 'string' && (AI_UNMET_REASONS as string[]).includes(req.query.reason)) filter.reason = req.query.reason;
+  if (typeof req.query.companyId === 'string' && (isObjectIdString(req.query.companyId) || req.query.companyId === 'platform')) filter.companyId = req.query.companyId;
+  const since = new Date(Date.now() - 7 * 86_400_000);
+  const [rows, total, week] = await Promise.all([
+    AiUnmetRequest.find(filter).sort({ createdAt: -1, _id: -1 }).limit(limit).lean(),
+    AiUnmetRequest.countDocuments(filter),
+    AiUnmetRequest.aggregate([{ $match: { ...filter, createdAt: { $gte: since } } }, { $group: { _id: '$reason', n: { $sum: 1 } } }]),
+  ]);
+  const uids = [...new Set(rows.map((r: any) => String(r.userId)).filter(isObjectIdString))];
+  const cids = [...new Set(rows.map((r: any) => String(r.companyId)).filter(isObjectIdString))];
+  const [users, cos]: any[][] = await Promise.all([
+    uids.length ? User.find({ _id: { $in: uids } }).select('firstName lastName role').lean() : [],
+    cids.length ? Company.find({ _id: { $in: cids } }).select('name').lean() : [],
+  ]);
+  const uMap = new Map(users.map((u) => [String(u._id), u]));
+  const cMap = new Map(cos.map((c) => [String(c._id), String(c.name || '')]));
+  res.json({
+    total,
+    byReason7d: Object.fromEntries((week as any[]).map((w) => [w._id, w.n])),
+    items: rows.map((r: any) => {
+      const u = uMap.get(String(r.userId));
+      return {
+        id: String(r._id), createdAt: new Date(r.createdAt).toISOString(), companyId: r.companyId,
+        companyName: cMap.get(String(r.companyId)) || (r.companyId === 'platform' ? 'platform' : ''),
+        userId: r.userId, userName: u ? fullName(u) : '', userRole: u?.role || '', channel: r.channel, reason: r.reason,
+        userText: r.userText || '', aiReply: r.aiReply || '', toolName: r.toolName || undefined, toolMessage: r.toolMessage || undefined,
+      };
+    }),
+  });
+}));
 
 // ───────────── Holat ─────────────
 router.get('/telegram-account', wrap(async (_req, res) => {

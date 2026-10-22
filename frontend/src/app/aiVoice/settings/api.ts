@@ -225,7 +225,17 @@ export const platformApi = {
   getArchives: (p: { companyId?: string } = {}) => call<unknown>("GET", `/platform/archives${qs({ limit: 60, ...p })}`),
   archiveUrl: (id: string) => `/platform/archives/${encodeURIComponent(id)}/download`,
   runArchive: () => call<{ ok: true; jobId: string; duplicate: boolean }>("POST", "/platform/archives/run", {}),
+  getUnmet: (p: { limit?: number; reason?: AiUnmetReason } = {}) => call<AiUnmetPage>("GET", `/platform/unmet${qs({ limit: 50, ...p })}`),
 };
+
+/** "AI qila olmadi" (owner 2026-10-22): AI bajara olmagan so'rovlar — dasturchi ko'radi. */
+export type AiUnmetReason = "refusal" | "unknown_tool" | "bad_args" | "tool_error" | "tool_denied" | "rounds" | "provider_failed" | "cant_reply";
+export const AI_UNMET_REASONS: AiUnmetReason[] = ["cant_reply", "tool_error", "unknown_tool", "tool_denied", "refusal", "bad_args", "rounds", "provider_failed"];
+export interface AiUnmetItem {
+  id: string; createdAt: string; companyId: string; companyName?: string; userId: string; userName?: string; userRole?: string;
+  channel: string; reason: AiUnmetReason; userText: string; aiReply: string; toolName?: string; toolMessage?: string;
+}
+export interface AiUnmetPage { total: number; byReason7d: Partial<Record<AiUnmetReason, number>>; items: AiUnmetItem[] }
 
 /** Faylni token bilan yuklab olib, brauzerda saqlash (arxivlar). true — muvaffaqiyatli. */
 export async function downloadFile(path: string, fallbackName: string): Promise<boolean> {

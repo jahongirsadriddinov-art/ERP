@@ -181,7 +181,8 @@ describe('aiSuppressedMorningUserIds (ertalabki eslatma, review C8)', () => {
 
 // bot.ts'ni import qilib bo'lmaydi — ilgaklar to'g'ri joyda chaqirilishini manba tartibi bilan tekshiramiz.
 describe("bot.ts ulanish joylari", () => {
-  const src = fs.readFileSync(path.join(__dirname, '../../services/bot.ts'), 'utf8').split('\r\n').join('\n');   // Windows (CRLF) checkout'da ham
+  // Windows (core.autocrlf) checkout'ida CRLF — "\n}\n" qidiruvi uchun normallashtiriladi
+  const src = fs.readFileSync(path.join(__dirname, '../../services/bot.ts'), 'utf8').replace(/\r\n/g, '\n');
   const section = (start: string, end: string) => {
     const i = src.indexOf(start);
     const j = src.indexOf(end, i + start.length);

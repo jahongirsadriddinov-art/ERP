@@ -124,9 +124,15 @@ router.post('/backup/import', requireFeature('backup'), async (req, res) => {
     const others: any[] = await User.find({ companyId: { $ne: cid }, $or: [{ _id: { $in: ids.filter((x) => /^[a-f0-9]{24}$/i.test(x)) } }, { phone: { $in: phones } }] })
       .select('_id phone').lean().catch(() => []);
     for (const o of others) { foreignUsers.add(String(o._id)); foreignUsers.add(String(o.phone)); }
+    // XAVFSIZLIK (audit 2026-10-22): firma egasi(lari) importda TEGILMAYDI — o'chirilmaydi va fayldagi
+    // nusxasi bilan almashtirilmaydi; fayldan hech kim isOwner olmaydi. Avval egasi bo'lmagan direktor
+    // soxta fayl bilan egani o'chirib/telefonini o'z raqamiga almashtirib (keyin OTP bilan kirib) yoki
+    // o'zini ega qilib firmani egallab olishi mumkin edi.
+    const owners: any[] = await User.find({ companyId: cid, isOwner: true }).select('_id phone').lean();
+    for (const o of owners) { foreignUsers.add(String(o._id)); foreignUsers.add(String(o.phone)); }
     const users = stamp(rawUsers)
       .filter((u: any) => COMPANY_ROLES.includes(String(u.role)) && !foreignUsers.has(String(u._id)) && !foreignUsers.has(String(u.phone)))
-      .map((u: any) => { const { isDeveloper: _d, ...rest } = u; return rest; });
+      .map((u: any) => { const { isDeveloper: _d, isOwner: _o, ...rest } = u; return rest; });
     const objects = stamp(arr(data.objects));
     const transactions = stamp(arr(data.transactions));
     const materials = stamp(arr(data.materials));
@@ -155,7 +161,7 @@ router.post('/backup/import', requireFeature('backup'), async (req, res) => {
     };
 
     await Promise.all([
-      User.deleteMany(filter), ObjectModel.deleteMany(filter),
+      User.deleteMany({ ...filter, isOwner: { $ne: true } }), ObjectModel.deleteMany(filter),
       Transaction.deleteMany(filter), Material.deleteMany(filter), Attendance.deleteMany(filter),
     ]);
     const [uCount, oCount, tCount, mCount, aCount, alCount] = await Promise.all([

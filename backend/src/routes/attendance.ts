@@ -104,6 +104,21 @@ router.get('/', async (req, res) => {
       return res.status(403).json({ error: 'Ruxsat yo\'q' });
     }
     const filter: any = scoped();
+    // ?all=1 (faqat rahbariyat) — butun firma bo'yicha davr yozuvlari: "Hisobotlar" Excel'idagi "Davomat" varag'i
+    // uchun (owner 2026-10-22). Davr majburiy va 400 kundan oshmaydi — bazani bitta so'rov bilan to'liq tortmaslik uchun.
+    const all = String(req.query.all || '') === '1';
+    if (all) {
+      if (!isBoss) return res.status(403).json({ error: "Ruxsat yo'q" });
+      const ymd = /^\d{4}-\d{2}-\d{2}$/;
+      if (!ymd.test(String(from || '')) || !ymd.test(String(to || '')) || from > to) return res.status(400).json({ error: 'from va to (YYYY-MM-DD) talab etiladi' });
+      if ((Date.parse(to) - Date.parse(from)) / 86400000 > 400) return res.status(400).json({ error: "Davr 400 kundan oshmasin" });
+      filter.date = { $gte: from, $lte: to };
+      const records = await Attendance.find(filter).sort({ date: -1 }).limit(20000).lean();
+      return res.json(records.map((r: any) => ({
+        id: String(r._id), userId: r.userId, date: r.date, checkIn: r.checkIn || null, checkOut: r.checkOut || null,
+        workHours: r.workHours ?? null, status: r.status, note: r.note || '',
+      })));
+    }
     filter.userId = userId || tenant.userId;
     if (date) { filter.date = date; }
     else if (from || to) {

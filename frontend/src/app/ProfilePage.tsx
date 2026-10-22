@@ -151,13 +151,13 @@ function AuditLogSection({ token }: { token: string }) {
           <div className="flex justify-end mb-2">
             <button onClick={async () => {
                 try {
-                  const r = await fetch(`${API_BASE}/api/audit-logs/export.csv`, { headers: { Authorization: `Bearer ${token}` } });
+                  const r = await fetch(`${API_BASE}/api/audit-logs/export.xlsx`, { headers: { Authorization: `Bearer ${token}` } });
                   if (!r.ok) throw new Error();
-                  await saveOrShareBlob(`audit-${new Date().toISOString().slice(0, 10)}.csv`, await r.blob());
+                  await saveOrShareBlob(`audit-${new Date().toISOString().slice(0, 10)}.xlsx`, await r.blob());
                 } catch { toast.error(t('common.error')); }
               }}
               className="flex items-center gap-1.5 text-xs font-semibold border border-border rounded-full px-3 py-1.5 hover:bg-muted liquid-transition">
-              <MorphIcon icon={Download} className="w-3.5 h-3.5" />{t('profile.auditExport', { defaultValue: "Excel/CSV yuklab olish" })}
+              <MorphIcon icon={Download} className="w-3.5 h-3.5" />{t('profile.auditExport', { defaultValue: "Excel yuklab olish" })}
             </button>
           </div>
           {loading && <SkeletonList items={4} withAvatar={false} />}

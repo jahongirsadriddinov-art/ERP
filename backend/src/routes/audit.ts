@@ -3,6 +3,7 @@ import AuditLog from '../models/AuditLog';
 import { getTenant } from '../middleware/tenantContext';
 import User from '../models/User';
 import { requireFeature } from '../middleware/requireFeature';
+import { buildXlsx, tableSheet, tashkentSerial } from '../utils/xlsxWriter';
 
 const router = Router();
 
@@ -96,6 +97,50 @@ router.get('/export.csv', requireFeature('audit_log'), async (req, res) => {
     res.send('\uFEFF' + [header.map(cell).join(';'), ...rows].join('\r\n'));
   } catch (err) {
     console.error('Audit export error:', err);
+    res.status(500).json({ error: 'Server xatoligi' });
+  }
+});
+
+// GET /api/audit-logs/export.xlsx — xuddi shu jurnal, tartibli Excel (owner 2026-10-22): vaqt — haqiqiy sana-vaqt
+// (Toshkent), rol so'z bilan, sarlavha muzlatilgan va filtrli. CSV yo'li eski ilova versiyalari uchun qoldirildi.
+router.get('/export.xlsx', requireFeature('audit_log'), async (req, res) => {
+  try {
+    const tenant = getTenant();
+    if (!tenant?.userId) return res.status(401).json({ error: 'Autentifikatsiya talab etiladi' });
+    const actor = await User.findById(tenant.userId).catch(() => null);
+    if (!actor || !['direktor', 'orinbosar', 'dasturchi'].includes(actor.role)) {
+      return res.status(403).json({ error: "Faqat admin ko'rishi mumkin" });
+    }
+    const { from, to } = req.query as Record<string, string>;
+    const filter: any = {};
+    if (actor.role !== 'dasturchi') filter.companyId = actor.companyId || tenant.companyId;
+    if (from || to) {
+      filter.createdAt = {};
+      if (from) filter.createdAt.$gte = new Date(from);
+      if (to) filter.createdAt.$lte = new Date(to + 'T23:59:59');
+    }
+    const logs: any[] = await AuditLog.find(filter).sort({ createdAt: -1 }).limit(20000).lean();
+    const ROLE: Record<string, string> = { direktor: 'Direktor', orinbosar: "O'rinbosar", prorab: 'Prorab', brigadir: 'Brigadir', ishchi: 'Ishchi', dasturchi: 'Dasturchi' };
+    const val = (v: any) => v == null ? '' : typeof v === 'object' ? JSON.stringify(v) : String(v);
+    const sheet = tableSheet({
+      name: 'Audit jurnali', title: 'Audit jurnali', subtitle: `${logs.length} ta yozuv`,
+      columns: [
+        { header: 'Vaqt', width: 17, style: 'datetime' }, { header: 'Foydalanuvchi', width: 22 }, { header: 'Rol', width: 12 },
+        { header: 'Amal', width: 14 }, { header: "Bo'lim", width: 14 }, { header: 'Tavsif', width: 48 },
+        { header: 'Eski qiymat', width: 30 }, { header: 'Yangi qiymat', width: 30 }, { header: 'ID', width: 26 },
+      ],
+      rows: logs.map(l => [
+        tashkentSerial(l.createdAt) ?? '', l.userName || l.userId || '', ROLE[l.userRole] || l.userRole || '',
+        l.action || '', l.entity || '', l.description || '', val(l.oldValue), val(l.newValue), l.entityId || '',
+      ]),
+      emptyText: "Yozuv yo'q",
+    });
+    const buf = Buffer.from(await buildXlsx([sheet], { title: 'Audit jurnali' }));
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="audit-${new Date().toISOString().slice(0, 10)}.xlsx"`);
+    res.send(buf);
+  } catch (err) {
+    console.error('Audit xlsx export error:', err);
     res.status(500).json({ error: 'Server xatoligi' });
   }
 });

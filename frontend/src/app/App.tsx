@@ -457,48 +457,15 @@ export const fmtWorkDuration = (checkIn?: string | null, checkOut?: string | nul
   return m === 0 ? `${h} soat` : `${h} soat ${m} daqiqa`;
 };
 
-// CSV eksport — Excel'da to'g'ridan-to'g'ri ochiladi. Uchinchi tomon xlsx
-// kutubxonasi ATAYLAB ishlatilmadi (npm'dagi "xlsx" paketida tuzatilmagan
-// xavfsizlik zaifligi bor — prototype pollution/ReDoS, hech qanday fix yo'q).
-// CSV hech qanday tashqi kodsiz, xavfsiz va Excel/Google Sheets/LibreOffice
-// hammasida bir xil ochiladi. BOM — Excel'da o'zbek/rus harflari to'g'ri
-// (krakozyabra bo'lmasdan) ko'rinishi uchun shart.
-function csvCell(v: string | number): string {
-  const s = String(v ?? "");
-  return /[",\n;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
-export function downloadCsv(filename: string, headers: string[], rows: (string | number)[][]) {
-  const lines = [headers, ...rows].map(r => r.map(csvCell).join(";"));
-  // XATO TUZATILDI ("chiqim tafsilotini yuklaganda... formati noto'g'ir"):
-  // BOM + ";" ajratkich o'zi YETARLI emas edi — Excel qaysi belgini
-  // ajratkich deb hisoblashni FOYDALANUVCHI KOMPYUTERINING til/mintaqa
-  // sozlamasidan (Windows Control Panel) o'qiydi, fayl ICHIDAGI belgidan
-  // emas. Agar u boshqa (masalan ",") bo'lsa, butun qator BITTA katakka
-  // ("A1"da hammasi qatorlab) tushib qolardi — aynan shu holat sodir
-  // bo'lgan. "sep=;" — Excel tomonidan rasman qo'llab-quvvatlanadigan
-  // maxsus BIRINCHI QATOR ko'rsatmasi, mintaqa sozlamasidan qat'i nazar
-  // ";"ni MAJBURIY ajratkich sifatida ishlatishga majburlaydi.
-  const blob = new Blob(["﻿sep=;\r\n" + lines.join("\r\n")], { type: "text/csv;charset=utf-8;" });
-  // saveOrShareBlob: Android APK'da <a download> ISHLAMAYDI (WebView'da
-  // Downloads integratsiyasi yo'q — hech qanday xato ham chiqmasdi, shu
-  // sabab "hisobotni yuklab bo'lmayapti" edi). Web/exe'da eski usul saqlanadi.
-  saveOrShareBlob(filename, blob).then(r => { if (!r.ok) toast.error("Fayl saqlanmadi"); });
-}
+// Excel eksport (owner 2026-10-22: "Excel'ga yuklangan hamma narsa tartibsiz"). Avval ";" bilan CSV edi —
+// mintaqa sozlamasiga qarab bitta ustunga yopishib qolardi, sana/summa matn bo'lib chiqardi. Endi haqiqiy .xlsx
+// (lib/xlsx — tashqi kutubxonasiz): o'zbekcha sarlavha, so'm formati, sana — sana, filtr, JAMI qatori.
+// Nomi eski chaqiruvlar (FinancePage) uchun saqlangan; fayl kengaytmasi avtomatik .xlsx bo'ladi.
 export function exportExpensesToCsv(expenses: Expense[], users: AppUser[], projects: Project[], filename: string) {
-  const headers = ["Sana", "Tavsif", "Turi", "Kimga", "Obyekt", "Summa (so'm)", "Holati", "Kim qo'shdi", "Kim tasdiqladi"];
-  const rows = expenses.map(e => {
-    const to = users.find(u => u.id === e.toUserId);
-    const proj = projects.find(p => p.id === e.projectId);
-    const creator = users.find(u => u.id === e.createdById);
-    const confirmer = users.find(u => u.id === e.confirmedById);
-    return [
-      e.date, e.description || EXP_LABELS[e.type], EXP_LABELS[e.type],
-      to?.name || "-", proj?.name || "-", e.amount,
-      e.status === "confirmed" ? "Tasdiqlangan" : "Kutilmoqda",
-      creator?.name || "-", confirmer?.name || "-",
-    ];
-  });
-  downloadCsv(filename, headers, rows);
+  import("./lib/xlsx/download")
+    .then(m => m.saveExpensesXlsx(expenses, users, projects, filename))
+    .then(ok => { if (!ok) toast.error("Fayl saqlanmadi"); })
+    .catch(() => toast.error("Fayl saqlanmadi"));
 }
 export const isAdmin = (r: Role) => r === "direktor" || r === "orinbosar";
 export const isPlatformAdmin = (r: Role) => r === "dasturchi";

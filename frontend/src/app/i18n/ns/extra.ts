@@ -47,7 +47,7 @@ export const uz = {
     errorHint: "Internet yoki server vaqtincha javob bermadi. \"Qayta urinish\"ni bosing yoki o'rnatuvchini qo'lda yuklab oling.",
   },
   profile: {
-    auditExport: "Excel/CSV yuklab olish",
+    auditExport: "Excel yuklab olish",
     photoSaved: "Profil rasmi saqlandi",
     font: "Shrift", fontSize: "Matn o'lchami", fontSmaller: "Kichikroq", fontBigger: "Kattaroq",
     fontSizePreview: "Namuna: Bugun obyektga 120 qop sement keltirildi.",
@@ -116,7 +116,7 @@ export const ru: typeof uz = {
     errorHint: "Интернет или сервер временно не отвечает. Нажмите \"Повторить\" или скачайте установщик вручную.",
   },
   profile: {
-    auditExport: "Скачать Excel/CSV",
+    auditExport: "Скачать Excel",
     photoSaved: "Фото профиля сохранено",
     font: "Шрифт", fontSize: "Размер текста", fontSmaller: "Меньше", fontBigger: "Больше",
     fontSizePreview: "Пример: сегодня на объект привезли 120 мешков цемента.",

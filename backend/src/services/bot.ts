@@ -36,6 +36,8 @@ import {
 import { aiConfig } from '../aiVoice/config';
 import { captureError } from './errorTracker';
 import { onBotLinked as onAiBotLinked } from '../aiVoice/telegram/tgLink';
+import { decorateMarkup, decorateMessage, canonicalizeUpdate, refreshBotUiIfStale, ensureBotUiLoaded, registerExtraLabelSource } from './botUi/runtime';
+import { applyBotCommands } from './botUi/commands';
 
 dotenv.config();
 
@@ -67,7 +69,20 @@ function stripFormatting(text: string, mode: string): string {
   return text;
 }
 const isParseError = (e: any) => /can't parse entities/i.test(String(e?.message || ''));
-const rawSendMessage = bot.sendMessage.bind(bot);
+// Bot dizayni (services/botUi): tugmalarga dasturchi sozlagan matn/premium emoji/rang, xabarlarga premium
+// emoji qo'shiladi. Telegram rad etsa (masalan bot egasida Premium tugagan) — bezaksiz qayta yuboriladi.
+const isBadRequest = (e: any) => e?.response?.statusCode === 400 || /\b400\b|Bad Request/i.test(String(e?.message || ''));
+async function withBotUi<T>(text: any, opts: any, send: (text: any, opts: any) => Promise<T>): Promise<T> {
+  refreshBotUiIfStale();
+  const m = decorateMessage(text, opts);
+  const markup = opts?.reply_markup ? decorateMarkup(opts.reply_markup) : undefined;
+  const dOpts = markup !== undefined && markup !== opts?.reply_markup ? { ...(m.opts || {}), reply_markup: markup } : m.opts;
+  if (m.text === text && dOpts === opts) return send(text, opts);
+  try { return await send(m.text, dOpts); }
+  catch (e) { if (isBadRequest(e) && !isParseError(e)) return send(text, opts); throw e; }
+}
+const rawSendMessage0 = bot.sendMessage.bind(bot);
+const rawSendMessage = (chatId: any, text: any, opts?: any) => withBotUi(text, opts, (t, o) => rawSendMessage0(chatId, t, o));
 (bot as any).sendMessage = async (chatId: any, text: any, opts?: any) => {
   try { return await rawSendMessage(chatId, text, opts); }
   catch (e) {
@@ -78,7 +93,24 @@ const rawSendMessage = bot.sendMessage.bind(bot);
     throw e;
   }
 };
-const rawEditMessageText = bot.editMessageText.bind(bot);
+const rawEditMessageText0 = bot.editMessageText.bind(bot);
+const rawEditMessageText = (text: any, opts?: any) => withBotUi(text, opts, (t, o) => rawEditMessageText0(t, o));
+const rawEditMessageReplyMarkup = bot.editMessageReplyMarkup.bind(bot);
+(bot as any).editMessageReplyMarkup = async (markup: any, opts?: any) => {
+  refreshBotUiIfStale();
+  const d = decorateMarkup(markup);
+  if (d === markup) return rawEditMessageReplyMarkup(markup, opts);
+  try { return await rawEditMessageReplyMarkup(d, opts); }
+  catch (e) { if (isBadRequest(e)) return rawEditMessageReplyMarkup(markup, opts); throw e; }
+};
+// O'zgartirilgan reply-tugma bosilganda botga YANGI matn keladi — handlerlar standart matnni kutadi, shu sabab
+// update tarqatilishidan oldin standart matnga qaytariladi (polling ham, webhook ham processUpdate'dan o'tadi).
+const rawProcessUpdate = bot.processUpdate.bind(bot);
+(bot as any).processUpdate = (update: any) => {
+  try { canonicalizeUpdate(update); } catch { /* bezak ixtiyoriy */ }
+  return rawProcessUpdate(update);
+};
+void ensureBotUiLoaded();
 (bot as any).editMessageText = async (text: any, opts?: any) => {
   try { return await rawEditMessageText(text, opts); }
   catch (e) {
@@ -329,6 +361,14 @@ async function getAppSettingsCached(): Promise<any> {
   }
   return cachedAppSettings;
 }
+// Bot dizayni: "⚙️ Tugmalarni sozlash"da o'zgartirilgan matnli tugmalar ham premium emoji/rang olsin
+registerExtraLabelSource(() => {
+  const out: { text: string; key: string }[] = [];
+  for (const f of ['devButtonLabels', 'adminButtonLabels', 'userButtonLabels']) {
+    for (const [key, text] of Object.entries<any>(cachedAppSettings?.[f] || {})) if (typeof text === 'string' && text.trim()) out.push({ key, text: text.trim() });
+  }
+  return out;
+});
 
 // ─── Majburiy obuna (kanal/guruh) ────────────────────────────────────────────
 // Aniq talab: bot foydalanuvchi shu 3 kanal/guruhga obuna bo'lmaguncha
@@ -1682,12 +1722,8 @@ async function resetChatState(chatId: number) {
   await bot.sendMessage(chatId, text, { reply_markup: await keyboardForUser(user, lang) }).catch(() => {});
 }
 
-bot.setMyCommands([
-  { command: 'start', description: 'Botni boshlash / Запуск' },
-  { command: 'res', description: 'Botni yangilash / Обновить бота' },
-  // /ai, /jadval — faqat AI ovozli yordamchi yoqilgan bo'lsa ko'rinadi (ro'yxat botHooks'da)
-  ...(aiConfig.enabled ? AI_BOT_COMMANDS.map(({ command, description }) => ({ command, description })) : []),
-]).catch((e: Error) => console.error('[bot commands]', e.message));
+// Buyruqlar menyusi — dasturchi panelidagi "Bot dizayni"dan (sozlama yo'q bo'lsa avvalgi ro'yxat: start, res, AI yoqiq bo'lsa ai/jadval)
+applyBotCommands().catch((e: Error) => console.error('[bot commands]', e.message));
 
 bot.on('message', async (msg: any) => {
   const chatId = msg.chat.id;

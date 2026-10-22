@@ -38,6 +38,7 @@ import sessionsRoutes from './routes/sessions';
 import deployRoutes from './routes/deploy';
 import paymentsRoutes from './routes/payments';
 import uptimeRoutes from './routes/uptime';
+import botUiRoutes, { stickerImageRouter as botUiStickerRoutes } from './routes/botUi';
 import insightsRoutes from './routes/insights';
 import worklogsRoutes from './routes/worklogs';
 import importRoutes from './routes/importExcel';
@@ -306,6 +307,8 @@ app.use('/api/export1c',        requireAuth, blockDeveloper, export1cRoutes);
 app.use('/api/announcements',   requireAuth, blockDeveloper, announcementsRoutes);
 app.use('/api/dev-announcements', requireAuth, requireDeveloper, devAnnouncementsRoutes);
 app.use('/api/dev/uptime',      requireAuth, requireDeveloper, uptimeRoutes); // UptimeRobot holati (read-only kalit)
+app.use('/api/dev/bot-ui',      requireAuth, requireDeveloper, botUiRoutes); // Bot dizayni: tugma matni/premium emoji/rang, buyruqlar
+app.use('/api/bot-ui-sticker',  botUiStickerRoutes); // faqat qo'shilgan emoji paketlari rasmlari (<img> token yubormaydi)
 // publicClientRoutes — mijoz portali, ATAYLAB auth shart emas (mijoz tizim
 // foydalanuvchisi emas) — o'zining ichida taxmin qilib bo'lmaydigan token bilan himoyalangan.
 app.use('/api/public',          publicClientRoutes);

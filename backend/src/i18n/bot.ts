@@ -300,7 +300,7 @@ const uz: BotDict = {
   editLabelPrompt: (p) => `✏️ Joriy matn: "${p.current}"\n\nYangi matn (kerak bo'lsa ikonka bilan, masalan: 📣 Elon yuborish) yozing. Xabar matnlarida {time} yozsangiz — haqiqiy vaqt bilan almashadi.`,
   editLabelSaved: (p) => `✅ Saqlandi: "${p.label}"`,
   editMsgSaved: "✅ Xabar saqlandi. Aynan shunday (emoji/formatlash bilan) yuboriladi:",
-  premiumEmojiButtonWarning: "⚠️ Eslatma: Telegram tugma yozuvlarida premium/maxsus emoji ko'rinmaydi (oddiy belgi sifatida chiqadi) — bu Telegram platformasining o'zi qo'ygan cheklov, botda tuzatib bo'lmaydi. Faqat XABAR matnlarida (📝 Xabar matnlari bo'limida) premium emoji to'liq saqlanadi.",
+  premiumEmojiButtonWarning: "ℹ️ Tugma matnidagi premium emoji ko'rinmaydi. Tugmaga premium emoji ikonkasi va rang qo'yish uchun: sayt → Dasturchi paneli → 🎨 Bot dizayni.",
   devReorderIntro: "🔀 Tugmalarni yuqoriga/pastga surish uchun ▲/▼ tugmalarini bosing. Tugagach \"◀️ Orqaga\" bosing.",
   devResetConfirm: "❓ Hamma tugma matni, xabar matnlari va tartib STANDART holatga qaytarilsinmi?",
   devResetDone: "✅ Standart holatga qaytarildi.",
@@ -513,7 +513,7 @@ const ru: BotDict = {
   editLabelPrompt: (p) => `✏️ Текущий текст: "${p.current}"\n\nВведите новый текст (при желании с иконкой, например: 📣 Отправить объявление). В тексте сообщений можно написать {time} — заменится на реальное время.`,
   editLabelSaved: (p) => `✅ Сохранено: "${p.label}"`,
   editMsgSaved: "✅ Сообщение сохранено. Будет отправлено точно так (с эмодзи/форматированием):",
-  premiumEmojiButtonWarning: "⚠️ Примечание: премиум/особые эмодзи не отображаются в тексте КНОПОК (показывается обычный символ) — это ограничение самого Telegram, бот исправить не может. Только в тексте СООБЩЕНИЙ (раздел 📝 Текст сообщений) премиум-эмодзи сохраняется полностью.",
+  premiumEmojiButtonWarning: "ℹ️ Премиум-эмодзи в тексте кнопки не отображается. Иконку (премиум-эмодзи) и цвет кнопки задайте на сайте: Панель разработчика → 🎨 Дизайн бота.",
   devReorderIntro: "🔀 Нажмите ▲/▼, чтобы переместить кнопки вверх/вниз. По завершении нажмите \"◀️ Назад\".",
   devResetConfirm: "❓ Сбросить весь текст кнопок, текст сообщений и порядок до СТАНДАРТНОГО состояния?",
   devResetDone: "✅ Сброшено до стандартного состояния.",
@@ -663,4 +663,9 @@ export function tb(lang: BotLang | undefined, key: keyof BotDict, params?: any):
 
 export function langLabel(lang: BotLang): string {
   return lang === 'ru' ? 'Русский' : lang === 'uz-cyrl' ? 'Ўзбек (кирилл)' : "O'zbek";
+}
+
+// Bot dizayni (services/botUi): xabarlarda ishlatilgan emoji'larni yig'ish uchun — lug'atning xom qiymatlari.
+export function botDictEntries(lang: 'uz' | 'ru'): [string, unknown][] {
+  return Object.entries(lang === 'ru' ? ru : uz);
 }

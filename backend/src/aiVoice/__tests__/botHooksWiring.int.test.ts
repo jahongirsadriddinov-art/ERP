@@ -222,7 +222,11 @@ describe("bot.ts ulanish joylari", () => {
 
   it("/res AI rejimini ham tozalaydi; /ai buyrug'i faqat AI yoqilganda menyuda", () => {
     expect(section('async function resetChatState', '\n}\n')).toContain('aiBotResetChat(chatId)');
-    expect(section('bot.setMyCommands([', ']).catch')).toContain('aiConfig.enabled ? AI_BOT_COMMANDS.map(');
+    // Buyruqlar endi services/botUi/commands.ts orqali (dasturchi panelida tahrirlanadi); /ai, /jadval faqat AI yoqilganda
+    expect(src).toContain('applyBotCommands().catch(');
+    const cmds = fs.readFileSync(path.join(__dirname, '../../services/botUi/commands.ts'), 'utf8');
+    expect(cmds).toContain("...(aiEnabled ? [{ command: 'ai'");
+    expect(cmds).toContain('if (c.aiOnly && !aiEnabled) continue;');
     expect(AI_BOT_COMMANDS.map((c) => c.command)).toEqual(['ai', 'jadval']);
   });
 

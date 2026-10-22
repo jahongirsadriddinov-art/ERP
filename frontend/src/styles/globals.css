@@ -643,16 +643,14 @@ textarea {
 @media (hover: none) { [data-sonner-toast].erp-toast [data-close-button] { opacity: 1; } }
 [data-sonner-toast].erp-toast [data-button] { border-radius: 10px; font-weight: 700; }
 
-/* Bildirishnomalar markazi — shaffof "shisha" panel */
+/* Bildirishnomalar markazi — owner 2026-10-22: "orqasi ko'rinib qolgan" → to'liq (shaffof emas) fon */
 .notif-glass {
-  background: rgba(255, 255, 255, 0.8);
-  -webkit-backdrop-filter: blur(28px) saturate(1.8);
-  backdrop-filter: blur(28px) saturate(1.8);
-  border: 1px solid rgba(255, 255, 255, 0.65);
+  background: #ffffff;
+  border: 1px solid rgba(15, 23, 42, 0.08);
   box-shadow: 0 30px 70px -20px rgba(15, 23, 42, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.7);
 }
 .dark .notif-glass {
-  background: rgba(20, 22, 30, 0.74);
+  background: #16181f;
   border-color: rgba(255, 255, 255, 0.09);
   box-shadow: 0 30px 70px -20px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }

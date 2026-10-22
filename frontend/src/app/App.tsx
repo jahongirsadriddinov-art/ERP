@@ -1513,12 +1513,32 @@ export function resizeImageFile(file: File, maxDim: number, quality = 0.85): Pro
 function BottomFinanceBar({ expenses, projects }: { expenses: Expense[]; projects: Project[] }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
+  const barRef = useRef<HTMLDivElement>(null);
+  // Owner 2026-10-22: ochilgandan keyin boshqa joy bosilsa, aylantirilsa yoki surilsa — yopilsin
+  useEffect(() => {
+    if (!open) return;
+    const outside = (e: Event) => { if (barRef.current && !barRef.current.contains(e.target as Node)) setOpen(false); };
+    const close = () => setOpen(false);
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("pointerdown", outside, true);
+    document.addEventListener("scroll", outside, true);
+    document.addEventListener("touchmove", outside, { capture: true, passive: true });
+    window.addEventListener("resize", close);
+    document.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("pointerdown", outside, true);
+      document.removeEventListener("scroll", outside, true);
+      document.removeEventListener("touchmove", outside, true);
+      window.removeEventListener("resize", close);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [open]);
   const confirmed = expenses.filter(e=>e.status==="confirmed");
   const total = confirmed.reduce((a,e)=>a+e.amount,0);
   const byProj = projects.map(p=>({name:p.name,amount:confirmed.filter(e=>e.projectId===p.id).reduce((a,e)=>a+e.amount,0)})).filter(d=>d.amount>0);
   const byType = (Object.keys(EXP_LABELS) as ExpType[]).map(k=>({name:expLabel(t, k),amount:confirmed.filter(e=>e.type===k).reduce((a,e)=>a+e.amount,0)})).filter(d=>d.amount>0);
   return (
-    <div className="expense-glass flex-shrink-0 overflow-hidden text-white z-20">
+    <div ref={barRef} className="expense-glass flex-shrink-0 overflow-hidden text-white z-20">
       {open&&(
         <div className="border-b border-white/10 px-4 py-3 grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div><p className="text-sm md:text-xs font-semibold text-white/50 uppercase tracking-wider mb-2">{t('finance.byProject')}</p>

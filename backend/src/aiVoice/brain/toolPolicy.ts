@@ -1,4 +1,5 @@
 import type { ToolResult } from '../contracts';
+import { normApostrophes, toLatinUz } from './style';
 
 // Agent darajasidagi tool siyosati (brain):
 //  • explicitDecision — "o'z qarori" (ownDecision) tool'lari (approveTransaction/rejectTransaction)
@@ -24,11 +25,13 @@ export function decisionKindOf(tool: string): DecisionKind | null {
 
 export function explicitDecision(kind: DecisionKind, userText: string, history: { role: string; text: string }[] = []): boolean {
   const re = kind === 'approve' ? APPROVE_RE : REJECT_RE;
+  // Kirill o'zbekcha ("тасдиқла", "рад эт") va tarixdagi kirillcha AI javobi ham (uz-cyrl foydalanuvchi)
+  const both = (s: string) => [s, normApostrophes(toLatinUz(s))];
   const text = String(userText || '').slice(0, 500);
-  if (re.test(text)) return true;
-  if (!AFFIRM_RE.test(text)) return false;
+  if (both(text).some((x) => re.test(x))) return true;
+  if (!both(text).some((x) => AFFIRM_RE.test(x))) return false;
   const lastAi = [...(Array.isArray(history) ? history : [])].reverse().find((h) => h?.role === 'assistant');
-  return !!lastAi && re.test(String(lastAi.text || '').slice(-400));
+  return !!lastAi && both(String(lastAi.text || '').slice(-400)).some((x) => re.test(x));
 }
 
 export const MAX_RESULT_CHARS = 6000;

@@ -30,11 +30,21 @@ export interface RegistrationPaymentInput {
   telegramChatId?: string;
   registrationId?: string;
   planKey: string;
+  /** "O'zim tanlayman" (owner 2026-10-22: faqat ro'yxatdan o'tishda) — muddat + qo'shimcha funksiyalar */
+  custom?: { months: number; features: string[] };
   promoCode?: string;
 }
 
 export async function createRegistrationPaymentOrder(input: RegistrationPaymentInput): Promise<CreateRegistrationPaymentResult> {
-  const planInfo = getPlanInfo(input.planKey);
+  let planInfo = getPlanInfo(input.planKey);
+  let customFeatures: string[] | undefined;
+  if (input.planKey === 'custom') {
+    const { getCustomPricing, priceCustomPlan } = await import('../config/customPlan');
+    const priced = input.custom ? priceCustomPlan(await getCustomPricing(), Number(input.custom.months), input.custom.features || []) : null;
+    if (!priced) return { ok: false, error: "Tanlangan tarif noto'g'ri" } as any;
+    customFeatures = priced.features;
+    planInfo = { label: `O'zim tanlagan tarif (${input.custom!.months} oy)`, days: priced.days, amount: priced.amount, features: priced.features } as any;
+  }
   if (!planInfo || planInfo.amount <= 0) {
     return { ok: false, error: "Noto'g'ri yoki bepul tarif — to'lov shart emas" };
   }
@@ -94,6 +104,7 @@ export async function createRegistrationPaymentOrder(input: RegistrationPaymentI
     webhookToken,
     plan: input.planKey,
     days: planInfo.days,
+    ...(customFeatures ? { features: customFeatures } : {}),
     promoCode: appliedPromo,
   });
 

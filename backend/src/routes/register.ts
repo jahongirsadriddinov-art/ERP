@@ -209,7 +209,7 @@ router.get('/trial-check', async (req, res) => {
 
 router.post('/complete', async (req, res) => {
   try {
-    const { token, owner, company, logoUrl, selectedPlan, paymentMethod, promoCode } = req.body || {};
+    const { token, owner, company, logoUrl, selectedPlan, paymentMethod, promoCode, custom } = req.body || {};
 
     // Token orqali faol sessiyani topamiz (256-bit sir + bot tasdig'i talab qilinadi)
     const reg = await findActiveByRawToken(token);
@@ -240,8 +240,23 @@ router.post('/complete', async (req, res) => {
       return res.status(409).json({ error: 'Bu raqam bilan firma mavjud. Tizimga kiring.' });
     }
 
-    const planKey = (selectedPlan && PLAN_CONFIG[selectedPlan as string]) ? (selectedPlan as SelectedPlan) : '1month';
-    const planInfo = PLAN_CONFIG[planKey];
+    // "O'zim tanlayman" — faqat shu yerda (ro'yxatdan o'tishda) tanlanadi (owner 2026-10-22)
+    let customPick: { months: number; features: string[] } | undefined;
+    let planKey: SelectedPlan;
+    let planInfo: { label: string; days: number; amount: number; features?: string[] };
+    if (selectedPlan === 'custom') {
+      const { getCustomPricing, priceCustomPlan } = await import('../config/customPlan');
+      const months = Number(custom?.months);
+      const feats = Array.isArray(custom?.features) ? custom.features.map(String).slice(0, 20) : [];
+      const priced = priceCustomPlan(await getCustomPricing(), months, feats);
+      if (!priced) return res.status(400).json({ error: "Tanlangan tarif noto'g'ri" });
+      customPick = { months, features: priced.features };
+      planKey = 'custom' as SelectedPlan;
+      planInfo = { label: `O'zim tanlagan tarif (${months} oy)`, days: priced.days, amount: priced.amount, features: priced.features };
+    } else {
+      planKey = (selectedPlan && PLAN_CONFIG[selectedPlan as string]) ? (selectedPlan as SelectedPlan) : '1month';
+      planInfo = PLAN_CONFIG[planKey];
+    }
     const isFreePlan = planInfo.amount <= 0;
     // Bepul sinov — bitta qurilma / Telegram hisobi / raqam uchun faqat BIR MARTA
     if (isFreePlan) {
@@ -289,6 +304,7 @@ router.post('/complete', async (req, res) => {
           telegramChatId: reg.telegramChatId,
           registrationId: String(reg._id),
           planKey,
+          ...(customPick ? { custom: customPick } : {}),
           promoCode: typeof promoCode === 'string' && promoCode.trim() ? promoCode.trim() : undefined,
         });
 
@@ -400,6 +416,7 @@ router.post('/complete', async (req, res) => {
       plan: 'PRO',
       selectedPlan: planKey,
       amount: planInfo.amount,
+      ...(customPick ? { customFeatures: customPick.features } : {}),
       status: 'pending',
       requestedAt: now,
     }).catch(() => null);

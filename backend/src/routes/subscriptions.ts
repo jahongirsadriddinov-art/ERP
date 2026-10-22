@@ -55,6 +55,7 @@ router.get('/my', requireAuth, async (req, res) => {
       daysLeft,
       requestedAt: (sub as any).requestedAt || (sub as any).createdAt,
       approvedAt: (sub as any).approvedAt,
+      cancelRequestedAt: (sub as any).cancelRequestedAt || null,
       features,
     });
   } catch (err) {
@@ -79,12 +80,40 @@ router.post('/pay', requireAuth, requireOwnerOrAdmin, async (req, res) => {
     // noto'g'ri tarif) qo'llanadi. Promokod faqat shu (veb) yo'ldan
     // qo'llaniladi — botda matn kiritish qadami yo'q.
     const custom = planKey === 'custom' ? { months: Number(req.body?.months), features: Array.isArray(req.body?.features) ? req.body.features.map(String) : [] } : undefined;
+    // "O'zim tanlayman" faqat ro'yxatdan o'tishda tanlanadi; keyin — faqat o'sha tarifni uzaytirish (owner 2026-10-22)
+    if (custom) {
+      const cur: any = await Subscription.findOne({ companyId: String(t.companyId) }).sort({ createdAt: -1 }).select('selectedPlan').lean();
+      if (cur?.selectedPlan !== 'custom') return res.status(400).json({ error: "O'zim tanlayman tarifi faqat ro'yxatdan o'tishda tanlanadi" });
+    }
     const result = await createSubscriptionPaymentOrder(String(t.companyId), (req as any).user?.userId, planKey, promoCode, custom);
     if (!result.ok) return res.status(result.httpStatus).json({ error: result.error });
 
     res.json({ ok: true, payUrl: result.order.pay_url, providers: result.order.providers, amount: result.amount });
   } catch (err: any) {
     console.error('subscriptions/pay error:', err);
+    res.status(500).json({ error: 'Server xatoligi' });
+  }
+});
+
+// POST /api/admin/subscriptions/cancel — egasi obunani bekor qiladi (owner 2026-10-22): muddat oxirigacha ishlaydi,
+// keyin uzaytirilmaydi; {undo:true} — qaytarish. Dasturchiga xabar boradi.
+router.post('/cancel', requireAuth, requireOwnerOrAdmin, async (req, res) => {
+  try {
+    const t = getTenant();
+    if (!t?.companyId) return res.status(400).json({ error: 'Firma topilmadi' });
+    const sub: any = await Subscription.findOne({ companyId: String(t.companyId) }).sort({ createdAt: -1 });
+    if (!sub) return res.status(404).json({ error: 'Obuna topilmadi' });
+    const undo = req.body?.undo === true;
+    sub.cancelRequestedAt = undo ? null : new Date();
+    await sub.save();
+    const dev = process.env.DEVELOPER_CHAT_ID;
+    if (dev) {
+      const { bot } = await import('../services/bot');
+      bot.sendMessage(dev, `${undo ? '↩️' : '🛑'} Obuna ${undo ? 'bekor qilish qaytarildi' : 'bekor qilindi (muddat oxirigacha)'} — firma ${String(t.companyId)}`).catch(() => {});
+    }
+    res.json({ ok: true, cancelRequestedAt: sub.cancelRequestedAt });
+  } catch (err) {
+    console.error('subscriptions/cancel error:', err);
     res.status(500).json({ error: 'Server xatoligi' });
   }
 });

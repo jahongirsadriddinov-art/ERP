@@ -1,6 +1,5 @@
 import { confirmDialog } from "./lib/confirmDialog";
 import { SnapshotsPanel, DangerZone } from "./components/DataSafety";
-import CustomPlanBuilder from "./components/CustomPlanBuilder";
 import { useState, useRef, useEffect, useMemo, lazy, Suspense } from "react";
 import Building2 from "@hugeicons/core-free-icons/Building02Icon";
 import Users from "@hugeicons/core-free-icons/UserMultipleIcon";
@@ -635,6 +634,21 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
   }, []);
   const [payingPlan, setPayingPlan] = useState<string | null>(null);
   const [renewPromoCode, setRenewPromoCode] = useState("");
+  // Obunani bekor qilish (owner 2026-10-22): muddat tugaguncha ishlaydi, keyin uzaytirilmaydi; qayta bosilsa — qaytariladi
+  const cancelSubscription = async () => {
+    const undo = !!subData?.cancelRequestedAt;
+    if (!undo && !(await confirmDialog(t('plan.cancelConfirm', "Obuna bekor qilinsinmi? Muddat tugaguncha ishlaydi."), { danger: true }))) return;
+    try {
+      const r = await fetch(`${API_BASE}/api/admin/subscriptions/cancel`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem("token")}` },
+        body: JSON.stringify({ undo }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) { toast.error(d.error || t('common.error')); return; }
+      setSubData((s: any) => s ? { ...s, cancelRequestedAt: d.cancelRequestedAt || null } : s);
+      toast.success(undo ? t('plan.cancelUndone', "Obuna davom etadi") : t('plan.canceled', "Obuna bekor qilindi — muddat oxirigacha ishlaydi"));
+    } catch { toast.error(t('common.error')); }
+  };
   const handlePay = async (planKey: string, extra?: { months: number; features: string[] }) => {
     if (payingPlan) return;
     setPayingPlan(planKey);
@@ -1057,17 +1071,31 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
                         kutmasdan. "rejected"da ko'rsatilmaydi: backend baribir
                         rad etadi, foydalanuvchini bekorga xatolikka olib
                         bormaslik uchun — o'rniga yuqoridagi "bog'laning" xabari. */}
-                    {/* "O'zim tanlayman" — muddat va funksiyalarni o'zi tanlab, narxini ko'rib to'laydi (kirimlar hisobi ham shu yerda yoqiladi) */}
-                    <details className="px-5 py-4 group" open={subData.status === 'pending' || subData.status === 'expired' || undefined}>
-                      <summary className="cursor-pointer text-sm font-bold flex items-center justify-between gap-2 list-none">
-                        <span>🧩 {t('plan.customTitle', "O'zim tanlayman — kerakli funksiyalar bilan tarif")}</span>
-                        <span className="text-muted-foreground group-open:rotate-180 transition-transform">▾</span>
-                      </summary>
-                      <div className="mt-3">
-                        <CustomPlanBuilder busy={payingPlan === 'custom'} initial={subData.selectedPlan === 'custom' ? subData.features : undefined}
-                          onPay={(months, features) => handlePay('custom', { months, features })} />
-                      </div>
-                    </details>
+                    {/* Owner 2026-10-22: sozlamalarda faqat tarifni almashtirish yoki bekor qilish ("O'zim tanlayman" — faqat ro'yxatdan o'tishda) */}
+                    {subData.status !== 'pending' && subData.status !== 'expired' && (
+                      <details className="px-5 py-4 group">
+                        <summary className="cursor-pointer text-sm font-bold flex items-center justify-between gap-2 list-none" data-testid="plan-change-toggle">
+                          <span>🔁 {t('plan.change', 'Tarifni almashtirish')}</span>
+                          <span className="text-muted-foreground group-open:rotate-180 transition-transform">▾</span>
+                        </summary>
+                        <div className="mt-3 space-y-2">
+                          {payablePlans.map(plan => (
+                            <button key={plan.key} disabled={!!payingPlan} onClick={() => handlePay(plan.key)}
+                              className="w-full flex items-center justify-between gap-2 px-4 h-14 rounded-2xl border border-border/60 hover:border-primary/50 hover:bg-primary/5 liquid-transition disabled:opacity-60 text-left">
+                              <span className="text-sm font-semibold">{plan.label}</span>
+                              <span className="flex items-center gap-2 text-sm font-bold text-primary">
+                                {payingPlan === plan.key ? <MorphIcon icon={Loader2} className="w-4 h-4 animate-spin" /> : `${plan.amount.toLocaleString()} ${t('common.som')}`}
+                              </span>
+                            </button>
+                          ))}
+                          <button type="button" onClick={cancelSubscription} data-testid="plan-cancel"
+                            className="w-full h-12 rounded-2xl border border-red-500/40 text-red-700 dark:text-red-300 text-sm font-semibold">
+                            {subData.cancelRequestedAt ? t('plan.cancelUndo', 'Bekor qilishni qaytarish') : t('plan.cancel', 'Obunani bekor qilish')}
+                          </button>
+                          {subData.cancelRequestedAt && <p className="text-xs text-muted-foreground">{t('plan.cancelNote', "Obuna muddati tugaguncha ishlaydi, keyin uzaytirilmaydi.")}</p>}
+                        </div>
+                      </details>
+                    )}
                     {(subData.status === 'pending' || subData.status === 'expired') && (
                       <div className="px-5 py-4 space-y-2">
                         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('profile.payPrompt')}</p>

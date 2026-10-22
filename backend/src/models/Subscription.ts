@@ -8,6 +8,8 @@ export interface ISubscription extends Document {
   customFeatures?: string[]; // "O'zim tanlayman" (custom) tarifida tanlangan funksiyalar
   amount?: number;
   status: 'active' | 'trialing' | 'past_due' | 'canceled' | 'pending' | 'expired' | 'rejected';
+  /** Egasi bekor qildi (owner 2026-10-22): muddat oxirigacha ishlaydi, keyin uzaytirilmaydi */
+  cancelRequestedAt?: Date | null;
   currentPeriodStart?: Date;
   currentPeriodEnd?: Date;
   requestedAt?: Date;
@@ -26,6 +28,7 @@ const SubscriptionSchema: Schema = new Schema({
   selectedPlan: { type: String },
   customFeatures: { type: [String], default: undefined },
   amount: { type: Number },
+  cancelRequestedAt: { type: Date, default: null },
   status: {
     type: String,
     enum: ['active', 'trialing', 'past_due', 'canceled', 'pending', 'expired', 'rejected'],

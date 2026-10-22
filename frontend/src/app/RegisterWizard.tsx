@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import CustomPlanBuilder, { type CustomPick } from "./components/CustomPlanBuilder";
 import ArrowLeft from "@hugeicons/core-free-icons/ArrowLeft01Icon";
 import AlertTriangle from "@hugeicons/core-free-icons/Alert02Icon";
 import CheckCircle from "@hugeicons/core-free-icons/CheckmarkCircle01Icon";
@@ -73,7 +74,12 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
   const livePlans = Object.fromEntries(allPlans.map(p => [p.key, { amount: p.amount, days: p.days, label: p.label }]));
   const freePlan = allPlans.find(p => p.amount <= 0);
   const tieredPlans = (period: string) => allPlans.filter(p => p.period === period).sort((a, b) => (a.tier || 0) - (b.tier || 0));
-  const selectedPlanInfo = allPlans.find(p => p.key === selectedPlan);
+  // "O'zim tanlayman" — faqat ro'yxatdan o'tishda (owner 2026-10-22)
+  const [customPick, setCustomPick] = useState<CustomPick | null>(null);
+  const [customOpen, setCustomOpen] = useState(false);
+  const selectedPlanInfo = selectedPlan === 'custom' && customPick
+    ? { key: 'custom', label: t('plan.customTitle', "O'zim tanlagan tarif"), amount: customPick.total, days: customPick.days, features: customPick.features } as any
+    : allPlans.find(p => p.key === selectedPlan);
   const isFreeSelected = !!selectedPlanInfo && selectedPlanInfo.amount <= 0;
   // Bepul sinov shu qurilmada allaqachon ishlatilganmi (server qurilma belgilari bo'yicha aytadi)
   const [trialBlocked, setTrialBlocked] = useState<string | null>(null);
@@ -291,8 +297,9 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
         body: JSON.stringify({
           token: reg.token,
           selectedPlan: selectedPlan || freePlan?.key || 'bepul',
+          ...(selectedPlan === 'custom' && customPick ? { custom: { months: customPick.months, features: customPick.features } } : {}),
           paymentMethod,
-          promoCode: (!isFreeSelected && paymentMethod === 'online' && promoResult?.ok) ? promoCode.trim() : undefined,
+          promoCode: (selectedPlan !== 'custom' && !isFreeSelected && paymentMethod === 'online' && promoResult?.ok) ? promoCode.trim() : undefined,
           owner: { firstName, lastName, middleName, email, position, password },
           company: { name: companyName, legalName, inn, activityType, region, employeeRange, currency },
           logoUrl,
@@ -491,6 +498,22 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
                     </motion.button>
                   );
                 })}
+              </div>
+              {/* O'zim tanlayman — muddat + kerakli qo'shimchalar */}
+              <div className={`rounded-3xl border-2 p-4 ${selectedPlan === 'custom' ? "border-primary bg-primary/[0.05]" : "border-dashed border-border/70"}`}>
+                <button type="button" onClick={() => setCustomOpen(v => !v)} className="w-full flex items-center justify-between gap-3 text-left" data-testid="custom-plan-toggle">
+                  <span>
+                    <span className="block text-base font-bold">🧩 {t('plan.customTitle', "O'zim tanlayman")}</span>
+                    <span className="block text-xs text-muted-foreground">{selectedPlan === 'custom' && customPick ? `${customPick.total.toLocaleString('uz-UZ')} ${t('register.som')} · ${t('register.daysCount', { count: customPick.days })}` : t('plan.customHint', "Faqat kerakli qo'shimcha funksiyalarni tanlang")}</span>
+                  </span>
+                  <span className={`text-muted-foreground transition-transform ${customOpen ? "rotate-180" : ""}`}>▾</span>
+                </button>
+                {customOpen && (
+                  <div className="mt-4">
+                    <CustomPlanBuilder initial={customPick?.features} actionLabel={t('plan.chooseCustom', "Shu tarifni tanlash")}
+                      onPay={(_m, _f, pick) => { setCustomPick(pick); setSelectedPlan('custom'); setCustomOpen(false); }} />
+                  </div>
+                )}
               </div>
               <p className="text-xs text-center text-muted-foreground pt-1">{t('register.tarifFooter')}</p>
             </div>

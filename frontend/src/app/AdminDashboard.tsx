@@ -23,6 +23,7 @@ import Loader2 from "@hugeicons/core-free-icons/Loading03Icon";
 import FileText from "@hugeicons/core-free-icons/FileTextIcon";
 import Upload from "@hugeicons/core-free-icons/Upload01Icon";
 import { MorphIcon } from "morphicons/react";
+import { IconTile, type IconTone } from "./components/IconTile";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import { API_BASE, parseSmetaFile, uploadChatMedia } from "./api";
@@ -93,10 +94,10 @@ export function AdminDashboard({ currentUser, users, projects, transfers, setUse
   const brigades = [...new Set(users.filter(u => u.brigade).map(u => u.brigade!))];
 
   const sections = [
-    { key: "rahbariyat", label: t('dashboard.leadership'), icon: Building2 },
-    { key: "boshxodimlar", label: t('dashboard.topStaff'), icon: Users },
-    { key: "brigadalar", label: t('dashboard.brigades'), icon: HardHat },
-    { key: "faolobyektlar", label: t('dashboard.activeObjects'), icon: Package },
+    { key: "rahbariyat", label: t('dashboard.leadership'), icon: Building2, tone: "blue" as IconTone },
+    { key: "boshxodimlar", label: t('dashboard.topStaff'), icon: Users, tone: "violet" as IconTone },
+    { key: "brigadalar", label: t('dashboard.brigades'), icon: HardHat, tone: "amber" as IconTone },
+    { key: "faolobyektlar", label: t('dashboard.activeObjects'), icon: Package, tone: "green" as IconTone },
   ];
 
   const toggle = (key: string) => setActiveTab(prev => prev === key ? "" : key);
@@ -178,19 +179,19 @@ export function AdminDashboard({ currentUser, users, projects, transfers, setUse
       <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28 }}
         className="surface flex flex-col overflow-hidden">
         <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border flex-shrink-0">
-          <div className="icon-chip w-6 h-6"><MorphIcon icon={Building2} className="w-3.5 h-3.5" /></div>
-          <h2 className="text-sm md:text-xs font-bold uppercase tracking-wider font-['Roboto_Slab',serif]">{t('dashboard.leadership')}</h2>
+          <IconTile icon={Building2} tone="blue" size="sm" variant="solid" />
+          <h2 className="text-sm font-bold font-display">{t('dashboard.leadership')}</h2>
         </div>
         <div className="flex-1 overflow-y-auto p-3 scrollbar-hide">
           {users.filter(u => u.role === "direktor").map(u => (
             <div key={u.id} className="mb-2">
               <div className="bg-primary text-white rounded-md p-3 flex items-center gap-2">
-                <Avatar user={u} size="sm"/><div><p className="text-sm md:text-xs font-semibold">{u.name}</p><p className="text-sm md:text-xs text-white/90">{roleLabel(t, u.role)}</p></div>
+                <Avatar user={u} size="sm"/><div><p className="text-sm font-semibold">{u.name}</p><p className="text-sm text-white/90">{roleLabel(t, u.role)}</p></div>
               </div>
               {users.filter(u2 => u2.role === "orinbosar").map(u2 => (
                 <div key={u2.id} className="ml-4 mt-2 border-l-2 border-dashed border-primary/30 pl-3">
                   <div className="bg-secondary rounded-md p-3 flex items-center gap-2">
-                    <Avatar user={u2} size="sm"/><div><p className="text-sm md:text-xs font-semibold">{u2.name}</p><p className="text-sm md:text-xs text-muted-foreground">{roleLabel(t, u2.role)}</p><p className="text-sm md:text-xs text-muted-foreground font-mono">{u2.phone}</p></div>
+                    <Avatar user={u2} size="sm"/><div><p className="text-sm font-semibold">{u2.name}</p><p className="text-sm text-muted-foreground">{roleLabel(t, u2.role)}</p><p className="text-sm text-muted-foreground font-mono">{u2.phone}</p></div>
                   </div>
                 </div>
               ))}
@@ -198,13 +199,13 @@ export function AdminDashboard({ currentUser, users, projects, transfers, setUse
           ))}
           <div className="mt-4 pt-3 border-t border-border">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-sm md:text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('dashboard.staffShort')}</p>
+              <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">{t('dashboard.staffShort')}</p>
               <button onClick={() => setShowAddUser(true)} className="flex items-center gap-1 text-[9px] bg-primary/10 text-primary px-2 py-1 rounded hover:bg-primary/20 font-semibold"><MorphIcon icon={UserPlus} className="w-2.5 h-2.5" />{t('common.add')}</button>
             </div>
             {(["direktor","orinbosar","prorab","brigadir","ishchi"] as Role[]).map(r => (
               <div key={r} className="flex items-center justify-between py-1">
-                <span className="text-sm md:text-xs text-muted-foreground">{roleLabel(t, r)}</span>
-                <span className="text-sm md:text-xs font-mono font-semibold">{users.filter(u=>u.role===r).length}</span>
+                <span className="text-sm text-muted-foreground">{roleLabel(t, r)}</span>
+                <span className="text-sm font-mono font-semibold">{users.filter(u=>u.role===r).length}</span>
               </div>
             ))}
           </div>
@@ -215,14 +216,14 @@ export function AdminDashboard({ currentUser, users, projects, transfers, setUse
       <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28, delay: 0.05 }}
         className="surface flex flex-col overflow-hidden">
         <div className="flex items-center justify-between px-4 py-2.5 border-b border-border flex-shrink-0">
-          <div className="flex items-center gap-2"><div className="icon-chip w-6 h-6"><MorphIcon icon={Users} className="w-3.5 h-3.5" /></div><h2 className="text-sm md:text-xs font-bold uppercase tracking-wider font-['Roboto_Slab',serif]">{t('dashboard.topStaff')}</h2></div>
-          <button onClick={() => setShowAddUser(true)} className="text-sm md:text-xs bg-primary/10 text-primary px-2 py-1 rounded hover:bg-primary/20 font-semibold flex items-center gap-1"><MorphIcon icon={UserPlus} className="w-2.5 h-2.5" />{t('common.add')}</button>
+          <div className="flex items-center gap-2"><IconTile icon={Users} tone="violet" size="sm" variant="solid" /><h2 className="text-sm font-bold font-display">{t('dashboard.topStaff')}</h2></div>
+          <button onClick={() => setShowAddUser(true)} className="text-sm bg-primary/10 text-primary px-2 py-1 rounded hover:bg-primary/20 font-semibold flex items-center gap-1"><MorphIcon icon={UserPlus} className="w-2.5 h-2.5" />{t('common.add')}</button>
         </div>
         <div className="flex-1 overflow-y-auto scrollbar-hide divide-y divide-border/50">
           {users.filter(u => ["orinbosar","prorab"].includes(u.role)).map(u => (
             <div key={u.id} className="flex items-center gap-2.5 py-2 px-3 hover:bg-muted/40 transition-colors group">
               <Avatar user={u} size="sm"/>
-              <div className="flex-1 min-w-0"><p className="text-sm md:text-xs font-semibold truncate">{u.name}</p><p className="text-sm md:text-xs text-muted-foreground font-mono">{u.phone}</p>{u.brigade&&<p className="text-[9px] text-muted-foreground">{u.brigade}</p>}</div>
+              <div className="flex-1 min-w-0"><p className="text-sm font-semibold truncate">{u.name}</p><p className="text-sm text-muted-foreground font-mono">{u.phone}</p>{u.brigade&&<p className="text-[9px] text-muted-foreground">{u.brigade}</p>}</div>
               <RoleBadge role={u.role}/>
               <div className="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button aria-label={t('common.edit')} onClick={() => setEditUser(u)} className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-primary"><MorphIcon icon={Edit} className="w-3 h-3" /></button>
@@ -237,20 +238,20 @@ export function AdminDashboard({ currentUser, users, projects, transfers, setUse
       <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28, delay: 0.10 }}
         className="surface flex flex-col overflow-hidden">
         <div className="flex items-center justify-between px-4 py-2.5 border-b border-border flex-shrink-0">
-          <div className="flex items-center gap-2"><div className="icon-chip w-6 h-6"><MorphIcon icon={HardHat} className="w-3.5 h-3.5" /></div><h2 className="text-sm md:text-xs font-bold uppercase tracking-wider font-['Roboto_Slab',serif]">{t('dashboard.brigades')}</h2></div>
-          <button onClick={() => setShowSend(true)} className="flex items-center gap-1 text-sm md:text-xs bg-primary text-white px-2 py-1 rounded hover:bg-primary/90 font-semibold"><MorphIcon icon={Send} className="w-2.5 h-2.5" />{t('dashboard.send')}</button>
+          <div className="flex items-center gap-2"><IconTile icon={HardHat} tone="amber" size="sm" variant="solid" /><h2 className="text-sm font-bold font-display">{t('dashboard.brigades')}</h2></div>
+          <button onClick={() => setShowSend(true)} className="flex items-center gap-1 text-sm bg-primary text-white px-2 py-1 rounded hover:bg-primary/90 font-semibold"><MorphIcon icon={Send} className="w-2.5 h-2.5" />{t('dashboard.send')}</button>
         </div>
         <div className="flex-1 overflow-y-auto p-3 scrollbar-hide">
           {brigades.map(brigade => (
             <div key={brigade} className="mb-3">
               <div className="flex items-center justify-between px-3 py-1.5 bg-secondary rounded-md mb-1">
                 <span className="text-[11px] font-semibold text-secondary-foreground">{brigade}</span>
-                <span className="text-sm md:text-xs text-muted-foreground">{t('dashboard.peopleCount', { count: users.filter(u=>u.brigade===brigade).length })}</span>
+                <span className="text-sm text-muted-foreground">{t('dashboard.peopleCount', { count: users.filter(u=>u.brigade===brigade).length })}</span>
               </div>
               {users.filter(u => u.brigade===brigade).map(m => (
                 <div key={m.id} className="flex items-center gap-2 py-1.5 px-3 hover:bg-muted/40 rounded transition-colors group">
                   <Avatar user={m} size="sm"/>
-                  <div className="flex-1 min-w-0"><p className="text-sm md:text-xs text-foreground truncate">{m.name}</p></div>
+                  <div className="flex-1 min-w-0"><p className="text-sm text-foreground truncate">{m.name}</p></div>
                   <RoleBadge role={m.role}/>
                   <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button aria-label={t('common.edit')} onClick={() => setEditUser(m)} className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-primary"><MorphIcon icon={Edit} className="w-3 h-3" /></button>
@@ -262,18 +263,18 @@ export function AdminDashboard({ currentUser, users, projects, transfers, setUse
           ))}
           {transfers.filter(t=>t.toUserId===currentUser.id&&t.status==="pending").length > 0 && (
             <div className="mt-3 pt-3 border-t border-border">
-              <p className="text-sm md:text-xs font-semibold text-amber-800 dark:text-amber-400 uppercase mb-2 flex items-center gap-1"><MorphIcon icon={Package} className="w-2.5 h-2.5" />{t('dashboard.incomingShort')}</p>
+              <p className="text-sm font-semibold text-amber-800 dark:text-amber-400 uppercase mb-2 flex items-center gap-1"><MorphIcon icon={Package} className="w-2.5 h-2.5" />{t('dashboard.incomingShort')}</p>
               {transfers.filter(t=>t.toUserId===currentUser.id&&t.status==="pending").map(t => (
                 <TransferRow key={t.id} t={t} currentUser={currentUser} allUsers={users} projects={projects} onConfirm={onConfirmTransfer} onReject={onRejectTransfer}/>
               ))}
             </div>
           )}
           <div className="mt-3 pt-3 border-t border-border">
-            <p className="text-sm md:text-xs font-semibold text-muted-foreground uppercase mb-2">{t('dashboard.allWorkers')}</p>
+            <p className="text-sm font-semibold text-muted-foreground uppercase mb-2">{t('dashboard.allWorkers')}</p>
             {users.filter(u => u.role==="ishchi" || u.role==="brigadir").map(m => (
               <div key={m.id} className="flex items-center gap-2 py-1.5 px-3 hover:bg-muted/40 rounded transition-colors group mb-1">
                 <Avatar user={m} size="sm"/>
-                <div className="flex-1 min-w-0"><p className="text-sm md:text-xs text-foreground truncate">{m.name}</p></div>
+                <div className="flex-1 min-w-0"><p className="text-sm text-foreground truncate">{m.name}</p></div>
                 <RoleBadge role={m.role}/>
                 <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button aria-label={t('common.edit')} onClick={() => setEditUser(m)} className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-primary"><MorphIcon icon={Edit} className="w-3 h-3" /></button>
@@ -289,8 +290,8 @@ export function AdminDashboard({ currentUser, users, projects, transfers, setUse
       <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28, delay: 0.15 }}
         className="surface flex flex-col overflow-hidden">
         <div className="flex items-center justify-between px-4 py-2.5 border-b border-border flex-shrink-0">
-          <div className="flex items-center gap-2"><div className="icon-chip icon-chip-accent w-6 h-6"><MorphIcon icon={Package} className="w-3.5 h-3.5" /></div><h2 className="text-sm md:text-xs font-bold uppercase tracking-wider font-['Roboto_Slab',serif]">{t('dashboard.activeObjects')}</h2></div>
-          <button onClick={()=>setShowAddObject(true)} className="text-sm md:text-xs bg-accent text-white px-2 py-1 rounded hover:bg-accent/90 font-semibold flex items-center gap-1 dark:bg-accent/10 dark:text-accent dark:hover:bg-accent/20"><MorphIcon icon={Plus} className="w-2.5 h-2.5" />{t('common.add')}</button>
+          <div className="flex items-center gap-2"><IconTile icon={Package} tone="green" size="sm" variant="solid" /><h2 className="text-sm font-bold font-display">{t('dashboard.activeObjects')}</h2></div>
+          <button onClick={()=>setShowAddObject(true)} className="text-sm bg-accent text-white px-2 py-1 rounded hover:bg-accent/90 font-semibold flex items-center gap-1 dark:bg-accent/10 dark:text-accent dark:hover:bg-accent/20"><MorphIcon icon={Plus} className="w-2.5 h-2.5" />{t('common.add')}</button>
         </div>
         <div className="flex-1 overflow-y-auto p-3 scrollbar-hide">
           <div className="grid grid-cols-3 gap-1.5 mb-3">
@@ -308,9 +309,9 @@ export function AdminDashboard({ currentUser, users, projects, transfers, setUse
               <div key={p.id} onClick={()=>onSelectProject(p)} className="surface rounded-xl p-3 cursor-pointer hover:border-primary/40 liquid-transition group mb-2">
                 <div className="flex items-start justify-between gap-1">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5 mb-1"><span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${p.status==="active"?"bg-green-500":p.status==="paused"?"bg-amber-400":"bg-blue-400"}`}/><p className="text-sm md:text-xs font-semibold truncate">{p.name}</p></div>
-                    <p className="text-sm md:text-xs text-muted-foreground flex items-center gap-1"><MorphIcon icon={MapPin} className="w-2.5 h-2.5" />{p.location}</p>
-                    {foreman&&<p className="text-sm md:text-xs text-muted-foreground flex items-center gap-1"><MorphIcon icon={HardHat} className="w-2.5 h-2.5" />{foreman.name}</p>}
+                    <div className="flex items-center gap-1.5 mb-1"><span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${p.status==="active"?"bg-green-500":p.status==="paused"?"bg-amber-400":"bg-blue-400"}`}/><p className="text-sm font-semibold truncate">{p.name}</p></div>
+                    <p className="text-sm text-muted-foreground flex items-center gap-1"><MorphIcon icon={MapPin} className="w-2.5 h-2.5" />{p.location}</p>
+                    {foreman&&<p className="text-sm text-muted-foreground flex items-center gap-1"><MorphIcon icon={HardHat} className="w-2.5 h-2.5" />{foreman.name}</p>}
                   </div>
                   <MorphIcon icon={ChevronRight} className="w-4 h-4 text-muted-foreground group-hover:text-primary mt-0.5" />
                 </div>
@@ -330,18 +331,19 @@ export function AdminDashboard({ currentUser, users, projects, transfers, setUse
       {sections.map(section => {
         const isOpen = activeTab === section.key;
         return (
-          <div key={section.key} className={`shrink-0 rounded-2xl overflow-hidden border bg-card/80 backdrop-blur-sm shadow-sm transition-shadow ${isOpen ? "border-primary/40 shadow-lg shadow-primary/10" : "border-border"}`}>
+          <div key={section.key} className={`surface no-lift shrink-0 rounded-2xl overflow-hidden transition-shadow ${isOpen ? "shadow-md" : ""}`}>
             {/* Header — always visible */}
             <button
               onClick={() => toggle(section.key)}
-              className={`w-full flex items-center justify-between px-4 py-4 transition-colors ${isOpen ? "bg-primary text-white" : "bg-card hover:bg-muted/30"}`}>
-              <div className="flex items-center gap-3">
-                <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${isOpen ? "bg-white/20" : "bg-primary/10"}`}>
-                  <MorphIcon icon={section.icon} className={`w-4 h-4 ${isOpen ? "text-white" : "text-primary"}`} />
-                </div>
-                <span className={`text-sm font-bold tracking-wide font-['Roboto_Slab',serif] ${isOpen ? "text-white" : "text-foreground"}`}>{section.label}</span>
+              aria-expanded={isOpen}
+              className={`w-full flex items-center justify-between gap-3 px-4 min-h-[64px] py-3 transition-colors ${isOpen ? "border-b border-border" : "hover:bg-muted/30 active:bg-muted/50"}`}>
+              <div className="flex items-center gap-3 min-w-0">
+                <IconTile icon={section.icon} tone={section.tone} size="md" variant="solid" />
+                <span className="text-[15px] font-bold font-display text-foreground truncate">{section.label}</span>
               </div>
-              <MorphIcon icon={ChevronDown} className={`w-5 h-5 transition-transform duration-300 ${isOpen ? "rotate-180 text-white" : "text-muted-foreground"}`} />
+              <span className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 transition-colors ${isOpen ? "bg-muted text-foreground" : "text-muted-foreground"}`}>
+                <MorphIcon icon={ChevronDown} className={`w-5 h-5 transition-transform duration-300 ${isOpen ? "rotate-180" : ""}`} />
+              </span>
             </button>
 
             {/* Content — only visible when open */}
@@ -359,7 +361,7 @@ export function AdminDashboard({ currentUser, users, projects, transfers, setUse
                           <div key={u2.id} className="ml-6 mt-2 border-l-2 border-dashed border-primary/30 pl-3">
                             <div className="bg-secondary rounded-xl p-3 flex items-center gap-2">
                               <Avatar user={u2} size="sm"/>
-                              <div><p className="text-sm font-semibold">{u2.name}</p><p className="text-sm md:text-xs text-muted-foreground">{roleLabel(t, u2.role)}</p><p className="text-sm md:text-xs text-muted-foreground font-mono">{u2.phone}</p></div>
+                              <div><p className="text-sm font-semibold">{u2.name}</p><p className="text-sm text-muted-foreground">{roleLabel(t, u2.role)}</p><p className="text-sm text-muted-foreground font-mono">{u2.phone}</p></div>
                             </div>
                           </div>
                         ))}
@@ -367,8 +369,8 @@ export function AdminDashboard({ currentUser, users, projects, transfers, setUse
                     ))}
                     <div className="pt-3 border-t border-border">
                       <div className="flex items-center justify-between mb-3">
-                        <p className="text-sm md:text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('dashboard.staffCount')}</p>
-                        <button onClick={() => setShowAddUser(true)} className="flex items-center gap-1 text-sm md:text-xs bg-primary/10 text-primary px-3 py-1.5 rounded-full hover:bg-primary/20 font-semibold"><MorphIcon icon={UserPlus} className="w-3 h-3" />{t('common.add')}</button>
+                        <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">{t('dashboard.staffCount')}</p>
+                        <button onClick={() => setShowAddUser(true)} className="flex items-center gap-1 text-sm bg-primary/10 text-primary px-3 py-1.5 rounded-full hover:bg-primary/20 font-semibold"><MorphIcon icon={UserPlus} className="w-3 h-3" />{t('common.add')}</button>
                       </div>
                       {(["direktor","orinbosar","prorab","brigadir","ishchi"] as Role[]).map(r => (
                         <div key={r} className="flex items-center justify-between py-1.5 border-b border-border/30 last:border-0">
@@ -383,12 +385,12 @@ export function AdminDashboard({ currentUser, users, projects, transfers, setUse
                 {section.key === "boshxodimlar" && (
                   <div>
                     <div className="flex justify-end px-4 py-2 border-b border-border/30">
-                      <button onClick={() => setShowAddUser(true)} className="flex items-center gap-1.5 text-sm md:text-xs bg-primary text-white px-3 py-1.5 rounded-full font-semibold"><MorphIcon icon={UserPlus} className="w-3 h-3" />{t('common.add')}</button>
+                      <button onClick={() => setShowAddUser(true)} className="flex items-center gap-1.5 text-sm bg-primary text-white px-3 py-1.5 rounded-full font-semibold"><MorphIcon icon={UserPlus} className="w-3 h-3" />{t('common.add')}</button>
                     </div>
                     {users.filter(u => ["orinbosar","prorab"].includes(u.role)).map(u => (
                       <div key={u.id} className="flex items-center gap-3 py-3 px-4 border-b border-border/40 hover:bg-muted/30">
                         <Avatar user={u} size="sm"/>
-                        <div className="flex-1"><p className="text-sm font-semibold">{u.name}</p><p className="text-sm md:text-xs text-muted-foreground font-mono">{u.phone}</p></div>
+                        <div className="flex-1"><p className="text-sm font-semibold">{u.name}</p><p className="text-sm text-muted-foreground font-mono">{u.phone}</p></div>
                         <RoleBadge role={u.role}/>
                         <div className="flex gap-1">
                           <button aria-label={t('common.edit')} onClick={() => setEditUser(u)} className="p-2 hover:bg-muted rounded-lg text-muted-foreground hover:text-primary"><MorphIcon icon={Edit} className="w-4 h-4" /></button>
@@ -402,13 +404,13 @@ export function AdminDashboard({ currentUser, users, projects, transfers, setUse
                 {section.key === "brigadalar" && (
                   <div className="p-4 space-y-3">
                     <div className="flex justify-end">
-                      <button onClick={() => setShowSend(true)} className="flex items-center gap-1.5 text-sm md:text-xs bg-primary text-white px-3 py-1.5 rounded-full font-semibold"><MorphIcon icon={Send} className="w-3 h-3" />{t('dashboard.send')}</button>
+                      <button onClick={() => setShowSend(true)} className="flex items-center gap-1.5 text-sm bg-primary text-white px-3 py-1.5 rounded-full font-semibold"><MorphIcon icon={Send} className="w-3 h-3" />{t('dashboard.send')}</button>
                     </div>
                     {brigades.map(brigade => (
                       <div key={brigade} className="bg-muted/30 rounded-xl overflow-hidden">
                         <div className="flex items-center justify-between px-3 py-2 bg-secondary">
-                          <span className="text-sm md:text-xs font-semibold">{brigade}</span>
-                          <span className="text-sm md:text-xs text-muted-foreground">{t('dashboard.peopleCount', { count: users.filter(u=>u.brigade===brigade).length })}</span>
+                          <span className="text-sm font-semibold">{brigade}</span>
+                          <span className="text-sm text-muted-foreground">{t('dashboard.peopleCount', { count: users.filter(u=>u.brigade===brigade).length })}</span>
                         </div>
                         {users.filter(u => u.brigade===brigade).map(m => (
                           <div key={m.id} className="flex items-center gap-3 py-2.5 px-3 border-t border-border/30">
@@ -424,7 +426,7 @@ export function AdminDashboard({ currentUser, users, projects, transfers, setUse
                       </div>
                     ))}
                     <div className="pt-2 border-t border-border">
-                      <p className="text-sm md:text-xs font-semibold text-muted-foreground uppercase mb-2">{t('dashboard.allWorkers')}</p>
+                      <p className="text-sm font-semibold text-muted-foreground uppercase mb-2">{t('dashboard.allWorkers')}</p>
                       {users.filter(u => u.role==="ishchi" || u.role==="brigadir").map(m => (
                         <div key={m.id} className="flex items-center gap-3 py-2.5 px-2 border-b border-border/30">
                           <Avatar user={m} size="sm"/>
@@ -439,7 +441,7 @@ export function AdminDashboard({ currentUser, users, projects, transfers, setUse
                     </div>
                     {transfers.filter(t=>t.toUserId===currentUser.id&&t.status==="pending").length > 0 && (
                       <div className="pt-2 border-t border-border">
-                        <p className="text-sm md:text-xs font-semibold text-amber-800 dark:text-amber-400 uppercase mb-2 flex items-center gap-1"><MorphIcon icon={Package} className="w-3 h-3" />{t('dashboard.incomingMaterials')}</p>
+                        <p className="text-sm font-semibold text-amber-800 dark:text-amber-400 uppercase mb-2 flex items-center gap-1"><MorphIcon icon={Package} className="w-3 h-3" />{t('dashboard.incomingMaterials')}</p>
                         {transfers.filter(t=>t.toUserId===currentUser.id&&t.status==="pending").map(t => (
                           <TransferRow key={t.id} t={t} currentUser={currentUser} allUsers={users} projects={projects} onConfirm={onConfirmTransfer} onReject={onRejectTransfer}/>
                         ))}
@@ -451,13 +453,13 @@ export function AdminDashboard({ currentUser, users, projects, transfers, setUse
                 {section.key === "faolobyektlar" && (
                   <div className="p-4">
                     <div className="flex justify-end mb-3">
-                      <button onClick={()=>setShowAddObject(true)} className="flex items-center gap-1.5 text-sm md:text-xs bg-accent text-white px-3 py-1.5 rounded-full font-semibold"><MorphIcon icon={Plus} className="w-3 h-3" />{t('common.add')}</button>
+                      <button onClick={()=>setShowAddObject(true)} className="flex items-center gap-1.5 text-sm bg-accent text-white px-3 py-1.5 rounded-full font-semibold"><MorphIcon icon={Plus} className="w-3 h-3" />{t('common.add')}</button>
                     </div>
                     <div className="grid grid-cols-3 gap-2 mb-4">
                       {[["active",t('dashboard.statusActive'),"text-green-800 dark:text-green-400","bg-green-500/10"],["paused",t('dashboard.statusPausedFull'),"text-amber-500","bg-amber-500/10"],["completed",t('dashboard.statusCompleted'),"text-blue-500 dark:text-blue-400","bg-blue-500/10"]].map(([s,l,c,bg])=>(
                         <div key={s} className={`${bg} border border-border rounded-xl p-3 text-center`}>
                           <p className={`text-lg font-bold font-mono ${c}`}>{projects.filter(p=>p.status===s).length}</p>
-                          <p className="text-sm md:text-xs text-muted-foreground">{l}</p>
+                          <p className="text-sm text-muted-foreground">{l}</p>
                         </div>
                       ))}
                     </div>
@@ -469,14 +471,14 @@ export function AdminDashboard({ currentUser, users, projects, transfers, setUse
                           <div className="flex items-start justify-between gap-2">
                             <div className="flex-1">
                               <div className="flex items-center gap-2 mb-1"><span className={`w-2 h-2 rounded-full flex-shrink-0 ${p.status==="active"?"bg-green-500":p.status==="paused"?"bg-amber-400":"bg-blue-400"}`}/><p className="text-sm font-semibold">{p.name}</p></div>
-                              <p className="text-sm md:text-xs text-muted-foreground flex items-center gap-1"><MorphIcon icon={MapPin} className="w-3 h-3" />{p.location}</p>
-                              {foreman&&<p className="text-sm md:text-xs text-muted-foreground flex items-center gap-1 mt-0.5"><MorphIcon icon={HardHat} className="w-3 h-3" />{foreman.name}</p>}
+                              <p className="text-sm text-muted-foreground flex items-center gap-1"><MorphIcon icon={MapPin} className="w-3 h-3" />{p.location}</p>
+                              {foreman&&<p className="text-sm text-muted-foreground flex items-center gap-1 mt-0.5"><MorphIcon icon={HardHat} className="w-3 h-3" />{foreman.name}</p>}
                             </div>
                             <MorphIcon icon={ChevronRight} className="w-5 h-5 text-muted-foreground mt-0.5" />
                           </div>
                           <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border">
-                            <span className="text-sm md:text-xs text-muted-foreground font-mono">{fmt(p.budget)}</span>
-                            {pend>0&&<span className="ml-auto text-sm md:text-xs bg-amber-500/15 text-amber-800 dark:text-amber-300 px-2 py-0.5 rounded-full font-semibold">{t('dashboard.pendingCount', { count: pend })}</span>}
+                            <span className="text-sm text-muted-foreground font-mono">{fmt(p.budget)}</span>
+                            {pend>0&&<span className="ml-auto text-sm bg-amber-500/15 text-amber-800 dark:text-amber-300 px-2 py-0.5 rounded-full font-semibold">{t('dashboard.pendingCount', { count: pend })}</span>}
                           </div>
                         </div>
                       );
@@ -565,42 +567,42 @@ export function AddUserModal({ currentUser, users, projects, onClose, onAdd }:
         <form onSubmit={handleSubmit} className="p-4 space-y-3">
           {err && <div className="bg-red-500/10 border border-red-500/25 rounded-xl px-3 py-2.5 text-xs text-red-700 dark:text-red-400 flex items-center gap-2"><MorphIcon icon={AlertCircle} className="w-3.5 h-3.5 flex-shrink-0" />{err}</div>}
           <div>
-            <label className="text-sm md:text-xs font-medium block mb-1">{t('addUser.nameLabel')}</label>
-            <input className="w-full text-sm md:text-xs border border-border rounded px-3 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary"
+            <label className="text-sm font-medium block mb-1">{t('addUser.nameLabel')}</label>
+            <input className="w-full text-sm border border-border rounded px-3 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary"
               placeholder={t('addUser.namePlaceholder')} value={form.name} onChange={e => { setErr(""); setForm({...form, name: e.target.value}); }} required/>
           </div>
           <div>
-            <label className="text-sm md:text-xs font-medium block mb-1">{t('addUser.phoneLabel')}</label>
-            <input inputMode="tel" className="w-full text-sm md:text-xs border border-border rounded px-3 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary font-mono"
+            <label className="text-sm font-medium block mb-1">{t('addUser.phoneLabel')}</label>
+            <input inputMode="tel" className="w-full text-sm border border-border rounded px-3 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary font-mono"
               value={form.phone} onChange={e => {
                 setErr("");
                 const val = e.target.value;
                 if (val.startsWith("+998 ")) setForm({...form, phone: "+998 " + val.slice(5).replace(/\D/g, "").slice(0, 9)});
                 else if (val === "+998" || val === "") setForm({...form, phone: "+998 "});
               }} required/>
-            <p className="text-sm md:text-xs text-muted-foreground mt-1">{t('addUser.smsHint')}</p>
+            <p className="text-sm text-muted-foreground mt-1">{t('addUser.smsHint')}</p>
           </div>
           <div>
-            <label className="text-sm md:text-xs font-medium block mb-1">{t('addUser.positionLabel')}</label>
-            <select className="w-full text-sm md:text-xs border border-border rounded px-3 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary"
+            <label className="text-sm font-medium block mb-1">{t('addUser.positionLabel')}</label>
+            <select className="w-full text-sm border border-border rounded px-3 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary"
               value={form.role} onChange={e => setForm({...form, role: e.target.value as Role})}>
               {allowedRoles.map(r => <option key={r} value={r}>{roleLabel(t, r)}</option>)}
             </select>
           </div>
           {isAdmin(currentUser.role) && (
             <div>
-              <label className="text-sm md:text-xs font-medium block mb-1">{t('addUser.baseSalaryLabel')}</label>
-              <input type="number" min="0" className="w-full text-sm md:text-xs border border-border rounded px-3 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary"
+              <label className="text-sm font-medium block mb-1">{t('addUser.baseSalaryLabel')}</label>
+              <input type="number" min="0" className="w-full text-sm border border-border rounded px-3 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary"
                 placeholder={t('addUser.baseSalaryPlaceholder') as string} value={form.baseSalary} onChange={e => setForm({...form, baseSalary: e.target.value})}/>
             </div>
           )}
           {(form.role === "brigadir" || form.role === "ishchi") && (
             <div>
-              <label className="text-sm md:text-xs font-medium block mb-1">{t('addUser.brigadeLabel')}</label>
+              <label className="text-sm font-medium block mb-1">{t('addUser.brigadeLabel')}</label>
               {currentUser.role === "brigadir" ? (
-                <input className="w-full text-sm md:text-xs border border-border rounded px-3 py-2 bg-muted font-medium" value={currentUser.brigade} readOnly/>
+                <input className="w-full text-sm border border-border rounded px-3 py-2 bg-muted font-medium" value={currentUser.brigade} readOnly/>
               ) : (
-                <select className="w-full text-sm md:text-xs border border-border rounded px-3 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary"
+                <select className="w-full text-sm border border-border rounded px-3 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary"
                   value={form.brigade} onChange={e => setForm({...form, brigade: e.target.value})}>
                   <option value="">{t('addUser.selectPlaceholder')}</option>
                   {brigades.map(b => <option key={b} value={b}>{b}</option>)}
@@ -608,29 +610,29 @@ export function AddUserModal({ currentUser, users, projects, onClose, onAdd }:
                 </select>
               )}
               {form.brigade === "__new__" && (
-                <input className="w-full text-sm md:text-xs border border-border rounded px-3 py-2 bg-input-background mt-1.5 focus:outline-none focus:ring-1 focus:ring-primary"
+                <input className="w-full text-sm border border-border rounded px-3 py-2 bg-input-background mt-1.5 focus:outline-none focus:ring-1 focus:ring-primary"
                   placeholder={t('addUser.newBrigadePlaceholder')} onChange={e => setForm({...form, newBrigade: e.target.value})}/>
               )}
             </div>
           )}
           {isAdmin(currentUser.role) && form.role !== "orinbosar" && (
             <div>
-              <label className="text-sm md:text-xs font-medium block mb-1">{t('addUser.objects')}</label>
+              <label className="text-sm font-medium block mb-1">{t('addUser.objects')}</label>
               <div className="space-y-1 max-h-28 overflow-y-auto border border-border rounded p-2">
                 {projects.map(p => (
                   <label key={p.id} className="flex items-center gap-2 cursor-pointer hover:bg-muted/30 px-1 py-0.5 rounded">
                     <input type="checkbox" checked={form.projectIds.includes(p.id)}
                       onChange={e => setForm({...form, projectIds: e.target.checked ? [...form.projectIds, p.id] : form.projectIds.filter(id => id !== p.id)})}
                       className="w-3 h-3 accent-primary"/>
-                    <span className="text-sm md:text-xs">{p.name}</span>
+                    <span className="text-sm">{p.name}</span>
                   </label>
                 ))}
               </div>
             </div>
           )}
           <div className="flex gap-2 pt-1">
-            <button type="button" onClick={onClose} disabled={submitting} className="flex-1 text-sm md:text-xs border border-border rounded px-3 py-2 hover:bg-muted transition-colors disabled:opacity-50">{t('addUser.cancel')}</button>
-            <button type="submit" disabled={submitting} className="flex-1 text-sm md:text-xs bg-primary text-white rounded px-3 py-2 hover:bg-primary/90 transition-colors font-semibold disabled:opacity-60 flex items-center justify-center gap-1.5">
+            <button type="button" onClick={onClose} disabled={submitting} className="flex-1 text-sm border border-border rounded px-3 py-2 hover:bg-muted transition-colors disabled:opacity-50">{t('addUser.cancel')}</button>
+            <button type="submit" disabled={submitting} className="flex-1 text-sm bg-primary text-white rounded px-3 py-2 hover:bg-primary/90 transition-colors font-semibold disabled:opacity-60 flex items-center justify-center gap-1.5">
               {submitting && <MorphIcon icon={Loader2} className="w-3.5 h-3.5 animate-spin" />}{t('common.add')}
             </button>
           </div>
@@ -664,20 +666,20 @@ export function EditUserModal({ user, currentUser, onClose, onUpdate }: { user: 
           onClose();
         }} className="p-4 space-y-3">
           <div>
-            <label className="text-sm md:text-xs font-medium block mb-1">{t('editUser.nameLabel')}</label>
-            <input className="w-full text-sm md:text-xs border border-border rounded px-2.5 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
+            <label className="text-sm font-medium block mb-1">{t('editUser.nameLabel')}</label>
+            <input className="w-full text-sm border border-border rounded px-2.5 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
               placeholder={t('editUser.namePlaceholder')} value={form.name} onChange={e => setForm({...form, name: e.target.value})} required autoFocus
               disabled={!(currentUser.role === 'direktor' || currentUser.role === 'orinbosar')} />
           </div>
           <div>
-            <label className="text-sm md:text-xs font-medium block mb-1">{t('editUser.phoneLabel')}</label>
-            <input inputMode="tel" className="w-full text-sm md:text-xs border border-border rounded px-2.5 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary font-mono disabled:opacity-50"
+            <label className="text-sm font-medium block mb-1">{t('editUser.phoneLabel')}</label>
+            <input inputMode="tel" className="w-full text-sm border border-border rounded px-2.5 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary font-mono disabled:opacity-50"
               placeholder="+998901234567" value={form.phone} onChange={e => setForm({...form, phone: e.target.value.replace(/[^\d+]/g, "")})} required
               disabled={!(currentUser.role === 'direktor' || currentUser.role === 'orinbosar')} />
           </div>
           <div>
-            <label className="text-sm md:text-xs font-medium block mb-1">{t('editUser.positionLabel')}</label>
-            <select className="w-full text-sm md:text-xs border border-border rounded px-2.5 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary"
+            <label className="text-sm font-medium block mb-1">{t('editUser.positionLabel')}</label>
+            <select className="w-full text-sm border border-border rounded px-2.5 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary"
               value={form.role} onChange={e => setForm({...form, role: e.target.value as Role})}>
               {editableRoles.map(r => <option key={r} value={r}>{roleLabel(t, r)}</option>)}
               {!editableRoles.includes(form.role) && <option value={form.role}>{roleLabel(t, form.role)}</option>}
@@ -685,21 +687,21 @@ export function EditUserModal({ user, currentUser, onClose, onUpdate }: { user: 
           </div>
           {isAdmin(currentUser.role) && (
             <div>
-              <label className="text-sm md:text-xs font-medium block mb-1">{t('addUser.baseSalaryLabel')}</label>
-              <input type="number" min="0" className="w-full text-sm md:text-xs border border-border rounded px-2.5 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary"
+              <label className="text-sm font-medium block mb-1">{t('addUser.baseSalaryLabel')}</label>
+              <input type="number" min="0" className="w-full text-sm border border-border rounded px-2.5 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary"
                 placeholder={t('addUser.baseSalaryPlaceholder') as string} value={form.baseSalary} onChange={e => setForm({...form, baseSalary: e.target.value})}/>
             </div>
           )}
           {["ishchi", "brigadir"].includes(form.role) && (
             <div>
-              <label className="text-sm md:text-xs font-medium block mb-1">{t('editUser.brigadeLabel')}</label>
-              <input className="w-full text-sm md:text-xs border border-border rounded px-2.5 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary"
+              <label className="text-sm font-medium block mb-1">{t('editUser.brigadeLabel')}</label>
+              <input className="w-full text-sm border border-border rounded px-2.5 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary"
                 value={form.brigade} onChange={e => setForm({...form, brigade: e.target.value})}/>
             </div>
           )}
           <div className="flex gap-2 pt-1">
-            <button type="button" onClick={onClose} className="flex-1 text-sm md:text-xs border border-border rounded px-3 py-2 hover:bg-muted transition-colors">{t('editUser.cancel')}</button>
-            <button type="submit" className="flex-1 text-sm md:text-xs bg-primary text-white rounded px-3 py-2 hover:bg-primary/90 font-semibold">{t('editUser.save')}</button>
+            <button type="button" onClick={onClose} className="flex-1 text-sm border border-border rounded px-3 py-2 hover:bg-muted transition-colors">{t('editUser.cancel')}</button>
+            <button type="submit" className="flex-1 text-sm bg-primary text-white rounded px-3 py-2 hover:bg-primary/90 font-semibold">{t('editUser.save')}</button>
           </div>
         </form>
       </div>
@@ -774,23 +776,23 @@ export function AddObjectModal({ users, onClose, onAdd }:
           <button aria-label={t('addObject.close')} onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted liquid-transition"><MorphIcon icon={X} className="w-4 h-4 text-muted-foreground" /></button>
         </div>
         <form onSubmit={handleSubmit} className="p-4 space-y-3">
-          <div><label className="text-sm md:text-xs font-medium block mb-1">{t('addObject.nameLabel')}</label><input className="w-full text-sm md:text-xs border border-border rounded px-3 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary" placeholder={t('addObject.namePlaceholder')} value={form.name} onChange={e=>setForm({...form,name:e.target.value})} required/></div>
-          <div><label className="text-sm md:text-xs font-medium block mb-1">{t('addObject.locationLabel')}</label><LocationInput placeholder={t('addObject.locationPlaceholder')} value={form.location} onChange={v=>setForm({...form,location:v})} onCoords={setCoords}/></div>
-          <div><label className="text-sm md:text-xs font-medium block mb-1">{t('addObject.geofence', "\"Ishga keldim\" radiusi (metr)")}</label>
+          <div><label className="text-sm font-medium block mb-1">{t('addObject.nameLabel')}</label><input className="w-full text-sm border border-border rounded px-3 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary" placeholder={t('addObject.namePlaceholder')} value={form.name} onChange={e=>setForm({...form,name:e.target.value})} required/></div>
+          <div><label className="text-sm font-medium block mb-1">{t('addObject.locationLabel')}</label><LocationInput placeholder={t('addObject.locationPlaceholder')} value={form.location} onChange={v=>setForm({...form,location:v})} onCoords={setCoords}/></div>
+          <div><label className="text-sm font-medium block mb-1">{t('addObject.geofence', "\"Ishga keldim\" radiusi (metr)")}</label>
             <input type="number" inputMode="numeric" min={50} max={100000} step={50} placeholder={t('addObject.geofenceOff', "Bo'sh — tekshirilmaydi")} className="w-full text-base sm:text-sm border border-border rounded-xl px-3 h-11 bg-input-background focus:outline-none" value={radius} onChange={e=>setRadius(e.target.value)}/>
             <p className="text-[11px] text-muted-foreground mt-1">Bo'sh qoldirsangiz — "Ishga keldim" joyi tekshirilmaydi. Prorablarga tekshiruv qo'llanmaydi.</p>
             <p className="text-[11px] text-muted-foreground mt-1">{coords ? t('addObject.geofenceOk', "✓ Obyekt nuqtasi tanlandi — ishchilar faqat shu radius ichida ishga kela oladi") : t('addObject.geofenceHint', "Manzilni xaritadan tanlang — shunda ishchilar faqat obyektda \"Ishga keldim\" bosa oladi")}</p></div>
-          <div><label className="text-sm md:text-xs font-medium block mb-1">{t('addObject.budgetLabel')}</label><input type="number" className="w-full text-sm md:text-xs border border-border rounded px-3 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary" placeholder="50000000" value={form.budget} onChange={e=>setForm({...form,budget:e.target.value})}/></div>
+          <div><label className="text-sm font-medium block mb-1">{t('addObject.budgetLabel')}</label><input type="number" className="w-full text-sm border border-border rounded px-3 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary" placeholder="50000000" value={form.budget} onChange={e=>setForm({...form,budget:e.target.value})}/></div>
           <div>
-            <label className="text-sm md:text-xs font-medium block mb-1">{t('addObject.foremanLabel')}</label>
-            <select className="w-full text-sm md:text-xs border border-border rounded px-3 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary" value={form.foremanId} onChange={e=>setForm({...form,foremanId:e.target.value})}>
+            <label className="text-sm font-medium block mb-1">{t('addObject.foremanLabel')}</label>
+            <select className="w-full text-sm border border-border rounded px-3 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary" value={form.foremanId} onChange={e=>setForm({...form,foremanId:e.target.value})}>
               <option value="">{t('addObject.selectPlaceholder')}</option>
               {users.filter(u=>u.role==="prorab").map(u=><option key={u.id} value={u.id}>{u.name}</option>)}
             </select>
           </div>
           <div>
-            <label className="text-sm md:text-xs font-medium block mb-1">{t('addObject.smetaLabel')}</label>
-            <input type="file" accept=".pdf,.xlsx,.xls,.docx,.doc,.csv,.txt" className="w-full text-sm md:text-xs border border-border rounded px-3 py-1.5 bg-input-background file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-sm md:text-xs file:bg-primary file:text-white hover:file:bg-primary/90" onChange={e=>setSmeta(e.target.files?.[0]||null)}/>
+            <label className="text-sm font-medium block mb-1">{t('addObject.smetaLabel')}</label>
+            <input type="file" accept=".pdf,.xlsx,.xls,.docx,.doc,.csv,.txt" className="w-full text-sm border border-border rounded px-3 py-1.5 bg-input-background file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-sm file:bg-primary file:text-white hover:file:bg-primary/90" onChange={e=>setSmeta(e.target.files?.[0]||null)}/>
             {loading && smeta && (
               <div className="mt-2">
                 <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground"><MorphIcon icon={Loader2} className="w-3 h-3 animate-spin" />{smetaMsg || t('addObject.smetaLoading')}</div>
@@ -798,7 +800,7 @@ export function AddObjectModal({ users, onClose, onAdd }:
               </div>
             )}
           </div>
-          <div className="flex gap-2 pt-1"><button type="button" onClick={onClose} className="flex-1 text-sm md:text-xs border border-border rounded px-3 py-2 hover:bg-muted">{t('addObject.cancel')}</button><button type="submit" disabled={loading} className="flex-1 text-sm md:text-xs bg-accent text-white rounded px-3 py-2 font-semibold hover:bg-accent/90">{loading?t('addObject.smetaLoading'):t('addObject.submit')}</button></div>
+          <div className="flex gap-2 pt-1"><button type="button" onClick={onClose} className="flex-1 text-sm border border-border rounded px-3 py-2 hover:bg-muted">{t('addObject.cancel')}</button><button type="submit" disabled={loading} className="flex-1 text-sm bg-accent text-white rounded px-3 py-2 font-semibold hover:bg-accent/90">{loading?t('addObject.smetaLoading'):t('addObject.submit')}</button></div>
         </form>
       </div>
     </div>

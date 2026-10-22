@@ -3,6 +3,19 @@
 // (translations.ts va boshqa ns fayllar) BOR kalit bu yerda almashtirilmaydi — uni o'sha faylning o'zida o'zgartiring.
 // 'uz-cyrl' avtomatik hosil qilinadi.
 export const uz = {
+  common: { more: "Yana" },
+  settingsUi: {
+    account: "Hisob", accountDesc: "Ruxsatlaringiz va biriktirilgan obyektlar",
+    company: "Firma", companyDesc: "Obuna, valyuta kursi, zaxira nusxa va firma tarixi",
+    security: "Xavfsizlik", securityDesc: "Ilova qulfi, PIN kod va hisobingizga kirgan qurilmalar",
+    ai: "AI yordamchi", aiDesc: "AI qo'ng'iroqlari va shaxsiy AI sozlamalari",
+    app: "Ilova ko'rinishi", appDesc: "Til, rang, fon va shrift — faqat shu qurilmada",
+    rowBg: "Sahifalar orqasidagi rasm", rowAppearance: "Yorug', qorong'i yoki telefon bo'yicha", rowColor: "Tugma va belgilar rangi",
+    rowFont: "Matn o'lchami va shrift turi", rowLanguage: "O'zbekcha, kirillcha yoki ruscha", rowPerms: "Sizga nimalar ruxsat etilgan",
+    rowProjects: "Siz biriktirilgan obyektlar", rowCurrency: "Dollar kursi — summalarni hisoblash uchun", rowDevices: "Hisobingizga kirgan telefon va kompyuterlar",
+    rowSubscription: "Tarif, muddat va to'lov", rowBackup: "Barcha ma'lumotni faylga saqlash yoki qaytarish", rowDanger: "Ma'lumotlarni butunlay o'chirish",
+    rowLock: "Hozir qulflash — qayta ochish uchun PIN so'raladi", rowLogout: "Bu qurilmadan hisobdan chiqish",
+  },
   ai: {
     micUnsupported: "Bu qurilmada ovoz yozib bo'lmaydi",
     micDenied: "Mikrofonga ruxsat berilmadi — sozlamalardan ruxsat bering",
@@ -56,7 +69,7 @@ export const uz = {
     fontHint: "Tanlangan shrift butun saytga (shu qurilmada) qo'llanadi. Hujjatlar shrifti hujjatlar bo'limida alohida tanlanadi.",
   },
   register: { saveBackToSummary: "Saqlash va xulosaga qaytish" },
-  nav: { homeShort: "Asosiy" },
+  nav: { homeShort: "Asosiy", reportsShort: "Hisobot", gpsShort: "Kuzatuv", chatShort: "Xabarlar" },
   gps: { signalLost: "Aloqa uzildi", signalBack: "Aloqa tiklandi", gapsCount: "Aloqa {{count}} marta uzilgan",
     justNow: "hozirgina", daysAgo: "{{d}} kun oldin", fAll: "Hammasi", fWorking: "Ishda", fLive: "Jonli", fNoSignal: "Signal yo'q",
     notCame: "Kelmagan", atWork: "Ishda", left: "Ketgan", profile: "Profil", lastSeenShort: "Oxirgi",
@@ -78,6 +91,19 @@ export const uz = {
 };
 
 export const ru: typeof uz = {
+  common: { more: "Ещё" },
+  settingsUi: {
+    account: "Аккаунт", accountDesc: "Ваши права и прикреплённые объекты",
+    company: "Компания", companyDesc: "Подписка, курс валют, резервная копия и история действий",
+    security: "Безопасность", securityDesc: "Блокировка приложения, PIN-код и устройства с вашим входом",
+    ai: "AI-помощник", aiDesc: "AI-звонки и личные настройки AI",
+    app: "Внешний вид", appDesc: "Язык, цвет, фон и шрифт — только на этом устройстве",
+    rowBg: "Фоновое изображение страниц", rowAppearance: "Светлая, тёмная или как в системе", rowColor: "Цвет кнопок и значков",
+    rowFont: "Размер и тип шрифта", rowLanguage: "Узбекский (латиница/кириллица) или русский", rowPerms: "Что вам разрешено",
+    rowProjects: "Объекты, к которым вы прикреплены", rowCurrency: "Курс доллара для пересчёта сумм", rowDevices: "Телефоны и компьютеры с вашим входом",
+    rowSubscription: "Тариф, срок и оплата", rowBackup: "Сохранить все данные в файл или восстановить", rowDanger: "Безвозвратное удаление данных",
+    rowLock: "Заблокировать сейчас — для входа нужен PIN", rowLogout: "Выйти из аккаунта на этом устройстве",
+  },
   ai: {
     micUnsupported: "На этом устройстве нельзя записать голос",
     micDenied: "Нет доступа к микрофону — разрешите его в настройках",
@@ -131,7 +157,7 @@ export const ru: typeof uz = {
     fontHint: "Выбранный шрифт применяется ко всему сайту (на этом устройстве). Шрифт документов выбирается отдельно в разделе документов.",
   },
   register: { saveBackToSummary: "Сохранить и вернуться к итогу" },
-  nav: { homeShort: "Главная" },
+  nav: { homeShort: "Главная", reportsShort: "Отчёты", gpsShort: "GPS", chatShort: "Чаты" },
   gps: { signalLost: "Связь потеряна", signalBack: "Связь восстановлена", gapsCount: "Связь терялась {{count}} раз",
     justNow: "только что", daysAgo: "{{d}} дн. назад", fAll: "Все", fWorking: "На работе", fLive: "Онлайн", fNoSignal: "Нет сигнала",
     notCame: "Не пришёл", atWork: "На работе", left: "Ушёл", profile: "Профиль", lastSeenShort: "Последний раз",

@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { MorphIcon } from "morphicons/react";
+import { IconTile } from "./components/IconTile";
 import Phone from "@hugeicons/core-free-icons/PhoneIcon";
 import X from "@hugeicons/core-free-icons/Cancel01Icon";
 import Edit from "@hugeicons/core-free-icons/Edit02Icon";
@@ -337,7 +338,7 @@ export default function ChatPage({ currentUser, users, messages, groups, onlineU
           <AiChatThread userId={currentUser.id} onBack={() => setAiOpen(false)} />
         ) : !threadOpen ? (
           <div className="flex-1 flex items-center justify-center text-muted-foreground">
-            <div className="text-center animate-pop-in"><MorphIcon icon={MessageCircle} className="w-12 h-12 mx-auto mb-3 opacity-20" /><p className="text-sm bg-card/70 rounded-full px-4 py-1.5">{tChat("chat.selectConversation")}</p></div>
+            <div className="text-center animate-pop-in"><IconTile icon={MessageCircle} tone="blue" size="xl" variant="soft" className="mx-auto mb-3" /><p className="text-sm bg-card/70 rounded-full px-4 py-1.5">{tChat("chat.selectConversation")}</p></div>
           </div>
         ) : (
           <>

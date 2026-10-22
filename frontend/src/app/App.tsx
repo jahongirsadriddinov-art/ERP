@@ -78,6 +78,7 @@ import Lock from "@hugeicons/core-free-icons/LockIcon";
 import Volume2 from "@hugeicons/core-free-icons/VolumeHighIcon";
 import VolumeX from "@hugeicons/core-free-icons/VolumeOffIcon";
 import { MorphIcon, type IconNode } from "morphicons/react";
+import { IconTile, type IconTone } from "./components/IconTile";
 import { toast, Toaster } from "sonner";
 import { isSoundEnabled, setSoundEnabled, getSoundVolume, setSoundVolume, playSound, sfx } from "./sound";
 import { createPortal } from "react-dom";
@@ -601,7 +602,7 @@ export function CompanyLogo({ src, imgClass, iconClass }: { src?: string; imgCla
 }
 
 export function Avatar({ user, size = "md" }: { user: AppUser; size?: "sm"|"md"|"lg" }) {
-  const sz = { sm: "w-7 h-7 text-sm md:text-xs", md: "w-9 h-9 text-sm md:text-xs", lg: "w-16 h-16 text-xl" }[size];
+  const sz = { sm: "w-7 h-7 text-sm", md: "w-9 h-9 text-sm", lg: "w-16 h-16 text-xl" }[size];
   const [avatarBad, setAvatarBad] = useState(false);
   useEffect(() => { setAvatarBad(false); }, [user.avatar]);
   if (user.avatar && !avatarBad) return <img src={user.avatar} alt={user.name} className={`${sz} rounded-full object-cover flex-shrink-0`} onError={() => setAvatarBad(true)}/>;
@@ -627,6 +628,40 @@ export function fmtVideoDuration(sec: number): string {
 
 // Forma oynalari (yangi obyekt/xodim/chiqim, hujjat...) — tashqariga ADASHIB bosilganda yopilmaydi
 // (kiritilgan ma'lumot yo'qolmasin). Faqat X / "Bekor qilish" tugmasi yoki Esc bilan yopiladi.
+// Telefon sarlavhasi — kam ishlatiladigan tugmalar (e'lonlar, QR, bloklash, mavzu) bitta "⋯" menyuda:
+// tepada faqat eng kerakli 4 ta tugma qoladi, barmoq bilan bosish oson bo'ladi.
+function HeaderMoreMenu({ items, label }: { items: { key: string; icon: IconNode; label: string; tone: IconTone; onClick: () => void }[]; label: string }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const out = (e: Event) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("pointerdown", out, true);
+    document.addEventListener("keydown", esc);
+    return () => { document.removeEventListener("pointerdown", out, true); document.removeEventListener("keydown", esc); };
+  }, [open]);
+  return (
+    <div ref={ref} className="relative lg:hidden">
+      <button onClick={() => setOpen(o => !o)} aria-label={label} title={label} aria-expanded={open}
+        className={`btn btn-ghost w-9 h-9 p-0 rounded-full ${open ? "bg-muted text-foreground" : ""}`}>
+        <MorphIcon icon={MoreHorizontal} className="w-5 h-5" />
+      </button>
+      {open && (
+        <div role="menu" className="absolute right-0 top-[calc(100%+10px)] z-[70] w-[min(17rem,calc(100vw-24px))] surface rounded-2xl p-1.5 animate-pop-in origin-top-right">
+          {items.map(it => (
+            <button key={it.key} role="menuitem" onClick={() => { setOpen(false); it.onClick(); }}
+              className="w-full flex items-center gap-3 px-2.5 py-2 min-h-[52px] rounded-xl text-left hover:bg-muted/60 active:bg-muted liquid-transition">
+              <IconTile icon={it.icon} tone={it.tone} size="sm" variant="solid" />
+              <span className="text-[15px] font-medium">{it.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function EscClose({ onClose }: { onClose: () => void }) {
   const ref = useRef(onClose);
   ref.current = onClose;
@@ -705,7 +740,7 @@ export function LocationInput({ value, onChange, placeholder, onCoords }: { valu
     <div className="relative" ref={wrapRef}>
       <div className="flex gap-1.5">
         <input
-          className="w-full text-sm md:text-xs border border-border rounded px-3 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary"
+          className="w-full text-sm border border-border rounded px-3 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary"
           placeholder={placeholder}
           value={value}
           onChange={e => { onChange(e.target.value); setCoords(null); search(e.target.value); }}
@@ -1086,22 +1121,22 @@ export function TransferRow({ t, currentUser, allUsers, projects, onConfirm, onR
   }[t.status];
 
   return (
-    <div className={`border rounded-xl p-3 text-sm md:text-xs space-y-2 shadow-sm liquid-transition ${t.status === "confirmed" ? "border-green-500/25 bg-green-500/8" : t.status === "rejected" ? "border-red-500/25 bg-red-500/8" : "border-amber-500/25 bg-amber-500/8"}`}>
+    <div className={`border rounded-xl p-3 text-sm space-y-2 shadow-sm liquid-transition ${t.status === "confirmed" ? "border-green-500/25 bg-green-500/8" : t.status === "rejected" ? "border-red-500/25 bg-red-500/8" : "border-amber-500/25 bg-amber-500/8"}`}>
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-foreground">{t.materialName}</p>
-          <p className="text-muted-foreground font-mono text-sm md:text-xs">
+          <p className="text-muted-foreground font-mono text-sm">
             {t.quantity.toLocaleString()} {t.unit}
             {!!t.price && <span className="ml-1.5 text-primary font-semibold">· {(t.price * t.quantity).toLocaleString()} {tt('common.som')}</span>}
           </p>
-          <p className="text-sm md:text-xs text-muted-foreground mt-0.5">
+          <p className="text-sm text-muted-foreground mt-0.5">
             {isSender ? <><span className="text-foreground font-medium">{tt('dashboard.youLabel')}</span> → {to?.name}</> : <>{from?.name} → <span className="text-foreground font-medium">{tt('dashboard.youLabel')}</span></>}
           </p>
-          <p className="text-sm md:text-xs text-muted-foreground">{proj?.name} • {t.date || t.sentDate}</p>
-          {t.note && <p className="text-sm md:text-xs text-muted-foreground italic">{t.note}</p>}
-          {t.defect && <p className="text-sm md:text-xs text-amber-700 flex items-center gap-1 mt-0.5"><MorphIcon icon={AlertTriangle} className="w-2.5 h-2.5" />{t.defect}</p>}
+          <p className="text-sm text-muted-foreground">{proj?.name} • {t.date || t.sentDate}</p>
+          {t.note && <p className="text-sm text-muted-foreground italic">{t.note}</p>}
+          {t.defect && <p className="text-sm text-amber-700 flex items-center gap-1 mt-0.5"><MorphIcon icon={AlertTriangle} className="w-2.5 h-2.5" />{t.defect}</p>}
           {t.status === "confirmed" && isSender && t.confirmedDate && (
-            <p className="text-sm md:text-xs text-green-800 dark:text-green-400 font-medium mt-0.5">✓ {tt('dashboard.confirmedByLabel', { name: to?.name, date: t.confirmedDate })}</p>
+            <p className="text-sm text-green-800 dark:text-green-400 font-medium mt-0.5">✓ {tt('dashboard.confirmedByLabel', { name: to?.name, date: t.confirmedDate })}</p>
           )}
         </div>
         <div className="flex-shrink-0">{statusBadge}</div>
@@ -1109,14 +1144,14 @@ export function TransferRow({ t, currentUser, allUsers, projects, onConfirm, onR
       {canConfirm && (
         <div className="space-y-1.5">
           <textarea rows={1} placeholder={tt('dashboard.defectPlaceholder')} value={defect} onChange={e => setDefect(e.target.value)}
-            className="w-full text-sm md:text-xs border border-border rounded px-2 py-1.5 bg-input-background resize-none focus:outline-none focus:ring-1 focus:ring-primary"/>
+            className="w-full text-sm border border-border rounded px-2 py-1.5 bg-input-background resize-none focus:outline-none focus:ring-1 focus:ring-primary"/>
           <div className="flex gap-1.5">
             <button onClick={() => onConfirm(t.id, defect || undefined)}
-              className="flex-1 flex items-center justify-center gap-1 text-sm md:text-xs bg-green-600 text-white rounded py-1.5 hover:bg-green-700 font-semibold">
+              className="flex-1 flex items-center justify-center gap-1 text-sm bg-green-600 text-white rounded py-1.5 hover:bg-green-700 font-semibold">
               <MorphIcon icon={Check} className="w-3 h-3" />{tt('dashboard.acceptBtn')}
             </button>
             <button onClick={() => onReject(t.id)}
-              className="flex items-center justify-center gap-1 text-sm md:text-xs bg-red-500/15 text-red-700 dark:text-red-300 rounded px-2.5 py-1.5 hover:bg-red-500/100/25 font-semibold">
+              className="flex items-center justify-center gap-1 text-sm bg-red-500/15 text-red-700 dark:text-red-300 rounded px-2.5 py-1.5 hover:bg-red-500/100/25 font-semibold">
               <MorphIcon icon={X} className="w-3 h-3" />{tt('dashboard.rejectBtn')}
             </button>
           </div>
@@ -1141,7 +1176,7 @@ function MyTransfersPanel({ currentUser, transfers, allUsers, projects, onConfir
     <div className="flex flex-col h-full p-3 gap-3 overflow-hidden">
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28 }}
         className="surface flex items-center justify-between px-4 py-3 flex-shrink-0">
-        <h2 className="text-sm font-bold uppercase tracking-wider font-['Roboto_Slab',serif]">{t('dashboard.materials')}</h2>
+        <h2 className="text-sm font-bold uppercase tracking-wider font-display">{t('dashboard.materials')}</h2>
         <button onClick={onSend} className="btn btn-primary flex items-center gap-1.5 text-xs px-3.5 py-2 rounded-full">
           <MorphIcon icon={Send} className="w-3.5 h-3.5" />{t('dashboard.send')}
         </button>
@@ -1159,7 +1194,7 @@ function MyTransfersPanel({ currentUser, transfers, allUsers, projects, onConfir
       </motion.div>
       <div className="flex-1 overflow-y-auto space-y-2 scrollbar-hide">
         {shown.length === 0 ? (
-          <div className="text-center py-10 text-muted-foreground"><MorphIcon icon={Package} className="w-8 h-8 mx-auto mb-2 opacity-30" /><p className="text-sm md:text-xs">{t('dashboard.emptyList')}</p></div>
+          <div className="text-center py-10 text-muted-foreground"><IconTile icon={Package} tone="orange" size="xl" variant="soft" className="mx-auto mb-3" /><p className="text-sm">{t('dashboard.emptyList')}</p></div>
         ) : shown.map(tr => (
           <TransferRow key={tr.id} t={tr} currentUser={currentUser} allUsers={allUsers} projects={projects} onConfirm={onConfirm} onReject={onReject}/>
         ))}
@@ -1417,29 +1452,29 @@ function themeVars(p: VarInput): Record<string, string> {
 const DARK_BORDER = "rgba(255,255,255,0.10)";
 export const COLOR_THEMES = [
   { id: "navy", name: "Klassik", primary: "#1B3A6B", accent: "#D2440F",
-    light: themeVars({ primary:"#1B3A6B", accent:"#D2440F", secondary:"#E4EAF3", secondaryFg:"#1B3A6B", bg:"#F4F6FA", card:"#FFFFFF", fg:"#0F1A2E", muted:"#EAEEF5", mutedFg:"#5C6B84", border:"rgba(15,26,46,0.10)", input:"#EDF1F7", ring:"#1B3A6B" }),
-    dark:  themeVars({ primary:"#3E6DB5", accent:"#F26A3D", secondary:"#1E2A40", secondaryFg:"#CBD5E1", bg:"#0B1220", card:"#131C2E", fg:"#E6ECF5", muted:"#1A2436", mutedFg:"#8A9CB8", border:DARK_BORDER, input:"#1A2436", ring:"#5B8DD6" }) },
+    light: themeVars({ primary:"#1B3A6B", accent:"#D2440F", secondary:"#E8EDF6", secondaryFg:"#1B3A6B", bg:"#F5F7FA", card:"#FFFFFF", fg:"#0F172A", muted:"#EEF1F6", mutedFg:"#5B6474", border:"rgba(15,23,42,0.09)", input:"#F1F4F8", ring:"#1B3A6B" }),
+    dark:  themeVars({ primary:"#3E6DB5", accent:"#F26A3D", secondary:"#1A2233", secondaryFg:"#CBD5E1", bg:"#0A0E16", card:"#121826", fg:"#E8ECF3", muted:"#1A2130", mutedFg:"#8E9AAE", border:DARK_BORDER, input:"#161D2B", ring:"#5B8DD6" }) },
   { id: "ocean", name: "Okean", primary: "#0369A1", accent: "#0B7CAF",
-    light: themeVars({ primary:"#0369A1", accent:"#0B7CAF", secondary:"#E0F2FE", secondaryFg:"#075985", bg:"#F1F9FE", card:"#FFFFFF", fg:"#0C2536", muted:"#E4F3FB", mutedFg:"#4E6E7E", border:"rgba(3,105,161,0.10)", input:"#E8F5FF", ring:"#0369A1" }),
-    dark:  themeVars({ primary:"#2A94D6", accent:"#22C3E6", secondary:"#102838", secondaryFg:"#BAE0F5", bg:"#071620", card:"#0E2130", fg:"#E1F0F7", muted:"#12293A", mutedFg:"#7F9DB0", border:DARK_BORDER, input:"#12293A", ring:"#38BDF8" }) },
+    light: themeVars({ primary:"#0369A1", accent:"#0B7CAF", secondary:"#E0F0FA", secondaryFg:"#075985", bg:"#F4F8FB", card:"#FFFFFF", fg:"#0B2230", muted:"#EAF1F6", mutedFg:"#56707F", border:"rgba(8,47,73,0.09)", input:"#EEF4F8", ring:"#0369A1" }),
+    dark:  themeVars({ primary:"#2A94D6", accent:"#22C3E6", secondary:"#10283A", secondaryFg:"#BAE0F5", bg:"#071118", card:"#0F1C26", fg:"#E3EEF4", muted:"#15242F", mutedFg:"#86A2B2", border:DARK_BORDER, input:"#132330", ring:"#38BDF8" }) },
   { id: "forest", name: "O'rmon", primary: "#166534", accent: "#12863D",
-    light: themeVars({ primary:"#166534", accent:"#12863D", secondary:"#DCFCE7", secondaryFg:"#14532D", bg:"#F1FBF4", card:"#FFFFFF", fg:"#0E2A18", muted:"#E4F6EA", mutedFg:"#4B6B57", border:"rgba(22,101,52,0.10)", input:"#E9F8EF", ring:"#166534" }),
-    dark:  themeVars({ primary:"#2E9E5B", accent:"#22C55E", secondary:"#12281B", secondaryFg:"#BBF7D0", bg:"#08160E", card:"#0F2418", fg:"#E2F3E8", muted:"#132A1D", mutedFg:"#83AE92", border:DARK_BORDER, input:"#132A1D", ring:"#34D399" }) },
+    light: themeVars({ primary:"#166534", accent:"#12863D", secondary:"#E1F3E6", secondaryFg:"#14532D", bg:"#F5F8F5", card:"#FFFFFF", fg:"#10241A", muted:"#EBF2EC", mutedFg:"#56685B", border:"rgba(20,50,30,0.09)", input:"#EEF4EF", ring:"#166534" }),
+    dark:  themeVars({ primary:"#2E9E5B", accent:"#22C55E", secondary:"#13281B", secondaryFg:"#BBF7D0", bg:"#08100B", card:"#101B14", fg:"#E3F0E7", muted:"#16231B", mutedFg:"#8AA794", border:DARK_BORDER, input:"#15221A", ring:"#34D399" }) },
   { id: "purple", name: "Binafsha", primary: "#6D28D9", accent: "#7C3AED",
-    light: themeVars({ primary:"#6D28D9", accent:"#7C3AED", secondary:"#EDE9FE", secondaryFg:"#5B21B6", bg:"#F7F5FF", card:"#FFFFFF", fg:"#241542", muted:"#F0ECFE", mutedFg:"#665A82", border:"rgba(91,33,182,0.10)", input:"#F0EEFF", ring:"#6D28D9" }),
-    dark:  themeVars({ primary:"#7C4DE0", accent:"#A78BFA", secondary:"#241640", secondaryFg:"#DDD6FE", bg:"#120A22", card:"#1B1230", fg:"#ECE7F7", muted:"#201538", mutedFg:"#9C8BC0", border:DARK_BORDER, input:"#201538", ring:"#A78BFA" }) },
+    light: themeVars({ primary:"#6D28D9", accent:"#7C3AED", secondary:"#EEE8FD", secondaryFg:"#5B21B6", bg:"#F7F6FB", card:"#FFFFFF", fg:"#1E1633", muted:"#EFEDF7", mutedFg:"#655F7A", border:"rgba(40,25,80,0.09)", input:"#F2F0F8", ring:"#6D28D9" }),
+    dark:  themeVars({ primary:"#7C4DE0", accent:"#A78BFA", secondary:"#221A3A", secondaryFg:"#DDD6FE", bg:"#0D0A16", card:"#171224", fg:"#EDE9F6", muted:"#1E1830", mutedFg:"#A097BA", border:DARK_BORDER, input:"#1B1529", ring:"#A78BFA" }) },
   { id: "rose", name: "Atirgul", primary: "#BE123C", accent: "#E11D48",
-    light: themeVars({ primary:"#BE123C", accent:"#E11D48", secondary:"#FFE4E6", secondaryFg:"#9F1239", bg:"#FFF5F6", card:"#FFFFFF", fg:"#3A1420", muted:"#FDECEE", mutedFg:"#86616A", border:"rgba(159,18,57,0.10)", input:"#FFF0F1", ring:"#BE123C" }),
-    dark:  themeVars({ primary:"#E24B6A", accent:"#F43F5E", secondary:"#351720", secondaryFg:"#FECDD3", bg:"#1E0A10", card:"#2B1119", fg:"#F7E7EB", muted:"#33161F", mutedFg:"#C08D97", border:DARK_BORDER, input:"#33161F", ring:"#FB7185" }) },
+    light: themeVars({ primary:"#BE123C", accent:"#E11D48", secondary:"#FDE6EA", secondaryFg:"#9F1239", bg:"#FAF6F7", card:"#FFFFFF", fg:"#2A1218", muted:"#F4ECEE", mutedFg:"#7C6268", border:"rgba(80,20,35,0.09)", input:"#F6F0F1", ring:"#BE123C" }),
+    dark:  themeVars({ primary:"#E24B6A", accent:"#F43F5E", secondary:"#33171F", secondaryFg:"#FECDD3", bg:"#130A0D", card:"#1E1216", fg:"#F5E9EC", muted:"#27171C", mutedFg:"#BA969E", border:DARK_BORDER, input:"#24151A", ring:"#FB7185" }) },
   { id: "slate", name: "Tosh", primary: "#334155", accent: "#475569",
-    light: themeVars({ primary:"#334155", accent:"#475569", secondary:"#E2E8F0", secondaryFg:"#1E293B", bg:"#F4F6F9", card:"#FFFFFF", fg:"#111827", muted:"#EBEFF4", mutedFg:"#5A6577", border:"rgba(30,41,59,0.10)", input:"#EEF2F7", ring:"#334155" }),
-    dark:  themeVars({ primary:"#64748B", accent:"#94A3B8", secondary:"#1E2836", secondaryFg:"#CBD5E1", bg:"#0B1017", card:"#131A24", fg:"#E6EAF0", muted:"#18202C", mutedFg:"#8A97A8", border:DARK_BORDER, input:"#18202C", ring:"#94A3B8" }) },
+    light: themeVars({ primary:"#334155", accent:"#475569", secondary:"#E5E9EF", secondaryFg:"#1E293B", bg:"#F5F6F8", card:"#FFFFFF", fg:"#111827", muted:"#ECEEF2", mutedFg:"#5B6472", border:"rgba(17,24,39,0.09)", input:"#F0F2F5", ring:"#334155" }),
+    dark:  themeVars({ primary:"#64748B", accent:"#94A3B8", secondary:"#1D222B", secondaryFg:"#CBD5E1", bg:"#0B0D11", card:"#14171D", fg:"#E7EAEF", muted:"#1B1F27", mutedFg:"#8F98A6", border:DARK_BORDER, input:"#181C23", ring:"#94A3B8" }) },
   { id: "amber", name: "Oltin rang", primary: "#B45309", accent: "#B16105",
-    light: themeVars({ primary:"#B45309", accent:"#B16105", secondary:"#FEF3C7", secondaryFg:"#92400E", bg:"#FFFBEB", card:"#FFFFFF", fg:"#2E1D06", muted:"#FBF2D8", mutedFg:"#7A6A48", border:"rgba(146,64,14,0.10)", input:"#FFF8E0", ring:"#B45309" }),
-    dark:  themeVars({ primary:"#B87A1C", accent:"#F59E0B", secondary:"#2C2110", secondaryFg:"#FDE68A", bg:"#15100A", card:"#221A0E", fg:"#F5ECD8", muted:"#271F10", mutedFg:"#B39B6E", border:DARK_BORDER, input:"#271F10", ring:"#FBBF24" }) },
+    light: themeVars({ primary:"#B45309", accent:"#B16105", secondary:"#FBF0DD", secondaryFg:"#92400E", bg:"#F8F6F2", card:"#FFFFFF", fg:"#1F1A13", muted:"#F1EDE6", mutedFg:"#6E6458", border:"rgba(70,45,15,0.09)", input:"#F4F1EB", ring:"#B45309" }),
+    dark:  themeVars({ primary:"#B87A1C", accent:"#F59E0B", secondary:"#2A2216", secondaryFg:"#FDE68A", bg:"#0F0D0A", card:"#1A1713", fg:"#F4EFE7", muted:"#221E19", mutedFg:"#AB9F8C", border:DARK_BORDER, input:"#1F1B16", ring:"#FBBF24" }) },
   { id: "teal", name: "Moviy-yashil", primary: "#0F766E", accent: "#0C8479",
-    light: themeVars({ primary:"#0F766E", accent:"#0C8479", secondary:"#CCFBF1", secondaryFg:"#115E59", bg:"#F0FDFA", card:"#FFFFFF", fg:"#0A2A28", muted:"#E0F5F1", mutedFg:"#4B6E6A", border:"rgba(15,118,110,0.10)", input:"#E8FBF7", ring:"#0F766E" }),
-    dark:  themeVars({ primary:"#1AA093", accent:"#14B8A6", secondary:"#0F2A28", secondaryFg:"#99F6E4", bg:"#051614", card:"#0D2422", fg:"#DDF3F0", muted:"#112B28", mutedFg:"#7BA9A3", border:DARK_BORDER, input:"#112B28", ring:"#2DD4BF" }) },
+    light: themeVars({ primary:"#0F766E", accent:"#0C8479", secondary:"#D9F3EE", secondaryFg:"#115E59", bg:"#F4F8F7", card:"#FFFFFF", fg:"#0D2422", muted:"#E9F1EF", mutedFg:"#536A66", border:"rgba(10,60,55,0.09)", input:"#EEF4F3", ring:"#0F766E" }),
+    dark:  themeVars({ primary:"#1AA093", accent:"#14B8A6", secondary:"#0F2A27", secondaryFg:"#99F6E4", bg:"#071110", card:"#0F1C1A", fg:"#DFF0ED", muted:"#152523", mutedFg:"#86AAA4", border:DARK_BORDER, input:"#132220", ring:"#2DD4BF" }) },
 ];
 
 // Galereyadan/kameradan yuklangan rasm (ayniqsa telefon fotosi, ko'pincha bir
@@ -1507,17 +1542,17 @@ function BottomFinanceBar({ expenses, projects }: { expenses: Expense[]; project
     <div ref={barRef} className="expense-glass flex-shrink-0 overflow-hidden text-white z-20">
       {open&&(
         <div className="border-b border-white/10 px-4 py-3 grid grid-cols-1 sm:grid-cols-2 gap-4 max-h-[60vh] supports-[height:1dvh]:max-h-[60dvh] overflow-y-auto">
-          <div><p className="text-sm md:text-xs font-semibold text-white/50 uppercase tracking-wider mb-2">{t('finance.byProject')}</p>
-            {byProj.map(d=><div key={d.name} className="flex items-center justify-between py-0.5"><span className="text-sm md:text-xs text-white/80 truncate mr-4">{d.name}</span><span className="text-sm md:text-xs font-mono font-semibold text-white flex-shrink-0">{fmt(d.amount)}</span></div>)}
+          <div><p className="text-sm font-semibold text-white/50 uppercase tracking-wider mb-2">{t('finance.byProject')}</p>
+            {byProj.map(d=><div key={d.name} className="flex items-center justify-between py-0.5"><span className="text-sm text-white/80 truncate mr-4">{d.name}</span><span className="text-sm font-mono font-semibold text-white flex-shrink-0">{fmt(d.amount)}</span></div>)}
           </div>
-          <div><p className="text-sm md:text-xs font-semibold text-white/50 uppercase tracking-wider mb-2">{t('finance.byType')}</p>
-            {byType.map(d=><div key={d.name} className="flex items-center justify-between py-0.5"><span className="text-sm md:text-xs text-white/80">{d.name}</span><span className="text-sm md:text-xs font-mono font-semibold text-white">{fmt(d.amount)}</span></div>)}
+          <div><p className="text-sm font-semibold text-white/50 uppercase tracking-wider mb-2">{t('finance.byType')}</p>
+            {byType.map(d=><div key={d.name} className="flex items-center justify-between py-0.5"><span className="text-sm text-white/80">{d.name}</span><span className="text-sm font-mono font-semibold text-white">{fmt(d.amount)}</span></div>)}
           </div>
 
         </div>
       )}
       <button onClick={()=>setOpen(!open)} className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-white/5 transition-colors">
-        <div className="flex items-center gap-2"><MorphIcon icon={TrendingDown} className="w-4 h-4 text-white/90" /><span className="text-sm md:text-xs text-white/90">{t('finance.totalExpenses')}</span></div>
+        <div className="flex items-center gap-2"><MorphIcon icon={TrendingDown} className="w-4 h-4 text-white/90" /><span className="text-sm text-white/90">{t('finance.totalExpenses')}</span></div>
         <div className="flex items-center gap-2 min-w-0"><span className="text-sm font-bold font-mono truncate">{fmt(total)}</span><MorphIcon icon={open ? ChevronUp : ChevronDown} className="w-4 h-4 text-white/60 flex-shrink-0" /></div>
       </button>
     </div>
@@ -1785,7 +1820,7 @@ function LoginScreen({ onLogin, onRegister, onBack }: { onLogin: (u: any, compan
         <div className="w-16 h-16 bg-gradient-to-br from-primary to-primary/80 rounded-3xl flex items-center justify-center mx-auto mb-4 shadow-xl shadow-primary/20 overflow-hidden">
           <CompanyLogo src={loginCompanyLogo} imgClass="w-full h-full object-contain p-1" iconClass="w-8 h-8 text-white" />
         </div>
-        <h1 className="text-3xl font-bold font-['Roboto_Slab',serif] bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70">{loginCompanyName}</h1>
+        <h1 className="text-3xl font-bold font-display bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70">{loginCompanyName}</h1>
         <p className="text-sm text-muted-foreground mt-1">{t('login.subtitle')}</p>
       </motion.div>
       <div className="mb-4 relative z-10">
@@ -1793,7 +1828,7 @@ function LoginScreen({ onLogin, onRegister, onBack }: { onLogin: (u: any, compan
       </div>
       <motion.div initial={{ opacity: 0, y: 20, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ type: "spring", stiffness: 280, damping: 26, delay: 0.08 }}
         className="w-full max-w-sm space-y-4 glass p-7 rounded-[2rem] border border-white/25 shadow-2xl shadow-primary/10 relative z-10 overflow-hidden">
-        {error && <div className="bg-red-500/10 text-red-700 dark:text-red-400 text-sm md:text-xs p-3 rounded-lg border border-red-500/20 text-center">{error}</div>}
+        {error && <div className="bg-red-500/10 text-red-700 dark:text-red-400 text-sm p-3 rounded-lg border border-red-500/20 text-center">{error}</div>}
 
         <AnimatePresence mode="wait">
         <motion.div key={step} initial={{ opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -24 }}
@@ -1801,15 +1836,15 @@ function LoginScreen({ onLogin, onRegister, onBack }: { onLogin: (u: any, compan
         {step === "phone" ? (
           <form onSubmit={handlePhoneSubmit} className="space-y-4">
             <div className="bg-primary/5 border border-primary/10 rounded-xl p-3 mb-4">
-              <p className="text-sm md:text-xs text-muted-foreground leading-relaxed text-center">
+              <p className="text-sm text-muted-foreground leading-relaxed text-center">
                 {t('login.botHintBefore')} <span className="font-semibold text-foreground">/start</span> {t('login.botHintAfter')}
               </p>
-              <a href="https://t.me/qurilish_erp_bot" target="_blank" rel="noopener noreferrer" className="mt-2 text-sm md:text-xs font-semibold text-foreground flex items-center justify-center gap-1 hover:underline hover:text-primary">
+              <a href="https://t.me/qurilish_erp_bot" target="_blank" rel="noopener noreferrer" className="mt-2 text-sm font-semibold text-foreground flex items-center justify-center gap-1 hover:underline hover:text-primary">
                 <MorphIcon icon={Send} className="w-3 h-3 text-primary" /> {t('login.goToBot', { handle: '@qurilish_erp_bot' })}
               </a>
             </div>
             <div>
-              <label htmlFor="login-phone" className="text-sm md:text-xs font-medium block mb-1.5 ml-1 text-muted-foreground">{t('login.phoneLabel')}</label>
+              <label htmlFor="login-phone" className="text-sm font-medium block mb-1.5 ml-1 text-muted-foreground">{t('login.phoneLabel')}</label>
               <div className="relative">
                 <MorphIcon icon={Phone} className="w-4 h-4 text-muted-foreground absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input id="login-phone" type="text" inputMode="tel" className="w-full text-sm border border-border/50 rounded-2xl pl-11 pr-4 py-3 bg-white/50 dark:bg-black/20 focus:bg-white dark:focus:bg-black/40 focus:outline-none focus:ring-2 focus:ring-primary/50 font-mono liquid-transition shadow-inner"
@@ -1875,11 +1910,11 @@ function LoginScreen({ onLogin, onRegister, onBack }: { onLogin: (u: any, compan
         ) : step === "devpass" ? (
           <form onSubmit={handleDevLogin} className="space-y-4">
             <div className="bg-slate-800/5 border border-slate-800/10 rounded-xl p-3 mb-2 text-center">
-              <p className="text-sm md:text-xs text-muted-foreground">{t('login.devLoginTitle')}</p>
+              <p className="text-sm text-muted-foreground">{t('login.devLoginTitle')}</p>
               <p className="text-xs font-mono text-foreground mt-1">{phone}</p>
             </div>
             <div>
-              <label className="text-sm md:text-xs font-medium block mb-1.5 ml-1 text-muted-foreground text-center">{t('login.passwordLabel')}</label>
+              <label className="text-sm font-medium block mb-1.5 ml-1 text-muted-foreground text-center">{t('login.passwordLabel')}</label>
               <input type="password" className="w-full text-base text-center border border-border/50 rounded-xl px-4 py-3 bg-white/50 dark:bg-black/20 focus:bg-white dark:focus:bg-black/40 focus:outline-none focus:ring-2 focus:ring-primary/50 liquid-transition shadow-inner"
                 placeholder="••••••••" value={password} onChange={e => { setError(""); setPassword(e.target.value); }} autoFocus/>
             </div>
@@ -1896,7 +1931,7 @@ function LoginScreen({ onLogin, onRegister, onBack }: { onLogin: (u: any, compan
             </button>
             {devResetStage === "none" && (
               <button type="button" onClick={handleDevResetRequest} disabled={devResetBusy}
-                className="w-full text-sm md:text-xs text-primary hover:underline py-1 liquid-transition disabled:opacity-60">
+                className="w-full text-sm text-primary hover:underline py-1 liquid-transition disabled:opacity-60">
                 {t('login.devForgotPassword')}
               </button>
             )}
@@ -1918,14 +1953,14 @@ function LoginScreen({ onLogin, onRegister, onBack }: { onLogin: (u: any, compan
             {devResetStage === "done" && (
               <p className="text-xs text-green-600 text-center">{t('login.devResetSuccessHint')}</p>
             )}
-            <button type="button" onClick={() => { setStep("phone"); setPassword(""); setDevResetStage("none"); }} className="w-full text-sm md:text-xs text-muted-foreground hover:text-foreground py-2 liquid-transition">
+            <button type="button" onClick={() => { setStep("phone"); setPassword(""); setDevResetStage("none"); }} className="w-full text-sm text-muted-foreground hover:text-foreground py-2 liquid-transition">
               {t('login.changeNumber')}
             </button>
           </form>
         ) : (
           <form onSubmit={handleCodeSubmit} className="space-y-4">
             <div>
-              <label className="text-sm md:text-xs font-medium block mb-2 text-muted-foreground text-center">{t('login.codeLabel')}</label>
+              <label className="text-sm font-medium block mb-2 text-muted-foreground text-center">{t('login.codeLabel')}</label>
               <OtpBoxes value={code} onChange={v => { setError(""); setCode(v); }} error={!!error} autoFocus/>
             </div>
             <button type="submit" disabled={submitting} className="w-full bg-gradient-to-r from-primary via-primary to-blue-700 text-white text-sm font-bold py-3.5 rounded-full shadow-lg shadow-primary/30 hover:shadow-xl hover:shadow-primary/35 hover:-translate-y-0.5 active:scale-[0.98] liquid-transition disabled:opacity-60 disabled:pointer-events-none">
@@ -1934,10 +1969,10 @@ function LoginScreen({ onLogin, onRegister, onBack }: { onLogin: (u: any, compan
             <div className="flex flex-col gap-2 pt-2">
               <button type="button" onClick={() => {
                 if (timeLeft === 0) handlePhoneSubmit();
-              }} className={`w-full text-sm md:text-xs font-medium py-2 rounded-lg liquid-transition ${timeLeft > 0 ? "text-muted-foreground/50 cursor-not-allowed" : "text-primary hover:bg-primary/10"}`}>
+              }} className={`w-full text-sm font-medium py-2 rounded-lg liquid-transition ${timeLeft > 0 ? "text-muted-foreground/50 cursor-not-allowed" : "text-primary hover:bg-primary/10"}`}>
                 {timeLeft > 0 ? t('login.resendCountdown', { time: `${Math.floor(timeLeft / 60)}:${(timeLeft % 60).toString().padStart(2, '0')}` }) : t('login.resend')}
               </button>
-              <button type="button" onClick={() => setStep("phone")} className="w-full text-sm md:text-xs text-muted-foreground hover:text-foreground py-2 liquid-transition">
+              <button type="button" onClick={() => setStep("phone")} className="w-full text-sm text-muted-foreground hover:text-foreground py-2 liquid-transition">
                 {t('login.changeNumber')}
               </button>
             </div>
@@ -3073,10 +3108,10 @@ export default function App() {
     // allaqachon cheklangan — bu yerda faqat sahifaga KIRISH ochilmoqda.
     { key: "finance" as NavPage, label: tApp('nav.finance'), icon: DollarSign },
     ...(admin && hasFeature('reports') ? [
-      { key: "reports" as NavPage, label: tApp('nav.reports'), icon: BarChart2 },
+      { key: "reports" as NavPage, label: tApp('nav.reports'), shortLabel: tApp('nav.reportsShort'), icon: BarChart2 },
     ] : []),
-    ...(isGpsAdmin && hasFeature('gps_tracking') ? [{ key: "gps" as NavPage, label: tApp('nav.gps'), icon: MapPin }] : []),
-    { key: "chat", label: tApp('nav.chat'), icon: MessageCircle, badge: unreadMsgs },
+    ...(isGpsAdmin && hasFeature('gps_tracking') ? [{ key: "gps" as NavPage, label: tApp('nav.gps'), shortLabel: tApp('nav.gpsShort'), icon: MapPin }] : []),
+    { key: "chat", label: tApp('nav.chat'), shortLabel: tApp('nav.chatShort'), icon: MessageCircle, badge: unreadMsgs },
     { key: "profile", label: tApp('nav.profile'), icon: User },
   ];
   // Header — 3 ta mustaqil "orolcha" pill (logo / nav / bell+avatar), orqada
@@ -3119,27 +3154,34 @@ export default function App() {
           <MorphIcon icon={Search} className="w-[18px] h-[18px]" />
         </button>
         <button onClick={()=>setShowAnnouncements(true)} title={tApp('announcements.title')} aria-label={tApp('announcements.title')}
-          className="btn btn-ghost w-9 h-9 p-0 rounded-full">
+          className="btn btn-ghost w-9 h-9 p-0 rounded-full hidden lg:inline-flex">
           <MorphIcon icon={Megaphone} className="w-[18px] h-[18px]" />
         </button>
         {hasFeature('qr_tools') && (
           <button onClick={()=>setQrScanOpen(true)} title={tApp('qrScanner.title')} aria-label={tApp('qrScanner.title')}
-            className="btn btn-ghost w-9 h-9 p-0 rounded-full">
+            className="btn btn-ghost w-9 h-9 p-0 rounded-full hidden lg:inline-flex">
             <MorphIcon icon={QrCode} className="w-[18px] h-[18px]" />
           </button>
         )}
         <button onClick={lockAppNow} title={tApp('profile.lockNowBtn')} aria-label={tApp('profile.lockNowBtn')}
-          className="btn btn-ghost w-9 h-9 p-0 rounded-full">
+          className="btn btn-ghost w-9 h-9 p-0 rounded-full hidden lg:inline-flex">
           <MorphIcon icon={Lock} className="w-[18px] h-[18px]" />
         </button>
         <NotificationCenter messages={messages} transfers={transfers} expenses={expenses} users={users} currentUser={liveUser}
           onOpenChat={()=>{setPage("chat");setSelProject(null);}} onOpenDashboard={()=>{setPage("dashboard");setSelProject(null);}}/>
         <button onClick={cycleThemeMode} title={themeMode==="light"?"Yorug'":themeMode==="dark"?"Qorong'i":"Tizim bo'yicha"}
           aria-label={themeMode==="light"?"Yorug'":themeMode==="dark"?"Qorong'i":"Tizim bo'yicha"}
-          className="btn btn-ghost w-9 h-9 p-0 rounded-full">
+          className="btn btn-ghost w-9 h-9 p-0 rounded-full hidden lg:inline-flex">
           <MorphIcon icon={themeMode==="light"?Sun:themeMode==="dark"?Moon:(deviceKind()==="phone"?Smartphone:deviceKind()==="tablet"?TabletIcon:Monitor)} className="w-[18px] h-[18px]" />
         </button>
-        <button onClick={()=>{setPage("profile");setSelProject(null);}} className="flex items-center gap-2 hover:bg-white/5 pl-1 pr-1 sm:pr-3 py-1 rounded-full liquid-transition">
+        <HeaderMoreMenu label={tApp('common.more', "Yana")} items={[
+          { key: "ann", icon: Megaphone, tone: "orange", label: tApp('announcements.title'), onClick: () => setShowAnnouncements(true) },
+          ...(hasFeature('qr_tools') ? [{ key: "qr", icon: QrCode, tone: "violet" as IconTone, label: tApp('qrScanner.title'), onClick: () => setQrScanOpen(true) }] : []),
+          { key: "lock", icon: Lock, tone: "slate", label: tApp('profile.lockNowBtn'), onClick: lockAppNow },
+          { key: "theme", icon: themeMode==="light"?Sun:themeMode==="dark"?Moon:Smartphone, tone: "amber",
+            label: `${tApp('profile.appearanceMode')}: ${themeMode==="light"?tApp('profile.themeLight'):themeMode==="dark"?tApp('profile.themeDark'):tApp('profile.themeSystem')}`, onClick: cycleThemeMode },
+        ]} />
+        <button onClick={()=>{setPage("profile");setSelProject(null);}} aria-label={tApp('nav.profile')} className="flex items-center gap-2 hover:bg-white/5 pl-1 pr-1 2xl:pr-3 py-1 rounded-full liquid-transition">
           <Avatar user={liveUser} size="sm"/>
           <div className="hidden 2xl:block text-left">
             <p className="text-[11px] font-semibold leading-none">{liveUser.name.split(" ")[0]}</p>
@@ -3671,24 +3713,23 @@ export default function App() {
             transition={{ type: "spring", stiffness: 520, damping: 30 }}
             aria-label={n.label}
             aria-current={active ? "page" : undefined}
-            className="flex-1 min-w-0 flex flex-col items-center justify-center gap-1 h-[58px] relative z-10 select-none"
+            className="nav-tab flex-1 min-w-0 flex flex-col items-center justify-center gap-1 h-[60px] relative z-10 select-none"
           >
-            <span className="relative flex items-center justify-center w-[52px] h-[30px]">
+            <span className="relative flex items-center justify-center w-[54px] h-[32px]">
               {active && (
                 <motion.span layoutId="mobileNavActivePill" className="nav-pill-indicator absolute inset-0 rounded-full"
                   transition={{ type: "spring", stiffness: 520, damping: 36 }} />
               )}
               <motion.span className="relative z-[1] flex items-center justify-center"
                 animate={active ? { scale: 1.08 } : { scale: 1 }}
-                transition={{ type: "spring", stiffness: 520, damping: 22 }}
-                style={{ color: active ? '#fff' : 'rgba(255,255,255,0.55)' }}>
-                <MorphIcon icon={n.icon} className="w-[19px] h-[19px]" />
+                transition={{ type: "spring", stiffness: 520, damping: 22 }}>
+                <MorphIcon icon={n.icon} className="w-[22px] h-[22px]" strokeWidth={active ? 2.1 : 1.8} />
               </motion.span>
               {!!n.badge && n.badge>0 && (
-                <span data-testid={`nav-badge-${n.key}`} className="badge-pulse absolute -top-1 right-1 min-w-[16px] h-4 px-0.5 bg-red-500 text-white rounded-full text-[9px] flex items-center justify-center font-bold shadow border border-black/20 z-[2]">{n.badge > 9 ? '9+' : n.badge}</span>
+                <span data-testid={`nav-badge-${n.key}`} className="badge-pulse absolute -top-1 right-1 min-w-[16px] h-4 px-0.5 bg-red-500 text-white rounded-full text-[9px] flex items-center justify-center font-bold shadow ring-2 ring-[var(--card)] z-[2]">{n.badge > 9 ? '9+' : n.badge}</span>
               )}
             </span>
-            <span className={`block max-w-full px-0.5 truncate whitespace-nowrap text-[10px] leading-none tracking-tight transition-colors duration-300 ${active ? "font-bold text-white" : "font-medium text-white/55"}`}>
+            <span className="nav-tab__label block max-w-full px-0.5 truncate whitespace-nowrap transition-colors duration-300">
               {n.shortLabel || n.label}
             </span>
           </motion.button>

@@ -254,7 +254,7 @@ export default function LandingPage({ onLogin, onRegister, focus }: { onLogin: (
         <div className="max-w-6xl mx-auto px-5 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <img src="/favicon-96.png" alt="QurilishERP" className="w-9 h-9 rounded-xl shadow-md shadow-primary/20" />
-            <span className="font-bold text-lg font-['Roboto_Slab',serif]">QurilishERP</span>
+            <span className="font-bold text-lg font-display">QurilishERP</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="hidden sm:block"><LanguageSwitcher size="sm" value={i18n.language as SiteLang} onChange={l => setSiteLanguage(l)} /></div>
@@ -278,7 +278,7 @@ export default function LandingPage({ onLogin, onRegister, focus }: { onLogin: (
             }} />
           <div className="relative max-w-3xl mx-auto px-5 pt-14 pb-12 md:pt-20 text-center">
             <TechTag>[ QurilishERP ]</TechTag>
-            <h1 className="mt-4 text-3xl md:text-5xl font-bold font-['Roboto_Slab',serif] leading-[1.12] tracking-tight">
+            <h1 className="mt-4 text-3xl md:text-5xl font-bold font-display leading-[1.12] tracking-tight">
               {focus === 'features' && t('landing.featuresTitle')}
               {focus === 'steps' && t('landing.stepsTitle')}
               {focus === 'audience' && t('landing.audienceTitle')}
@@ -321,7 +321,7 @@ export default function LandingPage({ onLogin, onRegister, focus }: { onLogin: (
             <div className="mb-5">
               <TechTag>[ {t('landing.heroEyebrow')} ]</TechTag>
             </div>
-            <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold font-['Roboto_Slab',serif] leading-[1.08] max-w-4xl mx-auto tracking-tight">
+            <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold font-display leading-[1.08] max-w-4xl mx-auto tracking-tight">
               <span className="text-foreground">{t('landing.heroTitleLine1')}</span>
               <br/>
               <span className="bg-clip-text text-transparent bg-gradient-to-r from-primary via-primary to-accent">{t('landing.heroTitleLine2')}</span>
@@ -431,7 +431,7 @@ export default function LandingPage({ onLogin, onRegister, focus }: { onLogin: (
       {(!focus || focus === 'features') && <section className="max-w-6xl mx-auto px-5 py-16 md:py-24">
         {!focus && <div className="text-center max-w-xl mx-auto mb-12">
           <SectionBadge>{t('landing.featuresBadge')}</SectionBadge>
-          <h2 className="text-2xl md:text-4xl font-bold font-['Roboto_Slab',serif] tracking-tight">{t('landing.featuresTitle')}</h2>
+          <h2 className="text-2xl md:text-4xl font-bold font-display tracking-tight">{t('landing.featuresTitle')}</h2>
           <p className="text-sm text-muted-foreground mt-3">{t('landing.featuresSubtitle')}</p>
         </div>}
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -463,7 +463,7 @@ export default function LandingPage({ onLogin, onRegister, focus }: { onLogin: (
         <div className="relative max-w-5xl mx-auto px-5">
           {!focus && <div className="text-center max-w-xl mx-auto mb-14">
             <SectionBadge>{t('landing.stepsBadge')}</SectionBadge>
-            <h2 className="text-2xl md:text-4xl font-bold font-['Roboto_Slab',serif] tracking-tight">{t('landing.stepsTitle')}</h2>
+            <h2 className="text-2xl md:text-4xl font-bold font-display tracking-tight">{t('landing.stepsTitle')}</h2>
           </div>}
           <div className="grid md:grid-cols-3 gap-8 relative">
             <div className="hidden md:block absolute top-7 left-[16.5%] right-[16.5%] h-px bg-gradient-to-r from-primary/40 via-accent/40 to-primary/40" />
@@ -486,7 +486,7 @@ export default function LandingPage({ onLogin, onRegister, focus }: { onLogin: (
       {(!focus || focus === 'audience') && <section className="max-w-6xl mx-auto px-5 py-16 md:py-24">
         {!focus && <div className="text-center max-w-xl mx-auto mb-12">
           <SectionBadge>{t('landing.audienceBadge')}</SectionBadge>
-          <h2 className="text-2xl md:text-4xl font-bold font-['Roboto_Slab',serif] tracking-tight">{t('landing.audienceTitle')}</h2>
+          <h2 className="text-2xl md:text-4xl font-bold font-display tracking-tight">{t('landing.audienceTitle')}</h2>
         </div>}
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {AUDIENCE.map((a, i) => (
@@ -523,7 +523,7 @@ export default function LandingPage({ onLogin, onRegister, focus }: { onLogin: (
       {/* ── SEO matni (owner 2026-10-19: "qidiruvda tez chiqsin") — odamlar qidiradigan so'zlar tabiiy matnda,
           ko'rinadigan holda (yashirin kalit so'zlar Google'da jazolanadi). ───────────────────────────── */}
       {!focus && <section className="max-w-3xl mx-auto px-5 pt-16 md:pt-24">
-        <h2 className="text-2xl md:text-3xl font-bold font-['Roboto_Slab',serif] tracking-tight text-center mb-6">{t('landing.seoTitle')}</h2>
+        <h2 className="text-2xl md:text-3xl font-bold font-display tracking-tight text-center mb-6">{t('landing.seoTitle')}</h2>
         <div className="space-y-4 text-sm md:text-base text-muted-foreground leading-relaxed">
           <p>{t('landing.seoP1')}</p>
           <p>{t('landing.seoP2')}</p>
@@ -535,7 +535,7 @@ export default function LandingPage({ onLogin, onRegister, focus }: { onLogin: (
       {(!focus || focus === 'faq') && <section className="max-w-3xl mx-auto px-5 py-16 md:py-24">
         {!focus && <div className="text-center mb-10">
           <SectionBadge>{t('landing.faqBadge')}</SectionBadge>
-          <h2 className="text-2xl md:text-4xl font-bold font-['Roboto_Slab',serif] tracking-tight">{t('landing.faqTitle')}</h2>
+          <h2 className="text-2xl md:text-4xl font-bold font-display tracking-tight">{t('landing.faqTitle')}</h2>
         </div>}
         <div className="space-y-3">
           {FAQS.map((f, i) => (
@@ -564,7 +564,7 @@ export default function LandingPage({ onLogin, onRegister, focus }: { onLogin: (
           sahifada — bo'lim-sahifalarida chalg'itmasin. ─────────────────── */}
       {!focus && <section className="max-w-3xl mx-auto px-5 pb-16">
         <div className="text-center mb-8">
-          <h2 className="text-2xl md:text-4xl font-bold font-['Roboto_Slab',serif] tracking-tight">{t('landing.downloadTitle')}</h2>
+          <h2 className="text-2xl md:text-4xl font-bold font-display tracking-tight">{t('landing.downloadTitle')}</h2>
           <p className="text-muted-foreground text-sm md:text-base mt-3 max-w-xl mx-auto">{t('landing.downloadSubtitle')}</p>
         </div>
         <AppDownloadCards />
@@ -596,7 +596,7 @@ export default function LandingPage({ onLogin, onRegister, focus }: { onLogin: (
           <div className="relative z-10 w-14 h-14 rounded-2xl bg-white/15 backdrop-blur-sm flex items-center justify-center mx-auto mb-6 border border-white/20">
             <MorphIcon icon={Globe2} className="w-7 h-7 text-white"  />
           </div>
-          <h2 className="relative z-10 text-3xl md:text-4xl font-bold font-['Roboto_Slab',serif] text-white max-w-lg mx-auto tracking-tight">
+          <h2 className="relative z-10 text-3xl md:text-4xl font-bold font-display text-white max-w-lg mx-auto tracking-tight">
             {t('landing.finalCtaTitle')}
           </h2>
           <p className="relative z-10 text-sm md:text-base text-white/80 mt-4 max-w-md mx-auto">

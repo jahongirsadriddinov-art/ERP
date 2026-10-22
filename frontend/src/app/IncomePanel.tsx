@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { MorphIcon } from "morphicons/react";
+import { IconTile } from "./components/IconTile";
 import Plus from "@hugeicons/core-free-icons/PlusSignIcon";
 import Edit from "@hugeicons/core-free-icons/Edit02Icon";
 import Trash from "@hugeicons/core-free-icons/Delete02Icon";
@@ -84,7 +85,7 @@ export function IncomePanel({ currentUser, users, projects, incomes, onAdded, on
 
       <div className="flex-1 overflow-y-auto space-y-2 scrollbar-hide">
         {shown.length === 0 ? (
-          <div className="text-center py-10 text-muted-foreground"><MorphIcon icon={TrendingUp} className="w-10 h-10 mx-auto mb-2 opacity-30" /><p className="text-sm">{k("empty")}</p></div>
+          <div className="text-center py-10 text-muted-foreground"><IconTile icon={TrendingUp} tone="teal" size="xl" variant="soft" className="mx-auto mb-3" /><p className="text-sm">{k("empty")}</p></div>
         ) : shown.map((e) => {
           const proj = projects.find((p) => p.id === e.projectId);
           return (

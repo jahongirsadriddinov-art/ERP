@@ -633,7 +633,7 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
                     <input value={devMsgText} onChange={e => setDevMsgText(e.target.value)}
                       onKeyDown={e => e.key==='Enter'&&!e.shiftKey&&sendDevMsg()}
                       placeholder={t('devPanel.messages.inputPlaceholder')}
-                      className="flex-1 text-sm md:text-xs bg-muted/50 rounded-xl px-3 py-2.5 md:py-2 focus:outline-none focus:ring-2 focus:ring-primary/30"/>
+                      className="flex-1 text-sm bg-muted/50 rounded-xl px-3 py-2.5 md:py-2 focus:outline-none focus:ring-2 focus:ring-primary/30"/>
                     <button onClick={sendDevMsg} disabled={devMsgLoading||!devMsgText.trim()} aria-label={t('devPanel.messages.sendAria')}
                       className="w-10 h-10 md:w-8 md:h-8 rounded-xl bg-primary text-white flex items-center justify-center disabled:opacity-40 flex-shrink-0">
                       {devMsgLoading ? <MorphIcon icon={Loader2} className="w-4 h-4 animate-spin" /> : <MorphIcon icon={Send} className="w-4 h-4" />}

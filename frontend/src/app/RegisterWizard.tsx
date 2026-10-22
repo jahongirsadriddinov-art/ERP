@@ -29,7 +29,7 @@ type RegStep = "warn" | "tarif" | "payment" | "phone" | "bot" | "owner" | "compa
 function RegField({ label, children, hint }: { label: string; children: any; hint?: string }) {
   return (
     <div>
-      <label className="text-sm md:text-xs font-medium block mb-1.5 ml-1 text-muted-foreground">{label}</label>
+      <label className="text-sm font-medium block mb-1.5 ml-1 text-muted-foreground">{label}</label>
       {children}
       {hint && <p className="text-[11px] text-muted-foreground mt-1 ml-1">{hint}</p>}
     </div>

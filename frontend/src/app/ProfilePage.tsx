@@ -773,16 +773,16 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
                 <span className="text-[10px] text-muted-foreground hidden sm:block">{t('profile.appliesSiteWide')}</span>
               </div>
               <div className="p-3">
-                <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 xl:grid-cols-7 gap-2">
+                <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-6 xl:grid-cols-7 gap-2.5">
                   {BG_TEMPLATES.map(bgT => {
                     const isCurrent = bgT.id === "default" ? (!profileBg || profileBg === "") : profileBg === bgT.value;
                     return (
                       <button key={bgT.id} onClick={() => applyBgTemplate(bgT.value)}
                         className={`relative rounded-lg sm:rounded-xl overflow-hidden border-2 liquid-transition ${isCurrent ? "border-primary shadow-md scale-[1.05]" : "border-transparent hover:border-primary/40"}`}
                         style={{ aspectRatio: "4/3", background: bgT.value || "var(--background)" }}>
-                        {bgT.id === "default" && <div className="absolute inset-0 flex items-center justify-center bg-muted/60"><span className="text-[8px] text-muted-foreground font-semibold">{t('profile.none')}</span></div>}
+                        {bgT.id === "default" && <div className="absolute inset-0 flex items-center justify-center bg-muted/60"><span className="text-[11px] text-muted-foreground font-semibold">{t('profile.none')}</span></div>}
                         {isCurrent && <div className="absolute top-0.5 right-0.5 w-3.5 h-3.5 bg-white/95 rounded-full flex items-center justify-center shadow"><MorphIcon icon={Check} className="w-2 h-2 text-primary" /></div>}
-                        {bgT.id !== "default" && <div className="absolute inset-x-0 bottom-0 py-0.5" style={{ background: "rgba(0,0,0,0.38)" }}><p className="text-center text-[7px] sm:text-[8px] text-white font-semibold">{t(`profile.bgTemplateNames.${bgT.id}`, { defaultValue: bgT.name })}</p></div>}
+                        {bgT.id !== "default" && <div className="absolute inset-x-0 bottom-0 py-0.5" style={{ background: "rgba(0,0,0,0.38)" }}><p className="text-center text-[11px] sm:text-[10px] text-white font-semibold truncate px-1">{t(`profile.bgTemplateNames.${bgT.id}`, { defaultValue: bgT.name })}</p></div>}
                       </button>
                     );
                   })}
@@ -790,7 +790,7 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
                     className="relative rounded-lg sm:rounded-xl overflow-hidden border-2 border-dashed border-border bg-muted/40 hover:bg-muted/70 hover:border-primary/40 flex flex-col items-center justify-center gap-0.5 liquid-transition"
                     style={{ aspectRatio: "4/3" }}>
                     <MorphIcon icon={Upload} className="w-3.5 h-3.5 text-muted-foreground" />
-                    <p className="text-[7px] sm:text-[8px] text-muted-foreground font-semibold">{t('profile.uploadPhotoShort')}</p>
+                    <p className="text-[11px] sm:text-[10px] text-muted-foreground font-semibold">{t('profile.uploadPhotoShort')}</p>
                   </button>
                 </div>
               </div>

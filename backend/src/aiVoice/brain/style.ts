@@ -7,7 +7,10 @@ const GREETING_RE = /^\s*(assalomu?\s*alaykum|assalom|salom(\s*alaykum)?|va\s*al
 const INTRO_RE = /^\s*(men\s+[^.!?\n]{0,60}(sun['ʻ’`]?iy\s+intellekt|ai)\s+yordamchi(si)?(man)?|я\s+[^.!?\n]{0,40}(ии|ai|искусственн)[^.!?\n]{0,40}помощник)[^.!?\n]*[.!]?\s*/i;
 
 /** Foydalanuvchining o'zi salom berganmi (shunda bir so'zli alik joiz). */
-export const isGreeting = (text: string): boolean => GREETING_RE.test(String(text || '').slice(0, 60));
+export const isGreeting = (text: string): boolean => {
+  const t = String(text || '').slice(0, 60);
+  return GREETING_RE.test(t) || (hasCyrillic(t) && GREETING_RE.test(toLatinUz(t)));   // "салом", "ассалому алайкум"
+};
 
 /**
  * Takroriy salom/tanishtiruvni olib tashlaydi. Foydalanuvchi salom bergan bo'lsa — tegilmaydi.
@@ -101,3 +104,19 @@ export const askedToConfirm = (lastAssistant: string): boolean => {
   const tail = String(lastAssistant || '').slice(-500);
   return /tasdiq|подтвер/i.test(tail) || /tasdiq/i.test(toLatinUz(tail));
 };
+
+// Faqat salomlashish ("salom", "assalomu alaykum, qalaysiz?", "привет, как дела") — boshqa so'rov yo'q.
+const SMALLTALK_WORDS = new Set([
+  'qalaysiz', 'qalesiz', 'yaxshimisiz', 'qandaysiz', 'ishlar', 'qalay', 'nima', 'gap', 'gaplar', 'yaxshi', 'mi', 'aka', 'opa', 'ai',
+  'bot', 'yordamchi', 'hammasi', 'joyidami', 'tinchlikmi', 'tinchmi', 'charchamang', 'salom', 'assalomu', 'alaykum', 'brat', 'do\'stim',
+  'как', 'дела', 'вы', 'ты', 'поживаете', 'всё', 'все', 'хорошо', 'нормально', 'привет', 'здравствуйте', 'бот',
+]);
+export function isPureGreeting(text: string): boolean {
+  const raw = String(text || '').trim();
+  if (!raw || raw.length > 60 || !isGreeting(raw)) return false;
+  const src = GREETING_RE.test(raw) ? raw : toLatinUz(raw);
+  const rest = normApostrophes(src.replace(GREETING_RE, '').toLowerCase()).replace(/[!.,?;:)(«»"“”…\-–—]+/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!rest) return true;
+  const words = rest.split(' ');
+  return words.length <= 5 && words.every((w) => SMALLTALK_WORDS.has(w) || SMALLTALK_WORDS.has(toLatinUz(w)));
+}

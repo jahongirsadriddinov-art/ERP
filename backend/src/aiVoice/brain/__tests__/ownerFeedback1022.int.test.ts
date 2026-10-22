@@ -11,7 +11,10 @@ import { __resetGeminiKeysForTests } from '../../lib/geminiKeys';
 import { effectiveToolNames } from '../../tools/rbac';
 import { ErpTextAgent, SUCCESS_CLAIM_RE } from '../agent';
 import { createGeminiProvider } from '../providers/gemini';
-import { askedToConfirm, pureYesNo, toLatinUz } from '../style';
+import { askedToConfirm, isPureGreeting, pureYesNo, toLatinUz } from '../style';
+import { BANNED_GREETING_RE, composeGreeting, greetingFor, recencyOf } from '../greeting';
+import AiEmployeeContact from '../../../models/AiEmployeeContact';
+import { greetingTurn } from '../../voice/prompts';
 import { explicitDecision } from '../toolPolicy';
 import { __flushUnmet, __resetUnmetForTests, setUnmetNotifier, soundsLikeCant, unmetSignature } from '../unmet';
 import { ctxFor, resetCaches, setupErp, teardownErp, type Env } from '../../tools/erp/__tests__/erpHelpers';
@@ -306,5 +309,82 @@ describe('"AI qila olmadi" — aniqlash, saqlash, xabar', () => {
     rows = await unmetRows();
     expect(rows).toHaveLength(16);
     expect(alerts).toHaveLength(10);
+  });
+});
+
+describe("jonli salom (owner 2026-10-22: har safar bir xil «Qandaysiz, nima yordam bera olaman» bo'lmasin)", () => {
+  const seeded = (seed: number) => () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
+
+  it("kun vaqti, ism; taqiqlangan qolip yo'q; oxirgisi bilan HECH QACHON bir xil emas", () => {
+    const rng = seeded(7);
+    let last = '';
+    for (let i = 0; i < 300; i++) {
+      const hour = i % 24;
+      const g = composeGreeting({ lang: i % 3 ? 'uz' : 'ru', name: 'Imom', hour, recency: (['today', 'yesterday', 'long', 'never'] as const)[i % 4], last, rng });
+      expect(g.toLowerCase()).not.toBe(last.toLowerCase());
+      expect(g).not.toMatch(BANNED_GREETING_RE);
+      expect(g).toMatch(/Imom/);
+      expect(g.split(/[.!?]/).filter((x) => x.trim()).length).toBeLessThanOrEqual(4);
+      last = g;
+    }
+    expect(composeGreeting({ lang: 'uz', name: 'Ali', hour: 8, rng: () => 0 })).toMatch(/tong/i);
+    expect(composeGreeting({ lang: 'uz', name: 'Ali', hour: 19, rng: () => 0 })).toMatch(/kech/i);
+    expect(composeGreeting({ lang: 'ru', hour: 8, rng: () => 0 })).toMatch(/утро/i);
+    expect(composeGreeting({ lang: 'uz', name: 'Ali', hour: 12, recency: 'yesterday', rng: () => 0.6 })).toMatch(/Kecha/);
+    expect(composeGreeting({ lang: 'uz', name: 'Ali', hour: 12, recentTool: 'notifyManager', rng: () => 0.1 })).toMatch(/Rahbarga yozgan/);
+    // Har xillik: 50 ta salomda kamida 10 xil
+    const r2 = seeded(3);
+    expect(new Set(Array.from({ length: 50 }, () => composeGreeting({ lang: 'uz', name: 'Ali', hour: 10, rng: r2 }))).size).toBeGreaterThanOrEqual(10);
+  });
+
+  it('recencyOf: bugun / kecha / hafta / ancha', () => {
+    const now = new Date('2026-10-22T10:00:00Z');
+    expect(recencyOf(null, now)).toBe('never');
+    expect(recencyOf(new Date('2026-10-22T04:00:00Z'), now)).toBe('today');
+    expect(recencyOf(new Date('2026-10-21T10:00:00Z'), now)).toBe('yesterday');
+    expect(recencyOf(new Date('2026-10-18T10:00:00Z'), now)).toBe('week');
+    expect(recencyOf(new Date('2026-09-01T10:00:00Z'), now)).toBe('long');
+  });
+
+  it("greetingFor: shaxs bo'yicha xotira — ketma-ket 25 ta qo'ng'iroqda bir xil salom yo'q", async () => {
+    const { A } = env;
+    let prev = '';
+    for (let i = 0; i < 25; i++) {
+      const g = await greetingFor({ companyId: A.companyId, userId: A.prorabId, lang: 'uz', name: 'Prorab' });
+      expect(g).not.toBe(prev);
+      const row: any = await AiEmployeeContact.findOne({ companyId: A.companyId, employeeId: A.prorabId }).lean();
+      expect(row.lastGreeting).toBe(g);
+      prev = g;
+    }
+  });
+
+  it.each([
+    ['salom', true], ['Assalomu alaykum!', true], ['Assalomu alaykum, qalaysiz?', true], ['Привет, как дела?', true], ['Здравствуйте', true],
+    ['салом', true], ['salom, bugun nima ishlarim bor?', false], ['salom ertaga 8 da eslat', false], ['vazifalarim', false],
+  ])('isPureGreeting(%s) = %s', (t, want) => expect(isPureGreeting(t as string)).toBe(want));
+
+  it("chat: model eski qolipni aytsa yoki oxirgi salomni takrorlasa — boshqa, odamdek salom", async () => {
+    const { A } = env;
+    await AiEmployeeContact.updateOne({ companyId: A.companyId, employeeId: A.workerId }, { $unset: { lastGreeting: 1 } });
+    const ctx = ctxFor(A.workerId, A.companyId, { channel: 'bot' });
+    const banned = await agentWith(fakeGenai([() => geminiText("Va alaykum assalom! Qandaysiz, nima yordam bera olaman?")])).run({ ctx, history: [], userText: 'salom' });
+    expect(banned.text).not.toMatch(BANNED_GREETING_RE);
+    expect(banned.text).toMatch(/Alfa-ishchi/);
+    const a = await agentWith(fakeGenai([() => geminiText('Salom! Eshitaman.')])).run({ ctx, history: [], userText: 'Assalomu alaykum' });
+    expect(a.text).toBe('Salom! Eshitaman.');
+    const b = await agentWith(fakeGenai([() => geminiText('Salom! Eshitaman.')])).run({ ctx, history: [], userText: 'salom' });
+    expect(b.text).not.toBe('Salom! Eshitaman.');
+    // Salom bo'lmagan savol — salom almashtirilmaydi (botda takroriy salom odatdagidek olib tashlanadi)
+    const c = await agentWith(fakeGenai([() => geminiText('Salom! Eshitaman.')])).run({ ctx, history: [], userText: 'vazifalarim qanaqa' });
+    expect(c.text).toBe('Eshitaman.');
+  });
+
+  it("ovoz: tanish odamga tayyor, har gal boshqa salom; eski qolip taqiqlanadi; birinchi qo'ng'iroq — tanishtiruv", () => {
+    const t = greetingTurn('uz', { name: 'Imom', firstTime: false, disclosure: 'AI yordamchi', inbound: true, greeting: 'Xayrli tong, Imom! Bugun nimadan boshlaymiz?' });
+    expect(t).toMatch(/Xayrli tong, Imom! Bugun nimadan boshlaymiz\?/);
+    expect(t).toMatch(/ISHLATMANG/);
+    const ru = greetingTurn('ru', { name: 'Иван', firstTime: false, disclosure: 'AI', inbound: true, greeting: 'Добрый вечер, Иван! Слушаю.' });
+    expect(ru).toMatch(/Добрый вечер, Иван! Слушаю\./);
+    expect(greetingTurn('uz', { name: 'Imom', firstTime: true, disclosure: 'AI yordamchi', inbound: true, greeting: 'x' })).toMatch(/BIRINCHI suhbat/);
   });
 });

@@ -165,8 +165,10 @@ export function startTurnText(lang: AiLang, purpose: Purpose): string {
  *  • keyingi safarlar — faqat ism bilan qisqa salom: "Assalomu alaykum, Imom aka! Bugun qandaysiz? Sizga qanday yordam bera olaman?"
  * aka/opa — model ismga qarab tanlaydi (bilmasa faqat ism). Ko'p gap yo'q.
  */
-export function greetingTurn(lang: AiLang, o: { name?: string; firstTime: boolean; disclosure: string; inbound: boolean; reason?: string }): string {
+export function greetingTurn(lang: AiLang, o: { name?: string; firstTime: boolean; disclosure: string; inbound: boolean; reason?: string; greeting?: string }): string {
   const name = sanitizeForPrompt(o.name, 40);
+  // Owner 2026-10-22: har safar bir xil "Qandaysiz, nima yordam bera olaman" — endi tayyor, har gal boshqa salom (brain/greeting.ts)
+  const greeting = sanitizeForPrompt(o.greeting, 300);
   const reason = sanitizeForPrompt(o.reason, 300);
   // Owner 2026-10-19: AI o'zi (kelishilgan vaqtda) qo'ng'iroq qildi — salomdan keyin DARHOL sababini aytsin
   if (!o.inbound && reason) {
@@ -179,14 +181,18 @@ export function greetingTurn(lang: AiLang, o: { name?: string; firstTime: boolea
     const who = name ? `по имени («${name}») — с уважением` : 'без имени';
     return o.firstTime
       ? `[СИСТЕМА] Звонок соединён. Это ПЕРВЫЙ разговор с этим человеком. Коротко (2 предложения): поздоровайтесь ${who}, скажите, что вы — ${o.disclosure.replace(/^Здравствуйте,?\s*/i, '')}, и что можете: задачи, график, объекты, напоминания, сообщения сотрудникам, звонки, погода, курс, поиск в интернете. Закончите: «Чем могу помочь?»`
-      : `[СИСТЕМА] Звонок соединён. Вы уже знакомы — НЕ представляйтесь. Одно короткое приветствие ${who}, например: «Здравствуйте, ${name || '…'}! Как вы сегодня? Чем могу помочь?» — и ждите.`;
+      : greeting
+        ? `[СИСТЕМА] Звонок соединён. Вы уже знакомы — НЕ представляйтесь. Поздоровайтесь тепло и естественно, по смыслу этой фразы (можно своими словами, коротко): «${greeting}» — и ждите. НЕ используйте шаблон «Как вы сегодня? Чем могу помочь?».`
+        : `[СИСТЕМА] Звонок соединён. Вы уже знакомы — НЕ представляйтесь. Одно короткое приветствие ${who}, например: «Здравствуйте, ${name || '…'}! Как вы сегодня? Чем могу помочь?» — и ждите.`;
   }
   const hon = "ismiga qarab \"aka\" (erkak) yoki \"opa\" (ayol) qo'shing; aniq bilmasangiz faqat ism";
   const keep = " Butun suhbat davomida FAQAT o'zbek tilida (lotin) gapiring — turk, qozoq, ingliz yoki boshqa tilga O'TMANG (foydalanuvchi rus tilida gapirsagina — rus tilida).";
   const who = name ? `ismi bilan («${name}»; ${hon})` : 'ismsiz';
   return o.firstTime
     ? `[TIZIM]${keep} Qo'ng'iroq ulandi. Bu shu odam bilan BIRINCHI suhbat. Qisqa (2 jumla): ${who} salomlashing, o'zingiz ${o.disclosure.replace(/^Assalomu alaykum,?\s*/i, '')} ekaningizni va nima qila olishingizni ayting: vazifalar, jadval, obyektlar, eslatmalar, xodimlarga xabar va qo'ng'iroq, ob-havo, valyuta kursi, internetdan qidirish. Oxirida: «Sizga qanday yordam bera olaman?»`
-    : `[TIZIM]${keep} Qo'ng'iroq ulandi. Siz tanishsiz — o'zingizni TANISHTIRMANG. Bitta qisqa salom ${who}, masalan: «Assalomu alaykum, ${name || '…'} aka! Bugun qandaysiz? Sizga qanday yordam bera olaman?» — va javobni kuting. Ko'p gapirmang.`;
+    : greeting
+      ? `[TIZIM]${keep} Qo'ng'iroq ulandi. Siz tanishsiz — o'zingizni TANISHTIRMANG. Iliq va tabiiy, odamdek salomlashing — shu gap mazmunida (o'z so'zingiz bilan bo'lishi mumkin, qisqa; ismga ${hon}): «${greeting}» — va javobni kuting. «Bugun qandaysiz? Sizga qanday yordam bera olaman?» qolipini ISHLATMANG.`
+      : `[TIZIM]${keep} Qo'ng'iroq ulandi. Siz tanishsiz — o'zingizni TANISHTIRMANG. Bitta qisqa salom ${who}, masalan: «Assalomu alaykum, ${name || '…'} aka! Bugun qandaysiz? Sizga qanday yordam bera olaman?» — va javobni kuting. Ko'p gapirmang.`;
 }
 
 /** TTS klip bo'lmasa: model BIRINCHI bo'lib aynan shu jumlani aytsin (zaxira yo'l, A8). */

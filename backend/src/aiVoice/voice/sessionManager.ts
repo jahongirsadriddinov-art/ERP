@@ -32,6 +32,7 @@ import { ATTENDANCE_TOOL, attendanceToolDeclaration, runAttendanceTool } from '.
 import { TranscriptLog } from './transcriptLog';
 import { clearVision, pushFrame } from './vision';
 import { pureYesNo } from '../brain/style';
+import { greetingFor } from '../brain/greeting';
 import { getTool } from '../tools/registry';
 import { VISION_GUIDE } from '../brain/systemPrompt';
 import { loadDeveloperActor, PLATFORM_SCOPE, platformSettings } from '../platform';
@@ -493,7 +494,13 @@ class ManagedVoiceSession implements VoiceSessionHandle {
       this.disclosureDone = true;
       this.uplinkOpenAt = Date.now() + 1_500;
       this.ev('state', { state: 'disclosure', mode: firstTime ? 'intro' : 'greeting' });
-      this.vs.sendText(greetingTurn(this.lang, { name: this.actorName, firstTime, disclosure: text, inbound: this.direction === 'inbound', reason: this.opts.requestText }));
+      // Owner 2026-10-22: tanish odamga har safar boshqacha, jonli salom (kun vaqti, ism, oxirgi suhbat) — ketma-ket takrorlanmaydi
+      const greeting = !firstTime && !this.guest && !this.opts.requestText
+        ? await greetingFor({ companyId: this.companyId, userId: this.employeeId, lang: this.lang === 'ru' ? 'ru' : 'uz', name: this.actorName, excludeSessionId: this.sessionId })
+          .catch(() => undefined)
+        : undefined;
+      if (this.state !== 'connected' || !this.vs) return;
+      this.vs.sendText(greetingTurn(this.lang, { name: this.actorName, firstTime, disclosure: text, inbound: this.direction === 'inbound', reason: this.opts.requestText, greeting }));
       return;
     }
     this.safeSend(AIV_SERVER_EVENTS.transcript, { sessionId: this.sessionId, role: 'assistant', text, final: true });

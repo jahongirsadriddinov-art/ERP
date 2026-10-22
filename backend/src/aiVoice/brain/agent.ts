@@ -3,6 +3,7 @@ import type {
   PendingActionInfo, TextAgent, TextAgentInput, TextAgentOutput, TextProviderName, ToolCtx, ToolResult, ToolStatus,
 } from '../contracts';
 import AiActionAudit from '../../models/AiActionAudit';
+import AiEmployeeContact from '../../models/AiEmployeeContact';
 import { checkActor } from '../actor';
 import { aiConfig } from '../config';
 import { isObjectIdString } from '../lib/ids';
@@ -21,7 +22,8 @@ import { resolveTextProviderOrder } from './providerOrder';
 import { quotaKindOf, quotaMessage, type QuotaKind } from './quota';
 import { capToolResult, decisionKindOf, explicitDecision } from './toolPolicy';
 import { buildSystemPrompt, isVoiceChannel } from './systemPrompt';
-import { askedToConfirm, pureYesNo, stripRepeatedGreeting } from './style';
+import { askedToConfirm, isPureGreeting, pureYesNo, stripRepeatedGreeting } from './style';
+import { BANNED_GREETING_RE, greetingFor, rememberGreeting, sameGreeting } from './greeting';
 import { reportUnmet, soundsLikeCant, type UnmetIssue } from './unmet';
 import { createClaudeProvider } from './providers/claude';
 import { createGeminiProvider } from './providers/gemini';
@@ -105,6 +107,8 @@ interface RunState {
    */
   autoConfirm: boolean;
   autoConfirmed: boolean;
+  /** Foydalanuvchi faqat salom bergan — javobdagi salom takrorlanmasin (varyGreeting). */
+  greet?: { lang: Lang; name?: string };
 }
 
 export class ErpTextAgent implements TextAgent {
@@ -159,6 +163,10 @@ export class ErpTextAgent implements TextAgent {
       const quick = await this.quickConfirm(ctx, yn, st, lang);
       if (quick) return reply(quick);
       if (yn) st.autoConfirm = askedQuestion(st.history);
+    }
+    // Owner 2026-10-22: "har safar bir xil salom" — faqat salom bo'lsa, javob keyin tekshiriladi (varyGreeting)
+    if ((ctx.channel === 'web' || ctx.channel === 'bot') && isPureGreeting(userText)) {
+      st.greet = { lang: /здравств|привет|добр(ый|ое)/i.test(userText) ? 'ru' : /assalom|salom|xayrli/i.test(userText) ? 'uz' : lang, name: actor.firstName || actor.name };
     }
     const allowed = effectiveToolNames(settings, actor.role, actor.isOwner, { channel: ctx.channel, purpose: ctx.purpose });
     const tools = toolDeclarations(allowed, lang);
@@ -220,7 +228,7 @@ export class ErpTextAgent implements TextAgent {
         const session = provider.start({ system, history: input.history || [], userText, tools, effort: settings.brain.effort, model: settings.provider.textModel });
         const text = this.guard(await this.loop(provider, session, ctx, allowed, runId, maxRounds, outer, st, lang), st, lang);
         this.reportIfUnmet(ctx, st, text);
-        return reply(text);
+        return reply(st.greet ? await this.varyGreeting(ctx, st, text) : text);
       } catch (e) {
         if (input.signal?.aborted) break;
         const qk = quotaKindOf(e);
@@ -405,6 +413,22 @@ export class ErpTextAgent implements TextAgent {
       companyId: ctx.companyId, userId: ctx.userId, channel: ctx.channel, userText: st.userText, aiReply: text,
       provider: st.usage.provider, issue,
     });
+  }
+
+  /**
+   * Owner 2026-10-22: model salomga har safar "Qandaysiz, nima yordam bera olaman" deb javob berardi. Model javobi
+   * eski qolip yoki shu odamga oxirgi aytilgan salomning aynan o'zi bo'lsa — odamdek, boshqa salom bilan almashtiriladi
+   * (kun vaqti, ism, oxirgi suhbat). Aks holda model javobi "oxirgi salom" sifatida eslab qolinadi.
+   */
+  private async varyGreeting(ctx: ToolCtx, st: RunState, text: string): Promise<string> {
+    try {
+      const contact: any = await AiEmployeeContact.findOne({ companyId: ctx.companyId, employeeId: ctx.userId }).select('lastGreeting').lean();
+      if (BANNED_GREETING_RE.test(text) || sameGreeting(text, contact?.lastGreeting)) {
+        return await greetingFor({ companyId: ctx.companyId, userId: ctx.userId, lang: st.greet!.lang, name: st.greet!.name, replyTo: true });
+      }
+      await rememberGreeting(ctx.companyId, ctx.userId, text);
+    } catch { /* salom — ixtiyoriy */ }
+    return text;
   }
 
   /** Server tomonidagi haqiqiy natijalar (model so'zi emas). */

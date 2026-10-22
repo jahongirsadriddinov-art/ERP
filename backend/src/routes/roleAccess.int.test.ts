@@ -8,7 +8,7 @@ vi.mock('../services/bot', () => ({
   bot: { sendMessage: vi.fn(async () => undefined), sendPhoto: vi.fn(), sendDocument: vi.fn(), sendVoice: vi.fn(), sendVideo: vi.fn(), sendLocation: vi.fn() },
   notifyAdmins: vi.fn(async () => undefined), keyboardForUser: vi.fn(async () => ({})), fmtWorkDuration: vi.fn(() => ''),
 }));
-vi.mock('../services/socket', () => ({ emitToUser: vi.fn(), emitToGroup: vi.fn(), emitToCompany: vi.fn(), broadcast: vi.fn(), kickUser: vi.fn(), leaveGroupRoom: vi.fn() }));
+vi.mock('../services/socket', () => ({ emitToUser: vi.fn(), emitToGroup: vi.fn(), emitToCompany: vi.fn(), emitToCompanyBosses: vi.fn(), broadcast: vi.fn(), kickUser: vi.fn(), leaveGroupRoom: vi.fn() }));
 vi.mock('../services/email', () => ({ sendEmail: vi.fn(async () => undefined) }));
 vi.mock('../services/push', () => ({ sendPushToUser: vi.fn(async () => undefined) }));
 vi.mock('../services/notifications', () => ({ createNotification: vi.fn(async () => undefined) }));

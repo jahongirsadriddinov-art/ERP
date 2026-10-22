@@ -160,6 +160,11 @@ router.post('/', async (req, res) => {
       // qiymatga qaytiladi — eski xatti-harakat saqlanadi.
       txData.createdById = getTenant()?.userId || (data.createdById ? String(data.createdById) : undefined);
       txData.status = data.toUserId ? 'pending' : (data.status || 'confirmed');
+      // XAVFSIZLIK (audit 2026-10-22): qabul qiluvchi faqat shu firmadan — aks holda begona firma xodimiga
+      // bot/push orqali "to'lov" xabari va tasdiqlash tugmalari yuborilardi
+      if (txData.toUserId && getTenant()?.userId && !(await User.exists(scoped({ _id: txData.toUserId })).catch(() => null))) {
+        return res.status(400).json({ success: false, errors: [{ field: 'toUserId', message: 'Qabul qiluvchi topilmadi' }] });
+      }
     }
 
     // direktor/orinbosardan BOSHQA har qanday rol chiqim yaratsa — admin

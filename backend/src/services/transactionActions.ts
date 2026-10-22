@@ -66,6 +66,12 @@ export async function confirmTransactionAction(i: TxActionInput): Promise<TxActi
   if (!actingUserId || String(found.toUserId) !== String(actingUserId)) {
     return fail(403, 'Faqat qabul qiluvchi tasdiqlashi mumkin', 'not_recipient');
   }
+  // XAVFSIZLIK (audit 2026-10-22): rahbar tasdig'ini talab qiladigan chiqim qabul qiluvchi tasdig'i bilan
+  // "tasdiqlangan" bo'lib qolmasin — aks holda ishchi o'zini (yoki sherigini) qabul qiluvchi qilib, istalgan
+  // summani rahbarsiz tasdiqlab yuborardi. Bunday yozuv faqat /approve (tanlangan rahbar) orqali yopiladi.
+  if (found.requiresAdminApproval) {
+    return fail(403, "Bu chiqimni avval rahbar tasdiqlashi kerak", 'not_approver');
+  }
   const confirmedDate = todayIso();
   const tx: any = await transition(i.txFilter, found._id, {
     $set: { status: 'confirmed', confirmedById: actingUserId, confirmedDate, ...(i.defect ? { defect: i.defect } : {}) },

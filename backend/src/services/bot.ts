@@ -3039,6 +3039,12 @@ bot.on('callback_query', async (query: any) => {
         await bot.answerCallbackQuery(query.id, { text: tb(lang, 'notYoursOnlyRecipient') });
         return;
       }
+      // XAVFSIZLIK (audit 2026-10-22): rahbar tasdig'i kerak bo'lgan chiqimni qabul qiluvchi o'zi tasdiqlay
+      // olmaydi (services/transactionActions.ts confirm bilan bir xil qoida) — faqat tanlangan rahbar
+      if (isConfirm && tx.requiresAdminApproval && !isAdminOfCompany) {
+        await bot.answerCallbackQuery(query.id, { text: tb(lang, 'notYoursOnlyRecipient') });
+        return;
+      }
 
       tx.status = isConfirm ? 'confirmed' : 'rejected';
       if (isConfirm) {

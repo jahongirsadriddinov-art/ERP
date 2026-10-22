@@ -107,6 +107,26 @@ export default function ErrorLogPanel() {
           </button>
           <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${SOURCE_TONE[detail.source]}`}>{t(`devPanel.errorLog.sources.${detail.source}`)}{detail.kind ? ` · ${detail.kind}` : ""}</span>
           <div className="flex-1" />
+          {/* Owner 2026-10-22: xatoni nusxalab (dasturchiga/AI'ga) yuborish uchun — hamma tafsilot bitta matnda */}
+          <button type="button" data-testid="err-copy" onClick={() => {
+            const lines = [
+              `[${detail.source}${detail.kind ? `/${detail.kind}` : ""}] ${detail.message}`,
+              ...rows.filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`),
+              `Marta: ${detail.count} · Foydalanuvchilar: ${detail.users} · Firmalar: ${detail.companies}`,
+              detail.action ? `Oxirgi amal: ${detail.action}` : "",
+              detail.breadcrumbs?.length ? `Oldingi amallar: ${detail.breadcrumbs.join(" → ")}` : "",
+              detail.userAgent ? `Qurilma: ${detail.userAgent}` : "",
+              detail.stack ? `
+Stack:
+${detail.stack}` : "",
+              detail.componentStack ? `
+Komponentlar:
+${detail.componentStack}` : "",
+            ].filter(Boolean).join("
+");
+            navigator.clipboard?.writeText(lines).then(() => toast.success(t("devPanel.errorLog.copied", { defaultValue: "Nusxa olindi" })))
+              .catch(() => toast.error(t("devPanel.errorLog.copyFailed", { defaultValue: "Nusxa olib bo'lmadi" })));
+          }} className="px-3.5 py-2 rounded-full text-[13px] font-semibold bg-muted hover:bg-muted/70">📋 {t("devPanel.errorLog.copy", { defaultValue: "Nusxa olish" })}</button>
           {detail.resolved ? (
             <button type="button" data-testid="err-reopen" onClick={() => void setResolved(false)}
               className="px-3.5 py-2 rounded-full text-[13px] font-semibold bg-muted hover:bg-muted/70">{t("devPanel.errorLog.reopen")}</button>

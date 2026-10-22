@@ -1476,7 +1476,7 @@ export function resizeImageFile(file: File, maxDim: number, quality = 0.85): Pro
 }
 
 // ─── Bottom Finance Bar ──────────────────────────────────────────────────────────────
-function BottomFinanceBar({ expenses, projects, incomes = [], users = [] }: { expenses: Expense[]; projects: Project[]; incomes?: Expense[]; users?: AppUser[] }) {
+function BottomFinanceBar({ expenses, projects }: { expenses: Expense[]; projects: Project[] }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const barRef = useRef<HTMLDivElement>(null);
@@ -1503,15 +1503,6 @@ function BottomFinanceBar({ expenses, projects, incomes = [], users = [] }: { ex
   const total = confirmed.reduce((a,e)=>a+e.amount,0);
   const byProj = projects.map(p=>({name:p.name,amount:confirmed.filter(e=>e.projectId===p.id).reduce((a,e)=>a+e.amount,0)})).filter(d=>d.amount>0);
   const byType = (Object.keys(EXP_LABELS) as ExpType[]).map(k=>({name:expLabel(t, k),amount:confirmed.filter(e=>e.type===k).reduce((a,e)=>a+e.amount,0)})).filter(d=>d.amount>0);
-  // Kirimlar alohida (owner 2026-10-22) — kim kiritgani bo'yicha va oxirgilari ro'yxat bo'lib
-  const incTotal = incomes.reduce((a,e)=>a+(e.amount||0),0);
-  const incByPerson = Object.values(incomes.reduce((m: Record<string,{name:string;amount:number}>, e) => {
-    const id = e.createdById || "—";
-    const name = users.find(u=>u.id===id)?.name || "—";
-    (m[id] ||= { name, amount: 0 }).amount += e.amount || 0;
-    return m;
-  }, {})).sort((a,b)=>b.amount-a.amount);
-  const incRecent = [...incomes].sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0, 5);
   return (
     <div ref={barRef} className="expense-glass flex-shrink-0 overflow-hidden text-white z-20">
       {open&&(
@@ -1522,23 +1513,12 @@ function BottomFinanceBar({ expenses, projects, incomes = [], users = [] }: { ex
           <div><p className="text-sm md:text-xs font-semibold text-white/50 uppercase tracking-wider mb-2">{t('finance.byType')}</p>
             {byType.map(d=><div key={d.name} className="flex items-center justify-between py-0.5"><span className="text-sm md:text-xs text-white/80">{d.name}</span><span className="text-sm md:text-xs font-mono font-semibold text-white">{fmt(d.amount)}</span></div>)}
           </div>
-          {incomes.length > 0 && (
-            <div className="sm:col-span-2 rounded-xl bg-black/15 p-3" data-testid="bar-incomes">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-sm md:text-xs font-semibold text-white/60 uppercase tracking-wider">{t('income.tab')}</p>
-                <span className="text-sm font-mono font-bold">+{fmt(incTotal)}</span>
-              </div>
-              {incByPerson.map(p=><div key={p.name} className="flex items-center justify-between py-0.5"><span className="text-sm md:text-xs text-white/80 truncate mr-4">👤 {p.name}</span><span className="text-sm md:text-xs font-mono font-semibold flex-shrink-0">+{fmt(p.amount)}</span></div>)}
-              <div className="mt-2 pt-2 border-t border-white/10 space-y-0.5">
-                {incRecent.map(e=><div key={e.id} className="flex items-center justify-between gap-3"><span className="text-xs text-white/70 truncate">{e.date} · {e.description || t('income.noNote')}</span><span className="text-xs font-mono flex-shrink-0">+{fmt(e.amount)}</span></div>)}
-              </div>
-            </div>
-          )}
+
         </div>
       )}
       <button onClick={()=>setOpen(!open)} className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-white/5 transition-colors">
         <div className="flex items-center gap-2"><MorphIcon icon={TrendingDown} className="w-4 h-4 text-white/90" /><span className="text-sm md:text-xs text-white/90">{t('finance.totalExpenses')}</span></div>
-        <div className="flex items-center gap-2 min-w-0"><span className="text-sm font-bold font-mono truncate">{fmt(total)}</span>{incTotal > 0 && <span className="hidden min-[380px]:inline text-xs font-mono font-semibold text-white/90 bg-black/15 rounded-full px-2 py-0.5 flex-shrink-0">+{fmt(incTotal)}</span>}<MorphIcon icon={open ? ChevronUp : ChevronDown} className="w-4 h-4 text-white/60 flex-shrink-0" /></div>
+        <div className="flex items-center gap-2 min-w-0"><span className="text-sm font-bold font-mono truncate">{fmt(total)}</span><MorphIcon icon={open ? ChevronUp : ChevronDown} className="w-4 h-4 text-white/60 flex-shrink-0" /></div>
       </button>
     </div>
   );
@@ -3547,7 +3527,7 @@ export default function App() {
 
       {/* Top bar — admin only (Mobile/Tablet only) */}
       <div className="block lg:hidden">
-        {admin && <BottomFinanceBar expenses={expenses} projects={projects} incomes={incomes} users={users}/>}
+        {admin && <BottomFinanceBar expenses={expenses} projects={projects}/>}
       </div>
 
       {/* Main */}
@@ -3598,7 +3578,7 @@ export default function App() {
         )}
         {page==="reports" && admin && (
           <Suspense fallback={<SkeletonPage variant="dashboard" />}>
-            <ReportsPage projects={projects} expenses={expenses} incomes={incomes} showIncome={incomes.length > 0} users={users}/>
+            <ReportsPage projects={projects} expenses={expenses} incomes={incomes} showIncome={['direktor','orinbosar'].includes(liveUser.role) || !!liveUser.isOwner} users={users}/>
           </Suspense>
         )}
         {page==="chat" && (
@@ -3657,7 +3637,7 @@ export default function App() {
           pastkisi oddiy hujjat oqimida suzuvchi pastki navbar orqasida
           "sizib chiqib" turardi. Endi ikkalasi ham bir xil `lg` chegarada. */}
       <div className="hidden lg:block">
-        {admin && <BottomFinanceBar expenses={expenses} projects={projects} incomes={incomes} users={users}/>}
+        {admin && <BottomFinanceBar expenses={expenses} projects={projects}/>}
       </div>
 
       {/* Global send modal for non-admin */}

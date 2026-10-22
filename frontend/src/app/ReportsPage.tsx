@@ -104,6 +104,8 @@ export default function ReportsPage({ projects, expenses, incomes, users, showIn
   const headerRef = useRef<HTMLDivElement>(null);
   // Owner 2026-10-19: "Nazorat" — o'g'irlik, narx, hujjat muddati, texnika va funksiyalar sozlamasi
   const [view, setView] = usePersistentState<"finance" | "control">("reports.view", "finance", oneOf(["finance", "control"]));
+  // Owner 2026-10-22: kirim va chiqim ALOHIDA hisoblanadi; balans (kirim − chiqim) faqat foydalanuvchi yoqsa
+  const [showBalance, setShowBalance] = usePersistentState<boolean>("reports.balance", false, (v) => typeof v === "boolean");
 
   useEffect(() => {
     if (!filtersOpen) return;
@@ -280,7 +282,7 @@ export default function ReportsPage({ projects, expenses, incomes, users, showIn
       { label: t('reports.pnlIncome'), value: money(totalIncome), title: fmt(totalIncome), sub: `${filtInc.length} ${ops}`, tone: "text-muted-foreground", grad: "from-emerald-500/20 to-cyan-500/10" },
     ] : []),
     { label: t('reports.totalExpense'), value: money(total), title: fmt(total), sub: delta != null ? `${delta > 0 ? "▲" : delta < 0 ? "▼" : "•"} ${Math.abs(delta)}% ${t('reports.vsPrev', { defaultValue: "oldingi davrga nisbatan" })}` : `${filtExp.length} ${ops}`, tone: delta != null && delta > 0 ? "text-rose-500" : delta != null ? "text-emerald-500" : "text-muted-foreground", grad: "from-orange-500/20 to-rose-500/10" },
-    ...(showIncome ? [
+    ...(showIncome && showBalance ? [
       { label: t('reports.balance', { defaultValue: "Balans (kirim − chiqim)" }), value: `${net > 0 ? "+" : ""}${money(net)}`, title: fmt(net), sub: net >= 0 ? t('reports.profit', { defaultValue: "Foyda" }) : t('reports.loss', { defaultValue: "Zarar" }), tone: net >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400", grad: net >= 0 ? "from-emerald-500/20 to-emerald-500/5" : "from-rose-500/25 to-rose-500/5", valueTone: net >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400" },
     ] : []),
     { label: t('reports.perDay', { defaultValue: "Kunlik o'rtacha" }), value: money(Math.round(total / spanDays)), title: fmt(Math.round(total / spanDays)), sub: `${spanDays} ${t('reports.days', { defaultValue: "kun" })}`, tone: "text-muted-foreground", grad: "from-indigo-500/20 to-violet-500/10" },
@@ -399,7 +401,13 @@ export default function ReportsPage({ projects, expenses, incomes, users, showIn
         </div>
 
         {/* Trend: kirim bo'lsa — kirim/chiqim ustunlari + jamlanma balans chizig'i */}
-        <Card title={showIncome ? t('reports.trendBalance', { defaultValue: "Kirim, chiqim va balans" }) : t('reports.trendExp', { defaultValue: "Chiqimlar dinamikasi" })} delay={0.05}>
+        {showIncome && (
+          <label className="surface rounded-2xl px-4 h-12 flex items-center justify-between gap-3 cursor-pointer" data-testid="reports-balance-toggle">
+            <span className="text-sm font-semibold">{t('reports.showBalance', { defaultValue: "Balansni ko'rsatish (kirim − chiqim)" })}</span>
+            <input type="checkbox" checked={showBalance} onChange={(e) => setShowBalance(e.target.checked)} className="w-5 h-5 accent-[var(--primary)]" />
+          </label>
+        )}
+        <Card title={showIncome ? (showBalance ? t('reports.trendBalance', { defaultValue: "Kirim, chiqim va balans" }) : t('reports.trendIncExp', { defaultValue: "Kirim va chiqim" })) : t('reports.trendExp', { defaultValue: "Chiqimlar dinamikasi" })} delay={0.05}>
           {trend.length === 0 ? <p className="text-sm text-muted-foreground py-10 text-center">{t('reports.exportEmpty')}</p> : showIncome ? (
             <ResponsiveContainer width="100%" height={chartH(250)}>
               <ComposedChart data={trend} margin={{ left: 0, right: 4, top: 8 }}>
@@ -410,7 +418,7 @@ export default function ReportsPage({ projects, expenses, incomes, users, showIn
                 <Legend wrapperStyle={{ fontSize: 11 }} iconType="circle" iconSize={8} />
                 <Bar dataKey="kirim" name={t('reports.pnlIncome')} fill={INC} radius={[4, 4, 0, 0]} maxBarSize={18} />
                 <Bar dataKey="chiqim" name={t('reports.expense')} fill={EXP} radius={[4, 4, 0, 0]} maxBarSize={18} />
-                <Line type="monotone" dataKey="balans" name={t('reports.balanceShort', { defaultValue: "Balans" })} stroke={BAL} strokeWidth={2.5} dot={false} />
+                {showBalance && <Line type="monotone" dataKey="balans" name={t('reports.balanceShort', { defaultValue: "Balans" })} stroke={BAL} strokeWidth={2.5} dot={false} />}
               </ComposedChart>
             </ResponsiveContainer>
           ) : (
@@ -432,7 +440,7 @@ export default function ReportsPage({ projects, expenses, incomes, users, showIn
         {/* Kirim monitoringi */}
         {showIncome && (
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-3" data-testid="reports-income-section">
-            <Card title={t('reports.balanceByObject', { defaultValue: "Obyektlar bo'yicha balans" })} delay={0.06}>
+            <Card title={showBalance ? t('reports.balanceByObject', { defaultValue: "Obyektlar bo'yicha balans" }) : t('reports.incExpByObject', { defaultValue: "Obyektlar bo'yicha kirim va chiqim" })} delay={0.06}>
               {objBalance.length === 0 ? <p className="text-sm text-muted-foreground py-6 text-center">{t('reports.exportEmpty')}</p> : (
                 <div className="space-y-3">
                   {objBalance.slice(0, narrow ? 6 : 10).map(r => {
@@ -441,7 +449,7 @@ export default function ReportsPage({ projects, expenses, incomes, users, showIn
                       <div key={r.id} className="min-w-0">
                         <div className="flex items-baseline gap-2 text-xs min-w-0">
                           <span className="font-semibold truncate min-w-0">{r.name}</span>
-                          <span className={`ml-auto font-mono font-bold whitespace-nowrap ${b >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>{b > 0 ? "+" : ""}{short(b)}</span>
+                          {showBalance && <span className={`ml-auto font-mono font-bold whitespace-nowrap ${b >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>{b > 0 ? "+" : ""}{short(b)}</span>}
                         </div>
                         <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1 mt-1 text-[10px] text-muted-foreground">
                           <span>{t('reports.pnlIncome')}</span>

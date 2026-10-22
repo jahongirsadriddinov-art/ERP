@@ -131,6 +131,16 @@ async def handle_private_message(rt: "TelegramRuntime", sender_id: int, text: st
     """DM: faqat bog'lash kodi. True — mos keldi (binding.matched yuborildi)."""
     emp = rt.binding.match(sender_id, text or "")
     if not emp:
+        # Owner 2026-10-22: AI akkauntiga yozilgan oddiy xabar — backend AI'ga (chatdagidek javob beradi va bajaradi)
+        t = (text or "").strip()
+        if t and getattr(rt, "account_id", None) is not None:
+            ev = {"type": "dm.received", "tgUserId": str(sender_id), "text": t[:2000], "at": int(time.time() * 1000)}
+            if rt.account_id:
+                ev["account"] = rt.account_id
+            try:
+                await rt.emit(ev)
+            except Exception as e:
+                log.debug("dm emit: %s", type(e).__name__)
         return False
     ev = {"type": "binding.matched", "employeeId": emp, "tgUserId": str(sender_id), "at": int(time.time() * 1000)}
     if username:
@@ -148,6 +158,7 @@ class TelegramRuntime:
         self.binding = binding
         self.calls = None            # CallManager (main.py ulaydi)
         self.label = "platforma akkaunti"   # diagnostika (accounts.py qo'yadi)
+        self.account_id = ""                # "" — platforma; firma/hovuz akkaunti — uning id'si (accounts.py)
         self.client = None
         self.pytg = None
         self.me_id: Optional[int] = None
@@ -335,6 +346,22 @@ class TelegramRuntime:
             await self._stop_locked("logout")
             self.store.clear()
             self.username = self.display_name = None
+
+    # ── DM javobi (owner 2026-10-22: AI akkauntga yozilsa javob beradi) ──
+    async def send_dm(self, user_id: int, text: str) -> None:
+        if not self.client:
+            from .errors import RpcError
+            raise RpcError("not_authorized")
+        await self.client.send_message(int(user_id), str(text)[:4000])
+
+    async def typing(self, user_id: int) -> None:
+        if not self.client:
+            return
+        from telethon.tl import functions, types
+        try:
+            await self.client(functions.messages.SetTypingRequest(peer=await self.client.get_input_entity(int(user_id)), action=types.SendMessageTypingAction()))
+        except Exception:
+            pass
 
     # ── Engine (calls.py) ──
     async def has_peer(self, user_id: int) -> bool:

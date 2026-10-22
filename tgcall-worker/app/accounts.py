@@ -37,6 +37,7 @@ class Account:
         self.store = store
         self.runtime = TelegramRuntime(cfg, store, emit, binding)
         self.runtime.label = f"akkaunt …{acc_id[-4:]}" if acc_id else "platforma akkaunti"
+        self.runtime.account_id = acc_id
 
         async def ask(data: dict):
             return await ask_incoming({**data, "account": acc_id} if acc_id else data)

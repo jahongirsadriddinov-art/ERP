@@ -192,6 +192,32 @@ async def amain() -> int:
         need_tg(a)
         return await update_profile(a.runtime, p)
 
+    async def h_dm_send(p: dict) -> dict:
+        a = accounts.get(p)
+        need_tg(a)
+        try:
+            uid = int(str(p.get("tgUserId") or "0"))
+        except ValueError:
+            raise RpcError("bad_request")
+        text = p.get("text")
+        if uid <= 0 or not isinstance(text, str) or not text.strip():
+            raise RpcError("bad_request")
+        try:
+            await a.runtime.send_dm(uid, text)
+        except RpcError:
+            raise
+        except Exception as e:
+            raise RpcError("send_failed", type(e).__name__[:60])
+        return {"ok": True}
+
+    async def h_dm_typing(p: dict) -> dict:
+        a = accounts.get(p)
+        try:
+            await a.runtime.typing(int(str(p.get("tgUserId") or "0")))
+        except ValueError:
+            pass
+        return {"ok": True}
+
     def by_session(name: str):
         return lambda p: getattr(accounts.by_session(p.get("sessionId")).calls, name)(p)
 
@@ -202,6 +228,7 @@ async def amain() -> int:
         "incoming.config": h_incoming_config,
         "accounts.sync": h_accounts_sync, "accounts.remove": lambda p: accounts.remove(p),
         "profile.get": h_profile_get, "profile.update": h_profile_update,
+        "dm.send": h_dm_send, "dm.typing": h_dm_typing,
         "call.caption": by_session("caption"), "call.video_rate": by_session("video_rate"),
         "call.subtitles": by_session("subtitles"), "call.avatar": by_session("avatar_event"),
     }

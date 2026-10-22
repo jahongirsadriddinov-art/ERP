@@ -380,6 +380,8 @@ export interface WorkerRpcMethods {
   /** Firma Telegram akkauntlari (owner 2026-10-19) — worker yangilarini yaratadi; olib tashlash faqat accounts.remove. */
   'accounts.sync': { params: { accounts: string[] }; result: { ok: true; accounts: number } };
   'accounts.remove': { params: { account: string }; result: { ok: true } };
+  'dm.send': { params: { account?: string; tgUserId: string; text: string }; result: { ok: true } };
+  'dm.typing': { params: { account?: string; tgUserId: string }; result: { ok: true } };
   /** AI akkaunti profili (owner 2026-10-19): rasm (base64, kichik), ism, familiya, bio, username. */
   'profile.get': { params: { account?: string }; result: { firstName: string; lastName: string; username: string; about: string; photo?: string } };
   'profile.update': {
@@ -421,7 +423,9 @@ export type WorkerCallEndReason =
 export type WorkerEvent =
   | { type: 'call.state'; sessionId: string; state: WorkerCallState; reason?: WorkerCallEndReason; at: number; /** ulanmaslik bosqichi: accept | key_exchange | p2p_connect | connect_timeout | record */ stage?: string }
   | { type: 'health'; status: WorkerStatus; at: number }
-  | { type: 'binding.matched'; employeeId: string; tgUserId: string; username?: string; at: number };
+  | { type: 'binding.matched'; employeeId: string; tgUserId: string; username?: string; at: number }
+  /** AI akkauntiga yozilgan oddiy xabar (owner 2026-10-22) — telegram/dmChat.ts javob beradi */
+  | { type: 'dm.received'; account?: string; tgUserId: string; text: string; at: number };
 
 // ───────────────────────────── TextAgent (P2 amalga oshiradi) ─────────────────────────────
 export interface TextAgentInput {

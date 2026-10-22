@@ -30,6 +30,8 @@ const DEFAULT_TIMEOUT_MS: Record<WorkerRpcMethod, number> = {
   'incoming.config': 5_000,
   'accounts.sync': 10_000,
   'accounts.remove': 20_000,
+  'dm.send': 15_000,
+  'dm.typing': 5_000,
   'profile.get': 20_000,
   'profile.update': 60_000,
   'call.caption': 3_000,

@@ -2,6 +2,7 @@ import type { JobQueue } from '../queue/jobQueue';
 import { initAccountService, recordHealth, runMaintenance } from './accountService';
 import { initCallBridge } from './callBridge';
 import { initCompanyAccounts, recordAccountsHealth } from './companyAccounts';
+import { initDmChat } from './dmChat';
 import { initIncomingCalls } from './incomingCalls';
 import { callWorker } from './workerRpc';
 import { workerConnectedHere } from './workerNamespace';
@@ -28,6 +29,7 @@ export function registerHandlers(q: JobQueue): void {
   initCallBridge();
   initIncomingCalls();
   initCompanyAccounts();
+  initDmChat();
   q.register(CONNECTION_HEALTH_JOB, async () => { await runHealthCheck(q.now()); }, { concurrency: 1, maxAttempts: 1, doneTtlMs: 3600_000 });
   q.scheduleRecurring(CONNECTION_HEALTH_JOB, 60_000);
 }

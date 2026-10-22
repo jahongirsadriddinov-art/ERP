@@ -19,9 +19,9 @@ const money = (n: number | null | undefined) => (n === null || n === undefined ?
 
 function Section({ title, count, children, delay = 0 }: { title: string; count?: number; children: React.ReactNode; delay?: number }) {
   return (
-    <motion.section className="surface rounded-2xl p-4" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay, duration: 0.25 }}>
+    <motion.section className="surface rounded-2xl p-3 sm:p-4 min-w-0" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay, duration: 0.25 }}>
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-bold">{title}</h3>
+        <h3 className="text-sm font-bold min-w-0">{title}</h3>
         {count !== undefined && <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-muted text-muted-foreground">{count}</span>}
       </div>
       {children}
@@ -84,8 +84,8 @@ export default function ControlPanel() {
         {data.docs.length === 0 ? empty("control.docsNone") : (
           <ul className="space-y-1.5">
             {data.docs.map((d) => (
-              <li key={d.id} className="flex items-center justify-between gap-2 text-xs">
-                <span className="truncate">{d.title}</span>
+              <li key={d.id} className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5 text-xs min-w-0">
+                <span className="min-w-0 break-words">{d.title}</span>
                 <span className={`flex-shrink-0 font-semibold ${d.stage === "expired" ? "text-red-600 dark:text-red-400" : d.stage === "d1" || d.stage === "d7" ? "text-amber-700 dark:text-amber-300" : "text-muted-foreground"}`}>
                   {d.stage === "expired" ? t("control.expired") : t("control.daysLeft", { days: d.days })} · {String(d.expiresAt).slice(0, 10)}
                 </span>
@@ -99,8 +99,8 @@ export default function ControlPanel() {
         {data.equipment.length === 0 ? empty("control.equipmentNone") : (
           <ul className="space-y-1.5">
             {data.equipment.map((e) => (
-              <li key={e.id} className="flex items-center justify-between gap-2 text-xs">
-                <span className="truncate">{e.name}</span>
+              <li key={e.id} className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5 text-xs min-w-0">
+                <span className="min-w-0 break-words">{e.name}</span>
                 <span className="flex-shrink-0 text-amber-700 dark:text-amber-300 font-semibold">
                   {e.daysToService !== null ? (e.daysToService < 0 ? t("control.serviceOverdue") : t("control.serviceInDays", { days: e.daysToService })) : t("control.serviceInHours", { hours: Math.max(0, Math.round(e.hoursToService || 0)) })}
                 </span>

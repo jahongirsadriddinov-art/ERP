@@ -28,6 +28,9 @@ export const uz = {
     pnlNet: "Sof foyda/zarar",
     budgetVsActual: "Byudjet vs haqiqat (obyektlar bo'yicha)",
     overBudget: "Byudjetdan {{percent}}% oshib ketdi",
+    balance: "Balans (kirim − chiqim)", balanceShort: "Balans", profit: "Foyda", loss: "Zarar",
+    trendBalance: "Kirim, chiqim va balans", balanceByObject: "Obyektlar bo'yicha balans", incomeByPerson: "Kirimni kim kiritgan",
+    noIncome: "Tanlangan davrda kirim yo'q", unknown: "Noma'lum", noObject: "Obyektsiz", showMore: "Yana ko'rsatish", days: "kun",
   },
 };
 
@@ -61,5 +64,8 @@ export const ru = {
     pnlNet: "Чистая прибыль/убыток",
     budgetVsActual: "Бюджет vs факт (по объектам)",
     overBudget: "Превышение бюджета на {{percent}}%",
+    balance: "Баланс (приход − расход)", balanceShort: "Баланс", profit: "Прибыль", loss: "Убыток",
+    trendBalance: "Приход, расход и баланс", balanceByObject: "Баланс по объектам", incomeByPerson: "Кто внёс приход",
+    noIncome: "За период прихода нет", unknown: "Неизвестно", noObject: "Без объекта", showMore: "Показать ещё", days: "дн.",
   },
 };

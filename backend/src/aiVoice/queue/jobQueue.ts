@@ -1,5 +1,6 @@
 import AiJob, { type IAiJob } from '../../models/AiJob';
 import { INSTANCE_ID, LIMITS } from '../config';
+import { captureError } from '../../services/errorTracker';
 
 // Mongo'dagi ish navbati (design D8 + review C1/C3/C5):
 //  • claim — atomik findOneAndUpdate (status queued→leased, leaseOwner, leaseUntil, attempts+1);
@@ -226,8 +227,10 @@ export class JobQueue {
     const terminal = (status: 'failed' | 'dead') => AiJob.updateOne(own, {
       $set: { status, lastError: msg, finishedAt: now, leaseOwner: null, leaseUntil: null, expiresAt: new Date(now.getTime() + LIMITS.jobFailedTtlMs) },
     });
-    if (err instanceof NonRetryableJobError) { await terminal('failed'); return; }
-    if (job.attempts >= job.maxAttempts) { await terminal('dead'); this.log(`ish 'dead': ${job.type} ${job._id} — ${msg}`); return; }
+    // Yakuniy muvaffaqiyatsizlik — markaziy xato jurnaliga (dasturchi panelida "Xatolar", yangi tur bo'lsa Telegram)
+    const report = (status: string) => void captureError({ source: 'worker', kind: `${job.type}:${status}`, message: msg, stack: (err as Error)?.stack });
+    if (err instanceof NonRetryableJobError) { await terminal('failed'); report('failed'); return; }
+    if (job.attempts >= job.maxAttempts) { await terminal('dead'); report('dead'); this.log(`ish 'dead': ${job.type} ${job._id} — ${msg}`); return; }
     const delay = backoffMs(job.attempts, reg?.opts.backoffBaseMs ?? LIMITS.jobBackoffBaseMs, reg?.opts.backoffCapMs ?? LIMITS.jobBackoffCapMs);
     await AiJob.updateOne(own, { $set: { status: 'queued', lastError: msg, runAt: new Date(now.getTime() + delay), leaseOwner: null, leaseUntil: null } });
   }

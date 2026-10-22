@@ -77,6 +77,13 @@ describe('#1 bitta salom va sof ha/yo\'q', () => {
     expect(pureYesNo('bekor qil')).toBe(false);
     expect(pureYesNo('ha, lekin ertaga')).toBeNull();
     expect(pureYesNo('ertaga 7 da eslat')).toBeNull();
+    // Owner 2026-10-22: qisqa tasdiq iborasi ham sof javob (avval "aniq tasdiqlang" deb aylanib qolardi)
+    expect(pureYesNo('ha tasdiqlayman')).toBe(true);
+    expect(pureYesNo('Ha, albatta qiling')).toBe(true);
+    expect(pureYesNo('да, подтверждаю')).toBe(true);
+    expect(pureYesNo("yo'q kerak emas")).toBe(false);
+    expect(pureYesNo('ha qil lekin 20 ga')).toBeNull();
+    expect(pureYesNo('qil')).toBeNull();
   });
 });
 

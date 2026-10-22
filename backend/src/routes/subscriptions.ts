@@ -80,6 +80,13 @@ router.post('/pay', requireAuth, requireOwnerOrAdmin, async (req, res) => {
     // noto'g'ri tarif) qo'llanadi. Promokod faqat shu (veb) yo'ldan
     // qo'llaniladi — botda matn kiritish qadami yo'q.
     const custom = planKey === 'custom' ? { months: Number(req.body?.months), features: Array.isArray(req.body?.features) ? req.body.features.map(String) : [] } : undefined;
+    // Faol obunada hozirgi tarifni qayta "almashtirib" bo'lmaydi (owner 2026-10-22); muddati tugagan bo'lsa — uzaytirish mumkin.
+    // Yangi tarif kunlari qolgan kunlarga qo'shiladi (payments webhook: extendPeriodEnd).
+    {
+      const cur: any = await Subscription.findOne({ companyId: String(t.companyId) }).sort({ createdAt: -1 }).select('selectedPlan status currentPeriodEnd').lean();
+      const activeNow = cur?.status === 'active' && cur?.currentPeriodEnd && new Date(cur.currentPeriodEnd) > new Date();
+      if (activeNow && cur.selectedPlan === planKey && req.body?.renew !== true) return res.status(409).json({ error: 'Bu sizning hozirgi tarifingiz' });
+    }
     // "O'zim tanlayman" faqat ro'yxatdan o'tishda tanlanadi; keyin — faqat o'sha tarifni uzaytirish (owner 2026-10-22)
     if (custom) {
       const cur: any = await Subscription.findOne({ companyId: String(t.companyId) }).sort({ createdAt: -1 }).select('selectedPlan').lean();

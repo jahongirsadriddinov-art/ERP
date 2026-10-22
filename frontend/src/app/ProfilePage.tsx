@@ -1079,15 +1079,19 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
                           <span className="text-muted-foreground group-open:rotate-180 transition-transform">▾</span>
                         </summary>
                         <div className="mt-3 space-y-2">
-                          {payablePlans.map(plan => (
-                            <button key={plan.key} disabled={!!payingPlan} onClick={() => handlePay(plan.key)}
-                              className="w-full flex items-center justify-between gap-2 px-4 h-14 rounded-2xl border border-border/60 hover:border-primary/50 hover:bg-primary/5 liquid-transition disabled:opacity-60 text-left">
-                              <span className="text-sm font-semibold">{plan.label}</span>
+                          <p className="text-xs text-muted-foreground">{t('plan.changeNote', "Yangi tarif kunlari qolgan kunlaringizga qo'shiladi.")}</p>
+                          {payablePlans.map(plan => {
+                            // Owner 2026-10-22: hozirgi tarifni qayta tanlab bo'lmaydi
+                            const current = plan.key === subData.selectedPlan;
+                            return (
+                            <button key={plan.key} disabled={!!payingPlan || current} onClick={() => handlePay(plan.key)} data-testid={`plan-option-${plan.key}`}
+                              className="w-full flex items-center justify-between gap-2 px-4 h-14 rounded-2xl border border-border/60 hover:border-primary/50 hover:bg-primary/5 liquid-transition disabled:opacity-60 disabled:hover:bg-transparent text-left">
+                              <span className="text-sm font-semibold">{plan.label}{current && <span className="ml-2 text-[11px] font-bold text-emerald-600">✓ {t('plan.current', 'Hozirgi tarif')}</span>}</span>
                               <span className="flex items-center gap-2 text-sm font-bold text-primary">
                                 {payingPlan === plan.key ? <MorphIcon icon={Loader2} className="w-4 h-4 animate-spin" /> : `${plan.amount.toLocaleString()} ${t('common.som')}`}
                               </span>
                             </button>
-                          ))}
+                          ); })}
                           <button type="button" onClick={cancelSubscription} data-testid="plan-cancel"
                             className="w-full h-12 rounded-2xl border border-red-500/40 text-red-700 dark:text-red-300 text-sm font-semibold">
                             {subData.cancelRequestedAt ? t('plan.cancelUndo', 'Bekor qilishni qaytarish') : t('plan.cancel', 'Obunani bekor qilish')}

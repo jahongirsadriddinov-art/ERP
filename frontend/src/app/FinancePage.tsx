@@ -137,14 +137,15 @@ export function FinancePage({ currentUser, users, projects, expenses, onAddExpen
       )}
 
       {/* Filters */}
-      <div className="surface px-4 py-2.5 flex gap-2 flex-wrap flex-shrink-0">
-        <select className="text-sm md:text-xs border border-border rounded-full px-3 py-1.5 bg-input-background focus:outline-none" value={projFilter} onChange={e=>setProjFilter(e.target.value)}>
+      {/* Owner 2026-10-22: telefonda tanlov ekrandan chiqib ketardi — to'liq kenglikda, matn qisqaradi; turlar gorizontal suriladi */}
+      <div className="surface px-3 py-2.5 flex flex-col gap-2 flex-shrink-0 min-w-0 overflow-hidden">
+        <select className="w-full min-w-0 max-w-full truncate h-10 text-sm border border-border rounded-full px-3 bg-input-background focus:outline-none" value={projFilter} onChange={e=>setProjFilter(e.target.value)}>
           <option value="all">{t('finance.allObjects')}</option>
           {projects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
-        <div className="flex gap-1.5 flex-wrap">
-          <button onClick={()=>setFilter("all")} className={`text-sm md:text-xs px-3 py-1.5 rounded-full font-medium liquid-transition ${filter==="all"?"bg-primary text-white":"bg-muted text-muted-foreground hover:bg-secondary"}`}>{t('finance.all')}</button>
-          {(Object.keys(EXP_LABELS) as ExpType[]).map(k=><button key={k} onClick={()=>setFilter(k)} className={`text-sm md:text-xs px-3 py-1.5 rounded-full font-medium liquid-transition ${filter===k?"bg-primary text-white":"bg-muted text-muted-foreground hover:bg-secondary"}`}>{expLabel(t, k)}</button>)}
+        <div className="flex gap-1.5 overflow-x-auto scrollbar-hide -mx-3 px-3">
+          <button onClick={()=>setFilter("all")} className={`flex-shrink-0 h-9 text-sm px-3.5 rounded-full font-medium liquid-transition ${filter==="all"?"bg-primary text-white":"bg-muted text-muted-foreground hover:bg-secondary"}`}>{t('finance.all')}</button>
+          {(Object.keys(EXP_LABELS) as ExpType[]).map(k=><button key={k} onClick={()=>setFilter(k)} className={`flex-shrink-0 h-9 text-sm px-3.5 rounded-full font-medium liquid-transition ${filter===k?"bg-primary text-white":"bg-muted text-muted-foreground hover:bg-secondary"}`}>{expLabel(t, k)}</button>)}
         </div>
       </div>
 

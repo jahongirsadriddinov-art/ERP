@@ -27,7 +27,6 @@ import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import { API_BASE, parseSmetaFile, uploadChatMedia } from "./api";
 import { motion, AnimatePresence } from "motion/react";
-import { PlanFactOverview } from "./PlanFact";
 import { EquipmentDetails } from "./EquipmentExtras";
 import { saveOrShareBlob, openExternalUrl } from "./platform";
 import { SkeletonList } from "./Skeleton";
@@ -302,7 +301,6 @@ export function AdminDashboard({ currentUser, users, projects, transfers, setUse
               </div>
             ))}
           </div>
-          <div className="mb-3"><PlanFactOverview onOpen={(id) => { const pr = projects.find(x => x.id === id); if (pr) onSelectProject(pr); }} /></div>
           {projects.map(p => {
             const pend = transfers.filter(t=>t.projectId===p.id&&t.status==="pending").length;
             const foreman = users.find(u=>u.id===p.foremanId);
@@ -463,7 +461,6 @@ export function AdminDashboard({ currentUser, users, projects, transfers, setUse
                         </div>
                       ))}
                     </div>
-                    <div className="mb-4"><PlanFactOverview onOpen={(id) => { const pr = projects.find(x => x.id === id); if (pr) onSelectProject(pr); }} /></div>
                     {projects.map(p => {
                       const pend = transfers.filter(t=>t.projectId===p.id&&t.status==="pending").length;
                       const foreman = users.find(u=>u.id===p.foremanId);

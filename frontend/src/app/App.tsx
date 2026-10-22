@@ -88,7 +88,6 @@ import { AnnouncementComposer, AnnouncementContent, AnnouncementPopup, type Anno
 import { connectSocket, getSocket, disconnectSocket } from "./socket";
 import { isAiCallActive, decideCallOffer } from "./aiVoice/bus";
 import { motion, AnimatePresence } from "motion/react";
-import { PlanFactCard, PlanFactOverview } from "./PlanFact";
 // Katta sahifalar alohida fayllarda va kerak bo'lganda yuklanadi (owner 2026-10-19: App.tsx'ni bo'lish)
 const AdminDashboard = lazy(() => import("./AdminDashboard").then((m) => ({ default: m.AdminDashboard })));
 const ObjectDetailPage = lazy(() => import("./ObjectDetailPage").then((m) => ({ default: m.ObjectDetailPage })));

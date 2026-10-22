@@ -12,6 +12,7 @@ export const uz = {
       plans: "Tariflar",
       promocodes: "Promokodlar",
       announcements: "📢 E'lon",
+      botUi: "🎨 Bot dizayni",
       server: "🟢 Server",
     },
     server: {
@@ -188,6 +189,7 @@ export const ru = {
       plans: "Тарифы",
       promocodes: "Промокоды",
       announcements: "📢 Объявление",
+      botUi: "🎨 Дизайн бота",
       server: "🟢 Сервер",
     },
     server: {

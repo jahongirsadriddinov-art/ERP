@@ -18,7 +18,7 @@ import GpsLocation from '../models/GpsLocation';
 import AppRelease from '../models/AppRelease';
 import AppSettings from '../models/AppSettings';
 import { initRegistrationScene, isInRegistration } from './registrationScene';
-import { emitToUser, emitToGroup, emitToCompany } from './socket';
+import { emitToUser, emitToGroup, emitToCompanyBosses } from './socket';
 import { tb, langLabel, BotLang } from '../i18n/bot';
 import { getBackendUrl } from '../utils/backendUrl';
 import { uploadFileToCloud } from '../config/cloudinary';
@@ -832,7 +832,7 @@ async function saveLocationFromTelegram(chatId: number, lat: number, lng: number
   const loc = await GpsLocation.create({ userId: String(user._id), companyId: user.companyId, lat, lng, accuracy, timestamp: new Date(), source });
   // MUHIM: avval global broadcast() — BOSHQA firmalarga ham GPS koordinatasi
   // sızardi. Endi faqat SHU foydalanuvchining o'z firma xonasiga.
-  emitToCompany(user.companyId, 'gps:update', { userId: String(user._id), companyId: user.companyId, lat, lng, accuracy, timestamp: loc.timestamp, source });
+  emitToCompanyBosses(user.companyId, 'gps:update', { userId: String(user._id), companyId: user.companyId, lat, lng, accuracy, timestamp: loc.timestamp, source });
 }
 
 const CHECKIN_ONLY_KEYBOARD = (lang?: BotLang) => ({

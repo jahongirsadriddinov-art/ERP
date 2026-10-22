@@ -6,10 +6,12 @@ import App, { ClientViewPage } from "./app/App.tsx";
 import UpdateChecker from "./app/UpdateChecker.tsx";
 import MediaViewer from "./app/MediaViewer.tsx";
 import { installErrorReporting } from "./app/lib/monitoring";
+import { installNativeContextMenuGuard } from "./app/lib/nativeContextMenu";
 import { installLegacyColorFallback, installDvhFallback } from "./app/lib/legacyCss";
 import { applyAppFont, applyFontScale, applyFontWeight } from "./app/lib/fonts";
 
 installErrorReporting();
+installNativeContextMenuGuard();
 // Eski Android WebView (Chrome < 111): ranglar va ekran balandligi uchun moslik
 installDvhFallback();
 installLegacyColorFallback();

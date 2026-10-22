@@ -98,7 +98,20 @@ router.post('/', requireOwnerOrAdmin, async (req, res) => {
 });
 
 // Upload Smeta to Object — SSE progress stream
-router.post('/:id/smeta', upload.single('smeta'), async (req: Request, res: Response) => {
+// XAVFSIZLIK (audit 2026-10-22): smeta yuklash obyektning BARCHA materiallarini o'chirib qayta yozadi va
+// byudjetni almashtiradi — avval hech qanday rol tekshiruvi yo'q edi (istalgan ishchi bajarardi). Endi
+// /api/smeta/parse bilan bir xil qoida: rahbar yoki o'sha obyekt prorabi. Fayl qabul qilishdan OLDIN.
+async function canEditSmeta(req: Request, res: Response, next: () => void) {
+  const t = getTenant();
+  const boss = !!t?.isOwner || ['direktor', 'orinbosar'].includes(String(t?.role));
+  if (boss) return next();
+  const own = /^[a-f0-9]{24}$/i.test(String(req.params.id))
+    && !!(await ObjectModel.exists(scoped({ _id: String(req.params.id), foremanId: String(t?.userId || '') })).catch(() => null));
+  if (!own) return res.status(403).json({ error: "Bu obyekt smetasini o'zgartirishga ruxsat yo'q" });
+  return next();
+}
+
+router.post('/:id/smeta', canEditSmeta, upload.single('smeta'), async (req: Request, res: Response) => {
   // ── SSE setup ──────────────────────────────────────────────────────────────
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');

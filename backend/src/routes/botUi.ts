@@ -22,8 +22,12 @@ function packSummary(p: BotEmojiPack) {
   return { name: p.name, title: p.title, count: p.stickers?.length || 0, stickers: (p.stickers || []).map(s => ({ id: s.id, emoji: s.emoji, animated: !!s.animated, video: !!s.video })) };
 }
 
+// Har javobda to'liq ma'lumot (owner 2026-10-22: paket qo'shilgach sahifa "catalog" yo'qligidan yiqilardi)
 function view(doc: any) {
   return {
+    catalog: BOT_UI_CATALOG,
+    commandsCatalog: BOT_UI_COMMANDS,
+    messageEmojiCandidates: messageEmojiCandidates(),
     config: {
       buttons: doc?.buttons || {},
       messageEmoji: doc?.messageEmoji || [],
@@ -99,12 +103,7 @@ function sanitizeCommands(input: any): { commands: any[]; errors: string[] } {
 router.get('/', async (_req: Request, res: Response) => {
   res.set('Cache-Control', 'no-store');
   const doc: any = await BotUiConfig.findOne({ key: 'global' }).lean();
-  res.json({
-    catalog: BOT_UI_CATALOG,
-    commandsCatalog: BOT_UI_COMMANDS,
-    messageEmojiCandidates: messageEmojiCandidates(),
-    ...view(doc),
-  });
+  res.json(view(doc));
 });
 
 router.put('/', async (req: Request, res: Response) => {
@@ -174,7 +173,12 @@ router.post('/auto-decorate', async (req: Request, res: Response) => {
   const packs = (doc.toObject().packs || []) as BotEmojiPack[];
   if (!packs.length) return res.status(400).json({ error: "Avval kamida bitta emoji paketini qo'shing" });
   const useAi = req.body?.useAi !== false;
-  const draft = await autoDecorate(packs, useAi ? geminiTextToJson : null);
+  // AI uzoq javob bersa (model band) — 25 s'dan keyin kalit so'zlar bo'yicha tanlanadi; ulanish uzilib qolmasin
+  const aiWithTimeout = (prompt: string) => Promise.race([
+    geminiTextToJson(prompt),
+    new Promise<never>((_, rej) => setTimeout(() => rej(new Error('AI 25 s ichida javob bermadi')), 25_000)),
+  ]);
+  const draft = await autoDecorate(packs, useAi ? aiWithTimeout : null);
   doc.draft = draft as any;
   doc.markModified('draft');
   await doc.save();

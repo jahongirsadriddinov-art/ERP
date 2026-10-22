@@ -101,7 +101,9 @@ export default function BotUiPanel() {
   const [dirty, setDirty] = useState(false);
 
   const adopt = useCallback((d: Data, keepEdits = false) => {
-    setData(d);
+    // Javobda ro'yxatlar bo'lmasa — avvalgilari saqlanadi (sahifa yiqilmasin)
+    setData((prev) => ({ ...(prev || {}), ...d, catalog: d.catalog || prev?.catalog || [], commandsCatalog: d.commandsCatalog || prev?.commandsCatalog || [] } as Data));
+    if (!d.commandsCatalog) return;
     if (keepEdits) return;
     setButtons(d.config.buttons || {});
     setMsgEmoji(Object.fromEntries((d.config.messageEmoji || []).map((e) => [e.emoji, e.id])));

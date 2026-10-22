@@ -116,14 +116,9 @@ export default function ErrorLogPanel() {
               detail.action ? `Oxirgi amal: ${detail.action}` : "",
               detail.breadcrumbs?.length ? `Oldingi amallar: ${detail.breadcrumbs.join(" → ")}` : "",
               detail.userAgent ? `Qurilma: ${detail.userAgent}` : "",
-              detail.stack ? `
-Stack:
-${detail.stack}` : "",
-              detail.componentStack ? `
-Komponentlar:
-${detail.componentStack}` : "",
-            ].filter(Boolean).join("
-");
+              detail.stack ? `\nStack:\n${detail.stack}` : "",
+              detail.componentStack ? `\nKomponentlar:\n${detail.componentStack}` : "",
+            ].filter(Boolean).join("\n");
             navigator.clipboard?.writeText(lines).then(() => toast.success(t("devPanel.errorLog.copied", { defaultValue: "Nusxa olindi" })))
               .catch(() => toast.error(t("devPanel.errorLog.copyFailed", { defaultValue: "Nusxa olib bo'lmadi" })));
           }} className="px-3.5 py-2 rounded-full text-[13px] font-semibold bg-muted hover:bg-muted/70">📋 {t("devPanel.errorLog.copy", { defaultValue: "Nusxa olish" })}</button>

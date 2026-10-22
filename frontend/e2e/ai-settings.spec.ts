@@ -88,7 +88,7 @@ test("Refresh: dasturchi paneli tabi va AI tabi o'z joyida qoladi; AI akkaunti i
   await expect(page.getByTestId('ai-pf-tab-tgAccounts')).toHaveAttribute('aria-selected', 'true', { timeout: 20_000 });
   await expect(page.getByTestId('ai-tg-company-account')).toContainText('Jasur');
   await page.getByTestId('ai-tg-account-rename').click();
-  await page.getByTestId('ai-tg-company-account').locator('input').fill('Sarvar');
+  await page.getByTestId('ai-tg-company-account').locator('input:not([type=checkbox])').fill('Sarvar');
   await page.getByTestId('ai-tg-company-account').getByRole('button', { name: 'Saqlash' }).click();
   await expect.poll(() => patches.length).toBe(1);
   expect(patches[0]).toEqual({ name: 'Sarvar' });

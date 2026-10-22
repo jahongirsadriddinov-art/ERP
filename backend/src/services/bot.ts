@@ -11,7 +11,7 @@ import Message from '../models/Message';
 import Group from '../models/Group';
 import Attendance from '../models/Attendance';
 import ObjectModel from '../models/Object';
-import { EXP_T, expLang, parseExpenseText, voiceToExpense, receiptToExpense, ParsedExpense, ExpCategory, EXP_CATEGORIES, guessExpenseCategory, fmtMoney } from './botExpense';
+import { EXP_T, expLang, parseExpenseText, voiceToExpense, receiptToExpense, textToExpense, parseDateInput, ParsedExpense, ExpCategory, EXP_CATEGORIES, guessExpenseCategory, fmtMoney } from './botExpense';
 import { getRatesForCompany } from '../routes/currency';
 import TransactionModel from '../models/Transaction';
 import GpsLocation from '../models/GpsLocation';
@@ -1146,6 +1146,20 @@ interface ExpenseDraft {
   currency: 'UZS' | 'USD' | 'EUR'; originalAmount: number; rate?: number; date: string; cleanText?: string;
 }
 const pendingExpenseDrafts = new Map<string, ExpenseDraft>();
+// Qoralamani tahrirlash (owner 2026-10-22): chatId → qaysi qoralama, qaysi maydon, qaysi xabar
+type DraftField = 'text' | 'amount' | 'desc' | 'proj' | 'to' | 'date';
+const pendingDraftEdit = new Map<number, { id: string; field: DraftField; messageId: number }>();
+const DE = (user: any) => user?.language === 'ru' ? {
+  editBtn: '✏️ Исправить', back: '⬅️ Назад',
+  fields: { text: '📝 Весь текст', amount: '💰 Сумма', desc: '🧾 Описание', proj: '🏗 Объект', to: '👤 Кому', date: '📅 Дата' },
+  ask: { text: '📝 Напишите исправленный текст целиком (например: «150 тысяч на цемент для 12-школы, Азиз-ака»):', amount: '💰 Напишите сумму (например: 150000 или 1,5 млн):', desc: '🧾 Напишите описание:', proj: '🏗 Напишите название объекта:', to: '👤 Кому (имя или организация):', date: '📅 Дата (например: 12.10 или «вчера»):' },
+  bad: '⚠️ Не понял. Попробуйте ещё раз.', pick: 'Что исправить?',
+} : {
+  editBtn: '✏️ Tahrirlash', back: '⬅️ Orqaga',
+  fields: { text: "📝 Butun matn", amount: '💰 Summa', desc: '🧾 Tavsif', proj: '🏗 Obyekt', to: '👤 Kimga', date: '📅 Sana' },
+  ask: { text: "📝 Tuzatilgan gapni to'liq yozing (masalan: «12-maktab uchun sementga 150 ming, Aziz akaga»):", amount: '💰 Summani yozing (masalan: 150000 yoki 1,5 mln):', desc: '🧾 Tavsifni yozing:', proj: '🏗 Obyekt nomini yozing:', to: '👤 Kimga (ism yoki tashkilot):', date: "📅 Sana (masalan: 12.10 yoki «kecha»):" },
+  bad: "⚠️ Tushunmadim. Qaytadan yozing.", pick: "Nimani o'zgartiramiz?",
+};
 
 // ─── "📋 Kunlik hisobot" (owner 2026-10-19: "ovozli hisobot") — ovoz/matn → AI → tasdiq → saqlash ───────────
 const pendingReportEntry = new Map<number, { userId: string; at: number }>();
@@ -1318,7 +1332,84 @@ async function sendExpenseDraft(chatId: number, user: any, parsed: ParsedExpense
   });
   const draft = pendingExpenseDrafts.get(id)!;
   draft.projLabel = proj?.name ?? (parsed.projectName ? `${parsed.projectName} ❓` : undefined);
-  await bot.sendMessage(chatId, expenseDraftText(T, draft), { reply_markup: expenseDraftKeyboard(T, id) });
+  await bot.sendMessage(chatId, expenseDraftText(T, draft), { reply_markup: expenseDraftKeyboard(T, id, user) });
+}
+
+/** Tahrirlash: foydalanuvchi yozgan qiymatni qoralamaga qo'llash. true — xabar shu yerda ishlatildi. */
+async function handleDraftEditInput(msg: any, chatId: number): Promise<boolean> {
+  const st = pendingDraftEdit.get(chatId);
+  if (!st) return false;
+  const text = typeof msg.text === 'string' ? msg.text.trim() : '';
+  if (!text || text.startsWith('/')) { pendingDraftEdit.delete(chatId); return false; }
+  const draft = pendingExpenseDrafts.get(st.id);
+  const user: any = draft ? await User.findById(draft.userId).catch(() => null) : null;
+  if (!draft || !user || draft.chatId !== chatId) { pendingDraftEdit.delete(chatId); return false; }
+  const T = EXP_T[expLang(user.language)];
+  const D = DE(user);
+  const today = todayInTashkent();
+  let ok = true;
+  const setAmount = async (amount: number, currency: 'UZS' | 'USD' | 'EUR' = 'UZS') => {
+    draft.currency = currency; draft.originalAmount = amount; draft.rate = undefined; draft.amount = amount;
+    if (currency !== 'UZS') {
+      const rates = await getRatesForCompany(user.companyId);
+      draft.rate = currency === 'USD' ? rates.USD : rates.EUR;
+      draft.amount = Math.round(amount * draft.rate);
+    }
+  };
+  const setProject = async (name?: string) => {
+    if (!name) return;
+    const proj: any = await matchExpenseProject(user, name);
+    draft.projectId = proj ? String(proj._id) : undefined;
+    draft.projectName = proj?.name;
+    draft.objectLabel = proj ? undefined : name;
+    draft.projLabel = proj?.name ?? `${name} ❓`;
+  };
+  try {
+    if (st.field === 'text') {
+      const cq = user.companyId ? { companyId: user.companyId } : { _id: null };
+      const [hObjs, hUsers] = await Promise.all([
+        ObjectModel.find(cq).select('name').limit(60).lean().catch(() => []),
+        User.find(cq).select('firstName lastName').limit(80).lean().catch(() => []),
+      ]);
+      const p = await textToExpense(text, today, {
+        objects: (hObjs as any[]).map((o) => String(o.name || '')),
+        people: (hUsers as any[]).map((u) => `${u.firstName || ''} ${u.lastName || ''}`.trim()),
+      });
+      if (!p) ok = false;
+      else {
+        await setAmount(p.amount, p.currency || 'UZS');
+        draft.description = p.description;
+        draft.category = p.category ?? guessExpenseCategory(p.description);
+        if (p.date) draft.date = p.date;
+        if (p.projectName) await setProject(p.projectName);
+        if (p.recipientName) draft.recipientName = await matchExpenseRecipient(user, p.recipientName);
+        draft.cleanText = text.slice(0, 1500);
+      }
+    } else if (st.field === 'amount') {
+      const p = parseExpenseText(`${text} x`, today);
+      const words = /mln|million|миллион/i.test(text) ? 1e6 : /ming|тыс/i.test(text) ? 1e3 : 1;
+      const n = Number(text.replace(/[^\d.,]/g, '').replace(',', '.'));
+      const amount = words > 1 && Number.isFinite(n) && n > 0 ? Math.round(n * words) : p?.amount;
+      if (!amount) ok = false; else await setAmount(amount, p?.currency || 'UZS');
+    } else if (st.field === 'desc') {
+      draft.description = text.slice(0, 300);
+      draft.category = guessExpenseCategory(draft.description);
+    } else if (st.field === 'proj') {
+      await setProject(text.slice(0, 120));
+    } else if (st.field === 'to') {
+      draft.recipientName = await matchExpenseRecipient(user, text.slice(0, 120));
+    } else if (st.field === 'date') {
+      const d = parseDateInput(text, today);
+      if (!d) ok = false; else draft.date = d;
+    }
+  } catch (e) {
+    console.error('[bot expense edit]', (e as Error)?.message);
+    ok = false;
+  }
+  if (!ok) { await bot.sendMessage(chatId, D.bad); return true; }
+  pendingDraftEdit.delete(chatId);
+  await bot.sendMessage(chatId, expenseDraftText(T, draft), { reply_markup: expenseDraftKeyboard(T, st.id, user) });
+  return true;
 }
 
 function expenseDraftText(T: any, d: ExpenseDraft): string {
@@ -1331,10 +1422,10 @@ function expenseDraftText(T: any, d: ExpenseDraft): string {
   lines.push('', T.ask);
   return lines.join('\n');
 }
-function expenseDraftKeyboard(T: any, id: string) {
+function expenseDraftKeyboard(T: any, id: string, user?: any) {
   return { inline_keyboard: [
     [{ text: T.okBtn, callback_data: `expok_${id}` }, { text: T.cancelBtn, callback_data: `expno_${id}` }],
-    [{ text: T.catBtn, callback_data: `expcat_${id}` }],
+    [{ text: T.catBtn, callback_data: `expcat_${id}` }, { text: DE(user).editBtn, callback_data: `expedit_${id}` }],
     [{ text: T.retryBtn, callback_data: `expretry_${id}` }],
   ] };
 }
@@ -1429,14 +1520,39 @@ async function handleExpenseCallback(query: any, data: string, user: any, chatId
     bot.editMessageText(text, { chat_id: chatId, message_id: messageId, ...(kb ? { reply_markup: kb } : {}) }).catch(() => {});
 
   if (data === 'expcancel') { pendingExpenseEntry.delete(chatId); await edit(T.cancelled); return; }
-  const id = data.slice(data.indexOf('_') + 1);
+  const id = data.slice(data.lastIndexOf('_') + 1);
   if (data.startsWith('expretry_')) { pendingExpenseDrafts.delete(id); await edit(T.cancelled); await startExpenseFlow(chatId, user); return; }
 
   const draft = pendingExpenseDrafts.get(id);
   if (!draft || draft.chatId !== chatId || draft.userId !== String(user._id)) { await edit(T.expired); return; }
   if (data.startsWith('expcat_')) {
     draft.category = EXP_CATEGORIES[(EXP_CATEGORIES.indexOf(draft.category) + 1) % EXP_CATEGORIES.length];
-    await edit(expenseDraftText(T, draft), expenseDraftKeyboard(T, id));
+    await edit(expenseDraftText(T, draft), expenseDraftKeyboard(T, id, user));
+    return;
+  }
+  // ✏️ Tahrirlash — maydon tanlash; tanlangach foydalanuvchi yangi qiymatni yozadi (handleDraftEditInput)
+  if (data.startsWith('expedit_')) {
+    const D = DE(user);
+    const f = D.fields;
+    await edit(`${expenseDraftText(T, draft)}\n\n${D.pick}`, { inline_keyboard: [
+      [{ text: f.text, callback_data: `expf_text_${id}` }],
+      [{ text: f.amount, callback_data: `expf_amount_${id}` }, { text: f.desc, callback_data: `expf_desc_${id}` }],
+      [{ text: f.proj, callback_data: `expf_proj_${id}` }, { text: f.to, callback_data: `expf_to_${id}` }],
+      [{ text: f.date, callback_data: `expf_date_${id}` }, { text: D.back, callback_data: `expback_${id}` }],
+    ] });
+    return;
+  }
+  if (data.startsWith('expback_')) {
+    pendingDraftEdit.delete(chatId);
+    await edit(expenseDraftText(T, draft), expenseDraftKeyboard(T, id, user));
+    return;
+  }
+  if (data.startsWith('expf_')) {
+    const field = data.split('_')[1] as DraftField;
+    if (!['text', 'amount', 'desc', 'proj', 'to', 'date'].includes(field)) return;
+    pendingDraftEdit.set(chatId, { id, field, messageId });
+    pendingExpenseEntry.delete(chatId);
+    await bot.sendMessage(chatId, DE(user).ask[field], { reply_markup: { force_reply: true, input_field_placeholder: DE(user).fields[field] } as any });
     return;
   }
   pendingExpenseDrafts.delete(id); // ikki marta bosilsa ikki chiqim yaratilmasin
@@ -1753,6 +1869,7 @@ bot.on('message', async (msg: any) => {
 
   // ── Chiqim qo'shish oqimi (matn yoki ovoz) — voice'lar `!msg.text` tekshiruvidan
   // OLDIN ushlanishi shart, shu sabab bu yerda.
+  if (pendingDraftEdit.has(chatId) && (await handleDraftEditInput(msg, chatId))) return;
   if (pendingExpenseEntry.has(chatId) && (await handleExpenseInput(msg, chatId))) return;
   if (pendingReportEntry.has(chatId) && (await handleReportInput(msg, chatId))) return;
 

@@ -63,3 +63,27 @@ describe('dates and currency', () => {
     expect(p?.description).toBe('benzin');
   });
 });
+
+describe("qoralamani tahrirlash (owner 2026-10-22)", () => {
+  it('parseDateInput: 12.10, 12.10.2026, ISO, kecha; kelajak — yo\'q', async () => {
+    const { parseDateInput } = await import('./botExpense');
+    expect(parseDateInput('12.10', '2026-10-22')).toBe('2026-10-12');
+    expect(parseDateInput('5/9/2026', '2026-10-22')).toBe('2026-09-05');
+    expect(parseDateInput('2026-10-01', '2026-10-22')).toBe('2026-10-01');
+    expect(parseDateInput('kecha', '2026-10-22')).toBe('2026-10-21');
+    expect(parseDateInput('30.10', '2026-10-22')).toBeUndefined();
+    expect(parseDateInput('salom', '2026-10-22')).toBeUndefined();
+  });
+  it('textToExpense: AI yo\'q bo\'lsa oddiy tahlilchi bilan, tuzatilgan matn saqlanadi', async () => {
+    const prev = { a: process.env.GEMINI_API_KEY, b: process.env.GEMINI_API_KEYS };
+    delete process.env.GEMINI_API_KEY; delete process.env.GEMINI_API_KEYS;
+    try {
+      const { textToExpense } = await import('./botExpense');
+      const r = await textToExpense('150000 sement uchun', '2026-10-22');
+      expect(r).toMatchObject({ amount: 150000, description: 'sement uchun', category: 'material', cleanText: '150000 sement uchun' });
+    } finally {
+      if (prev.a !== undefined) process.env.GEMINI_API_KEY = prev.a;
+      if (prev.b !== undefined) process.env.GEMINI_API_KEYS = prev.b;
+    }
+  });
+});

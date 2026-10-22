@@ -1,4 +1,4 @@
-import { geminiAudioToJson, geminiConfigured } from './gemini';
+import { geminiAudioToJson, geminiConfigured, geminiTextToJson } from './gemini';
 
 // Telegram botdagi "Chiqim qo'shish" — matn yoki OVOZLI xabar orqali chiqim
 // kiritish (tasdiqlash bilan). Bu fayl faqat sof yordamchilar: matn/ovozni
@@ -162,6 +162,55 @@ export async function voiceToExpense(audio: Buffer, mimeType: string, today: str
     transcript: String(r?.transcript || '').trim() || undefined,
     cleanText: String(r?.cleanText || '').trim().slice(0, 1500) || undefined,
   };
+}
+
+/**
+ * Foydalanuvchi tuzatgan/yozgan TO'LIQ gap → chiqim maydonlari (owner 2026-10-22: "gapirilgan gapni qo'lda
+ * o'zgartirib bo'lsin", "to'g'ri taqsimlolmayapti"). Ovozdagi bilan bir xil qoidalar; AI ishlamasa — oddiy tahlilchi.
+ */
+export async function textToExpense(text: string, today: string, hints?: VoiceHints): Promise<ParsedExpense | null> {
+  const clean = String(text || '').trim().slice(0, 1500);
+  if (!clean) return null;
+  if (geminiConfigured()) {
+    try {
+      const prompt = voicePrompt(today, hints).replace("Bu qurilish firmasi xodimining XARAJAT (chiqim) haqidagi OVOZLI xabari.",
+        "Bu qurilish firmasi xodimining XARAJAT (chiqim) haqidagi MATNI (ovozli xabardan tuzatilgan bo'lishi mumkin).")
+        + `
+
+MATN: «${clean.replace(/[«»]/g, '"')}»`;
+      const r = await geminiTextToJson(prompt);
+      const amount = Math.round((Number(r?.amount) || 0) * 100) / 100;
+      const description = String(r?.description || '').trim();
+      if (amount > 0 && amount < MAX_AMOUNT && description) {
+        const dRaw = String(r?.date || '').trim();
+        return {
+          amount, description: description.slice(0, 300),
+          currency: ['USD', 'EUR'].includes(String(r?.currency).toUpperCase()) ? String(r.currency).toUpperCase() as ExpCurrency : 'UZS',
+          date: /^\d{4}-\d{2}-\d{2}$/.test(dRaw) && dRaw <= today ? dRaw : undefined,
+          projectName: String(r?.projectName || '').trim() || undefined,
+          recipientName: String(r?.recipientName || '').trim().slice(0, 120) || undefined,
+          category: asCategory(r?.category) ?? guessExpenseCategory(description),
+          cleanText: clean,
+        };
+      }
+    } catch { /* AI ishlamadi — oddiy tahlilchi */ }
+  }
+  const p = parseExpenseText(clean, today);
+  return p ? { ...p, cleanText: clean } : null;
+}
+
+/** "12.10", "12.10.2026", "2026-10-12", "kecha" → YYYY-MM-DD (kelajak emas). */
+export function parseDateInput(text: string, today: string): string | undefined {
+  const t = String(text || '').trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t <= today ? t : undefined;
+  const m = t.match(/^(\d{1,2})[./-](\d{1,2})(?:[./-](\d{2,4}))?$/);
+  if (m) {
+    const y = m[3] ? (m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3])) : Number(today.slice(0, 4));
+    const iso = `${y}-${String(Number(m[2])).padStart(2, '0')}-${String(Number(m[1])).padStart(2, '0')}`;
+    return /^\d{4}-\d{2}-\d{2}$/.test(iso) && iso <= today ? iso : undefined;
+  }
+  const d = extractDate(t, today).date;
+  return d && d <= today ? d : undefined;
 }
 
 // ── Chek / nakladnoy / hisob-faktura surati → chiqim ─────────────────────────

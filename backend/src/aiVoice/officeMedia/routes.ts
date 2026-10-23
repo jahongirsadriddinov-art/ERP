@@ -7,6 +7,7 @@ import { wavToPcm16, resamplePcm16 } from '../voice/audio';
 import { GeminiTranscriber, type Transcriber } from '../voice/geminiSpeech';
 import { chatWithAgent } from '../agents/service';
 import { isMediaFileUrl, parseVideoLink, parseYandexMusic } from './links';
+import { getOfficeWeather } from './weather';
 
 // AI ofis — media va ovozli suhbat (owner 2026-10-23). Bootstrap: /api/ai-voice/platform (requireAuth + requireDeveloper).
 //  GET/PUT /office/media     — dasturchining musiqa (Yandex havola + o'z qo'shiqlari) va kino havolasi;
@@ -33,6 +34,11 @@ const mediaDto = (m: any) => ({
 
 export const officeMediaRoutes = Router();
 officeMediaRoutes.use((_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
+
+/** Toshkentdagi hozirgi ob-havo (Open-Meteo, 10 daqiqa kesh) — ofis tashqarisi uchun. */
+officeMediaRoutes.get('/office/weather', wrap(async (_req, res) => {
+  res.json(await getOfficeWeather());
+}));
 
 officeMediaRoutes.get('/office/media', wrap(async (req, res) => {
   res.json(mediaDto(await OfficeMedia.findOne({ userId: uid(req) }).lean()));

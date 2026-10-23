@@ -92,3 +92,42 @@ describe('agent bilan suhbat', () => {
     expect((await request(app).post(`${P}/agents/backend/chat`).set('Authorization', tok(devId)).send({ text: '' })).status).toBe(400);
   });
 });
+
+describe('ofis ob-havosi (Open-Meteo)', () => {
+  it('WMO kodlari → rejim', async () => {
+    const { wmoToMode } = await import('../weather');
+    expect(wmoToMode(0)).toBe('sunny');
+    expect(wmoToMode(1)).toBe('sunny');
+    expect(wmoToMode(3)).toBe('cloudy');
+    expect(wmoToMode(45)).toBe('fog');
+    expect(wmoToMode(61)).toBe('rain');
+    expect(wmoToMode(81)).toBe('rain');
+    expect(wmoToMode(95)).toBe('rain');
+    expect(wmoToMode(73)).toBe('snow');
+    expect(wmoToMode(86)).toBe('snow');
+    expect(wmoToMode(2, { precipitation: 0.4 })).toBe('rain');
+    expect(wmoToMode(61, { snowfall: 0.2 })).toBe('snow');
+    expect(wmoToMode(null, { cloud: 90 })).toBe('cloudy');
+  });
+
+  it('endpoint: faqat dasturchi, 10 daqiqa kesh, xatoda zaxira', async () => {
+    const { __setWeatherFetcherForTests, OPEN_METEO_URL } = await import('../weather');
+    let calls = 0;
+    __setWeatherFetcherForTests(async (url) => {
+      calls++;
+      expect(url).toBe(OPEN_METEO_URL);
+      return new Response(JSON.stringify({ current: { weather_code: 63, temperature_2m: 7.4, is_day: 1, cloud_cover: 100, precipitation: 1.2, snowfall: 0 } }), { status: 200 });
+    });
+    expect((await request(app).get(`${P}/office/weather`).set('Authorization', tok(A.ownerId))).status).toBe(403);
+    const r = await request(app).get(`${P}/office/weather`).set('Authorization', tok(devId));
+    expect(r.status).toBe(200);
+    expect(r.body).toMatchObject({ mode: 'rain', code: 63, temp: 7.4, isDay: true, source: 'open-meteo' });
+    const r2 = await request(app).get(`${P}/office/weather`).set('Authorization', tok(devId));
+    expect(r2.body.source).toBe('cache');
+    expect(calls).toBe(1);
+    __setWeatherFetcherForTests(async () => { throw new Error('offline'); });
+    const r3 = await request(app).get(`${P}/office/weather`).set('Authorization', tok(devId));
+    expect(r3.body).toMatchObject({ mode: 'sunny', source: 'fallback' });
+    __setWeatherFetcherForTests(null);
+  });
+});

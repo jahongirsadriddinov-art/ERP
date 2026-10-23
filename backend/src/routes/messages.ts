@@ -150,6 +150,14 @@ export function isAllowedMediaUrl(v: unknown): boolean {
 }
 
 const shape = (m: any) => ({ ...m.toObject(), id: m._id });
+// lean() hujjat uchun AYNAN shu natija: sxema default'lari (hydrate qo'shardi) va bo'sh `location` (toObject minimize
+// olib tashlardi) — ro'yxat har 12 s'da so'raladi, to'liq Mongoose hujjati qurish ortiqcha.
+const MSG_DEFAULTS = { toUserId: '', text: '', read: false, edited: false, pinned: false, deleted: false };
+const shapeLean = (m: any) => {
+  const o: any = { ...MSG_DEFAULTS, ...m, id: m._id };
+  if (o.location && typeof o.location === 'object' && !Object.keys(o.location).length) delete o.location;
+  return o;
+};
 
 // XAVFSIZLIK (audit 2026-10-22): HTML rejimidagi bot xabarida foydalanuvchi matni/ismi escape qilinadi —
 // aks holda xodim rasmiy bot nomidan soxta havola (<a href>) yoki buzuq teg (xabar umuman yetmaydi) yubora olardi.
@@ -302,8 +310,8 @@ router.get('/', async (req, res) => {
         { toUserId: uid },
         ...(groupIds.length ? [{ groupId: { $in: groupIds } }] : []),
       ],
-    })).sort({ createdAt: -1 }).limit(3000);
-    res.json(messages.reverse().map(shape));
+    })).sort({ createdAt: -1 }).limit(3000).lean();
+    res.json(messages.reverse().map(shapeLean));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server xatoligi' });

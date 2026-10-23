@@ -55,6 +55,12 @@ MessageSchema.index({ groupId: 1, timestamp: -1 });
 // GET / yo'li {companyId}.sort({createdAt}) so'raydi — bir xil sabab bilan
 // (Transaction.ts'dagi izohga qarang) qo'sh indeks kerak.
 MessageSchema.index({ companyId: 1, createdAt: -1 });
+// GET /api/messages (har 12 s'da) {fromUserId}|{toUserId}|{groupId $in} $or'ini createdAt bo'yicha so'raydi —
+// har tarmoq o'z indeksi bilan saralangan holda birlashtiriladi (SORT_MERGE); aks holda firmaning
+// BARCHA xabarlari ko'rib chiqilardi.
+MessageSchema.index({ fromUserId: 1, createdAt: -1 });
+MessageSchema.index({ toUserId: 1, createdAt: -1 });
+MessageSchema.index({ groupId: 1, createdAt: -1 });
 // Global search uchun matn indeksi
 MessageSchema.index({ text: 'text' });
 

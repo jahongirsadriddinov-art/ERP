@@ -476,10 +476,23 @@ const DEV_PHONE = "+998900960890"; // dasturchi raqami — parol bilan kiradi (T
 // index.html'dagi boshlang'ich loader bilan AYNAN bir xil — yuklanish bitta uzluksiz loader bo'lib ko'rinadi
 // Yangi "shisha" (shaffof, blur) bildirishnoma dizayni — eski richColors (to'q yashil/qizil
 // to'rtburchak) o'rniga. Ko'rinishi globals.css'dagi .erp-toast bloki orqali.
-export const AppToaster = () => (
-  <Toaster position="top-center" closeButton gap={10} visibleToasts={4} offset={14}
-    toastOptions={{ className: "erp-toast", duration: 3800 }} />
-);
+// Telefonda (owner 2026-10-23) bildirishnomalar PASTDA, menyu/yozish maydonidan yuqorida — tepada ular sarlavhadagi
+// tugmalarni (masalan chatdagi qo'ng'iroq) to'sib qo'yardi. Kompyuterda — tepada, o'rtada.
+export const AppToaster = () => {
+  const [phone, setPhone] = useState(() => typeof window !== "undefined" && window.matchMedia?.("(max-width: 640px)").matches);
+  useEffect(() => {
+    const mq = window.matchMedia?.("(max-width: 640px)");
+    if (!mq) return;
+    const on = () => setPhone(mq.matches);
+    mq.addEventListener?.("change", on);
+    return () => mq.removeEventListener?.("change", on);
+  }, []);
+  return (
+    <Toaster position={phone ? "bottom-center" : "top-center"} closeButton gap={10} visibleToasts={phone ? 3 : 4} offset={14}
+      mobileOffset={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 96px)", left: 12, right: 12 }}
+      toastOptions={{ className: "erp-toast", duration: 3800 }} />
+  );
+};
 export const BootLoader = () => <div className="boot-loader"><div className="logo-wrap"><div className="spinner" /></div></div>;
 
 // ─── Small Components ─────────────────────────────────────────────────────────

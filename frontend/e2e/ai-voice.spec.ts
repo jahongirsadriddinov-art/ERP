@@ -249,6 +249,8 @@ test("guruhga AI qo'shish va @AI bilan savol", async ({ page }) => {
 });
 
 test("ovozli limit/kvota — qo'ng'iroq to'xtab qolmaydi: matnli AI chatiga o'tadi (sabab bilan)", async ({ page }) => {
+  // ikki marta qo'ng'iroq + 15 s'lik kutishlar — parallel yuklamada 30 s'ga sig'masdi (beqaror edi)
+  test.setTimeout(75_000);
   const { sio } = await setup(page);
   sio.startMode = 'quota';
   await page.getByTestId('ai-chat-contact').click({ timeout: 20_000 });

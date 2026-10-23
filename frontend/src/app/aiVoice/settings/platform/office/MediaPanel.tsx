@@ -5,7 +5,7 @@ import { uploadChatMedia } from "../../../../api";
 import { isMediaFileUrl, parseVideoLink, parseYandexMusic } from "./media";
 import { player, sound, useMuted, usePlayer } from "./sound";
 import { openExternalUrl } from "../../../../platform";
-import { currentMovie, mediaStore, useMedia, yandexEmbed } from "./mediaStore";
+import { currentMovie, mediaStore, useMedia, useScreenAnchor, yandexEmbed } from "./mediaStore";
 import { fmtSize, localMedia, UPLOAD_LIMIT } from "./localMedia";
 
 // AI ofis — musiqa va kino (owner 2026-10-23). MediaHost Dasturchi paneli ILDIZIDA bir marta o'rnatiladi (tab, ofis/yurish
@@ -77,20 +77,25 @@ function CinemaWindow({ k }: { k: K }) {
   const m = useMedia();
   const muted = useMuted();
   const box = useRef<HTMLDivElement>(null);
+  const anchor = useScreenAnchor();
   const mv = currentMovie(m);
   if (!mv) return null;
-  const full = m.cinema === "full";
+  // "screen" — yurish rejimida kinozal ekrani ustida (proyeksiya); ekran ko'rinmasa — markazdagi oyna
+  const onScreen = m.cinema === "screen" && !!anchor;
+  const full = m.cinema === "full" || (m.cinema === "screen" && !anchor);
   return (
-    <div ref={box} data-testid="ai-office-cinema-win"
-      className={full ? "fixed z-[121] left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[min(94vw,1100px)] rounded-2xl overflow-hidden bg-black shadow-2xl border border-white/10"
+    <div ref={box} data-testid="ai-office-cinema-win" data-mode={onScreen ? "screen" : full ? "full" : "mini"}
+      style={onScreen ? { left: anchor!.x, top: anchor!.y, width: anchor!.w, height: anchor!.h } : undefined}
+      className={onScreen ? "fixed z-[91] overflow-hidden bg-black pointer-events-none group"
+        : full ? "fixed z-[121] left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[min(94vw,1100px)] rounded-2xl overflow-hidden bg-black shadow-2xl border border-white/10"
         : "fixed z-[121] left-2 bottom-16 sm:left-4 w-[min(300px,60vw)] rounded-xl overflow-hidden bg-black shadow-2xl border border-white/10"}>
-      <div className="flex items-center gap-1 px-2 py-1 bg-[#15171c] text-white text-[12px]">
-        <span className="font-semibold mr-auto truncate">🎬 {k("media.cinema")}</span>
+      <div className={onScreen ? "absolute z-10 right-1 top-1 flex items-center gap-1 px-1 rounded-full bg-black/60 text-white text-[12px] pointer-events-auto" : "flex items-center gap-1 px-2 py-1 bg-[#15171c] text-white text-[12px]"}>
+        <span className={onScreen ? "hidden" : "font-semibold mr-auto truncate"}>🎬 {k("media.cinema")}</span>
         {full && <button type="button" onClick={() => { try { void box.current?.requestFullscreen?.(); } catch { /* */ } }} className="h-7 px-2 rounded-full hover:bg-white/10" data-testid="ai-office-cinema-big">⛶ {k("media.bigger")}</button>}
-        <button type="button" onClick={() => (full ? mediaStore.minimizeCinema() : mediaStore.watch("full"))} className="w-7 h-7 rounded-full hover:bg-white/10" aria-label={full ? k("media.minimize") : k("media.expand")} data-testid="ai-office-cinema-min">{full ? "–" : "⤢"}</button>
+        <button type="button" onClick={() => (full || onScreen ? mediaStore.minimizeCinema() : mediaStore.watch("full"))} className="w-7 h-7 rounded-full hover:bg-white/10" aria-label={full || onScreen ? k("media.minimize") : k("media.expand")} data-testid="ai-office-cinema-min">{full || onScreen ? "–" : "⤢"}</button>
         <button type="button" onClick={() => mediaStore.stopCinema()} className="w-7 h-7 rounded-full hover:bg-white/10 text-red-400" aria-label={k("media.stop")} data-testid="ai-office-cinema-stop">■</button>
       </div>
-      <div className="aspect-video">
+      <div className={onScreen ? "w-full h-full" : "aspect-video"}>
         {mv.kind === "kinopoisk" ? (
           <div className="w-full h-full grid place-items-center text-center p-6 text-white">
             <div><p className="text-sm mb-3">{k("media.kinopoisk")}</p>

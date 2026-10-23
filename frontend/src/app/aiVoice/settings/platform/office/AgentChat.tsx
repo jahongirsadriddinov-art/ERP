@@ -2,7 +2,7 @@ import "../../../../i18n/aiVoiceNs";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { officeApi, type ChatMsg, type OfficeAgent } from "./officeApi";
-import { blobToWav16k, speak } from "./sound";
+import { blobToWav16k, speakAgent } from "./sound";
 
 // AI ofis — agent bilan suhbat (owner 2026-10-23): yozib yoki MIKROFON bilan gapiring → matn (Gemini transkripsiya) → agent o'z ishi
 // haqida javob beradi (Gemini) → javob ovoz chiqarib o'qiladi (ovoz yoqilgan bo'lsa) va 3D'da gap pufagi chiqadi.
@@ -38,8 +38,9 @@ export default function AgentChat({ agent, taskable, onCommand, onSpeak }: {
     const reply = r.data.reply;
     setMsgs((m) => [...m, { role: "agent", text: reply }]);
     onSpeak?.(reply);
-    const spoken = speak(reply, isRu(reply) ? "ru" : "uz", () => onSpeak?.(null));
-    if (!spoken) setTimeout(() => onSpeak?.(null), Math.min(9000, 1500 + reply.length * 45));
+    void speakAgent(reply, isRu(reply) ? "ru" : "uz", () => onSpeak?.(null)).then((spoken) => {
+      if (!spoken) setTimeout(() => onSpeak?.(null), Math.min(9000, 1500 + reply.length * 45));
+    });
   };
 
   const mic = async () => {

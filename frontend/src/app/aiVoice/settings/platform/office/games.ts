@@ -31,9 +31,20 @@ const rnd = (n: number) => Math.floor(Math.random() * n);
 
 // ───────────── Rekordlar ─────────────
 const uid = () => { try { return JSON.parse(localStorage.getItem("currentUser") || "{}").id || "dev"; } catch { return "dev"; } };
+/** Serverga yuborish (kompyuter ochilganda o'rnatiladi); bo'lmasa — faqat shu brauzerda (oflayn zaxira). */
+export const scoreSync: { push: ((id: GameId, v: number) => void) | null } = { push: null };
 export const hiscore = {
   get(id: GameId): number { try { return Number(localStorage.getItem(`aiOffice.hi.${uid()}.${id}`)) || 0; } catch { return 0; } },
-  set(id: GameId, v: number) { try { if (v > hiscore.get(id)) localStorage.setItem(`aiOffice.hi.${uid()}.${id}`, String(Math.floor(v))); } catch { /* */ } },
+  set(id: GameId, v: number) {
+    try { if (v > hiscore.get(id)) { localStorage.setItem(`aiOffice.hi.${uid()}.${id}`, String(Math.floor(v))); scoreSync.push?.(id, Math.floor(v)); } } catch { /* */ }
+  },
+  /** Serverdagi rekordlarni mahalliyga qo'shish (kattasi qoladi). */
+  merge(scores: Record<string, number>) {
+    for (const [id, v] of Object.entries(scores || {})) {
+      if (!(GAME_IDS as string[]).includes(id) || !(v > 0)) continue;
+      try { if (v > hiscore.get(id as GameId)) localStorage.setItem(`aiOffice.hi.${uid()}.${id}`, String(Math.floor(v))); } catch { /* */ }
+    }
+  },
 };
 
 // ───────────── Sof mantiq (testlanadi) ─────────────

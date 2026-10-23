@@ -80,6 +80,8 @@ async function mockApi(page: Page, calls: Calls) {
     const json = (body: any, status = 200) => route.fulfill({ status, headers: CORS, json: body });
     if (url.includes('/api/status')) return json({ siteEnabled: true, appEnabled: true, botEnabled: true });
     if (url.includes('/api/deploy/latest')) return json({ available: false });
+    if (url.includes('/platform/office/scores')) return json({ ok: true, scores: { snake: 7 } });
+    if (url.includes('/platform/office/tts')) return json({ error: 'tts_unavailable' }, 503);
     if (url.includes('/platform/office/weather')) return json({ mode: 'rain', code: 63, temp: 7.4, isDay: true, cloud: 100, precipitation: 1.2, snowfall: 0, at: new Date().toISOString(), source: 'open-meteo' });
     if (url.includes('/platform/office/media')) {
       if (method === 'PUT') { const b = req.postDataJSON(); (calls.media ||= []).push(b); Object.assign(media, b); return json({ ok: true, media }); }
@@ -341,6 +343,9 @@ test('AI ofis: "Ofisga kirish" — yurish rejimi, agent oldiga borib buyruq, o\'
     await expect(page.getByTestId('ai-office-game').locator('canvas')).toBeVisible();
   }
   await page.getByTestId('ai-office-game-a').click();
+  // Serverdagi rekord (ilon: 7) ko'rinadi
+  await page.getByTestId('ai-office-game-snake').click();
+  await expect(page.getByTestId('ai-office-game-best')).toHaveText('7');
   // Kompyuterdagi musiqa, kino, fayllar ilovalari
   await page.getByTestId('ai-office-pc-app-music').click();
   await expect(page.getByTestId('ai-office-pc-media')).toBeVisible();
@@ -523,6 +528,8 @@ test('AI ofis: kino — ▶ Ko\'rish, kichraytirish (to\'xtamaydi), kinozalga ki
     await page.getByTestId('ai-office-goto').click();
     await page.getByTestId('ai-office-goto-place-cinema').click();
     await expect(page.getByTestId('ai-office-cinema-min')).toHaveText('–', { timeout: 10_000 }); // katta oyna
+    // Kompyuterda film kinozal ekranining ustida (proyeksiya), telefonda — markazdagi oyna
+    await expect(win).toHaveAttribute('data-mode', info.project.name === 'telefon' ? 'full' : 'screen', { timeout: 10_000 });
     await page.getByTestId('ai-office-cinema-stop').click();
     await expect(win).toHaveCount(0);
     await page.getByTestId('ai-office-exit').click();

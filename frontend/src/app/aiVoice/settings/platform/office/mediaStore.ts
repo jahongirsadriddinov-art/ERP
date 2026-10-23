@@ -7,7 +7,7 @@ import { player, setTrackResolver, type Track } from "./sound";
 // AI ofis — musiqa va kino holati (owner 2026-10-23): Dasturchi paneli ildizidagi MediaHost bitta marta o'rnatiladi va
 // tab/rejim almashganda ham yashaydi (Yandex iframe qayta yaratilmaydi, <audio> to'xtamaydi). Ofis, kompyuter, panel —
 // faqat shu storeni boshqaradi.
-export type WinState = "closed" | "full" | "mini";
+export type WinState = "closed" | "full" | "mini" | "screen";
 export interface MState {
   media: OfficeMedia | null;
   local: LocalItem[];
@@ -85,6 +85,21 @@ export const mediaStore = {
   stopCinema() { set({ cinema: "closed" }); },
 };
 export const useMedia = () => useSyncExternalStore(mediaStore.subscribe, () => st, () => st);
+
+// ─── Kinozal ekrani joylashuvi (yurish rejimida film 3D ekran ustiga aniq tushadi) ───
+export interface Rect2 { x: number; y: number; w: number; h: number }
+let anchor: Rect2 | null = null;
+const al = new Set<() => void>();
+export const screenAnchor = {
+  get: () => anchor,
+  set(r: Rect2 | null) {
+    const same = (a: Rect2 | null, b: Rect2 | null) => (!a && !b) || (!!a && !!b && Math.abs(a.x - b.x) < 1 && Math.abs(a.y - b.y) < 1 && Math.abs(a.w - b.w) < 1 && Math.abs(a.h - b.h) < 1);
+    if (same(anchor, r)) return;
+    anchor = r; al.forEach((l) => l());
+  },
+  subscribe(l: () => void) { al.add(l); return () => { al.delete(l); }; },
+};
+export const useScreenAnchor = () => useSyncExternalStore(screenAnchor.subscribe, () => anchor, () => anchor);
 
 /** Hozirgi kino: shu kompyuterdagi fayl (ustun) yoki serverdagi havola. */
 export function currentMovie(s: MState): VideoLink | null {

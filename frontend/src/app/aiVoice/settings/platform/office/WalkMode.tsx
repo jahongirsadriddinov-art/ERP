@@ -64,8 +64,9 @@ export default function WalkMode({ agents, profiles, setup, scene, onExit, onCha
     const inside = x > CIN.x0 && x < CIN.x1 && z > CIN.z0 && z < CIN.z1;
     if (inside !== inCinema.current) {
       inCinema.current = inside;
-      if (inside && movie && mediaStore.state.cinema !== "full") mediaStore.watch("full");
-      else if (!inside && mediaStore.state.cinema === "full") mediaStore.minimizeCinema();
+      // Kompyuterda — film 3D ekranning o'zida (proyeksiya), telefonda — markazdagi oyna
+      if (inside && movie && mediaStore.state.cinema !== "full" && mediaStore.state.cinema !== "screen") mediaStore.watch(touch ? "full" : "screen");
+      else if (!inside && (mediaStore.state.cinema === "full" || mediaStore.state.cinema === "screen")) mediaStore.minimizeCinema();
     }
   };
   const touch = typeof window !== "undefined" && (window.matchMedia?.("(pointer: coarse)").matches ?? false);

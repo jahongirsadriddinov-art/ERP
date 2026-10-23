@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import { call } from "../../api";
 
 // AI ofis — ovoz: umumiy "ovozni o'chirish" (eslab qolinadi; standart — o'chiq), o'z qo'shiqlari pleyeri (bitta <audio>),
 // agent ovozi (brauzer speechSynthesis), o'yin "bip"lari (WebAudio). Hamma narsa `muted` ga bo'ysunadi.
@@ -142,6 +143,28 @@ export function speak(text: string, lang: "uz" | "ru", onEnd?: () => void): bool
     ss.speak(u);
     return true;
   } catch { onEnd?.(); return false; }
+}
+
+let voiceAudio: HTMLAudioElement | null = null;
+/**
+ * Agent ovozi: avval backend (Gemini TTS — qo'ng'iroqlardagi o'zbekcha ovoz), bo'lmasa brauzer ovozi (rus ovozi bilan).
+ * Ovoz o'chiq bo'lsa — jim (matn pufakda baribir ko'rinadi).
+ */
+export async function speakAgent(text: string, lang: "uz" | "ru", onEnd?: () => void): Promise<boolean> {
+  if (muted) return false; // matn pufakda o'qish vaqti davomida turadi (chaqiruvchi taymer qo'yadi)
+  try {
+    const r = await call<{ audio: string; mime: string }>("POST", "/platform/office/tts", { text: text.slice(0, 600), lang });
+    if (r.ok && r.data?.audio && !muted) {
+      voiceAudio?.pause();
+      const a = new Audio(`data:${r.data.mime || "audio/wav"};base64,${r.data.audio}`);
+      voiceAudio = a;
+      a.onended = () => onEnd?.();
+      a.onerror = () => onEnd?.();
+      await a.play();
+      return true;
+    }
+  } catch { /* brauzer ovoziga o'tiladi */ }
+  return speak(text, lang, onEnd);
 }
 
 // ───────────── O'yin "bip"lari ─────────────

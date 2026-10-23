@@ -3,8 +3,9 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import type { OfficeAgent } from "./officeApi";
-import { assignIdle, BOUNDS, buildGrid, computeLayout, doorZones, type Desk } from "./layout";
+import { assignIdle, BOUNDS, buildGrid, CINEMA, computeLayout, doorZones, type Desk } from "./layout";
 import { Crowd } from "./crowd";
+import { screenAnchor } from "./mediaStore";
 import { ScreenHub } from "./screens";
 import { Building, Cinema, Cook, DeskSet, GameCorner, Kitchen, Lounge, ManagerRoomFurniture, OwnerOffice, Plants, Rooms } from "./props";
 import { Agent, Player } from "./actors";
@@ -154,11 +155,43 @@ export default function OfficeScene({ agents, selectedId, onSelect, showAllLabel
               onSelect={onSelect} />
           );
         })}
+        {walk && <CinemaAnchor />}
         {walk ? <Player crowd={crowd} grid={grid} bridge={walk.bridge} agents={agents} holding={walk.holding} youLabel={youLabel} />
           : <Controls compact={compact} resetKey={resetKey} crowd={crowd} focus={focus || null} />}
       </Canvas>
     </div>
   );
+}
+
+/** Yurish rejimida: kinozal ekranining 4 burchagi ekranga proyeksiya qilinadi (~15 fps) — film shu to'rtburchakka joylanadi. */
+function CinemaAnchor() {
+  const { camera, gl } = useThree();
+  const acc = useRef(0);
+  const corners = useMemo(() => {
+    const S = CINEMA.screen, z = S.z - 0.02;
+    return [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([sx, sy]) => new THREE.Vector3(S.x + (sx * S.w) / 2, 1.75 + sy * 1.2, z));
+  }, []);
+  const v = useMemo(() => new THREE.Vector3(), []);
+  useEffect(() => () => screenAnchor.set(null), []);
+  useFrame((_, dt) => {
+    acc.current += dt;
+    if (acc.current < 1 / 15) return;
+    acc.current = 0;
+    const r = gl.domElement.getBoundingClientRect();
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, ok = true;
+    for (const c of corners) {
+      v.copy(c).applyMatrix4(camera.matrixWorldInverse);
+      if (v.z > -0.5) { ok = false; break; } // kamera orqasida
+      v.copy(c).project(camera);
+      const px = r.left + ((v.x + 1) / 2) * r.width, py = r.top + ((1 - v.y) / 2) * r.height;
+      x0 = Math.min(x0, px); x1 = Math.max(x1, px); y0 = Math.min(y0, py); y1 = Math.max(y1, py);
+    }
+    const w = x1 - x0, h = y1 - y0;
+    // Ekran yetarlicha katta va ko'proq qismi ko'rinadi — aks holda markazdagi oynaga qaytadi
+    const vis = ok && w > r.width * 0.18 && x0 > r.left - w * 0.25 && x1 < r.right + w * 0.25 && y0 > r.top - h * 0.25 && y1 < r.bottom + h * 0.25;
+    screenAnchor.set(vis ? { x: x0, y: y0, w, h } : null);
+  });
+  return null;
 }
 
 /** Bitta joyda: olomon qadami (agentlar harakati) va ekran teksturalari — agentlar kadridan oldin. */

@@ -5,7 +5,8 @@ import { Badge, type Tone } from "../../ui";
 import { officeApi, type AgentTask, type TaskStatus } from "./officeApi";
 import type { ScreenHub } from "./screens";
 import { beep } from "./sound";
-import { GAME_IDS, hiscore, type Dir, type GameId } from "./games";
+import { GAME_IDS, hiscore, scoreSync, type Dir, type GameId } from "./games";
+import { call } from "../../api";
 import { MediaPanel } from "./MediaPanel";
 import { mediaStore, useMedia } from "./mediaStore";
 import { fmtSize } from "./localMedia";
@@ -179,6 +180,18 @@ export function GameView({ hub, k, big = false }: { hub: ScreenHub | null; k: K;
   const [id, setId] = useState<GameId>(() => hub?.tvGame || "pong");
   const [score, setScore] = useState(0);
   const [best, setBest] = useState(0);
+  // Rekordlar serverda (har dasturchiga) — kirishda olinadi, yangi rekord yuboriladi; tarmoq bo'lmasa — mahalliy qoladi
+  useEffect(() => {
+    scoreSync.push = (game, v) => { void call("PUT", "/platform/office/scores", { game, score: v }); };
+    void call<{ scores: Record<string, number> }>("GET", "/platform/office/scores").then((r) => {
+      const sc = r.ok && r.data && typeof r.data.scores === "object" && r.data.scores ? r.data.scores : null;
+      if (!sc) return;
+      hiscore.merge(sc);
+      // Mahalliyda kattaroq bo'lsa (oflayn o'ynalgan) — serverga ham
+      for (const g of GAME_IDS) { const l = hiscore.get(g); if (l > (sc[g] || 0)) void call("PUT", "/platform/office/scores", { game: g, score: l }); }
+    });
+    return () => { scoreSync.push = null; };
+  }, []);
   useEffect(() => {
     if (!hub || !host.current) return;
     hub.setTvGame(id);

@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { isMapAlive, withMap, disposeMap } from "./lib/leafletSafe";
 
 // Toshkent — qiymat bo'lmaganda xaritaning boshlang'ich markazi.
 const DEFAULT_CENTER: [number, number] = [41.2995, 69.2401];
@@ -37,21 +38,21 @@ export default function LocationPicker({ value, onPick, height = 260 }: { value:
     map.on("click", (e: L.LeafletMouseEvent) => { place(e.latlng.lat, e.latlng.lng); emit(e.latlng.lat, e.latlng.lng); });
     mapRef.current = map;
     // Konteyner endigina ko'rinadigan bo'lgani uchun o'lchamni qayta hisoblash shart
-    setTimeout(() => map.invalidateSize(), 50);
-    return () => { map.remove(); mapRef.current = null; markerRef.current = null; };
+    const sizeTimer = setTimeout(() => withMap(map, (m) => m.invalidateSize()), 50);
+    return () => { mapRef.current = null; markerRef.current = null; disposeMap(map, () => clearTimeout(sizeTimer)); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Tashqaridan (qidiruv/GPS) qiymat o'zgarsa — marker va xarita siljiydi
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !value) return;
+    if (!map || !value || !isMapAlive(map)) return;
     if (lastInternal.current === `${value.lat},${value.lng}`) return; // xaritaning o'zidan tanlangan — qayta markazlanmaydi
     if (!markerRef.current) {
       markerRef.current = L.marker([value.lat, value.lng], { icon: pinIcon, draggable: true }).addTo(map);
       markerRef.current.on("dragend", () => { const p = markerRef.current!.getLatLng(); emit(p.lat, p.lng); });
     } else markerRef.current.setLatLng([value.lat, value.lng]);
-    map.setView([value.lat, value.lng], Math.max(map.getZoom(), 16));
+    withMap(map, (m) => m.setView([value.lat, value.lng], Math.max(m.getZoom(), 16)));
   }, [value?.lat, value?.lng]);
 
   return <div ref={ref} className="w-full rounded-xl overflow-hidden border border-border" style={{ height }} />;

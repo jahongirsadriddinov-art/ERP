@@ -14,6 +14,7 @@ import { MorphIcon } from "morphicons/react";
 import { useTranslation } from "react-i18next";
 import { AppUser } from "./App";
 import { memojiHtml } from "./components/UserAvatar";
+import { isMapAlive, withMap, disposeMap } from "./lib/leafletSafe";
 
 interface GpsPoint { userId: string; lat: number; lng: number; accuracy?: number; timestamp: string; source?: 'site'|'bot_live'|'bot_once'; speed?: number; battery?: number; charging?: boolean; network?: string }
 
@@ -105,15 +106,20 @@ export default function WorkerMap({ users, gpsLocations, focusUserId, track, onS
     const map = L.map(containerRef.current, { zoomControl: false, attributionControl: true }).setView(DEFAULT_CENTER, 12);
     mapRef.current = map;
     // Konteyner o'lchami o'zgarsa (telefonda pastki panel, burilish) — plitalar kulrang bo'lib qolmasin
-    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => map.invalidateSize()) : null;
+    // Yopilgandan keyin kelgan o'lcham hodisasi o'chirilgan xaritaga tegmasin (withMap)
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => withMap(map, (m) => m.invalidateSize())) : null;
     ro?.observe(containerRef.current);
-    return () => { ro?.disconnect(); map.remove(); trackLayerRef.current = null; mapRef.current = null; markersRef.current = {}; circlesRef.current = {}; };
+    return () => {
+      mapRef.current = null;
+      disposeMap(map, () => ro?.disconnect());
+      trackLayerRef.current = null; tileRef.current = null; markersRef.current = {}; circlesRef.current = {};
+    };
   }, []);
 
   // Plitka qatlami: xarita (yorug'/qorong'i) yoki sun'iy yo'ldosh
   useEffect(() => {
     const map = mapRef.current;
-    if (!map) return;
+    if (!map || !isMapAlive(map)) return;
     const defs = layer === 'sat' ? TILES.sat : dark ? TILES.dark : TILES.light;
     tileRef.current?.remove();
     const g = L.layerGroup();
@@ -125,18 +131,19 @@ export default function WorkerMap({ users, gpsLocations, focusUserId, track, onS
   const fitAll = () => {
     const map = mapRef.current;
     const pts = gpsLocations.map(l => [l.lat, l.lng] as [number, number]);
-    if (map && pts.length) map.fitBounds(pts, { padding: [48, 48], maxZoom: 16 });
+    if (pts.length) withMap(map, (m) => m.fitBounds(pts, { padding: [48, 48], maxZoom: 16 }));
   };
   const locateMe = () => {
     const map = mapRef.current;
     if (!map || !navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition((p) => map.flyTo([p.coords.latitude, p.coords.longitude], 16, { duration: 0.6 }), () => {}, { enableHighAccuracy: true, timeout: 8000 });
+    // GPS javobi bir necha soniyadan keyin keladi — shu orada sahifa yopilgan bo'lishi mumkin
+    navigator.geolocation.getCurrentPosition((p) => withMap(mapRef.current, (m) => m.flyTo([p.coords.latitude, p.coords.longitude], 16, { duration: 0.6 })), () => {}, { enableHighAccuracy: true, timeout: 8000 });
   };
 
   // Markerlar — gpsLocations o'zgarganda yangilanadi (yangi socket yangilanishi kelganda ham)
   useEffect(() => {
     const map = mapRef.current;
-    if (!map) return;
+    if (!map || !isMapAlive(map)) return;
     const now = Date.now();
     const seen = new Set<string>();
 
@@ -193,8 +200,8 @@ export default function WorkerMap({ users, gpsLocations, focusUserId, track, onS
 
     // Birinchi marta ma'lumot kelganda — barcha markerlarni ko'rsatadigan qilib markazlashtirish
     const pts = gpsLocations.map(l => [l.lat, l.lng] as [number, number]);
-    if (pts.length > 0 && !map.__wmFitted) {
-      map.fitBounds(pts, { padding: [40, 40], maxZoom: 15 });
+    if (pts.length > 0 && !(map as any).__wmFitted) {
+      withMap(map, (m) => m.fitBounds(pts, { padding: [40, 40], maxZoom: 15 }));
       (map as any).__wmFitted = true;
     }
   }, [gpsLocations, users, t]);
@@ -209,14 +216,13 @@ export default function WorkerMap({ users, gpsLocations, focusUserId, track, onS
     if (!map || !focusUserId) return;
     const marker = markersRef.current[focusUserId];
     if (!marker) return;
-    map.flyTo(marker.getLatLng(), Math.max(map.getZoom(), 16), { duration: 0.6 });
-    marker.openTooltip();
+    withMap(map, (m) => { m.flyTo(marker.getLatLng(), Math.max(m.getZoom(), 16), { duration: 0.6 }); marker.openTooltip(); });
   }, [focusUserId, gpsLocations]);
 
   // Tanlangan xodimning bugungi izi
   useEffect(() => {
     const map = mapRef.current;
-    if (!map) return;
+    if (!map || !isMapAlive(map)) return;
     trackLayerRef.current?.remove();
     trackLayerRef.current = null;
     const pts = (track || []).filter(p => (p.accuracy ?? 0) <= 200).map(p => [p.lat, p.lng] as [number, number]);
@@ -234,7 +240,7 @@ export default function WorkerMap({ users, gpsLocations, focusUserId, track, onS
     // Iz va xodimning hozirgi joyi birga ko'rinsin
     const cur = focusUserId ? markersRef.current[focusUserId]?.getLatLng() : undefined;
     const all = cur ? [...pts, [cur.lat, cur.lng] as [number, number]] : pts;
-    if (all.length > 1) map.fitBounds(all, { padding: [56, 56], maxZoom: 17 });
+    if (all.length > 1) withMap(map, (m) => m.fitBounds(all, { padding: [56, 56], maxZoom: 17 }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [track, t]);
 
@@ -277,8 +283,8 @@ export default function WorkerMap({ users, gpsLocations, focusUserId, track, onS
       {/* Boshqaruv (owner 2026-10-22: "boshqarishga noqulay") — o'ng tomonda katta tugmalar */}
       <div className="absolute right-3 top-[5.5rem] sm:top-1/2 sm:-translate-y-1/2 z-[402] flex flex-col gap-2" data-testid="map-controls">
         {[
-          { k: 'in', label: t('map.zoomIn', { defaultValue: 'Yaqinlashtirish' }), icon: PlusIcon, on: () => mapRef.current?.zoomIn() },
-          { k: 'out', label: t('map.zoomOut', { defaultValue: 'Uzoqlashtirish' }), icon: MinusIcon, on: () => mapRef.current?.zoomOut() },
+          { k: 'in', label: t('map.zoomIn', { defaultValue: 'Yaqinlashtirish' }), icon: PlusIcon, on: () => withMap(mapRef.current, (m) => m.zoomIn()) },
+          { k: 'out', label: t('map.zoomOut', { defaultValue: 'Uzoqlashtirish' }), icon: MinusIcon, on: () => withMap(mapRef.current, (m) => m.zoomOut()) },
           { k: 'fit', label: t('map.fitAll', { defaultValue: 'Hammani ko\'rsatish' }), icon: FitIcon, on: fitAll },
           { k: 'me', label: t('map.myLocation', { defaultValue: 'Mening joyim' }), icon: GpsIcon, on: locateMe },
           { k: 'layer', label: layer === 'sat' ? t('map.layerMap', { defaultValue: 'Xarita' }) : t('map.layerSat', { defaultValue: "Sun'iy yo'ldosh" }), icon: layer === 'sat' ? MapIcon : SatIcon, on: () => setLayer(v => v === 'sat' ? 'map' : 'sat') },

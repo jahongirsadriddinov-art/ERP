@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import L from "leaflet";
+import { isMapAlive, withMap, disposeMap, timerBag } from "./lib/leafletSafe";
 import X from "@hugeicons/core-free-icons/Cancel01Icon";
 import Calendar from "@hugeicons/core-free-icons/Calendar01Icon";
 import Clock from "@hugeicons/core-free-icons/Clock01Icon";
@@ -39,6 +40,7 @@ export default function WorkerProfileModal({ worker, transfers, expenses, onClos
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const layerRef = useRef<L.LayerGroup | null>(null);
+  const mapTimers = useRef(timerBag());
 
   // Davomat tarixi — oxirgi 90 kun (cheksiz o'sib ketmasligi uchun; ko'p
   // yillik xodim uchun ham ro'yxat oqilg'on bo'lib qoladi).
@@ -80,7 +82,7 @@ export default function WorkerProfileModal({ worker, transfers, expenses, onClos
       layerRef.current = L.layerGroup().addTo(map);
     }
     const map = mapRef.current, layer = layerRef.current;
-    if (!map || !layer) return;
+    if (!map || !layer || !isMapAlive(map)) return;
     layer.clearLayers();
     if (trail.length === 0) { setGaps(0); return; }
     // Iz bo'laklarga bo'linadi: ikki nuqta orasida 6 daqiqadan ko'p uzilish bo'lsa — "aloqa uzildi" (internet yoki
@@ -117,12 +119,13 @@ export default function WorkerProfileModal({ worker, transfers, expenses, onClos
     setGaps(segs.length - 1);
     const all = sorted.map(ll);
     // Xarita oyna ochilish animatsiyasi paytida 0 o'lchamda yaratilgan bo'lishi mumkin — o'lchamni qayta hisoblaymiz
-    map.invalidateSize();
-    map.fitBounds(all.length > 1 ? all : [all[0], all[0]], { padding: [30, 30], maxZoom: 16 });
-    setTimeout(() => { map.invalidateSize(); map.fitBounds(all.length > 1 ? all : [all[0], all[0]], { padding: [30, 30], maxZoom: 16 }); }, 350);
+    // Kechiktirilgan qayta moslash — oyna 350 ms ichida yopilsa (xato: "t._leaflet_pos" o'chirilgan xaritada) bekor qilinadi
+    const fit = () => withMap(map, (m) => { m.invalidateSize(); m.fitBounds(all.length > 1 ? all : [all[0], all[0]], { padding: [30, 30], maxZoom: 16 }); });
+    fit();
+    mapTimers.current.set(fit, 350);
   }, [trail, t]);
 
-  useEffect(() => () => { mapRef.current?.remove(); mapRef.current = null; }, []);
+  useEffect(() => () => { const map = mapRef.current; mapRef.current = null; layerRef.current = null; disposeMap(map, () => mapTimers.current.clear()); }, []);
 
   const sent = useMemo(() => transfers.filter(tr => tr.fromUserId === worker.id), [transfers, worker.id]);
   const received = useMemo(() => transfers.filter(tr => tr.toUserId === worker.id), [transfers, worker.id]);

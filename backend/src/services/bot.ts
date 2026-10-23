@@ -13,6 +13,8 @@ import Attendance from '../models/Attendance';
 import ObjectModel from '../models/Object';
 import { EXP_T, expLang, parseExpenseText, voiceToExpense, receiptToExpense, textToExpense, parseDateInput, ParsedExpense, ExpCategory, EXP_CATEGORIES, guessExpenseCategory, fmtMoney } from './botExpense';
 import { getRatesForCompany } from '../routes/currency';
+import { getExpenseContext, promptLists, resolveEntity, type ExpenseContext } from './expenseContext';
+import { runVoiceExpensePipeline } from './voiceExpensePipeline';
 import TransactionModel from '../models/Transaction';
 import GpsLocation from '../models/GpsLocation';
 import AppRelease from '../models/AppRelease';
@@ -32,7 +34,7 @@ import { deriveWebhookSecret, canDecideSubscription, sendToCompanyAdmins } from 
 import { registerBotInstance, dispatchAiCallback, dispatchAiMessage, aiBotResetChat, aiSuppressedMorningUserIds, WORKER_OFFSHIFT_CALLBACK_RE, aiBotButtonText } from '../aiVoice/bot/botHooks';
 import { aiConfig } from '../aiVoice/config';
 import { captureError } from './errorTracker';
-import { objectQueryForUser as userObjectQuery } from '../middleware/objectScope';
+import { objectQueryForUser as userObjectQuery, assignedObjectIdsFor } from '../middleware/objectScope';
 import { linkTelegram } from './telegramIdentity';
 import { decorateMarkup, decorateMessage, canonicalizeUpdate, refreshBotUiIfStale, ensureBotUiLoaded, registerExtraLabelSource } from './botUi/runtime';
 import { applyBotCommands } from './botUi/commands';
@@ -1187,6 +1189,8 @@ interface ExpenseDraft {
   category: ExpCategory; projLabel?: string;
   recipientName?: string; objectLabel?: string; voiceFileId?: string; rawText?: string;
   currency: 'UZS' | 'USD' | 'EUR'; originalAmount: number; rate?: number; date: string; cleanText?: string;
+  /** Noaniq nom (owner 2026-10-23: "taxmin qilmasin, so'rasin") — tugma bilan tanlanadi */
+  projChoices?: { id: string; name: string }[]; toChoices?: string[];
 }
 const pendingExpenseDrafts = new Map<string, ExpenseDraft>();
 // Qoralamani tahrirlash (owner 2026-10-22): chatId → qaysi qoralama, qaysi maydon, qaysi xabar
@@ -1197,11 +1201,13 @@ const DE = (user: any) => user?.language === 'ru' ? {
   fields: { text: '📝 Весь текст', amount: '💰 Сумма', desc: '🧾 Описание', proj: '🏗 Объект', to: '👤 Кому', date: '📅 Дата' },
   ask: { text: '📝 Напишите исправленный текст целиком (например: «150 тысяч на цемент для 12-школы, Азиз-ака»):', amount: '💰 Напишите сумму (например: 150000 или 1,5 млн):', desc: '🧾 Напишите описание:', proj: '🏗 Напишите название объекта:', to: '👤 Кому (имя или организация):', date: '📅 Дата (например: 12.10 или «вчера»):' },
   bad: '⚠️ Не понял. Попробуйте ещё раз.', pick: 'Что исправить?',
+  chooseProj: '❓ Какой объект? Выберите ниже 👇', chooseTo: '❓ Кому? Выберите ниже 👇', listening: '⏳ Слушаю…',
 } : {
   editBtn: '✏️ Tahrirlash', back: '⬅️ Orqaga',
   fields: { text: "📝 Butun matn", amount: '💰 Summa', desc: '🧾 Tavsif', proj: '🏗 Obyekt', to: '👤 Kimga', date: '📅 Sana' },
   ask: { text: "📝 Tuzatilgan gapni to'liq yozing (masalan: «12-maktab uchun sementga 150 ming, Aziz akaga»):", amount: '💰 Summani yozing (masalan: 150000 yoki 1,5 mln):', desc: '🧾 Tavsifni yozing:', proj: '🏗 Obyekt nomini yozing:', to: '👤 Kimga (ism yoki tashkilot):', date: "📅 Sana (masalan: 12.10 yoki «kecha»):" },
   bad: "⚠️ Tushunmadim. Qaytadan yozing.", pick: "Nimani o'zgartiramiz?",
+  chooseProj: "❓ Qaysi obyekt? Pastdan tanlang 👇", chooseTo: "❓ Kimga? Pastdan tanlang 👇", listening: '⏳ Tinglayapman…',
 };
 
 // ─── "📋 Kunlik hisobot" (owner 2026-10-19: "ovozli hisobot") — ovoz/matn → AI → tasdiq → saqlash ───────────
@@ -1307,49 +1313,48 @@ async function findExpenseApprover(user: any) {
     || (await User.findOne(base).catch(() => null));
 }
 
-// Nomni solishtirish uchun: kichik harf, apostrof/tire/raqam oldidagi belgilarsiz, kirill->lotin
-const normName = (x: string) => x.toLowerCase()
-  .replace(/[ʻʼ'’`‘]/g, '').replace(/[-–—_.,№#]/g, ' ')
-  .replace(/maktab|школа|shkola/g, 'maktab').replace(/\s+/g, ' ').trim();
+// Firma ro'yxati (60 s kesh) + obyekt doirasi (owner 2026-10-23): rahbar — barcha obyektlar, boshqa rollar — faqat
+// o'ziga biriktirilganlar (middleware/objectScope, saytdagi bilan bir xil qoida). Xodimlar ro'yxati — butun firma.
+async function scopedExpenseContext(user: any): Promise<ExpenseContext> {
+  const [ctx, ids] = await Promise.all([
+    getExpenseContext(user?.companyId),
+    user?.companyId ? assignedObjectIdsFor(user).catch(() => [] as string[]) : Promise.resolve([] as string[]),
+  ]);
+  if (ids === null) return ctx;
+  const allow = new Set(ids);
+  return { ...ctx, objects: ctx.objects.filter((o) => allow.has(o.id)) };
+}
+
+// Obyekt/xodim nomini moslashtirish — services/nameMatch.ts (kirill/lotin, qo'shimchalar, taxalluslar, xato eshitilgan
+// nomlar). Firma ro'yxati 60 s keshlanadi (expenseContext). Noaniq bo'lsa — taxmin qilinmaydi (choices).
 async function matchExpenseProject(user: any, name?: string) {
-  const q = normName(name || '');
-  if (q.length < 2) return null;
-  const objs = await ObjectModel.find(await userObjectQuery(user)).select('name').lean();
-  const qTokens = q.split(' ').filter(Boolean);
-  let best: any = null, bestScore = 0;
-  for (const o of objs as any[]) {
-    const n = normName(String(o.name));
-    if (!n) continue;
-    if (n === q) return o;
-    let score = 0;
-    if (n.includes(q) || q.includes(n)) score += 5;
-    for (const tk of qTokens) if (n.split(' ').includes(tk)) score += /\d/.test(tk) ? 3 : 1; // raqam ("12") muhimroq
-    if (score > bestScore) { bestScore = score; best = o; }
-  }
-  return bestScore >= 3 ? best : null;
+  if (!String(name || '').trim()) return null;
+  const ctx = await scopedExpenseContext(user);
+  const r = resolveEntity(ctx.objects, name);
+  return r.match ? { _id: r.match.id, name: r.match.name } : null;
 }
 
 // "Kimga" — firmadagi xodimga mos kelsa uning to'liq ismi, aks holda aytilgan nom o'zi
 async function matchExpenseRecipient(user: any, name?: string): Promise<string | undefined> {
-  const q = normName(name || '');
-  if (q.length < 2) return undefined;
-  const people = await User.find(user.companyId ? { companyId: user.companyId } : {}).select('firstName lastName').lean();
-  for (const p of people as any[]) {
-    const full = normName(`${p.firstName || ''} ${p.lastName || ''}`);
-    const first = normName(p.firstName || '');
-    if (full && (full === q || full.includes(q) || (first.length >= 3 && q.split(' ').includes(first)))) {
-      return `${p.firstName || ''} ${p.lastName || ''}`.trim();
-    }
-  }
-  return (name || '').trim().slice(0, 120);
+  const n = String(name || '').trim();
+  if (n.length < 2) return undefined;
+  const ctx = await getExpenseContext(user?.companyId);
+  return resolveEntity(ctx.people, n).match?.name || n.slice(0, 120);
 }
 
-async function sendExpenseDraft(chatId: number, user: any, parsed: ParsedExpense, extra?: { voiceFileId?: string; rawText?: string }) {
+async function sendExpenseDraft(chatId: number, user: any, parsed: ParsedExpense, extra?: { voiceFileId?: string; rawText?: string },
+  opts?: { ctx?: ExpenseContext; approver?: any; editMessageId?: number }) {
   const T = EXP_T[expLang(user.language)];
-  const proj: any = await matchExpenseProject(user, parsed.projectName);
-  const approver: any = await findExpenseApprover(user);
+  const ctx = opts?.ctx || await scopedExpenseContext(user);
+  const pr = resolveEntity(ctx.objects, parsed.projectName, parsed.projectKey, parsed.projectConfidence);
+  const rr = resolveEntity(ctx.people, parsed.recipientName, parsed.recipientKey, parsed.recipientConfidence);
+  const approver: any = opts && 'approver' in opts ? opts.approver : await findExpenseApprover(user);
   pendingExpenseEntry.delete(chatId);
-  if (!isAdmin(user.role) && !approver) { await bot.sendMessage(chatId, T.noApprover); return; }
+  if (!isAdmin(user.role) && !approver) {
+    if (opts?.editMessageId) await bot.editMessageText(T.noApprover, { chat_id: chatId, message_id: opts.editMessageId }).catch(() => bot.sendMessage(chatId, T.noApprover));
+    else await bot.sendMessage(chatId, T.noApprover);
+    return;
+  }
 
   const now = Date.now();
   for (const [k, d] of pendingExpenseDrafts) if (now - d.createdAt > 30 * 60 * 1000) pendingExpenseDrafts.delete(k);
@@ -1363,19 +1368,28 @@ async function sendExpenseDraft(chatId: number, user: any, parsed: ParsedExpense
   }
   const id = Math.random().toString(36).slice(2, 10);
   const approverName = approver ? `${approver.firstName} ${approver.lastName || ''}`.trim() : undefined;
+  const spokenTo = String(parsed.recipientName || '').trim().slice(0, 120) || undefined;
   pendingExpenseDrafts.set(id, {
     chatId, userId: String(user._id), amount: uzsAmount, description: parsed.description,
     currency, originalAmount: parsed.amount, rate, date: parsed.date || todayInTashkent(), cleanText: parsed.cleanText,
-    projectId: proj ? String(proj._id) : undefined, projectName: proj?.name, transcript: parsed.transcript,
+    projectId: pr.match?.id, projectName: pr.match?.name, transcript: parsed.transcript,
     approverId: approver ? String(approver._id) : undefined, approverName, createdAt: now,
     category: parsed.category ?? guessExpenseCategory(parsed.description),
-    recipientName: await matchExpenseRecipient(user, parsed.recipientName),
-    objectLabel: proj ? undefined : (parsed.projectName || undefined),
+    recipientName: rr.match?.name || spokenTo,
+    objectLabel: pr.match ? undefined : (parsed.projectName || undefined),
     voiceFileId: extra?.voiceFileId, rawText: extra?.rawText,
+    projChoices: pr.choices?.map((c) => ({ id: c.id, name: c.name })),
+    toChoices: rr.choices?.map((c) => c.name),
   });
   const draft = pendingExpenseDrafts.get(id)!;
-  draft.projLabel = proj?.name ?? (parsed.projectName ? `${parsed.projectName} ❓` : undefined);
-  await bot.sendMessage(chatId, expenseDraftText(T, draft), { reply_markup: expenseDraftKeyboard(T, id, user) });
+  draft.projLabel = pr.match?.name ?? (parsed.projectName ? `${parsed.projectName} ❓` : (pr.choices ? '❓' : undefined));
+  const text = expenseDraftText(T, draft, user);
+  const reply_markup = expenseDraftKeyboard(T, id, user, draft);
+  if (opts?.editMessageId) {
+    try { await bot.editMessageText(text, { chat_id: chatId, message_id: opts.editMessageId, reply_markup }); return; }
+    catch { bot.deleteMessage(chatId, opts.editMessageId).catch(() => {}); }
+  }
+  await bot.sendMessage(chatId, text, { reply_markup });
 }
 
 /** Tahrirlash: foydalanuvchi yozgan qiymatni qoralamaga qo'llash. true — xabar shu yerda ishlatildi. */
@@ -1399,33 +1413,31 @@ async function handleDraftEditInput(msg: any, chatId: number): Promise<boolean> 
       draft.amount = Math.round(amount * draft.rate);
     }
   };
-  const setProject = async (name?: string) => {
-    if (!name) return;
-    const proj: any = await matchExpenseProject(user, name);
-    draft.projectId = proj ? String(proj._id) : undefined;
-    draft.projectName = proj?.name;
-    draft.objectLabel = proj ? undefined : name;
-    draft.projLabel = proj?.name ?? `${name} ❓`;
+  const setProject = async (name?: string, key?: string, conf?: number) => {
+    if (!name && !key) return;
+    const r = resolveEntity((await scopedExpenseContext(user)).objects, name, key, conf);
+    draft.projectId = r.match?.id;
+    draft.projectName = r.match?.name;
+    draft.objectLabel = r.match ? undefined : name;
+    draft.projLabel = r.match?.name ?? `${name || ''} ❓`.trim();
+    draft.projChoices = r.choices?.map((c) => ({ id: c.id, name: c.name }));
+  };
+  const setRecipient = async (name?: string, key?: string, conf?: number) => {
+    const r = resolveEntity((await getExpenseContext(user.companyId)).people, name, key, conf);
+    draft.recipientName = r.match?.name || String(name || '').trim().slice(0, 120) || undefined;
+    draft.toChoices = r.choices?.map((c) => c.name);
   };
   try {
     if (st.field === 'text') {
-      const cq = user.companyId ? { companyId: user.companyId } : { _id: null };
-      const [hObjs, hUsers] = await Promise.all([
-        ObjectModel.find(await userObjectQuery(user)).select('name').limit(60).lean().catch(() => []),
-        User.find(cq).select('firstName lastName').limit(80).lean().catch(() => []),
-      ]);
-      const p = await textToExpense(text, today, {
-        objects: (hObjs as any[]).map((o) => String(o.name || '')),
-        people: (hUsers as any[]).map((u) => `${u.firstName || ''} ${u.lastName || ''}`.trim()),
-      });
+      const p = await textToExpense(text, today, promptLists(await scopedExpenseContext(user)));
       if (!p) ok = false;
       else {
         await setAmount(p.amount, p.currency || 'UZS');
         draft.description = p.description;
         draft.category = p.category ?? guessExpenseCategory(p.description);
         if (p.date) draft.date = p.date;
-        if (p.projectName) await setProject(p.projectName);
-        if (p.recipientName) draft.recipientName = await matchExpenseRecipient(user, p.recipientName);
+        if (p.projectName || p.projectKey) await setProject(p.projectName, p.projectKey, p.projectConfidence);
+        if (p.recipientName || p.recipientKey) await setRecipient(p.recipientName, p.recipientKey, p.recipientConfidence);
         draft.cleanText = text.slice(0, 1500);
       }
     } else if (st.field === 'amount') {
@@ -1440,7 +1452,7 @@ async function handleDraftEditInput(msg: any, chatId: number): Promise<boolean> 
     } else if (st.field === 'proj') {
       await setProject(text.slice(0, 120));
     } else if (st.field === 'to') {
-      draft.recipientName = await matchExpenseRecipient(user, text.slice(0, 120));
+      await setRecipient(text.slice(0, 120));
     } else if (st.field === 'date') {
       const d = parseDateInput(text, today);
       if (!d) ok = false; else draft.date = d;
@@ -1451,22 +1463,30 @@ async function handleDraftEditInput(msg: any, chatId: number): Promise<boolean> 
   }
   if (!ok) { await bot.sendMessage(chatId, D.bad); return true; }
   pendingDraftEdit.delete(chatId);
-  await bot.sendMessage(chatId, expenseDraftText(T, draft), { reply_markup: expenseDraftKeyboard(T, st.id, user) });
+  await bot.sendMessage(chatId, expenseDraftText(T, draft, user), { reply_markup: expenseDraftKeyboard(T, st.id, user, draft) });
   return true;
 }
 
-function expenseDraftText(T: any, d: ExpenseDraft): string {
+function expenseDraftText(T: any, d: ExpenseDraft, user?: any): string {
   const lines = [T.confirmTitle, ''];
   if (d.cleanText || d.transcript) lines.push(T.fullTextLine(d.cleanText || d.transcript), '');
   lines.push(T.moneyLine(fmtMoney(d.originalAmount, d.currency), d.currency !== 'UZS' ? d.amount.toLocaleString('ru-RU') : undefined),
     T.dateLine(d.date), T.descLine(d.description), T.catLine(T.cats[d.category]), T.projLine(d.projLabel));
   if (d.recipientName) lines.push(T.recipientLine(d.recipientName));
   if (d.approverName) lines.push(T.approverLine(d.approverName));
+  if (d.projChoices?.length) lines.push('', DE(user).chooseProj);
+  if (d.toChoices?.length) lines.push('', DE(user).chooseTo);
   lines.push('', T.ask);
   return lines.join('\n');
 }
-function expenseDraftKeyboard(T: any, id: string, user?: any) {
+function expenseDraftKeyboard(T: any, id: string, user?: any, d?: ExpenseDraft) {
+  // Noaniq obyekt/kimga — avval tanlov tugmalari (har biri alohida qatorda, nom to'liq ko'rinsin)
+  const choiceRows = [
+    ...(d?.projChoices || []).slice(0, 4).map((c, i) => [{ text: `🏗 ${c.name}`.slice(0, 60), callback_data: `exppj_${i}_${id}` }]),
+    ...(d?.toChoices || []).slice(0, 4).map((n, i) => [{ text: `👤 ${n}`.slice(0, 60), callback_data: `expto_${i}_${id}` }]),
+  ];
   return { inline_keyboard: [
+    ...choiceRows,
     [{ text: T.okBtn, callback_data: `expok_${id}` }, { text: T.cancelBtn, callback_data: `expno_${id}` }],
     [{ text: T.catBtn, callback_data: `expcat_${id}` }, { text: DE(user).editBtn, callback_data: `expedit_${id}` }],
     [{ text: T.retryBtn, callback_data: `expretry_${id}` }],
@@ -1505,36 +1525,41 @@ async function handleExpenseInput(msg: any, chatId: number): Promise<boolean> {
       return true;
     }
     if (msg.voice || msg.audio) {
+      // Owner 2026-10-23: "ovozli chiqim juda sekin". Endi: "⏳ Tinglayapman…" darhol; fayl yuklash, firma ro'yxati
+      // (60 s kesh) va tasdiqlovchi PARALLEL; Gemini tezkor rejimda; tayyor qoralama shu xabarning o'rniga (edit).
       const media = msg.voice || msg.audio;
-      const notice = await bot.sendMessage(chatId, T.processing);
-      let parsed: ParsedExpense | null = null;
+      const t0 = Date.now();
+      const noticeP = bot.sendMessage(chatId, DE(user).listening).catch(() => null);
       const heardOut: { heard?: string } = {};
+      let res: Awaited<ReturnType<typeof runVoiceExpensePipeline>>;
       try {
-        const link = await bot.getFileLink(media.file_id);
-        const buf = Buffer.from(await (await fetch(link)).arrayBuffer());
-        const cq = user.companyId ? { companyId: user.companyId } : { _id: null };
-        const [hObjs, hUsers] = await Promise.all([
-          ObjectModel.find(await userObjectQuery(user)).select('name').limit(60).lean().catch(() => []),
-          User.find(cq).select('firstName lastName').limit(80).lean().catch(() => []),
-        ]);
-        parsed = await voiceToExpense(buf, media.mime_type || 'audio/ogg', todayInTashkent(), heardOut, {
-          objects: (hObjs as any[]).map(o => String(o.name || '')),
-          people: (hUsers as any[]).map(u => `${u.firstName || ''} ${u.lastName || ''}`.trim()),
+        res = await runVoiceExpensePipeline({
+          download: async () => {
+            const link = await bot.getFileLink(media.file_id);
+            return Buffer.from(await (await fetch(link)).arrayBuffer());
+          },
+          loadContext: () => scopedExpenseContext(user),
+          loadApprover: () => findExpenseApprover(user),
+          parse: (buf, ctx) => voiceToExpense(buf, media.mime_type || 'audio/ogg', todayInTashkent(), heardOut, promptLists(ctx)),
         });
       } catch (e: any) {
-        bot.deleteMessage(chatId, notice.message_id).catch(() => {});
+        const notice: any = await noticeP;
+        if (notice) bot.deleteMessage(chatId, notice.message_id).catch(() => {});
         if (e?.message === 'NO_GEMINI') { await bot.sendMessage(chatId, T.noGemini, { parse_mode: 'Markdown' }); return true; }
         console.error('[bot expense voice]', e);
         await bot.sendMessage(chatId, T.voiceError, { parse_mode: 'Markdown' }).catch(() => bot.sendMessage(chatId, T.voiceFail));
         return true;
       }
-      bot.deleteMessage(chatId, notice.message_id).catch(() => {});
-      if (!parsed) {
+      const notice: any = await noticeP;
+      console.log(`[bot expense voice] ${res.timings.download}ms yuklash, ${res.timings.context}ms kontekst, ${res.timings.ai}ms AI, jami ${Date.now() - t0}ms`);
+      if (!res.parsed) {
         const heard = (heardOut.heard || '').slice(0, 500);
-        await bot.sendMessage(chatId, heard ? T.voiceHeard.replace('{text}', heard) : T.voiceFail);
+        const text = heard ? T.voiceHeard.replace('{text}', heard) : T.voiceFail;
+        if (notice) await bot.editMessageText(text, { chat_id: chatId, message_id: notice.message_id }).catch(() => bot.sendMessage(chatId, text));
+        else await bot.sendMessage(chatId, text);
         return true;
       }
-      await sendExpenseDraft(chatId, user, parsed, { voiceFileId: media.file_id });
+      await sendExpenseDraft(chatId, user, res.parsed, { voiceFileId: media.file_id }, { ctx: res.ctx, approver: res.approver, editMessageId: notice?.message_id });
       return true;
     }
     if (msg.text) {
@@ -1570,14 +1595,27 @@ async function handleExpenseCallback(query: any, data: string, user: any, chatId
   if (!draft || draft.chatId !== chatId || draft.userId !== String(user._id)) { await edit(T.expired); return; }
   if (data.startsWith('expcat_')) {
     draft.category = EXP_CATEGORIES[(EXP_CATEGORIES.indexOf(draft.category) + 1) % EXP_CATEGORIES.length];
-    await edit(expenseDraftText(T, draft), expenseDraftKeyboard(T, id, user));
+    await edit(expenseDraftText(T, draft, user), expenseDraftKeyboard(T, id, user, draft));
+    return;
+  }
+  // Noaniq obyekt/kimga — foydalanuvchi tugma bilan tanladi
+  if (data.startsWith('exppj_') || data.startsWith('expto_')) {
+    const i = Number(data.split('_')[1]);
+    if (data.startsWith('exppj_')) {
+      const c = draft.projChoices?.[i];
+      if (c) { draft.projectId = c.id; draft.projectName = c.name; draft.projLabel = c.name; draft.objectLabel = undefined; draft.projChoices = undefined; }
+    } else {
+      const n = draft.toChoices?.[i];
+      if (n) { draft.recipientName = n; draft.toChoices = undefined; }
+    }
+    await edit(expenseDraftText(T, draft, user), expenseDraftKeyboard(T, id, user, draft));
     return;
   }
   // ✏️ Tahrirlash — maydon tanlash; tanlangach foydalanuvchi yangi qiymatni yozadi (handleDraftEditInput)
   if (data.startsWith('expedit_')) {
     const D = DE(user);
     const f = D.fields;
-    await edit(`${expenseDraftText(T, draft)}\n\n${D.pick}`, { inline_keyboard: [
+    await edit(`${expenseDraftText(T, draft, user)}\n\n${D.pick}`, { inline_keyboard: [
       [{ text: f.text, callback_data: `expf_text_${id}` }],
       [{ text: f.amount, callback_data: `expf_amount_${id}` }, { text: f.desc, callback_data: `expf_desc_${id}` }],
       [{ text: f.proj, callback_data: `expf_proj_${id}` }, { text: f.to, callback_data: `expf_to_${id}` }],
@@ -1587,7 +1625,7 @@ async function handleExpenseCallback(query: any, data: string, user: any, chatId
   }
   if (data.startsWith('expback_')) {
     pendingDraftEdit.delete(chatId);
-    await edit(expenseDraftText(T, draft), expenseDraftKeyboard(T, id, user));
+    await edit(expenseDraftText(T, draft, user), expenseDraftKeyboard(T, id, user, draft));
     return;
   }
   if (data.startsWith('expf_')) {
@@ -3058,7 +3096,7 @@ bot.on('callback_query', async (query: any) => {
     await handleReportCallback(query, data, user, chatId, messageId);
     return;
   }
-  if (/^exp(ok|no|retry|cancel)/.test(data)) {
+  if (/^exp(ok|no|retry|cancel|cat_|edit_|back_|f_|pj_|to_)/.test(data)) {
     await handleExpenseCallback(query, data, user, chatId, messageId);
     return;
   }

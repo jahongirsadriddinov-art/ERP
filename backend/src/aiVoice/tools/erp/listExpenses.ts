@@ -5,6 +5,7 @@ import type { AiToolDef } from '../types';
 import { isObjectIdString } from '../../lib/ids';
 import { addDays } from '../../lib/zonedTime';
 import { periodRange } from './getAllowedFinancialReport';
+import { objectAliases, pickCandidate } from '../../../services/nameMatch';
 import {
   cf, ALL_CHANNELS, ALL_ROLES, ASSIST, canSeeObject, denied, FREE_TEXT_KEYS, fullName, isBoss, L, nameRegex, notFound, ok, today, visibleObjectIds,
 } from './common';
@@ -66,8 +67,16 @@ export const listExpenses: AiToolDef<Args> = {
     let objectId = args.objectId;
     if (!objectId && args.objectName) {
       const visible = await visibleObjectIds(ctx);
-      const objs: any[] = await ObjectModel.find(cf(ctx, { ...(visible === null ? {} : { _id: { $in: visible } }), name: nameRegex(args.objectName) }))
+      const scope = visible === null ? {} : { _id: { $in: visible } };
+      let objs: any[] = await ObjectModel.find(cf(ctx, { ...scope, name: nameRegex(args.objectName) }))
         .select('name').limit(5).lean();
+      // Aniq qism topilmasa — fuzzy (kirill/lotin, "Юнусабад" = Yunusobod, "12-школа" = 12-maktab), faqat ko'ra oladigan obyektlar
+      if (!objs.length) {
+        const all: any[] = await ObjectModel.find(cf(ctx, scope)).select('name').limit(300).lean();
+        const pick = pickCandidate(args.objectName, all.map((o) => ({ id: String(o._id), name: String(o.name || ''), aliases: objectAliases(String(o.name || '')) })));
+        const ids = pick.match ? [pick.match.id] : (pick.ambiguous || []).map((c) => c.id);
+        objs = all.filter((o) => ids.includes(String(o._id)));
+      }
       if (!objs.length) return notFound(ctx, L(ctx, 'Bunday obyekt topilmadi.', 'Объект не найден.'));
       if (objs.length > 1) return ok(L(ctx, 'Bir nechta obyekt mos keldi — qaysi biri?', 'Подходит несколько объектов — какой?'), { candidates: objs.map((o) => ({ id: String(o._id), name: o.name })) });
       objectId = String(objs[0]._id);

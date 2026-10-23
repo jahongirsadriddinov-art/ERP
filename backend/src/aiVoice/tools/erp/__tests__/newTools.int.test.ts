@@ -55,6 +55,13 @@ describe('listExpenses', () => {
     expect(w.data.scope).toBe('own');
     expect(w.data.total.count).toBe(1);
   });
+  it("obyekt nomi kirillda / xato eshitilgan bo'lsa ham topiladi (fuzzy), boshqa firmaniki — yo'q", async () => {
+    const { A } = env;
+    const r: any = (await call(A.ownerId, A.companyId, 'listExpenses', { period: 'today', objectName: 'Альфа' })).result;
+    expect(r.status).toBe('ok');
+    expect(r.data.total.count).toBe(2);
+    expect((await call(A.ownerId, A.companyId, 'listExpenses', { period: 'today', objectName: 'Beta' })).result.status).toBe('not_found');
+  });
 });
 
 describe('getObjectDetails', () => {

@@ -14,6 +14,8 @@ export type ExpCurrency = 'UZS' | 'USD' | 'EUR';
 export interface ParsedExpense {
   amount: number; description: string; projectName?: string; recipientName?: string; transcript?: string;
   category?: ExpCategory; currency?: ExpCurrency; date?: string; cleanText?: string;
+  /** Model ro'yxatdan tanlagan kalit ("O3"/"P7") va ishonchi 0..1 — yakuniy tanlov expenseContext.resolveEntity'da */
+  projectKey?: string; projectConfidence?: number; recipientKey?: string; recipientConfidence?: number;
 }
 
 // Toshkent vaqti bo'yicha YYYY-MM-DD, `days` kun oldin
@@ -117,11 +119,24 @@ export function parseExpenseText(text: string, today?: string): ParsedExpense | 
 }
 
 export type VoiceHints = { objects?: string[]; people?: string[] };
+const KEYED = /^[OP]\d+: /;
 const hintBlock = (h?: VoiceHints) => {
   const o = (h?.objects || []).filter(Boolean).slice(0, 60), p = (h?.people || []).filter(Boolean).slice(0, 80);
+  // Kalitli ro'yxat ("O1: 12-maktab (12)") — model kalitni tanlaydi, server fuzzy-moslashtirib tekshiradi
+  if (o.some((x) => KEYED.test(x)) || p.some((x) => KEYED.test(x))) {
+    return (o.length ? `\nFIRMA OBYEKTLARI (kalit: nom (qisqa shakllari)):\n${o.join('\n')}` : '')
+      + (p.length ? `\nFIRMA XODIMLARI (kalit: ism familiya — lavozim (qisqa/erkalash shakllari)):\n${p.join('\n')}` : '')
+      + `\nOBYEKT va KIMGA ni shu ro'yxatlardan tanla: "projectKey"/"recipientKey" — mos kalit (masalan "O2", "P5"), "projectConfidence"/"recipientConfidence" — ishonching 0..1. Odamlar ismni qisqartirib, erkalab yoki qo'shimcha bilan aytadi ("Botirga", "Aziz aka" = Abdulaziz, "prorabga" = shu lavozimdagi xodim), ruscha/kirill shaklda ("Юнусабад" = Yunusobod). Ro'yxatda yo'q yoki ikkilansang — kalitni "" qoldir, ishonchni past qo'y. "projectName"/"recipientName" ga baribir AYNAN eshitilgan nomni yoz.`;
+  }
   return (o.length ? `\nFIRMA OBYEKTLARI (projectName shu ro'yxatdan eng mosini AYNAN shu yozuvda tanla, mos kelmasa — eshitilganini yoz): ${o.join(' | ')}` : '')
     + (p.length ? `\nFIRMA XODIMLARI (recipientName uchun — mos kelsa AYNAN shu yozuvda): ${p.join(' | ')}` : '');
 };
+const num01 = (v: any): number | undefined => { const n = Number(v); return Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : undefined; };
+/** Model javobidagi kalit/ishonch maydonlari. */
+const keyFields = (r: any) => ({
+  projectKey: String(r?.projectKey || '').trim().toUpperCase() || undefined, projectConfidence: num01(r?.projectConfidence),
+  recipientKey: String(r?.recipientKey || '').trim().toUpperCase() || undefined, recipientConfidence: num01(r?.recipientConfidence),
+});
 const voicePrompt = (today: string, hints?: VoiceHints) => `Bu qurilish firmasi xodimining XARAJAT (chiqim) haqidagi OVOZLI xabari. Til o'zbekcha (lotin) yoki ruscha bo'lishi mumkin, sheva va aralash (o'zbek-rus) gaplar ham bo'ladi. Bugungi sana: ${today}.${hintBlock(hints)}
 O'ZBEKCHA SONLAR: bir, ikki, uch, to'rt, besh, olti, yetti, sakkiz, to'qqiz, o'n, yigirma, o'ttiz, qirq, ellik, oltmish, yetmish, sakson, to'qson, yuz, ming, million (mln, "milyon"), milliard. Masalan: "bir yarim million" = 1500000, "ikki yuz ellik ming" = 250000, "o'n besh ming" = 15000, "yarim million" = 500000, "uch yuz" so'zidan keyin "ming" bo'lmasa ham kontekstdan so'm miqdorini aniqla ("uch yuz so'm" emas — qurilishda odatda "uch yuz ming"). Qurilish so'zlari: sement, armatura, g'isht, qum, shag'al, beton, taxta, kraska, profil, gipsokarton, elektrod, truba, kabel, benzin, solyarka, usta, mardikor, ishchi, avans, oylik/zarplata, ijara, kran, ekskavator, rastvor, nakladnoy. Jargon: "limon"/"lim" = million, "ko'k" = dollar ("yuz ko'k" = 100 USD). Kirill yozuv ham bo'lishi mumkin (ў=o', ғ=g', қ=q, ҳ=h) — "description"ni lotin yozuvida yoz.
 1) Ovozni AYNAN eshitilganidek yozib ol ("transcript"). Eshitilmagan/tushunarsiz narsani o'zing o'ylab topma.
@@ -134,11 +149,12 @@ O'ZBEKCHA SONLAR: bir, ikki, uch, to'rt, besh, olti, yetti, sakkiz, to'qqiz, o'n
    - "projectName": obyekt/loyiha/bino nomi (masalan "12-maktab", "Yunusobod turar joy") aytilgan bo'lsa AYNAN shu nom, aks holda "".
    - "recipientName": pul/material KIMGA berilgani (odam ismi yoki tashkilot, masalan "Aziz aka", "prorab Botir") aytilgan bo'lsa shu nom, aks holda "".
    - "category": FAQAT shulardan biri: "oylik" (ish haqi/avans), "material" (qurilish materiallari), "jihozlar" (asbob-uskuna, ijara), "transport" (yoqilg'i, yuk/yo'l xarajati), "boshqa" (qolgan hammasi).
-Javob FAQAT JSON: {"transcript":"","cleanText":"","amount":0,"currency":"UZS","date":"","description":"","projectName":"","recipientName":"","category":"boshqa"}`;
+Javob FAQAT JSON: {"transcript":"","cleanText":"","amount":0,"currency":"UZS","date":"","description":"","projectName":"","projectKey":"","projectConfidence":0,"recipientName":"","recipientKey":"","recipientConfidence":0,"category":"boshqa"}`;
 
 export async function voiceToExpense(audio: Buffer, mimeType: string, today: string, out?: { heard?: string }, hints?: VoiceHints): Promise<ParsedExpense | null> {
   if (!geminiConfigured()) throw new Error('NO_GEMINI');
-  const r = await geminiAudioToJson(audio, mimeType || 'audio/ogg', voicePrompt(today, hints));
+  // Tezkor rejim: "o'ylash"siz (owner: "juda sekin") — nomlar keyin serverda fuzzy-moslashtiriladi
+  const r = await geminiAudioToJson(audio, mimeType || 'audio/ogg', voicePrompt(today, hints), { fast: true });
   const heard = String(r?.cleanText || r?.transcript || '').trim();
   if (out) out.heard = heard;
   let amount = Math.round((Number(r?.amount) || 0) * 100) / 100;
@@ -161,6 +177,7 @@ export async function voiceToExpense(audio: Buffer, mimeType: string, today: str
     category: asCategory(r?.category) ?? guessExpenseCategory(description),
     transcript: String(r?.transcript || '').trim() || undefined,
     cleanText: String(r?.cleanText || '').trim().slice(0, 1500) || undefined,
+    ...keyFields(r),
   };
 }
 
@@ -178,7 +195,7 @@ export async function textToExpense(text: string, today: string, hints?: VoiceHi
         + `
 
 MATN: «${clean.replace(/[«»]/g, '"')}»`;
-      const r = await geminiTextToJson(prompt);
+      const r = await geminiTextToJson(prompt, { fast: true });
       const amount = Math.round((Number(r?.amount) || 0) * 100) / 100;
       const description = String(r?.description || '').trim();
       if (amount > 0 && amount < MAX_AMOUNT && description) {
@@ -191,6 +208,7 @@ MATN: «${clean.replace(/[«»]/g, '"')}»`;
           recipientName: String(r?.recipientName || '').trim().slice(0, 120) || undefined,
           category: asCategory(r?.category) ?? guessExpenseCategory(description),
           cleanText: clean,
+          ...keyFields(r),
         };
       }
     } catch { /* AI ishlamadi — oddiy tahlilchi */ }

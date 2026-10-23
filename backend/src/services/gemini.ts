@@ -34,34 +34,70 @@ function parseJsonLoose(text: string): any {
 }
 
 /** Faqat matn (ovozsiz) — masalan botga yozilgan kunlik hisobot. */
-export async function geminiTextToJson(prompt: string): Promise<any> {
-  return geminiAudioToJson(null, '', prompt);
+export async function geminiTextToJson(prompt: string, opts?: GeminiOpts): Promise<any> {
+  return geminiAudioToJson(null, '', prompt, opts);
 }
 
-export async function geminiAudioToJson(audio: Buffer | null, mimeType: string, prompt: string): Promise<any> {
+export interface GeminiOpts {
+  /**
+   * Tezkor rejim (owner 2026-10-23: "ovozli chiqim juda sekin"): "o'ylash" o'chiq (2.5 — thinkingBudget 0,
+   * 3.x — thinkingLevel "minimal"), qisqa javob limiti, urinishlar orasida qisqa kutish, so'rov uchun 25 s chegara.
+   * Nom/obyekt tanlash baribir serverdagi fuzzy-moslashtiruvchida aniqlanadi — modelga chuqur "o'ylash" kerak emas.
+   */
+  fast?: boolean;
+  /** Model ro'yxati (standart — MODELS; tezkor rejimda GEMINI_FAST_MODELS bo'lsa o'sha). */
+  models?: string[];
+}
+
+// Ishlamaydigan model (404 "not found"/"no longer available" yoki 400 — bu sozlamani qabul qilmaydi) har so'rovda
+// qayta sinalmasin: har biri bir necha yuz ms yo'qotish edi. 30 daqiqa o'tkazib yuboriladi.
+const deadModels = new Map<string, number>();
+const DEAD_MS = 30 * 60_000;
+const isDeadModelErr = (e: any) => /\b404\b|not found|no longer available|is not supported|unknown name|thinking_?(budget|level|config)/i.test(String(e?.message || e));
+export function _resetGeminiDeadModels() { deadModels.clear(); }
+
+const FAST_MODELS = (process.env.GEMINI_FAST_MODELS || '').split(',').map(m => m.trim()).filter(Boolean);
+
+function thinkingFor(modelName: string, fast: boolean): Record<string, unknown> {
+  if (fast) {
+    if (/2\.5-flash/.test(modelName)) return { thinkingConfig: { thinkingBudget: 0 } };
+    if (/gemini-[3-9]/.test(modelName)) return { thinkingConfig: { thinkingLevel: 'minimal' } };
+    return {};
+  }
+  // Biroz "o'ylash" o'zbekcha nutqni (raqamlar, nomlar) aniqroq tushunishga yordam beradi; javob uchun joy yetarli qoldiriladi
+  return modelName.includes('2.5') ? { thinkingConfig: { thinkingBudget: 768 } } : {};
+}
+
+export async function geminiAudioToJson(audio: Buffer | null, mimeType: string, prompt: string, opts: GeminiOpts = {}): Promise<any> {
   if (!KEYS.length) throw new Error('GEMINI_API_KEY sozlanmagan');
+  const fast = !!opts.fast;
+  const models = opts.models?.length ? opts.models : (fast && FAST_MODELS.length ? FAST_MODELS : MODELS);
+  const tries = fast ? 2 : 3;
   let lastErr: any = null;
   for (let k = 0; k < KEYS.length; k++) {
     const ki = (keyIdx + k) % KEYS.length;
-    for (const modelName of MODELS) {
-      for (let attempt = 0; attempt < 3; attempt++) {
+    for (const modelName of models) {
+      const deadKey = `${ki}|${modelName}|${fast ? 'f' : 'n'}`;
+      const deadAt = deadModels.get(deadKey);
+      if (deadAt && Date.now() - deadAt < DEAD_MS) continue;
+      for (let attempt = 0; attempt < tries; attempt++) {
         try {
           const model = new GoogleGenerativeAI(KEYS[ki]).getGenerativeModel({
             model: modelName,
             generationConfig: {
-              maxOutputTokens: 6144, temperature: 0, responseMimeType: 'application/json',
-              // Biroz "o'ylash" o'zbekcha nutqni (raqamlar, nomlar) aniqroq tushunishga yordam beradi; javob uchun joy yetarli qoldiriladi
-              ...(modelName.includes('2.5') ? { thinkingConfig: { thinkingBudget: 768 } } : {}),
+              maxOutputTokens: fast ? 2048 : 6144, temperature: 0, responseMimeType: 'application/json',
+              ...thinkingFor(modelName, fast),
             } as any,
-          });
+          }, fast ? { timeout: 25_000 } : undefined);
           const res = await model.generateContent(audio ? [prompt, { inlineData: { mimeType, data: audio.toString('base64') } }] : [prompt]);
           const out = parseJsonLoose(res.response.text());
           keyIdx = ki; // ishlagan kalitda qolamiz
           return out;
         } catch (err: any) {
           lastErr = err;
-          console.warn(`[gemini audio] key#${ki} ${modelName} try${attempt + 1}:`, String(err?.message || err).slice(0, 160));
-          if (isTransient(err) || (err as Error)?.message === 'BAD_JSON') { if (attempt < 2) { await sleep(1500 * (attempt + 1)); continue; } }
+          console.warn(`[gemini audio] key#${ki} ${modelName}${fast ? ' fast' : ''} try${attempt + 1}:`, String(err?.message || err).slice(0, 160));
+          if (!isQuota(err) && !isTransient(err) && isDeadModelErr(err)) { deadModels.set(deadKey, Date.now()); break; }
+          if (isTransient(err) || (err as Error)?.message === 'BAD_JSON') { if (attempt < tries - 1) { await sleep((fast ? 500 : 1500) * (attempt + 1)); continue; } }
           break; // kvota / 404 / ruxsat — keyingi modelga (yoki kalitga)
         }
       }

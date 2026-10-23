@@ -2812,6 +2812,8 @@ export default function App() {
         if (document.visibilityState === 'visible' && !socket.connected) {
           socket.connect();
         }
+        // Yashirin paytda o'tkazib yuborilgan zaxira so'rovlar — qaytishi bilan darhol bir marta
+        if (document.visibilityState === 'visible' && pollSkipped) { pollSkipped = false; poll(); }
       };
       document.addEventListener('visibilitychange', onVisibility);
 
@@ -2830,7 +2832,14 @@ export default function App() {
           }
         }).catch(()=>{});
       };
-      const intv = setInterval(() => { fetchMsgs(); fetchGroups(); fetchTx(); }, 12000);
+      // Oyna/ilova yashirin (fon, boshqa tab) bo'lsa zaxira so'rovlar yuborilmaydi — hech kim ko'rmaydi,
+      // lekin har 12 s'da butun xabar/guruh/tranzaksiya ro'yxatlari qayta yuklanardi. Qaytganda darhol yangilanadi.
+      const poll = () => { fetchMsgs(); fetchGroups(); fetchTx(); };
+      let pollSkipped = false;
+      const intv = setInterval(() => {
+        if (document.visibilityState === 'hidden') { pollSkipped = true; return; }
+        poll();
+      }, 12000);
       return () => {
         clearInterval(intv);
         document.removeEventListener('visibilitychange', onVisibility);

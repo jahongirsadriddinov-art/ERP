@@ -242,6 +242,7 @@ async function findSticker(id: string) {
   return stickerIndex.map.get(id);
 }
 
+const imgFailed = new Map<string, number>();
 export const stickerImageRouter = Router();
 stickerImageRouter.get('/:id', async (req: Request, res: Response) => {
   const id = String(req.params.id || '');
@@ -254,15 +255,22 @@ stickerImageRouter.get('/:id', async (req: Request, res: Response) => {
   // Rasm: thumbnail (webp/jpg); bo'lmasa statik stikerning o'zi (webp). Animatsion (tgs) va video (webm) — faqat thumbnail.
   const fileId = s.thumb || (!s.animated ? s.fileId : undefined);
   if (!fileId) return res.status(404).end();
+  // Ilgari yuklab bo'lmagan rasm — 10 daqiqa qayta urinilmaydi (sahifa oddiy emojini ko'rsatadi)
+  const failedAt = imgFailed.get(id);
+  if (failedAt && Date.now() - failedAt < 10 * 60_000) return res.status(404).end();
   try {
-    const { buf, path } = await tgDownloadFile(fileId);
+    // Telegram ko'p so'rovda vaqtincha rad etadi (429) — bir marta qayta urinamiz
+    const { buf, path } = await tgDownloadFile(fileId).catch(async () => { await new Promise((r) => setTimeout(r, 1200)); return tgDownloadFile(fileId); });
     const type = /\.webm$/i.test(path) ? 'video/webm' : /\.jpe?g$/i.test(path) ? 'image/jpeg' : /\.png$/i.test(path) ? 'image/png' : 'image/webp';
     if (imgCache.size > 1500) imgCache.clear();
     const v = { buf, type };
     imgCache.set(id, v);
     send(v);
   } catch {
-    res.status(502).end();
+    // Bu xato emas: emoji botda ishlaydi, faqat ko'rinish rasmi yo'q — xatolar ro'yxatini to'ldirmasin
+    if (imgFailed.size > 2000) imgFailed.clear();
+    imgFailed.set(id, Date.now());
+    res.status(404).end();
   }
 });
 

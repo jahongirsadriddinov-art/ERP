@@ -327,6 +327,10 @@ input, textarea, [contenteditable="true"], [contenteditable=""] {
   100%{ opacity:1; transform:scale(1); }
 }
 .animate-pop-in { animation: popIn 0.38s cubic-bezier(0.16,1,0.3,1) forwards; }
+/* Chat: iqtibosdan o'tilgan xabar bir lahza yoritiladi */
+@keyframes chatMsgFlash { 0%,35% { background: color-mix(in srgb, var(--primary) 22%, transparent); } 100% { background: transparent; } }
+.chat-msg-flash { animation: chatMsgFlash 1.4s ease-out; border-radius: 12px; }
+@media (prefers-reduced-motion: reduce) { .chat-msg-flash { animation: none; outline: 2px solid var(--primary); } }
 
 @keyframes slideInRight {
   from { opacity:0; transform:translateX(32px); }

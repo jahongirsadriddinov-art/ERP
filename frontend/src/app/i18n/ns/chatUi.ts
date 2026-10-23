@@ -52,6 +52,8 @@ export const uz = {
   back: "Orqaga",
   attach: "Biriktirish",
   unreadCount: "{{count}} ta o'qilmagan",
+  messageActions: "Xabar amallari",
+  originalMissing: "Asl xabar topilmadi (o'chirilgan bo'lishi mumkin)",
 };
 
 export const ru = {
@@ -107,4 +109,6 @@ export const ru = {
   back: "Назад",
   attach: "Прикрепить",
   unreadCount: "{{count}} непрочитанных",
+  messageActions: "Действия с сообщением",
+  originalMissing: "Исходное сообщение не найдено (возможно, удалено)",
 };

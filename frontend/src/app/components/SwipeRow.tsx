@@ -14,6 +14,8 @@ export interface RowAction {
   icon?: IconNode;
   tone?: "default" | "danger" | "primary";
   onClick: () => void;
+  /** data-testid (ActionSheet tugmasi uchun) */
+  testId?: string;
 }
 
 const REVEAL_W = 76;   // har tugma kengligi (px)
@@ -104,20 +106,21 @@ export function SwipeRow({ actions, onOpen, children, className = "", testId }: 
 }
 
 /** Pastdan chiqadigan amallar ro'yxati (telefon) / markazdagi kichik oyna (kompyuter). */
-export function ActionSheet({ actions, onClose, title }: { actions: RowAction[]; onClose: () => void; title?: string }) {
+export function ActionSheet({ actions, onClose, title, header, testId }: { actions: RowAction[]; onClose: () => void; title?: string; header?: ReactNode; testId?: string }) {
   useEffect(() => {
     const esc = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     document.addEventListener("keydown", esc);
     return () => document.removeEventListener("keydown", esc);
   }, [onClose]);
   return createPortal(
-    <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center" role="dialog" aria-modal="true">
+    <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center" role="dialog" aria-modal="true" aria-label={title} data-testid={testId}>
       <div className="absolute inset-0 bg-black/45 animate-fade-in" onClick={onClose} />
       <div className="relative w-full sm:max-w-sm bg-card text-foreground rounded-t-3xl sm:rounded-3xl p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-2xl animate-slide-up-fade">
         <div className="mx-auto mt-1 mb-2 h-1.5 w-10 rounded-full bg-muted sm:hidden" />
         {title && <p className="px-4 py-2 text-xs font-semibold text-muted-foreground">{title}</p>}
+        {header}
         {actions.map((a) => (
-          <button key={a.key} type="button" onClick={() => { onClose(); a.onClick(); }}
+          <button key={a.key} type="button" data-testid={a.testId} onClick={() => { onClose(); a.onClick(); }}
             className={`w-full flex items-center gap-3 px-4 h-14 rounded-2xl text-[15px] font-semibold hover:bg-muted/60 active:bg-muted ${a.tone === "danger" ? "text-red-600 dark:text-red-400" : ""}`}>
             {a.icon && <MorphIcon icon={a.icon} className="w-5 h-5 opacity-80" />}
             {a.label || <OpenLabel />}

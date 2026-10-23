@@ -33,8 +33,10 @@ function messages() {
 }
 const group = { _id: 'g1', name: 'Obyekt 1', memberIds: ['u1', 'u3', 'u5'], adminIds: ['u1'], createdBy: 'u1', companyId: 'c1' };
 
-async function setup(page: Page, opts: { readAllStatus?: number; extraMsgs?: any[] } = {}) {
-  const calls = { readAll: 0, markRead: [] as any[] };
+async function setup(page: Page, opts: { readAllStatus?: number; extraMsgs?: any[]; asProrab?: boolean } = {}) {
+  const self = opts.asProrab ? { ...me, role: 'prorab', isOwner: false } : me;
+  const userList = users.map((u) => (u === me ? self : u));
+  const calls = { readAll: 0, markRead: [] as any[], sent: [] as any[], edits: [] as { id: string; body: any }[], deletes: [] as string[] };
   await page.route(/\/socket\.io\//, (r) => r.abort());
   await page.route(/\/api\//, async (route) => {
     const req = route.request();
@@ -47,9 +49,14 @@ async function setup(page: Page, opts: { readAllStatus?: number; extraMsgs?: any
     if (url.includes('/api/admin/subscriptions/my')) return json({ status: 'active', daysLeft: 30, features: [] });
     if (url.includes('/api/messages/read-all') && method === 'POST') { calls.readAll++; return json({ ok: true }, opts.readAllStatus || 200); }
     if (url.includes('/api/messages/read') && method === 'PATCH') { calls.markRead.push(req.postDataJSON()); return json({ message: 'ok' }); }
-    if (/\/api\/users(\?|$)/.test(url) && method === 'GET') return json(users);
+    const msgId = url.match(/\/api\/messages\/([^/?]+)$/)?.[1];
+    if (msgId && method === 'PATCH') { const body = req.postDataJSON(); calls.edits.push({ id: msgId, body }); return json({ _id: msgId, ...body }); }
+    if (msgId && method === 'DELETE') { calls.deletes.push(msgId); return json({ id: msgId, deleted: true }); }
+    if (/\/api\/messages$/.test(url) && method === 'POST') { const body = req.postDataJSON(); calls.sent.push(body); return json({ ...body, _id: `srv${calls.sent.length}` }, 201); }
+    if (/\/api\/users(\?|$)/.test(url) && method === 'GET') return json(userList);
     if (/\/api\/messages\?/.test(url) && method === 'GET') return json([...messages(), ...(opts.extraMsgs || [])]);
     if (/\/api\/groups\?/.test(url) && method === 'GET') return json([group]);
+    if (url.includes('/api/attendance/today')) return json({ status: 'present', checkIn: new Date().toISOString() });
     if (url.includes('/api/ai-voice/')) return json({});
     if (method === 'GET') return json([]);
     return json({});
@@ -70,7 +77,7 @@ async function setup(page: Page, opts: { readAllStatus?: number; extraMsgs?: any
       // Guruh o'qilmaganlari "birinchi ochilish"dan keyin sanaladi — sinov uchun boshlang'ich nuqta eski
       localStorage.setItem('erp_chatPrefs:u1', JSON.stringify({ v: 1, baseline: 1 }));
     } catch { /* */ }
-  }, me);
+  }, self);
   await page.goto('/');
   await expect(page.getByTestId('chat-list')).toBeVisible({ timeout: 20_000 });
   await expect(page.getByTestId('chat-row-u:u3')).toBeVisible({ timeout: 20_000 });
@@ -225,3 +232,109 @@ test("Navbar chat belgisi O'qilmagan jildi bilan mos; modal ochilsa navbar yashi
   await expect(nav).not.toHaveClass(/ios-bottom-bar-hidden/, { timeout: 5_000 });
   await expect(page.locator('body')).not.toHaveClass(/modal-open/);
 });
+
+// ─── Xabar amallari (Telegram uslubi): telefon — uzoq bosish → ActionSheet, o'ngga surish → javob; kompyuter — o'ng tugma ───
+const bubbleOf = (page: Page, text: string) => page.getByTestId('chat-msg').filter({ hasText: text }).getByTestId('chat-bubble');
+
+/** Teginish hodisalari (Playwright'da "uzoq bosish"/"surish" yo'q) — React delegatsiyasi uchun bubbles: true. */
+async function touchGesture(page: Page, text: string, kind: 'long' | 'swipe') {
+  const el = bubbleOf(page, text);
+  await el.scrollIntoViewIfNeeded();
+  const box = (await el.boundingBox())!;
+  await el.evaluate(async (node, a) => {
+    const x0 = a.x, y0 = a.y;
+    const mk = (type: string, x: number) => {
+      const t = new Touch({ identifier: 1, target: node, clientX: x, clientY: y0 });
+      node.dispatchEvent(new TouchEvent(type, { bubbles: true, cancelable: true, touches: type === 'touchend' ? [] : [t], targetTouches: type === 'touchend' ? [] : [t], changedTouches: [t] }));
+    };
+    const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    mk('touchstart', x0);
+    if (a.kind === 'long') { await wait(650); mk('touchend', x0); return; }
+    for (let dx = 4; dx <= 90; dx += 6) { mk('touchmove', x0 + dx); await wait(12); }
+    mk('touchend', x0 + 90);
+  }, { x: box.x + 20, y: box.y + box.height / 2, kind });
+}
+
+test("xabar amallari: javob, nusxa, tahrirlash (faqat o'ziniki), o'chirish (rahbar — istalganini)", async ({ page }, info) => {
+  const phone = info.project.name === 'telefon';
+  if (phone) await page.setViewportSize({ width: 390, height: 844 });
+  const calls = await setup(page);
+  await page.getByTestId('chat-row-u:u4').click();
+  await expect(page.getByTestId('chat-thread-scroll')).toBeVisible();
+
+  const openActions = async (text: string) => {
+    if (phone) {
+      await touchGesture(page, text, 'long');
+      await expect(page.getByTestId('chat-msg-actions')).toBeVisible();
+      return page.getByTestId('chat-msg-actions');
+    }
+    await bubbleOf(page, text).click({ button: 'right' });
+    await expect(page.getByTestId('chat-msg-menu')).toBeVisible();
+    return page.getByTestId('chat-msg-menu');
+  };
+
+  if (phone) {
+    // Telegram'dagidek butun ekran: ilova sarlavhasi yashirin, suhbat sarlavhasi eng tepada, pastki navbar yo'q
+    await expect(page.locator('header.nav-blur-top')).toBeHidden();
+    expect((await page.getByTestId('chat-thread-header').boundingBox())!.y).toBeLessThan(40);
+    await expect(page.locator('nav.ios-bottom-bar')).toHaveClass(/ios-bottom-bar-hidden/);
+  }
+
+  // O'z xabari (39 — men yozganman): tahrirlash bor
+  let menu = await openActions('Xabar raqami 39');
+  await shot(page, 'msg-actions');
+  for (const a of ['reply', 'copy', 'edit', 'pin', 'forward', 'select', 'delete']) await expect(menu.getByTestId(`msg-action-${a}`)).toBeVisible();
+  await menu.getByTestId('msg-action-edit').click();
+  await expect(menu).toBeHidden();
+  const input = page.getByTestId('chat-input');
+  await expect(input).toHaveValue(/Xabar raqami 39/);
+  await input.fill('Tuzatilgan matn');
+  await page.getByTestId('chat-send').click();
+  await expect.poll(() => calls.edits).toEqual([{ id: 'b39', body: { text: 'Tuzatilgan matn' } }]);
+  await expect(page.getByTestId('chat-thread-scroll').getByText('Tuzatilgan matn')).toBeVisible();
+
+  // Boshqaning xabari (38 — Brigadir): tahrirlash YO'Q, o'chirish bor (direktor)
+  menu = await openActions('Xabar raqami 38');
+  await expect(menu.getByTestId('msg-action-edit')).toHaveCount(0);
+  await menu.getByTestId('msg-action-delete').click();
+  await expect.poll(() => calls.deletes).toEqual(['b38']);
+  await expect(page.getByTestId('chat-thread-scroll').getByText('Xabar raqami 38', { exact: false })).toHaveCount(0);
+
+  // Javob: telefonda — pufakchani o'ngga surish; kompyuterda — menyudan
+  if (phone) await touchGesture(page, 'Xabar raqami 36', 'swipe');
+  else { menu = await openActions('Xabar raqami 36'); await menu.getByTestId('msg-action-reply').click(); }
+  await expect(page.getByRole('button', { name: 'Javobni bekor qilish' })).toBeVisible();
+  await input.fill('Qabul qildim');
+  await page.getByTestId('chat-send').click();
+  await expect.poll(() => calls.sent.map((b) => [b.text, b.replyToId])).toEqual([['Qabul qildim', 'b36']]);
+
+  // Iqtibosga bosish — asl xabarga o'tadi va u bir lahza yoritiladi
+  const quote = page.getByTestId('chat-msg').filter({ hasText: 'Qabul qildim' }).getByTestId('chat-msg-quote');
+  await expect(quote).toBeVisible();
+  await quote.click();
+  await expect(page.locator('[data-msg-id="b36"]')).toHaveClass(/chat-msg-flash/);
+  await expect(page.locator('[data-msg-id="b36"]')).toBeInViewport();
+
+  // Composer ekranda (klaviatura/safe-area ostida qolmaydi), gorizontal skroll yo'q
+  const cb = (await input.boundingBox())!;
+  expect(cb.y + cb.height).toBeLessThanOrEqual(page.viewportSize()!.height);
+  expect(await noHorizontalScroll(page)).toBe(true);
+  await shot(page, 'msg-reply');
+});
+
+test("oddiy xodim boshqaning xabarini o'chira olmaydi (menyuda yo'q)", async ({ page }) => {
+  const calls = await setup(page, { asProrab: true });
+  await page.getByTestId('chat-row-u:u4').click();
+  await bubbleOf(page, 'Xabar raqami 38').click({ button: 'right' });
+  const menu = page.getByTestId('chat-msg-menu');
+  await expect(menu.getByTestId('msg-action-reply')).toBeVisible();
+  await expect(menu.getByTestId('msg-action-delete')).toHaveCount(0);
+  await expect(menu.getByTestId('msg-action-edit')).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await expect(menu).toBeHidden();
+  // O'ziniki — o'chirish bor
+  await bubbleOf(page, 'Xabar raqami 37').click({ button: 'right' });
+  await page.getByTestId('chat-msg-menu').getByTestId('msg-action-delete').click();
+  await expect.poll(() => calls.deletes).toEqual(['b37']);
+});
+

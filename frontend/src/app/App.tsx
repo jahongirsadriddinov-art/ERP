@@ -3545,7 +3545,8 @@ export default function App() {
           o'zi endi yuqorida (initialLoading gate'idan OLDIN) headerEl
           sifatida bir marta quriladi — shu yerda faqat qo'yiladi. */}
       <PullToRefresh />
-      {headerEl}
+      {/* Telefonda ochiq suhbat — Telegram'dagidek butun ekran: ilova sarlavhasi yashirinadi (suhbat sarlavhasi o'zi safe-area'ni oladi) */}
+      <div className={(page === 'chat' && chatIsOpen) ? "hidden md:contents" : "contents"}>{headerEl}</div>
 
       {/* Offline banner */}
       {(isOffline || syncPending > 0 || syncStatus === 'synced') && (
@@ -3568,7 +3569,7 @@ export default function App() {
       )}
 
       {/* Top bar — admin only (Mobile/Tablet only) */}
-      <div className="block lg:hidden">
+      <div className={(page === 'chat' && chatIsOpen) ? "hidden md:block lg:hidden" : "block lg:hidden"}>
         {admin && <BottomFinanceBar expenses={expenses} projects={projects}/>}
       </div>
 

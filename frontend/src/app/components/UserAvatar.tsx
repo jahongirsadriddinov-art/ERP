@@ -5,8 +5,10 @@ import { useEffect, useState, type CSSProperties } from "react";
 // bosh (Microsoft Fluent Emoji 3D, MIT — public/avatars/NOTICE.txt). Har foydalanuvchiga id bo'yicha
 // BARQAROR tanlanadi (bir odam doim bir xil yuz), fonida ham barqaror yumshoq gradient doira.
 // Ilovadagi barcha avatarlar shu komponent orqali: App.Avatar, chat/ChatAvatar, CallOverlay, WorkerMap.
+// Yuzlar ro'yxati — avatars/manifest.ts (qo'lda tanlash yo'q; yagona tanlov — o'z rasmini yuklash).
+import { AVATARS, type AvatarFit } from "../avatars/manifest";
 
-export const MEMOJI_COUNT = 32;
+export const MEMOJI_COUNT = AVATARS.length;
 // Fon tuslari — bir-biriga mos, "premium" yumshoq ranglar (hsl hue, ikkinchisi yaqin qo'shni tus)
 const HUES: [number, number][] = [
   [212, 236], [252, 278], [282, 312], [330, 352], [8, 30], [32, 48],
@@ -23,9 +25,9 @@ function hash(s: string): number {
 /** Chat kalitlari ("u:<id>") va oddiy user.id bir xil yuzni bersin. */
 const normSeed = (seed: string) => (seed || "?").replace(/^u:/, "");
 
-// Yuz jinsga mos bo'lsin (owner 2026-10-23: Jahongirga ayol yuzi tushgan edi) — public/avatars/NOTICE.txt tartibida
-const MALE = [1, 2, 6, 7, 8, 10, 12, 14, 15, 18, 19, 22, 24, 26, 28, 31];
-const FEMALE = [3, 4, 9, 11, 13, 16, 20, 23, 25, 27, 29, 30, 32];
+// Yuz jinsga mos bo'lsin (owner 2026-10-23: Jahongirga ayol yuzi tushgan edi) — manifest'dagi gender bo'yicha
+const MALE = AVATARS.filter((a) => a.gender === "m");
+const FEMALE = AVATARS.filter((a) => a.gender === "f");
 const MALE_IN_A = /^(hamza|murtaza|mirza|usama|isa|musa|yahya|zakariya|ota|mustafa|abdulla|ubayda|hudayfa|taha)$/i;
 /** Ism-familiyadan jins: o'zbek/rus familiyasi (-ova/-eva ayol, -ov/-ev erkak), bo'lmasa ism oxiri. */
 export function guessGender(name?: string): "m" | "f" | null {
@@ -41,13 +43,20 @@ export function guessGender(name?: string): "m" | "f" | null {
   return "m";
 }
 
-export function memojiFor(seed: string, name?: string): { src: string; h1: number; h2: number } {
+export interface Memoji { id: string; src: string; h1: number; h2: number; fit?: AvatarFit }
+
+export function memojiFor(seed: string, name?: string): Memoji {
   const h = hash(normSeed(seed));
   const g = guessGender(name);
-  const pool = g === "m" ? MALE : g === "f" ? FEMALE : null;
-  const n = pool ? pool[h % pool.length] : (h % MEMOJI_COUNT) + 1;
+  const pool = g === "m" && MALE.length ? MALE : g === "f" && FEMALE.length ? FEMALE : AVATARS;
+  const a = pool[h % pool.length];
   const [h1, h2] = HUES[Math.floor(h / MEMOJI_COUNT) % HUES.length];
-  return { src: `/avatars/${n < 10 ? "0" : ""}${n}.webp`, h1, h2 };
+  return { id: a.id, src: a.file, h1, h2, fit: a.fit };
+}
+
+/** Bust rasmlarda boshni doiraga kattalashtirish (memoji uslubi) — .memoji-avatar__img--fit CSS o'zgaruvchilari. */
+function fitVars(fit?: AvatarFit): string {
+  return fit ? `;--av-zoom:${fit.zoom};--av-y:${fit.y}%` : "";
 }
 
 export function initialsOf(name: string): string {
@@ -59,10 +68,12 @@ export function initialsOf(name: string): string {
 export function memojiHtml(seed: string, photo?: string, name?: string): string {
   const esc = (v: string) => v.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
   const m = memojiFor(seed, name);
+  const cls = `memoji-avatar__img${m.fit ? " memoji-avatar__img--fit" : ""}`;
+  const style = `--av-h1:${m.h1};--av-h2:${m.h2}${fitVars(m.fit)}`;
   if (photo) {
-    return `<span class="memoji-avatar" style="--av-h1:${m.h1};--av-h2:${m.h2}"><img class="memoji-avatar__photo" src="${esc(photo)}" alt="" decoding="async" onerror="this.onerror=null;this.className='memoji-avatar__img';this.src='${m.src}'"/></span>`;
+    return `<span class="memoji-avatar" style="${style}"><img class="memoji-avatar__photo" src="${esc(photo)}" alt="" decoding="async" onerror="this.onerror=null;this.className='${cls}';this.src='${m.src}'"/></span>`;
   }
-  return `<span class="memoji-avatar" style="--av-h1:${m.h1};--av-h2:${m.h2}"><img class="memoji-avatar__img" src="${m.src}" alt="" decoding="async"/></span>`;
+  return `<span class="memoji-avatar" style="${style}"><img class="${cls}" src="${m.src}" alt="" decoding="async"/></span>`;
 }
 
 export function UserAvatar({ seed, name, src, size, className = "", style, testId, title }: {
@@ -92,12 +103,13 @@ export function UserAvatar({ seed, name, src, size, className = "", style, testI
   }
   const m = memojiFor(seed, name);
   return (
-    <span data-testid={testId} title={title} role={label ? "img" : undefined} aria-label={label}
+    <span data-testid={testId} data-memoji={m.id} title={title} role={label ? "img" : undefined} aria-label={label}
       className={`user-avatar memoji-avatar flex-shrink-0 select-none ${className}`}
-      style={{ ...box, ["--av-h1" as string]: m.h1, ["--av-h2" as string]: m.h2 } as CSSProperties}>
+      style={{ ...box, ["--av-h1" as string]: m.h1, ["--av-h2" as string]: m.h2,
+        ...(m.fit ? { ["--av-zoom" as string]: m.fit.zoom, ["--av-y" as string]: `${m.fit.y}%` } : null) } as CSSProperties}>
       {memojiBad
         ? <span className="memoji-avatar__initials" style={size ? { fontSize: Math.round(size * 0.36) } : undefined}>{initialsOf(name || "")}</span>
-        : <img src={m.src} alt="" loading="lazy" decoding="async" draggable={false} className="memoji-avatar__img" onError={() => setMemojiBad(true)} />}
+        : <img src={m.src} alt="" loading="lazy" decoding="async" draggable={false} className={`memoji-avatar__img${m.fit ? " memoji-avatar__img--fit" : ""}`} onError={() => setMemojiBad(true)} />}
     </span>
   );
 }

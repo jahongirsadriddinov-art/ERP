@@ -13,10 +13,11 @@ export function ChatAvatar({ name, src, seed, size = 48, online, group, support 
   const dot = Math.max(10, Math.round(size * 0.27));
   return (
     <span className="relative flex-shrink-0 inline-block" style={{ width: size, height: size }}>
-      {src && !bad ? (
+      {!group && !support ? (
+        // Foydalanuvchi: rasm (yuklanmasa memoji) yoki avtomatik memoji — hammasi UserAvatar'da
+        <UserAvatar seed={seed} name={name} src={src} className="w-full h-full" />
+      ) : src && !bad ? (
         <img src={src} alt="" loading="lazy" decoding="async" className="w-full h-full rounded-full object-cover" onError={() => setBad(true)} draggable={false} />
-      ) : !group && !support ? (
-        <UserAvatar seed={seed} name={name} className="w-full h-full" />
       ) : support ? (
         <span className="w-full h-full rounded-full flex items-center justify-center bg-orange-500/15" style={{ fontSize: size * 0.45 }}>🛠</span>
       ) : (

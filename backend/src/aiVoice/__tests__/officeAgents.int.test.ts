@@ -95,7 +95,7 @@ describe('agentlar ro\'yxati', () => {
     const keys = r.body.agents.map((a: any) => a.key);
     for (const k of ['manager', 'backend', 'frontend', 'database', 'ai', 'mobile', 'designer', 'security', 'qa', 'devpanel', 'devbot', 'smm', 'marketing',
       'reporter', 'feature', 'windows', 'android', 'miniapp', 'erpbot', 'landing', 'payments', 'devops', 'tgworker', 'translator', 'perf', 'analytics',
-      'support', 'docs', 'billing', 'role-direktor', 'finance', 'chat', 'gps', 'botdesign', 'notify', 'monitoring']) expect(keys).toContain(k);
+      'support', 'docs', 'billing', 'role-direktor', 'finance', 'chat', 'gps', 'botdesign', 'notify', 'monitoring', 'office-designer']) expect(keys).toContain(k);
     expect(r.body.agents.find((a: any) => a.key === 'smm')).toMatchObject({ kind: 'content', team: 'growth', builtIn: true });
     expect(r.body.agents.find((a: any) => a.key === 'manager')).toMatchObject({ team: 'lead' });
     expect(r.body.setup.codeReady).toBe(true);

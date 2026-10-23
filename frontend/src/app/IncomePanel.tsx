@@ -13,6 +13,7 @@ import { SwipeRow } from "./components/SwipeRow";
 import { confirmDialog } from "./lib/confirmDialog";
 import { EscClose, fmt, fmtUsd, roleLabel, type AppUser, type Expense, type Project } from "./App";
 import { EditExpenseModal } from "./FinancePage";
+import { MoneyField, moneyOf, useShowInUzs, InUzsToggle, parseAmount, type Cur } from "./components/Money";
 
 // Kirim (owner 2026-10-22): kirimni faqat direktor va o'rinbosar kiritadi. Direktor hammaning kirimini KIM kiritgani
 // bo'yicha ko'radi ("o'rinbosar shuncha so'm kirim qildi"), o'rinbosar — faqat o'zinikini (server shu qoida bilan beradi).
@@ -27,6 +28,8 @@ export function IncomePanel({ currentUser, users, projects, incomes, onAdded, on
   const [showAdd, setShowAdd] = useState(false);
   const [edit, setEdit] = useState<Expense | null>(null);
   const isDirector = currentUser.role === "direktor" || !!(currentUser as any).isOwner;
+  const [inUzs, setInUzs] = useShowInUzs();
+  const hasFx = incomes.some((e) => e.currency && e.currency !== "UZS");
 
   const byPerson = useMemo(() => {
     const m = new Map<string, { id: string; total: number; count: number }>();
@@ -83,7 +86,8 @@ export function IncomePanel({ currentUser, users, projects, incomes, onAdded, on
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto space-y-2 scrollbar-hide">
+      {hasFx && <div className="flex justify-end px-1 flex-shrink-0"><InUzsToggle value={inUzs} onChange={setInUzs} /></div>}
+      <div className="flex-1 overflow-y-auto space-y-2.5 scrollbar-hide">
         {shown.length === 0 ? (
           <div className="text-center py-10 text-muted-foreground"><IconTile icon={TrendingUp} tone="teal" size="xl" variant="soft" className="mx-auto mb-3" /><p className="text-sm">{k("empty")}</p></div>
         ) : shown.map((e) => {
@@ -93,13 +97,19 @@ export function IncomePanel({ currentUser, users, projects, incomes, onAdded, on
               { key: "edit", label: t("common.edit", { defaultValue: "Tahrirlash" }), icon: Edit, tone: "primary", onClick: () => setEdit(e) },
               { key: "del", label: t("common.delete", { defaultValue: "O'chirish" }), icon: Trash, tone: "danger", onClick: () => { void remove(e); } },
             ]}>
-              <div className="surface rounded-2xl p-3.5 flex items-start justify-between gap-3" style={{ borderLeft: "4px solid #10b981" }}>
-                <div className="min-w-0">
-                  <p className="font-semibold text-[15px] truncate">{e.description || k("noNote")}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{[proj?.name, e.date].filter(Boolean).join(" • ")}</p>
-                  {isDirector && <p className="text-xs text-muted-foreground">{k("by")} <span className="font-medium text-foreground">{nameOf(e.createdById)}</span></p>}
+              <div className="fin-card flex items-start gap-3" style={{ ["--acc" as any]: "#10b981" }}>
+                <IconTile icon={TrendingUp} tone="green" size="md" variant="soft" />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="font-semibold text-[15px] leading-snug line-clamp-2 min-w-0">{e.description || k("noNote")}</p>
+                    <div className="text-right flex-shrink-0">
+                      <p className="fin-amount text-[17px] whitespace-nowrap" data-testid="income-amount">+{moneyOf(e, inUzs).main}</p>
+                      {moneyOf(e, inUzs).sub && <p className="text-[11px] text-muted-foreground whitespace-nowrap tabular-nums">{moneyOf(e, inUzs).sub}</p>}
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1 truncate">{[proj?.name, e.date].filter(Boolean).join(" · ")}</p>
+                  {isDirector && <p className="text-xs text-muted-foreground mt-0.5 truncate">{k("by")} <span className="font-medium text-foreground">{nameOf(e.createdById)}</span></p>}
                 </div>
-                <p className="font-bold text-emerald-600 dark:text-emerald-400 font-mono text-right flex-shrink-0">+{fmt(e.amount)}</p>
               </div>
             </SwipeRow>
           );
@@ -116,18 +126,19 @@ function AddIncomeModal({ currentUser, projects, onClose, onAdded }: { currentUs
   const { t } = useTranslation();
   const k = (s: string) => t(`income.${s}`) as string;
   const [amount, setAmount] = useState("");
+  const [currency, setCurrency] = useState<Cur>("UZS");
   const [description, setDescription] = useState("");
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [projectId, setProjectId] = useState("");
   const [busy, setBusy] = useState(false);
-  const n = Number(amount.replace(/\s/g, ""));
+  const n = parseAmount(amount);
   const save = async () => {
     if (!n) return;
     setBusy(true);
     try {
       const r = await fetch(`${API_BASE}/api/transactions`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "income", amount: n, description: description.trim(), date, projectId: projectId || undefined, status: "confirmed", createdById: currentUser.id }),
+        body: JSON.stringify({ type: "income", amount: n, currency, description: description.trim(), date, projectId: projectId || undefined, status: "confirmed", createdById: currentUser.id }),
       });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) { toast.error(d.errors?.[0]?.message || d.error || t("common.error", { defaultValue: "Xatolik" })); return; }
@@ -144,8 +155,7 @@ function AddIncomeModal({ currentUser, projects, onClose, onAdded }: { currentUs
       <div className="relative w-full sm:max-w-md bg-card rounded-t-3xl sm:rounded-3xl p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] space-y-3 animate-slide-up-fade" data-testid="income-modal">
         <div className="mx-auto -mt-2 mb-1 h-1.5 w-10 rounded-full bg-muted sm:hidden" />
         <h3 className="text-base font-bold">{k("addTitle")}</h3>
-        <label className="block"><span className="text-xs font-semibold text-muted-foreground">{k("amount")}</span>
-          <input autoFocus inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^\d\s]/g, ""))} className={field} placeholder="0" /></label>
+        <MoneyField label={k("amount")} amount={amount} currency={currency} onAmount={setAmount} onCurrency={setCurrency} autoFocus className={field} />
         <label className="block"><span className="text-xs font-semibold text-muted-foreground">{k("source")}</span>
           <input value={description} maxLength={300} onChange={(e) => setDescription(e.target.value)} className={field} placeholder={k("sourcePh")} /></label>
         <div className="grid grid-cols-2 gap-2">

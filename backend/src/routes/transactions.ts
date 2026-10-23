@@ -10,6 +10,15 @@ import { scoped, stamped } from '../middleware/scope';
 import { getTenant } from '../middleware/tenantContext';
 import { tb, BotLang } from '../i18n/bot';
 import { logAudit } from '../services/audit';
+import { getRatesForCompany } from './currency';
+
+// Kirim/chiqim dollar yoki yevroda (owner 2026-10-23): asl summa va kurs saqlanadi, `amount` — doim so'mda
+// (barcha hisob-kitoblar shu bilan). Kurs: firma o'z kursi bo'lsa o'sha, bo'lmasa Markaziy bank.
+const FX = ['USD', 'EUR'] as const;
+async function toUzs(original: number, currency: 'USD' | 'EUR', rate?: number) {
+  const r = rate && rate > 0 ? rate : (await getRatesForCompany(getTenant()?.companyId))[currency];
+  return { amount: Math.round(original * r), rate: r };
+}
 // XATO TUZATILDI: bu faylda avval FAQAT Telegram bot xabari (bot.sendMessage)
 // va real-vaqt socket (emitToUser) yuborilardi — foydalanuvchi bot orqali
 // EMAS, faqat sayt/APK/Windows dasturi orqali ishlasa (Telegram ochmasa) va
@@ -151,6 +160,13 @@ router.post('/', async (req, res) => {
     } else {
       // Expense types: oylik, material, jihozlar, transport, boshqa, expense, income
       txData.amount = Number(data.amount) || 0;
+      if (FX.includes(data.currency) && txData.amount > 0) {
+        const { amount, rate } = await toUzs(txData.amount, data.currency);
+        Object.assign(txData, {
+          currency: data.currency, originalAmount: txData.amount, amount, uzsAmount: amount,
+          [data.currency === 'USD' ? 'usdRate' : 'eurRate']: rate, rateDate: todayInTashkent(),
+        });
+      }
       txData.description = data.description;
       txData.projectId = data.projectId ? String(data.projectId) : undefined;
       txData.toUserId = data.toUserId ? String(data.toUserId) : undefined;
@@ -412,7 +428,18 @@ router.patch('/:id', async (req, res) => {
       if (b.amount !== undefined) {
         const a = Number(b.amount);
         if (!Number.isFinite(a) || a <= 0 || a > 1e13) errors.push({ field: 'amount', message: "Summa musbat son bo'lsin" });
-        else { set.amount = a; if (!tx.currency || tx.currency === 'UZS') { set.uzsAmount = a; set.originalAmount = a; } }
+        else {
+          const cur = b.currency !== undefined ? String(b.currency) : (tx.currency || 'UZS');
+          if (FX.includes(cur as any)) {
+            // valyuta o'zgarmasa — yozuvdagi kurs saqlanadi; o'zgarsa — bugungi kurs
+            const keep = cur === tx.currency ? (cur === 'USD' ? tx.usdRate : tx.eurRate) : undefined;
+            const { amount, rate } = await toUzs(a, cur as 'USD' | 'EUR', keep);
+            Object.assign(set, { currency: cur, originalAmount: a, amount, uzsAmount: amount, [cur === 'USD' ? 'usdRate' : 'eurRate']: rate });
+            if (!keep) set.rateDate = todayInTashkent();
+          } else { set.amount = a; set.uzsAmount = a; set.originalAmount = a; set.currency = 'UZS'; }
+        }
+      } else if (b.currency !== undefined && b.currency !== tx.currency) {
+        errors.push({ field: 'amount', message: "Valyutani o'zgartirganda summani ham yuboring" });
       }
       if (b.type !== undefined) {
         if (tx.type === 'income' || !EXPENSE_TYPES.includes(String(b.type))) errors.push({ field: 'type', message: "Turni o'zgartirib bo'lmaydi" });

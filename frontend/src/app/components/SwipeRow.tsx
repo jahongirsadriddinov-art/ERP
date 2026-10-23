@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { MorphIcon, type IconNode } from "morphicons/react";
+import Info from "@hugeicons/core-free-icons/InformationCircleIcon";
+import { IconTile } from "./IconTile";
 
 // Telefon/planshetda ro'yxat qatori (owner 2026-10-22: "Telegramdagidek o'ngdan surilganda o'zgartirish va o'chirish
 // chiqsin, yoki ustiga bosganda chiqsin — ikkalasi ham"):
@@ -119,13 +121,19 @@ export function ActionSheet({ actions, onClose, title, header, testId }: { actio
         <div className="mx-auto mt-1 mb-2 h-1.5 w-10 rounded-full bg-muted sm:hidden" />
         {title && <p className="px-4 py-2 text-xs font-semibold text-muted-foreground">{title}</p>}
         {header}
-        {actions.map((a) => (
-          <button key={a.key} type="button" data-testid={a.testId} onClick={() => { onClose(); a.onClick(); }}
-            className={`w-full flex items-center gap-3 px-4 h-14 rounded-2xl text-[15px] font-semibold hover:bg-muted/60 active:bg-muted ${a.tone === "danger" ? "text-red-600 dark:text-red-400" : ""}`}>
-            {a.icon && <MorphIcon icon={a.icon} className="w-5 h-5 opacity-80" />}
-            {a.label || <OpenLabel />}
+        {/* Har bir amal — alohida tugma, rangli ikonka bilan (owner 2026-10-23: "ajralib turadigan qil") */}
+        <div className="flex flex-col gap-2 px-1.5 pb-1">
+          {actions.map((a) => (
+            <button key={a.key} type="button" data-testid={a.testId} onClick={() => { onClose(); a.onClick(); }}
+              className={`sheet-action ${a.tone === "danger" ? "sheet-action--danger" : a.tone === "primary" ? "sheet-action--primary" : ""}`}>
+              <IconTile icon={a.icon || Info} size="sm" variant="soft" tone={a.tone === "danger" ? "red" : a.tone === "primary" ? "blue" : "slate"} />
+              <span className="flex-1 text-left">{a.label || <OpenLabel />}</span>
+            </button>
+          ))}
+          <button type="button" onClick={onClose} className="mt-1 h-12 rounded-2xl text-[15px] font-semibold text-muted-foreground hover:bg-muted/60" data-testid="sheet-cancel">
+            <CancelLabel />
           </button>
-        ))}
+        </div>
       </div>
     </div>,
     document.body,
@@ -136,4 +144,9 @@ function OpenLabel() {
   // "Batafsil" — tarjimasiz komponentlar uchun; ota komponent o'z matnini yuborsa u ishlatiladi
   const lang = typeof document !== "undefined" ? document.documentElement.lang : "uz";
   return <>{lang.startsWith("ru") ? "Подробнее" : "Batafsil"}</>;
+}
+
+function CancelLabel() {
+  const lang = typeof document !== "undefined" ? document.documentElement.lang : "uz";
+  return <>{lang.startsWith("ru") ? "Отмена" : "Bekor qilish"}</>;
 }

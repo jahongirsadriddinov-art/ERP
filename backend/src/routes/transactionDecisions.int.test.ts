@@ -4,6 +4,7 @@ import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 
 vi.mock('../services/bot', () => ({ bot: { sendMessage: vi.fn(async () => undefined) }, notifyAdmins: vi.fn(async () => undefined) }));
 vi.mock('../services/socket', () => ({ emitToUser: vi.fn(), emitToGroup: vi.fn(), emitToCompany: vi.fn(), broadcast: vi.fn() }));
+vi.mock('./currency', () => ({ getRatesForCompany: vi.fn(async () => ({ USD: 12_500, EUR: 13_500 })) }));
 vi.mock('../services/email', () => ({ sendEmail: vi.fn(async () => undefined) }));
 vi.mock('../services/push', () => ({ sendPushToUser: vi.fn(async () => undefined) }));
 // Smena darvozasi (423) bu sinov mavzusi emas — hamma "smenada"
@@ -150,6 +151,19 @@ describe("kirim (owner 2026-10-22): faqat direktor/o'rinbosar kiritadi; direktor
     const orin = (await list('orin')).body.filter((t: any) => t.type === 'income').map((t: any) => t.description);
     expect(orin).toEqual(["Mijozdan to'lov"]);
     expect((await list('prorab')).body.some((t: any) => t.type === 'income')).toBe(false);
+  });
+  it("dollarda kirim (owner 2026-10-23): so'mga kurs bo'yicha o'giriladi, asl summa va kurs saqlanadi; tahrirda kurs saqlanadi", async () => {
+    const r = await add('owner', { type: 'income', amount: 1_000, currency: 'USD', description: 'Dollar avans' });
+    expect(r.status).toBeLessThan(300);
+    const tx: any = await Transaction.findById(r.body._id || r.body.id).lean();
+    expect(tx).toMatchObject({ currency: 'USD', originalAmount: 1_000, amount: 12_500_000, uzsAmount: 12_500_000, usdRate: 12_500 });
+    await Transaction.updateOne({ _id: tx._id }, { usdRate: 12_000 }); // yozuv kursi
+    const e = await request(app).patch(`/api/transactions/${tx._id}`).set('Authorization', tok('owner')).send({ amount: 2_000 });
+    expect(e.status).toBe(200);
+    expect(await Transaction.findById(tx._id).lean()).toMatchObject({ currency: 'USD', originalAmount: 2_000, amount: 24_000_000 });
+    const u = await request(app).patch(`/api/transactions/${tx._id}`).set('Authorization', tok('owner')).send({ amount: 5_000_000, currency: 'UZS' });
+    expect(u.status).toBe(200);
+    expect(await Transaction.findById(tx._id).lean()).toMatchObject({ currency: 'UZS', originalAmount: 5_000_000, amount: 5_000_000 });
   });
 });
 

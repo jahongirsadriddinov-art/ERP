@@ -17,6 +17,14 @@ import { MorphIcon } from "morphicons/react";
 import { IconTile } from "./components/IconTile";
 import { SwipeRow } from "./components/SwipeRow";
 import { IncomePanel } from "./IncomePanel";
+import { MoneyField, moneyOf, useShowInUzs, InUzsToggle, parseAmount, type Cur } from "./components/Money";
+import UserIc from "@hugeicons/core-free-icons/UserIcon";
+import PackageIc from "@hugeicons/core-free-icons/Package01Icon";
+import WrenchIc from "@hugeicons/core-free-icons/Wrench01Icon";
+import TruckIc from "@hugeicons/core-free-icons/TruckDeliveryIcon";
+import MoreIc from "@hugeicons/core-free-icons/MoreHorizontalCircle01Icon";
+import InvoiceIc from "@hugeicons/core-free-icons/Invoice01Icon";
+import type { IconTone } from "./components/IconTile";
 import { usePersistentState, oneOf } from "./lib/persistentState";
 import { confirmDialog } from "./lib/confirmDialog";
 import { toast } from "sonner";
@@ -74,14 +82,14 @@ export function FinancePage({ currentUser, users, projects, expenses, onAddExpen
   const pendingMe = isAdmin
     ? expenses.filter(e=>e.requiresAdminApproval&&e.status==="pending").length
     : expenses.filter(e=>e.toUserId===currentUser.id&&e.status==="pending").length;
-  const typeClr: Record<string,string> = {
-    oylik:"bg-blue-500/15 text-blue-700 dark:text-blue-300",
-    material:"bg-orange-500/15 text-orange-800 dark:text-orange-300",
-    jihozlar:"bg-purple-500/15 text-purple-700 dark:text-purple-300",
-    transport:"bg-teal-500/15 text-teal-700 dark:text-teal-300",
-    boshqa:"bg-muted text-muted-foreground"
+  const [inUzs, setInUzs] = useShowInUzs();
+  const hasFx = expenses.some((e) => e.currency && e.currency !== "UZS");
+  // Har bir turning ikonkasi va rangi — karta nuri, ikonka va summa shu rangda (owner 2026-10-23: premium kartalar)
+  const TYPE_LOOK: Record<string, { icon: any; tone: IconTone; acc: string }> = {
+    oylik: { icon: UserIc, tone: "blue", acc: "#3b82f6" }, material: { icon: PackageIc, tone: "orange", acc: "#f97316" },
+    jihozlar: { icon: WrenchIc, tone: "violet", acc: "#8b5cf6" }, transport: { icon: TruckIc, tone: "teal", acc: "#14b8a6" },
+    boshqa: { icon: MoreIc, tone: "slate", acc: "#64748b" }, expense: { icon: InvoiceIc, tone: "amber", acc: "#f59e0b" },
   };
-
   const sectionTabs = isBoss && (
     <div className="flex p-1 rounded-full bg-muted flex-shrink-0" role="tablist" data-testid="finance-section">
       {(["exp", "inc"] as const).map((s) => (
@@ -171,6 +179,7 @@ export function FinancePage({ currentUser, users, projects, expenses, onAddExpen
         </div>
       </div>}
 
+      {hasFx && <div className="flex justify-end px-1 flex-shrink-0"><InUzsToggle value={inUzs} onChange={setInUzs} /></div>}
       {/* List */}
       <div className="flex-1 overflow-y-auto space-y-2.5 scrollbar-hide">
         {filteredExpenses.length===0
@@ -185,38 +194,43 @@ export function FinancePage({ currentUser, users, projects, expenses, onAddExpen
               // (eski) yozuvlar uchun — eski xatti-harakat, istalgan admin tasdiqlaydi.
               const canAdminApprove=isAdmin&&e.requiresAdminApproval&&e.status==="pending"&&(!e.approverId||e.approverId===currentUser.id);
               const approver=e.approverId?userById.get(e.approverId):undefined;
-              const borderColor = e.status==="confirmed" ? "#22c55e" : e.requiresAdminApproval ? "#e5633a" : "#f59e0b";
               return (
                 <SwipeRow key={e.id} testId="finance-row" onOpen={()=>setDetailExp(e)}
                   actions={canEdit(e) ? [
                     { key: "edit", label: t('common.edit', { defaultValue: "O'zgartirish" }), icon: Edit, tone: "primary", onClick: () => setEditExp(e) },
                     { key: "del", label: t('common.delete', { defaultValue: "O'chirish" }), icon: Trash, tone: "danger", onClick: () => { void removeExp(e); } },
                   ] : []}>
-                {/* Owner 2026-10-22: kartochka ixcham — summa va holat tepada, nom 2 qatorgacha, qolgani bitta kulrang qatorda */}
-                <div className="w-full text-left surface rounded-2xl p-3.5 hover:bg-muted/20 liquid-transition relative overflow-hidden">
-                  <span aria-hidden className="absolute left-0 top-3 bottom-3 w-1 rounded-r-full" style={{ background: borderColor }} />
-                  <div className="flex items-center justify-between gap-2 pl-1.5">
-                    <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
-                      <span className={`text-[11px] px-2 py-0.5 rounded-full font-semibold ${typeClr[e.type] || "bg-muted text-muted-foreground"}`}>{expLabel(t, e.type as ExpType) || e.type}</span>
-                      {e.anomaly && <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400">⚠ {t('finance.anomaly', { defaultValue: "G'ayrioddiy" })}</span>}
-                      {e.requiresAdminApproval&&e.status==="pending"&&<span className="text-[11px] px-2 py-0.5 rounded-full font-semibold bg-accent/15 text-accent">{t('approvalChain.needsApproval')}</span>}
+                {/* Owner 2026-10-23: premium karta — tur ikonkasi, rangli nur, summa gradientda; holat va tur — chiplar */}
+                {(() => { const look = TYPE_LOOK[e.type] || TYPE_LOOK.boshqa; const m = moneyOf(e, inUzs); return (
+                <div className="fin-card w-full text-left" style={{ ["--acc" as any]: look.acc }}>
+                  <div className="flex items-start gap-3">
+                    <IconTile icon={look.icon} tone={look.tone} size="md" variant="soft" />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-3">
+                        <p className="text-[15px] font-semibold leading-snug text-foreground line-clamp-2 min-w-0">{e.description || expLabel(t, e.type as ExpType)}</p>
+                        <div className="text-right flex-shrink-0">
+                          <p className="fin-amount text-[17px] whitespace-nowrap">{m.main}</p>
+                          {m.sub && <p className="text-[11px] text-muted-foreground whitespace-nowrap tabular-nums">{m.sub}</p>}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                        <span className="fin-chip" style={{ ["--chip" as any]: look.acc }}>{expLabel(t, e.type as ExpType) || e.type}</span>
+                        {e.status==="confirmed"
+                          ?<span className="fin-chip" style={{ ["--chip" as any]: "#10b981" }}><MorphIcon icon={CheckCircle} className="w-3 h-3" />{t('finance.confirmed')}</span>
+                          :<span className="fin-chip" style={{ ["--chip" as any]: "#f59e0b" }}><MorphIcon icon={Clock} className="w-3 h-3" />{t('finance.pending')}</span>}
+                        {e.anomaly && <span className="fin-chip" style={{ ["--chip" as any]: "#f59e0b" }}>⚠ {t('finance.anomaly', { defaultValue: "G'ayrioddiy" })}</span>}
+                        {e.requiresAdminApproval&&e.status==="pending"&&<span className="fin-chip" style={{ ["--chip" as any]: "#e5633a" }}>{t('approvalChain.needsApproval')}</span>}
+                      </div>
+                      <p className="text-[13px] text-muted-foreground mt-1.5 truncate">
+                        {[proj?.name || e.objectLabel, e.date].filter(Boolean).join(" · ")}
+                      </p>
+                      {(to || e.recipientName || creator || (approver && e.status==="pending")) && (
+                        <p className="text-[12px] text-muted-foreground/90 mt-0.5 truncate">
+                          {[(to?.name || e.recipientName) ? `→ ${to?.name || e.recipientName}` : "", creator ? `✍ ${creator.name}` : "", approver && e.status==="pending" ? `⏳ ${approver.name}` : ""].filter(Boolean).join("   ")}
+                        </p>
+                      )}
                     </div>
-                    {e.status==="confirmed"
-                      ?<span className="text-[11px] text-emerald-700 dark:text-emerald-400 font-semibold flex items-center gap-1 flex-shrink-0"><MorphIcon icon={CheckCircle} className="w-3.5 h-3.5" />{t('finance.confirmed')}</span>
-                      :<span className="text-[11px] text-amber-700 dark:text-amber-400 font-semibold flex items-center gap-1 flex-shrink-0"><MorphIcon icon={Clock} className="w-3.5 h-3.5" />{t('finance.pending')}</span>}
                   </div>
-                  <div className="flex items-end justify-between gap-3 mt-2 pl-1.5">
-                    <p className="text-[15px] font-semibold leading-snug text-foreground line-clamp-2 min-w-0">{e.description || expLabel(t, e.type as ExpType)}</p>
-                    <p className="text-[17px] font-bold text-accent whitespace-nowrap tabular-nums flex-shrink-0">{fmt(e.amount)}</p>
-                  </div>
-                  <p className="text-[13px] text-muted-foreground mt-1.5 pl-1.5 truncate">
-                    {[proj?.name || e.objectLabel, e.date].filter(Boolean).join(" · ")}
-                  </p>
-                  {(to || e.recipientName || creator || (approver && e.status==="pending")) && (
-                    <p className="text-[12px] text-muted-foreground/90 mt-0.5 pl-1.5 truncate">
-                      {[(to?.name || e.recipientName) ? `→ ${to?.name || e.recipientName}` : "", creator ? `✍ ${creator.name}` : "", approver && e.status==="pending" ? `⏳ ${approver.name}` : ""].filter(Boolean).join("   ")}
-                    </p>
-                  )}
                   {canConfirm&&<button onClick={e2=>{e2.stopPropagation();onConfirm(e.id);}} className="mt-2 w-full text-sm bg-green-600 text-white rounded py-1.5 hover:bg-green-700 font-semibold flex items-center justify-center gap-1"><MorphIcon icon={Check} className="w-3 h-3" />{t('finance.confirmAction')}</button>}
                   {canAdminApprove&&(
                     <div className="mt-2 flex gap-2" onClick={e2=>e2.stopPropagation()}>
@@ -225,6 +239,7 @@ export function FinancePage({ currentUser, users, projects, expenses, onAddExpen
                     </div>
                   )}
                 </div>
+                ); })()}
                 </SwipeRow>
               );
             })
@@ -541,7 +556,9 @@ export function ExpenseDetailModal({ expense, users, projects, onClose }: { expe
 // ─── Chiqimni tahrirlash (owner 2026-10-22) ────────────────────────────────────
 export function EditExpenseModal({ expense, projects, onClose, onSaved }: { expense: Expense; projects: Project[]; onClose: () => void; onSaved: (e: Expense) => void }) {
   const { t } = useTranslation();
-  const [amount, setAmount] = useState(String(expense.amount || ""));
+  const fx = expense.currency && expense.currency !== "UZS" && expense.originalAmount ? expense.currency as Cur : null;
+  const [currency, setCurrency] = useState<Cur>(fx || "UZS");
+  const [amount, setAmount] = useState(String((fx ? expense.originalAmount : expense.amount) || ""));
   const [description, setDescription] = useState(expense.description || "");
   const [type, setType] = useState<string>(expense.type);
   const [date, setDate] = useState(expense.date || "");
@@ -550,8 +567,9 @@ export function EditExpenseModal({ expense, projects, onClose, onSaved }: { expe
   const isIncome = expense.type === "income";
   const save = async () => {
     const body: Record<string, unknown> = {};
-    const a = Number(String(amount).replace(/\s/g, ""));
-    if (a !== expense.amount) body.amount = a;
+    const a = parseAmount(String(amount));
+    const origCur = fx || "UZS";
+    if (currency !== origCur || a !== (fx ? expense.originalAmount : expense.amount)) { body.amount = a; if (currency !== "UZS" || origCur !== "UZS") body.currency = currency; }
     if (description.trim() !== (expense.description || "")) body.description = description.trim();
     if (!isIncome && type !== expense.type) body.type = type;
     if (date !== expense.date) body.date = date;
@@ -575,8 +593,7 @@ export function EditExpenseModal({ expense, projects, onClose, onSaved }: { expe
       <div className="relative w-full sm:max-w-md bg-card rounded-t-3xl sm:rounded-3xl p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] space-y-3 max-h-[92dvh] overflow-y-auto animate-slide-up-fade" data-testid="edit-expense">
         <div className="mx-auto -mt-2 mb-1 h-1.5 w-10 rounded-full bg-muted sm:hidden" />
         <h3 className="text-base font-bold">{isIncome ? t('finance.editIncome', { defaultValue: "Kirimni o'zgartirish" }) : t('finance.editExpense', { defaultValue: "Chiqimni o'zgartirish" })}</h3>
-        <label className="block"><span className="text-xs font-semibold text-muted-foreground">{t('finance.amount', { defaultValue: "Summa (so'm)" })}</span>
-          <input inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^\d\s]/g, ""))} className={field} /></label>
+        <MoneyField label={t('finance.amountShort', { defaultValue: "Summa" })} amount={amount} currency={currency} onAmount={setAmount} onCurrency={setCurrency} className={field} />
         <label className="block"><span className="text-xs font-semibold text-muted-foreground">{t('finance.description', { defaultValue: 'Izoh' })}</span>
           <input value={description} maxLength={1000} onChange={(e) => setDescription(e.target.value)} className={field} /></label>
         {!isIncome && (

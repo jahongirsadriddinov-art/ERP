@@ -116,6 +116,7 @@ test("Kirim (direktor): kim qancha kirim qilgani ko'rinadi; yangi kirim qo'shila
     if (url.includes('/api/status')) return ok({ json: { siteEnabled: true, appEnabled: true, botEnabled: true } });
     if (url.includes('/api/deploy/latest')) return ok({ json: { available: false } });
     if (url.includes('/api/attendance/today')) return ok({ json: { status: 'present', checkIn: new Date().toISOString() } });
+    if (url.includes('/api/currency/rates')) return ok({ json: { USD: 12_650, EUR: 13_700 } });
     if (url.includes('/api/users') && method === 'GET') return ok({ json: [{ _id: 'u1', id: 'u1', firstName: 'Ali', name: 'Ali', role: 'direktor', phone: '+998900000001' }, { _id: 'u3', id: 'u3', firstName: 'Vali', name: 'Vali', role: 'orinbosar', phone: '+998900000003' }] });
     if (url.includes('/api/transactions') && method === 'POST') {
       const b = req.postDataJSON(); posted.push(b);
@@ -144,5 +145,15 @@ test("Kirim (direktor): kim qancha kirim qilgani ko'rinadi; yangi kirim qo'shila
   await expect.poll(() => posted.length).toBe(1);
   expect(posted[0]).toMatchObject({ type: 'income', amount: 500000, description: 'Bonus', status: 'confirmed' });
   await expect(page.getByTestId('income-row').filter({ hasText: 'Bonus' })).toBeVisible();
+
+  // Dollarda kirim (owner 2026-10-23): $ tanlanadi, so'mdagi qiymati ko'rinadi, serverga valyuta bilan ketadi
+  await page.getByTestId('income-add').click();
+  await page.getByTestId('money-cur-USD').click();
+  await page.getByTestId('money-amount').fill('1000');
+  await expect(page.getByTestId('money-preview')).toContainText('12');
+  await modal.locator('input').nth(1).fill('Dollar avans');
+  await page.getByTestId('income-save').click();
+  await expect.poll(() => posted.length).toBe(2);
+  expect(posted[1]).toMatchObject({ type: 'income', amount: 1000, currency: 'USD', description: 'Dollar avans' });
   expect(errors, errors.join('\n')).toEqual([]);
 });

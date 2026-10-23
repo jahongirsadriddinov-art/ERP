@@ -80,6 +80,7 @@ async function mockApi(page: Page, calls: Calls) {
     const json = (body: any, status = 200) => route.fulfill({ status, headers: CORS, json: body });
     if (url.includes('/api/status')) return json({ siteEnabled: true, appEnabled: true, botEnabled: true });
     if (url.includes('/api/deploy/latest')) return json({ available: false });
+    if (url.includes('/platform/office/weather')) return json({ mode: 'rain', code: 63, temp: 7.4, isDay: true, cloud: 100, precipitation: 1.2, snowfall: 0, at: new Date().toISOString(), source: 'open-meteo' });
     if (url.includes('/platform/office/media')) {
       if (method === 'PUT') { const b = req.postDataJSON(); (calls.media ||= []).push(b); Object.assign(media, b); return json({ ok: true, media }); }
       return json(media);
@@ -526,5 +527,44 @@ test('AI ofis: kino — ▶ Ko\'rish, kichraytirish (to\'xtamaydi), kinozalga ki
     await expect(win).toHaveCount(0);
     await page.getByTestId('ai-office-exit').click();
   }
+  expect(errors, errors.join('\n')).toEqual([]);
+});
+
+test('AI ofis: ob-havo — Toshkentdagi haqiqiy (yomg\'ir, 7°), qo\'lda tanlash va kun vaqti', async ({ page }, info) => {
+  test.setTimeout(90_000);
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  const calls: Calls = { tasks: [], approves: [], officeGets: 0 };
+  await mockApi(page, calls);
+  await seed(page);
+  await openOffice(page);
+  await expect(page.getByTestId('ai-office-temp')).toHaveText('7°');
+  const wrap = page.getByTestId('ai-office-canvas-wrap');
+  await expect(wrap.or(page.getByTestId('ai-office-nowebgl'))).toBeVisible({ timeout: 30_000 });
+  if (!(await wrap.isVisible())) { test.skip(true, "WebGL yo'q"); return; }
+  await expect(wrap).toHaveAttribute('data-weather', 'rain');
+  await expectFitsViewport(page);
+  await page.waitForTimeout(1500);
+  await page.screenshot({ path: `test-results/office/weather-rain-${info.project.name}.png` });
+  await page.getByTestId('ai-office-weather').first().click();
+  await expect(page.getByTestId('ai-office-weather-real')).toContainText("Yomg'ir");
+  await page.getByTestId('ai-office-weather-snow').click();
+  await expect(wrap).toHaveAttribute('data-weather', 'snow');
+  expect(await page.evaluate(() => localStorage.getItem('aiOffice.weather'))).toBe('"snow"');
+  await page.getByTestId('ai-office-weather-fog').click();
+  await expect(wrap).toHaveAttribute('data-weather', 'fog');
+  // Kun vaqti: qo'lda — kechasi 22:00
+  await page.getByTestId('ai-office-time-auto').uncheck();
+  await page.getByTestId('ai-office-time').fill('22');
+  await expect(wrap).toHaveAttribute('data-hour', '22');
+  await page.getByTestId('ai-office-weather-sunny').click();
+  await page.getByTestId('ai-office-weather').first().click();
+  await page.waitForTimeout(1500);
+  await page.screenshot({ path: `test-results/office/weather-night-${info.project.name}.png` });
+  // Avto — yana haqiqiy (yomg'ir)
+  await page.getByTestId('ai-office-weather').first().click();
+  await page.getByTestId('ai-office-weather-auto').click();
+  await page.getByTestId('ai-office-time-auto').check();
+  await expect(wrap).toHaveAttribute('data-weather', 'rain');
   expect(errors, errors.join('\n')).toEqual([]);
 });

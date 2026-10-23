@@ -50,25 +50,22 @@ export function Building({ hub }: { hub: ScreenHub }) {
       {/* Pol plitasi (diorama) */}
       <Box p={[0, -0.25, cz]} s={[w + 1, 0.5, d + 1]} c="#efe6da" recv />
       <Box p={[0, -0.75, cz]} s={[w + 1.2, 0.5, d + 1.2]} c="#cdbfae" />
-      {/* Orqa va chap devorlar (kesma ko'rinish) */}
-      <Box p={[0, 1.4, B.z0 - 0.35]} s={[w + 1, 2.8, 0.3]} c="#f8f3ec" recv />
-      <Box p={[B.x0 - 0.35, 1.4, cz]} s={[0.3, 2.8, d + 1]} c="#f3ede4" recv />
+      {/* Tashqi devorlar — katta oynalar (tashqarisi ko'rinadi): pastki qism, oyna, tepa to'sin; o'ng va old tomon — butun oyna */}
+      <Box p={[0, 0.5, B.z0 - 0.35]} s={[w + 1, 1.0, 0.3]} c="#f8f3ec" recv />
+      <Box p={[B.x0 - 0.35, 0.5, cz]} s={[0.3, 1.0, d + 1]} c="#f3ede4" recv />
+      <Box p={[0, 2.7, B.z0 - 0.35]} s={[w + 1, 0.2, 0.3]} c="#f8f3ec" />
+      <Box p={[B.x0 - 0.35, 2.7, cz]} s={[0.3, 0.2, d + 1]} c="#f3ede4" />
       <Box p={[0, 2.82, B.z0 - 0.35]} s={[w + 1, 0.06, 0.34]} c={CLAUDE} />
       <Box p={[B.x0 - 0.35, 2.82, cz]} s={[0.34, 0.06, d + 1]} c={CLAUDE} />
-      {/* Derazalar — osmon (bulutlar asta suzadi) */}
-      {[-21.6, 5.2].map((x) => (
-        <group key={x} position={[x, 2.3, B.z0 - 0.18]}>
-          <Box p={[0, 0, -0.01]} s={[4.8, 0.7, 0.04]} c="#e9e2d8" />
-          <mesh><planeGeometry args={[4.6, 0.55]} /><meshBasicMaterial map={hub.sky} toneMapped={false} /></mesh>
-          <Box p={[0, 0, 0.02]} s={[0.04, 0.55, 0.02]} c="#e9e2d8" />
-        </group>
-      ))}
-      {[-13, -1, 12].map((z) => (
-        <group key={z} position={[B.x0 - 0.18, 2.3, z]} rotation={[0, Math.PI / 2, 0]}>
-          <Box p={[0, 0, -0.01]} s={[3.2, 0.7, 0.04]} c="#e9e2d8" />
-          <mesh><planeGeometry args={[3, 0.55]} /><meshBasicMaterial map={hub.sky} toneMapped={false} /></mesh>
-        </group>
-      ))}
+      <GlassPane p={[0, 1.8, B.z0 - 0.35]} s={[w + 1, 1.6, 0.04]} />
+      <GlassPane p={[B.x0 - 0.35, 1.8, cz]} s={[0.04, 1.6, d + 1]} />
+      <GlassPane p={[B.x1 + 0.35, 1.4, cz]} s={[0.04, 2.8, d + 1]} />
+      <GlassPane p={[0, 1.4, B.z1 + 0.35]} s={[w + 1, 2.8, 0.04]} />
+      <Box p={[B.x1 + 0.35, 0.1, cz]} s={[0.12, 0.2, d + 1]} c="#3a3f4b" />
+      <Box p={[0, 0.1, B.z1 + 0.35]} s={[w + 1, 0.2, 0.12]} c="#3a3f4b" />
+      {/* Oyna romlari */}
+      {Array.from({ length: Math.floor(w / 4) + 1 }, (_, i) => B.x0 + i * 4).map((x) => <Box key={`b${x}`} p={[x, 1.8, B.z0 - 0.35]} s={[0.08, 1.6, 0.34]} c="#3a3f4b" />)}
+      {Array.from({ length: Math.floor(d / 4) + 1 }, (_, i) => B.z0 + i * 4).map((z) => <Box key={`l${z}`} p={[B.x0 - 0.35, 1.8, z]} s={[0.34, 1.6, 0.08]} c="#3a3f4b" />)}
       <WallClock position={[-3.2, 2.25, B.z0 - 0.18]} />
       {/* Chap devordagi neon logotip */}
       <group position={[B.x0 - 0.18, 1.7, 3]} rotation={[0, Math.PI / 2, 0]}>
@@ -80,6 +77,14 @@ export function Building({ hub }: { hub: ScreenHub }) {
         <Box p={[0.4, -0.1, 0.03]} s={[0.6, 0.06, 0.02]} c="#9b8f84" />
       </group>
     </group>
+  );
+}
+
+function GlassPane({ p, s }: { p: [number, number, number]; s: [number, number, number] }) {
+  return (
+    <mesh geometry={BOX} position={p} scale={s} renderOrder={2}>
+      <meshStandardMaterial color="#cfe6f7" transparent opacity={0.16} roughness={0.05} metalness={0.4} depthWrite={false} />
+    </mesh>
   );
 }
 

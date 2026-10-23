@@ -3,6 +3,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import { useTranslation } from "react-i18next";
 import type { AgentProfile, OfficeAgent, Setup } from "./officeApi";
 import { MuteButton } from "./MediaPanel";
+import WeatherChip, { useOfficeWeather } from "./WeatherChip";
 import { currentMovie, mediaStore, useMedia } from "./mediaStore";
 import { ROOMS } from "./layout";
 import AgentPanel from "./AgentPanel";
@@ -41,6 +42,7 @@ export default function WalkMode({ agents, profiles, setup, scene, onExit, onCha
   const [help, setHelp] = useState(() => { try { return localStorage.getItem("aiOffice.walkHelp") !== "1"; } catch { return true; } });
   const closeHelp = () => { setHelp(false); try { localStorage.setItem("aiOffice.walkHelp", "1"); } catch { /* */ } };
   const mm = useMedia();
+  const wx = useOfficeWeather();
   const inCinema = useRef(false);
   const [speech, setSpeech] = useState<{ id: string; text: string } | null>(null);
   const [rotateOk, setRotateOk] = useState(false);
@@ -221,7 +223,7 @@ export default function WalkMode({ agents, profiles, setup, scene, onExit, onCha
       onWheel={(e) => { if ((e.target as HTMLElement).closest("[data-ui]")) return; bridge.input.zoom = Math.max(1.8, Math.min(9, bridge.input.zoom + e.deltaY * 0.004)); }}>
       <Suspense fallback={null}>
         <OfficeScene agents={agents} selectedId={talking} onSelect={() => {}} resetKey={0} {...scene}
-          walk={{ bridge, talkingId: talking, holding }} onHub={setHub} speech={speech} />
+          walk={{ bridge, talkingId: talking, holding }} onHub={setHub} speech={speech} weather={wx.mode} hour={wx.hour} />
       </Suspense>
 
       {/* Yuqori panel */}
@@ -230,6 +232,7 @@ export default function WalkMode({ agents, profiles, setup, scene, onExit, onCha
           <button type="button" onClick={onExit} data-testid="ai-office-exit" className="h-9 px-3.5 rounded-full bg-black/60 text-white text-[13px] font-semibold backdrop-blur">✕ {k("walk.exit")}</button>
           <button type="button" onClick={() => setMenu((v) => !v)} data-testid="ai-office-goto" aria-expanded={menu} className="h-9 px-3.5 rounded-full bg-black/60 text-white text-[13px] font-semibold backdrop-blur">🧭 {k("walk.goto")}</button>
           <MuteButton k={k} dark />
+          <WeatherChip dark />
           <button type="button" onClick={() => (mm.music === "full" ? mediaStore.minimizeMusic() : mediaStore.openMusic())} data-testid="ai-office-media-open" className="h-9 px-3 rounded-full bg-black/60 text-white text-[13px] font-semibold backdrop-blur">🎵</button>
           {movie && <button type="button" onClick={() => mediaStore.watch("full")} data-testid="ai-office-walk-watch" className="h-9 px-3 rounded-full bg-[#e5484d] text-white text-[13px] font-semibold">▶ {k("media.watch")}</button>}
           {!touch && <button type="button" onClick={() => { bridge.input.fp = !bridge.input.fp; setFp(bridge.input.fp); }} className="h-9 px-3 rounded-full bg-black/60 text-white text-[12px] font-semibold backdrop-blur">{fp ? "1P" : "3P"}</button>}

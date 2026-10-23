@@ -16,10 +16,37 @@ export const sound = {
     try { localStorage.setItem(KEY, v ? "1" : "0"); } catch { /* */ }
     if (v) { try { window.speechSynthesis?.cancel(); } catch { /* */ } }
     player.syncMute();
+    rainSync();
     emit();
   },
   subscribe(l: L) { listeners.add(l); return () => { listeners.delete(l); }; },
+  /** Yomg'ir shovqini (ofis tashqarisi) — ovoz yoqilgan bo'lsa. */
+  setRain(on: boolean) { rainOn = on; rainSync(); },
 };
+let rainOn = false;
+let rainNode: { ctx: AudioContext; src: AudioBufferSourceNode; gain: GainNode } | null = null;
+function rainSync() {
+  const want = rainOn && !muted;
+  try {
+    if (want && !rainNode) {
+      const Ctx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!Ctx) return;
+      const ctx: AudioContext = new Ctx();
+      const buf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      let last = 0;
+      for (let i = 0; i < d.length; i++) { const w = Math.random() * 2 - 1; last = (last + 0.02 * w) / 1.02; d[i] = last * 3.5 + w * 0.05; }
+      const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true;
+      const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 1800;
+      const gain = ctx.createGain(); gain.gain.value = 0.25;
+      src.connect(lp); lp.connect(gain); gain.connect(ctx.destination);
+      src.start();
+      rainNode = { ctx, src, gain };
+    } else if (!want && rainNode) {
+      rainNode.src.stop(); void rainNode.ctx.close(); rainNode = null;
+    }
+  } catch { /* */ }
+}
 export const useMuted = () => useSyncExternalStore(sound.subscribe, () => muted, () => true);
 
 // ───────────── O'z qo'shiqlari pleyeri (bitta <audio>, sahifa/tab almashganda ham to'xtamaydi) ─────────────

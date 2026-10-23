@@ -38,6 +38,7 @@ export const uz = {
       sit: { cinema: "Kino ko'rish", game: "PlayStation o'ynash", kitchen: "O'tirib ovqatlanish", lounge: "Divanda dam olish", computer: "Kompyuterga o'tirish" },
     },
     locate: "Ofisda topish",
+    weather: { title: "Ob-havo (Toshkent)", auto: "Avto", sunny: "Quyosh", cloudy: "Bulut", rain: "Yomg'ir", snow: "Qor", fog: "Tuman", real: "Hozir Toshkentda", time: "Kun vaqti", timeAuto: "Toshkentning hozirgi vaqti" },
     games: { pong: "Pong", snake: "Ilon", blocks: "Bloklar", g2048: "2048", breakout: "G'isht", racer: "Poyga", ttt: "X-O" },
     doing: {
       code: "Kod yozyapti: {{t}}", write: "Yozyapti: {{t}}", plan: "Reja tuzyapti: {{t}}", call: "Qo'ng'iroqda gaplashyapti", chat: "Chatda javob beryapti",
@@ -918,6 +919,7 @@ export const ru = {
       sit: { cinema: "Смотреть кино", game: "Играть в PlayStation", kitchen: "Сесть поесть", lounge: "Отдохнуть на диване", computer: "Сесть за компьютер" },
     },
     locate: "Найти в офисе",
+    weather: { title: "Погода (Ташкент)", auto: "Авто", sunny: "Солнце", cloudy: "Облачно", rain: "Дождь", snow: "Снег", fog: "Туман", real: "Сейчас в Ташкенте", time: "Время суток", timeAuto: "Текущее время Ташкента" },
     games: { pong: "Понг", snake: "Змейка", blocks: "Блоки", g2048: "2048", breakout: "Арканоид", racer: "Гонки", ttt: "Крестики-нолики" },
     doing: {
       code: "Пишет код: {{t}}", write: "Пишет: {{t}}", plan: "Составляет план: {{t}}", call: "Разговаривает по телефону", chat: "Отвечает в чате",

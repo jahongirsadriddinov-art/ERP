@@ -21,7 +21,7 @@ export function MuteButton({ k, dark = false }: { k: K; dark?: boolean }) {
   const muted = useMuted();
   return (
     <button type="button" onClick={() => sound.setMuted(!muted)} aria-pressed={!muted} data-multi-tap data-testid="ai-office-mute" title={muted ? k("media.unmute") : k("media.mute")}
-      className={dark ? "h-9 px-3 rounded-full bg-black/60 text-white text-[13px] font-semibold backdrop-blur" : "h-8 px-3 rounded-full border border-border bg-card/60 text-[12px] font-semibold inline-flex items-center gap-1.5"}>
+      className={dark ? "relative h-9 px-3 rounded-full bg-black/60 text-white text-[13px] font-semibold backdrop-blur" : "relative h-8 px-3 rounded-full border border-border bg-card/60 text-[12px] font-semibold inline-flex items-center gap-1.5"}>
       {muted ? "🔇" : "🔊"}<span className="sr-only">{muted ? k("media.unmute") : k("media.mute")}</span>
     </button>
   );

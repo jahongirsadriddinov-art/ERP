@@ -14,6 +14,7 @@ import { officeApi, TEAMS, type AgentProfile, type OfficeAgent, type Setup } fro
 import AgentPanel, { NewAgentForm, activityTone, agoText } from "./AgentPanel";
 import type { ErpLink } from "./Desktop";
 import { MediaHost, MuteButton } from "./MediaPanel";
+import WeatherChip, { useOfficeWeather } from "./WeatherChip";
 import { currentMovie, mediaStore, useMedia as useMediaState, youtubeThumb } from "./mediaStore";
 import { useMuted, usePlayer } from "./sound";
 import { assignIdle, computeLayout } from "./layout";
@@ -98,6 +99,7 @@ export default function AiOffice({ fill = false, onNavigate, erpLinks = [], exte
   const [sceneKey, setSceneKey] = useState(0);
   const [walking, setWalking] = useState(false);
   const mm = useMediaState();
+  const wx = useOfficeWeather();
   const [focus, setFocus] = useState<{ id: string; n: number } | null>(null);
   const [speech, setSpeech] = useState<{ id: string; text: string } | null>(null);
   const muted = useMuted();
@@ -203,7 +205,7 @@ export default function AiOffice({ fill = false, onNavigate, erpLinks = [], exte
   return (
     <div className={`flex flex-col gap-2 ${height}`} data-testid="ai-office">
       {/* Asboblar qatori — bitta qator (telefonda gorizontal skrol) */}
-      <div className="flex-shrink-0 flex items-center gap-2 overflow-x-auto scrollbar-hide">
+      <div className="relative flex-shrink-0 flex items-center gap-2 overflow-x-auto scrollbar-hide">
         <div className="hidden lg:block flex-shrink-0 mr-1">
           <p className="text-sm font-bold leading-tight">{k("title")}</p>
           <p className="text-[11px] text-muted-foreground leading-tight">{k("subtitleShort")}</p>
@@ -214,6 +216,7 @@ export default function AiOffice({ fill = false, onNavigate, erpLinks = [], exte
           <Stat dot="#b8b2aa" label={k("stats.idle")} n={count((a) => !a.busy && a.activity !== "review")} />
         </div>
         <div className="flex gap-1.5 ml-auto flex-shrink-0">
+          <WeatherChip />
           <MuteButton k={k} />
           <button type="button" onClick={() => (mm.music === "full" ? mediaStore.minimizeMusic() : mediaStore.openMusic())} aria-pressed={mm.music === "full"} data-testid="ai-office-media-open" disabled={!mm.media}
             className="h-8 px-3 rounded-full border border-border bg-card/60 text-[12px] font-semibold inline-flex items-center gap-1.5">
@@ -254,7 +257,7 @@ export default function AiOffice({ fill = false, onNavigate, erpLinks = [], exte
             <Suspense fallback={<div className="absolute inset-0 p-4"><Skeleton h="h-full" /></div>}>
               <OfficeScene key={sceneKey} agents={agents} selectedId={selected} onSelect={select} showAllLabels={showAll} compact={compact} dark={dark}
                 resetKey={resetKey} zoneNames={zoneNames} youLabel={k("walk.you")} onContextLost={lostCb} onContextRestored={restoredCb}
-                focus={focus} speech={speech} cinemaSrc={cinemaSrc} cinemaThumb={cinemaThumb} musicOn={musicOn} />
+                focus={focus} speech={speech} cinemaSrc={cinemaSrc} cinemaThumb={cinemaThumb} musicOn={musicOn} weather={wx.mode} hour={wx.hour} />
             </Suspense>
           ) : (
             <div className="absolute inset-0 p-4"><Skeleton h="h-full" /></div>

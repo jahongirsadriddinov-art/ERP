@@ -9,6 +9,8 @@ import { ScreenHub } from "./screens";
 import { Building, Cinema, Cook, DeskSet, GameCorner, Kitchen, Lounge, ManagerRoomFurniture, OwnerOffice, Plants, Rooms } from "./props";
 import { Agent, Player } from "./actors";
 import type { WalkBridge } from "./walk";
+import Outside from "./Outside";
+import { tashkentTime, type WeatherMode } from "./sky";
 
 // AI ofis — 3D sahna (three.js + @react-three/fiber, faqat shu lazy chunk'da). Xonalar ish turi bo'yicha (layout.ts), agentlar
 // A* + to'qnashmaslik bilan yuradi (crowd.ts), monitor/kino/TV — umumiy canvas teksturalar (screens.ts).
@@ -42,9 +44,12 @@ export interface OfficeSceneProps {
   cinemaThumb?: string | null;
   /** Musiqa chalinyapti — radio yonida notalar. */
   musicOn?: boolean;
+  /** Ob-havo rejimi va Toshkent soati (kun/tun) — tashqi dunyo uchun. */
+  weather?: WeatherMode;
+  hour?: number;
 }
 
-export default function OfficeScene({ agents, selectedId, onSelect, showAllLabels, compact, dark, resetKey, zoneNames, youLabel, walk, onContextLost, onContextRestored, onHub, focus, speech, cinemaSrc, cinemaThumb, musicOn }: OfficeSceneProps) {
+export default function OfficeScene({ agents, selectedId, onSelect, showAllLabels, compact, dark, resetKey, zoneNames, youLabel, walk, onContextLost, onContextRestored, onHub, focus, speech, cinemaSrc, cinemaThumb, musicOn, weather = "sunny", hour = 13 }: OfficeSceneProps) {
   const layoutKey = agents.map((a) => `${a.id}:${a.team}:${a.kind}`).join("|");
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const layout = useMemo(() => computeLayout(agents.map((a) => ({ id: a.id, team: a.team, kind: a.kind }))), [layoutKey]);
@@ -96,16 +101,19 @@ export default function OfficeScene({ agents, selectedId, onSelect, showAllLabel
       .map((id) => { const d = layout.desks.get(id)!; return { x: d.chair.x, z: d.chair.z - d.dir * 0.95, face: d.dir > 0 ? 0 : Math.PI }; });
   }, [othersKey, layout]);
   const onAir = agents.some((a) => a.activity === "call");
+  const doy = useMemo(() => tashkentTime().doy, []);
+  const focusV = useMemo(() => new THREE.Vector3(0, 0, (BOUNDS.z0 + BOUNDS.z1) / 2), []);
+  const focusFn = useMemo(() => () => { const me = crowd.get("me"); return me ? focusV.set(me.pos.x, 0, me.pos.z) : focusV.set(0, 0, (BOUNDS.z0 + BOUNDS.z1) / 2); }, [crowd, focusV]);
   // Qo'ng'iroq pufaklari — bir vaqtda ko'pi bilan 3 ta (tartibsizlik bo'lmasin)
   const bubbleIds = useMemo(() => new Set(agents.filter((a) => a.activity === "call").slice(0, 3).map((a) => a.id)), [agents]);
 
   return (
-    <div ref={wrap} className="absolute inset-0" data-testid="ai-office-canvas-wrap">
+    <div ref={wrap} className="absolute inset-0" data-testid="ai-office-canvas-wrap" data-weather={weather} data-hour={Math.floor(hour)}>
       <Canvas
         shadows={!compact}
         dpr={compact ? [1, 1.25] : [1, 1.5]}
         frameloop={active ? "always" : "never"}
-        camera={{ position: [0, 40, 30], fov: compact ? 42 : 36, near: 0.3, far: 250 }}
+        camera={{ position: [0, 40, 30], fov: compact ? 42 : 36, near: 0.3, far: 1600 }}
         gl={{ antialias: !compact, alpha: true, powerPreference: "high-performance", preserveDrawingBuffer: false }}
         onPointerMissed={() => { if (!walk) onSelect(null); }}
         onCreated={({ gl }) => {
@@ -120,7 +128,7 @@ export default function OfficeScene({ agents, selectedId, onSelect, showAllLabel
         data-testid="ai-office-canvas"
       >
         <Ticker crowd={crowd} hub={hub} />
-        <Lights dark={dark} compact={compact} />
+        <Outside mode={weather} hour={hour} doy={doy} compact={compact} walk={!!walk} focus={focusFn} />
         <Building hub={hub} />
         <Rooms rooms={layout.rooms} walls={layout.walls} names={zoneNames} onAir={onAir} small={compact && !walk} />
         <ManagerRoomFurniture />
@@ -161,18 +169,6 @@ function Ticker({ crowd, hub }: { crowd: Crowd; hub: ScreenHub }) {
     hub.tick(d);
   }, -1);
   return null;
-}
-
-function Lights({ dark, compact }: { dark: boolean; compact: boolean }) {
-  return (
-    <>
-      <hemisphereLight args={[dark ? "#e8ecff" : "#fff7ee", dark ? "#9a8f86" : "#d6cabd", dark ? 1.0 : 1.15]} />
-      <directionalLight position={[16, 30, 14]} intensity={dark ? 1.4 : 1.7} color="#fff1e2" castShadow={!compact}
-        shadow-mapSize={[1536, 1536]} shadow-bias={-0.0004} shadow-normalBias={0.02}
-        shadow-camera-left={-28} shadow-camera-right={28} shadow-camera-top={24} shadow-camera-bottom={-24} shadow-camera-near={5} shadow-camera-far={90} />
-      <directionalLight position={[-20, 14, 20]} intensity={0.35} color="#cfe0ff" />
-    </>
-  );
 }
 
 // ───────────── Kamera: ofisni kadrga to'liq sig'dirish ─────────────
@@ -258,7 +254,7 @@ function Controls({ compact, resetKey, crowd, focus }: { compact: boolean; reset
   }, [camera, size.width, size.height, compact, resetKey]);
   return (
     <OrbitControls ref={ref} makeDefault enableDamping dampingFactor={0.08} target={fit?.target}
-      minDistance={fit ? fit.dist * 0.22 : 8} maxDistance={fit ? fit.dist * 1.35 : 90}
+      minDistance={fit ? fit.dist * 0.22 : 8} maxDistance={fit ? fit.dist * 2.2 : 140}
       minPolarAngle={0.15} maxPolarAngle={1.2}
       minAzimuthAngle={fit ? fit.az - 1.1 : -Infinity} maxAzimuthAngle={fit ? fit.az + 1.1 : Infinity}
       screenSpacePanning={false}

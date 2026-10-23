@@ -29,12 +29,14 @@ const ErrorLogPanel = lazy(() => import("./ErrorLogPanel"));
 const AiPlatformPanel = lazy(() => import("./aiVoice/settings/platform/AiPlatformPanel"));
 // Bot dizayni: tugma matnlari, premium emoji, rang, buyruqlar — alohida chunk
 const BotUiPanel = lazy(() => import("./BotUiPanel"));
+// AI ofis (owner 2026-10-23: "hech qayerda ko'rinmayapti") — dasturchi panelining o'z tabi
+const AiOffice = lazy(() => import("./aiVoice/settings/platform/office/AiOffice"));
 
 // ─── Developer Panel ────────────────────────────────────────────────────────────
 export default function DeveloperPanel({ currentUser, onLogout }: { currentUser: AppUser; onLogout: () => void }) {
   const { t } = useTranslation();
-  const [tab, setTab] = usePersistentState<"firms" | "users" | "subscriptions" | "messages" | "plans" | "promocodes" | "announcements" | "aiVoice" | "botUi" | "server" | "errors">(
-    "dev.tab", "subscriptions", oneOf(["firms", "users", "subscriptions", "messages", "plans", "promocodes", "announcements", "aiVoice", "botUi", "server", "errors"]));
+  const [tab, setTab] = usePersistentState<"firms" | "users" | "subscriptions" | "messages" | "plans" | "promocodes" | "announcements" | "aiVoice" | "botUi" | "server" | "errors" | "office">(
+    "dev.tab", "subscriptions", oneOf(["firms", "users", "subscriptions", "messages", "plans", "promocodes", "announcements", "aiVoice", "botUi", "server", "errors", "office"]));
   const [annReload, setAnnReload] = useState(0);
   const [companies, setCompanies] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
@@ -363,6 +365,9 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
           <button onClick={() => setTab("announcements")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "announcements" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
             {t('devPanel.tabs.announcements')}
           </button>
+          <button onClick={() => setTab("office")} data-testid="dev-tab-office" className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "office" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
+            🏢 {t('devPanel.tabs.office', { defaultValue: 'AI ofis' })}
+          </button>
           <button onClick={() => setTab("aiVoice")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "aiVoice" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
             {t('aiVoice.platform.title')}
           </button>
@@ -684,6 +689,8 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
               </div>
             </div>
           ))
+        ) : tab === "office" ? (
+          <Suspense fallback={<SkeletonList items={3}/>}><AiOffice /></Suspense>
         ) : tab === "errors" ? (
           <Suspense fallback={<SkeletonList items={3}/>}><ErrorLogPanel /></Suspense>
         ) : tab === "server" ? (

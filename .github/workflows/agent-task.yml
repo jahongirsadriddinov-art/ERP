@@ -5,7 +5,8 @@
 # Holat backend'ga qaytariladi: POST callbackUrl, sarlavha X-Agent-Secret (AGENT_CALLBACK_SECRET).
 #
 # Kerakli repository secrets (Settings → Secrets and variables → Actions):
-#   ANTHROPIC_API_KEY      — Claude API kaliti
+#   CLAUDE_CODE_OAUTH_TOKEN — Claude obunasi (Pro/Max) tokeni: kompyuterda `claude setup-token` (API kaliti SHART EMAS)
+#   ANTHROPIC_API_KEY       — yoki Claude API kaliti (ixtiyoriy, token bo'lmasa)
 #   AGENT_CALLBACK_SECRET  — backend'dagi AGENT_CALLBACK_SECRET bilan bir xil qiymat
 # XAVFSIZLIK: payload matnlari hech qachon `run:` ichiga ${{ }} bilan qo'yilmaydi — faqat env orqali (injection yo'q).
 name: AI agent task
@@ -69,6 +70,7 @@ jobs:
         id: claude
         uses: anthropics/claude-code-action@v1
         with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           prompt: ${{ steps.prompt.outputs.text }}

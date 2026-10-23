@@ -52,7 +52,8 @@ export function setupChecklist(): { codeReady: boolean; contentReady: boolean; i
     { key: 'AGENT_GITHUB_REPO', ok: REPO_RE.test(c.repo), where: 'backend', required: true, for: 'code' },
     { key: 'AGENT_CALLBACK_SECRET', ok: !!c.callbackSecret, where: 'backend', required: true, for: 'code' },
     { key: 'AGENT_CALLBACK_URL', ok: /^https?:\/\//.test(c.callbackUrl), where: 'backend', required: true, for: 'code' },
-    { key: 'ANTHROPIC_API_KEY', ok: null, where: 'github', required: true, for: 'code' },
+    // Claude obunasi orqali (owner 2026-10-23: API kalit sotib olmaydi) — `claude setup-token`
+    { key: 'CLAUDE_CODE_OAUTH_TOKEN', ok: null, where: 'github', required: true, for: 'code' },
     { key: 'AGENT_CALLBACK_SECRET (GitHub)', ok: null, where: 'github', required: true, for: 'code' },
     { key: 'GEMINI_API_KEY', ok: geminiConfigured(), where: 'backend', required: true, for: 'content' },
     { key: 'AGENT_TG_CHANNEL_ID', ok: !!(c.tgChannel && c.botToken), where: 'backend', required: false, for: 'content' },

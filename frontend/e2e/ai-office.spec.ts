@@ -53,7 +53,7 @@ const SETUP = {
     { key: 'AGENT_GITHUB_REPO', ok: false, where: 'backend', required: true, for: 'code' },
     { key: 'AGENT_CALLBACK_SECRET', ok: false, where: 'backend', required: true, for: 'code' },
     { key: 'AGENT_CALLBACK_URL', ok: true, where: 'backend', required: true, for: 'code' },
-    { key: 'ANTHROPIC_API_KEY', ok: null, where: 'github', required: true, for: 'code' },
+    { key: 'CLAUDE_CODE_OAUTH_TOKEN', ok: null, where: 'github', required: true, for: 'code' },
     { key: 'AGENT_CALLBACK_SECRET (GitHub)', ok: null, where: 'github', required: true, for: 'code' },
     { key: 'GEMINI_API_KEY', ok: true, where: 'backend', required: true, for: 'content' },
   ],
@@ -217,7 +217,7 @@ test('AI ofis: 3D sahna, agentlar, buyruq va natija (owner 2026-10-22)', async (
   // Code agenti — sozlanmagan: sozlash ro'yxati (sir nomlari) ko'rinadi
   await page.getByTestId('ai-office-agent-backend').click();
   await expect(page.getByTestId('ai-office-setup')).toContainText('AGENT_GITHUB_TOKEN');
-  await expect(page.getByTestId('ai-office-setup')).toContainText('ANTHROPIC_API_KEY');
+  await expect(page.getByTestId('ai-office-setup')).toContainText('CLAUDE_CODE_OAUTH_TOKEN');
   await page.screenshot({ path: `test-results/office/office-backend-${info.project.name}.png` });
 
   // Rol yordamchisi buyruq olmaydi

@@ -16,13 +16,13 @@ const CONFETTI = 28;
 const DUMMY = new THREE.Object3D();
 
 interface BodyRefs {
-  body: React.RefObject<THREE.Group | null>; legs: React.MutableRefObject<(THREE.Mesh | null)[]>; arms: React.MutableRefObject<(THREE.Group | null)[]>;
+  body: React.RefObject<THREE.Group | null>; legs: React.MutableRefObject<(THREE.Object3D | null)[]>; arms: React.MutableRefObject<(THREE.Group | null)[]>;
   cup: React.MutableRefObject<THREE.Mesh | null>; pad: React.MutableRefObject<THREE.Mesh | null>; papers: React.MutableRefObject<THREE.Mesh | null>;
   headset: React.MutableRefObject<THREE.Group | null>;
 }
 function useBodyRefs(): BodyRefs {
   return {
-    body: useRef<THREE.Group>(null), legs: useRef<(THREE.Mesh | null)[]>([]), arms: useRef<(THREE.Group | null)[]>([]),
+    body: useRef<THREE.Group>(null), legs: useRef<(THREE.Object3D | null)[]>([]), arms: useRef<(THREE.Group | null)[]>([]),
     cup: useRef<THREE.Mesh | null>(null), pad: useRef<THREE.Mesh | null>(null), papers: useRef<THREE.Mesh | null>(null), headset: useRef<THREE.Group | null>(null),
   };
 }
@@ -48,8 +48,10 @@ function animateBody(r: BodyRefs, pose: BodyPose, t: number, dt: number, o: { ca
   b.rotation.z = THREE.MathUtils.lerp(b.rotation.z, tiltZ, Math.min(1, dt * 5));
   r.legs.current.forEach((l, i) => {
     if (!l) return;
-    l.rotation.x = pose === "walk" ? Math.sin(t * 11 + (i % 2 ? Math.PI : 0)) * 0.6 : 0;
-    l.position.z = seated ? 0.12 : 0;
+    // Owner 2026-10-23: "yurganda oyoqlari orqasidan chiqyapti" — oyoq endi SON (tepa) nuqtasidan aylanadi va
+    // tebranish kichikroq: oyoq uchi tana ostida qoladi, orqaga chiqib ketmaydi
+    l.rotation.x = pose === "walk" ? Math.sin(t * 11 + (i % 2 ? Math.PI : 0)) * 0.38 : 0;
+    l.position.z = seated ? 0.1 : 0;
     l.scale.y = seated ? 0.6 : 1;
   });
   r.arms.current.forEach((a, i) => {
@@ -77,9 +79,12 @@ function Mascot({ r, tint, color, hat, failed }: { r: BodyRefs; tint: string; co
   return (
     <group ref={r.body}>
       {[-0.22, -0.08, 0.08, 0.22].map((x, i) => (
-        <mesh key={x} ref={(m) => { r.legs.current[i] = m; }} geometry={BOX} position={[x, 0.09, 0]} scale={[0.09, 0.18, 0.1]} castShadow>
-          <meshStandardMaterial color={mix(tint, "#000", 0.12)} roughness={0.8} />
-        </mesh>
+        // aylanish nuqtasi — oyoq tepasida (tana pastida), mesh pastga siljitilgan
+        <group key={x} ref={(g) => { r.legs.current[i] = g; }} position={[x, 0.19, 0.02]}>
+          <mesh geometry={BOX} position={[0, -0.095, 0]} scale={[0.09, 0.19, 0.1]} castShadow>
+            <meshStandardMaterial color={mix(tint, "#000", 0.12)} roughness={0.8} />
+          </mesh>
+        </group>
       ))}
       <mesh geometry={BOX} position={[0, 0.42, 0]} scale={[0.66, 0.46, 0.42]} castShadow>
         <meshStandardMaterial color={tint} roughness={0.75} emissive={failed ? "#ff2020" : "#000"} emissiveIntensity={failed ? 0.35 : 0} />

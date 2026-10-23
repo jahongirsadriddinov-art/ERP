@@ -9,7 +9,7 @@ export const MESSAGE_KINDS: MessageKind[] = [
   { key: 'error', emoji: '⚠', meaning: 'error / not allowed / not found', re: /xato|xatolik|topilmadi|mumkin emas|ruxsat yo'q|ruxsat berilmagan|noto'g'ri|muvaffaqiyatsiz|ошибк|не найден|нельзя|нет доступа|неверн|не удалось/i },
   { key: 'cancel', emoji: '❌', meaning: 'cancelled / rejected / deleted', re: /bekor qilindi|rad etildi|o'chirildi|отменен|отклонен|удален/i },
   { key: 'success', emoji: '✅', meaning: 'done / saved / confirmed', re: /saqlandi|tasdiqlandi|qabul qilindi|bajarildi|qo'shildi|yuborildi|tayyor|muvaffaqiyatli|сохранен|подтвержден|принят|выполнен|добавлен|отправлен|готово|успешно/i },
-  { key: 'wait', emoji: '⏳', meaning: 'please wait / pending / in progress', re: /kuting|kutilmoqda|tekshirilmoqda|jarayonda|подождите|ожида|обрабатыва/i },
+  { key: 'wait', emoji: '⏳', meaning: 'please wait / pending / in progress', re: /kuting|kutilmoqda|yuklanmoqda|tayyorlanmoqda|загруж|готовлю|tekshirilmoqda|jarayonda|подождите|ожида|обрабатыва/i },
   { key: 'money', emoji: '💰', meaning: 'money: expense, income, payment, balance', re: /so'm|сум|chiqim|kirim|to'lov|pul|balans|summa|xarajat|расход|приход|оплат|баланс|сумм|деньг/i },
   { key: 'report', emoji: '📊', meaning: 'report / statistics', re: /hisobot|statistika|jami|отчёт|отчет|статистик|итого/i },
   { key: 'object', emoji: '🏗', meaning: 'construction object / site / material', re: /obyekt|qurilish|material|smeta|объект|стройк|материал|смет/i },

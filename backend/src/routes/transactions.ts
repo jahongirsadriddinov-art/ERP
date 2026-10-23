@@ -1,4 +1,5 @@
 import { receiptToExpense } from '../services/botExpense';
+import { GEMINI_TIMEOUT } from '../services/gemini';
 import { todayInTashkent } from '../utils/tz';
 import { checkRate } from '../utils/rateLimit';
 import ObjectForHints from '../models/Object';
@@ -32,6 +33,9 @@ async function toUzs(original: number, currency: 'USD' | 'EUR', rate?: number, s
 // qo'shildi.
 import { sendPushToUser } from '../services/push';
 import { approveTransactionAction, confirmTransactionAction, rejectTransactionAction } from '../services/transactionActions';
+
+// Chek skaneri javobi muddati — proksi (~60 s) va telefon tarmog'i uzishidan oldin
+export const SCAN_RECEIPT_DEADLINE_MS = Number(process.env.SCAN_RECEIPT_DEADLINE_MS) || 35_000;
 
 const router = Router();
 const TX_DEFAULTS = { status: 'pending', currency: 'UZS', requiresAdminApproval: false };
@@ -373,13 +377,18 @@ router.post('/scan-receipt', async (req, res) => {
     const mt = typeof mimeType === 'string' && /^image\/(jpeg|png|webp|heic)$/.test(mimeType) ? mimeType : 'image/jpeg';
     const allowed = await allowedObjectIds();
     const objs: any[] = t.companyId ? await ObjectForHints.find({ companyId: t.companyId, ...(allowed === null ? {} : { _id: { $in: allowed } }) }).select('name').limit(60).lean() : [];
-    const r = await receiptToExpense(Buffer.from(image, 'base64'), mt, todayInTashkent(), { objects: objs.map(o => String(o.name)) });
-    if (!r) return res.status(422).json({ error: "Chekdan summani o'qib bo'lmadi — aniqroq, yorug' joyda suratga oling" });
+    // Muddat (xato tuzatildi — "API javob bermadi (tarmoq): POST /scan-receipt"): Gemini band bo'lsa kalit × model ×
+    // urinishlar bir necha daqiqaga cho'zilib, proksi/telefon tarmog'i so'rovni uzib qo'yardi. Endi ~35 s ichida
+    // javob: o'qilmasa — "qo'lda to'ldiring" (422, manual: true).
+    const r = await receiptToExpense(Buffer.from(image, 'base64'), mt, todayInTashkent(), { objects: objs.map(o => String(o.name)) }, { deadlineMs: SCAN_RECEIPT_DEADLINE_MS });
+    if (!r) return res.status(422).json({ error: "Chekdan summani o'qib bo'lmadi — aniqroq, yorug' joyda suratga oling yoki qo'lda to'ldiring", manual: true });
     res.json(r);
   } catch (err: any) {
     if (err?.message === 'NO_GEMINI') return res.status(503).json({ error: 'AI xizmati sozlanmagan' });
+    if (err?.message === GEMINI_TIMEOUT) return res.status(422).json({ error: "Chekni hozir o'qib ulgurmadim — qayta urinib ko'ring yoki summani qo'lda to'ldiring", manual: true, timeout: true });
+    // AI xizmati xatosi (kvota/band) — foydalanuvchi qo'lda to'ldirishi mumkin; sabab server logida
     console.error('[scan-receipt]', err?.message);
-    res.status(500).json({ error: "Chekni o'qib bo'lmadi — qayta urinib ko'ring" });
+    res.status(422).json({ error: "Chekni hozir o'qib bo'lmadi — qayta urinib ko'ring yoki summani qo'lda to'ldiring", manual: true });
   }
 });
 

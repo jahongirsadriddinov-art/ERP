@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo } from "react";
+import { useState, useRef, useMemo, useEffect } from "react";
 import Plus from "@hugeicons/core-free-icons/PlusSignIcon";
 import CheckCircle from "@hugeicons/core-free-icons/CheckmarkCircle01Icon";
 import Clock from "@hugeicons/core-free-icons/Clock01Icon";
@@ -35,6 +35,7 @@ import { useTranslation } from "react-i18next";
 import { API_BASE } from "./api";
 import { guessExpType } from "./lib/expense";
 import { EXP_LABELS, EscClose, LIVE_EUR_RATE, LIVE_RATE_DATE, LIVE_USD_RATE, expLabel, exportExpensesToCsv, fmt, fmtUsd, isAdmin, resizeImageFile, roleLabel, type AppUser, type ExpType, type Expense, type Project } from "./App";
+import { scanReceiptFile, type ScanStage } from "./lib/receiptScan";
 
 // ─── Finance Page ──────────────────────────────────────────────────────────────
 /** `arr.find(x => x.id === id)` bilan bir xil natija (birinchi moslik), lekin O(1) */
@@ -270,22 +271,27 @@ export function AddExpenseModal({ currentUser, projects, allUsers, onClose, onAd
   // Chek/nakladnoy suratidan to'ldirish — AI summa, sana, tavsif va turni o'qiydi; foydalanuvchi tekshirib yuboradi
   const receiptRef = useRef<HTMLInputElement>(null);
   const [scanning, setScanning] = useState(false);
+  // Bosqich (siqish / yuklash / o'qish) va oyna yopilsa so'rovni bekor qilish (lib/receiptScan.ts)
+  const [scanStage, setScanStage] = useState<ScanStage | null>(null);
+  const scanAbort = useRef<AbortController | null>(null);
+  useEffect(() => () => scanAbort.current?.abort(), []);
   const scanReceipt = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; e.target.value = "";
     if (!file) return;
     setScanning(true); setErr("");
+    scanAbort.current?.abort();
+    const ac = new AbortController(); scanAbort.current = ac;
     try {
-      const dataUrl = await resizeImageFile(file, 1600, 0.85);
-      const r = await fetch(`${API_BASE}/api/transactions/scan-receipt`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ image: dataUrl.split(",")[1], mimeType: "image/jpeg" }) });
-      const d = await r.json().catch(() => ({}));
-      if (!r.ok) { setErr(d.error || t('common.error')); return; }
+      const res = await scanReceiptFile(file, { resize: resizeImageFile, fetch: (...a) => fetch(...a), url: `${API_BASE}/api/transactions/scan-receipt` }, { signal: ac.signal, onStage: setScanStage });
+      if (!res.ok) { if (res.kind !== 'cancelled') setErr(res.message); return; }
+      const d = res.data;
       const type = (["oylik", "material", "jihozlar", "transport", "boshqa"].includes(d.category) ? d.category : "material") as ExpType;
       const t2 = type === "boshqa" ? "material" : type;
       setForm(f => ({ ...f, type: t2, amount: amountToInput(Math.round(d.amount)), description: d.description || f.description, date: d.date || f.date }));
       if (t2 === "material") setMatRows([{ name: d.description || "", price: amountToInput(Math.round(d.amount)) }]);
       toast.success(t('addExpense.receiptRead', "Chek o'qildi — tekshirib, yuboring"));
     } catch { setErr(t('common.error')); }
-    finally { setScanning(false); }
+    finally { if (scanAbort.current === ac) { setScanning(false); setScanStage(null); } }
   };
 
   const matTotal = matRows.reduce((s, r) => s + parseMoney(r.price), 0);
@@ -360,7 +366,7 @@ export function AddExpenseModal({ currentUser, projects, allUsers, onClose, onAd
           <button type="button" onClick={() => receiptRef.current?.click()} disabled={scanning}
             className="w-full h-11 rounded-xl border-2 border-dashed border-primary/40 bg-primary/[0.04] text-primary text-sm font-bold flex items-center justify-center gap-2 hover:bg-primary/10 liquid-transition disabled:opacity-60">
             {scanning ? <MorphIcon icon={Loader2} className="w-4 h-4 animate-spin" /> : <span aria-hidden>📷</span>}
-            {scanning ? t('addExpense.receiptReading', "Chek o'qilmoqda...") : t('addExpense.receiptBtn', "Chek suratidan to'ldirish")}
+            {scanning ? (scanStage === 'compress' ? t('addExpense.receiptCompress', "Surat tayyorlanmoqda...") : scanStage === 'upload' ? t('addExpense.receiptUpload', "Yuklanmoqda...") : t('addExpense.receiptReading', "Chek o'qilmoqda...")) : t('addExpense.receiptBtn', "Chek suratidan to'ldirish")}
           </button>
           {err && (
             <div className="bg-red-500/10 border border-red-500/25 rounded-xl px-3 py-2.5 text-xs text-red-700 dark:text-red-400 flex items-center gap-2">

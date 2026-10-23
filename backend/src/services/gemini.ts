@@ -35,6 +35,14 @@ function parseJsonLoose(text: string): any {
   throw new Error('BAD_JSON');
 }
 
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  let t: ReturnType<typeof setTimeout> | undefined;
+  return Promise.race([
+    p.finally(() => clearTimeout(t)),
+    new Promise<T>((_, reject) => { t = setTimeout(() => reject(new Error(GEMINI_TIMEOUT)), Math.max(0, ms)); }),
+  ]);
+}
+
 /** Faqat matn (ovozsiz) — masalan botga yozilgan kunlik hisobot. */
 export async function geminiTextToJson(prompt: string, opts?: GeminiOpts): Promise<any> {
   return geminiAudioToJson(null, '', prompt, opts);
@@ -49,7 +57,15 @@ export interface GeminiOpts {
   fast?: boolean;
   /** Model ro'yxati (standart — MODELS; tezkor rejimda GEMINI_FAST_MODELS bo'lsa o'sha). */
   models?: string[];
+  /**
+   * Umumiy muddat (barcha kalit × model × urinishlar uchun). Foydalanuvchi kutayotgan HTTP so'rovlar (masalan chek
+   * skaneri) proksi/telefon tarmog'i uzib qo'ymasidan OLDIN javob berishi uchun: muddat tugasa 'GEMINI_TIMEOUT'
+   * otiladi. Berilmasa — avvalgidek (bot fon ishlari, cheklovsiz).
+   */
+  deadlineMs?: number;
 }
+
+export const GEMINI_TIMEOUT = 'GEMINI_TIMEOUT';
 
 // Ishlamaydigan model (404 "not found"/"no longer available" yoki 400 — bu sozlamani qabul qilmaydi) har so'rovda
 // qayta sinalmasin: har biri bir necha yuz ms yo'qotish edi. 30 daqiqa o'tkazib yuboriladi.
@@ -75,6 +91,8 @@ export async function geminiAudioToJson(audio: Buffer | null, mimeType: string, 
   const fast = !!opts.fast;
   const models = opts.models?.length ? opts.models : (fast && FAST_MODELS.length ? FAST_MODELS : MODELS);
   const tries = fast ? 2 : 3;
+  const until = opts.deadlineMs ? Date.now() + opts.deadlineMs : Infinity;
+  const left = () => until - Date.now();
   let lastErr: any = null;
   for (let k = 0; k < KEYS.length; k++) {
     const ki = (keyIdx + k) % KEYS.length;
@@ -83,6 +101,7 @@ export async function geminiAudioToJson(audio: Buffer | null, mimeType: string, 
       const deadAt = deadModels.get(deadKey);
       if (deadAt && Date.now() - deadAt < DEAD_MS) continue;
       for (let attempt = 0; attempt < tries; attempt++) {
+        if (left() <= 500) throw new Error(GEMINI_TIMEOUT);
         try {
           const model = new GoogleGenerativeAI(KEYS[ki]).getGenerativeModel({
             model: modelName,
@@ -91,15 +110,21 @@ export async function geminiAudioToJson(audio: Buffer | null, mimeType: string, 
               ...thinkingFor(modelName, fast),
             } as any,
           }, fast ? { timeout: 25_000 } : undefined);
-          const res = await model.generateContent(audio ? [prompt, { inlineData: { mimeType, data: audio.toString('base64') } }] : [prompt]);
+          const req = audio ? [prompt, { inlineData: { mimeType, data: audio.toString('base64') } }] : [prompt];
+          const res: any = Number.isFinite(until)
+            ? await withTimeout(model.generateContent(req, { timeout: left() }), left())
+            : await model.generateContent(req);
           const out = parseJsonLoose(res.response.text());
           keyIdx = ki; // ishlagan kalitda qolamiz
           return out;
         } catch (err: any) {
           lastErr = err;
           console.warn(`[gemini audio] key#${ki} ${modelName}${fast ? ' fast' : ''} try${attempt + 1}:`, String(err?.message || err).slice(0, 160));
+          if ((err as Error)?.message === GEMINI_TIMEOUT || left() <= 500) throw new Error(GEMINI_TIMEOUT);
           if (!isQuota(err) && !isTransient(err) && isDeadModelErr(err)) { deadModels.set(deadKey, Date.now()); break; }
-          if (isTransient(err) || (err as Error)?.message === 'BAD_JSON') { if (attempt < tries - 1) { await sleep((fast ? 500 : 1500) * (attempt + 1)); continue; } }
+          if (isTransient(err) || (err as Error)?.message === 'BAD_JSON') {
+            if (attempt < tries - 1) { await sleep(Math.min((fast ? 500 : 1500) * (attempt + 1), Number.isFinite(until) ? Math.max(0, left() - 500) : Infinity)); continue; }
+          }
           break; // kvota / 404 / ruxsat — keyingi modelga (yoki kalitga)
         }
       }

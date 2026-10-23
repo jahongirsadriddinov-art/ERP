@@ -246,9 +246,9 @@ Javob FAQAT JSON: {"amount":0,"currency":"UZS","date":"","vendor":"","items":[],
 
 export interface ParsedReceipt extends ParsedExpense { vendor?: string; items?: { name: string; qty?: string; sum?: number }[] }
 
-export async function receiptToExpense(image: Buffer, mimeType: string, today: string, hints?: VoiceHints): Promise<ParsedReceipt | null> {
+export async function receiptToExpense(image: Buffer, mimeType: string, today: string, hints?: VoiceHints, opts: { deadlineMs?: number } = {}): Promise<ParsedReceipt | null> {
   if (!geminiConfigured()) throw new Error('NO_GEMINI');
-  const r = await geminiAudioToJson(image, mimeType || 'image/jpeg', receiptPrompt(today, hints));
+  const r = await geminiAudioToJson(image, mimeType || 'image/jpeg', receiptPrompt(today, hints), opts);
   if (r?.readable === false) return null;
   const amount = Math.round((Number(r?.amount) || 0) * 100) / 100;
   const vendor = String(r?.vendor || '').trim().slice(0, 120);

@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import Plus from "@hugeicons/core-free-icons/PlusSignIcon";
 import CheckCircle from "@hugeicons/core-free-icons/CheckmarkCircle01Icon";
 import Clock from "@hugeicons/core-free-icons/Clock01Icon";
@@ -26,6 +26,13 @@ import { guessExpType } from "./lib/expense";
 import { EXP_LABELS, EscClose, LIVE_EUR_RATE, LIVE_RATE_DATE, LIVE_USD_RATE, expLabel, exportExpensesToCsv, fmt, fmtUsd, isAdmin, resizeImageFile, roleLabel, type AppUser, type ExpType, type Expense, type Project } from "./App";
 
 // ─── Finance Page ──────────────────────────────────────────────────────────────
+/** `arr.find(x => x.id === id)` bilan bir xil natija (birinchi moslik), lekin O(1) */
+function firstById<T extends { id: string }>(arr: T[]): Map<string | undefined, T> {
+  const m = new Map<string | undefined, T>();
+  for (const x of arr) if (!m.has(x.id)) m.set(x.id, x);
+  return m;
+}
+
 export function FinancePage({ currentUser, users, projects, expenses, onAddExpense, onConfirm, onApprove, onReject, allowIncome, onUpdated, onDeleted, incomes = [], onIncomeAdded }:
   { currentUser: AppUser; users: AppUser[]; projects: Project[]; expenses: Expense[]; onAddExpense: (e: Expense) => void; onConfirm: (id: string) => void; onApprove?: (id: string, note?: string) => void; onReject?: (id: string) => void; allowIncome?: boolean;
     onUpdated?: (e: Expense) => void; onDeleted?: (id: string) => void; incomes?: Expense[]; onIncomeAdded?: (e: Expense) => void }) {
@@ -58,6 +65,9 @@ export function FinancePage({ currentUser, users, projects, expenses, onAddExpen
   const [currencyMode, setCurrencyMode] = useState<"uzs2usd"|"usd2uzs"|"uzs2eur"|"eur2uzs">("uzs2usd");
 
   const filteredExpenses = expenses.filter(e => (filter==="all"||e.type===filter) && (projFilter==="all"||e.projectId===projFilter));
+  // Har qator uchun users/projects.find (qatorlar × xodimlar) o'rniga — bir marta tuziladigan id → yozuv xaritasi
+  const userById = useMemo(() => firstById(users), [users]);
+  const projById = useMemo(() => firstById(projects), [projects]);
 
   const totalExpense = expenses.filter(e=>e.status==="confirmed").reduce((a,e)=>a+e.amount,0);
   const isAdmin = ['direktor','orinbosar'].includes(currentUser.role);
@@ -166,15 +176,15 @@ export function FinancePage({ currentUser, users, projects, expenses, onAddExpen
         {filteredExpenses.length===0
           ? <div className="text-center py-10 text-muted-foreground"><IconTile icon={Wallet} tone="green" size="xl" variant="soft" className="mx-auto mb-3" /><p className="text-sm">{t('finance.notFound')}</p></div>
           : filteredExpenses.map(e=>{
-              const to=users.find(u=>u.id===e.toUserId);
-              const proj=projects.find(p=>p.id===e.projectId);
-              const creator=users.find(u=>u.id===e.createdById);
+              const to=userById.get(e.toUserId);
+              const proj=projById.get(e.projectId);
+              const creator=userById.get(e.createdById);
               const canConfirm=e.toUserId===currentUser.id&&e.status==="pending"&&!e.requiresAdminApproval;
               // approverId belgilangan bo'lsa — FAQAT o'sha admin tasdiqlay oladi
               // (backend PATCH /:id/approve'dagi bir xil qoida). approverId yo'q
               // (eski) yozuvlar uchun — eski xatti-harakat, istalgan admin tasdiqlaydi.
               const canAdminApprove=isAdmin&&e.requiresAdminApproval&&e.status==="pending"&&(!e.approverId||e.approverId===currentUser.id);
-              const approver=e.approverId?users.find(u=>u.id===e.approverId):undefined;
+              const approver=e.approverId?userById.get(e.approverId):undefined;
               const borderColor = e.status==="confirmed" ? "#22c55e" : e.requiresAdminApproval ? "#e5633a" : "#f59e0b";
               return (
                 <SwipeRow key={e.id} testId="finance-row" onOpen={()=>setDetailExp(e)}

@@ -33,12 +33,16 @@ const AiPlatformPanel = lazy(() => import("./aiVoice/settings/platform/AiPlatfor
 const BotUiPanel = lazy(() => import("./BotUiPanel"));
 // AI ofis (owner 2026-10-23: "hech qayerda ko'rinmayapti") — dasturchi panelining o'z tabi
 const AiOffice = lazy(() => import("./aiVoice/settings/platform/office/AiOffice"));
+// AI ofis musiqa/kino pleyeri — panel ildizida (tab almashganda to'xtamaydi); ofis bir marta ochilgach o'rnatiladi
+const OfficeMediaHost = lazy(() => import("./aiVoice/settings/platform/office/MediaPanel"));
 
 // ─── Developer Panel ────────────────────────────────────────────────────────────
 export default function DeveloperPanel({ currentUser, onLogout, profileEl }: { currentUser: AppUser; onLogout: () => void; /** Profil tabi — sayt ko'rinishi (App.tsx beradi) */ profileEl?: ReactNode }) {
   const { t } = useTranslation();
   const [tab, setTab] = usePersistentState<"firms" | "users" | "subscriptions" | "messages" | "plans" | "promocodes" | "announcements" | "aiVoice" | "botUi" | "server" | "errors" | "office" | "profile">(
     "dev.tab", "subscriptions", oneOf(["firms", "users", "subscriptions", "messages", "plans", "promocodes", "announcements", "aiVoice", "botUi", "server", "errors", "office", "profile"]));
+  const [mediaHost, setMediaHost] = useState(false);
+  useEffect(() => { if (tab === "office") setMediaHost(true); }, [tab]);
   const [annReload, setAnnReload] = useState(0);
   const [companies, setCompanies] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
@@ -312,6 +316,7 @@ export default function DeveloperPanel({ currentUser, onLogout, profileEl }: { c
 
   return (
     <div className={`h-[100dvh] flex flex-col ${tab === "office" ? "overflow-hidden" : "overflow-y-auto md:overflow-hidden"} overscroll-contain bg-background`} style={{ paddingTop: "env(safe-area-inset-top)" }}>
+      {mediaHost && <Suspense fallback={null}><OfficeMediaHost /></Suspense>}
       <header className="glass sticky top-0 z-20 px-4 py-3 flex items-center justify-between gap-2 border-b border-border/50 flex-shrink-0">
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-slate-700 to-slate-900 text-white flex items-center justify-center text-sm font-bold shadow-sm shrink-0">🛠</div>
@@ -698,7 +703,7 @@ export default function DeveloperPanel({ currentUser, onLogout, profileEl }: { c
         ) : tab === "profile" ? (
           <div className="pb-24" data-testid="dev-profile">{profileEl}</div>
         ) : tab === "office" ? (
-          <Suspense fallback={<SkeletonList items={3}/>}><AiOffice fill onNavigate={(k) => setTab(k as any)} erpLinks={[
+          <Suspense fallback={<SkeletonList items={3}/>}><AiOffice fill externalHost onNavigate={(k) => setTab(k as any)} erpLinks={[
             { key: "subscriptions", label: t('devPanel.tabs.subscriptions') }, { key: "firms", label: t('devPanel.tabs.firms', { count: companies.length }) },
             { key: "users", label: t('devPanel.tabs.users') }, { key: "messages", label: t('devPanel.tabs.messages') },
             { key: "aiVoice", label: t('aiVoice.platform.title') }, { key: "server", label: t('devPanel.tabs.server') }, { key: "errors", label: t('devPanel.tabs.errors') },

@@ -455,3 +455,58 @@ test('AI ofis: yurish — tugma bosib turilsa eshikdan to\'xtamay o\'tadi; musiq
   await page.getByTestId('ai-office-exit').click();
   expect(errors, errors.join('\n')).toEqual([]);
 });
+
+test('AI ofis: kino — ▶ Ko\'rish, kichraytirish (to\'xtamaydi), kinozalga kirganda o\'zi chiqadi; musiqa X — mini-pleyer, tab almashsa to\'xtamaydi', async ({ page }, info) => {
+  test.setTimeout(120_000);
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  const calls: Calls = { tasks: [], approves: [], officeGets: 0 };
+  await mockApi(page, calls);
+  await seed(page);
+  await openOffice(page);
+  // Kino havolasi → ▶ Ko'rish → oyna; "–" — kichrayadi (iframe saqlanadi)
+  await page.getByTestId('ai-office-media-open').first().click();
+  await page.getByTestId('ai-office-media-tab-cinema').click();
+  await page.getByTestId('ai-office-cinema-url').fill('https://youtu.be/dQw4w9WgXcQ');
+  await page.getByTestId('ai-office-cinema-save').click();
+  await page.getByTestId('ai-office-watch').click();
+  const win = page.getByTestId('ai-office-cinema-win');
+  await expect(win).toBeVisible();
+  await expect(win.locator('iframe')).toHaveAttribute('src', /youtube\.com\/embed\/dQw4w9WgXcQ\?autoplay=1&mute=1/);
+  await page.getByTestId('ai-office-cinema-min').click();
+  await expect(win).toBeVisible();
+  // Musiqa: Yandex → X (mini-pleyer, vidjet saqlanadi) → boshqa tabga o'tib qaytish — vidjet o'sha (qayta yaratilmagan)
+  await page.getByTestId('ai-office-media-tab-music').click();
+  await page.getByTestId('ai-office-mute').first().click();
+  await page.getByTestId('ai-office-yandex').fill('https://music.yandex.ru/album/123');
+  await page.getByTestId('ai-office-yandex-save').click();
+  const frame = page.getByTestId('ai-office-yandex-frame');
+  await expect(frame).toHaveAttribute('src', 'https://music.yandex.ru/iframe/#album/123');
+  await frame.evaluate((el) => { (el as any).__marker = 42; });
+  await page.getByTestId('ai-office-media-min').click();
+  await expect(page.getByTestId('ai-office-mini')).toBeVisible();
+  await page.getByTestId('dev-tab-errors').click();
+  await expect(page.getByTestId('ai-office-mini')).toBeVisible();
+  await page.getByTestId('dev-tab-office').click();
+  await page.getByTestId('ai-office-mini-expand').click();
+  expect(await page.getByTestId('ai-office-yandex-frame').evaluate((el) => (el as any).__marker)).toBe(42);
+  await page.getByTestId('ai-office-media-min').click();
+  await page.getByTestId('ai-office-mini-stop').click();
+  await expect(page.getByTestId('ai-office-mini')).toHaveCount(0);
+
+  // Yurish rejimi: kinozalga kirilsa — film o'zi katta oynada
+  const enter = page.getByTestId('ai-office-enter');
+  if (await enter.isVisible().catch(() => false)) {
+    await enter.click();
+    if (info.project.name === 'telefon') await page.getByTestId('ai-office-rotate-skip').click();
+    await expect(page.getByTestId('ai-office-walk')).toHaveAttribute('data-pos', /.+/, { timeout: 30_000 });
+    await expect(win).toBeVisible();
+    await page.getByTestId('ai-office-goto').click();
+    await page.getByTestId('ai-office-goto-place-cinema').click();
+    await expect(page.getByTestId('ai-office-cinema-min')).toHaveText('–', { timeout: 10_000 }); // katta oyna
+    await page.getByTestId('ai-office-cinema-stop').click();
+    await expect(win).toHaveCount(0);
+    await page.getByTestId('ai-office-exit').click();
+  }
+  expect(errors, errors.join('\n')).toEqual([]);
+});

@@ -10,13 +10,13 @@ import Reset from "@hugeicons/core-free-icons/Target02Icon";
 import X from "@hugeicons/core-free-icons/Cancel01Icon";
 import { isNotReady } from "../../api";
 import { Notice, Skeleton } from "../../ui";
-import { officeApi, TEAMS, type AgentProfile, type OfficeAgent, type OfficeMedia, type Setup } from "./officeApi";
+import { officeApi, TEAMS, type AgentProfile, type OfficeAgent, type Setup } from "./officeApi";
 import AgentPanel, { NewAgentForm, activityTone, agoText } from "./AgentPanel";
 import type { ErpLink } from "./Desktop";
-import MediaPanel, { MuteButton } from "./MediaPanel";
+import { MediaHost, MuteButton } from "./MediaPanel";
+import { currentMovie, mediaStore, useMedia as useMediaState, youtubeThumb } from "./mediaStore";
 import { useMuted, usePlayer } from "./sound";
 import { assignIdle, computeLayout } from "./layout";
-import { isMediaFileUrl, parseVideoLink } from "./media";
 
 // Dasturchi paneli → "AI ofis" (owner 2026-10-22/23). Butun ko'rinish BITTA ekranga sig'adi (sahifa skrolisiz):
 //  • kompyuterda — chapda 3D sahna (flex-1), o'ngda panel: jamoalar bo'yicha agentlar ro'yxati (qidiruv bilan) yoki tanlangan
@@ -26,6 +26,7 @@ import { isMediaFileUrl, parseVideoLink } from "./media";
 const OfficeScene = lazy(() => import("./OfficeScene"));
 const WalkMode = lazy(() => import("./WalkMode"));
 const HINT_KEY = "aiOffice.hint.v2";
+
 const ZONES = ["lead", "dev", "call", "design", "secqa", "marketing", "finance", "support", "kitchen", "game", "cinema", "lounge", "owner"];
 
 function hasWebGL(): boolean {
@@ -72,7 +73,9 @@ export function doingText(a: OfficeAgent, poiKind: string | undefined, k: (key: 
 }
 const readHint = () => { try { return localStorage.getItem(HINT_KEY) !== "1"; } catch { return true; } };
 
-export default function AiOffice({ fill = false, onNavigate, erpLinks = [] }: {
+export default function AiOffice({ fill = false, onNavigate, erpLinks = [], externalHost = false }: {
+  /** Musiqa/kino pleyeri (MediaHost) ota panel ildizida o'rnatilgan — tab almashganda ham to'xtamaydi. */
+  externalHost?: boolean;
   /** Ota konteyner balandligini to'liq egallash (Dasturchi paneli: flex-1 min-h-0). Aks holda — ekran balandligidan hisoblanadi. */
   fill?: boolean;
   /** Kompyuterdagi "ERP" yorliqlari bosilganda (yurish rejimidan chiqib) — ota panel bo'limini ochadi. */
@@ -94,8 +97,7 @@ export default function AiOffice({ fill = false, onNavigate, erpLinks = [] }: {
   const [lost, setLost] = useState(false);
   const [sceneKey, setSceneKey] = useState(0);
   const [walking, setWalking] = useState(false);
-  const [media, setMedia] = useState<OfficeMedia | null>(null);
-  const [mediaOpen, setMediaOpen] = useState(false);
+  const mm = useMediaState();
   const [focus, setFocus] = useState<{ id: string; n: number } | null>(null);
   const [speech, setSpeech] = useState<{ id: string; text: string } | null>(null);
   const muted = useMuted();
@@ -116,7 +118,7 @@ export default function AiOffice({ fill = false, onNavigate, erpLinks = [] }: {
     if (r.ok && r.data) { setProfiles(r.data.agents || []); setSetup(r.data.setup || null); }
   }, []);
 
-  useEffect(() => { officeApi.media().then((r) => setMedia(r.ok && r.data ? r.data : { yandex: "", tracks: [], cinema: "" })); }, []);
+  useEffect(() => { void mediaStore.load(); }, []);
   useEffect(() => {
     loadOffice();
     loadProfiles();
@@ -163,9 +165,10 @@ export default function AiOffice({ fill = false, onNavigate, erpLinks = [] }: {
     const m = assignIdle(idle, layout.pois, slot);
     return new Map([...m.entries()].map(([id, i]) => [id, layout.pois[i].kind as string]));
   }, [agents, layout, slot]);
-  const cinemaSrc = media?.cinema && !parseVideoLink(media.cinema) && isMediaFileUrl(media.cinema, "video") ? media.cinema
-    : media?.cinema && parseVideoLink(media.cinema)?.kind === "file" ? media.cinema : null;
-  const musicOn = ps.playing || (!!media?.yandex && !muted && mediaOpen);
+  const movie = currentMovie(mm);
+  const cinemaSrc = movie?.kind === "file" ? movie.src : null;
+  const cinemaThumb = youtubeThumb(movie);
+  const musicOn = ps.playing || (mm.yandexOn && !muted);
   const zoneNames = useMemo(() => Object.fromEntries(ZONES.map((z) => [z, k(`zones.${z}`)])), [k]);
 
   if (state === "nr") return <Notice tone="lock" testId="ai-office-nr">{k("notReady")}</Notice>;
@@ -190,7 +193,7 @@ export default function AiOffice({ fill = false, onNavigate, erpLinks = [] }: {
         </div>
         <div className="flex gap-1.5 ml-auto flex-shrink-0">
           <MuteButton k={k} />
-          <button type="button" onClick={() => setMediaOpen((v) => !v)} aria-pressed={mediaOpen} data-testid="ai-office-media-open" disabled={!media}
+          <button type="button" onClick={() => (mm.music === "full" ? mediaStore.minimizeMusic() : mediaStore.openMusic())} aria-pressed={mm.music === "full"} data-testid="ai-office-media-open" disabled={!mm.media}
             className="h-8 px-3 rounded-full border border-border bg-card/60 text-[12px] font-semibold inline-flex items-center gap-1.5">
             🎵 {k("media.title")}
           </button>
@@ -229,7 +232,7 @@ export default function AiOffice({ fill = false, onNavigate, erpLinks = [] }: {
             <Suspense fallback={<div className="absolute inset-0 p-4"><Skeleton h="h-full" /></div>}>
               <OfficeScene key={sceneKey} agents={agents} selectedId={selected} onSelect={select} showAllLabels={showAll} compact={compact} dark={dark}
                 resetKey={resetKey} zoneNames={zoneNames} youLabel={k("walk.you")} onContextLost={lostCb}
-                focus={focus} speech={speech} cinemaSrc={cinemaSrc} musicOn={musicOn} />
+                focus={focus} speech={speech} cinemaSrc={cinemaSrc} cinemaThumb={cinemaThumb} musicOn={musicOn} />
             </Suspense>
           ) : (
             <div className="absolute inset-0 p-4"><Skeleton h="h-full" /></div>
@@ -239,9 +242,6 @@ export default function AiOffice({ fill = false, onNavigate, erpLinks = [] }: {
               className="absolute z-30 top-2 right-2 w-9 h-9 rounded-full grid place-items-center bg-card/85 backdrop-blur border border-border shadow-sm hover:bg-card">
               <MorphIcon icon={Reset} className="w-4 h-4" />
             </button>
-          )}
-          {mediaOpen && media && !walking && (
-            <div className="absolute z-40 top-2 left-2"><MediaPanel media={media} onSaved={setMedia} onClose={() => setMediaOpen(false)} /></div>
           )}
           {hint && webgl && !walking && (
             <div className="absolute z-30 left-2 bottom-2 max-w-[calc(100%-16px)] flex items-center gap-1.5 text-[11px] bg-card/85 text-foreground backdrop-blur border border-border rounded-full pl-3 pr-1 py-1 shadow-sm" data-testid="ai-office-hint">
@@ -313,11 +313,12 @@ export default function AiOffice({ fill = false, onNavigate, erpLinks = [] }: {
         </div>
       </div>
 
+      {!externalHost && <MediaHost />}
       {walking && agents && (
         <Suspense fallback={<div className="fixed inset-0 z-[90] bg-[#0f1115]" />}>
           <WalkMode agents={agents} profiles={profiles} setup={setup} onExit={exitWalk} onChanged={changed} onProfile={loadProfiles}
-            onNavigate={onNavigate} erpLinks={onNavigate ? erpLinks : []} media={media} onMedia={setMedia}
-            scene={{ compact, dark, zoneNames, youLabel: k("walk.you"), showAllLabels: showAll, cinemaSrc, musicOn }} />
+            onNavigate={onNavigate} erpLinks={onNavigate ? erpLinks : []}
+            scene={{ compact, dark, zoneNames, youLabel: k("walk.you"), showAllLabels: showAll, cinemaSrc, cinemaThumb, musicOn }} />
         </Suspense>
       )}
     </div>

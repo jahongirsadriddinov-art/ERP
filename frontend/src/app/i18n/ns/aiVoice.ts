@@ -47,6 +47,9 @@ export const uz = {
       cinemaReady: "Kinozalda {{kind}} tayyor — ofisga kirib, kinoda o'tiring.", cinemaDefault: "Hozir ekranda multfilm. YouTube / VK Video / Rutube havolasini yoki video fayl qo'ying.",
       kinopoisk: "Kinopoisk HD filmlarini boshqa saytga joylab bo'lmaydi (DRM himoyasi va X-Frame-Options) — faqat Kinopoisk'ning o'zida ochiladi.",
       openKp: "Kinopoisk'da ochish", file: "video fayl", clear: "Olib tashlash",
+      expand: "Kattalashtirish", stop: "To'xtatish", minimize: "Kichraytirish", bigger: "Kattalashtirish", watch: "Ko'rish", fromDevice: "Qurilmadan",
+      videoFromDevice: "Qurilmadan video", keepHere: "Shu kompyuterda saqlab qo'yish (serverga yuklanmaydi)", toServer: "Serverga yuklash", toServerShort: "Serverga",
+      savedHere: "Bu kompyuterda saqlangan videolar", tooBig: "Fayl juda katta — serverga {{size}} gacha yuklanadi; shu kompyuterda saqlang.", openPlayer: "pleyerni ochish",
     },
     chat: {
       title: "Suhbat", placeholder: "Savol bering yoki 🎤 bosib gapiring…", listening: "Eshityapman… (to'xtatish — 🎤)", ask: "So'rash", mic: "Ovoz bilan gapirish",
@@ -919,6 +922,9 @@ export const ru = {
       cinemaReady: "В кинозале готов {{kind}} — войдите в офис и сядьте в кино.", cinemaDefault: "Сейчас на экране мультфильм. Вставьте ссылку YouTube / VK Видео / Rutube или видеофайл.",
       kinopoisk: "Фильмы Кинопоиск HD нельзя встроить на другой сайт (защита DRM и X-Frame-Options) — они открываются только на самом Кинопоиске.",
       openKp: "Открыть в Кинопоиске", file: "видеофайл", clear: "Убрать",
+      expand: "Развернуть", stop: "Остановить", minimize: "Свернуть", bigger: "На весь экран", watch: "Смотреть", fromDevice: "С устройства",
+      videoFromDevice: "Видео с устройства", keepHere: "Сохранить на этом компьютере (без загрузки на сервер)", toServer: "Загрузить на сервер", toServerShort: "На сервер",
+      savedHere: "Видео на этом компьютере", tooBig: "Файл слишком большой — на сервер до {{size}}; сохраните на этом компьютере.", openPlayer: "открыть плеер",
     },
     chat: {
       title: "Разговор", placeholder: "Задайте вопрос или нажмите 🎤 и говорите…", listening: "Слушаю… (стоп — 🎤)", ask: "Спросить", mic: "Говорить голосом",

@@ -22,41 +22,78 @@ export const sound = {
 };
 export const useMuted = () => useSyncExternalStore(sound.subscribe, () => muted, () => true);
 
-// ───────────── O'z qo'shiqlari pleyeri ─────────────
-export interface Track { id: string; name: string; url: string }
-interface PState { tracks: Track[]; index: number; playing: boolean; volume: number }
-let ps: PState = { tracks: [], index: 0, playing: false, volume: 0.6 };
+// ───────────── O'z qo'shiqlari pleyeri (bitta <audio>, sahifa/tab almashganda ham to'xtamaydi) ─────────────
+// Qo'shiq — serverdagi (url) yoki shu kompyuterdagi (local — IndexedDB id). Oxirgi qo'shiq va joy (soniya) eslab qolinadi:
+// qayta ochilganda o'sha joydan davom etadi.
+export interface Track { id: string; name: string; url?: string; local?: string; size?: number }
+interface PState { tracks: Track[]; index: number; playing: boolean; volume: number; time: number; duration: number }
+const RESUME = "aiOffice.player";
+const readResume = (): { id: string; time: number; volume?: number } | null => { try { return JSON.parse(localStorage.getItem(RESUME) || "null"); } catch { return null; } };
+let ps: PState = { tracks: [], index: 0, playing: false, volume: readResume()?.volume ?? 0.6, time: 0, duration: 0 };
 const pl = new Set<L>();
 const pemit = () => { ps = { ...ps }; pl.forEach((l) => l()); emit(); };
 let audio: HTMLAudioElement | null = null;
+let pendingSeek = 0;
+let lastSave = 0;
+const saveResume = () => {
+  const t = ps.tracks[ps.index];
+  try { if (t) localStorage.setItem(RESUME, JSON.stringify({ id: t.id, time: Math.floor(audio?.currentTime || ps.time), volume: ps.volume })); } catch { /* */ }
+};
+let resolveUrl: (t: Track) => Promise<string | null> = async (t) => t.url || null;
+/** Mahalliy (IndexedDB) qo'shiqlar uchun URL hal qiluvchi — mediaStore o'rnatadi. */
+export function setTrackResolver(fn: (t: Track) => Promise<string | null>) { resolveUrl = fn; }
 const el = () => {
   if (!audio && typeof Audio !== "undefined") {
     audio = new Audio();
-    audio.preload = "none";
+    audio.preload = "metadata";
     audio.addEventListener("ended", () => player.next());
-    audio.addEventListener("pause", () => { if (ps.playing && audio?.paused && !audio.ended) { ps.playing = false; pemit(); } });
+    audio.addEventListener("pause", () => { if (ps.playing && audio?.paused && !audio.ended) { ps.playing = false; saveResume(); pemit(); } });
+    audio.addEventListener("loadedmetadata", () => { if (pendingSeek && audio) { try { audio.currentTime = pendingSeek; } catch { /* */ } pendingSeek = 0; } ps.duration = audio?.duration || 0; pemit(); });
+    audio.addEventListener("timeupdate", () => {
+      ps.time = audio?.currentTime || 0;
+      const now = Date.now();
+      if (now - lastSave > 3000) { lastSave = now; saveResume(); pemit(); }
+    });
   }
   return audio;
 };
 export const player = {
   get state() { return ps; },
   subscribe(l: L) { pl.add(l); return () => { pl.delete(l); }; },
-  setTracks(t: Track[]) { ps.tracks = t; if (ps.index >= t.length) ps.index = 0; if (!t.length) player.pause(); pemit(); },
-  play(i = ps.index) {
+  setTracks(t: Track[]) {
+    const cur = ps.tracks[ps.index]?.id;
+    ps.tracks = t;
+    const keep = cur ? t.findIndex((x) => x.id === cur) : -1;
+    if (keep >= 0) ps.index = keep;
+    else {
+      const r = readResume();
+      const i = r ? t.findIndex((x) => x.id === r.id) : -1;
+      ps.index = i >= 0 ? i : 0;
+      if (i >= 0 && !ps.playing) { pendingSeek = r!.time || 0; ps.time = pendingSeek; }
+    }
+    if (!t.length) player.pause();
+    pemit();
+  },
+  async play(i = ps.index) {
     const a = el(); const t = ps.tracks[i];
     if (!a || !t) return;
-    if (a.src !== t.url) a.src = t.url;
+    const url = await resolveUrl(t);
+    if (!url) return;
+    if (a.src !== url) { if (i !== ps.index) pendingSeek = 0; a.src = url; }
     ps.index = i; ps.playing = true;
     a.volume = ps.volume; a.muted = muted;
     a.play().catch(() => { ps.playing = false; pemit(); });
     pemit();
   },
-  pause() { audio?.pause(); ps.playing = false; pemit(); },
-  toggle() { if (ps.playing) player.pause(); else player.play(); },
-  next() { if (!ps.tracks.length) return; player.play((ps.index + 1) % ps.tracks.length); },
-  setVolume(v: number) { ps.volume = Math.max(0, Math.min(1, v)); if (audio) audio.volume = ps.volume; pemit(); },
+  pause() { audio?.pause(); ps.playing = false; saveResume(); pemit(); },
+  toggle() { if (ps.playing) player.pause(); else void player.play(); },
+  next() { if (!ps.tracks.length) return; void player.play((ps.index + 1) % ps.tracks.length); },
+  prev() { if (!ps.tracks.length) return; void player.play((ps.index - 1 + ps.tracks.length) % ps.tracks.length); },
+  seek(sec: number) { if (audio) audio.currentTime = sec; ps.time = sec; pemit(); },
+  setVolume(v: number) { ps.volume = Math.max(0, Math.min(1, v)); if (audio) audio.volume = ps.volume; saveResume(); pemit(); },
   syncMute() { if (audio) audio.muted = muted; },
-  stop() { audio?.pause(); if (audio) audio.removeAttribute("src"); ps.playing = false; pemit(); },
+  /** Haqiqiy to'xtatish (mini-pleyerdagi ■). */
+  stop() { saveResume(); audio?.pause(); if (audio) audio.removeAttribute("src"); ps.playing = false; pemit(); },
 };
 export const usePlayer = () => useSyncExternalStore(player.subscribe, () => ps, () => ps);
 
@@ -69,8 +106,9 @@ export function speak(text: string, lang: "uz" | "ru", onEnd?: () => void): bool
     ss.cancel();
     const u = new SpeechSynthesisUtterance(text.slice(0, 600));
     const voices = ss.getVoices();
-    const v = voices.find((x) => x.lang.toLowerCase().startsWith(lang)) || voices.find((x) => x.lang.toLowerCase().startsWith(lang === "uz" ? "tr" : "ru"));
-    if (v) { u.voice = v; u.lang = v.lang; } else u.lang = lang === "uz" ? "uz-UZ" : "ru-RU";
+    // O'zbekcha ovoz kamdan-kam bor — bo'lmasa ANIQ rus ovozi (lotin matnini ham tushunarli o'qiydi); matn pufakda baribir ko'rinadi
+    const v = voices.find((x) => x.lang.toLowerCase().startsWith(lang)) || voices.find((x) => x.lang.toLowerCase().startsWith("ru"));
+    if (v) { u.voice = v; u.lang = v.lang; } else u.lang = "ru-RU";
     u.rate = 1.02;
     u.onend = () => onEnd?.();
     u.onerror = () => onEnd?.();

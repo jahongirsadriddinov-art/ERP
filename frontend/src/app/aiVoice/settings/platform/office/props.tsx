@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
 import { Billboard, Html, Instance, Instances } from "@react-three/drei";
 import * as THREE from "three";
@@ -496,7 +496,7 @@ export function GameCorner({ hub }: { hub: ScreenHub }) {
 }
 
 // ───────────── Kinozal: ekranda multfilm (canvas), pardalar, puflar, popkorn ─────────────
-export function Cinema({ hub, videoSrc }: { hub: ScreenHub; videoSrc: string | null }) {
+export function Cinema({ hub, videoSrc, thumb }: { hub: ScreenHub; videoSrc: string | null; thumb: string | null }) {
   const S = CINEMA.screen;
   // To'g'ridan-to'g'ri video (mp4/webm) — ekranda video tekstura (ovozsiz; ovoz bilan — yurish rejimida kinoda o'tirganda)
   const vtex = useMemo(() => {
@@ -509,13 +509,21 @@ export function Cinema({ hub, videoSrc }: { hub: ScreenHub; videoSrc: string | n
     return { v, t };
   }, [videoSrc]);
   useEffect(() => () => { if (vtex) { vtex.v.pause(); vtex.v.removeAttribute("src"); vtex.v.load(); vtex.t.dispose(); } }, [vtex]);
+  // YouTube muqovasi (CORS bilan yuklanadi; yuklanmasa — multfilm qoladi)
+  const [poster, setPoster] = useState<THREE.Texture | null>(null);
+  useEffect(() => {
+    if (!thumb) { setPoster(null); return; }
+    let t: THREE.Texture | null = null, dead = false;
+    new THREE.TextureLoader().setCrossOrigin("anonymous").load(thumb, (tx) => { if (dead) { tx.dispose(); return; } tx.colorSpace = THREE.SRGBColorSpace; t = tx; setPoster(tx); }, undefined, () => setPoster(null));
+    return () => { dead = true; t?.dispose(); };
+  }, [thumb]);
   const bagColors = ["#e85d75", "#f2a541", "#5b8def", "#7bd389", "#b57edc", CLAUDE, "#3fa7a0"];
   return (
     <group>
       <Box p={[S.x, 1.75, S.z - 0.08]} s={[S.w + 0.4, 2.7, 0.1]} c="#15171c" />
       <mesh position={[S.x, 1.75, S.z - 0.02]}>
         <planeGeometry args={[S.w, 2.4]} />
-        <meshBasicMaterial map={vtex?.t || hub.movie} toneMapped={false} />
+        <meshBasicMaterial map={vtex?.t || poster || hub.movie} toneMapped={false} />
       </mesh>
       <Box p={[S.x - S.w / 2 - 0.4, 1.4, S.z + 0.1]} s={[0.5, 2.8, 0.3]} c="#9b2335" cast />
       <Box p={[S.x + S.w / 2 + 0.4, 1.4, S.z + 0.1]} s={[0.5, 2.8, 0.3]} c="#9b2335" cast />

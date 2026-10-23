@@ -37,11 +37,13 @@ export interface OfficeSceneProps {
   speech?: { id: string; text: string } | null;
   /** Kinozal ekrani uchun to'g'ridan-to'g'ri video (mp4/webm) — video tekstura. */
   cinemaSrc?: string | null;
+  /** YouTube muqovasi — kinozal ekranida (multfilm o'rniga). */
+  cinemaThumb?: string | null;
   /** Musiqa chalinyapti — radio yonida notalar. */
   musicOn?: boolean;
 }
 
-export default function OfficeScene({ agents, selectedId, onSelect, showAllLabels, compact, dark, resetKey, zoneNames, youLabel, walk, onContextLost, onHub, focus, speech, cinemaSrc, musicOn }: OfficeSceneProps) {
+export default function OfficeScene({ agents, selectedId, onSelect, showAllLabels, compact, dark, resetKey, zoneNames, youLabel, walk, onContextLost, onHub, focus, speech, cinemaSrc, cinemaThumb, musicOn }: OfficeSceneProps) {
   const layoutKey = agents.map((a) => `${a.id}:${a.team}:${a.kind}`).join("|");
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const layout = useMemo(() => computeLayout(agents.map((a) => ({ id: a.id, team: a.team, kind: a.kind }))), [layoutKey]);
@@ -121,7 +123,7 @@ export default function OfficeScene({ agents, selectedId, onSelect, showAllLabel
         <Kitchen />
         <Cook />
         <GameCorner hub={hub} />
-        <Cinema hub={hub} videoSrc={cinemaSrc || null} />
+        <Cinema hub={hub} videoSrc={cinemaSrc || null} thumb={cinemaThumb || null} />
         <Lounge musicOn={!!musicOn} />
         <Plants />
         {agents.map((a) => {

@@ -69,6 +69,10 @@ function MiniPlayer({ k }: { k: K }) {
   );
 }
 
+const posKey = (m: ReturnType<typeof useMedia>) => `aiOffice.pos.${m.cinemaLocal ? `local:${m.cinemaLocal}` : m.media?.cinema || ""}`;
+const readPos = (key: string) => { try { return Number(localStorage.getItem(key)) || 0; } catch { return 0; } };
+const savePos = (key: string, t: number) => { try { localStorage.setItem(key, String(Math.floor(t))); } catch { /* */ } };
+
 function CinemaWindow({ k }: { k: K }) {
   const m = useMedia();
   const muted = useMuted();
@@ -93,7 +97,11 @@ function CinemaWindow({ k }: { k: K }) {
               <a href={mv.open} target="_blank" rel="noopener noreferrer" className="inline-flex h-9 px-4 rounded-full bg-[#ff6600] text-white text-[13px] font-semibold items-center">{k("media.openKp")}</a></div>
           </div>
         ) : mv.kind === "file" ? (
-          <video src={mv.src} className="w-full h-full" controls autoPlay playsInline muted={muted} data-testid="ai-office-movie" />
+          <video src={mv.src} className="w-full h-full" controls autoPlay playsInline muted={muted} data-testid="ai-office-movie"
+            // Har video uchun oxirgi joy eslab qolinadi (qayta ochilganda davom etadi)
+            onLoadedMetadata={(e) => { const t = readPos(posKey(m)); if (t > 5 && t < (e.currentTarget.duration || Infinity) - 5) e.currentTarget.currentTime = t; }}
+            onTimeUpdate={(e) => { const v = e.currentTarget; if (Math.floor(v.currentTime) % 3 === 0) savePos(posKey(m), v.currentTime); }}
+            onPause={(e) => savePos(posKey(m), e.currentTarget.currentTime)} />
         ) : (
           <iframe title="movie" className="w-full h-full border-0" allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowFullScreen data-testid="ai-office-movie"
             src={`${mv.embed}${mv.embed.includes("?") ? "&" : "?"}autoplay=1${muted ? "&mute=1" : ""}`} referrerPolicy="strict-origin-when-cross-origin" />

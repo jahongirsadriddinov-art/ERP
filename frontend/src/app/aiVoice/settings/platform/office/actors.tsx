@@ -371,7 +371,7 @@ export function Player({ crowd, grid, bridge, agents, holding, youLabel }: {
       let best: Target | null = null, bd = Infinity;
       // "Qayerga?" orqali tanlangan agent yonida bo'lsa — o'sha birinchi
       const f = s.focus ? crowd.get(s.focus) : undefined;
-      if (f && Math.hypot(f.pos.x - w.pos.x, f.pos.z - w.pos.z) < 2.0) { best = { kind: "agent", id: f.id, name: names.get(f.id) || f.id }; bd = 0; }
+      if (f && Math.hypot(f.pos.x - w.pos.x, f.pos.z - w.pos.z) < 3.0) { best = { kind: "agent", id: f.id, name: names.get(f.id) || f.id }; bd = 0; }
       else for (const o of crowd.walkers.values()) {
         if (o.id === "me") continue;
         const d = Math.hypot(o.pos.x - w.pos.x, o.pos.z - w.pos.z);

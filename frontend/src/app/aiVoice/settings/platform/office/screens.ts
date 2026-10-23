@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { createGame, GAME_IDS, type Dir, type GameId, type GameInput, type MiniGame } from "./games";
 
 // AI ofis — "jonli" ekranlar: har tur uchun BITTA kichik canvas tekstura (barcha monitorlar bo'lishib ishlatadi),
 // kino filmi (oddiy multfilm sahnasi — mualliflik kontenti yo'q), PlayStation TV'dagi Pong o'yini, deraza osmoni.
@@ -36,52 +37,16 @@ const TERM_LINES = [
   "[deploy] render: live ✔", "[scan] 0 vulnerabilities", "[perf] p95 84 ms", "$ git push origin agent/qa", "[ci] e2e: 41 passed",
 ];
 
-export class Pong {
-  canvas = mk(320, 180);
-  ctx = this.canvas.getContext?.("2d") as CanvasRenderingContext2D | null;
-  ball = { x: 160, y: 90, vx: 150, vy: 90 };
-  left = 70; right = 70;
-  score: [number, number] = [0, 0];
-  /** O'yinchi boshqaradi (chap raketka): -1 yuqoriga, +1 pastga; null — avtomatik (namoyish). */
-  input: number | null = null;
-  playing = false;
-  /** Raketka to'pni qaytarganda (o'yin "bip"i). */
-  onHit: (() => void) | null = null;
-  reset(dir = 1) { this.ball = { x: 160, y: 90, vx: 150 * dir, vy: (Math.random() - 0.5) * 160 }; }
-  update(dt: number) {
-    const b = this.ball, P = 40;
-    const ai = (y: number, sp: number) => { const c = y + P / 2, d = b.y - c; return y + Math.max(-sp * dt, Math.min(sp * dt, d)); };
-    if (this.playing && this.input !== null) this.left += this.input * 210 * dt; else this.left = ai(this.left, 150);
-    this.right = ai(this.right, this.playing ? 120 : 150);
-    this.left = Math.max(0, Math.min(180 - P, this.left)); this.right = Math.max(0, Math.min(180 - P, this.right));
-    b.x += b.vx * dt; b.y += b.vy * dt;
-    if (b.y < 4 || b.y > 176) { b.vy *= -1; b.y = Math.max(4, Math.min(176, b.y)); }
-    if (b.x < 18 && b.x > 8 && b.y > this.left && b.y < this.left + P && b.vx < 0) { b.vx = -b.vx * 1.04; b.vy += (b.y - (this.left + P / 2)) * 4; if (this.playing) this.onHit?.(); }
-    if (b.x > 302 && b.x < 312 && b.y > this.right && b.y < this.right + P && b.vx > 0) { b.vx = -b.vx * 1.04; b.vy += (b.y - (this.right + P / 2)) * 4; if (this.playing) this.onHit?.(); }
-    if (b.x < -10) { this.score[1]++; this.reset(1); }
-    if (b.x > 330) { this.score[0]++; this.reset(-1); }
-    b.vx = Math.sign(b.vx) * Math.min(420, Math.abs(b.vx));
-  }
-  draw() {
-    const g = this.ctx;
-    if (!g) return;
-    g.fillStyle = "#070b1a"; g.fillRect(0, 0, 320, 180);
-    g.fillStyle = "#1b2a52"; for (let y = 0; y < 180; y += 14) g.fillRect(158, y, 4, 8);
-    g.fillStyle = "#7cf3ff"; g.fillRect(10, this.left, 6, 40);
-    g.fillStyle = "#ff7ab8"; g.fillRect(304, this.right, 6, 40);
-    g.fillStyle = "#ffffff"; g.beginPath(); g.arc(this.ball.x, this.ball.y, 5, 0, Math.PI * 2); g.fill();
-    g.font = "bold 22px monospace"; g.textAlign = "center"; g.fillStyle = "#c9d6ff";
-    g.fillText(String(this.score[0]), 120, 28); g.fillText(String(this.score[1]), 200, 28);
-    if (!this.playing) { g.font = "bold 11px sans-serif"; g.fillStyle = "#8fa3d9"; g.fillText("PONG — DEMO", 160, 170); }
-  }
-}
-
 export class ScreenHub {
   canvases = {} as Record<ScreenKind, HTMLCanvasElement>;
   textures = {} as Record<ScreenKind, THREE.CanvasTexture>;
   movieCanvas = mk(384, 192);
   movie: THREE.CanvasTexture;
-  pong = new Pong();
+  /** Mini-o'yinlar (kerak bo'lganda yaratiladi); TV — hozirgi o'yin canvas'i. */
+  games: Partial<Record<GameId, MiniGame>> = {};
+  tvGame: GameId = "pong";
+  /** Odam o'ynayotganda boshqaruv: ushlab turilgan o'qlar + navbatdagi bir martalik bosishlar. */
+  input = { x: 0, y: 0, dirs: [] as Dir[], a: false, tap: null as { x: number; y: number } | null };
   tv: THREE.CanvasTexture;
   sky: THREE.CanvasTexture;
   used = new Set<ScreenKind>();
@@ -92,7 +57,7 @@ export class ScreenHub {
       this.textures[k] = this.tex(this.canvases[k]);
     }
     this.movie = this.tex(this.movieCanvas);
-    this.tv = this.tex(this.pong.canvas);
+    this.tv = this.tex(this.game(this.tvGame).canvas);
     const sky = mk(128, 64);
     const g = sky.getContext?.("2d");
     if (g) {
@@ -104,7 +69,7 @@ export class ScreenHub {
     this.sky = this.tex(sky);
     this.sky.wrapS = THREE.RepeatWrapping;
     for (const k of SCREEN_KINDS) this.drawScreen(k, 0);
-    this.drawMovie(0); this.pong.draw();
+    this.drawMovie(0); this.game(this.tvGame).draw();
   }
   private tex(c: HTMLCanvasElement) {
     const t = new THREE.CanvasTexture(c);
@@ -120,9 +85,30 @@ export class ScreenHub {
       this.acc = 0;
     }
     if (this.accMovie >= 1 / 15) { this.drawMovie(this.t); this.movie.needsUpdate = true; this.accMovie = 0; }
-    const tvStep = this.pong.playing ? 1 / 40 : 1 / 15;
-    if (this.accTv >= tvStep) { this.pong.update(this.accTv); this.pong.draw(); this.tv.needsUpdate = true; this.accTv = 0; }
+    const g = this.game(this.tvGame);
+    const tvStep = g.playing ? 1 / 40 : 1 / 15;
+    if (this.accTv >= tvStep) {
+      let inp: GameInput | null = null;
+      if (g.playing) {
+        const i = this.input;
+        inp = { x: i.x, y: i.y, dir: i.dirs.shift() || null, a: i.a, tap: i.tap };
+        i.a = false; i.tap = null;
+      }
+      g.update(Math.min(this.accTv, 0.1), inp); g.draw(); this.tv.needsUpdate = true; this.accTv = 0;
+    }
   }
+  game(id: GameId): MiniGame { return (this.games[id] ||= createGame(id)); }
+  /** TV'da (va kompyuterda) shu o'yin — canvas almashtiriladi. */
+  setTvGame(id: GameId) {
+    if (!GAME_IDS.includes(id) || id === this.tvGame) return;
+    for (const g of Object.values(this.games)) if (g) g.playing = false;
+    this.tvGame = id;
+    this.tv.dispose();
+    this.tv.image = this.game(id).canvas;
+    this.tv.needsUpdate = true;
+  }
+  /** Eski nom (Pong). */
+  get pong() { return this.game("pong"); }
   dispose() {
     for (const k of SCREEN_KINDS) this.textures[k].dispose();
     this.movie.dispose(); this.tv.dispose(); this.sky.dispose();

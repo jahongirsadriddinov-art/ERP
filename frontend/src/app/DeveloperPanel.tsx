@@ -1,4 +1,5 @@
 import "./i18n/aiVoiceNs";
+import type { ReactNode } from "react";
 import { confirmDialog } from "./lib/confirmDialog";
 import { useState, useRef, useEffect, lazy, Suspense } from "react";
 import { oneOf, usePersistentState } from "./lib/persistentState";
@@ -34,10 +35,10 @@ const BotUiPanel = lazy(() => import("./BotUiPanel"));
 const AiOffice = lazy(() => import("./aiVoice/settings/platform/office/AiOffice"));
 
 // ─── Developer Panel ────────────────────────────────────────────────────────────
-export default function DeveloperPanel({ currentUser, onLogout }: { currentUser: AppUser; onLogout: () => void }) {
+export default function DeveloperPanel({ currentUser, onLogout, profileEl }: { currentUser: AppUser; onLogout: () => void; /** Profil tabi — sayt ko'rinishi (App.tsx beradi) */ profileEl?: ReactNode }) {
   const { t } = useTranslation();
-  const [tab, setTab] = usePersistentState<"firms" | "users" | "subscriptions" | "messages" | "plans" | "promocodes" | "announcements" | "aiVoice" | "botUi" | "server" | "errors" | "office">(
-    "dev.tab", "subscriptions", oneOf(["firms", "users", "subscriptions", "messages", "plans", "promocodes", "announcements", "aiVoice", "botUi", "server", "errors", "office"]));
+  const [tab, setTab] = usePersistentState<"firms" | "users" | "subscriptions" | "messages" | "plans" | "promocodes" | "announcements" | "aiVoice" | "botUi" | "server" | "errors" | "office" | "profile">(
+    "dev.tab", "subscriptions", oneOf(["firms", "users", "subscriptions", "messages", "plans", "promocodes", "announcements", "aiVoice", "botUi", "server", "errors", "office", "profile"]));
   const [annReload, setAnnReload] = useState(0);
   const [companies, setCompanies] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
@@ -347,8 +348,9 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
         </div>
       )}
 
-      <div className="mx-4 md:mx-6 xl:mx-auto xl:max-w-7xl xl:w-[calc(100%-3rem)] mt-3 flex items-center gap-2 flex-shrink-0 sticky top-[3.75rem] md:static z-10 bg-background/90 backdrop-blur-xl py-1 md:py-0">
-        <div className="flex-1 min-w-0 nav-pill-desktop flex gap-1 p-1 rounded-full overflow-x-auto scrollbar-hide">
+      {/* Tablar qatori (owner 2026-10-23: orqasidagi ortiqcha fon/chegara olib tashlandi) */}
+      <div className="mx-4 md:mx-6 xl:mx-auto xl:max-w-7xl xl:w-[calc(100%-3rem)] mt-3 flex items-center gap-2 flex-shrink-0 sticky top-[3.75rem] md:static z-10 bg-background md:bg-transparent py-1 md:py-0">
+        <div className="flex-1 min-w-0 flex gap-1 p-1 rounded-full bg-card overflow-x-auto scrollbar-hide">
           <button onClick={() => setTab("subscriptions")} className={`relative py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "subscriptions" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
             {t('devPanel.tabs.subscriptions')} {subs.filter(s => s.status === "pending").length > 0 && <span className="ml-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full badge-pulse">{subs.filter(s => s.status === "pending").length}</span>}
           </button>
@@ -377,6 +379,9 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
           </button>
           <button onClick={() => setTab("server")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "server" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
             {t('devPanel.tabs.server')}
+          </button>
+          <button onClick={() => setTab("profile")} data-testid="dev-tab-profile" className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "profile" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
+            👤 {t('devPanel.tabs.profile', { defaultValue: 'Profil' })}
           </button>
           <button onClick={() => setTab("errors")} data-testid="dev-tab-errors" className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "errors" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
             {t('devPanel.tabs.errors')}
@@ -690,6 +695,8 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
               </div>
             </div>
           ))
+        ) : tab === "profile" ? (
+          <div className="pb-24" data-testid="dev-profile">{profileEl}</div>
         ) : tab === "office" ? (
           <Suspense fallback={<SkeletonList items={3}/>}><AiOffice fill onNavigate={(k) => setTab(k as any)} erpLinks={[
             { key: "subscriptions", label: t('devPanel.tabs.subscriptions') }, { key: "firms", label: t('devPanel.tabs.firms', { count: companies.length }) },

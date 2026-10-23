@@ -354,9 +354,11 @@ function SecuritySettingsCard() {
   );
 }
 
-export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdateUser, onCompanyNameChange, onCompanyLogoChange, onBgChange, onColorThemeChange, colorTheme, themeMode, onThemeModeChange, canEditCompany, todayAttendance, onCheckIn, onCheckOut, gpsTracking, gpsStatus, onLockNow, canBackup, backupLoading, onBackup, importLoading, onImportBackup, importFileRef }:
+export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdateUser, onCompanyNameChange, onCompanyLogoChange, onBgChange, onColorThemeChange, colorTheme, themeMode, onThemeModeChange, canEditCompany, todayAttendance, onCheckIn, onCheckOut, gpsTracking, gpsStatus, onLockNow, canBackup, backupLoading, onBackup, importLoading, onImportBackup, importFileRef, devMode }:
   { currentUser: AppUser; projects: Project[]; onUpdateAvatar: (url: string) => void; onLogout: () => void; onUpdateUser: (u: AppUser) => void; onCompanyNameChange: (name: string) => void; onCompanyLogoChange: (logo: string) => void; onBgChange: (bg: string) => void; onColorThemeChange: (id: string) => void; colorTheme: string; themeMode: "light"|"dark"|"system"; onThemeModeChange: (m: "light"|"dark"|"system") => void; canEditCompany?: boolean; todayAttendance: null | { status: string; checkIn?: string; checkOut?: string; workHours?: number }; onCheckIn: () => void; onCheckOut: () => void; gpsTracking: boolean; onLockNow: () => void; gpsStatus?: GpsStatus;
-    canBackup?: boolean; backupLoading?: boolean; onBackup?: () => void; importLoading?: boolean; onImportBackup?: (e: React.ChangeEvent<HTMLInputElement>) => void; importFileRef?: React.RefObject<HTMLInputElement>; }) {
+    canBackup?: boolean; backupLoading?: boolean; onBackup?: () => void; importLoading?: boolean; onImportBackup?: (e: React.ChangeEvent<HTMLInputElement>) => void; importFileRef?: React.RefObject<HTMLInputElement>;
+    /** Dasturchi paneli (owner 2026-10-23): faqat xavfsizlik va sayt ko'rinishi bo'limlari */
+    devMode?: boolean; }) {
   const { t, i18n } = useTranslation();
   const changeLanguage = async (lang: SiteLang) => {
     setSiteLanguage(lang);
@@ -1330,10 +1332,11 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
             { id: "app", title: t('settingsUi.app'), desc: t('settingsUi.appDesc'), keys: ["language", "appearance", "color", "bg", "font"],
               after: !isNative() ? <div className="mt-3"><AppDownloadCards compact title={t('profile.appDownloadTitle')} loadingFallback={false} /></div> : null },
           ];
+          const shownGroups = devMode ? groups.filter(g => g.id === "security" || g.id === "app") : groups;
           return (
             <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28, delay: 0.06 }}
               className="xl:columns-2 xl:gap-6">
-              {groups.map(g => {
+              {shownGroups.map(g => {
                 const rows = g.keys.map(byKey).filter(Boolean) as (typeof menuRows)[number][];
                 if (!rows.length && !g.before && !g.after) return null;
                 return (

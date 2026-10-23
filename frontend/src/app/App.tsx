@@ -3010,12 +3010,25 @@ export default function App() {
   );
   // Dasturchi (super-admin) — alohida panel: barcha firmalar va foydalanuvchilar
   if (liveUser.role === "dasturchi") return (
-    <>
+    <div className={siteBg ? "with-bg min-h-[100dvh]" : "min-h-[100dvh]"} style={!siteBg ? undefined : (siteBg.startsWith("linear-gradient") || siteBg.startsWith("radial-gradient")) ? { background: siteBg } : { backgroundImage: `url(${siteBg})`, backgroundSize: "cover", backgroundPosition: "center", backgroundAttachment: "fixed" }}>
       <Suspense fallback={<div className="min-h-screen bg-background"><SkeletonPage variant="dashboard" /></div>}>
-        <DeveloperPanel currentUser={liveUser} onLogout={()=>{playSound("lock");setCurrentUser(null);setAuthView("login");}}/>
+        <DeveloperPanel currentUser={liveUser} onLogout={()=>{playSound("lock");setCurrentUser(null);setAuthView("login");}}
+          profileEl={
+            // Dasturchi uchun Profil (owner 2026-10-23): xavfsizlik + sayt ko'rinishi (til, rejim, rang, fon, shrift)
+            <ProfilePage devMode currentUser={liveUser} projects={[]} onUpdateAvatar={handleUpdateAvatar} onUpdateUser={handleUpdateUser}
+              onLogout={()=>{playSound("lock");setCurrentUser(null);setAuthView("login");}}
+              onCompanyNameChange={() => {}} onCompanyLogoChange={() => {}}
+              onBgChange={bg => setSiteBg(bg)}
+              colorTheme={colorTheme}
+              onColorThemeChange={id => { setColorTheme(id); localStorage.setItem("erp_colorTheme", id); }}
+              themeMode={themeMode}
+              onThemeModeChange={m => { setThemeMode(m); localStorage.setItem("erp_themeMode", m); }}
+              canEditCompany={false} todayAttendance={null} onCheckIn={() => {}} onCheckOut={() => {}}
+              gpsTracking={false} onLockNow={lockAppNow} />
+          }/>
       </Suspense>
       <AppToaster/>
-    </>
+    </div>
   );
   // MUHIM: bular avval initialLoading gate'idan KEYIN hisoblanardi — ya'ni
   // header (logo/nav/bell/avatar) ham initialLoading tugagunicha umuman

@@ -136,14 +136,27 @@ export default function AiOffice({ fill = false, onNavigate, erpLinks = [], exte
   /** Ro'yxatdan tanlash — kamera agentga uchadi ("topish"). */
   const locate = useCallback((id: string) => { select(id); setFocus((f) => ({ id, n: (f?.n || 0) + 1 })); }, [select]);
   const onSpeak = useCallback((id: string) => (text: string | null) => setSpeech(text ? { id, text } : null), []);
-  const exitWalk = useCallback(() => setWalking(false), []);
+  // Owner 2026-10-23: Esc bilan chiqqanda sahna "grafika xotirasi tozalandi" bo'lib qolardi — yurish rejimining
+  // alohida 3D konteksti hali yopilmasdan asosiy sahna yangisini ochardi. Endi asosiy sahna ~0.7 s keyin ochiladi.
+  const [settling, setSettling] = useState(false);
+  const exitWalk = useCallback(() => {
+    setWalking(false); setSettling(true);
+    setTimeout(() => setSettling(false), 700);
+  }, []);
   // WebGL konteksti yo'qolsa — avval brauzer o'zi qaytarishini kutamiz (odatda 1–3 s); qaytmasa (yoki 2-marta) — qo'lda qayta yuklash
   const lostTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lostCount = useRef(0);
+  const autoRemounts = useRef<number[]>([]);
   const lostCb = useCallback(() => {
     lostCount.current++;
     if (lostTimer.current) clearTimeout(lostTimer.current);
-    lostTimer.current = setTimeout(() => setLost(true), lostCount.current >= 2 ? 2500 : 6000);
+    lostTimer.current = setTimeout(() => {
+      // Brauzer qaytarmadi — sahnani o'zimiz qayta yaratamiz (30 s ichida ko'pi bilan 3 marta), keyin qo'lda tugma
+      const now = Date.now();
+      autoRemounts.current = autoRemounts.current.filter((t) => now - t < 30_000);
+      if (autoRemounts.current.length < 3) { autoRemounts.current.push(now); lostCount.current = 0; setSceneKey((n) => n + 1); return; }
+      setLost(true);
+    }, 1500);
   }, []);
   const restoredCb = useCallback(() => { if (lostTimer.current) clearTimeout(lostTimer.current); setLost(false); }, []);
   useEffect(() => () => { if (lostTimer.current) clearTimeout(lostTimer.current); }, []);
@@ -235,7 +248,7 @@ export default function AiOffice({ fill = false, onNavigate, erpLinks = [], exte
           style={{ background: sceneBg }} data-testid="ai-office-scene">
           {!webgl ? (
             <div className="absolute inset-0 grid place-items-center p-6 text-center text-sm text-muted-foreground" data-testid="ai-office-nowebgl">{k("noWebgl")}</div>
-          ) : walking ? (
+          ) : walking || settling ? (
             <div className="absolute inset-0 grid place-items-center text-sm text-muted-foreground">🚶 {k("walk.inside")}</div>
           ) : agents ? (
             <Suspense fallback={<div className="absolute inset-0 p-4"><Skeleton h="h-full" /></div>}>

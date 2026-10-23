@@ -354,6 +354,10 @@ test('AI ofis: "Ofisga kirish" — yurish rejimi, agent oldiga borib buyruq, o\'
   await expect(walk).toHaveCount(0);
   await expect(page.getByTestId('ai-office')).toBeVisible();
   await expectFitsViewport(page);
+  // chiqqandan keyin asosiy 3D sahna qaytadi, "grafika xotirasi tozalandi" chiqmaydi (owner 2026-10-23)
+  await expect(page.locator('[data-testid="ai-office-scene"] canvas')).toBeVisible({ timeout: 15_000 });
+  await page.waitForTimeout(2500);
+  await expect(page.getByTestId('ai-office-lost')).toHaveCount(0);
   expect(errors, errors.join('\n')).toEqual([]);
 });
 

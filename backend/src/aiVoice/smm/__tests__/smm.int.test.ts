@@ -21,6 +21,7 @@ import { dueSlot, nextSlot, pickLeastRecent, smmTick } from '../autopilot';
 import { putTemp, getTemp } from '../tempMedia';
 import { smmRender, wrapText, ffmpegAvailable, renderTemplate } from '../render';
 import { tgMessageUrl } from '../telegram';
+import { __resetChannelCacheForTests, formatChannelPost, paragraphs } from '../channel';
 import { zonedToUtc } from '../../lib/zonedTime';
 
 let mongo: MongoMemoryServer;
@@ -50,6 +51,7 @@ type Call = { url: string; method: string; body: any };
 let calls: Call[] = [];
 let graphMode: 'ok' | 'container_error' | 'token_bad' = 'ok';
 let statusPolls = 0;
+let memberResult: any = { status: 'administrator', can_post_messages: true };
 const fetchMock = vi.fn(async (input: any, init: any = {}) => {
   const url = String(input);
   const method = init.method || 'GET';
@@ -60,6 +62,13 @@ const fetchMock = vi.fn(async (input: any, init: any = {}) => {
   const j = (o: any, status = 200) => new Response(JSON.stringify(o), { status, headers: { 'Content-Type': 'application/json' } });
   if (url.startsWith('https://api.telegram.org/')) {
     const m = url.split('/').pop()!;
+    if (m === 'getMe') return j({ ok: true, result: { id: 777, is_bot: true, username: 'qurilish_erp_bot' } });
+    if (m === 'getChat') {
+      if (body?.chat_id === '@kanal_yoq') return j({ ok: false, error_code: 400, description: 'Bad Request: chat not found' }, 400);
+      if (body?.chat_id === '@guruh_erp') return j({ ok: true, result: { id: -100555, type: 'supergroup', title: 'Guruh' } });
+      return j({ ok: true, result: { id: -1001234567890, type: 'channel', title: 'QurilishERP yangiliklari', username: 'erp_kanal' } });
+    }
+    if (m === 'getChatMember') return j({ ok: true, result: memberResult });
     return j({ ok: true, result: m === 'sendMediaGroup' ? [{ message_id: 41 }, { message_id: 42 }] : { message_id: m === 'sendMessage' ? 50 : 40 } });
   }
   if (url.startsWith('https://generativelanguage.googleapis.com/')) {
@@ -115,7 +124,8 @@ beforeEach(async () => {
   __setContentRunnerForTests(null);
   __setIgSleepForTests(async () => {});
   await Promise.all([AgentProfile.deleteMany({}), AgentTask.deleteMany({}), SmmSettings.deleteMany({}), SmmRun.deleteMany({}), SmmInsight.deleteMany({}), SmmTempMedia.deleteMany({}), AuditLog.deleteMany({})]);
-  calls = []; graphMode = 'ok'; statusPolls = 0;
+  calls = []; graphMode = 'ok'; statusPolls = 0; memberResult = { status: 'administrator', can_post_messages: true };
+  __resetChannelCacheForTests();
   fetchMock.mockClear();
   vi.stubGlobal('fetch', fetchMock);
 });
@@ -301,11 +311,14 @@ describe("e'lon (qurilmadan fayl bilan)", () => {
     expect(String((photo.body as FormData).get('caption'))).toContain('#qurilish #erp');
     calls = [];
     process.env.AGENT_TG_CHANNEL_ID = '@qurilish_erp';
+    __resetChannelCacheForTests();
     const r2 = await request(app).post(`${P}/agent-tasks/${id}/items/1/publish`).set('Authorization', tok(devId))
       .field('target', 'telegram').attach('files', JPEG, { filename: 'a.jpg', contentType: 'image/jpeg' });
     expect(r2.body).toMatchObject({ sentTo: 'channel', url: 'https://t.me/qurilish_erp/40' });
     expect(tgCalls().map((c) => c.url.split('/').pop())).toEqual(['sendPhoto', 'sendMessage']);
-    expect((tgCalls()[0].body as FormData).get('caption')).toBe('Smeta 5 daqiqada');
+    expect((tgCalls()[0].body as FormData).get('caption')).toBe('<b>Smeta 5 daqiqada</b>');
+    expect((tgCalls()[0].body as FormData).get('parse_mode')).toBe('HTML');
+    expect(tgCalls()[1].body.reply_markup).toEqual({ inline_keyboard: [[{ text: '🌐 erp-firma.uz', url: 'https://erp-firma.uz' }]] });
     expect(tgCalls()[1].body).toMatchObject({ chat_id: '@qurilish_erp', reply_parameters: { message_id: 40 } });
     const it1 = (await get(`/agent-tasks/${id}`)).body.task.items[1];
     expect(it1.tg).toMatchObject({ status: 'published', target: 'channel', url: 'https://t.me/qurilish_erp/40' });
@@ -449,4 +462,84 @@ describe('server shablon (ffmpeg)', () => {
     expect(a.subarray(0, 2).equals(Buffer.from([0xff, 0xd8]))).toBe(true);
     expect(a.length).toBeGreaterThan(5000);
   }, 60_000);
+});
+
+describe("Telegram kanal (UI'dan ulash) va kanal formati", () => {
+  it('format: qalin sarlavha, HTML escape, paragraflar, heshteglar oxirida; uzun matn — qisqa caption + davomi', () => {
+    const p = formatChannelPost({ title: 'Smeta <tez>', text: 'Birinchi gap.\n\nIkkinchi & uchinchi.', hashtags: ['#qurilish', 'yomon teg', '#erp'] });
+    expect(p.captionHtml).toBe('<b>Smeta &lt;tez&gt;</b>\n\nBirinchi gap.\n\nIkkinchi &amp; uchinchi.\n\n#qurilish #erp');
+    expect(p.restHtml).toBeUndefined();
+    const long = formatChannelPost({ title: 'Sarlavha', text: `${'a'.repeat(600)}\n\n${'b'.repeat(600)}`, hashtags: ['#x'] });
+    expect(long.captionHtml).toBe(`<b>Sarlavha</b>\n\n${'a'.repeat(600)}`);
+    expect(long.restHtml).toBe(`${'b'.repeat(600)}\n\n#x`);
+    const one = "Bu birinchi gap. Bu ikkinchi gap. Uchinchi gap keldi. To'rtinchi gap ham bor. Beshinchi gap. " + 'Yana bir uzun gap shu yerda turibdi va u ancha uzun. '.repeat(5);
+    expect(paragraphs(one).length).toBeGreaterThan(2);
+  });
+
+  it("tekshirish: kanal yo'q / guruh / bot admin emas / huquq yo'q — tushunarli xato + bot nomi; muvaffaqiyat — saqlanadi va env'dan ustun", async () => {
+    process.env.TELEGRAM_BOT_TOKEN = 'bot123';
+    process.env.AGENT_TG_CHANNEL_ID = '@eski_env';
+    const v = (channel: string) => post('/smm/telegram/channel', { channel });
+    expect((await v('x')).body.error).toBe('tg_channel_invalid');
+    expect((await v('@kanal_yoq')).body).toMatchObject({ error: 'tg_chat_not_found', botUsername: 'qurilish_erp_bot' });
+    expect((await v('@guruh_erp')).body.error).toBe('tg_not_channel');
+    memberResult = { status: 'left' };
+    expect((await v('@erp_kanal')).body).toMatchObject({ error: 'tg_bot_not_admin', botUsername: 'qurilish_erp_bot' });
+    memberResult = { status: 'administrator', can_post_messages: false };
+    expect((await v('https://t.me/erp_kanal')).body.error).toBe('tg_no_post_right');
+    memberResult = { status: 'administrator', can_post_messages: true };
+    const ok = await v('erp_kanal');
+    expect(ok.status).toBe(200);
+    expect(ok.body).toMatchObject({ ok: true, channel: { id: '-1001234567890', username: 'erp_kanal', title: 'QurilishERP yangiliklari' }, botUsername: 'qurilish_erp_bot' });
+    const member = calls.filter((c) => c.url.endsWith('/getChatMember')).pop()!;
+    expect(member.body).toEqual({ chat_id: -1001234567890, user_id: 777 });
+    const st = (await get('/smm/settings')).body.status.telegram;
+    expect(st).toMatchObject({ channel: true, channelSource: 'db', channelName: '@erp_kanal', channelTitle: 'QurilishERP yangiliklari', botUsername: 'qurilish_erp_bot' });
+    expect(await AuditLog.countDocuments({ entity: 'smm_settings', entityId: 'telegram_channel' })).toBe(1);
+
+    // "Kanalga joylash" — endi DOIM kanalga (HTML, sayt tugmasi rasmda), havola username bilan
+    const id = await smmTask();
+    calls = [];
+    const r = await request(app).post(`${P}/agent-tasks/${id}/items/0/publish`).set('Authorization', tok(devId))
+      .field('target', 'telegram').attach('files', JPEG, { filename: 'a.jpg', contentType: 'image/jpeg' });
+    expect(r.body).toMatchObject({ ok: true, sentTo: 'channel', url: 'https://t.me/erp_kanal/40' });
+    const fd = tgCalls()[0].body as FormData;
+    expect(fd.get('chat_id')).toBe('-1001234567890');
+    expect(fd.get('parse_mode')).toBe('HTML');
+    expect(String(fd.get('caption'))).toMatch(/^<b>Smeta 5 daqiqada<\/b>\n\n/);
+    expect(JSON.parse(String(fd.get('reply_markup')))).toEqual({ inline_keyboard: [[{ text: '🌐 erp-firma.uz', url: 'https://erp-firma.uz' }]] });
+    // Eski "Kanalga yuborish" (matn) ham kanalga
+    calls = [];
+    const old = await post(`/agent-tasks/${id}/send`, { target: 'channel', index: 0 });
+    expect(old.body).toMatchObject({ ok: true, sentTo: 'channel' });
+    expect(tgCalls()[0].body).toMatchObject({ chat_id: '-1001234567890', parse_mode: 'HTML' });
+    // Sayt tugmasini o'chirish
+    await put('/smm/settings', { siteButton: false });
+    calls = [];
+    await request(app).post(`${P}/agent-tasks/${id}/items/0/publish`).set('Authorization', tok(devId)).field('target', 'telegram').attach('files', JPEG, { filename: 'a.jpg', contentType: 'image/jpeg' });
+    expect((tgCalls()[0].body as FormData).get('reply_markup')).toBeNull();
+    // Uzish — env'ga qaytadi; env ham bo'lmasa — o'z chatiga
+    expect((await request(app).delete(`${P}/smm/telegram/channel`).set('Authorization', tok(devId))).status).toBe(200);
+    delete process.env.AGENT_TG_CHANNEL_ID;
+    __resetChannelCacheForTests();
+    calls = [];
+    const own = await request(app).post(`${P}/agent-tasks/${id}/items/0/publish`).set('Authorization', tok(devId)).field('target', 'telegram');
+    expect(own.body).toMatchObject({ ok: true, sentTo: 'developer' });
+    expect(tgCalls()[0].body).toMatchObject({ chat_id: '555', parse_mode: 'HTML' });
+  });
+
+  it("to'liq avto: UI'dan ulangan kanalga jadval bo'yicha joylaydi", async () => {
+    process.env.TELEGRAM_BOT_TOKEN = 'bot123';
+    vi.spyOn(smmRender, 'renderTemplate').mockResolvedValue(JPEG);
+    expect((await post('/smm/telegram/channel', { channel: '@erp_kanal' })).status).toBe(200);
+    await put('/smm/settings', { mode: 'auto', days: [1], times: ['10:00'], formats: ['post'] });
+    __setContentRunnerForTests(async () => ({ summary: 'ok', items: [ITEM] }));
+    calls = [];
+    await smmTick(zonedToUtc('2026-10-26' as any, '10:03' as any));
+    const run: any = await SmmRun.findOne({}).lean();
+    expect(run.status).toBe('published');
+    const photo = tgCalls().find((c) => c.url.endsWith('/sendPhoto'))!;
+    expect((photo.body as FormData).get('chat_id')).toBe('-1001234567890');
+    expect(graphCalls()).toHaveLength(0);
+  });
 });

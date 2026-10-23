@@ -9,6 +9,9 @@ import { editItem, setApproval, setItemMedia } from './items';
 import { IMAGE_MIMES, publishItem, VIDEO_MIMES } from './publish';
 import { generateAiImage, ImageUnavailable, imagePromptFor, type Aspect } from './render';
 import AgentTask from '../../models/AgentTask';
+import { logAudit } from '../../services/audit';
+import { agentConfig } from '../agents/service';
+import { botInfo, removeChannel, TgVerifyError, verifyAndSaveChannel } from './channel';
 
 // SMM yo'llari (/api/ai-voice/platform/* — faqat dasturchi; bootstrap: requireAuth + requireDeveloper).
 
@@ -137,4 +140,28 @@ smmRoutes.post('/smm/analytics/refresh', wrap(async (req, res) => {
   const r = await refreshInsights(new Date());
   if (!r.ok) return res.status(502).json({ error: r.error });
   res.json({ ok: true, media: r.media, summary: await analyticsSummary() });
+}));
+
+/** Telegram kanalni UI'dan ulash: Bot API bilan tekshiriladi (kanal bormi, bot admin va "Xabar joylash" huquqi bormi), DB'ga saqlanadi. */
+smmRoutes.post('/smm/telegram/channel', wrap(async (req, res) => {
+  const rl = await hitRate(`smm:tgchan:${uid(req)}`, 30, 3_600_000);
+  if (!rl.allowed) return res.status(429).json({ error: 'rate_limited' });
+  const token = agentConfig().botToken;
+  const b = await botInfo(token);
+  try {
+    const ch = await verifyAndSaveChannel(isObj(req.body) ? req.body.channel : undefined, token, uid(req));
+    await logAudit({ userId: uid(req) || 'system', userName: 'Dasturchi', userRole: 'dasturchi', action: 'update', entity: 'smm_settings', entityId: 'telegram_channel',
+      description: `SMM: Telegram kanal ulandi — ${ch.username ? `@${ch.username}` : ch.title}`, newValue: { id: ch.id, username: ch.username }, req }).catch(() => undefined);
+    res.json({ ok: true, channel: ch, botUsername: b?.username });
+  } catch (e) {
+    const err = e instanceof TgVerifyError ? e : new TgVerifyError('tg_failed');
+    res.status(err.code === 'tg_unreachable' ? 502 : 400).json({ error: err.code, detail: err.detail || undefined, botUsername: b?.username });
+  }
+}));
+
+smmRoutes.delete('/smm/telegram/channel', wrap(async (req, res) => {
+  await removeChannel(uid(req));
+  await logAudit({ userId: uid(req) || 'system', userName: 'Dasturchi', userRole: 'dasturchi', action: 'update', entity: 'smm_settings', entityId: 'telegram_channel',
+    description: 'SMM: Telegram kanal uzildi', req }).catch(() => undefined);
+  res.json({ ok: true });
 }));

@@ -12,6 +12,7 @@ import { igConfigured, igEnv, igMaybeRefresh } from './instagram';
 import { expireStalePublishing, publishItem, type InFile } from './publish';
 import { ffmpegAvailable, GEMINI_IMAGE_MODEL, ImageUnavailable, imagePromptFor, smmRender, type Aspect } from './render';
 import { publicUrlOk, purgeExpiredTemp } from './tempMedia';
+import { botInfo, channelConfig, invalidateChannelCache } from './channel';
 
 // SMM avtopilot (owner 2026-10-23: "agent o'zi boshqarsin — yangiliklar, postlar, reels").
 // Rejimlar: off | approve ("tasdiq bilan" — jadval bo'yicha tayyorlaydi, egasi bir tugma bilan tasdiqlaydi; rasm/video
@@ -95,12 +96,17 @@ export async function saveSettings(body: Record<string, any>, by: string, req?: 
     if (!Number.isInteger(body.dailyCap) || body.dailyCap < 1 || body.dailyCap > 10) return { ok: false, error: 'invalid' };
     set.dailyCap = body.dailyCap;
   }
+  if (body.siteButton !== undefined) {
+    if (typeof body.siteButton !== 'boolean') return { ok: false, error: 'invalid' };
+    set.tgSiteButton = body.siteButton;
+  }
   if (body.paused !== undefined) {
     if (typeof body.paused !== 'boolean') return { ok: false, error: 'invalid' };
     set.paused = body.paused;
   }
   set.updatedBy = by;
   const doc = await SmmSettings.findOneAndUpdate({ key: 'global' }, { $set: set }, { upsert: true, returnDocument: 'after' }).lean();
+  invalidateChannelCache();
   const u: any = /^[0-9a-f]{24}$/i.test(by) ? await User.findById(by).select('firstName lastName role').lean().catch(() => null) : null;
   await logAudit({
     userId: by || 'system', userName: [u?.firstName, u?.lastName].filter(Boolean).join(' ') || 'Dasturchi', userRole: u?.role || 'dasturchi',
@@ -122,7 +128,12 @@ export async function connectionStatus() {
     lastRefreshAt: s?.igLastRefreshAt ? new Date(s.igLastRefreshAt).toISOString() : undefined, refreshError: s?.igRefreshError || undefined,
     publicUrl: publicUrlOk(), secretsKey: secretsKeyConfigured(),
   };
-  const tg = { bot: !!c.botToken, channel: !!(c.tgChannel && c.botToken), channelName: /^@\w+$/.test(c.tgChannel) ? c.tgChannel : undefined, devChat: !!(c.devChat && c.botToken), viewsAvailable: false };
+  const ch = await channelConfig();
+  const b = await botInfo(c.botToken);
+  const tg = {
+    bot: !!c.botToken, botUsername: b?.username || undefined, channel: !!(ch.chat && c.botToken), channelSource: ch.source,
+    channelName: ch.username ? `@${ch.username}` : undefined, channelTitle: ch.title, siteButton: ch.siteButton, devChat: !!(c.devChat && c.botToken), viewsAvailable: false,
+  };
   const items = [
     { key: 'TELEGRAM_BOT_TOKEN', ok: tg.bot, required: true, for: 'telegram' },
     { key: 'AGENT_TG_CHANNEL_ID', ok: tg.channel, required: false, for: 'telegram' },
@@ -261,7 +272,7 @@ export async function runSlot(runKey: string, date: string, s: any): Promise<str
   }
   // ── To'liq avto ──
   const wantIg = s.targets?.instagram !== false && igConfigured() && publicUrlOk();
-  const wantTg = s.targets?.telegram !== false && !!(agentConfig().tgChannel && agentConfig().botToken);
+  const wantTg = s.targets?.telegram !== false && !!((await channelConfig()).chat && agentConfig().botToken);
   if (!wantIg && !wantTg) {
     await AgentTask.updateOne({ _id: taskId }, { $set: { 'items.0.approval': 'pending' }, $push: { log: logLine("Avtopilot: Instagram ham, Telegram kanal ham sozlanmagan — e'lon qilinmadi, tasdiq kutadi") } });
     return finish('prepared', "e'lon joyi sozlanmagan — tasdiq kutadi", meta);

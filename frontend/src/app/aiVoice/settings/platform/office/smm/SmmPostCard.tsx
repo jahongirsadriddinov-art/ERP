@@ -12,16 +12,16 @@ import { pickVideoMime, type VideoType } from "./studio";
 // yuklab olish, matnni tahrirlash, Telegram / Instagram'ga e'lon (holat va havolalar), avtopilot tasdig'i.
 type K = (key: string, o?: Record<string, unknown>) => string;
 
-export const IG_ERRORS = ["ig_not_configured", "public_url_required", "ig_token_invalid", "ig_permission", "ig_rate_limited", "ig_publish_limit", "ig_media_fetch",
+export const IG_ERRORS = ["tg_channel_invalid", "tg_chat_not_found", "tg_not_channel", "tg_bot_not_admin", "tg_no_post_right", "tg_bot_missing", "tg_unreachable", "tg_failed","ig_not_configured", "public_url_required", "ig_token_invalid", "ig_permission", "ig_rate_limited", "ig_publish_limit", "ig_media_fetch",
   "ig_media_format", "ig_video_format", "ig_jpeg_required", "ig_timeout", "ig_expired", "ig_carousel_count", "ig_media_required", "ig_video_required",
   "ig_user_id_missing", "ig_unreachable", "already_published", "publishing", "telegram_failed", "not_configured", "file_too_large", "no_recorder",
   "media_missing", "rate_limited", "aborted"];
-export const smmErr = (e: string | undefined, k: K) => (e && IG_ERRORS.includes(e) ? k(`err.${e}`) : k("err.generic"));
+export const smmErr = (e: string | undefined, k: K, o?: Record<string, unknown>) => (e && IG_ERRORS.includes(e) ? k(`err.${e}`, { bot: "@bot", ...o }) : k("err.generic"));
 
 interface Preview { id: string; url: string | null; kind: "image" | "video"; mime?: string; size?: number }
 
-export default function SmmPostCard({ taskId, index, item, settings, status, onChanged }: {
-  taskId: string; index: number; item: SmmItem; settings: SmmSettings | null; status: SmmStatus | null; onChanged: () => void;
+export default function SmmPostCard({ taskId, index, item, settings, status, onChanged, onOpenSettings }: {
+  taskId: string; index: number; item: SmmItem; settings: SmmSettings | null; status: SmmStatus | null; onChanged: () => void; onOpenSettings?: () => void;
 }) {
   const { t } = useTranslation();
   const k: K = (key, o) => t(`aiVoice.office.smm.${key}`, o) as string;
@@ -81,8 +81,11 @@ export default function SmmPostCard({ taskId, index, item, settings, status, onC
     setBusy(target);
     const r = await smmApi.publish(taskId, index, { target, kind: target === "instagram" ? kind : undefined, tgTarget: "channel", force: opts.force }, blobs);
     setBusy(null);
-    if (!r.ok) { toast.error(smmErr(r.error, k) + (r.errorData?.detail ? ` — ${r.errorData.detail}` : "")); onChanged(); return false; }
-    if (target === "telegram") toast.success(r.data?.sentTo === "developer" ? k("sentToMe") : k("sentChannel"));
+    if (!r.ok) { toast.error(smmErr(r.error, k, { bot: status?.telegram.botUsername ? `@${status.telegram.botUsername}` : "@bot" }) + (r.errorData?.detail ? ` — ${r.errorData.detail}` : "")); onChanged(); return false; }
+    if (target === "telegram") {
+      if (r.data?.sentTo === "developer") toast.message(k("sentToMe"), onOpenSettings ? { action: { label: k("connectChannel"), onClick: onOpenSettings } } : undefined);
+      else toast.success(k("sentChannel"));
+    }
     else toast.success(k("igQueued"));
     onChanged();
     return true;
@@ -232,7 +235,7 @@ export default function SmmPostCard({ taskId, index, item, settings, status, onC
       {/* E'lon */}
       <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
         <button type="button" onClick={() => navigator.clipboard.writeText(full).then(() => toast.success(k("copied")), () => toast.error(k("err.generic")))} className={btn}>{k("copy")}</button>
-        <button type="button" className={btn} disabled={!!busy} onClick={() => publish("telegram")} data-testid="smm-pub-tg">{busy === "telegram" ? k("working") : k("toTelegram")}</button>
+        <button type="button" className={btn} disabled={!!busy} onClick={() => publish("telegram")} data-testid="smm-pub-tg">{busy === "telegram" ? k("working") : status?.telegram.channel ? k("toChannel") : k("toBotSelf")}</button>
         <select value={kind} onChange={(e) => setKind(e.target.value as SmmFormat)} aria-label={k("igKind")} className="h-7 rounded-full border border-border bg-background px-2 text-[11.5px]" data-testid="smm-ig-kind">
           {SMM_FORMATS.map((f) => <option key={f} value={f}>{k(`formats.${f}`)}</option>)}
         </select>

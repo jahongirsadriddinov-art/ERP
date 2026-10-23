@@ -18,7 +18,7 @@ export interface SmmSettings {
   targets: { telegram: boolean; instagram: boolean }; dailyCap: number; paused: boolean; perWeek: number; next?: string; envKill: boolean;
 }
 export interface SmmStatus {
-  telegram: { bot: boolean; channel: boolean; channelName?: string; devChat: boolean; viewsAvailable: boolean };
+  telegram: { bot: boolean; botUsername?: string; channel: boolean; channelSource?: "db" | "env" | "none"; channelName?: string; channelTitle?: string; siteButton?: boolean; devChat: boolean; viewsAvailable: boolean };
   instagram: { configured: boolean; userIdSet: boolean; via: "instagram" | "facebook"; appSet: boolean; username?: string; expiresAt?: string; lastRefreshAt?: string; refreshError?: string; publicUrl: boolean; secretsKey: boolean };
   gemini: { configured: boolean; imageModel: string };
   ffmpeg: boolean;
@@ -38,7 +38,9 @@ const item = (id: string, i: number) => `/platform/agent-tasks/${id}/items/${i}`
 
 export const smmApi = {
   settings: () => call<{ settings: SmmSettings; status: SmmStatus }>("GET", "/platform/smm/settings"),
-  saveSettings: (b: Partial<Omit<SmmSettings, "perWeek" | "next" | "envKill">>) => call<{ ok: true; settings: SmmSettings }>("PUT", "/platform/smm/settings", b),
+  saveSettings: (b: Partial<Omit<SmmSettings, "perWeek" | "next" | "envKill">> & { siteButton?: boolean }) => call<{ ok: true; settings: SmmSettings }>("PUT", "/platform/smm/settings", b),
+  tgChannel: (channel: string) => call<{ ok: true; channel: { id: string; username?: string; title: string }; botUsername?: string }>("POST", "/platform/smm/telegram/channel", { channel }),
+  tgChannelRemove: () => call<{ ok: true }>("DELETE", "/platform/smm/telegram/channel"),
   runs: () => call<{ runs: SmmRunRow[] }>("GET", "/platform/smm/runs"),
   igCheck: () => call<{ ok: true; username: string; followers?: number; mediaCount?: number }>("POST", "/platform/smm/instagram/check", {}),
   igRefresh: () => call<{ ok: true; expiresAt?: string }>("POST", "/platform/smm/instagram/refresh", {}),

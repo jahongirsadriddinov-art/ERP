@@ -5,6 +5,7 @@ import { agentConfig } from '../agents/service';
 import { IgError, igConfigured, igPublish, type IgKind } from './instagram';
 import { smmRender, ffmpegAvailable } from './render';
 import { TgError, tgSendPost, type TgFile } from './telegram';
+import { channelConfig, SITE_BUTTON_URL, siteButtonLabel } from './channel';
 import { publicUrlOk, putTemp, removeTemp } from './tempMedia';
 
 // SMM e'lon (owner 2026-10-23): qurilmadan kelgan (yoki avtopilot serverda yaratgan) fayllar bilan Telegram / Instagram.
@@ -47,10 +48,12 @@ async function audit(by: string | undefined, description: string, entityId: stri
 }
 
 /** Telegram uchun chat: kanal (sozlangan bo'lsa) yoki (faqat qo'lda) dasturchining o'z chati. Avtopilot — faqat kanal. */
-async function tgChat(target: 'channel' | 'developer', by: string | undefined, strict: boolean): Promise<{ chat: string; sentTo: 'channel' | 'developer' } | null> {
+export async function tgChat(target: 'channel' | 'developer', by: string | undefined, strict: boolean): Promise<{ chat: string; username?: string; sentTo: 'channel' | 'developer' } | null> {
   const c = agentConfig();
   if (!c.botToken) return null;
-  if (target === 'channel' && c.tgChannel) return { chat: c.tgChannel, sentTo: 'channel' };
+  // Kanal ulangan bo'lsa (UI'dan yoki env) — DOIM kanalga; o'z chatiga faqat kanal umuman yo'q bo'lsa
+  const ch = await channelConfig();
+  if (target === 'channel' && ch.chat) return { chat: ch.chat, username: ch.username, sentTo: 'channel' };
   if (strict) return null;
   if (target === 'developer' && c.devChat) return { chat: c.devChat, sentTo: 'developer' };
   const own: any = by && ID_RE.test(by) ? await User.findById(by).select('telegramChatId').lean().catch(() => null) : null;
@@ -104,15 +107,21 @@ export async function publishItem(taskId: string, index: number, target: Publish
     const dest = await tgChat(o.tgTarget || 'channel', o.by, !!o.auto);
     if (!dest) return { ok: false, status: 409, error: 'not_configured' };
     try {
-      const r = await tgSendPost({ token: agentConfig().botToken, chat: dest.chat, text: captionOf(it, 4096), title: it.title, files: files.map((f): TgFile => ({ data: f.data, mime: f.mime })) });
+      const ch = await channelConfig();
+      const url = SITE_BUTTON_URL();
+      const r = await tgSendPost({
+        token: agentConfig().botToken, chat: dest.chat, username: dest.username, item: it, files: files.map((f): TgFile => ({ data: f.data, mime: f.mime })),
+        ...(ch.siteButton ? { button: { text: siteButtonLabel(url), url } } : {}),
+      });
       const state = { status: 'published', at: new Date(), target: dest.sentTo, messageId: r.messageId, ...(r.url ? { url: r.url } : {}) };
       await AgentTask.updateOne({ _id: taskId }, { $set: { [`${key}.tg`]: state }, $push: { log: logLine(`${o.auto ? 'Avtopilot: ' : ''}Telegram ${dest.sentTo === 'channel' ? 'kanalga' : 'chatingizga'} yuborildi${files.length ? ` (${files.length} ta fayl)` : ''}`) } });
       await audit(o.by, `SMM: Telegram ${dest.sentTo === 'channel' ? 'kanalga' : 'dasturchi chatiga'} e'lon — "${String(it.title || '').slice(0, 80)}"`, where, o.req, { target: 'telegram', sentTo: dest.sentTo, files: files.length });
       return { ok: true, status: 200, sentTo: dest.sentTo, url: r.url };
     } catch (e) {
       const detail = e instanceof TgError ? e.detail : '';
-      await AgentTask.updateOne({ _id: taskId }, { $set: { [`${key}.tg`]: { status: 'failed', at: new Date(), error: 'telegram_failed', detail } }, $push: { log: logLine(`Telegram xatosi: ${detail || 'yuborilmadi'}`) } });
-      return { ok: false, status: 502, error: 'telegram_failed', detail };
+      const code = e instanceof TgError ? e.code : 'telegram_failed';
+      await AgentTask.updateOne({ _id: taskId }, { $set: { [`${key}.tg`]: { status: 'failed', at: new Date(), error: code, detail } }, $push: { log: logLine(`Telegram xatosi: ${detail || 'yuborilmadi'}`) } });
+      return { ok: false, status: 502, error: code, detail };
     }
   }
 

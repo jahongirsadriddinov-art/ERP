@@ -44,10 +44,7 @@ export default function SmmSettingsPanel({ settings, status, onSaved }: { settin
       {/* Ulanishlar */}
       <section className="rounded-xl border border-border p-2.5 space-y-2">
         <p className="text-[12.5px] font-bold">{k("connections")}</p>
-        <div className="flex items-start gap-2 text-[12px]" data-testid="smm-conn-tg">
-          <Badge tone={tg?.channel ? "green" : tg?.bot ? "amber" : "red"}>Telegram</Badge>
-          <span className="text-muted-foreground">{tg?.channel ? k("tgChannelOk", { name: tg.channelName || "" }) : tg?.bot ? k("tgOwnChat") : k("tgNoBot")} {k("tgViews")}</span>
-        </div>
+        <TelegramChannel status={status} k={k} onSaved={onSaved} />
         <div className="flex items-start gap-2 text-[12px]" data-testid="smm-conn-ig">
           <Badge tone={ig?.configured && ig.publicUrl ? "green" : "amber"}>Instagram</Badge>
           <span className="text-muted-foreground flex-1">
@@ -183,5 +180,52 @@ function DeviceFiles({ k }: { k: K }) {
       ))}
       {!list.length && <p className="text-[11.5px] text-muted-foreground">{k("deviceEmpty")}</p>}
     </section>
+  );
+}
+
+/** Telegram kanalni UI'dan ulash: @username yoki -100… → "Tekshirish" (bot admin va "Xabar joylash" huquqi) → saqlanadi. */
+function TelegramChannel({ status, k, onSaved }: { status: SmmStatus | null; k: K; onSaved: () => void }) {
+  const tg = status?.telegram;
+  const [v, setV] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const bot = tg?.botUsername ? `@${tg.botUsername}` : "@bot";
+  const check = async () => {
+    if (!v.trim() || busy) return;
+    setBusy(true); setErr(null);
+    const r = await smmApi.tgChannel(v.trim());
+    setBusy(false);
+    if (!r.ok) { setErr(smmErr(r.error, k, { bot: r.errorData?.botUsername ? `@${r.errorData.botUsername}` : bot })); return; }
+    toast.success(k("tgConnected", { name: r.data.channel.username ? `@${r.data.channel.username}` : r.data.channel.title }));
+    setV("");
+    onSaved();
+  };
+  return (
+    <div className="space-y-1.5" data-testid="smm-conn-tg">
+      <div className="flex items-start gap-2 text-[12px]">
+        <Badge tone={tg?.channel ? "green" : tg?.bot ? "amber" : "red"}>Telegram</Badge>
+        <span className="text-muted-foreground flex-1">
+          {tg?.channel ? k("tgChannelOk", { name: [tg.channelTitle, tg.channelName].filter(Boolean).join(" ") }) : tg?.bot ? k("tgOwnChat") : k("tgNoBot")}
+          {tg?.channel && tg.channelSource === "env" ? ` (${k("tgFromEnv")})` : ""} {k("tgViews")}
+        </span>
+      </div>
+      {tg?.bot && (
+        <>
+          <div className="flex gap-1.5">
+            <input value={v} onChange={(e) => setV(e.target.value)} placeholder={k("tgChannelPh")} aria-label={k("tgChannelField")} data-testid="smm-tg-channel-input"
+              onKeyDown={(e) => { if (e.key === "Enter") check(); }} className="flex-1 min-w-0 h-8 rounded-lg border border-border bg-background px-2.5 text-[12px]" />
+            <button type="button" onClick={check} disabled={busy || !v.trim()} data-testid="smm-tg-channel-check" className="h-8 px-3 rounded-full bg-primary text-primary-foreground text-[12px] font-semibold disabled:opacity-50">{busy ? k("working") : k("tgCheck")}</button>
+            {tg.channel && tg.channelSource === "db" && (
+              <button type="button" className="h-8 px-3 rounded-full border border-border text-[12px] font-semibold" onClick={async () => { await smmApi.tgChannelRemove(); onSaved(); }}>{k("tgDisconnect")}</button>
+            )}
+          </div>
+          {err && <p className="text-[11.5px] text-red-600" role="alert" data-testid="smm-tg-channel-error">{err}</p>}
+          <p className="text-[11px] text-muted-foreground" data-testid="smm-tg-howto">{k("tgHowto", { bot })}</p>
+          <label className="flex items-center gap-1.5 text-[11.5px]">
+            <input type="checkbox" checked={tg.siteButton !== false} onChange={async (e) => { await smmApi.saveSettings({ siteButton: e.target.checked }); onSaved(); }} />{k("tgSiteButton")}
+          </label>
+        </>
+      )}
+    </div>
   );
 }

@@ -14,12 +14,12 @@ const PROFILES = [
 // 1×1 PNG
 const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 
-type Calls = { media: any[]; publish: string[]; settings: any[]; approvals: any[]; images: any[] };
+type Calls = { media: any[]; publish: string[]; settings: any[]; approvals: any[]; images: any[]; channel?: any[] };
 
 async function mockApi(page: Page, calls: Calls) {
   const settings: any = { mode: 'off', days: [1, 3, 5], times: ['10:00'], formats: ['post', 'carousel', 'reel', 'story'], language: 'uz', targets: { telegram: true, instagram: true }, dailyCap: 3, paused: false, perWeek: 3, envKill: false };
   const status = {
-    telegram: { bot: true, channel: false, devChat: false, viewsAvailable: false },
+    telegram: { bot: true, botUsername: 'qurilish_erp_bot', channel: false, channelSource: 'none', siteButton: true, devChat: false, viewsAvailable: false } as any,
     instagram: { configured: true, userIdSet: true, via: 'instagram', appSet: false, username: 'qurilisherp', publicUrl: true, secretsKey: true },
     gemini: { configured: true, imageModel: 'gemini-2.5-flash-image' }, ffmpeg: true,
     items: [{ key: 'INSTAGRAM_ACCESS_TOKEN', ok: true, required: true, for: 'instagram' }, { key: 'AGENT_TG_CHANNEL_ID', ok: false, required: false, for: 'telegram' }],
@@ -45,6 +45,13 @@ async function mockApi(page: Page, calls: Calls) {
       if (method === 'PUT') { const b = req.postDataJSON(); calls.settings.push(b); Object.assign(settings, b, { perWeek: b.days.length * b.times.length, next: new Date(Date.now() + 3600e3).toISOString() }); return json({ ok: true, settings }); }
       return json({ settings, status });
     }
+    if (url.includes('/platform/smm/telegram/channel')) {
+      const b = req.postDataJSON();
+      (calls.channel ||= []).push(b);
+      if (calls.channel.length === 1) return json({ error: 'tg_bot_not_admin', botUsername: 'qurilish_erp_bot' }, 400);
+      Object.assign(status.telegram, { channel: true, channelSource: 'db', channelName: '@erp_kanal', channelTitle: 'QurilishERP yangiliklari' });
+      return json({ ok: true, channel: { id: '-1001234567890', username: 'erp_kanal', title: 'QurilishERP yangiliklari' }, botUsername: 'qurilish_erp_bot' });
+    }
     if (url.includes('/platform/smm/runs')) return json({ runs: [{ key: 'smm:2026-10-22:10:00', status: 'published', format: 'reel', note: "reel: Instagram: ok", at: iso(86400) }] });
     if (url.includes('/platform/smm/image')) { calls.images.push(req.postDataJSON()); return json({ mime: 'image/png', data: PNG, source: 'ai' }); }
     if (url.includes('/platform/smm/analytics')) {
@@ -64,6 +71,7 @@ async function mockApi(page: Page, calls: Calls) {
       if (m[2] === '/publish') {
         const body = (req.postDataBuffer() || Buffer.alloc(0)).toString('latin1');
         calls.publish.push(body);
+        if (body.includes('name="target"\r\n\r\ntelegram')) return json({ ok: true, sentTo: status.telegram.channel ? 'channel' : 'developer', ...(status.telegram.channel ? { url: 'https://t.me/erp_kanal/40' } : {}) });
         items[i].ig = { status: 'published', at: new Date().toISOString(), kind: 'post', url: 'https://www.instagram.com/p/XYZ/' };
         return json({ ok: true, pending: true }, 202);
       }
@@ -225,5 +233,34 @@ test('SMM: Reels — kod bilan animatsion video (canvas + MediaRecorder, haqiqiy
     await v.evaluate((el: HTMLVideoElement, t) => new Promise((r) => { el.onseeked = () => r(null); el.currentTime = t; }), at);
     await v.screenshot({ path: `test-results/smm/reel-${at}s.png` });
   }
+  expect(errors, errors.join(' | ')).toEqual([]);
+});
+
+test("SMM: Telegram kanalni UI'dan ulash — bot admin emas xatosi (bot nomi bilan), so'ng ulanadi; tugma «Kanalga joylash»", async ({ page }) => {
+  test.setTimeout(90_000);
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  const calls: Calls = { media: [], publish: [], settings: [], approvals: [], images: [] };
+  await mockApi(page, calls);
+  await seed(page);
+  await openSmm(page);
+  const card = page.getByTestId('ai-office-item-0');
+  // Kanal yo'q: tugma o'ziga yuborishini aytadi; yuborilgach — "Kanalni ulash" yorlig'i
+  await expect(card.getByTestId('smm-pub-tg')).toHaveText("Botga (o'zimga) yuborish");
+  await card.getByTestId('smm-pub-tg').click();
+  await expect(page.getByText("Botga (o'zingizga) yuborildi — kanal ulanmagan")).toBeVisible();
+  await page.getByRole('button', { name: 'Kanalni ulash' }).click();
+  await expect(page.getByTestId('smm-settings')).toBeVisible();
+  await expect(page.getByTestId('smm-tg-howto')).toContainText('@qurilish_erp_bot');
+  await page.getByTestId('smm-tg-channel-input').fill('@erp_kanal');
+  await page.getByTestId('smm-tg-channel-check').click();
+  await expect(page.getByTestId('smm-tg-channel-error')).toContainText("Botni kanalga admin qiling: Kanal → Administratorlar → Admin qo'shish → @qurilish_erp_bot");
+  await page.getByTestId('smm-tg-channel-check').click();
+  await expect(page.getByTestId('smm-conn-tg')).toContainText('QurilishERP yangiliklari @erp_kanal');
+  expect(calls.channel?.at(-1)).toEqual({ channel: '@erp_kanal' });
+  await page.getByTestId('smm-tab-posts').click();
+  await expect(page.getByTestId('ai-office-item-0').getByTestId('smm-pub-tg')).toHaveText('Kanalga joylash');
+  await page.getByTestId('ai-office-item-0').getByTestId('smm-pub-tg').click();
+  await expect(page.getByText('Kanalga joylandi')).toBeVisible();
   expect(errors, errors.join(' | ')).toEqual([]);
 });

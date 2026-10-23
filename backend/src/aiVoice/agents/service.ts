@@ -8,6 +8,8 @@ import { logAudit } from '../../services/audit';
 import { geminiConfigured, geminiTextToJson } from '../../services/gemini';
 import { AGENT_DEFAULTS } from './defaults';
 import { asSmmItem, featuresContext, newsContext, SMM_KEYS, smmFormatSpec } from '../smm/content';
+import { channelConfig, SITE_BUTTON_URL, siteButtonLabel } from '../smm/channel';
+import { tgSendPost } from '../smm/telegram';
 
 // AI ofis — boshqaruv markazi (owner 2026-10-22). Agentlar ro'yxati (AgentProfile), buyruqlar (AgentTask) va bajarish:
 //  • code agentlari → GitHub Actions repository_dispatch (event 'agent-task'); workflow (.github/workflows/agent-task.yml)
@@ -748,33 +750,31 @@ export async function sendTaskToTelegram(id: string, target: unknown, index: unk
   if (t.status !== 'done') return { ok: false, error: 'not_done', status: 409 };
   const c = agentConfig();
   if (target !== 'channel' && target !== 'developer') return { ok: false, error: 'invalid', status: 400 };
-  // Owner 2026-10-23: kanal (AGENT_TG_CHANNEL_ID) yoki DEVELOPER_CHAT_ID qo'yilmagan bo'lsa — bosgan dasturchining
-  // o'z Telegram chatiga (botga /start bosgan akkaunt) yuboriladi; javobda qayerga ketgani aytiladi
-  let chat = target === 'channel' ? c.tgChannel : c.devChat;
-  let sentTo: 'channel' | 'developer' = target === 'channel' && c.tgChannel ? 'channel' : 'developer';
+  // Owner 2026-10-23: kanal ulangan bo'lsa (UI'dan — SMM sozlamalari, yoki env AGENT_TG_CHANNEL_ID) post DOIM kanalga;
+  // kanal umuman yo'q bo'lsa — bosgan dasturchining o'z Telegram chatiga (javobda qayerga ketgani aytiladi)
+  const ch = await channelConfig();
+  let chat = target === 'channel' ? ch.chat : c.devChat;
+  let sentTo: 'channel' | 'developer' = target === 'channel' && ch.chat ? 'channel' : 'developer';
   if (!chat || target === 'developer') {
     const own: any = requesterId && /^[0-9a-f]{24}$/i.test(requesterId) ? await User.findById(requesterId).select('telegramChatId').lean().catch(() => null) : null;
     if (!chat && own?.telegramChatId) chat = String(own.telegramChatId);
-    if (target === 'channel' && !c.tgChannel) sentTo = 'developer';
+    if (target === 'channel' && !ch.chat) sentTo = 'developer';
   }
   // sozlanmagan — server xatosi emas (409), xatolar ro'yxatini to'ldirmasin
   if (!chat || !c.botToken) return { ok: false, error: 'not_configured', status: 409 };
-  let text: string;
+  let item: { title?: string; text?: string; hashtags?: string[] };
   if (typeof index === 'number' && Number.isInteger(index)) {
     const it = t.items?.[index];
     if (!it) return { ok: false, error: 'invalid', status: 400 };
-    text = [it.title, it.text, (it.hashtags || []).join(' ')].filter(Boolean).join('\n\n');
+    item = { title: it.title, text: it.text, hashtags: it.hashtags };
   } else {
-    text = t.summary || '';
+    item = { text: t.summary || '' };
   }
-  if (!text) return { ok: false, error: 'empty', status: 400 };
+  if (!item.text) return { ok: false, error: 'empty', status: 400 };
   try {
-    const res = await fetch(`https://api.telegram.org/bot${c.botToken}/sendMessage`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chat, text: text.slice(0, 4000), disable_web_page_preview: true }),
-      signal: AbortSignal.timeout(15_000),
-    });
-    if (!res.ok) return { ok: false, error: 'telegram_failed', status: 502 };
+    const url = SITE_BUTTON_URL();
+    await tgSendPost({ token: c.botToken, chat, username: sentTo === 'channel' ? ch.username : undefined, item, files: [],
+      ...(sentTo === 'channel' && ch.siteButton && typeof index === 'number' ? { button: { text: siteButtonLabel(url), url } } : {}) });
   } catch {
     return { ok: false, error: 'telegram_failed', status: 502 };
   }

@@ -36,6 +36,13 @@ const SmmSettingsSchema = new Schema({
   igUserId: String,                                // INSTAGRAM_USER_ID berilmasa /me'dan aniqlangan
   igUsername: String,
   insightsAt: Date,
+  // -- Telegram kanal (UI'dan ulanadi, env AGENT_TG_CHANNEL_ID'dan ustun) --
+  tgChannelId: String,
+  tgChannelUsername: String,
+  tgChannelTitle: String,
+  tgChannelCheckedAt: Date,
+  /** Kanal postlari ostida "sayt" tugmasi. */
+  tgSiteButton: { type: Boolean, default: true },
 }, { timestamps: true });
 
 /** Avtopilot ishga tushishi (slot) — unique key bir nechta instansiyada ikki marta ishlamaslik uchun (leader-safe). */

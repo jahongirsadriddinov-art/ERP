@@ -138,7 +138,7 @@ export default function AgentPanel({ agent, profile, profiles, setup, onClose, o
 
       {editing && profile && <EditAgent profile={profile} onSaved={() => { setEditing(false); onProfile(); onChanged(); }} />}
 
-      {isSmm && agent.id === "smm" && (
+      {isSmm && (
         <div className="flex gap-1 rounded-full bg-muted/50 p-1" role="tablist" data-testid="smm-tabs">
           {(["posts", "autopilot", "stats"] as const).map((x) => (
             <button key={x} type="button" role="tab" aria-selected={smmTab === x} onClick={() => setSmmTab(x)} data-testid={`smm-tab-${x}`}
@@ -177,7 +177,7 @@ export default function AgentPanel({ agent, profile, profiles, setup, onClose, o
             {tasks === null ? <div className="h-16 rounded-xl bg-muted/40 animate-pulse" />
               : !tasks.length ? <p className="text-xs text-muted-foreground" data-testid="ai-office-no-tasks">{k("empty")}</p>
                 : tasks.map((x) => (
-                  <TaskCard key={x.id} task={x} k={k} profiles={profiles} smm={isSmm ? { ...smm, reload: () => { load(); onChanged(); } } : undefined} childOf={childOf} nameOf={nameOf} onOpenAgent={onOpenAgent}
+                  <TaskCard key={x.id} task={x} k={k} profiles={profiles} smm={isSmm ? { ...smm, reload: () => { load(); onChanged(); }, openSettings: () => setSmmTab("autopilot") } : undefined} childOf={childOf} nameOf={nameOf} onOpenAgent={onOpenAgent}
                     onCancel={() => act(officeApi.cancel(x.id))} onRetry={(id = x.id) => act(officeApi.retry(id))}
                     onApprove={(b) => act(officeApi.approve(x.id, b))}
                     onSend={async (target, index) => {
@@ -196,7 +196,7 @@ export default function AgentPanel({ agent, profile, profiles, setup, onClose, o
 }
 
 function TaskCard({ task, k, profiles, childOf, nameOf, onCancel, onRetry, onApprove, onSend, onOpenAgent, smm }: {
-  task: AgentTask; k: K; smm?: { settings: SmmSettings | null; status: SmmStatus | null; reload: () => void }; profiles: AgentProfile[]; childOf: Map<string, AgentTask>; nameOf: (key: string) => string; onOpenAgent: (id: string) => void;
+  task: AgentTask; k: K; smm?: { settings: SmmSettings | null; status: SmmStatus | null; reload: () => void; openSettings: () => void }; profiles: AgentProfile[]; childOf: Map<string, AgentTask>; nameOf: (key: string) => string; onOpenAgent: (id: string) => void;
   onCancel: () => void; onRetry: (id?: string) => void; onApprove: (b: { spec?: string; plan?: PlanItem[] }) => void;
   onSend: (target: "channel" | "developer", index?: number) => void;
 }) {
@@ -277,7 +277,7 @@ function TaskCard({ task, k, profiles, childOf, nameOf, onCancel, onRetry, onApp
       )}
 
       {smm && task.items.map((it, i) => (
-        <SmmPostCard key={i} taskId={task.id} index={i} item={it} settings={smm.settings} status={smm.status} onChanged={smm.reload} />
+        <SmmPostCard key={i} taskId={task.id} index={i} item={it} settings={smm.settings} status={smm.status} onChanged={smm.reload} onOpenSettings={smm.openSettings} />
       ))}
       {!smm && task.items.map((it, i) => {
         const full = [it.title, it.text, (it.hashtags || []).join(" ")].filter(Boolean).join("\n\n");

@@ -56,6 +56,8 @@ export class Crowd {
   grid: Grid;
   walkers = new Map<string, Walker>();
   time = 0;
+  /** Yurish rejimida o'yinchi yaqinidagi agentlar (ismi ko'rinadi) — Player yangilaydi. */
+  labels = new Set<string>();
   constructor(grid: Grid) { this.grid = grid; }
 
   setGrid(g: Grid) {

@@ -31,9 +31,17 @@ export interface OfficeSceneProps {
   walk?: SceneWalk | null;
   onContextLost?: () => void;
   onHub?: (hub: ScreenHub | null) => void;
+  /** Ro'yxatdan "topish": n o'zgarsa — kamera shu agentga uchib boradi. */
+  focus?: { id: string; n: number } | null;
+  /** Gapirayotgan agent (suhbat javobi) — pufak + animatsiya. */
+  speech?: { id: string; text: string } | null;
+  /** Kinozal ekrani uchun to'g'ridan-to'g'ri video (mp4/webm) — video tekstura. */
+  cinemaSrc?: string | null;
+  /** Musiqa chalinyapti — radio yonida notalar. */
+  musicOn?: boolean;
 }
 
-export default function OfficeScene({ agents, selectedId, onSelect, showAllLabels, compact, dark, resetKey, zoneNames, youLabel, walk, onContextLost, onHub }: OfficeSceneProps) {
+export default function OfficeScene({ agents, selectedId, onSelect, showAllLabels, compact, dark, resetKey, zoneNames, youLabel, walk, onContextLost, onHub, focus, speech, cinemaSrc, musicOn }: OfficeSceneProps) {
   const layoutKey = agents.map((a) => `${a.id}:${a.team}:${a.kind}`).join("|");
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const layout = useMemo(() => computeLayout(agents.map((a) => ({ id: a.id, team: a.team, kind: a.kind }))), [layoutKey]);
@@ -85,6 +93,8 @@ export default function OfficeScene({ agents, selectedId, onSelect, showAllLabel
       .map((id) => { const d = layout.desks.get(id)!; return { x: d.chair.x, z: d.chair.z - d.dir * 0.95, face: d.dir > 0 ? 0 : Math.PI }; });
   }, [othersKey, layout]);
   const onAir = agents.some((a) => a.activity === "call");
+  // Qo'ng'iroq pufaklari — bir vaqtda ko'pi bilan 3 ta (tartibsizlik bo'lmasin)
+  const bubbleIds = useMemo(() => new Set(agents.filter((a) => a.activity === "call").slice(0, 3).map((a) => a.id)), [agents]);
 
   return (
     <div ref={wrap} className="absolute inset-0" data-testid="ai-office-canvas-wrap">
@@ -111,8 +121,8 @@ export default function OfficeScene({ agents, selectedId, onSelect, showAllLabel
         <Kitchen />
         <Cook />
         <GameCorner hub={hub} />
-        <Cinema hub={hub} />
-        <Lounge />
+        <Cinema hub={hub} videoSrc={cinemaSrc || null} />
+        <Lounge musicOn={!!musicOn} />
         <Plants />
         {agents.map((a) => {
           const desk = layout.desks.get(a.id);
@@ -123,13 +133,13 @@ export default function OfficeScene({ agents, selectedId, onSelect, showAllLabel
           return (
             <Agent key={a.id} agent={a} desk={desk} poi={pi !== undefined ? layout.pois[pi] : undefined} tour={tour} crowd={crowd}
               selected={selectedId === a.id} talking={walk?.talkingId === a.id}
-              showLabel={showAllLabels || a.busy || selectedId === a.id || a.activity === "review" || (!!a.task && a.task.status !== "queued")}
-              bubbles={!compact || !!walk}
+              showLabel={showAllLabels || selectedId === a.id}
+              bubble={bubbleIds.has(a.id) && (!compact || !!walk)} speech={speech?.id === a.id ? speech.text : null}
               onSelect={onSelect} />
           );
         })}
         {walk ? <Player crowd={crowd} grid={grid} bridge={walk.bridge} agents={agents} holding={walk.holding} youLabel={youLabel} />
-          : <Controls compact={compact} resetKey={resetKey} />}
+          : <Controls compact={compact} resetKey={resetKey} crowd={crowd} focus={focus || null} />}
       </Canvas>
     </div>
   );
@@ -206,11 +216,29 @@ export function fitView(camera: THREE.PerspectiveCamera, aspect: number): Fit {
   return front;
 }
 
-function Controls({ compact, resetKey }: { compact: boolean; resetKey: number }) {
+function Controls({ compact, resetKey, crowd, focus }: { compact: boolean; resetKey: number; crowd: Crowd; focus: { id: string; n: number } | null }) {
   const ref = useRef<any>(null);
   const { camera, size } = useThree();
   const [fit, setFit] = useState<Fit | null>(null);
   const fitted = useRef("");
+  // "Topish": kamera ~1.2 s davomida agentga silliq uchadi (yo'nalish saqlanadi, masofa yaqinlashadi)
+  const fly = useRef<{ id: string; t: number } | null>(null);
+  useEffect(() => { if (focus) fly.current = { id: focus.id, t: 0 }; }, [focus?.id, focus?.n]); // eslint-disable-line react-hooks/exhaustive-deps
+  useFrame((_, dt) => {
+    const f = fly.current, c = ref.current;
+    if (!f || !c || !fit) return;
+    const w = crowd.get(f.id);
+    if (!w) return;
+    f.t += dt;
+    const k = Math.min(1, dt * 4);
+    const off = camera.position.clone().sub(c.target);
+    const want = fit.dist * (compact ? 0.42 : 0.36);
+    const len = THREE.MathUtils.lerp(off.length(), want, k);
+    c.target.lerp(new THREE.Vector3(w.pos.x, 0.6, w.pos.z), k);
+    camera.position.copy(c.target).add(off.setLength(len));
+    c.update();
+    if (f.t > 1.4) fly.current = null;
+  });
   useEffect(() => {
     if (!size.width || !size.height) return;
     const key = `${compact}:${Math.round((size.width / size.height) * 40)}:${resetKey}`;

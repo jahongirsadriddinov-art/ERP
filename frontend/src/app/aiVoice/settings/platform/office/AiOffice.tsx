@@ -10,9 +10,13 @@ import Reset from "@hugeicons/core-free-icons/Target02Icon";
 import X from "@hugeicons/core-free-icons/Cancel01Icon";
 import { isNotReady } from "../../api";
 import { Notice, Skeleton } from "../../ui";
-import { officeApi, TEAMS, type AgentProfile, type OfficeAgent, type Setup } from "./officeApi";
+import { officeApi, TEAMS, type AgentProfile, type OfficeAgent, type OfficeMedia, type Setup } from "./officeApi";
 import AgentPanel, { NewAgentForm, activityTone, agoText } from "./AgentPanel";
 import type { ErpLink } from "./Desktop";
+import MediaPanel, { MuteButton } from "./MediaPanel";
+import { useMuted, usePlayer } from "./sound";
+import { assignIdle, computeLayout } from "./layout";
+import { isMediaFileUrl, parseVideoLink } from "./media";
 
 // Dasturchi paneli → "AI ofis" (owner 2026-10-22/23). Butun ko'rinish BITTA ekranga sig'adi (sahifa skrolisiz):
 //  • kompyuterda — chapda 3D sahna (flex-1), o'ngda panel: jamoalar bo'yicha agentlar ro'yxati (qidiruv bilan) yoki tanlangan
@@ -56,6 +60,16 @@ const useDark = () => {
   }, []);
   return d;
 };
+/** Agent hozir nima qilyapti — ro'yxat uchun (sahnadagi bilan bir xil: bo'sh agentning dam olish joyi assignIdle'dan). */
+export function doingText(a: OfficeAgent, poiKind: string | undefined, k: (key: string, o?: any) => string): string {
+  const task = a.task?.text || "";
+  if (a.activity === "task") return a.id === "manager" ? k("doing.plan", { t: task }) : a.kind === "code" ? k("doing.code", { t: task }) : k("doing.write", { t: task });
+  if (a.activity === "call") return k("doing.call");
+  if (a.activity === "chat") return k("doing.chat");
+  if (a.activity === "review") return k("doing.review", { t: task });
+  if (poiKind) return k(`doing.${poiKind}`);
+  return k("doing.desk");
+}
 const readHint = () => { try { return localStorage.getItem(HINT_KEY) !== "1"; } catch { return true; } };
 
 export default function AiOffice({ fill = false, onNavigate, erpLinks = [] }: {
@@ -80,6 +94,12 @@ export default function AiOffice({ fill = false, onNavigate, erpLinks = [] }: {
   const [lost, setLost] = useState(false);
   const [sceneKey, setSceneKey] = useState(0);
   const [walking, setWalking] = useState(false);
+  const [media, setMedia] = useState<OfficeMedia | null>(null);
+  const [mediaOpen, setMediaOpen] = useState(false);
+  const [focus, setFocus] = useState<{ id: string; n: number } | null>(null);
+  const [speech, setSpeech] = useState<{ id: string; text: string } | null>(null);
+  const muted = useMuted();
+  const ps = usePlayer();
   const compact = useMedia("(max-width: 640px)");
   const wide = useMedia("(min-width: 1024px)");
   const dark = useDark();
@@ -96,6 +116,7 @@ export default function AiOffice({ fill = false, onNavigate, erpLinks = [] }: {
     if (r.ok && r.data) { setProfiles(r.data.agents || []); setSetup(r.data.setup || null); }
   }, []);
 
+  useEffect(() => { officeApi.media().then((r) => setMedia(r.ok && r.data ? r.data : { yandex: "", tracks: [], cinema: "" })); }, []);
   useEffect(() => {
     loadOffice();
     loadProfiles();
@@ -110,6 +131,9 @@ export default function AiOffice({ fill = false, onNavigate, erpLinks = [] }: {
     if (id) { setAdding(false); sideRef.current?.scrollTo?.({ top: 0 }); }
   }, []);
   const changed = useCallback(() => { loadOffice(); loadProfiles(); }, [loadOffice, loadProfiles]);
+  /** Ro'yxatdan tanlash — kamera agentga uchadi ("topish"). */
+  const locate = useCallback((id: string) => { select(id); setFocus((f) => ({ id, n: (f?.n || 0) + 1 })); }, [select]);
+  const onSpeak = useCallback((id: string) => (text: string | null) => setSpeech(text ? { id, text } : null), []);
   const exitWalk = useCallback(() => setWalking(false), []);
   const lostCb = useCallback(() => setLost(true), []);
   const dismissHint = () => { setHint(false); try { localStorage.setItem(HINT_KEY, "1"); } catch { /* */ } };
@@ -128,6 +152,20 @@ export default function AiOffice({ fill = false, onNavigate, erpLinks = [] }: {
     }
     return TEAMS.filter((x) => m.has(x)).map((x) => [x, m.get(x)!] as const);
   }, [agents, query]);
+  // Bo'sh agentlar qayerda (sahnadagi bilan bir xil hisob)
+  const layoutKey = (agents || []).map((a) => `${a.id}:${a.team}:${a.kind}`).join("|");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const layout = useMemo(() => computeLayout((agents || []).map((a) => ({ id: a.id, team: a.team, kind: a.kind }))), [layoutKey]);
+  const slot = Math.floor(Date.now() / 45_000);
+  const poiKind = useMemo(() => {
+    const list = agents || [];
+    const idle = list.filter((a) => a.activity === "idle" && !(a.id === "manager" && list.some((x) => x.busy && x.id !== "manager"))).map((a) => a.id);
+    const m = assignIdle(idle, layout.pois, slot);
+    return new Map([...m.entries()].map(([id, i]) => [id, layout.pois[i].kind as string]));
+  }, [agents, layout, slot]);
+  const cinemaSrc = media?.cinema && !parseVideoLink(media.cinema) && isMediaFileUrl(media.cinema, "video") ? media.cinema
+    : media?.cinema && parseVideoLink(media.cinema)?.kind === "file" ? media.cinema : null;
+  const musicOn = ps.playing || (!!media?.yandex && !muted && mediaOpen);
   const zoneNames = useMemo(() => Object.fromEntries(ZONES.map((z) => [z, k(`zones.${z}`)])), [k]);
 
   if (state === "nr") return <Notice tone="lock" testId="ai-office-nr">{k("notReady")}</Notice>;
@@ -151,6 +189,11 @@ export default function AiOffice({ fill = false, onNavigate, erpLinks = [] }: {
           <Stat dot="#b8b2aa" label={k("stats.idle")} n={count((a) => !a.busy && a.activity !== "review")} />
         </div>
         <div className="flex gap-1.5 ml-auto flex-shrink-0">
+          <MuteButton k={k} />
+          <button type="button" onClick={() => setMediaOpen((v) => !v)} aria-pressed={mediaOpen} data-testid="ai-office-media-open" disabled={!media}
+            className="h-8 px-3 rounded-full border border-border bg-card/60 text-[12px] font-semibold inline-flex items-center gap-1.5">
+            🎵 {k("media.title")}
+          </button>
           {webgl && (
             <button type="button" onClick={() => { setSelected(null); setWalking(true); }} disabled={!agents} data-testid="ai-office-enter"
               className="h-8 px-3 rounded-full text-[12px] font-semibold inline-flex items-center gap-1.5 bg-foreground text-background disabled:opacity-50">
@@ -185,7 +228,8 @@ export default function AiOffice({ fill = false, onNavigate, erpLinks = [] }: {
           ) : agents ? (
             <Suspense fallback={<div className="absolute inset-0 p-4"><Skeleton h="h-full" /></div>}>
               <OfficeScene key={sceneKey} agents={agents} selectedId={selected} onSelect={select} showAllLabels={showAll} compact={compact} dark={dark}
-                resetKey={resetKey} zoneNames={zoneNames} youLabel={k("walk.you")} onContextLost={lostCb} />
+                resetKey={resetKey} zoneNames={zoneNames} youLabel={k("walk.you")} onContextLost={lostCb}
+                focus={focus} speech={speech} cinemaSrc={cinemaSrc} musicOn={musicOn} />
             </Suspense>
           ) : (
             <div className="absolute inset-0 p-4"><Skeleton h="h-full" /></div>
@@ -195,6 +239,9 @@ export default function AiOffice({ fill = false, onNavigate, erpLinks = [] }: {
               className="absolute z-30 top-2 right-2 w-9 h-9 rounded-full grid place-items-center bg-card/85 backdrop-blur border border-border shadow-sm hover:bg-card">
               <MorphIcon icon={Reset} className="w-4 h-4" />
             </button>
+          )}
+          {mediaOpen && media && !walking && (
+            <div className="absolute z-40 top-2 left-2"><MediaPanel media={media} onSaved={setMedia} onClose={() => setMediaOpen(false)} /></div>
           )}
           {hint && webgl && !walking && (
             <div className="absolute z-30 left-2 bottom-2 max-w-[calc(100%-16px)] flex items-center gap-1.5 text-[11px] bg-card/85 text-foreground backdrop-blur border border-border rounded-full pl-3 pr-1 py-1 shadow-sm" data-testid="ai-office-hint">
@@ -225,7 +272,7 @@ export default function AiOffice({ fill = false, onNavigate, erpLinks = [] }: {
             </div>
           ) : sel ? (
             <AgentPanel key={sel.id} agent={sel} profile={profile} profiles={profiles} setup={setup} onClose={() => setSelected(null)}
-              onChanged={changed} onProfile={loadProfiles} onOpenAgent={(id) => { loadProfiles(); loadOffice().then(() => select(id)); }} />
+              onChanged={changed} onProfile={loadProfiles} onOpenAgent={(id) => { loadProfiles(); loadOffice().then(() => locate(id)); }} onSpeak={onSpeak(sel.id)} />
           ) : (
             <div data-testid="ai-office-list">
               <div className="sticky top-0 z-10 bg-card/95 backdrop-blur p-2 border-b border-border">
@@ -243,7 +290,7 @@ export default function AiOffice({ fill = false, onNavigate, erpLinks = [] }: {
                     <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground mb-1.5 px-1">{k(`teams.${team}`)} <span className="opacity-60">{list.length}</span></p>
                     <div className={`grid gap-1.5 ${wide ? "grid-cols-1" : "grid-cols-1 min-[420px]:grid-cols-2"}`}>
                       {list.map((a) => (
-                        <button key={a.id} type="button" onClick={() => select(a.id)} data-testid={`ai-office-agent-${a.id}`} aria-pressed={selected === a.id}
+                        <button key={a.id} type="button" onClick={() => locate(a.id)} data-testid={`ai-office-agent-${a.id}`} aria-pressed={selected === a.id} title={k("locate")}
                           className={`text-left rounded-xl border px-2.5 py-2 flex items-center gap-2 liquid-transition ${selected === a.id ? "border-primary bg-primary/5" : "border-border bg-card/60 hover:bg-muted/50"}`}>
                           <span className="w-7 h-7 rounded-lg flex-shrink-0 relative" style={{ background: "#D97757", boxShadow: `inset 0 -6px 0 ${a.color}` }}>
                             <span className="absolute top-2 left-[7px] w-[3px] h-[6px] bg-[#1d1410]" /><span className="absolute top-2 right-[7px] w-[3px] h-[6px] bg-[#1d1410]" />
@@ -252,7 +299,7 @@ export default function AiOffice({ fill = false, onNavigate, erpLinks = [] }: {
                             <span className="block text-[12.5px] font-semibold truncate">{a.name}</span>
                             <span className="flex items-center gap-1 text-[11px] text-muted-foreground truncate">
                               <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: activityTone(a) }} />
-                              <span className="truncate">{a.task && a.activity !== "idle" ? a.task.text : k(`activity.${a.activity}`)}{a.since && a.busy ? ` · ${agoText(a.since, k)}` : ""}</span>
+                              <span className="truncate">{doingText(a, poiKind.get(a.id), k)}{a.since && a.busy ? ` · ${agoText(a.since, k)}` : ""}</span>
                             </span>
                           </span>
                         </button>
@@ -269,8 +316,8 @@ export default function AiOffice({ fill = false, onNavigate, erpLinks = [] }: {
       {walking && agents && (
         <Suspense fallback={<div className="fixed inset-0 z-[90] bg-[#0f1115]" />}>
           <WalkMode agents={agents} profiles={profiles} setup={setup} onExit={exitWalk} onChanged={changed} onProfile={loadProfiles}
-            onNavigate={onNavigate} erpLinks={onNavigate ? erpLinks : []}
-            scene={{ compact, dark, zoneNames, youLabel: k("walk.you"), showAllLabels: showAll }} />
+            onNavigate={onNavigate} erpLinks={onNavigate ? erpLinks : []} media={media} onMedia={setMedia}
+            scene={{ compact, dark, zoneNames, youLabel: k("walk.you"), showAllLabels: showAll, cinemaSrc, musicOn }} />
         </Suspense>
       )}
     </div>

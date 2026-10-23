@@ -1,7 +1,10 @@
 import "../../../../i18n/aiVoiceNs";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { AgentProfile, OfficeAgent, Setup } from "./officeApi";
+import type { AgentProfile, OfficeAgent, OfficeMedia, Setup } from "./officeApi";
+import MediaPanel, { MuteButton } from "./MediaPanel";
+import { parseVideoLink } from "./media";
+import { useMuted } from "./sound";
 import AgentPanel from "./AgentPanel";
 import { Desktop, GameView, type ErpLink } from "./Desktop";
 import { newBridge, places, type SeatKind, type Target } from "./walk";
@@ -15,10 +18,11 @@ import type { OfficeSceneProps } from "./OfficeScene";
 const OfficeScene = lazy(() => import("./OfficeScene"));
 type K = (key: string, o?: any) => string;
 
-export default function WalkMode({ agents, profiles, setup, scene, onExit, onChanged, onProfile, onNavigate, erpLinks }: {
+export default function WalkMode({ agents, profiles, setup, scene, onExit, onChanged, onProfile, onNavigate, erpLinks, media, onMedia }: {
   agents: OfficeAgent[]; profiles: AgentProfile[]; setup: Setup | null;
-  scene: Pick<OfficeSceneProps, "compact" | "dark" | "zoneNames" | "youLabel" | "showAllLabels">;
+  scene: Pick<OfficeSceneProps, "compact" | "dark" | "zoneNames" | "youLabel" | "showAllLabels" | "cinemaSrc" | "musicOn">;
   onExit: () => void; onChanged: () => void; onProfile: () => void; onNavigate?: (key: string) => void; erpLinks: ErpLink[];
+  media: OfficeMedia | null; onMedia: (m: OfficeMedia) => void;
 }) {
   const { t } = useTranslation();
   const k: K = (key, o) => t(`aiVoice.office.${key}`, o) as string;
@@ -33,16 +37,33 @@ export default function WalkMode({ agents, profiles, setup, scene, onExit, onCha
   const [locked, setLocked] = useState(false);
   const [fp, setFp] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  const [mediaOpen, setMediaOpen] = useState(false);
+  const [speech, setSpeech] = useState<{ id: string; text: string } | null>(null);
+  const [rotateOk, setRotateOk] = useState(false);
+  const [portrait, setPortrait] = useState(() => typeof window !== "undefined" && !!window.matchMedia?.("(orientation: portrait)").matches);
+  const muted = useMuted();
+  useEffect(() => {
+    const mq = window.matchMedia?.("(orientation: portrait)");
+    if (!mq) return;
+    const on = () => setPortrait(mq.matches);
+    mq.addEventListener?.("change", on);
+    return () => mq.removeEventListener?.("change", on);
+  }, []);
   const bridge = useMemo(() => newBridge(() => {}, () => {}), []);
   bridge.onNear = setNear;
   bridge.onSeat = setSeat;
   const touch = typeof window !== "undefined" && (window.matchMedia?.("(pointer: coarse)").matches ?? false);
-  const overlay = !!talking || seat === "computer" || seat === "game";
+  const overlay = !!talking || seat === "computer" || seat === "game" || mediaOpen;
+  const movie = media?.cinema ? parseVideoLink(media.cinema) : null;
 
   // To'liq ekran (bo'lmasa — qatlam baribir butun oynani egallaydi)
   useEffect(() => {
     const el = root.current;
-    try { el?.requestFullscreen?.().catch(() => {}); } catch { /* headless / iOS */ }
+    // To'liq ekran, telefonda — yotiq holat (orientation.lock). Qo'llamasa (iOS) — "telefonni yotqizing" oynasi
+    try {
+      const fs = el?.requestFullscreen?.();
+      fs?.then(() => (screen.orientation as any)?.lock?.("landscape")).catch(() => {});
+    } catch { /* headless / iOS */ }
     let was = false;
     const onFs = () => { if (document.fullscreenElement) was = true; else if (was) onExit(); };
     const onLock = () => setLocked(document.pointerLockElement === el);
@@ -55,6 +76,7 @@ export default function WalkMode({ agents, profiles, setup, scene, onExit, onCha
       document.removeEventListener("pointerlockchange", onLock);
       document.body.style.overflow = prev;
       try { if (document.pointerLockElement) document.exitPointerLock(); } catch { /* */ }
+      try { (screen.orientation as any)?.unlock?.(); } catch { /* */ }
       try { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); } catch { /* */ }
     };
   }, [onExit]);
@@ -144,7 +166,7 @@ export default function WalkMode({ agents, profiles, setup, scene, onExit, onCha
       onContextMenu={(e) => e.preventDefault()}>
       <Suspense fallback={null}>
         <OfficeScene agents={agents} selectedId={talking} onSelect={() => {}} resetKey={0} {...scene}
-          walk={{ bridge, talkingId: talking, holding }} onHub={setHub} />
+          walk={{ bridge, talkingId: talking, holding }} onHub={setHub} speech={speech} />
       </Suspense>
 
       {/* Yuqori panel */}
@@ -152,6 +174,8 @@ export default function WalkMode({ agents, profiles, setup, scene, onExit, onCha
         <div className="pointer-events-auto flex gap-1.5">
           <button type="button" onClick={onExit} data-testid="ai-office-exit" className="h-9 px-3.5 rounded-full bg-black/60 text-white text-[13px] font-semibold backdrop-blur">✕ {k("walk.exit")}</button>
           <button type="button" onClick={() => setMenu((v) => !v)} data-testid="ai-office-goto" aria-expanded={menu} className="h-9 px-3.5 rounded-full bg-black/60 text-white text-[13px] font-semibold backdrop-blur">🧭 {k("walk.goto")}</button>
+          <MuteButton k={k} dark />
+          <button type="button" onClick={() => setMediaOpen((v) => !v)} data-testid="ai-office-media-open" className="h-9 px-3 rounded-full bg-black/60 text-white text-[13px] font-semibold backdrop-blur">🎵</button>
           {!touch && <button type="button" onClick={() => { bridge.input.fp = !bridge.input.fp; setFp(bridge.input.fp); }} className="h-9 px-3 rounded-full bg-black/60 text-white text-[12px] font-semibold backdrop-blur">{fp ? "1P" : "3P"}</button>}
         </div>
         {!touch && <p className="hidden md:block ml-auto max-w-[460px] text-right text-[11px] text-white/80 bg-black/45 rounded-xl px-3 py-1.5 backdrop-blur">{k("walk.keys")}</p>}
@@ -191,6 +215,34 @@ export default function WalkMode({ agents, profiles, setup, scene, onExit, onCha
       )}
       {note && <div className="absolute left-1/2 -translate-x-1/2 top-16 z-20 px-4 py-2 rounded-full bg-black/70 text-white text-[13px]" data-testid="ai-office-note">{note}</div>}
       {seat === "cinema" && <div className="absolute left-1/2 -translate-x-1/2 top-16 z-20 px-4 py-2 rounded-full bg-black/60 text-white text-[12px]">🎬 {k("walk.movie")}</div>}
+      {/* Kinoda o'tirganda — tanlangan film ekran ustida (rasmiy embed yoki fayl); Kinopoisk — faqat ochish */}
+      {seat === "cinema" && movie && (
+        <div data-ui className="absolute z-30 left-1/2 top-[54%] -translate-x-1/2 -translate-y-1/2 w-[min(92vw,1100px)] aspect-video rounded-xl overflow-hidden bg-black shadow-2xl border-4 border-[#15171c]" data-testid="ai-office-movie">
+          {movie.kind === "kinopoisk" ? (
+            <div className="w-full h-full grid place-items-center text-center p-6 text-white space-y-3">
+              <div><p className="text-sm mb-3">{k("media.kinopoisk")}</p>
+                <a href={movie.open} target="_blank" rel="noopener noreferrer" className="inline-flex h-9 px-4 rounded-full bg-[#ff6600] text-white text-[13px] font-semibold items-center">{k("media.openKp")}</a></div>
+            </div>
+          ) : movie.kind === "file" ? (
+            <video src={movie.src} className="w-full h-full" controls autoPlay playsInline muted={muted} />
+          ) : (
+            <iframe title="movie" className="w-full h-full border-0" allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowFullScreen
+              src={`${movie.embed}${movie.embed.includes("?") ? "&" : "?"}autoplay=1${muted ? "&mute=1" : ""}`} referrerPolicy="strict-origin-when-cross-origin" />
+          )}
+        </div>
+      )}
+      {mediaOpen && media && (
+        <div data-ui className="absolute z-40 top-14 right-2"><MediaPanel media={media} onSaved={onMedia} onClose={() => setMediaOpen(false)} /></div>
+      )}
+      {touch && portrait && !rotateOk && (
+        <div data-ui className="absolute inset-0 z-50 grid place-items-center bg-black/85 text-white text-center p-6" data-testid="ai-office-rotate">
+          <div className="space-y-3">
+            <div className="text-5xl">📱↻</div>
+            <p className="text-[15px] font-semibold">{k("walk.rotate")}</p>
+            <button type="button" onClick={() => setRotateOk(true)} data-testid="ai-office-rotate-skip" className="h-10 px-5 rounded-full bg-white text-[#1f2328] text-[13px] font-semibold">{k("walk.rotateSkip")}</button>
+          </div>
+        </div>
+      )}
       {!locked && !touch && !overlay && <div className="pointer-events-none absolute inset-0 grid place-items-center"><span className="w-1.5 h-1.5 rounded-full bg-white/70" /></div>}
 
       {touch && !overlay && <Joystick onMove={(x, z) => { bridge.input.mx = x; bridge.input.mz = z; bridge.input.run = Math.hypot(x, z) > 0.92; }} />}
@@ -199,7 +251,8 @@ export default function WalkMode({ agents, profiles, setup, scene, onExit, onCha
       {sel && (
         <div data-ui className="absolute z-40 right-0 top-0 bottom-0 w-full sm:w-[420px] bg-card text-foreground border-l border-border shadow-2xl overflow-y-auto overscroll-contain" data-testid="ai-office-walk-panel">
           <AgentPanel key={sel.id} agent={sel} profile={profiles.find((p) => p.key === sel.id)} profiles={profiles} setup={setup}
-            onClose={() => setTalking(null)} onChanged={onChanged} onProfile={onProfile} onOpenAgent={(id) => setTalking(id)} />
+            onClose={() => setTalking(null)} onChanged={onChanged} onProfile={onProfile} onOpenAgent={(id) => setTalking(id)}
+            onSpeak={(text) => setSpeech(text ? { id: sel.id, text } : null)} />
         </div>
       )}
       {seat === "computer" && (

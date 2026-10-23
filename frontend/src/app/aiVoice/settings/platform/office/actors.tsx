@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import { Html } from "@react-three/drei";
 import * as THREE from "three";
@@ -124,18 +124,37 @@ function Mascot({ r, tint, color, hat, failed }: { r: BodyRefs; tint: string; co
 // ───────────── Agent ─────────────
 export interface AgentProps {
   agent: OfficeAgent; desk: Desk; poi?: Poi; tour?: { x: number; z: number; face: number }[]; crowd: Crowd;
-  selected: boolean; showLabel: boolean; talking: boolean; bubbles?: boolean; onSelect: (id: string | null) => void;
+  selected: boolean;
+  /** Ism yorlig'i doim (tanlangan yoki "Ismlar" yoqilgan). Aks holda — faqat sichqoncha ustida / o'yinchi yaqinida. */
+  showLabel: boolean;
+  talking: boolean;
+  /** Qo'ng'iroq pufagiga ruxsat (bir vaqtda ko'pi bilan 3 ta). */
+  bubble?: boolean;
+  /** Agent gapirayotgan matn (suhbat javobi) — pufakda va "gapirish" animatsiyasi. */
+  speech?: string | null;
+  onSelect: (id: string | null) => void;
 }
 type GoalPose = Pose | "work" | "relax" | "think" | "visit";
+const LABEL: React.CSSProperties = {
+  display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap", padding: "1px 7px 1px 5px", borderRadius: 999, fontSize: 11, fontWeight: 700,
+  boxShadow: "0 1px 4px rgba(40,30,20,.2)", fontFamily: "inherit", lineHeight: "16px",
+};
+const BUBBLE: React.CSSProperties = {
+  width: "max-content", maxWidth: 220, padding: "3px 8px", borderRadius: 10, fontSize: 11, fontWeight: 600, background: "#fff", color: "#1f2937",
+  boxShadow: "0 2px 8px rgba(0,0,0,.18)", fontFamily: "inherit", lineHeight: "15px",
+};
 
-export const Agent = memo(function Agent({ agent, desk, poi, tour, crowd, selected, showLabel, talking, bubbles = true, onSelect }: AgentProps) {
+export const Agent = memo(function Agent({ agent, desk, poi, tour, crowd, selected, showLabel, talking, bubble = false, speech = null, onSelect }: AgentProps) {
   const root = useRef<THREE.Group>(null);
   const r = useBodyRefs();
   const ring = useRef<THREE.Mesh>(null);
+  const halo = useRef<THREE.Mesh>(null);
   const confetti = useRef<THREE.InstancedMesh>(null);
+  const [hover, setHover] = useState(false);
+  const [near, setNear] = useState(false);
   const isBoss = agent.id === "manager";
   const tint = useMemo(() => mix(CLAUDE, agent.color || CLAUDE, agent.kind === "tg" ? 0 : 0.16), [agent.color, agent.kind]);
-  const st = useRef({ tourIdx: 0, celebrateAt: -1, prevTask: agent.task?.status, phase: Math.random() * 10, pose: "stand" as GoalPose });
+  const st = useRef({ tourIdx: 0, celebrateAt: -1, prevTask: agent.task?.status, phase: Math.random() * 10, nearCheck: 0, near: false });
 
   const deskGoal = (pose: GoalPose): Goal & { pose: GoalPose } => ({ key: `desk:${pose}`, x: desk.chair.x, z: desk.chair.z, face: desk.dir > 0 ? 0 : Math.PI, pose });
   const baseGoal = agent.activity === "task" || agent.activity === "chat" || agent.activity === "call" ? deskGoal("work")
@@ -181,13 +200,17 @@ export const Agent = memo(function Agent({ agent, desk, poi, tour, crowd, select
     const celebrating = s.celebrateAt >= 0 && since < 3;
     animateBody(r, pose, t, dt, {
       call: agent.activity === "call", celebrating, papers: agent.id === "reporter" && !!tour,
-      cheer: pose === "stand" && (s.phase * 10) % 3 < 1 && agent.activity === "idle" && Math.sin(t * 0.7) > 0.93,
+      cheer: (pose === "stand" && (s.phase * 10) % 3 < 1 && agent.activity === "idle" && Math.sin(t * 0.7) > 0.93) || (!!speech && !w.moving),
     });
     if (ring.current) {
       ring.current.visible = agent.activity === "task" || agent.activity === "review";
       ring.current.rotation.z = -t * 2.2;
       ring.current.position.y = 1.55 + (r.body.current?.position.y || 0);
     }
+    if (halo.current) { const k = 1 + Math.sin(clock.elapsedTime * 5) * 0.12; halo.current.scale.set(k, k, k); }
+    // Yurish rejimida — o'yinchi yaqinidagi agentlar ismi (crowd.labels — Player hisoblaydi)
+    s.nearCheck -= dt;
+    if (s.nearCheck <= 0) { s.nearCheck = 0.3; const n = crowd.labels.has(agent.id); if (n !== s.near) { s.near = n; setNear(n); } }
     const cf = confetti.current;
     if (cf) {
       cf.visible = celebrating && since < 2.8;
@@ -210,12 +233,22 @@ export const Agent = memo(function Agent({ agent, desk, poi, tour, crowd, select
   const scale = isBoss ? 1.35 : 1.15;
   const statusDot = agent.activity === "task" ? "#5ea8ff" : agent.activity === "call" ? "#2dd4bf" : agent.activity === "chat" ? "#a78bfa"
     : agent.activity === "review" ? "#ffb020" : failed ? "#ff3b30" : agent.task?.status === "done" ? "#34c759" : "#b8b2aa";
+  const label = showLabel || hover || near || talking || !!speech;
+  const bubbleText = speech ? (speech.length > 90 ? `${speech.slice(0, 88)}…` : speech) : talking ? "👋 …" : bubble && agent.activity === "call" ? "📞 Alo, …" : null;
   return (
-    <group ref={root} onClick={click} onPointerOver={(e) => { e.stopPropagation(); document.body.style.cursor = "pointer"; }} onPointerOut={() => { document.body.style.cursor = ""; }}>
+    <group ref={root} onClick={click}
+      onPointerOver={(e) => { e.stopPropagation(); document.body.style.cursor = "pointer"; setHover(true); }}
+      onPointerOut={() => { document.body.style.cursor = ""; setHover(false); }}>
       {(selected || failed) && (
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.03, 0]}>
           <ringGeometry args={[0.44, 0.58, 32]} />
-          <meshBasicMaterial color={failed ? "#ff3b30" : agent.color} transparent opacity={0.85} toneMapped={false} />
+          <meshBasicMaterial color={failed && !selected ? "#ff3b30" : agent.color} transparent opacity={0.85} toneMapped={false} />
+        </mesh>
+      )}
+      {selected && (
+        <mesh ref={halo} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.035, 0]}>
+          <ringGeometry args={[0.7, 0.8, 40]} />
+          <meshBasicMaterial color={agent.color} transparent opacity={0.55} toneMapped={false} />
         </mesh>
       )}
       <group scale={scale}>
@@ -228,26 +261,14 @@ export const Agent = memo(function Agent({ agent, desk, poi, tour, crowd, select
       <instancedMesh ref={confetti} args={[BOX, undefined, CONFETTI]} visible={false}>
         <meshBasicMaterial color="#ffd23f" toneMapped={false} />
       </instancedMesh>
-      {(showLabel || talking || (bubbles && agent.activity === "call")) && (
-        <Html position={[0, isBoss ? 1.95 : 1.7, 0]} center zIndexRange={[20, 0]} style={{ pointerEvents: "none" }}>
+      {(label || bubbleText) && (
+        <Html position={[0, isBoss ? 1.95 : 1.72, 0]} center zIndexRange={[selected || speech ? 30 : 20, 0]} style={{ pointerEvents: "none" }}>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
-            {(talking || (bubbles && agent.activity === "call")) && (
-              <div className="office-bubble" data-testid={`ai-office-bubble-${agent.id}`}
-                style={{
-                  whiteSpace: "nowrap", padding: "3px 8px", borderRadius: 10, fontSize: 11, fontWeight: 600, background: "#fff", color: "#1f2937",
-                  boxShadow: "0 2px 8px rgba(0,0,0,.18)", fontFamily: "inherit",
-                }}>
-                {talking ? "👋 …" : "📞 Alo, …"}
-              </div>
-            )}
-            {showLabel && (
+            {bubbleText && <div className="office-bubble" data-testid={`ai-office-bubble-${agent.id}`} style={BUBBLE}>{bubbleText}</div>}
+            {label && (
               <div className="office-label" data-testid={`ai-office-label-${agent.id}`}
-                style={{
-                  display: "flex", alignItems: "center", gap: 5, whiteSpace: "nowrap", padding: "2px 8px 2px 6px", borderRadius: 999,
-                  background: selected ? agent.color : "rgba(255,255,255,0.94)", color: selected ? "#fff" : "#1f2328", fontSize: 11.5, fontWeight: 700,
-                  boxShadow: "0 1px 6px rgba(40,30,20,.22)", border: `1px solid ${selected ? "transparent" : "rgba(0,0,0,.08)"}`, fontFamily: "inherit",
-                }}>
-                <span style={{ width: 7, height: 7, borderRadius: 99, background: statusDot, boxShadow: `0 0 6px ${statusDot}` }} />
+                style={{ ...LABEL, background: selected ? agent.color : "rgba(255,255,255,0.95)", color: selected ? "#fff" : "#1f2328" }}>
+                <span style={{ width: 6, height: 6, borderRadius: 99, background: statusDot }} />
                 {agent.name}
               </div>
             )}
@@ -387,6 +408,31 @@ export function Player({ crowd, grid, bridge, agents, holding, youLabel }: {
         }
         if (!best) TEA_SPOTS.forEach((p, i) => { const d = Math.hypot(p.x - w.pos.x, p.z - w.pos.z); if (d < 1.4 && d < bd) { bd = d; best = { kind: "tea", key: `tea${i}` }; } });
       }
+      // Yaqindagi (≤ 7 m) eng yaqin 5 agentning ismi ko'rinadi — qolganlari yashirin (tartibsizlik bo'lmasin)
+      const nearList: [string, number][] = [];
+      for (const o of crowd.walkers.values()) {
+        if (o.id === "me") continue;
+        const d = Math.hypot(o.pos.x - w.pos.x, o.pos.z - w.pos.z);
+        if (d < 7) nearList.push([o.id, d]);
+      }
+      nearList.sort((x, y) => x[1] - y[1]);
+      crowd.labels = new Set(nearList.slice(0, 5).map((x) => x[0]));
+      // Yo'l ko'rsatgich: qolgan yo'l polda chiziq + manzilda halqa
+      const ln = line.current, mk = marker.current;
+      if (ln && mk) {
+        const pts = w.path.length && !s.sitting ? [w.pos, ...w.path.slice(w.pi)] : [];
+        if (pts.length >= 2) {
+          const arr = ln.geometry.getAttribute("position") as THREE.BufferAttribute;
+          const n = Math.min(pts.length, 64);
+          for (let i = 0; i < n; i++) arr.setXYZ(i, pts[i].x, 0.06, pts[i].z);
+          arr.needsUpdate = true;
+          ln.geometry.setDrawRange(0, n);
+          ln.computeLineDistances();
+          ln.visible = true;
+          mk.position.set(pts[n - 1].x, 0.05, pts[n - 1].z);
+          mk.visible = true;
+        } else { ln.visible = false; mk.visible = false; }
+      }
       const b = best as Target | null;
       const key = !b ? "" : b.kind === "agent" ? `a:${b.id}` : b.kind === "seat" ? `s:${b.key}` : `t:${b.key}`;
       if (key !== s.nearKey) { s.nearKey = key; bridge.onNear(b); }
@@ -410,6 +456,10 @@ export function Player({ crowd, grid, bridge, agents, holding, youLabel }: {
 
   // Telefonda polga tegish — o'sha joyga yo'l topib boradi
   const tap = useRef<{ x: number; y: number; t: number } | null>(null);
+  const line = useRef<THREE.Line>(null);
+  const marker = useRef<THREE.Mesh>(null);
+  const lineGeo = useMemo(() => { const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(64 * 3), 3)); return g; }, []);
+  useEffect(() => () => { lineGeo.dispose(); crowd.labels = new Set(); }, [lineGeo, crowd]);
   return (
     <>
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}
@@ -421,6 +471,14 @@ export function Player({ crowd, grid, bridge, agents, holding, youLabel }: {
       }}>
       <planeGeometry args={[BOUNDS.x1 - BOUNDS.x0, BOUNDS.z1 - BOUNDS.z0]} />
       <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+    </mesh>
+    {/* @ts-expect-error — r3f <line> (SVG line emas) */}
+    <line ref={line} geometry={lineGeo} visible={false} frustumCulled={false}>
+      <lineDashedMaterial color="#f2c14e" dashSize={0.35} gapSize={0.22} linewidth={2} toneMapped={false} />
+    </line>
+    <mesh ref={marker} rotation={[-Math.PI / 2, 0, 0]} visible={false}>
+      <ringGeometry args={[0.32, 0.46, 24]} />
+      <meshBasicMaterial color="#f2c14e" transparent opacity={0.9} toneMapped={false} />
     </mesh>
     <group ref={root}>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.03, 0]}>

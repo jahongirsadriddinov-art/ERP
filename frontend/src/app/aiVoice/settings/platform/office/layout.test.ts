@@ -112,7 +112,13 @@ describe("AI ofis joylashuvi", () => {
     const a = assignIdle(ids, L.pois, 3);
     const b = assignIdle(ids, L.pois, 3);
     expect([...a.entries()]).toEqual([...b.entries()]);
-    expect(a.size).toBe(Math.min(ids.length, L.pois.length));
     expect(new Set(a.values()).size).toBe(a.size);
+    // Zona sig'imi: oshxona ≤ 6, PlayStation ≤ 4, kino ≤ puflar soni
+    const per: Record<string, number> = {};
+    for (const i of a.values()) per[L.pois[i].kind] = (per[L.pois[i].kind] || 0) + 1;
+    expect(per.kitchen || 0).toBeLessThanOrEqual(6);
+    expect(per.game || 0).toBeLessThanOrEqual(4);
+    expect(per.cinema || 0).toBeLessThanOrEqual(9);
+    expect(a.size).toBeGreaterThan(10);
   });
 });

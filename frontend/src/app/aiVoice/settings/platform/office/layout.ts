@@ -1,5 +1,5 @@
 // AI ofis — sof joylashuv va yo'l topish (three.js'siz, unit test qilinadi). Koordinatalar: x — chap/o'ng, z — yuqori/past
-// (tepadan qaraganda), birlik ≈ 1 metr. Pol: x ∈ [-21, 21], z ∈ [-15, 15].
+// (tepadan qaraganda), birlik ≈ 1 metr. Pol: x ∈ [-26, 26], z ∈ [-18, 20] (owner 2026-10-23: kengroq — yo'laklar 3 m, eshiklar 2.6 m).
 //  • orqa qator (dam olish): Boshliqning shisha kabineti, oshxona (oshpaz bilan), PlayStation burchagi, kinozal;
 //  • o'rta qator — xonalar: Dasturlash, (o'tish yo'lagi), Qo'ng'iroq markazi, Dizayn, Xavfsizlik & QA;
 //  • old qator — Marketing & SMM, Moliya & hisobot, Qo'llab-quvvatlash va ochiq dam olish burchagi.
@@ -20,38 +20,51 @@ export type Pose = "stand" | "sit" | "coffee" | "game" | "beanbag";
 export interface Poi extends P { kind: "kitchen" | "game" | "cinema" | "lounge"; pose: Pose; face: number }
 export interface Layout { desks: Map<string, Desk>; zones: Zone[]; rooms: Room[]; walls: Wall[]; obstacles: Rect[]; pois: Poi[]; bounds: Rect }
 
-export const BOUNDS: Rect = { x0: -21, z0: -15, x1: 21, z1: 15 };
+export const BOUNDS: Rect = { x0: -26, z0: -18, x1: 26, z1: 20 };
 export const DESK_W = 1.6;
 export const DESK_D = 0.8;
-const COL = 1.95;
+/** Stol ustunlari orasidagi masofa — stullar orasida ≥ 2 katak yo'lak qoladi. */
+const COL = 2.3;
 /** Stul markazi stol markazidan qancha uzoqda. */
 export const CHAIR_OFF = 0.9;
-/** Juft stol qatorlari orasidagi masofa — orqama-orqa stullar orasida yurish yo'lagi qoladi. */
-export const PAIR = 4.6;
+/** Juft stol qatorlari orasidagi masofa — orqama-orqa stullar orasida ≥ 2 katak yo'lak qoladi. */
+export const PAIR = 5.2;
 export const WALL_T = 0.06;
+/** Eshik kengligi (≥ 2 katak bo'sh o'tish joyi — ikki tomonlama harakat). */
+const DOOR = 2.6;
 
 /** Boshliq kabineti (orqa chap burchak, shisha devorlar; eshik — pastki devorda). */
-export const MANAGER_ROOM: Rect = { x0: -21, z0: -15, x1: -13.5, z1: -7.5 };
-export const MANAGER_DOOR = { x0: -16.2, x1: -14.4 };
-export const MANAGER_DESK: P = { x: -17.2, z: -11.6 };
+export const MANAGER_ROOM: Rect = { x0: -26, z0: -18, x1: -17, z1: -9 };
+export const MANAGER_DOOR = { x0: -21.3, x1: -18.7 };
+export const MANAGER_DESK: P = { x: -21.6, z: -14.2 };
+export const MANAGER_FURN = {
+  sofa: { x0: -25.6, z0: -13.6, x1: -24.7, z1: -11.0 } as Rect, table: { x0: -24.2, z0: -12.85, x1: -23.4, z1: -11.75 } as Rect,
+  shelf: { x0: -19.6, z0: -17.85, x1: -18.2, z1: -17.35 } as Rect,
+};
 
-const ROW_A = { z0: -5.8, z1: 4.8 };
-const ROW_B = { z0: 6.6, z1: 15 };
+/** Yo'laklar: orqa (dam olish qatori ↔ xonalar) va o'rta — 3 m (≥ 4 katak bo'sh). */
+export const CORRIDORS = [{ z0: -9, z1: -6 }, { z0: 6.6, z1: 9.6 }];
+/** Xonalar orasidagi tik o'tish yo'laklari (orqa ↔ o'rta yo'lak), 3 m. */
+export const HALLWAYS = [{ x0: -9, x1: -6 }, { x0: 17, x1: 20 }];
+const ROW_A = { z0: -6, z1: 6.6 };
+const ROW_B = { z0: 9.6, z1: 20 };
 export const ROOMS: Room[] = [
   { key: "lead", rect: MANAGER_ROOM, doors: [{ side: "s", at: (MANAGER_DOOR.x0 + MANAGER_DOOR.x1) / 2, w: MANAGER_DOOR.x1 - MANAGER_DOOR.x0 }], walls: true, glass: true },
-  { key: "kitchen", rect: { x0: -13.5, z0: -15, x1: -3.6, z1: -7.5 }, doors: [], walls: false },
-  { key: "game", rect: { x0: -3.6, z0: -15, x1: 8.6, z1: -7.5 }, doors: [], walls: false },
-  { key: "cinema", rect: { x0: 8.6, z0: -15, x1: 21, z1: -7.5 }, doors: [], walls: false },
-  { key: "dev", rect: { x0: -21, z0: ROW_A.z0, x1: -5.4, z1: ROW_A.z1 }, doors: [{ side: "n", at: -8.4, w: 2 }, { side: "s", at: -13.2, w: 2 }], walls: true },
-  { key: "call", rect: { x0: -3.4, z0: ROW_A.z0, x1: 6.6, z1: ROW_A.z1 }, doors: [{ side: "n", at: 1.6, w: 2 }, { side: "s", at: -1.4, w: 2 }], walls: true },
-  { key: "design", rect: { x0: 6.6, z0: ROW_A.z0, x1: 12.6, z1: ROW_A.z1 }, doors: [{ side: "n", at: 9.6, w: 2 }, { side: "s", at: 9.6, w: 2 }], walls: true },
-  { key: "secqa", rect: { x0: 12.6, z0: ROW_A.z0, x1: 21, z1: ROW_A.z1 }, doors: [{ side: "n", at: 16.8, w: 2 }, { side: "s", at: 16.8, w: 2 }], walls: true },
-  { key: "marketing", rect: { x0: -21, z0: ROW_B.z0, x1: -11, z1: ROW_B.z1 }, doors: [{ side: "n", at: -16, w: 2 }], walls: true },
-  { key: "finance", rect: { x0: -11, z0: ROW_B.z0, x1: -1, z1: ROW_B.z1 }, doors: [{ side: "n", at: -6, w: 2 }], walls: true },
-  { key: "support", rect: { x0: -1, z0: ROW_B.z0, x1: 9, z1: ROW_B.z1 }, doors: [{ side: "n", at: 4, w: 2 }], walls: true },
-  { key: "owner", rect: { x0: 9, z0: ROW_B.z0, x1: 15, z1: ROW_B.z1 }, doors: [{ side: "n", at: 12, w: 2 }], walls: true, glass: true },
-  { key: "lounge", rect: { x0: 15, z0: ROW_B.z0, x1: 21, z1: ROW_B.z1 }, doors: [], walls: false },
+  { key: "kitchen", rect: { x0: -17, z0: -18, x1: -5, z1: -9 }, doors: [], walls: false },
+  { key: "game", rect: { x0: -5, z0: -18, x1: 8, z1: -9 }, doors: [], walls: false },
+  { key: "cinema", rect: { x0: 8, z0: -18, x1: 26, z1: -9 }, doors: [], walls: false },
+  { key: "dev", rect: { x0: -26, z0: ROW_A.z0, x1: -9, z1: ROW_A.z1 }, doors: [{ side: "n", at: -13, w: DOOR }, { side: "s", at: -19, w: DOOR }], walls: true },
+  { key: "call", rect: { x0: -6, z0: ROW_A.z0, x1: 11, z1: ROW_A.z1 }, doors: [{ side: "n", at: 3, w: DOOR }, { side: "s", at: -1, w: DOOR }], walls: true },
+  { key: "design", rect: { x0: 11, z0: ROW_A.z0, x1: 17, z1: ROW_A.z1 }, doors: [{ side: "n", at: 14, w: DOOR }, { side: "s", at: 14, w: DOOR }], walls: true },
+  { key: "secqa", rect: { x0: 20, z0: ROW_A.z0, x1: 26, z1: ROW_A.z1 }, doors: [{ side: "n", at: 23, w: DOOR }, { side: "s", at: 23, w: DOOR }], walls: true },
+  { key: "marketing", rect: { x0: -26, z0: ROW_B.z0, x1: -13, z1: ROW_B.z1 }, doors: [{ side: "n", at: -19.5, w: DOOR }], walls: true },
+  { key: "finance", rect: { x0: -13, z0: ROW_B.z0, x1: 0, z1: ROW_B.z1 }, doors: [{ side: "n", at: -6.5, w: DOOR }], walls: true },
+  { key: "support", rect: { x0: 0, z0: ROW_B.z0, x1: 13, z1: ROW_B.z1 }, doors: [{ side: "n", at: 6.5, w: DOOR }], walls: true },
+  { key: "owner", rect: { x0: 13, z0: ROW_B.z0, x1: 20, z1: ROW_B.z1 }, doors: [{ side: "n", at: 16.5, w: DOOR }], walls: true, glass: true },
+  { key: "lounge", rect: { x0: 20, z0: ROW_B.z0, x1: 26, z1: ROW_B.z1 }, doors: [], walls: false },
 ];
+/** Eshik zonalari (navbat uchun): eshik bo'shlig'i bo'ylab ± 1.1 m. */
+export const doorZones = (): Rect[] => ROOMS.flatMap((r) => r.doors.map((d) => { const p = doorPoint(r, d); return { x0: d.at - d.w / 2 - 0.2, z0: p.z - 1.1, x1: d.at + d.w / 2 + 0.2, z1: p.z + 1.1 }; }));
 export const DESK_ZONES: ZoneKey[] = ["lead", "dev", "call", "design", "secqa", "marketing", "finance", "support"];
 export const roomOf = (key: ZoneKey) => ROOMS.find((r) => r.key === key)!;
 export const doorPoint = (r: Room, d: Door): P => ({ x: d.at, z: d.side === "n" ? r.rect.z0 : r.rect.z1 });
@@ -76,38 +89,44 @@ export const teamOf = (team: string) => (TEAM_ORDER.includes(team) ? team : "gro
 
 // ── Dam olish zonalari — orqa devor bo'ylab (kamera tomon qaragan): oshxona, PlayStation, kinozal ──
 export const KITCHEN = {
-  counter: { x0: -12.4, z0: -14.95, x1: -5.4, z1: -13.95 } as Rect, fridge: { x: -4.6, z: -14.4 },
-  table: { x: -8.6, z: -10.6, r: 1.0 }, coffee: { x: -11.2, z: -14.45 },
+  counter: { x0: -15.8, z0: -17.95, x1: -7.4, z1: -16.95 } as Rect, fridge: { x: -6.5, z: -17.4 },
+  table: { x: -11.5, z: -12.6, r: 1.0 }, coffee: { x: -14.8, z: -17.45 },
 };
-export const STOVE: P = { x: -9.6, z: -14.45 };
-export const SINK: P = { x: -6.6, z: -14.45 };
-export const MICROWAVE: P = { x: -8.1, z: -14.5 };
+export const STOVE: P = { x: -12.8, z: -17.45 };
+export const SINK: P = { x: -9.2, z: -17.45 };
+export const MICROWAVE: P = { x: -11.0, z: -17.5 };
 /** Oshpaz (NPC) plita oldida ishlaydi. */
-export const COOK: P = { x: -9.6, z: -13.3 };
+export const COOK: P = { x: -12.8, z: -16.3 };
 /** Oshxona stoli atrofidagi 4 ta stul. */
 export const KITCHEN_SEATS: P[] = [0, 1, 2, 3].map((i) => {
   const ang = (i / 4) * Math.PI * 2 + Math.PI / 4;
-  return { x: KITCHEN.table.x + Math.cos(ang) * 1.35, z: KITCHEN.table.z + Math.sin(ang) * 1.35 };
+  return { x: KITCHEN.table.x + Math.cos(ang) * 1.45, z: KITCHEN.table.z + Math.sin(ang) * 1.45 };
 });
+/** Kofe olish joylari (kofe mashinasi va rakovina yonida). */
+export const COFFEE_SPOTS: P[] = [{ x: KITCHEN.coffee.x, z: -16.2 }, { x: -9.6, z: -16.2 }];
+/** Oshxonada tik turib choy ichish joylari. */
+export const KITCHEN_STANDS: P[] = [{ x: -15.6, z: -11.0 }, { x: -7.2, z: -11.0 }, { x: -7.0, z: -14.0 }, { x: -15.8, z: -14.0 }];
 export const GAME = {
-  tv: { x: 2.6, z: -14.55 }, stand: { x0: 1, z0: -14.95, x1: 4.2, z1: -14.05 } as Rect,
-  sofa: { x0: 0.2, z0: -11.3, x1: 5.0, z1: -10.3 } as Rect, table: { x0: 1.6, z0: -13.3, x1: 3.6, z1: -12.65 } as Rect,
+  tv: { x: 1, z: -17.55 }, stand: { x0: -0.6, z0: -17.95, x1: 2.6, z1: -17.05 } as Rect,
+  sofa: { x0: -1.4, z0: -14.0, x1: 3.4, z1: -13.0 } as Rect, table: { x0: 0, z0: -16.1, x1: 2, z1: -15.45 } as Rect,
+  seats: [-0.4, 1.0, 2.4] as number[], seatZ: -13.55, standZ: -11.0,
 };
 export const CINEMA = {
-  screen: { x: 15.4, z: -14.75, w: 8 },
-  bags: [[12.5, -11.9], [14.4, -11.9], [16.3, -11.9], [18.2, -11.9], [13.4, -10], [15.4, -10], [17.4, -10]] as [number, number][],
+  screen: { x: 17, z: -17.75, w: 9 },
+  bags: [[12.6, -14.6], [14.9, -14.6], [17.2, -14.6], [19.5, -14.6], [21.8, -14.6], [13.75, -12.2], [16.05, -12.2], [18.35, -12.2], [20.65, -12.2]] as [number, number][],
+  stands: [13, 15.6, 18.2, 20.8] as number[], standZ: -10.2, popcorn: { x: 25.2, z: -13.4 } as P,
 };
 /** Old o'ng burchak — ochiq dam olish joyi: divan, kofe stolchasi, suv kuleri. */
 export const LOUNGE = {
-  sofa: { x0: 15.9, z0: 13.6, x1: 19.9, z1: 14.6 } as Rect, table: { x0: 16.7, z0: 11.9, x1: 19.1, z1: 12.6 } as Rect,
-  seats: [16.6, 17.9, 19.2] as number[],
+  sofa: { x0: 21, z0: 18.6, x1: 25, z1: 19.6 } as Rect, table: { x0: 21.8, z0: 16.6, x1: 24.2, z1: 17.3 } as Rect,
+  seats: [21.7, 23, 24.3] as number[], seatZ: 19.0,
 };
 /** Egasining shaxsiy kabineti ("Mening ofisim"): kompyuterli stol — o'yinchi o'tirsa, kompyuter ochiladi. */
-export const OWNER = { desk: { x: 12, z: 12.7 } as P, chair: { x: 12, z: 11.75 } as P, shelf: { x0: 9.3, z0: 13.6, x1: 9.8, z1: 14.9 } as Rect };
-export const COOLER: P = { x: 20.45, z: 9.2 };
+export const OWNER = { desk: { x: 16.5, z: 17.7 } as P, chair: { x: 16.5, z: 16.75 } as P, shelf: { x0: 13.3, z0: 18.5, x1: 13.8, z1: 19.8 } as Rect, lamp: { x: 19.3, z: 11.0 } as P };
+export const COOLER: P = { x: 25.45, z: 12.0 };
 export const PLANTS: P[] = [
-  { x: -3.3, z: -14.4 }, { x: 7.6, z: -14.4 }, { x: 20.3, z: -14.3 }, { x: 20.3, z: -8.3 }, { x: -12.9, z: -8.1 },
-  { x: 20.4, z: 14.4 }, { x: 15.7, z: 7.3 }, { x: 14.4, z: 14.4 },
+  { x: -4.6, z: -17.4 }, { x: 7.4, z: -17.4 }, { x: 25.3, z: -17.3 }, { x: 25.3, z: -9.8 }, { x: -16.4, z: -9.7 },
+  { x: 25.4, z: 19.4 }, { x: 20.7, z: 10.3 }, { x: 19.3, z: 19.4 },
 ];
 const around = (p: P, hx: number, hz: number): Rect => ({ x0: p.x - hx, z0: p.z - hz, x1: p.x + hx, z1: p.z + hz });
 const towards = (x: number, z: number, tx: number, tz: number) => Math.atan2(tx - x, tz - z);
@@ -156,7 +175,8 @@ export function computeLayout(agents: { id: string; team: string; kind?: string 
     const R = roomOf(key).rect;
     zones.push({ team: key, x: (R.x0 + R.x1) / 2, z: (R.z0 + R.z1) / 2, w: R.x1 - R.x0, d: R.z1 - R.z0 });
     if (!ids.length) continue;
-    const maxCols = Math.max(1, Math.floor((R.x1 - R.x0 - 1.8) / COL));
+    // Yon yo'laklar ≥ 2 m (ikki tomonlama harakat) — ustunlar soni shunga qarab
+    const maxCols = Math.max(1, Math.floor((R.x1 - R.x0 - 4.4) / COL));
     const cols = Math.min(maxCols, Math.max(1, Math.ceil(ids.length / 2)));
     const pairs = Math.ceil(ids.length / (cols * 2));
     const w = cols * COL;
@@ -185,7 +205,7 @@ export function computeLayout(agents: { id: string; team: string; kind?: string 
   obstacles.push(K.counter, around(K.fridge, 0.5, 0.5), around(t, 0.8, 0.8));
   // TV stendi va kofe stolchasi orasidagi tor tirqish (kabel zonasi) — yurilmaydi
   obstacles.push(GAME.stand, GAME.sofa, GAME.table, { x0: GAME.table.x0, z0: GAME.stand.z1, x1: GAME.table.x1, z1: GAME.table.z0 });
-  obstacles.push({ x0: CINEMA.screen.x - CINEMA.screen.w / 2 - 0.6, z0: -15, x1: CINEMA.screen.x + CINEMA.screen.w / 2 + 0.6, z1: -14.4 });
+  obstacles.push({ x0: CINEMA.screen.x - CINEMA.screen.w / 2 - 0.6, z0: BOUNDS.z0, x1: CINEMA.screen.x + CINEMA.screen.w / 2 + 0.6, z1: CINEMA.screen.z + 0.35 });
   obstacles.push(LOUNGE.sofa, LOUNGE.table, OWNER.shelf, around(OWNER.desk, 0.95, 0.45), around(OWNER.chair, 0.28, 0.26));
   for (const p of PLANTS) obstacles.push(around(p, 0.35, 0.35));
   // O'tiriladigan joylar ham to'siq (agent ularning ustidan yurmaydi; o'z o'rindig'iga faqat oxirgi qadamda kiradi)
@@ -193,22 +213,21 @@ export function computeLayout(agents: { id: string; team: string; kind?: string 
   for (const s of KITCHEN_SEATS) obstacles.push(around(s, 0.24, 0.24));
   for (const [x, z] of CINEMA.bags) obstacles.push(around({ x, z: z - 0.1 }, 0.5, 0.5));
   // Boshliq kabineti mebeli (divan, stolcha, kubok javoni), popkorn, suv kuleri, oshpaz
-  obstacles.push({ x0: -20.35, z0: -10.3, x1: -19.45, z1: -7.7 }, { x0: -19.0, z0: -9.55, x1: -18.2, z1: -8.45 }, { x0: -15.3, z0: -14.85, x1: -13.9, z1: -14.35 });
-  obstacles.push(around({ x: 20.2, z: -10.6 }, 0.4, 0.4), around(COOLER, 0.3, 0.3), around(COOK, 0.32, 0.3));
+  obstacles.push(MANAGER_FURN.sofa, MANAGER_FURN.table, MANAGER_FURN.shelf);
+  obstacles.push(around(CINEMA.popcorn, 0.4, 0.4), around(COOLER, 0.3, 0.3), around(COOK, 0.32, 0.3));
 
   const tv = GAME.tv;
   const pois: Poi[] = [
     ...KITCHEN_SEATS.map(({ x, z }): Poi => ({ kind: "kitchen", pose: "sit", x, z, face: towards(x, z, t.x, t.z) })),
-    { kind: "kitchen", pose: "coffee", x: K.coffee.x, z: -13.3, face: Math.PI },
-    { kind: "kitchen", pose: "coffee", x: -7.4, z: -13.3, face: Math.PI },
-    ...([[-12.6, -9.4], [-4.9, -9.6], [-4.7, -11.7], [-12.6, -11.6]] as const)
-      .map(([x, z]): Poi => ({ kind: "kitchen", pose: "stand", x, z, face: towards(x, z, t.x, t.z) })),
-    ...[1.2, 2.6, 4.0].map((x): Poi => ({ kind: "game", pose: "game", x, z: -10.85, face: Math.PI })),
-    { kind: "game", pose: "stand", x: 6.2, z: -12.2, face: towards(6.2, -12.2, tv.x, tv.z) },
-    ...[1.2, 2.6, 4.0].map((x): Poi => ({ kind: "game", pose: "stand", x, z: -9.4, face: Math.PI })),
+    ...COFFEE_SPOTS.map(({ x, z }): Poi => ({ kind: "kitchen", pose: "coffee", x, z, face: Math.PI })),
+    ...KITCHEN_STANDS.map(({ x, z }): Poi => ({ kind: "kitchen", pose: "stand", x, z, face: towards(x, z, t.x, t.z) })),
+    ...GAME.seats.map((x): Poi => ({ kind: "game", pose: "game", x, z: GAME.seatZ, face: Math.PI })),
+    { kind: "game", pose: "stand", x: 4.8, z: -15.0, face: towards(4.8, -15.0, tv.x, tv.z) },
+    // Tik turib tomosha qiluvchilar — bir-biridan ≥ 3 m (orasidan bemalol o'tiladi)
+    ...[GAME.seats[0] - 0.2, GAME.seats[2] + 0.2].map((x): Poi => ({ kind: "game", pose: "stand", x, z: GAME.standZ, face: Math.PI })),
     ...CINEMA.bags.map(([x, z]): Poi => ({ kind: "cinema", pose: "beanbag", x, z, face: Math.PI })),
-    ...[12.4, 14.6, 16.8, 18.8].map((x): Poi => ({ kind: "cinema", pose: "stand", x, z: -8.5, face: Math.PI })),
-    ...LOUNGE.seats.map((x): Poi => ({ kind: "lounge", pose: "sit", x, z: 14.0, face: Math.PI })),
+    ...CINEMA.stands.map((x): Poi => ({ kind: "cinema", pose: "stand", x, z: CINEMA.standZ, face: Math.PI })),
+    ...LOUNGE.seats.map((x): Poi => ({ kind: "lounge", pose: "sit", x, z: LOUNGE.seatZ, face: Math.PI })),
     { kind: "lounge", pose: "coffee", x: COOLER.x - 0.85, z: COOLER.z, face: Math.PI / 2 },
   ];
   return { desks, zones, rooms: ROOMS, walls, obstacles, pois, bounds: BOUNDS };
@@ -225,6 +244,10 @@ export interface Grid {
   blocked: Uint8Array; cols: number; rows: number;
   /** Asosiy (eng katta) bog'langan bo'sh hudud: 1 — shu hududda. Yopiq "cho'ntak"larga yo'l qidirilmaydi. */
   main: Uint8Array;
+  /** Katak narxi (A*): xonalar ichi qimmatroq — begona xona orqali "qisqa yo'l" qilinmaydi, yo'laklardan yuriladi. */
+  cost: Float32Array;
+  /** "O'ng tomondan yurish" yo'laklari: tik o'tish yo'lagining o'rta x'i / gorizontal yo'lakning o'rta z'i (yo'q — NaN). */
+  laneX: Float32Array; laneZ: Float32Array;
 }
 export function buildGrid(obstacles: Rect[]): Grid {
   const blocked = new Uint8Array(COLS * ROWS);
@@ -263,7 +286,21 @@ export function buildGrid(obstacles: Rect[]): Grid {
   const best = sizes.indexOf(Math.max(...sizes));
   const main = new Uint8Array(COLS * ROWS);
   for (let i = 0; i < COLS * ROWS; i++) if (comp[i] === best) main[i] = 1;
-  return { blocked, cols: COLS, rows: ROWS, main };
+  const cost = new Float32Array(COLS * ROWS).fill(1);
+  for (const r of ROOMS) {
+    if (!r.walls) continue;
+    for (let rr = 0; rr < ROWS; rr++) for (let c = 0; c < COLS; c++) {
+      const x = BOUNDS.x0 + (c + 0.5) * CELL, z = BOUNDS.z0 + (rr + 0.5) * CELL;
+      if (x > r.rect.x0 && x < r.rect.x1 && z > r.rect.z0 && z < r.rect.z1) cost[rr * COLS + c] = 2.5;
+    }
+  }
+  const laneX = new Float32Array(COLS * ROWS).fill(NaN), laneZ = new Float32Array(COLS * ROWS).fill(NaN);
+  for (let rr = 0; rr < ROWS; rr++) for (let c = 0; c < COLS; c++) {
+    const x = BOUNDS.x0 + (c + 0.5) * CELL, z = BOUNDS.z0 + (rr + 0.5) * CELL;
+    for (const h of HALLWAYS) if (x > h.x0 && x < h.x1 && z > CORRIDORS[0].z0 && z < CORRIDORS[1].z1) laneX[rr * COLS + c] = (h.x0 + h.x1) / 2;
+    for (const k of CORRIDORS) if (z > k.z0 && z < k.z1) laneZ[rr * COLS + c] = (k.z0 + k.z1) / 2;
+  }
+  return { blocked, cols: COLS, rows: ROWS, main, cost, laneX, laneZ };
 }
 export const cellOf = (p: P) => ({
   c: Math.min(COLS - 1, Math.max(0, Math.floor((p.x - BOUNDS.x0) / CELL))),
@@ -397,7 +434,15 @@ export function findPath(g: Grid, from: P, to: P, opts: PathOpts = {}): P[] | nu
         if (closed[ni] || !walkable(g, ni, extra)) continue;
         // Diagonalda burchak kesilmasin
         if (dr && dc && (!walkable(g, cr * g.cols + nc, extra) || !walkable(g, nr * g.cols + cc, extra))) continue;
-        const ng = gs[cur] + (dr && dc ? Math.SQRT2 : 1);
+        // Yo'laklarda "o'ngdan yurish": qarama-qarshi oqimlar bir-biriga yuzma-yuz kelmaydi
+        let lane = 1;
+        if (g.laneX) {
+          const lx = g.laneX[ni], lz = g.laneZ[ni];
+          const x = BOUNDS.x0 + (nc + 0.5) * CELL, z = BOUNDS.z0 + (nr + 0.5) * CELL;
+          if (lx === lx && dr) lane = (dr > 0 ? x > lx : x < lx) ? 1.6 : 1;
+          else if (lz === lz && dc) lane = (dc > 0 ? z < lz : z > lz) ? 1.6 : 1;
+        }
+        const ng = gs[cur] + (dr && dc ? Math.SQRT2 : 1) * (g.cost ? g.cost[ni] : 1) * lane;
         if (ng < gs[ni]) { gs[ni] = ng; fs[ni] = ng + h(ni); parent[ni] = cur; push(ni); }
       }
     }
@@ -432,17 +477,27 @@ export function hash(s: string): number {
   return h >>> 0;
 }
 
-/** Bo'sh agent qayerda dam oladi: har ~45 s o'zgaradi; bitta joyga ikki agent tushmaydi. */
-export function assignIdle(idleIds: string[], pois: Poi[], slot: number): Map<string, number> {
+/** Har dam olish joyiga bir vaqtda ko'pi bilan nechta agent (tiqilinch bo'lmasin): oshxona 6, PlayStation 4, kino — puflar soni. */
+export const POI_CAPS: Record<Poi["kind"], number> = { kitchen: 6, game: 4, cinema: CINEMA.bags.length, lounge: 4 };
+
+/** Bo'sh agent qayerda dam oladi: har ~45 s o'zgaradi; bitta joyga ikki agent tushmaydi; har zona sig'imi cheklangan (qolganlar stolida). */
+export function assignIdle(idleIds: string[], pois: Poi[], slot: number, caps: Partial<Record<Poi["kind"], number>> = POI_CAPS): Map<string, number> {
   const out = new Map<string, number>();
   const taken = new Set<number>();
+  const used: Record<string, number> = {};
   const sorted = [...idleIds].sort((a, b) => hash(`${a}:${slot}`) - hash(`${b}:${slot}`));
   for (const id of sorted) {
-    if (taken.size >= pois.length) break;
     let k = hash(`${id}#${slot}`) % pois.length;
-    while (taken.has(k)) k = (k + 1) % pois.length;
-    taken.add(k);
-    out.set(id, k);
+    let found = -1;
+    for (let n = 0; n < pois.length; n++, k = (k + 1) % pois.length) {
+      const kind = pois[k].kind;
+      if (taken.has(k) || (used[kind] || 0) >= (caps[kind] ?? Infinity)) continue;
+      found = k; break;
+    }
+    if (found < 0) continue;
+    taken.add(found);
+    used[pois[found].kind] = (used[pois[found].kind] || 0) + 1;
+    out.set(id, found);
   }
   return out;
 }

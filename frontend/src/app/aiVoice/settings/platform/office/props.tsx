@@ -4,7 +4,7 @@ import { Billboard, Html, Instance, Instances } from "@react-three/drei";
 import * as THREE from "three";
 import type { OfficeAgent } from "./officeApi";
 import {
-  BOUNDS, CINEMA, COOK, COOLER, GAME, KITCHEN, KITCHEN_SEATS, LOUNGE, MANAGER_DESK, MICROWAVE, OWNER, PLANTS, SINK, STOVE, doorPoint,
+  BOUNDS, CINEMA, COOK, COOLER, CORRIDORS, GAME, KITCHEN, KITCHEN_SEATS, LOUNGE, MANAGER_DESK, MANAGER_FURN as MF, MICROWAVE, OWNER, PLANTS, SINK, STOVE, doorPoint,
   type Desk, type Room, type Wall, type ZoneKey,
 } from "./layout";
 import { SCREEN_KINDS, screenKindOf, type ScreenHub, type ScreenKind } from "./screens";
@@ -13,6 +13,8 @@ import { SCREEN_KINDS, screenKindOf, type ScreenHub, type ScreenKind } from "./s
 // burchagi, egasining kabineti, soat, suv kuleri, oshpaz. Takrorlanadigan narsalar — instancing (stollar, stullar, monitorlar).
 
 export const CLAUDE = "#D97757";
+const cx = (r: { x0: number; x1: number }) => (r.x0 + r.x1) / 2;
+const cz = (r: { z0: number; z1: number }) => (r.z0 + r.z1) / 2;
 export const EYE = "#1d1410";
 export const BOX = new THREE.BoxGeometry(1, 1, 1);
 export const CYL = new THREE.CylinderGeometry(0.5, 0.5, 1, 20);
@@ -54,20 +56,20 @@ export function Building({ hub }: { hub: ScreenHub }) {
       <Box p={[0, 2.82, B.z0 - 0.35]} s={[w + 1, 0.06, 0.34]} c={CLAUDE} />
       <Box p={[B.x0 - 0.35, 2.82, cz]} s={[0.34, 0.06, d + 1]} c={CLAUDE} />
       {/* Derazalar — osmon (bulutlar asta suzadi) */}
-      {[-17.2, -8.6, 6.4, 15.4].map((x) => (
+      {[-21.6, 5.2].map((x) => (
         <group key={x} position={[x, 2.3, B.z0 - 0.18]}>
-          <Box p={[0, 0, -0.01]} s={[x === 15.4 ? 3.2 : 4.8, 0.7, 0.04]} c="#e9e2d8" />
-          <mesh><planeGeometry args={[x === 15.4 ? 3 : 4.6, 0.55]} /><meshBasicMaterial map={hub.sky} toneMapped={false} /></mesh>
+          <Box p={[0, 0, -0.01]} s={[4.8, 0.7, 0.04]} c="#e9e2d8" />
+          <mesh><planeGeometry args={[4.6, 0.55]} /><meshBasicMaterial map={hub.sky} toneMapped={false} /></mesh>
           <Box p={[0, 0, 0.02]} s={[0.04, 0.55, 0.02]} c="#e9e2d8" />
         </group>
       ))}
-      {[-11, -1, 9].map((z) => (
+      {[-13, -1, 12].map((z) => (
         <group key={z} position={[B.x0 - 0.18, 2.3, z]} rotation={[0, Math.PI / 2, 0]}>
           <Box p={[0, 0, -0.01]} s={[3.2, 0.7, 0.04]} c="#e9e2d8" />
           <mesh><planeGeometry args={[3, 0.55]} /><meshBasicMaterial map={hub.sky} toneMapped={false} /></mesh>
         </group>
       ))}
-      <WallClock position={[-1.4, 2.25, B.z0 - 0.18]} />
+      <WallClock position={[-3.2, 2.25, B.z0 - 0.18]} />
       {/* Chap devordagi neon logotip */}
       <group position={[B.x0 - 0.18, 1.7, 3]} rotation={[0, Math.PI / 2, 0]}>
         <Box p={[0, 0, 0]} s={[2.2, 1.0, 0.04]} c="#f7efe6" />
@@ -127,8 +129,11 @@ export const Rooms = memo(function Rooms({ rooms, walls, names, onAir, small }: 
         );
       })}
       {/* Yo'laklar (xonalar orasida) */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.004, -6.65]}><planeGeometry args={[42, 1.7]} /><meshStandardMaterial color="#e7ddcf" roughness={1} /></mesh>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.004, 5.7]}><planeGeometry args={[42, 1.8]} /><meshStandardMaterial color="#e7ddcf" roughness={1} /></mesh>
+      {CORRIDORS.map((c) => (
+        <mesh key={c.z0} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.004, (c.z0 + c.z1) / 2]}>
+          <planeGeometry args={[BOUNDS.x1 - BOUNDS.x0, c.z1 - c.z0]} /><meshStandardMaterial color="#e7ddcf" roughness={1} />
+        </mesh>
+      ))}
       {walls.map((w, i) => {
         const glass = !!w.glass;
         const h = glass ? 2.4 : WALL_H;
@@ -181,12 +186,12 @@ export function ManagerRoomFurniture() {
       <Box p={[MANAGER_DESK.x - 1.3, 0.36, MANAGER_DESK.z]} s={[0.1, 0.72, 1]} c="#2b2d33" />
       <Box p={[MANAGER_DESK.x + 1.3, 0.36, MANAGER_DESK.z]} s={[0.1, 0.72, 1]} c="#2b2d33" />
       {/* Divan va kofe stolchasi */}
-      <Box p={[-19.9, 0.3, -9]} s={[0.9, 0.6, 2.6]} c="#3c4a63" cast />
-      <Box p={[-20.3, 0.7, -9]} s={[0.2, 0.8, 2.6]} c="#34405a" />
-      <Box p={[-18.6, 0.25, -9]} s={[0.8, 0.5, 1.1]} c="#e9e2d8" />
+      <Box p={[cx(MF.sofa), 0.3, cz(MF.sofa)]} s={[MF.sofa.x1 - MF.sofa.x0, 0.6, MF.sofa.z1 - MF.sofa.z0]} c="#3c4a63" cast />
+      <Box p={[MF.sofa.x0 + 0.1, 0.7, cz(MF.sofa)]} s={[0.2, 0.8, MF.sofa.z1 - MF.sofa.z0]} c="#34405a" />
+      <Box p={[cx(MF.table), 0.25, cz(MF.table)]} s={[MF.table.x1 - MF.table.x0, 0.5, MF.table.z1 - MF.table.z0]} c="#e9e2d8" />
       {/* Kubok javoni */}
-      <Box p={[-14.6, 0.9, -14.6]} s={[1.4, 1.8, 0.45]} c="#cfa77f" />
-      <Box p={[-14.9, 1.95, -14.6]} s={[0.25, 0.3, 0.25]} c="#f2c14e" e="#f2c14e" ei={0.3} metal={0.6} rough={0.3} />
+      <Box p={[cx(MF.shelf), 0.9, cz(MF.shelf)]} s={[MF.shelf.x1 - MF.shelf.x0, 1.8, MF.shelf.z1 - MF.shelf.z0]} c="#cfa77f" />
+      <Box p={[cx(MF.shelf) - 0.3, 1.95, cz(MF.shelf)]} s={[0.25, 0.3, 0.25]} c="#f2c14e" e="#f2c14e" ei={0.3} metal={0.6} rough={0.3} />
     </group>
   );
 }
@@ -207,7 +212,7 @@ export function OwnerOffice({ hub }: { hub: ScreenHub }) {
       <Box p={[OWNER.chair.x, 0.9, OWNER.chair.z - 0.3]} s={[0.6, 0.75, 0.08]} c="#2b2d33" cast />
       <Box p={[(sh.x0 + sh.x1) / 2, 0.9, (sh.z0 + sh.z1) / 2]} s={[sh.x1 - sh.x0, 1.8, sh.z1 - sh.z0]} c="#a7825d" />
       {["#e85d75", "#5b8def", "#7bd389", "#f2a541"].map((c, i) => <Box key={c} p={[(sh.x0 + sh.x1) / 2 + 0.05, 0.5 + i * 0.4, sh.z0 + 0.3 + (i % 2) * 0.4]} s={[0.3, 0.3, 0.12]} c={c} />)}
-      <FloorLamp x={14.4} z={8.0} />
+      <FloorLamp x={OWNER.lamp.x} z={OWNER.lamp.z} />
     </group>
   );
 }
@@ -405,8 +410,8 @@ export function Kitchen() {
       <Box p={[f.x + 0.3, 1.8, f.z + 0.47]} s={[0.04, 0.4, 0.04]} c="#9aa3ad" />
       <Box p={[f.x + 0.3, 1.0, f.z + 0.47]} s={[0.04, 0.5, 0.04]} c="#9aa3ad" />
       {/* Meva savati */}
-      <mesh geometry={SPHERE} position={[-5.9, 1.0, cz]} scale={[0.5, 0.2, 0.5]}><meshStandardMaterial color="#c58b52" /></mesh>
-      {["#ff6b4a", "#ffd23f", "#7bd389"].map((c2, i) => <mesh key={c2} geometry={SPHERE} position={[-6.05 + i * 0.15, 1.1, cz]} scale={0.16}><meshStandardMaterial color={c2} /></mesh>)}
+      <mesh geometry={SPHERE} position={[c.x1 - 0.6, 1.0, cz]} scale={[0.5, 0.2, 0.5]}><meshStandardMaterial color="#c58b52" /></mesh>
+      {["#ff6b4a", "#ffd23f", "#7bd389"].map((c2, i) => <mesh key={c2} geometry={SPHERE} position={[c.x1 - 0.75 + i * 0.15, 1.1, cz]} scale={0.16}><meshStandardMaterial color={c2} /></mesh>)}
       {/* Ovqat stoli + suyanchiqli stullar + likopchalar */}
       <mesh geometry={CYL} position={[t.x, 0.74, t.z]} scale={[1.7, 0.06, 1.7]} castShadow receiveShadow><meshStandardMaterial color="#fbf7f1" roughness={0.5} /></mesh>
       <mesh geometry={CYL} position={[t.x, 0.37, t.z]} scale={[0.12, 0.74, 0.12]}><meshStandardMaterial color="#30333b" /></mesh>
@@ -483,9 +488,9 @@ export function GameCorner({ hub }: { hub: ScreenHub }) {
       <Box p={[(s.x0 + s.x1) / 2, 0.7, s.z1 - 0.12]} s={[s.x1 - s.x0, 0.8, 0.25]} c="#358f89" cast />
       <Box p={[s.x0 + 0.12, 0.5, (s.z0 + s.z1) / 2]} s={[0.25, 0.5, s.z1 - s.z0]} c="#358f89" />
       <Box p={[s.x1 - 0.12, 0.5, (s.z0 + s.z1) / 2]} s={[0.25, 0.5, s.z1 - s.z0]} c="#358f89" />
-      {[1.2, 2.6, 4.0].map((x) => <Box key={x} p={[x, 0.55, (s.z0 + s.z1) / 2 - 0.08]} s={[1.05, 0.12, 0.8]} c="#4cbcb4" />)}
+      {GAME.seats.map((x) => <Box key={x} p={[x, 0.55, (s.z0 + s.z1) / 2 - 0.08]} s={[1.05, 0.12, 0.8]} c="#4cbcb4" />)}
       <Box p={[(tb.x0 + tb.x1) / 2, 0.3, (tb.z0 + tb.z1) / 2]} s={[tb.x1 - tb.x0, 0.08, tb.z1 - tb.z0]} c="#d9b38c" cast />
-      <Box p={[3.0, 0.38, (tb.z0 + tb.z1) / 2]} s={[0.22, 0.06, 0.12]} c="#20232a" />
+      <Box p={[(tb.x0 + tb.x1) / 2 + 0.4, 0.38, (tb.z0 + tb.z1) / 2]} s={[0.22, 0.06, 0.12]} c="#20232a" />
     </group>
   );
 }
@@ -519,8 +524,8 @@ export function Cinema({ hub, videoSrc }: { hub: ScreenHub; videoSrc: string | n
           <meshStandardMaterial color={bagColors[i % bagColors.length]} roughness={0.9} />
         </mesh>
       ))}
-      <Box p={[20.2, 0.7, -10.6]} s={[0.8, 1.4, 0.8]} c="#d62839" cast />
-      <Box p={[20.2, 1.15, -10.6]} s={[0.66, 0.5, 0.66]} c="#fff4d6" e="#ffe08a" ei={0.6} o={0.85} />
+      <Box p={[CINEMA.popcorn.x, 0.7, CINEMA.popcorn.z]} s={[0.8, 1.4, 0.8]} c="#d62839" cast />
+      <Box p={[CINEMA.popcorn.x, 1.15, CINEMA.popcorn.z]} s={[0.66, 0.5, 0.66]} c="#fff4d6" e="#ffe08a" ei={0.6} o={0.85} />
     </group>
   );
 }
@@ -556,7 +561,7 @@ export function Lounge({ musicOn }: { musicOn: boolean }) {
         <mesh geometry={CYL} position={[0, 1.32, 0]} scale={[0.36, 0.6, 0.36]}><meshStandardMaterial color="#9fd6ff" transparent opacity={0.6} roughness={0.1} /></mesh>
         <mesh ref={bub} geometry={SPHERE} position={[0, 1.2, 0]} scale={0.05}><meshBasicMaterial color="#ffffff" /></mesh>
       </group>
-      <FloorLamp x={20.3} z={12.6} />
+      <FloorLamp x={25.3} z={17.0} />
       {/* Radio (musiqa pleyeri) — kofe stolchasida; chalganda notalar uchadi */}
       <Box p={[RADIO.x, 0.52, RADIO.z]} s={[0.56, 0.3, 0.22]} c="#c0392b" cast />
       <mesh position={[RADIO.x - 0.1, 0.52, RADIO.z + 0.112]}><circleGeometry args={[0.09, 20]} /><meshStandardMaterial color="#2b2d33" /></mesh>

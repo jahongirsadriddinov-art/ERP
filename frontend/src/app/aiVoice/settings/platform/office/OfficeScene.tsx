@@ -3,7 +3,7 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import type { OfficeAgent } from "./officeApi";
-import { assignIdle, BOUNDS, buildGrid, computeLayout, type Desk } from "./layout";
+import { assignIdle, BOUNDS, buildGrid, computeLayout, doorZones, type Desk } from "./layout";
 import { Crowd } from "./crowd";
 import { ScreenHub } from "./screens";
 import { Building, Cinema, Cook, DeskSet, GameCorner, Kitchen, Lounge, ManagerRoomFurniture, OwnerOffice, Plants, Rooms } from "./props";
@@ -47,7 +47,7 @@ export default function OfficeScene({ agents, selectedId, onSelect, showAllLabel
   const layout = useMemo(() => computeLayout(agents.map((a) => ({ id: a.id, team: a.team, kind: a.kind }))), [layoutKey]);
   const grid = useMemo(() => buildGrid(layout.obstacles), [layout]);
   const crowdRef = useRef<Crowd | null>(null);
-  if (!crowdRef.current) crowdRef.current = new Crowd(grid);
+  if (!crowdRef.current) crowdRef.current = new Crowd(grid, doorZones());
   const crowd = crowdRef.current;
   crowd.setGrid(grid);
   const hub = useMemo(() => new ScreenHub(), []);

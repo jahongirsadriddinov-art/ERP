@@ -65,13 +65,23 @@ describe("AI ofis olomoni (agentlar bir-biriga urilmaydi)", () => {
     expect(crowd.get("a")!.arrived && crowd.get("b")!.arrived).toBe(true);
   });
 
-  it("o'yinchi (drive) devor va agent orqali o'tmaydi", () => {
+  it("o'yinchi devor bo'ylab sirpanadi (to'xtab qolmaydi), odamlar orqali o'tadi (arvoh)", () => {
+    const crowd = new Crowd(grid);
+    // Orqa yo'lakda, Dasturlash xonasi devoriga qiya yo'nalishda yurish: devorga kirmaydi, lekin x bo'ylab siljiyveradi
+    crowd.place("me", { key: "me", x: -20, z: -6.9, face: 0 }, true);
+    crowd.place("x", { key: "x", x: -18.5, z: -6.9, face: 0 });
+    const x0 = crowd.get("me")!.pos.x;
+    for (let i = 0; i < 60; i++) crowd.drive("me", 2.0, 2.0, 1 / 30); // 45° devor tomon
+    const me = crowd.get("me")!;
+    expect(walkable(grid, cellIndex(me.pos))).toBe(true);
+    expect(me.pos.x - x0).toBeGreaterThan(2.5); // sirpanib o'tdi (agent "x" ham to'smadi)
+    expect(me.pos.z).toBeLessThan(-5.6);         // devordan o'tmadi
+  });
+
+  it("o'yinchi (drive) devor orqali o'tmaydi", () => {
     const crowd = new Crowd(grid);
     crowd.place("me", { key: "me", x: -8.4, z: -6.75, face: Math.PI }, true);
-    crowd.place("x", { key: "x", x: -8.4, z: -8.5, face: 0 });
     for (let i = 0; i < 90; i++) { crowd.drive("me", 0, -2.6, 1 / 30); crowd.step(1 / 30); }
-    const me = crowd.get("me")!, x = crowd.get("x")!;
-    expect(Math.hypot(me.pos.x - x.pos.x, me.pos.z - x.pos.z)).toBeGreaterThanOrEqual(0.74);
     // Chap tashqi devorga qarab yurish — chegaradan chiqmaydi
     for (let i = 0; i < 400; i++) crowd.drive("me", -2.6, 0, 1 / 30);
     expect(walkable(grid, cellIndex(crowd.get("me")!.pos))).toBe(true);

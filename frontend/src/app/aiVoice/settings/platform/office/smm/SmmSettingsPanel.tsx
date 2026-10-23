@@ -67,7 +67,8 @@ export default function SmmSettingsPanel({ settings, status, onSaved }: { settin
             <li key={i.key} className="flex items-start gap-1.5 text-[11.5px]">
               <span className={`mt-0.5 w-3.5 h-3.5 rounded-full grid place-items-center text-[9px] font-bold flex-shrink-0 ${i.ok ? "bg-emerald-500 text-white" : i.ok === null ? "bg-muted text-muted-foreground" : i.required ? "bg-amber-500 text-white" : "bg-muted text-muted-foreground"}`}>{i.ok ? "✓" : i.ok === null ? "?" : "!"}</span>
               <span className="min-w-0"><code className="font-mono font-semibold">{i.key}</code>{!i.required && <span className="text-muted-foreground"> · {k("optional")}</span>}
-                <span className="block text-muted-foreground">{k(`env.${i.key}`)}</span></span>
+                <span className="block text-muted-foreground">{k(`env.${i.key}`)}</span>
+                {i.detail && <span className="block text-red-600 break-words" data-testid={`smm-check-detail-${i.key}`}>{k("tgError")}: {i.detail}</span>}</span>
             </li>
           ))}
         </ul>

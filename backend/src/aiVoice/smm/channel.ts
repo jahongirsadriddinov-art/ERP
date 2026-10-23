@@ -1,4 +1,5 @@
 import { SmmSettings } from '../../models/Smm';
+import { sanitizePost } from './content';
 
 // Telegram kanal (owner 2026-10-23: "postlar KANALGA chiqsin, bot chatiga emas"). Kanal UI'dan ulanadi (env shart emas):
 // dasturchi @username yoki -100… id kiritadi → Bot API bilan tekshiriladi (getMe, getChat — kanal, getChatMember — bot admin va
@@ -83,6 +84,17 @@ export async function verifyAndSaveChannel(raw: unknown, token: string, by: stri
   return v;
 }
 
+/** Premium emoji natijasini bir marta qayd etish (sozlash ro'yxatida Telegram xatosi bilan ko'rsatiladi). */
+export async function recordPremium(r: { premium: 'used' | 'rejected' | 'none'; premiumError?: string }): Promise<void> {
+  if (r.premium === 'rejected') {
+    // Faqat sabab o'zgarganda yoziladi; upsert dublikat (shu xato allaqachon yozilgan) — e'tiborsiz
+    const err = (r.premiumError || 'rejected').slice(0, 300);
+    await SmmSettings.updateOne({ key: 'global', tgPremiumError: { $ne: err } }, { $set: { tgPremiumError: err, tgPremiumAt: new Date() } }, { upsert: true }).catch(() => undefined);
+  } else if (r.premium === 'used') {
+    await SmmSettings.updateOne({ key: 'global' }, { $set: { tgPremiumOkAt: new Date() }, $unset: { tgPremiumError: 1 } }, { upsert: true }).catch(() => undefined);
+  }
+}
+
 export async function removeChannel(by: string): Promise<void> {
   await SmmSettings.updateOne({ key: 'global' }, { $unset: { tgChannelId: 1, tgChannelUsername: 1, tgChannelTitle: 1, tgChannelCheckedAt: 1 }, $set: { updatedBy: by } }, { upsert: true });
   cache = null;
@@ -105,10 +117,12 @@ export function paragraphs(text: string): string[] {
 export interface ChannelPost { html: string; captionHtml: string; restHtml?: string; plainLength: number }
 /** Kanal posti: <b>sarlavha</b>, paragraflar, heshteglar oxirida. caption ≤1024 (ko'rinadigan belgilar) — sig'masa, rasmga qisqa
  *  caption (sarlavha + birinchi paragraf, sig'sa) va to'liq matn keyingi xabarda. */
-export function formatChannelPost(it: { title?: string; text?: string; hashtags?: string[] }, captionMax = 1024): ChannelPost {
-  const title = String(it.title || '').trim();
-  const paras = paragraphs(String(it.text || ''));
-  const tags = (it.hashtags || []).filter((h) => /^#\S+$/.test(h)).slice(0, 30).join(' ');
+export function formatChannelPost(raw: { title?: string; text?: string; hashtags?: string[] }, captionMax = 1024): ChannelPost {
+  // Faqat e'lon qilinadigan matn: yorliqlar, sahna ko'rsatmalari, [Rasm: …], markdown, to'ldiriladigan joylar olib tashlanadi
+  const it = sanitizePost(raw);
+  const title = it.title;
+  const paras = paragraphs(it.text);
+  const tags = it.hashtags.join(' ');
   const blocks = [title ? `<b>${escHtml(title)}</b>` : '', ...paras.map(escHtml), tags ? escHtml(tags) : ''].filter(Boolean);
   const plain = [title, ...paras, tags].filter(Boolean).join('\n\n');
   const html = blocks.join('\n\n');

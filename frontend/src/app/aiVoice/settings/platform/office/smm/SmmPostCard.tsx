@@ -200,6 +200,11 @@ export default function SmmPostCard({ taskId, index, item, settings, status, onC
           {item.title && <p className="text-[12.5px] font-bold">{item.title}</p>}
           <p className="text-[12.5px] whitespace-pre-wrap break-words">{item.text}</p>
           {!!item.hashtags?.length && <p className="text-[11.5px] text-sky-700 dark:text-sky-300">{item.hashtags.join(" ")}</p>}
+          {item.editorNotes && (
+            <p className="text-[11px] text-muted-foreground rounded-lg bg-muted/40 px-2 py-1.5 whitespace-pre-wrap" data-testid="smm-editor-notes">
+              <b>{k("editorNotes")}</b> {item.editorNotes}
+            </p>
+          )}
         </>
       )}
 

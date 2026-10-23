@@ -11,18 +11,18 @@ export interface MediaMeta { id: string; kind: "image" | "video"; mime?: string;
 export interface PubState { status: "publishing" | "published" | "failed"; at?: string; kind?: string; target?: string; url?: string; error?: string; detail?: string }
 export interface SmmItem {
   title: string; text: string; hashtags?: string[]; format?: SmmFormat; lang?: string; topic?: string; category?: string; imagePrompt?: string;
-  scenes?: { title: string; text: string }[]; media?: MediaMeta[]; approval?: "pending" | "approved" | "rejected"; tg?: PubState; ig?: PubState;
+  scenes?: { title: string; text: string }[]; media?: MediaMeta[]; approval?: "pending" | "approved" | "rejected"; tg?: PubState; ig?: PubState; editorNotes?: string;
 }
 export interface SmmSettings {
   mode: SmmMode; days: number[]; times: string[]; formats: SmmFormat[]; language: "uz" | "ru" | "both";
   targets: { telegram: boolean; instagram: boolean }; dailyCap: number; paused: boolean; perWeek: number; next?: string; envKill: boolean;
 }
 export interface SmmStatus {
-  telegram: { bot: boolean; botUsername?: string; channel: boolean; channelSource?: "db" | "env" | "none"; channelName?: string; channelTitle?: string; siteButton?: boolean; devChat: boolean; viewsAvailable: boolean };
+  telegram: { bot: boolean; botUsername?: string; channel: boolean; channelSource?: "db" | "env" | "none"; channelName?: string; channelTitle?: string; siteButton?: boolean; devChat: boolean; viewsAvailable: boolean; premium?: "ok" | "rejected" | "unknown"; premiumError?: string };
   instagram: { configured: boolean; userIdSet: boolean; via: "instagram" | "facebook"; appSet: boolean; username?: string; expiresAt?: string; lastRefreshAt?: string; refreshError?: string; publicUrl: boolean; secretsKey: boolean };
   gemini: { configured: boolean; imageModel: string };
   ffmpeg: boolean;
-  items: { key: string; ok: boolean | null; required: boolean; for: "telegram" | "instagram" | "content" }[];
+  items: { key: string; ok: boolean | null; required: boolean; for: "telegram" | "instagram" | "content"; detail?: string }[];
 }
 export interface SmmRunRow { key: string; status: string; mode?: string; format?: string; category?: string; topic?: string; taskId?: string; note?: string; at: string }
 export interface SmmPostStat { taskId: string; index: number; title: string; kind: string; url?: string; publishedAt: string; metrics: Record<string, number>; engagement: number; reach: number; updatedAt?: string }

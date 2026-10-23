@@ -25,7 +25,7 @@ async function mockApi(page: Page, calls: Calls) {
     items: [{ key: 'INSTAGRAM_ACCESS_TOKEN', ok: true, required: true, for: 'instagram' }, { key: 'AGENT_TG_CHANNEL_ID', ok: false, required: false, for: 'telegram' }],
   };
   const items: any[] = [
-    { title: 'Smeta 5 daqiqada', text: "QurilishERP bilan smetani tez tuzing. Bepul sinab ko'ring!", hashtags: ['#qurilish', '#erp'], format: 'post', category: 'feature', topic: 'Smeta', scenes: [{ title: 'Muammo', text: 'Smeta 3 kun' }] },
+    { title: 'Smeta 5 daqiqada', text: "QurilishERP bilan smetani tez tuzing. Bepul sinab ko'ring!", hashtags: ['#qurilish', '#erp'], format: 'post', category: 'feature', topic: 'Smeta', editorNotes: 'Ertalab 9:00 da joylang', scenes: [{ title: 'Muammo', text: 'Smeta 3 kun' }] },
     { title: 'Ishchilar qayerda?', text: 'GPS davomat bilan bilasiz.', format: 'story', category: 'tip', approval: 'pending' },
     { title: 'GPS davomat', text: "Ishchilar qayerda — xaritada. Sinab ko'ring!", format: 'reel', category: 'feature', scenes: [{ title: 'GPS xarita', text: 'Ishchilar jonli' }] },
   ];
@@ -134,6 +134,7 @@ test('SMM: rasmli post (shablon va AI), qurilmada saqlanadi, Instagram\'ga e\'lo
   await openSmm(page);
   const card = page.getByTestId('ai-office-item-0');
   await expect(card).toContainText('Smeta 5 daqiqada');
+  await expect(card.getByTestId('smm-editor-notes')).toContainText('Ertalab 9:00 da joylang');
   // Shablon rasm — brauzerda (canvas) chiziladi va IndexedDB'da saqlanadi; serverga faqat metama'lumot
   await card.getByTestId('smm-gen-template').click();
   await expect.poll(() => calls.media.length, { timeout: 20_000 }).toBe(1);

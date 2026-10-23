@@ -8,7 +8,7 @@ import { logAudit } from '../../services/audit';
 import { geminiConfigured, geminiTextToJson } from '../../services/gemini';
 import { AGENT_DEFAULTS } from './defaults';
 import { asSmmItem, featuresContext, newsContext, SMM_KEYS, smmFormatSpec } from '../smm/content';
-import { channelConfig, SITE_BUTTON_URL, siteButtonLabel } from '../smm/channel';
+import { channelConfig, recordPremium, SITE_BUTTON_URL, siteButtonLabel } from '../smm/channel';
 import { tgSendPost } from '../smm/telegram';
 
 // AI ofis — boshqaruv markazi (owner 2026-10-22). Agentlar ro'yxati (AgentProfile), buyruqlar (AgentTask) va bajarish:
@@ -191,7 +191,7 @@ export function itemDto(i: any) {
   return {
     title: i.title || '', text: i.text || '', ...(i.hashtags?.length ? { hashtags: i.hashtags } : {}),
     ...(i.format ? { format: i.format } : {}), ...(i.lang ? { lang: i.lang } : {}), ...(i.topic ? { topic: i.topic } : {}),
-    ...(i.category ? { category: i.category } : {}), ...(i.imagePrompt ? { imagePrompt: i.imagePrompt } : {}),
+    ...(i.category ? { category: i.category } : {}), ...(i.imagePrompt ? { imagePrompt: i.imagePrompt } : {}), ...(i.editorNotes ? { editorNotes: i.editorNotes } : {}),
     ...(i.scenes?.length ? { scenes: i.scenes.map((x: any) => ({ title: x.title || '', text: x.text || '' })) } : {}),
     ...(i.media?.length ? { media: i.media.map((m: any) => ({ id: m.id, kind: m.kind, ...(m.mime ? { mime: m.mime } : {}), ...(m.w ? { w: m.w, h: m.h } : {}), ...(m.size ? { size: m.size } : {}), ...(m.source ? { source: m.source } : {}), ...(m.at ? { at: isoOf(m.at) } : {}) })) } : {}),
     ...(i.approval && i.approval !== 'none' ? { approval: i.approval } : {}),
@@ -773,8 +773,9 @@ export async function sendTaskToTelegram(id: string, target: unknown, index: unk
   if (!item.text) return { ok: false, error: 'empty', status: 400 };
   try {
     const url = SITE_BUTTON_URL();
-    await tgSendPost({ token: c.botToken, chat, username: sentTo === 'channel' ? ch.username : undefined, item, files: [],
+    const sent = await tgSendPost({ token: c.botToken, chat, username: sentTo === 'channel' ? ch.username : undefined, item, files: [],
       ...(sentTo === 'channel' && ch.siteButton && typeof index === 'number' ? { button: { text: siteButtonLabel(url), url } } : {}) });
+    await recordPremium(sent);
   } catch {
     return { ok: false, error: 'telegram_failed', status: 502 };
   }

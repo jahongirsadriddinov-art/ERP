@@ -22,6 +22,7 @@ import { putTemp, getTemp } from '../tempMedia';
 import { smmRender, wrapText, ffmpegAvailable, renderTemplate } from '../render';
 import { tgMessageUrl } from '../telegram';
 import { __resetChannelCacheForTests, formatChannelPost, paragraphs } from '../channel';
+import { __resetBotUiForTests, setBotUiSnapshot } from '../../../services/botUi/runtime';
 import { zonedToUtc } from '../../lib/zonedTime';
 
 let mongo: MongoMemoryServer;
@@ -52,6 +53,7 @@ let calls: Call[] = [];
 let graphMode: 'ok' | 'container_error' | 'token_bad' = 'ok';
 let statusPolls = 0;
 let memberResult: any = { status: 'administrator', can_post_messages: true };
+let rejectCustomEmoji = false;
 const fetchMock = vi.fn(async (input: any, init: any = {}) => {
   const url = String(input);
   const method = init.method || 'GET';
@@ -69,6 +71,8 @@ const fetchMock = vi.fn(async (input: any, init: any = {}) => {
       return j({ ok: true, result: { id: -1001234567890, type: 'channel', title: 'QurilishERP yangiliklari', username: 'erp_kanal' } });
     }
     if (m === 'getChatMember') return j({ ok: true, result: memberResult });
+    const payload = body instanceof FormData ? String(body.get('caption') || '') : String(body?.text || '');
+    if (rejectCustomEmoji && payload.includes('<tg-emoji')) return j({ ok: false, error_code: 400, description: 'Bad Request: ENTITY_TEXT_INVALID' }, 400);
     return j({ ok: true, result: m === 'sendMediaGroup' ? [{ message_id: 41 }, { message_id: 42 }] : { message_id: m === 'sendMessage' ? 50 : 40 } });
   }
   if (url.startsWith('https://generativelanguage.googleapis.com/')) {
@@ -124,7 +128,8 @@ beforeEach(async () => {
   __setContentRunnerForTests(null);
   __setIgSleepForTests(async () => {});
   await Promise.all([AgentProfile.deleteMany({}), AgentTask.deleteMany({}), SmmSettings.deleteMany({}), SmmRun.deleteMany({}), SmmInsight.deleteMany({}), SmmTempMedia.deleteMany({}), AuditLog.deleteMany({})]);
-  calls = []; graphMode = 'ok'; statusPolls = 0; memberResult = { status: 'administrator', can_post_messages: true };
+  calls = []; graphMode = 'ok'; statusPolls = 0; memberResult = { status: 'administrator', can_post_messages: true }; rejectCustomEmoji = false;
+  __resetBotUiForTests();
   __resetChannelCacheForTests();
   fetchMock.mockClear();
   vi.stubGlobal('fetch', fetchMock);
@@ -541,5 +546,40 @@ describe("Telegram kanal (UI'dan ulash) va kanal formati", () => {
     const photo = tgCalls().find((c) => c.url.endsWith('/sendPhoto'))!;
     expect((photo.body as FormData).get('chat_id')).toBe('-1001234567890');
     expect(graphCalls()).toHaveLength(0);
+  });
+});
+
+describe('premium (custom) emoji kanal postida', () => {
+  const snap = (map: [string, string][]) => setBotUiSnapshot({
+    buttons: {}, messageEmoji: new Map(map), messageEmojiEnabled: true, stripEmojiWhenIcon: true, stickers: [], messagePrefix: {}, messagePrefixEnabled: false,
+  });
+
+  it("Bot dizayni xaritasi bo'yicha <tg-emoji> qo'yiladi; Telegram rad etsa — oddiy emoji bilan qayta va sababi ro'yxatda", async () => {
+    process.env.TELEGRAM_BOT_TOKEN = 'bot123';
+    process.env.AGENT_TG_CHANNEL_ID = '@erp_kanal';
+    const id = await smmTask([{ ...ITEM, text: "Qog'oz cheklar yo'qolyaptimi? 😟 Endi yo'q!" }]);
+    snap([['😟', '5368324170671202286']]);
+    calls = [];
+    const ok = await request(app).post(`${P}/agent-tasks/${id}/items/0/publish`).set('Authorization', tok(devId))
+      .field('target', 'telegram').attach('files', JPEG, { filename: 'a.jpg', contentType: 'image/jpeg' });
+    expect(ok.body.ok).toBe(true);
+    expect(String((tgCalls()[0].body as FormData).get('caption'))).toContain('<tg-emoji emoji-id="5368324170671202286">😟</tg-emoji>');
+    expect(tgCalls()).toHaveLength(1);
+    expect((await get('/smm/settings')).body.status.telegram.premium).toBe('ok');
+
+    rejectCustomEmoji = true;
+    calls = [];
+    const r = await request(app).post(`${P}/agent-tasks/${id}/items/0/publish`).set('Authorization', tok(devId))
+      .field('target', 'telegram').attach('files', JPEG, { filename: 'a.jpg', contentType: 'image/jpeg' });
+    expect(r.body).toMatchObject({ ok: true, sentTo: 'channel' });
+    expect(tgCalls()).toHaveLength(2);
+    const plain = String((tgCalls()[1].body as FormData).get('caption'));
+    expect(plain).not.toContain('<tg-emoji');
+    expect(plain).toContain('😟');
+    const st = (await get('/smm/settings')).body.status;
+    expect(st.telegram).toMatchObject({ premium: 'rejected', premiumError: 'Bad Request: ENTITY_TEXT_INVALID' });
+    expect(st.items.find((i: any) => i.key === 'TG_PREMIUM_EMOJI')).toMatchObject({ ok: false, detail: 'Bad Request: ENTITY_TEXT_INVALID' });
+    const log = (await get(`/agent-tasks/${id}`)).body.task.log.map((l: any) => l.text).join(' | ');
+    expect(log).toMatch(/premium emojini rad etdi/);
   });
 });

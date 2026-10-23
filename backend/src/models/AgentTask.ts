@@ -15,7 +15,7 @@ export interface AgentTaskItem {
   // ── SMM (ixtiyoriy) ──
   format?: 'post' | 'carousel' | 'reel' | 'story'; lang?: string; topic?: string; category?: string; imagePrompt?: string;
   scenes?: { title: string; text: string }[]; media?: SmmMediaMeta[];
-  approval?: 'none' | 'pending' | 'approved' | 'rejected';
+  approval?: 'none' | 'pending' | 'approved' | 'rejected'; editorNotes?: string;
   tg?: SmmPublishState; ig?: SmmPublishState;
 }
 export interface AgentTaskLink { label: string; url: string }
@@ -66,6 +66,7 @@ const AgentTaskSchema = new Schema<IAgentTask>({
       topic: { type: String, maxlength: 300 },
       category: { type: String, maxlength: 30 },
       imagePrompt: { type: String, maxlength: 1500 },
+      editorNotes: { type: String, maxlength: 1500 },
       scenes: { type: [new Schema({ title: { type: String, maxlength: 120 }, text: { type: String, maxlength: 400 } }, { _id: false })], default: undefined },
       media: {
         type: [new Schema({

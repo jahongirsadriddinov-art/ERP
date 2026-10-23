@@ -5,7 +5,8 @@ import { agentConfig } from '../agents/service';
 import { IgError, igConfigured, igPublish, type IgKind } from './instagram';
 import { smmRender, ffmpegAvailable } from './render';
 import { TgError, tgSendPost, type TgFile } from './telegram';
-import { channelConfig, SITE_BUTTON_URL, siteButtonLabel } from './channel';
+import { channelConfig, recordPremium, SITE_BUTTON_URL, siteButtonLabel } from './channel';
+import { sanitizePost } from './content';
 import { publicUrlOk, putTemp, removeTemp } from './tempMedia';
 
 // SMM e'lon (owner 2026-10-23): qurilmadan kelgan (yoki avtopilot serverda yaratgan) fayllar bilan Telegram / Instagram.
@@ -34,9 +35,9 @@ const ID_RE = /^[0-9a-f]{24}$/i;
 export const IMAGE_MIMES = ['image/jpeg', 'image/png', 'image/webp'];
 export const VIDEO_MIMES = ['video/mp4', 'video/webm', 'video/quicktime'];
 
-export function captionOf(it: { title?: string; text?: string; hashtags?: string[] }, max = 2200): string {
-  const tags = (it.hashtags || []).filter((h) => /^#\S+$/.test(h)).slice(0, 30).join(' ');
-  return [it.title, it.text, tags].filter(Boolean).join('\n\n').slice(0, max);
+export function captionOf(raw: { title?: string; text?: string; hashtags?: string[] }, max = 2200): string {
+  const it = sanitizePost(raw);
+  return [it.title, it.text, it.hashtags.join(' ')].filter(Boolean).join('\n\n').slice(0, max);
 }
 
 async function audit(by: string | undefined, description: string, entityId: string, req?: any, newValue?: unknown): Promise<void> {
@@ -113,6 +114,8 @@ export async function publishItem(taskId: string, index: number, target: Publish
         token: agentConfig().botToken, chat: dest.chat, username: dest.username, item: it, files: files.map((f): TgFile => ({ data: f.data, mime: f.mime })),
         ...(ch.siteButton ? { button: { text: siteButtonLabel(url), url } } : {}),
       });
+      await recordPremium(r);
+      if (r.premium === 'rejected') await AgentTask.updateOne({ _id: taskId }, { $push: { log: logLine(`Telegram premium emojini rad etdi (${(r.premiumError || '').slice(0, 120)}) — oddiy emoji bilan joylandi`) } });
       const state = { status: 'published', at: new Date(), target: dest.sentTo, messageId: r.messageId, ...(r.url ? { url: r.url } : {}) };
       await AgentTask.updateOne({ _id: taskId }, { $set: { [`${key}.tg`]: state }, $push: { log: logLine(`${o.auto ? 'Avtopilot: ' : ''}Telegram ${dest.sentTo === 'channel' ? 'kanalga' : 'chatingizga'} yuborildi${files.length ? ` (${files.length} ta fayl)` : ''}`) } });
       await audit(o.by, `SMM: Telegram ${dest.sentTo === 'channel' ? 'kanalga' : 'dasturchi chatiga'} e'lon — "${String(it.title || '').slice(0, 80)}"`, where, o.req, { target: 'telegram', sentTo: dest.sentTo, files: files.length });

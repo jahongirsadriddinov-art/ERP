@@ -43,6 +43,10 @@ const SmmSettingsSchema = new Schema({
   tgChannelCheckedAt: Date,
   /** Kanal postlari ostida "sayt" tugmasi. */
   tgSiteButton: { type: Boolean, default: true },
+  /** Premium (custom) emoji kanal postida: oxirgi rad etish sababi (Telegram xatosi) yoki muvaffaqiyat vaqti. */
+  tgPremiumError: String,
+  tgPremiumAt: Date,
+  tgPremiumOkAt: Date,
 }, { timestamps: true });
 
 /** Avtopilot ishga tushishi (slot) — unique key bir nechta instansiyada ikki marta ishlamaslik uchun (leader-safe). */

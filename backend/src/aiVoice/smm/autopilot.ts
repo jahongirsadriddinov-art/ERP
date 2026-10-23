@@ -119,7 +119,7 @@ export async function saveSettings(body: Record<string, any>, by: string, req?: 
 /** Ulanishlar holati va sozlash ro'yxati (faqat NOMLAR — qiymatlar hech qachon). */
 export async function connectionStatus() {
   const c = agentConfig();
-  const s: any = await SmmSettings.findOne({ key: 'global' }).select('igUsername igTokenExpiresAt igLastRefreshAt igRefreshError igUserId').lean().catch(() => null);
+  const s: any = await SmmSettings.findOne({ key: 'global' }).select('igUsername igTokenExpiresAt igLastRefreshAt igRefreshError igUserId tgPremiumError tgPremiumOkAt').lean().catch(() => null);
   const e = igEnv();
   const ig = {
     configured: igConfigured(), userIdSet: !!(e.userId || s?.igUserId), via: e.host === 'graph.instagram.com' ? 'instagram' : 'facebook',
@@ -133,10 +133,12 @@ export async function connectionStatus() {
   const tg = {
     bot: !!c.botToken, botUsername: b?.username || undefined, channel: !!(ch.chat && c.botToken), channelSource: ch.source,
     channelName: ch.username ? `@${ch.username}` : undefined, channelTitle: ch.title, siteButton: ch.siteButton, devChat: !!(c.devChat && c.botToken), viewsAvailable: false,
+    premium: s?.tgPremiumError ? 'rejected' : s?.tgPremiumOkAt ? 'ok' : 'unknown', premiumError: s?.tgPremiumError || undefined,
   };
   const items = [
     { key: 'TELEGRAM_BOT_TOKEN', ok: tg.bot, required: true, for: 'telegram' },
     { key: 'AGENT_TG_CHANNEL_ID', ok: tg.channel, required: false, for: 'telegram' },
+    { key: 'TG_PREMIUM_EMOJI', ok: s?.tgPremiumError ? false : s?.tgPremiumOkAt ? true : null, required: false, for: 'telegram', ...(s?.tgPremiumError ? { detail: String(s.tgPremiumError) } : {}) },
     { key: 'INSTAGRAM_ACCESS_TOKEN', ok: ig.configured, required: true, for: 'instagram' },
     { key: 'INSTAGRAM_USER_ID', ok: ig.userIdSet, required: ig.via === 'facebook', for: 'instagram' },
     { key: 'META_APP_ID', ok: ig.appSet, required: false, for: 'instagram' },

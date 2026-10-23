@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { geminiAudioToJson } from '../../services/gemini';
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import OfficeMedia from '../../models/OfficeMedia';
 import { hitRate } from '../lib/mongoRateLimit';
@@ -106,8 +107,17 @@ officeMediaRoutes.post('/office/transcribe', wrap(async (req, res) => {
   const lang = b.lang === 'ru' ? 'ru' : 'uz';
   try {
     const r = await transcriber.transcribe(pcm, { lang, model: aiConfig.models.transcribe });
-    res.json({ text: (r.text || '').slice(0, 2000) });
-  } catch {
+    return res.json({ text: (r.text || '').slice(0, 2000) });
+  } catch (e: any) {
+    console.warn('[office/transcribe] transcriber failed, Gemini audio fallback:', String(e?.message || e).slice(0, 200));
+  }
+  // Zaxira (owner 2026-10-23: "stt_failed" chiqardi) — ovozli chiqimda ishlab turgan Gemini audio yo'li
+  try {
+    const out = await geminiAudioToJson(Buffer.from(b.audio, 'base64'), 'audio/wav',
+      `Transcribe this ${lang === 'ru' ? 'Russian' : 'Uzbek (Latin script)'} speech exactly as spoken. Answer ONLY JSON: {"text":"..."}. If there is no speech, {"text":""}.`);
+    res.json({ text: String(out?.text || '').slice(0, 2000) });
+  } catch (e: any) {
+    console.error('[office/transcribe] failed:', String(e?.message || e).slice(0, 200));
     res.status(502).json({ error: 'stt_failed' });
   }
 }));

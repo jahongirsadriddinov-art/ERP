@@ -22,7 +22,9 @@
       <script>
         (function () {
           try {
-            if (location.hash.indexOf('tgWebAppData') === -1) return;
+            // Qayta yuklangan Mini App'da hash yo'qolgan bo'lishi mumkin — sessiyadagi initData ham hisobga olinadi
+            var tgSaved = ''; try { tgSaved = sessionStorage.getItem('tg_init') || ''; } catch (e2) {}
+            if (location.hash.indexOf('tgWebAppData') === -1 && !tgSaved) return;
             var s = document.createElement('script');
             s.src = 'https://telegram.org/js/telegram-web-app.js';
             s.async = true;

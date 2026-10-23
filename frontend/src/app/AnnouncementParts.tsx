@@ -1,5 +1,6 @@
 import { confirmDialog } from "./lib/confirmDialog";
-import { useState, useRef, useEffect, lazy, Suspense } from "react";
+import { useState, useRef, useEffect, Suspense } from "react";
+import { lazyRetry as lazy } from "./lib/lazyRetry";
 import { MorphIcon } from "morphicons/react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";

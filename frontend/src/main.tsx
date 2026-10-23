@@ -1,4 +1,7 @@
-import { lazy, Suspense } from "react";
+import { Suspense } from "react";
+import { lazyRetry as lazy, reloadWhenVisible } from "./app/lib/lazyRetry";
+import { isTelegramMiniApp } from "./app/telegramWebApp";
+import { installTelegramLifecycle } from "./app/lib/telegramLifecycle";
 
 import { createRoot } from "react-dom/client";
 import { MotionConfig } from "motion/react";
@@ -42,7 +45,7 @@ import "./styles/index.css";
 import { attachSoundUnlock } from "./app/sound.ts";
 import { attachAppleHaptics } from "./app/lib/haptics";
 import { installTapGuard } from "./app/lib/tapGuard";
-import { isChunkError, reloadForNewVersion } from "./app/lib/chunkReload";
+import { isChunkError } from "./app/lib/chunkReload";
 
 // UI ovoz effektlari (uisfx, "zen" pack) — birinchi bosishda audio
 // kontekstni ochadi va butun sayt bo'ylab tugma/havola bosishlariga
@@ -51,7 +54,10 @@ attachSoundUnlock();
 attachAppleHaptics(); // tugma ovozlari o'rniga — faqat Apple qurilmalarida yengil titrash
 installTapGuard();
 // Yangi versiyadan keyin eski bo'lak topilmasa (masalan tugma bosilganda yuklanadigan modul) — sahifa bir marta yangilanadi
-window.addEventListener("unhandledrejection", e => { if (isChunkError(e.reason)) { e.preventDefault(); reloadForNewVersion(); } });
+// Fonda (yashirin) qayta yuklanmaydi — iOS Telegram Mini App'da qaytganda oq ekran bo'lardi (lib/lazyRetry.ts)
+window.addEventListener("unhandledrejection", e => { if (isChunkError(e.reason)) { e.preventDefault(); reloadWhenVisible(); } });
+// Telegram Mini App: kichraytirib qaytarilganda (iOS) oq ekran — SDK, ranglar, repaint, bo'sh #root tiklanishi
+try { if (isTelegramMiniApp()) installTelegramLifecycle({ win: window as any, doc: document }); } catch { /* */ }
 
 // Chrome-ning built-in Translator/Language Detection API (window.translation)
 // sahifada ishlamasa "Language detection is not supported for this page" xatosini

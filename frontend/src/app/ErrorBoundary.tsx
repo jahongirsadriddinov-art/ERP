@@ -1,6 +1,7 @@
 import { Component, ReactNode } from "react";
 import { reportError } from "./lib/monitoring";
 import { isChunkError, reloadForNewVersion } from "./lib/chunkReload";
+import { reloadWhenVisible } from "./lib/lazyRetry";
 
 interface Props { children: ReactNode; }
 interface State { error: Error | null; }
@@ -14,7 +15,12 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: { componentStack: string }) {
     // Yangi versiya chiqqan, eski bo'lak topilmadi — xato emas: jimgina yangilaymiz
-    if (isChunkError(error) && reloadForNewVersion()) return;
+    // Fonda (Telegram Mini App kichraytirilgan, telefon qulflangan) — ko'rinadigan bo'lgach yangilanadi:
+    // yashirin sahifani qayta yuklash iOS'da qaytganda oq ekran qoldirardi
+    if (isChunkError(error)) {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") { reloadWhenVisible(); return; }
+      if (reloadForNewVersion()) return;
+    }
     console.error("[ErrorBoundary]", error, info.componentStack);
     // Eski kod mavjud bo'lmagan VITE_API_BASE'ga qarardi — umumiy reporter (to'g'ri manzil, versiya, platforma)
     reportError(error.message, error.stack, { componentStack: info.componentStack?.slice(0, 2000), kind: "react" });

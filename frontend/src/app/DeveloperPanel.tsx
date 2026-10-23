@@ -1,7 +1,8 @@
 import "./i18n/aiVoiceNs";
 import type { ReactNode } from "react";
 import { confirmDialog } from "./lib/confirmDialog";
-import { useState, useRef, useEffect, lazy, Suspense } from "react";
+import { useState, useRef, useEffect, Suspense } from "react";
+import { lazyRetry as lazy } from "./lib/lazyRetry";
 import { oneOf, usePersistentState } from "./lib/persistentState";
 import { useTranslation } from "react-i18next";
 import LogOut from "@hugeicons/core-free-icons/Logout01Icon";

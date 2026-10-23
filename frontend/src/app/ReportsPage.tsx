@@ -13,7 +13,8 @@ import { MorphIcon } from "morphicons/react";
 import { toast } from "sonner";
 import { Project, Expense, AppUser, ExpType, EXP_LABELS, fmt, expLabel, roleLabel } from "./App";
 import { API_BASE } from "./api";
-import { lazy, Suspense } from "react";
+import { Suspense } from "react";
+import { lazyRetry as lazy } from "./lib/lazyRetry";
 const ControlPanel = lazy(() => import("./ControlPanel"));
 
 // Yorqin, bir-biridan aniq ajraladigan ranglar (qorong'i va yorug' fonda ham o'qiladi)

@@ -1,7 +1,8 @@
 import "./i18n/aiVoiceNs";
 import { confirmDialog } from "./lib/confirmDialog";
 import { SnapshotsPanel, DangerZone } from "./components/DataSafety";
-import { useState, useRef, useEffect, lazy, Suspense } from "react";
+import { useState, useRef, useEffect, Suspense } from "react";
+import { lazyRetry as lazy } from "./lib/lazyRetry";
 import Building2 from "@hugeicons/core-free-icons/Building02Icon";
 import CheckCircle from "@hugeicons/core-free-icons/CheckmarkCircle01Icon";
 import AlertTriangle from "@hugeicons/core-free-icons/Alert02Icon";

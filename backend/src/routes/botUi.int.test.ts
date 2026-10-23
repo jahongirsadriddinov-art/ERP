@@ -140,7 +140,7 @@ describe('/api/dev/bot-ui', () => {
     const r = await decorate();
     expect(gem.prompt).toContain('confirmYes');
     expect(gem.prompt).toContain('KINDS');
-    expect(gem.prompt).toContain('1003 💬');
+    expect(gem.prompt).toContain('1003💬');
     const d = r.body.draft;
     expect(d.source).toBe('ai');
     expect(d.buttons.confirmYes).toEqual({ iconCustomEmojiId: '1001', style: 'success' });

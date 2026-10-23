@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
 import { API_BASE } from "./api";
+import { RecordMenu, EditRecordModal, sendJson } from "./components/RecordEdit";
 
 // ─── Kunlik hisobotlar (owner 2026-10-19: "ovozli hisobot") ────────────────────────────────────────────────
 // Botda ovoz bilan yuborilgan yoki shu yerda yozilgan hisobotlar; AI tartibga soladi, saqlashdan oldin ko'rsatiladi.
@@ -27,6 +28,7 @@ export function DailyReports({ objectId, canWrite }: { objectId: string; canWrit
   const [text, setText] = useState("");
   const [draft, setDraft] = useState<Report | null>(null);
   const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState<Report | null>(null);
   const load = () => fetch(`${API_BASE}/api/daily-reports?objectId=${objectId}`).then((r) => (r.ok ? r.json() : [])).then((d) => setItems(Array.isArray(d) ? d : [])).catch(() => setItems([]));
   useEffect(() => { void load(); /* eslint-disable-next-line */ }, [objectId]);
 
@@ -78,11 +80,32 @@ export function DailyReports({ objectId, canWrite }: { objectId: string; canWrit
         <ul className="space-y-2">
           {items.map((r, i) => (
             <motion.li key={r.id || i} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(0.3, 0.03 * i) }} className="surface rounded-xl p-3">
-              <p className="text-[11px] text-muted-foreground mb-1">{r.date} · {r.userName}{r.source === "bot" ? " · Telegram" : ""}</p>
+              <div className="flex items-start gap-2 mb-1">
+                <p className="flex-1 text-[11px] text-muted-foreground">{r.date} · {r.userName}{r.source === "bot" ? " · Telegram" : ""}</p>
+                {canWrite && r.id && (
+                  <RecordMenu testId={`dr-menu-${r.id}`} onEdit={() => setEditing(r)}
+                    onDelete={async () => { const ok = await sendJson(`${API_BASE}/api/daily-reports/${r.id}`, "DELETE"); if (ok) void load(); return ok; }} />
+                )}
+              </div>
               <ReportCard r={r} />
             </motion.li>
           ))}
         </ul>
+      )}
+      {editing && (
+        <EditRecordModal title={t("reportsX.title")} onClose={() => setEditing(null)}
+          initial={{ summary: editing.summary, workDone: editing.workDone.join("\n"), workersCount: editing.workersCount ?? "" }}
+          fields={[
+            { key: "summary", label: t("reportsX.summary", { defaultValue: "Qisqacha" }), type: "textarea" },
+            { key: "workDone", label: t("reportsX.workDone", { defaultValue: "Bajarilgan ishlar (har qatorda bittasi)" }), type: "textarea" },
+            { key: "workersCount", label: t("reportsX.workers"), type: "number" },
+          ]}
+          onSave={async (v) => {
+            const report = { ...editing, summary: v.summary, workDone: v.workDone.split("\n").map((s) => s.trim()).filter(Boolean), workersCount: v.workersCount === "" ? undefined : Number(v.workersCount) };
+            const ok = await sendJson(`${API_BASE}/api/daily-reports/${editing.id}`, "PATCH", { report });
+            if (ok) void load();
+            return ok;
+          }} />
       )}
     </section>
   );

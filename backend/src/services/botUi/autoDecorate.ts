@@ -16,7 +16,7 @@ const LEAD = /^\p{Extended_Pictographic}️?/u;
 const SYNONYMS: string[][] = [
   ['✅', '✔', '☑', '👍', '🆗', '💚'],
   ['❌', '✖', '🚫', '⛔', '🛑', '❎', '🔴'],
-  ['🟢', '✅', '💚', '▶'],
+  ['🟢', '✅', '💚'],
   ['💰', '💵', '💸', '🤑', '💲', '🪙', '💳'],
   ['💳', '💰', '💵'],
   ['💬', '🗨', '💭', '📨', '✉'],
@@ -52,7 +52,7 @@ const SYNONYMS: string[][] = [
   ['⏰', '⏱', '🕐', '⏳'],
   ['🔔', '🔊', '📢', '📣'],
   ['👋', '🤝', '😊', '🙂'],
-  ['ℹ', '💡', '📌', '📍', '🔹'],
+  ['ℹ', '💡', '📌'],
   ['💡', 'ℹ', '✨'],
   ['📌', '📍', 'ℹ'],
   ['🔒', '🔐', '🔑', '🛡'],
@@ -70,6 +70,30 @@ const SYNONYMS: string[][] = [
   ['🚚', '🚛', '📦'],
   ['💼', '📋', '🗂'],
 ];
+
+/** Ma'nosi mos stikerlar (owner 2026-10-23: "mantiqan mos bo'lsin" — "Ha"ga ✔, "Yo'q"ga ✖; boshqasi emas):
+ *  avval aynan shu emoji, keyin uning ma'nodoshlari. Bo'sh bo'lsa — ikonka qo'yilmaydi. */
+export function candidatesFor(base: string, stickers: Sticker[], limit = 6): Sticker[] {
+  const b = vs(base);
+  if (!b) return [];
+  const out: Sticker[] = [];
+  const seen = new Set<string>();
+  const add = (arr: Sticker[]) => { for (const s of arr) if (!seen.has(s.id) && out.length < limit) { seen.add(s.id); out.push(s); } };
+  add(stickers.filter(s => vs(s.emoji).includes(b)));
+  for (const group of SYNONYMS) {
+    if (!group.some(g => vs(g) === b)) continue;
+    for (const alt of group) add(stickers.filter(s => vs(s.emoji).includes(vs(alt))));
+  }
+  return out;
+}
+
+/** Tugmaning "ma'no emojisi": matni boshidagi emoji, bo'lmasa rangiga qarab (tasdiq ✅ / bekor ❌). */
+export function baseEmojiFor(item: BotUiCatalogItem): string {
+  const lead = (LEAD.exec(item.defaults.uz) || [''])[0];
+  if (lead) return lead;
+  const st = heuristicStyle(item);
+  return st === 'success' ? '✅' : st === 'danger' ? '❌' : '';
+}
 
 export function pickByEmoji(base: string, stickers: Sticker[], used?: Set<string>): string | null {
   const b = vs(base);
@@ -113,8 +137,7 @@ export function keywordDraft(packs: BotEmojiPack[]): BotUiDraft {
   const used = new Set<string>();
   const buttons: BotUiDraft['buttons'] = {};
   for (const item of BOT_UI_CATALOG) {
-    const base = (LEAD.exec(item.defaults.uz) || [''])[0];
-    const id = pickByEmoji(base, stickers, used);
+    const id = pickByEmoji(baseEmojiFor(item), stickers, used);
     const style = heuristicStyle(item);
     if (id) used.add(id);
     if (id || style) buttons[item.key] = { ...(id ? { iconCustomEmojiId: id } : {}), ...(style ? { style } : {}) };
@@ -147,51 +170,53 @@ export function compactStickers(stickers: Sticker[]): Sticker[] {
 }
 
 export function buildPrompt(stickers: Sticker[], emojis: string[]): string {
-  const btn = BOT_UI_CATALOG.map(i => `${i.key} | ${i.kind} | ${i.meaning} | ${i.defaults.uz}`).join('\n');
-  const st = stickers.map(s => `${s.id} ${s.emoji}`).join('\n');
+  const ids = (base: string) => candidatesFor(base, stickers).map(s => `${s.id}${s.emoji}`).join(' ');
+  const btn = BOT_UI_CATALOG.map(i => `${i.key} | ${i.meaning} | ${i.defaults.uz} | ${ids(baseEmojiFor(i)) || '-'}`).join('\n');
+  const msg = emojis.map(e => { const c = ids(e); return c ? `${e} | ${c}` : ''; }).filter(Boolean).join('\n');
+  const kinds = MESSAGE_KINDS.map(k => `${k.key} | ${k.meaning} | ${ids(k.emoji) || '-'}`).join('\n');
   return [
     'You decorate a Telegram bot of a construction-company ERP (Uzbek/Russian users).',
-    'For EVERY button choose the single best custom emoji from EMOJIS (by meaning of the button and the emoji of each custom emoji),',
-    'and a button style: "danger" (red) for cancel/reject/delete/disable/exit/back, "success" (green) for confirm/accept/save/enable/check-in,',
-    '"primary" (blue) for every other action. EVERY button must get a style and, whenever anything fits, an icon. Prefer different emojis for different buttons.',
-    'For every plain emoji in MESSAGE_EMOJIS choose the best matching custom emoji id (same or very close meaning).',
-    'For every message KIND choose the custom emoji that best fits messages of that kind (it is put in front of messages that have no emoji).',
+    'Icons MUST mean the same as the button: pick the icon ONLY from that line\'s CANDIDATES (id+emoji); "-" means no icon (use "").',
+    'Never put a cross on a yes/confirm button or a tick on a no/cancel button. Prefer different candidates for different buttons when they are equally good.',
+    'Button style: "danger" (red) for cancel/reject/delete/disable/exit/back, "success" (green) for confirm/accept/save/enable/check-in, "primary" (blue) for every other action.',
+    'For every MESSAGE_EMOJI pick the best id from its candidates; for every KIND pick the best id from its candidates ("-" = skip).',
     'Answer ONLY JSON: {"buttons":{"<key>":{"icon":"<id or empty>","style":"primary|success|danger"}},"messages":{"<plain emoji>":"<id>"},"kinds":{"<kind key>":"<id>"}}',
     '',
-    'BUTTONS (key | kind | meaning | current label):',
+    'BUTTONS (key | meaning | label | CANDIDATES):',
     btn,
     '',
-    'EMOJIS (id emoji):',
-    st,
+    'MESSAGE_EMOJIS (emoji | CANDIDATES):',
+    msg,
     '',
-    'MESSAGE_EMOJIS:',
-    emojis.join(' '),
-    '',
-    'KINDS (key | meaning | typical emoji):',
-    MESSAGE_KINDS.map(k => `${k.key} | ${k.meaning} | ${k.emoji}`).join('\n'),
+    'KINDS (key | meaning | CANDIDATES):',
+    kinds,
   ].join('\n');
 }
 
 /** AI natijasini tekshiradi: faqat mavjud kalitlar, mavjud emoji id'lari, ruxsat etilgan style'lar. */
 export function sanitizeAiResult(raw: any, stickers: Sticker[]): Pick<BotUiDraft, 'buttons' | 'messageEmoji' | 'prefix'> {
-  const ids = new Set(stickers.map(s => s.id));
-  const keys = new Set(BOT_UI_CATALOG.map(i => i.key));
+  const items = new Map(BOT_UI_CATALOG.map(i => [i.key, i]));
+  const allowed = (base: string) => new Set(candidatesFor(base, stickers).map(s => s.id));
   const buttons: BotUiDraft['buttons'] = {};
   for (const [k, v] of Object.entries<any>(raw?.buttons || {})) {
-    if (!keys.has(k) || !v || typeof v !== 'object') continue;
+    const item = items.get(k);
+    if (!item || !v || typeof v !== 'object') continue;
     const icon = String(v.icon ?? v.iconCustomEmojiId ?? '');
     const style = String(v.style || '');
     const o: any = {};
-    if (ids.has(icon)) o.iconCustomEmojiId = icon;
+    if (allowed(baseEmojiFor(item)).has(icon)) o.iconCustomEmojiId = icon; // ma'nosi mos emas — tashlanadi
     if (STYLES.has(style)) o.style = style;
     if (Object.keys(o).length) buttons[k] = o;
   }
   const messageEmoji: Record<string, string> = {};
   for (const [e, id] of Object.entries<any>(raw?.messages || {})) {
-    if (ids.has(String(id)) && /\p{Extended_Pictographic}/u.test(e) && e.length <= 8) messageEmoji[vs(e)] = String(id);
+    if (/\p{Extended_Pictographic}/u.test(e) && e.length <= 8 && allowed(e).has(String(id))) messageEmoji[vs(e)] = String(id);
   }
   const prefix: Record<string, string> = {};
-  for (const [k, id] of Object.entries<any>(raw?.kinds || {})) if (MESSAGE_KIND_KEYS.has(k) && ids.has(String(id))) prefix[k] = String(id);
+  for (const [k, id] of Object.entries<any>(raw?.kinds || {})) {
+    const kind = MESSAGE_KINDS.find(x => x.key === k);
+    if (kind && allowed(kind.emoji).has(String(id))) prefix[k] = String(id);
+  }
   return { buttons, messageEmoji, prefix };
 }
 

@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { motion } from "motion/react";
 import { toast } from "sonner";
 import { API_BASE } from "./api";
+import { RecordMenu, EditRecordModal, sendJson } from "./components/RecordEdit";
 
 // ─── Texnika tafsiloti (owner 2026-10-19: "texnika telemetriyasi") ─────────────────────────────────────────
 // Servis muddati/oralig'i, motor-soat, yoqilg'i me'yori; kunlik jurnal (soat, yoqilg'i); GPS-treker havolasi.
@@ -21,6 +22,7 @@ export function EquipmentDetails({ eq, canManage, onChanged }: { eq: any; canMan
   const [logs, setLogs] = useState<any[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [trackerUrl, setTrackerUrl] = useState("");
+  const [editLog, setEditLog] = useState<any | null>(null);
 
   const loadLogs = () => fetch(`${API_BASE}/api/equipment/${eq.id}/logs`).then((r) => (r.ok ? r.json() : [])).then((d) => setLogs(Array.isArray(d) ? d : [])).catch(() => setLogs([]));
   useEffect(() => { void loadLogs(); /* eslint-disable-next-line */ }, [eq.id]);
@@ -66,9 +68,11 @@ export function EquipmentDetails({ eq, canManage, onChanged }: { eq: any; canMan
           {logs && logs.length > 0 && (
             <ul className="mt-2 space-y-1 max-h-32 overflow-y-auto">
               {logs.slice(0, 15).map((l) => (
-                <li key={l.id} className="text-[11px] flex justify-between gap-2 text-muted-foreground">
-                  <span>{l.date}{l.source === "tracker" ? " · GPS" : ""}</span>
+                <li key={l.id} className="text-[11px] flex items-center justify-between gap-2 text-muted-foreground">
+                  <span className="flex-1">{l.date}{l.source === "tracker" ? " · GPS" : ""}</span>
                   <span className="font-mono">{l.hours != null ? `${l.hours} h` : ""}{l.fuel != null ? ` · ${l.fuel} l` : ""}{l.engineHours != null ? ` · ${l.engineHours} m/h` : ""}</span>
+                  <RecordMenu testId={`eqlog-menu-${l.id}`} onEdit={() => setEditLog(l)}
+                    onDelete={async () => { const ok = await sendJson(`${API_BASE}/api/equipment/${eq.id}/logs/${l.id}`, "DELETE"); if (ok) void loadLogs(); return ok; }} />
                 </li>
               ))}
             </ul>
@@ -95,6 +99,19 @@ export function EquipmentDetails({ eq, canManage, onChanged }: { eq: any; canMan
           </div>
         )}
       </div>
+      {editLog && (
+        <EditRecordModal title={t("equipmentX.logTitle")} initial={editLog} onClose={() => setEditLog(null)}
+          fields={[
+            { key: "date", label: t("equipmentX.date"), type: "date" }, { key: "hours", label: t("equipmentX.hours"), type: "number" },
+            { key: "fuel", label: t("equipmentX.fuel"), type: "number" }, { key: "engineHours", label: t("equipmentX.engineHours"), type: "number" },
+          ]}
+          onSave={async (v) => {
+            const num = (x: string) => (x === "" ? null : Number(x));
+            const ok = await sendJson(`${API_BASE}/api/equipment/${eq.id}/logs/${editLog.id}`, "PATCH", { date: v.date, hours: num(v.hours), fuel: num(v.fuel), engineHours: num(v.engineHours) });
+            if (ok) void loadLogs();
+            return ok;
+          }} />
+      )}
     </motion.div>
   );
 }

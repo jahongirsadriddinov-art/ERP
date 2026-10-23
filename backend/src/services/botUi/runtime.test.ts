@@ -6,6 +6,7 @@ import {
   normalizeSnapshot, registerExtraLabelSource, setBotUiSnapshot, stripLeadingEmoji,
 } from './runtime';
 import { BOT_UI_CATALOG, messageEmojiCandidates } from './catalog';
+import { sanitizeAiResult, candidatesFor } from './autoDecorate';
 
 const use = (doc: any) => setBotUiSnapshot(normalizeSnapshot(doc));
 
@@ -161,5 +162,14 @@ describe('botUi runtime — xabarlardagi premium emoji', () => {
     ]);
     const r = decorateMarkup({ keyboard: [['🏗 Obyekt A']] });
     expect(r.keyboard[0][0]).toEqual({ text: '🏗 Obyekt A', icon_custom_emoji_id: '601', style: 'primary' }); // reply matni o'zgarmaydi
+  });
+  it("AI ma'nosi mos bo'lmagan ikonkani qo'ya olmaydi: 'Ha'ga ✖ yo'q, 'Yo'q'ga ✔ yo'q", () => {
+    const st = [{ id: '1', emoji: '✅' }, { id: '2', emoji: '❌' }, { id: '3', emoji: '✔️' }];
+    const r = sanitizeAiResult({ buttons: { confirmYes: { icon: '2', style: 'success' }, confirmNo: { icon: '3', style: 'danger' }, kb_chat: { icon: '1' } }, messages: { '✅': '2', '❌': '2' } }, st);
+    expect(r.buttons.confirmYes).toEqual({ style: 'success' });
+    expect(r.buttons.confirmNo).toEqual({ style: 'danger' });
+    expect(r.buttons.kb_chat).toBeUndefined();
+    expect(r.messageEmoji).toEqual({ '❌': '2' });
+    expect(candidatesFor('✅', st).map(s => s.id)).toEqual(['1', '3']);
   });
 });

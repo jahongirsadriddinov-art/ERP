@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
 import { API_BASE } from "./api";
+import { RecordMenu, EditRecordModal, sendJson } from "./components/RecordEdit";
 
 // ─── Ishbay hisob (owner 2026-10-19: ixtiyoriy) ──────────────────────────────────────────────────────────────
 // Firma sozlamasida yoqilgan bo'lsa: prorab/rahbar bajarilgan hajm × narxni yozadi, rahbar (yoki obyekt prorabi)
@@ -25,7 +26,7 @@ export function useCompanyFeatures(): Record<string, boolean> | null {
   return f;
 }
 
-type Log = { id: string; userId: string; userName: string; workName: string; unit: string; volume: number; rate: number; amount: number; date: string; status: "pending" | "approved" | "rejected"; createdBy?: { userId: string } };
+type Log = { id: string; userId: string; userName: string; workName: string; unit: string; volume: number; rate: number; amount: number; date: string; note?: string; status: "pending" | "approved" | "rejected"; createdBy?: { userId: string } };
 type U = { id: string; name: string; role: string };
 
 const money = (n: number) => Math.round(n).toLocaleString("ru-RU");
@@ -36,6 +37,7 @@ export function PieceworkTab({ objectId, users, currentUser, isBoss, isForeman }
   const [items, setItems] = useState<Log[] | null>(null);
   const [form, setForm] = useState({ userId: "", workName: "", unit: "m2", volume: "", rate: "" });
   const [saving, setSaving] = useState(false);
+  const [editing, setEditing] = useState<Log | null>(null);
   const load = () => fetch(`${API_BASE}/api/worklogs?objectId=${objectId}`).then((r) => (r.ok ? r.json() : { items: [] })).then((d) => setItems(d.items || [])).catch(() => setItems([]));
   useEffect(() => { void load(); /* eslint-disable-next-line */ }, [objectId]);
 
@@ -103,10 +105,27 @@ export function PieceworkTab({ objectId, users, currentUser, isBoss, isForeman }
                     {t(`piecework.status.${x.status}`)}
                   </span>
                 )}
+                {(isBoss || (x.createdBy?.userId === currentUser.id && x.status === "pending")) && (
+                  <RecordMenu testId={`pw-menu-${x.id}`} title={x.workName} onEdit={() => setEditing(x)}
+                    onDelete={async () => { const ok = await sendJson(`${API_BASE}/api/worklogs/${x.id}`, "DELETE"); if (ok) void load(); return ok; }} />
+                )}
               </motion.li>
             ))}
           </AnimatePresence>
         </ul>
+      )}
+      {editing && (
+        <EditRecordModal title={editing.workName} initial={editing} onClose={() => setEditing(null)}
+          fields={[
+            { key: "workName", label: t("piecework.workName") }, { key: "unit", label: t("piecework.unit") },
+            { key: "volume", label: t("piecework.volume"), type: "number" }, { key: "rate", label: t("piecework.rate"), type: "number" },
+            { key: "date", label: t("common.date", { defaultValue: "Sana" }), type: "date" },
+          ]}
+          onSave={async (v) => {
+            const ok = await sendJson(`${API_BASE}/api/worklogs/${editing.id}`, "PATCH", { workName: v.workName, unit: v.unit, volume: Number(v.volume), rate: Number(v.rate), date: v.date || undefined });
+            if (ok) void load();
+            return ok;
+          }} />
       )}
     </div>
   );

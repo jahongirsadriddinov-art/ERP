@@ -206,6 +206,10 @@ router.post('/draft/apply', async (req: Request, res: Response) => {
   const draft: any = doc.draft;
   if (!draft) return res.status(400).json({ error: "Qoralama yo'q" });
   const buttons: Record<string, BotButtonOverride> = { ...(doc.buttons || {}) };
+  // Yangi bezak to'liq qo'llanadi: qoralamada ikonka yo'q tugmadan eski (ma'nosi mos bo'lmagan bo'lishi mumkin) ikonka olinadi
+  for (const [k, cur] of Object.entries<any>(buttons)) {
+    if (cur?.iconCustomEmojiId && !draft.buttons?.[k]?.iconCustomEmojiId) { const { iconCustomEmojiId: _x, ...rest } = cur; buttons[k] = rest; }
+  }
   for (const [k, v] of Object.entries<any>(draft.buttons || {})) {
     if (!BOT_UI_KEYS.has(k)) continue;
     const cur = { ...(buttons[k] || {}) };

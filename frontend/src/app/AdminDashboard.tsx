@@ -24,6 +24,7 @@ import FileText from "@hugeicons/core-free-icons/FileTextIcon";
 import Upload from "@hugeicons/core-free-icons/Upload01Icon";
 import { MorphIcon } from "morphicons/react";
 import { IconTile, type IconTone } from "./components/IconTile";
+import { RecordMenu, EditRecordModal, sendJson } from "./components/RecordEdit";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import { API_BASE, parseSmetaFile, uploadChatMedia } from "./api";
@@ -893,6 +894,7 @@ export function EquipmentModal({ projects, onClose }: { projects: Project[]; onC
 export function SafetyModal({ projects, onClose }: { projects: Project[]; onClose: () => void }) {
   const { t } = useTranslation();
   const [list, setList] = useState<any[]>([]);
+  const [editInc, setEditInc] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [title, setTitleField] = useState(""); const [severity, setSeverity] = useState("medium"); const [objectId, setObjectId] = useState("");
   const [adding, setAdding] = useState(false);
@@ -949,6 +951,8 @@ export function SafetyModal({ projects, onClose }: { projects: Project[]; onClos
                   <p className="text-[10px] text-muted-foreground">{inc.reportedBy?.name} · {new Date(inc.occurredAt).toLocaleDateString('uz-UZ')}</p>
                 </div>
                 <span className={`text-[9px] font-bold rounded-full px-2 py-0.5 flex-shrink-0 ${sevColor[inc.severity]}`}>{inc.severity.toUpperCase()}</span>
+                <RecordMenu testId={`saf-menu-${inc.id}`} title={inc.title} onEdit={() => setEditInc(inc)}
+                  onDelete={async () => { const ok = await sendJson(`${API_BASE}/api/safety/${inc.id}`, 'DELETE'); if (ok) load(); return ok; }} />
               </div>
               <select value={inc.status} onChange={ev=>setStatus(inc.id, ev.target.value)} className="mt-1.5 text-[10px] font-semibold border border-border rounded-full px-2 py-1 bg-transparent focus:outline-none">
                 {Object.keys(statusLabel).map(k => <option key={k} value={k}>{statusLabel[k]}</option>)}
@@ -956,6 +960,15 @@ export function SafetyModal({ projects, onClose }: { projects: Project[]; onClos
             </div>
           ))}
         </div>
+      )}
+      {editInc && (
+        <EditRecordModal title={editInc.title} initial={editInc} onClose={() => setEditInc(null)}
+          fields={[
+            { key: 'title', label: t('common.title', { defaultValue: 'Sarlavha' }) },
+            { key: 'description', label: t('common.description', { defaultValue: 'Tavsif' }), type: 'textarea' },
+            { key: 'severity', label: t('management.safSeverity', { defaultValue: 'Daraja' }), type: 'select', options: Object.keys(sevColor).map(k => ({ value: k, label: k.toUpperCase() })) },
+          ]}
+          onSave={async (v) => { const ok = await sendJson(`${API_BASE}/api/safety/${editInc.id}`, 'PATCH', v); if (ok) load(); return ok; }} />
       )}
     </ManagementModalShell>
   );
@@ -969,6 +982,7 @@ export function DocumentsModal({ projects, currentUser, onClose }: { projects: P
   const [uploading, setUploading] = useState(false);
   const [category, setCategory] = useState("contract"); const [objectId, setObjectId] = useState("");
   const [expiry, setExpiry] = useState("");
+  const [editDoc, setEditDoc] = useState<any | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const canSign = isAdmin(currentUser.role);
   const setDocExpiry = async (id: string, v: string) => {
@@ -1058,7 +1072,8 @@ export function DocumentsModal({ projects, currentUser, onClose }: { projects: P
                 {canSign && !iSigned && (
                   <button onClick={()=>sign(d.id)} title={t('management.docSignBtn')} aria-label={t('management.docSignBtn')} className="p-1 text-muted-foreground hover:text-primary"><MorphIcon icon={Check} className="w-3.5 h-3.5" /></button>
                 )}
-                <button onClick={()=>remove(d.id)} aria-label={t('common.delete')} className="p-1 text-muted-foreground hover:text-destructive"><MorphIcon icon={Trash} className="w-3.5 h-3.5" /></button>
+                <RecordMenu testId={`doc-menu-${d.id}`} title={d.title} onEdit={() => setEditDoc(d)}
+                  onDelete={async () => { const ok = await sendJson(`${API_BASE}/api/documents/${d.id}`, 'DELETE'); if (ok) load(); return ok; }} />
               </div>
               {(d.signatures || []).length > 0 && (
                 <p className="text-[10px] text-green-600 mt-1 pl-6">{t('management.docSignedBy', { names: d.signatures.map((s:any)=>s.name).join(', ') })}</p>
@@ -1066,6 +1081,15 @@ export function DocumentsModal({ projects, currentUser, onClose }: { projects: P
             </div>
           );})}
         </div>
+      )}
+      {editDoc && (
+        <EditRecordModal title={editDoc.title} initial={{ ...editDoc, objectId: editDoc.objectId || '' }} onClose={() => setEditDoc(null)}
+          fields={[
+            { key: 'title', label: t('common.title', { defaultValue: 'Nomi' }) },
+            { key: 'category', label: t('management.docCategory', { defaultValue: 'Turi' }), type: 'select', options: Object.keys(catLabel).map(k => ({ value: k, label: catLabel[k] })) },
+            { key: 'objectId', label: t('common.object', { defaultValue: 'Obyekt' }), type: 'select', options: [{ value: '', label: t('management.eqNoProject') }, ...projects.map(p => ({ value: p.id, label: p.name }))] },
+          ]}
+          onSave={async (v) => { const ok = await sendJson(`${API_BASE}/api/documents/${editDoc.id}`, 'PATCH', { title: v.title, category: v.category, objectId: v.objectId || null }); if (ok) load(); return ok; }} />
       )}
     </ManagementModalShell>
   );

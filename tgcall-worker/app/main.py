@@ -143,6 +143,9 @@ async def amain() -> int:
     async def h_lookup(p: dict) -> dict:
         a = accounts.get(p)
         need_tg(a)
+        blocked = a.runtime.health.blocked()
+        if blocked:
+            return {"status": blocked}
         return await a.runtime.lookup_contact(p)
 
     async def h_binding(p: dict) -> dict:
@@ -156,7 +159,8 @@ async def amain() -> int:
     async def h_place(p: dict) -> dict:
         a = accounts.get(p)
         need_tg(a)
-        return await a.calls.place(p)
+        # Anti-freeze: muzlatilgan/cheklangan akkaunt va soatlik/kunlik/bir odamga chegaralar (accounts.py)
+        return await a.place(p)
 
     async def h_hangup(p: dict) -> dict:
         return await accounts.by_session(p.get("sessionId")).calls.hangup(p)
@@ -190,7 +194,15 @@ async def amain() -> int:
     async def h_profile_update(p: dict) -> dict:
         a = accounts.get(p)
         need_tg(a)
-        return await update_profile(a.runtime, p)
+        blocked = a.runtime.health.blocked()
+        if blocked:
+            raise RpcError(blocked)
+        try:
+            return await update_profile(a.runtime, p)
+        except RpcError as e:
+            if e.code == "account_frozen":
+                a.runtime.note_state("frozen")
+            raise
 
     async def h_dm_send(p: dict) -> dict:
         a = accounts.get(p)
@@ -202,12 +214,7 @@ async def amain() -> int:
         text = p.get("text")
         if uid <= 0 or not isinstance(text, str) or not text.strip():
             raise RpcError("bad_request")
-        try:
-            await a.runtime.send_dm(uid, text)
-        except RpcError:
-            raise
-        except Exception as e:
-            raise RpcError("send_failed", type(e).__name__[:60])
+        await a.send_dm(uid, text)
         return {"ok": True}
 
     async def h_dm_typing(p: dict) -> dict:

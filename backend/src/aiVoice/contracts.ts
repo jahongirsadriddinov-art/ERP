@@ -360,11 +360,11 @@ export interface WorkerRpcMethods {
   /** Mehmon sinov qo'ng'irog'i (owner 2026-10-19): @username yoki telefon → Telegram id (kutilgan id'siz). */
   'contact.lookup': {
     params: { username?: string; phone?: string; account?: string };
-    result: { status: 'resolved' | 'not_found' | 'privacy_restricted' | 'import_limited' | 'flood_wait'; tgUserId?: string; retryAfterSec?: number };
+    result: { status: 'resolved' | 'not_found' | 'privacy_restricted' | 'import_limited' | 'flood_wait' | 'account_frozen' | 'spam_limited' | 'account_banned' | 'account_unauthorized'; tgUserId?: string; retryAfterSec?: number };
   };
   'binding.expect': { params: { employeeId: string; codeHash: string; expectedTgUserId: string; expiresAt: number }; result: { ok: true } };
   /** phone/username — faqat peer noma'lum bo'lsa, SHU qo'ng'iroq uchun (worker saqlamaydi, log qilmaydi). */
-  'call.place': { params: { account?: string; sessionId: string; tgUserId: string; timeoutSec: number; maxDurationSec: number; phone?: string; username?: string; avatar?: string; video?: boolean }; result: { accepted: boolean; reason?: string } };
+  'call.place': { params: { account?: string; sessionId: string; tgUserId: string; timeoutSec: number; maxDurationSec: number; phone?: string; username?: string; avatar?: string; video?: boolean }; result: { accepted: boolean; reason?: string; /** anti-freeze: rate_limited / peer_limited / flood_wait */ retryAfterSec?: number } };
   /** AI'ning joriy gapi — video avatar subtitri va kayfiyati (owner 2026-10-18). */
   'call.caption': { params: { sessionId: string; text: string; emotion?: string }; result: { ok: true } };
   /** Kamera kadrlari tezligi (videoga olishda vaqtincha ko'proq). */
@@ -414,18 +414,34 @@ export interface WorkerStatus {
   /** Platforma akkauntidagi faol qo'ng'iroqlar (activeCalls — hamma akkauntlar yig'indisi). */
   platformActiveCalls?: number;
   /** Firma Telegram akkauntlari holati. */
-  accounts?: Array<{ id: string; connected: boolean; tgUserId?: string; username?: string; activeCalls: number; floodWaitUntil?: number; /** masalan duplicate_account */ error?: string }>;
+  accounts?: Array<{ id: string; connected: boolean; tgUserId?: string; username?: string; activeCalls: number; floodWaitUntil?: number; /** masalan duplicate_account */ error?: string } & WorkerAntiFreeze>;
+  /** Anti-freeze: platforma akkaunti holati (firma akkauntlarida — har elementda). */
+  health?: WorkerAntiFreeze['health'];
+  usage?: WorkerAntiFreeze['usage'];
+  device?: string;
+  proxy?: string;
+}
+/** Anti-freeze (owner 2026-10-23): akkaunt Telegram cheklovi va bugungi ishlatilish (worker freeze.py / limits.py). */
+export interface WorkerAntiFreeze {
+  health?: { state: 'ok' | 'frozen' | 'spam_limited' | 'banned' | 'unauthorized'; reason?: string; since?: number; until?: number; appealUrl?: string };
+  usage?: Record<string, unknown>;
+  /** "MS-7C02 · Windows 10 x64 · TDesktop 6.2.4 x64" */
+  device?: string;
+  /** "socks5 host:port" (parolsiz) */
+  proxy?: string;
 }
 
 export type WorkerCallState = 'dialing' | 'ringing' | 'connected' | 'ended';
 export type WorkerCallEndReason =
-  | 'completed' | 'busy' | 'declined' | 'timeout' | 'privacy' | 'blocked' | 'outdated' | 'flood_wait' | 'spam_limited' | 'network' | 'hangup' | 'error';
+  | 'completed' | 'busy' | 'declined' | 'timeout' | 'privacy' | 'blocked' | 'outdated' | 'flood_wait' | 'spam_limited' | 'account_frozen' | 'network' | 'hangup' | 'error';
 export type WorkerEvent =
   | { type: 'call.state'; sessionId: string; state: WorkerCallState; reason?: WorkerCallEndReason; at: number; /** ulanmaslik bosqichi: accept | key_exchange | p2p_connect | connect_timeout | record */ stage?: string }
   | { type: 'health'; status: WorkerStatus; at: number }
   | { type: 'binding.matched'; employeeId: string; tgUserId: string; username?: string; at: number }
   /** AI akkauntiga yozilgan oddiy xabar (owner 2026-10-22) — telegram/dmChat.ts javob beradi */
-  | { type: 'dm.received'; account?: string; tgUserId: string; text: string; at: number };
+  | { type: 'dm.received'; account?: string; tgUserId: string; text: string; at: number }
+  /** Anti-freeze: akkaunt holati o'zgardi (darhol; health'da ham keladi). account yo'q — platforma akkaunti. */
+  | { type: 'account.health'; account?: string; health: NonNullable<WorkerAntiFreeze['health']>; at: number };
 
 // ───────────────────────────── TextAgent (P2 amalga oshiradi) ─────────────────────────────
 export interface TextAgentInput {
@@ -527,6 +543,9 @@ export interface AiTelegramAccountDto {
   status: string; username?: string; displayName?: string; phoneMasked?: string;
   workerConnected: boolean; workerVersion?: string; lastHealthAt?: string; udpOk?: boolean;
   floodWaitUntil?: string; dailyCallCount: number; dailyCap: number;
+  /** Anti-freeze: Telegram cheklovi va bugungi ishlatilish */
+  health?: { state: string; active: boolean; reason?: string; since?: number; until?: number; appealUrl?: string };
+  usage?: Record<string, unknown>; device?: string; proxy?: string;
 }
 
 // ── /api/ai-voice/admin (P8 backend + P8 UI) ──

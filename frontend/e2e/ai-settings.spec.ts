@@ -96,6 +96,47 @@ test("Refresh: dasturchi paneli tabi va AI tabi o'z joyida qoladi; AI akkaunti i
   expect(errors, errors.join('\n')).toEqual([]);
 });
 
+test("AI akkauntlari: sog'lig'i — muzlatilgan … gacha + @SpamBot/apellyatsiya, isitish, bugungi ishlatilish/chegaralar (owner 2026-10-23)", async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await mockApi(page, newCalls());
+  const until = Date.now() + 5 * 86_400_000;
+  await page.route(/\/api\/ai-voice\/platform\/tg-accounts/, async (route) => {
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: CORS });
+    return route.fulfill({ headers: CORS, json: { accounts: [
+      { id: 'aaaaaaaaaaaaaaaaaaaaaaaa', label: 'Jasur', status: 'connected', busy: false,
+        health: { state: 'frozen', active: true, until, appealUrl: 'https://t.me/spambot?start=appeal' },
+        usage: { warmup: false, call: { hour: 0, day: 4, capHour: 12, capDay: 55 } }, device: 'MS-7C02 · Windows 10 x64 · TDesktop 6.2.4 x64' },
+      { id: 'bbbbbbbbbbbbbbbbbbbbbbbb', label: 'Sarvar', status: 'connected', busy: false, health: { state: 'ok', active: false },
+        usage: { warmup: true, warmupUntil: until, call: { hour: 1, day: 2, capHour: 3, capDay: 9 }, cold: { hour: 0, day: 1, capHour: 1, capDay: 3 } },
+        device: 'Inspiron 15 3511 · Windows 11 x64 · TDesktop 6.3.0 x64', proxy: 'socks5 uz.proxy:1080' },
+    ] } });
+  });
+  await seed(page, { id: 'd1', name: 'Dasturchi', role: 'dasturchi', phone: '+998900000009', projectIds: [], language: 'uz' }, 'dashboard');
+  await page.goto('/');
+  const tab = page.getByRole('button', { name: /AI platforma/ }).first();
+  await expect(tab).toBeVisible({ timeout: 20_000 });
+  await tab.click();
+  await page.getByTestId('ai-pf-tab-tgAccounts').click();
+  const rows = page.getByTestId('ai-tg-company-account');
+  await expect(rows).toHaveCount(2);
+  const h1 = rows.nth(0).getByTestId('ai-tg-account-health');
+  await expect(h1).toContainText('Muzlatilgan');
+  await expect(h1).toContainText('gacha');
+  await expect(rows.nth(0).getByTestId('ai-tg-account-health-help')).toContainText('@SpamBot');
+  await expect(rows.nth(0).getByTestId('ai-tg-account-appeal')).toHaveAttribute('href', 'https://t.me/spambot?start=appeal');
+  await expect(rows.nth(0).getByTestId('ai-tg-account-usage')).toContainText("qo'ng'iroq 4/55");
+  await expect(h1).toContainText('Proksi yo\'q');
+  const h2 = rows.nth(1).getByTestId('ai-tg-account-health');
+  await expect(h2).toContainText("Sog'");
+  await expect(h2).toContainText('Isitilmoqda');
+  await expect(rows.nth(1).getByTestId('ai-tg-account-usage')).toContainText("qo'ng'iroq 2/9 · notanishga 1/3");
+  await expect(h2).toContainText('socks5 uz.proxy:1080');
+  // Telefonda ham gorizontal skroll yo'q
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+  expect(errors, errors.join('\n')).toEqual([]);
+});
+
 async function mockApi(page: Page, calls: Calls, o: Opts = {}) {
   await page.route(/\/api\//, async (route) => {
     const req = route.request();

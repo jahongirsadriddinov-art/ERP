@@ -10,7 +10,7 @@ import logging
 import re
 from typing import Any
 
-from .errors import RpcError, flood_seconds
+from .errors import FROZEN_ERRORS, RpcError, flood_seconds
 
 log = logging.getLogger("tgw.profile")
 
@@ -23,6 +23,8 @@ def _names(e: BaseException) -> set[str]:
 
 
 def _raise(e: BaseException) -> None:
+    if _names(e) & FROZEN_ERRORS:
+        raise RpcError("account_frozen")
     fs = flood_seconds(e)
     if fs:
         raise RpcError("flood_wait", "Telegram vaqtincha chekladi", fs)

@@ -21,8 +21,15 @@ def _names(exc: BaseException) -> set[str]:
     return {c.__name__ for c in type(exc).__mro__}
 
 
+# Telethon'da FrozenMethodInvalidError FloodError'dan meros — bu FloodWait EMAS, akkaunt muzlatilgan (freeze.py)
+FROZEN_ERRORS = {"FrozenMethodInvalidError", "FrozenParticipantMissingError"}
+
+
 def flood_seconds(exc: BaseException) -> Optional[int]:
-    if _names(exc) & {"FloodWaitError", "FloodPremiumWaitError", "FloodError", "SlowModeWaitError"}:
+    n = _names(exc)
+    if n & FROZEN_ERRORS:
+        return None
+    if n & {"FloodWaitError", "FloodPremiumWaitError", "FloodError", "SlowModeWaitError"}:
         try:
             s = int(getattr(exc, "seconds", 0) or 0)
         except (TypeError, ValueError):
@@ -49,6 +56,8 @@ def discard_reason_name(reason_obj) -> Optional[str]:
 def map_call_error(exc: BaseException, discard_reason: Optional[str] = None) -> str:
     """Qo'ng'iroq (play) xatosi → WorkerCallEndReason."""
     n = _names(exc)
+    if n & FROZEN_ERRORS:
+        return "account_frozen"
     if flood_seconds(exc) is not None:
         return "flood_wait"
     if "CallBusy" in n or discard_reason == "busy":

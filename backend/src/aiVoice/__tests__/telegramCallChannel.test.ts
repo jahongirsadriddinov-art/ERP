@@ -216,6 +216,34 @@ describe("firma Telegram akkauntlari (owner 2026-10-19)", () => {
     expect(r4.outcome).toBe('no_answer');
     expect((w.rpcsOf('call.place').at(-1) as any).params.account).toBeUndefined();
   });
+
+  it("anti-freeze: worker akkauntni muzlatilgan/chegarada deb rad etsa — u chetga olinadi va qo'ng'iroq boshqa akkauntdan; shu odamga tez-tez — keyinroq", async () => {
+    const w = await worker();
+    await contact(A.workerId);
+    const fresh = { status: 'connected', lastHealthAt: new Date() };
+    const a1 = await AiTgAccount.create({ label: 'Jasur', ...fresh });
+    const a2 = await AiTgAccount.create({ label: 'Sarvar', ...fresh });
+    w.handlers['call.place'] = (p: any) => (p.account === String(a1._id) ? { accepted: false, reason: 'account_frozen' } : { accepted: false, reason: 'peer_limited', retryAfterSec: 400 });
+    const t0 = Date.now();
+    const r1 = await telegramCallChannel.attempt(ctx(A.workerId), req);
+    expect(r1).toMatchObject({ outcome: 'unavailable', retryable: true, errorCode: 'account_limited' });
+    expect(r1.retryAt!.getTime() - t0).toBeLessThan(10_000);
+    expect(((await AiTgAccount.findById(a1._id).lean()) as any).limitedUntil.getTime()).toBeGreaterThan(t0 + 500_000);
+    const r2 = await telegramCallChannel.attempt(ctx(A.workerId), req);
+    expect((w.rpcsOf('call.place').at(-1) as any).params.account).toBe(String(a2._id));
+    expect(r2).toMatchObject({ outcome: 'unavailable', retryable: true, errorCode: 'peer_limited' });
+    expect(r2.retryAt!.getTime() - t0).toBeGreaterThanOrEqual(399_000);
+    // a2 chetga olinmaydi (cheklov odamga, akkauntga emas)
+    expect(((await AiTgAccount.findById(a2._id).lean()) as any).limitedUntil).toBeUndefined();
+  });
+
+  it("anti-freeze: muzlatilgan platforma akkaunti mavjud emas", async () => {
+    await contact(A.workerId);
+    await account({ health: { state: 'frozen', until: new Date(Date.now() + 3600_000) } });
+    expect(await reason(A.workerId)).toBe('account_restricted');
+    await account({ health: { state: 'frozen', until: new Date(Date.now() - 1000) } });
+    expect(await reason(A.workerId)).toBe('ok');
+  });
 });
 
 describe("worker bilan oqim", () => {

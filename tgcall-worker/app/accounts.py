@@ -7,6 +7,7 @@ o'chirish faqat aniq `accounts.remove` bilan (bo'sh ro'yxat kelsa ham sessiyalar
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 from pathlib import Path
@@ -15,8 +16,10 @@ from typing import Any, Awaitable, Callable, Optional
 from .auth_flow import LoginFlow
 from .binding import BindingMatcher
 from .calls import CallManager
-from .errors import RpcError
+from .errors import RpcError, flood_seconds
+from .fingerprint import fp_path
 from .health import build_status
+from .proxy import ProxyConfigError
 from .session_store import SessionStore
 from .tg import TelegramRuntime
 
@@ -27,6 +30,11 @@ ACCOUNT_ID_RE = re.compile(r"^[0-9a-f]{24}$")
 MAX_ACCOUNTS = 50
 
 EmitFn = Callable[[dict], Awaitable[Any]]
+
+# Qo'ng'iroq tugash sababi → akkaunt holati (anti-freeze: shu akkaunt chiquvchi ish uchun to'xtatiladi)
+_CALL_REASON_STATE = {"spam_limited": "spam_limited", "account_frozen": "frozen"}
+# DM: kutish shundan qisqa bo'lsa — rad etmasdan kutamiz (tabiiy "yozish" pauzasi)
+DM_WAIT_MAX_S = 8
 
 
 class Account:
@@ -42,12 +50,110 @@ class Account:
         async def ask(data: dict):
             return await ask_incoming({**data, "account": acc_id} if acc_id else data)
 
-        self.calls = CallManager(self.runtime, emit, send_up, ask_incoming=ask, send_video=send_video)
+        rt = self.runtime
+
+        async def emit_call(ev: dict):
+            # Qo'ng'iroq PEER_FLOOD/FROZEN bilan tugasa — akkaunt darhol cheklangan deb belgilanadi
+            if ev.get("type") == "call.state" and ev.get("reason") in _CALL_REASON_STATE:
+                rt.note_state(_CALL_REASON_STATE[ev["reason"]])
+            return await emit(ev)
+
+        self.calls = CallManager(self.runtime, emit_call, send_up, ask_incoming=ask, send_video=send_video)
         self.runtime.calls = self.calls
         # Firma akkaunti shu firma uchun ajratilgan — kiruvchi qo'ng'iroqlar doim backend qaroriga boradi
         if acc_id:
             self.calls.open_incoming = True
-        self.login = LoginFlow(lambda: self.runtime.make_client(None), self.runtime.adopt_session, can_login)
+        self.login = LoginFlow(self._login_client, self.runtime.adopt_session, can_login)
+
+    def _login_client(self):
+        try:
+            return self.runtime.make_client(None)
+        except ProxyConfigError as e:
+            raise RpcError("proxy_lib_missing" if str(e) == "proxy_lib_missing" else "proxy_invalid", "TG_PROXIES xato")
+
+    # ── anti-freeze: chiquvchi qo'ng'iroq / DM shu yerdan o'tadi (holat + chegaralar) ──
+    async def place(self, p: dict) -> dict:
+        rt = self.runtime
+        blocked = rt.health.blocked()
+        if blocked:
+            return {"accepted": False, "reason": blocked}
+        try:
+            uid = int(str(p.get("tgUserId") or "0"))
+        except ValueError:
+            uid = 0
+        warm = True
+        if uid > 0:
+            warm = rt.is_warm(uid)
+            lim = rt.usage.check("call", uid) or (None if warm else rt.usage.check("cold"))
+            if lim:
+                return {"accepted": False, "reason": lim[0], "retryAfterSec": lim[1]}
+        res = await self.calls.place(p)
+        if res.get("accepted") and uid > 0:
+            rt.usage.take("call", uid)
+            if not warm:
+                rt.usage.take("cold")
+        return res
+
+    async def send_dm(self, uid: int, text: str) -> None:
+        rt = self.runtime
+        kind = "reply" if rt.usage.wrote_recently(uid) else "dm"
+        blocked = rt.health.blocked()
+        # Spam cheklovida ham o'zi yozgan odamga javob berish mumkin; muzlatilgan/bloklangan — hech narsa
+        if blocked and not (blocked == "spam_limited" and kind == "reply"):
+            raise RpcError(blocked)
+
+        def limit():
+            lim = rt.usage.check(kind, uid if kind == "dm" else None)
+            if lim is None and kind == "dm" and not rt.is_warm(uid):
+                lim = rt.usage.check("cold")
+            return lim
+
+        lim = limit()
+        if lim and lim[0] == "rate_limited" and lim[1] <= DM_WAIT_MAX_S:
+            await asyncio.sleep(lim[1])
+            lim = limit()
+        if lim:
+            raise RpcError(lim[0], "Akkaunt chegarasi", lim[1])
+        try:
+            await rt.send_dm(uid, text)
+        except RpcError:
+            raise
+        except Exception as e:
+            fs = flood_seconds(e)
+            if fs:
+                rt.usage.flood(kind, fs)
+                raise RpcError("flood_wait", "Telegram vaqtincha chekladi", fs)
+            st = rt.health.blocked()
+            if st:
+                raise RpcError(st)
+            raise RpcError("send_failed", type(e).__name__[:60])
+        rt.usage.take(kind, uid if kind == "dm" else None)
+        if kind == "dm" and not rt.is_warm(uid):
+            rt.usage.take("cold")
+
+    def antifreeze_status(self) -> dict:
+        """Panel uchun: holat (ok/frozen/…), bugungi ishlatilish va chegaralar, qurilma izi, proksi turi."""
+        rt = self.runtime
+        out: dict = {"health": rt.health.to_dict()}
+        if self.store.exists() or rt.ready:
+            try:
+                fp = rt.fingerprint
+                out["device"] = f"{fp['device_model']} · {fp['system_version']} · TDesktop {fp['app_version']}"[:120]
+                out["usage"] = rt.usage.snapshot()
+            except Exception:
+                pass
+        if rt.proxy_desc:
+            out["proxy"] = rt.proxy_desc
+        return out
+
+    def forget_files(self) -> None:
+        """Akkaunt o'chirilganda: qurilma izi va hisoblagichlar ham (yangi raqam — yangi iz)."""
+        p = Path(self.store.path)
+        for f in (fp_path(p), p.with_name(p.stem + ".usage.json")):
+            try:
+                f.unlink()
+            except OSError:
+                pass
 
     @property
     def label(self) -> str:
@@ -59,6 +165,7 @@ class Account:
         st["id"] = self.id
         if not st.get("connected") and self.runtime.last_error:
             st["error"] = str(self.runtime.last_error)[:40]
+        st.update(self.antifreeze_status())
         return st
 
 
@@ -158,6 +265,7 @@ class AccountSet:
         await a.login.cancel()
         await a.runtime.logout()
         a.store.clear()
+        a.forget_files()
         self.items.pop(a.id, None)
         log.info("%s olib tashlandi", a.label)
         return {"ok": True}
@@ -191,6 +299,9 @@ class AccountSet:
         st = build_status(p.runtime, p.calls, udp_ok)
         st["activeCalls"] = sum(a.calls.active_count for a in self.all())
         st["platformActiveCalls"] = p.calls.active_count
+        st.update(p.antifreeze_status())
+        if not st.get("connected") and p.runtime.last_error:
+            st["error"] = str(p.runtime.last_error)[:40]
         others = [a.status() for a in self.all() if a.id]
         if others:
             st["accounts"] = others

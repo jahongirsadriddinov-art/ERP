@@ -13,10 +13,14 @@ import asyncio
 import logging
 import random
 import time
+from pathlib import Path
 from typing import Any, Awaitable, Callable, Optional
 
-from . import __version__
+from . import fingerprint as fpmod
+from . import proxy as proxymod
 from .binding import BindingMatcher
+from .freeze import Health, classify, json_value, parse_freeze
+from .limits import ImportGate, UsageLimiter
 from .peers import PeerResolver, mask_id
 from .errors import discard_reason_name, flood_seconds, map_call_error
 from .session_store import SessionStore, SessionStoreError
@@ -27,6 +31,8 @@ EmitFn = Callable[[dict], Awaitable[Any]]
 
 # Ochiq muloqot: pytgcalls shu vaqt ichida INCOMING_CALL bermasa — qo'ng'iroq rad etiladi (osilib qolmasin)
 INCOMING_GUARD_S = 12.0
+# Muzlatish tekshiruvi (help.getAppConfig) oralig'i
+FREEZE_CHECK_S = 30 * 60
 
 
 def _type_name(o: Any) -> str:
@@ -100,6 +106,9 @@ async def handle_phone_call_update(rt: "TelegramRuntime", pc: Any) -> None:
     name = _type_name(pc)
     if name == "PhoneCallRequested":
         caller = int(getattr(pc, "admin_id", 0) or 0)
+        note = getattr(rt, "note_inbound", None)
+        if caller and callable(note):
+            note(caller)      # o'zi qo'ng'iroq qilgan odam — unga keyin qo'ng'iroq/javob "sovuq" emas
         log.info("kiruvchi qo'ng'iroq keldi → %s (ochiq=%s)", getattr(rt, "label", "?"),
                  bool(rt.calls is not None and getattr(rt.calls, "open_incoming", False)))
         if caller and rt.calls is not None and getattr(rt.calls, "open_incoming", False):
@@ -172,21 +181,129 @@ class TelegramRuntime:
         self.last_error: Optional[str] = None
         self._lock = asyncio.Lock()
         self._ap = None
-        self.peers = PeerResolver(self)
+        # Anti-freeze (owner 2026-10-23): barqaror qurilma izi, proksi, chegaralar, muzlatish holati
+        self._fp: Optional[dict] = None
+        self._usage: Optional[UsageLimiter] = None
+        self.health = Health()
+        self.proxy_desc: Optional[str] = None
+        self.warm_peers: set[int] = set()      # dialogi bor (yozishgan) yoki o'zaro kontakt odamlar
+        self._freeze_task: Optional[asyncio.Task] = None
+        self.peers = PeerResolver(self, limiter=ImportGate(lambda: self.usage, self.health.blocked))
 
     # ── holat ──
     @property
     def ready(self) -> bool:
         return self.client is not None and self.pytg is not None and self.me_id is not None
 
+    # ── anti-freeze: iz / chegaralar / proksi ──
+    def _seed(self) -> str:
+        return self.account_id or f"platform:{getattr(self.cfg, 'worker_id', '')}"
+
+    @property
+    def fingerprint(self) -> dict:
+        if self._fp is None:
+            self._fp = fpmod.load_or_create(fpmod.fp_path(self.store.path), self._seed())
+        return self._fp
+
+    @property
+    def usage(self) -> UsageLimiter:
+        if self._usage is None:
+            p = Path(self.store.path)
+            self._usage = UsageLimiter(p.with_name(p.stem + ".usage.json"), self._seed(), self.fingerprint.get("addedAt"))
+        return self._usage
+
+    def proxy_config(self) -> Optional[dict]:
+        """TG_PROXIES bo'yicha shu akkaunt proksisi (xato bo'lsa ProxyConfigError — proksisiz ulanmaymiz)."""
+        p = proxymod.for_account(self.account_id, proxymod.table_from_env())
+        if p and p["type"] != "mtproto":
+            try:
+                import python_socks  # noqa: F401
+            except ImportError:
+                try:
+                    import socks  # noqa: F401
+                except ImportError:
+                    raise proxymod.ProxyConfigError("proxy_lib_missing")
+        self.proxy_desc = proxymod.describe(p)
+        return p
+
     def make_client(self, session: Optional[str]):
         from telethon import TelegramClient
         from telethon.sessions import StringSession
+        # Haqiqiy Telegram Desktop'ga o'xshash, akkauntga BARQAROR iz (avval "QurilishERP AI"/"Windows" — spam belgisi)
         return TelegramClient(
             StringSession(session or None), self.cfg.api_id, self.cfg.api_hash,
-            device_model="QurilishERP AI", system_version="Windows", app_version=__version__,
-            lang_code="uz", system_lang_code="uz", receive_updates=True,
+            **fpmod.client_kwargs(self.fingerprint), receive_updates=True,
+            **proxymod.client_kwargs(self.proxy_config()),
         )
+
+    async def _health_changed(self) -> None:
+        h = self.health.to_dict()
+        log.warning("%s holati: %s (%s)", self.label, h.get("state"), h.get("reason") or "-")
+        ev = {"type": "account.health", "health": h, "at": int(time.time() * 1000)}
+        if self.account_id:
+            ev["account"] = self.account_id
+        try:
+            await self.emit(ev)
+        except Exception as e:
+            log.debug("account.health: %s", type(e).__name__)
+
+    def note_error(self, e: BaseException) -> Optional[str]:
+        """Telegram xatosi muzlatish/cheklov/ban belgisimi — holat yangilanadi (o'zgarsa backendga darhol)."""
+        st = classify(e)
+        if st is not None:
+            self.note_state(st)
+        return st
+
+    def note_state(self, state: str) -> None:
+        """Holat belgisi (xato obyekti yoki call.state sababidan)."""
+        if self.health.mark(state, source="error"):
+            asyncio.ensure_future(self._health_changed())
+            if state == "frozen":
+                asyncio.ensure_future(self.check_freeze())   # tugash sanasi va apellyatsiya havolasi
+
+    def note_inbound(self, user_id: int) -> None:
+        try:
+            self.warm_peers.add(int(user_id))
+            self.usage.note_inbound(int(user_id))
+        except Exception:
+            pass
+
+    def is_warm(self, user_id: int) -> bool:
+        return int(user_id) in self.warm_peers or self.usage.wrote_recently(int(user_id))
+
+    async def check_freeze(self) -> Optional[dict]:
+        """help.getAppConfig: freeze_since_date / freeze_until_date / freeze_appeal_url."""
+        client = self.client
+        if client is None:
+            return None
+        from telethon.tl import functions
+        try:
+            res = await asyncio.wait_for(client(functions.help.GetAppConfigRequest(hash=0)), timeout=30)
+        except Exception as e:
+            self.note_error(e)
+            log.debug("app config: %s", type(e).__name__)
+            return None
+        cfg = json_value(getattr(res, "config", None))
+        if not isinstance(cfg, dict):
+            return None      # AppConfigNotModified — o'zgarish yo'q
+        info = parse_freeze(cfg)
+        if info:
+            if self.health.mark("frozen", "account_frozen", since=info.get("since"), until=info.get("until"),
+                                appeal_url=info.get("appealUrl"), source="app_config"):
+                await self._health_changed()
+        elif self.health.state == "frozen":
+            # Telegram endi muzlatish haqida aytmaydi (apellyatsiya qabul qilingan yoki muddat tugagan)
+            self.health.clear()
+            await self._health_changed()
+        return info
+
+    async def _freeze_loop(self) -> None:
+        while True:
+            try:
+                await self.check_freeze()
+            except Exception as e:
+                log.debug("freeze loop: %s", type(e).__name__)
+            await asyncio.sleep(FREEZE_CHECK_S)
 
     # ── ishga tushirish / to'xtatish ──
     async def start(self) -> None:
@@ -203,7 +320,17 @@ class TelegramRuntime:
                 self.last_error = "no_session"
                 log.info("Telegram sessiyasi yo'q — Dasturchi panelidan kiring (telefon -> kod)")
                 return
-            await self._start_with(s)
+            try:
+                await self._start_with(s)
+            except proxymod.ProxyConfigError as e:
+                self.last_error = "proxy_lib_missing" if str(e) == "proxy_lib_missing" else "proxy_invalid"
+                log.error("%s: TG_PROXIES xato (%s) — proksisiz ulanilmaydi", self.label, e)
+            except Exception as e:
+                st = self.note_error(e)
+                if st is None:
+                    raise
+                self.last_error = {"banned": "account_banned", "unauthorized": "not_authorized"}.get(st, f"account_{st}")
+                log.error("%s ishga tushmadi: %s", self.label, type(e).__name__)
 
     async def _start_with(self, session: str) -> None:
         client = self.make_client(session)
@@ -234,6 +361,7 @@ class TelegramRuntime:
                 sender = await event.get_sender()
                 if getattr(sender, "bot", False):
                     return
+                self.note_inbound(int(event.sender_id))
                 await handle_private_message(self, int(event.sender_id), event.raw_text or "", getattr(sender, "username", None))
             except Exception as e:
                 log.debug("dm: %s", type(e).__name__)
@@ -288,15 +416,28 @@ class TelegramRuntime:
         self.username = getattr(me, "username", None)
         self.display_name = " ".join(x for x in [getattr(me, "first_name", None), getattr(me, "last_name", None)] if x) or None
         self.last_error = None
-        log.info("Telegram ulandi — %s", self.label)
+        fp = self.fingerprint
+        log.info("Telegram ulandi — %s (qurilma: %s, %s, %s%s)", self.label, fp.get("device_model"), fp.get("system_version"),
+                 fp.get("app_version"), ", proksi: " + self.proxy_desc.split(" ")[0] if self.proxy_desc else "")
         # StringSession entity keshini diskda saqlamaydi — qayta ishga tushgandan keyin bog'langan xodimlar
         # (ular akkauntga DM yozgan) "peer_unknown" bo'lib qolmasin: dialoglar bir marta o'qiladi
         asyncio.ensure_future(self._warm_peers(client))
+        self._freeze_task = asyncio.ensure_future(self._freeze_loop())
+
+    def _collect_warm(self, dialogs) -> None:
+        for d in list(dialogs or []):
+            ent = getattr(d, "entity", None)
+            if ent is not None and type(ent).__name__ == "User" and not getattr(ent, "bot", False):
+                try:
+                    self.warm_peers.add(int(ent.id))
+                except (TypeError, ValueError):
+                    pass
 
     async def _warm_peers(self, client) -> None:
         try:
-            await asyncio.wait_for(client.get_dialogs(limit=200), timeout=60)
+            self._collect_warm(await asyncio.wait_for(client.get_dialogs(limit=200), timeout=60))
         except Exception as e:
+            self.note_error(e)
             log.debug("dialoglar: %s", type(e).__name__)
 
     async def stop(self, reason: str = "stop") -> None:
@@ -305,6 +446,9 @@ class TelegramRuntime:
             await self._stop_locked(reason)
 
     async def _stop_locked(self, reason: str) -> None:
+        t, self._freeze_task = self._freeze_task, None
+        if t is not None:
+            t.cancel()
         if self.calls:
             try:
                 await self.calls.shutdown("network")
@@ -331,6 +475,15 @@ class TelegramRuntime:
     async def adopt_session(self, session: str) -> None:
         """Login muvaffaqiyatli: sessiya shifrlab saqlanadi va asosiy mijoz ishga tushadi."""
         self.store.save(session)
+        # Yangi kirish (raqam boshqa bo'lishi mumkin): isitish davri va hisoblagichlar qaytadan, holat toza
+        try:
+            fp = self.fingerprint
+            fp["addedAt"] = int(time.time() * 1000)
+            fpmod.save(fpmod.fp_path(self.store.path), fp)
+            self.usage.reset(fp["addedAt"])
+        except Exception as e:
+            log.debug("iz/usage: %s", type(e).__name__)
+        self.health.clear()
         async with self._lock:
             await self._stop_locked("relogin")
             await self._start_with(session)
@@ -352,7 +505,11 @@ class TelegramRuntime:
         if not self.client:
             from .errors import RpcError
             raise RpcError("not_authorized")
-        await self.client.send_message(int(user_id), str(text)[:4000])
+        try:
+            await self.client.send_message(int(user_id), str(text)[:4000])
+        except Exception as e:
+            self.note_error(e)
+            raise
 
     async def typing(self, user_id: int) -> None:
         if not self.client:
@@ -460,7 +617,7 @@ class TelegramRuntime:
     # ── PeerOps (peers.py) ──
     async def refresh_dialogs(self) -> None:
         if self.client:
-            await asyncio.wait_for(self.client.get_dialogs(limit=200), timeout=30)
+            self._collect_warm(await asyncio.wait_for(self.client.get_dialogs(limit=200), timeout=30))
 
     async def username_id(self, username: str) -> Optional[int]:
         if not self.client:
@@ -486,9 +643,16 @@ class TelegramRuntime:
         await self.client(functions.contacts.DeleteContactsRequest(id=inputs))
 
     def _note_flood(self, e: Exception) -> Optional[int]:
+        self.note_error(e)
         fs = flood_seconds(e)
-        if fs and self.calls:
-            self.calls.flood_wait_until_ms = max(self.calls.flood_wait_until_ms, time.time() * 1000 + fs * 1000)
+        if fs:
+            # FloodWait aniq hurmat qilinadi: qo'ng'iroq ham, kontakt importi ham shu muddatgacha yo'q
+            if self.calls:
+                self.calls.flood_wait_until_ms = max(self.calls.flood_wait_until_ms, time.time() * 1000 + fs * 1000)
+            try:
+                self.usage.flood("import", fs)
+            except Exception:
+                pass
         return fs
 
     async def resolve_peer(self, user_id: int, username: Optional[str] = None, phone: Optional[str] = None) -> str:

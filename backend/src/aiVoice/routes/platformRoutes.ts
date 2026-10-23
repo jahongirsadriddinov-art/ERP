@@ -20,6 +20,7 @@ import { ensurePlatformConnection } from '../lib/workerLease';
 import {
   accountDto, maskPhone, setConnectedAccount, setFloodWait, setLoggedOut, setLoginState,
 } from '../telegram/accountService';
+import { profileCooldownSec } from '../telegram/antiFreeze';
 import { setAvatarEnabled, setOpenConversation } from '../telegram/incomingCalls';
 import { callWorker, WorkerRpcFailure } from '../telegram/workerRpc';
 import { getActiveWorker } from '../telegram/workerNamespace';
@@ -635,12 +636,17 @@ function profilePatch(body: unknown, allowUsername: boolean): ProfilePatch | nul
   }
   return out;
 }
-const PROFILE_HTTP: Record<string, number> = { username_occupied: 409, username_invalid: 400, name_invalid: 400, about_too_long: 400, photo_invalid: 400 };
+const PROFILE_HTTP: Record<string, number> = { username_occupied: 409, username_invalid: 400, name_invalid: 400, about_too_long: 400, photo_invalid: 400, profile_cooldown: 429, account_frozen: 423, spam_limited: 423, account_banned: 423 };
 
 async function applyProfile(accountId: string, patch: ProfilePatch): Promise<{ ok: true } | { ok: false; error: string; retryAfterSec?: number }> {
+  // Anti-freeze (owner 2026-10-23): tez-tez ism/rasm almashtirish — Telegram uchun "sotilgan/o'g'irlangan akkaunt"
+  // belgisi. Akkauntga kuniga ko'pi bilan 1 marta (birinchi sozlash darhol mumkin).
+  const acc: any = await getAccount(accountId);
+  const wait = profileCooldownSec(acc?.profileChangedAt);
+  if (wait > 0) return { ok: false, error: 'profile_cooldown', retryAfterSec: wait };
   try {
     const r = await callWorker('profile.update', { account: accountId, ...patch });
-    const set: Record<string, unknown> = {};
+    const set: Record<string, unknown> = { profileChangedAt: new Date() };
     if (r.displayName) set.displayName = r.displayName.slice(0, 80);
     if (patch.username !== undefined) set.username = r.username || undefined;
     // AI o'zini Telegram'dagi ism bilan tanishtiradi — ism o'zgarsa AI ismi ham

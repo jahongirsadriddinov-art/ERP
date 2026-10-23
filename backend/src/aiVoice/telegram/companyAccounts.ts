@@ -3,6 +3,7 @@ import AiTgAccount from '../../models/AiTgAccount';
 import AiChannelConnection from '../../models/AiChannelConnection';
 import type { WorkerEvent, WorkerStatus } from '../contracts';
 import { isObjectIdString } from '../lib/ids';
+import { applyAccountHealth, applyPlatformHealth, healthDto, healthyFilter, profileCooldownSec, sanitizeUsage } from './antiFreeze';
 import { callWorker, WorkerRpcFailure } from './workerRpc';
 import { workerConnectedHere, workerHub } from './workerNamespace';
 
@@ -20,6 +21,9 @@ export const MAX_POOL_ACCOUNTS = 50;
 export interface TgAccountDto {
   id: string; label?: string; status: string; username?: string; displayName?: string; phoneMasked?: string;
   busy: boolean; lastError?: string; connectedAt?: string; floodWaitUntil?: string;
+  /** Anti-freeze (owner 2026-10-23): Telegram cheklovi, bugungi ishlatilish/chegaralar, qurilma izi, proksi */
+  health?: ReturnType<typeof healthDto>; usage?: Record<string, unknown>; device?: string; proxy?: string;
+  limitedUntil?: string; lastUsedAt?: string; profileNextAt?: string;
 }
 
 const busyIds = async (ids: string[]): Promise<Set<string>> => {
@@ -38,6 +42,11 @@ export async function listPoolAccounts(): Promise<TgAccountDto[]> {
     lastError: r.status !== 'connected' ? r.lastError || undefined : undefined,
     connectedAt: r.connectedAt ? new Date(r.connectedAt).toISOString() : undefined,
     floodWaitUntil: r.floodWaitUntil && new Date(r.floodWaitUntil).getTime() > now ? new Date(r.floodWaitUntil).toISOString() : undefined,
+    health: healthDto(r.health, new Date(now)),
+    usage: r.usage || undefined, device: r.device || undefined, proxy: r.proxy || undefined,
+    limitedUntil: r.limitedUntil && new Date(r.limitedUntil).getTime() > now ? new Date(r.limitedUntil).toISOString() : undefined,
+    lastUsedAt: r.lastUsedAt ? new Date(r.lastUsedAt).toISOString() : undefined,
+    profileNextAt: profileCooldownSec(r.profileChangedAt, new Date(now)) ? new Date(new Date(r.profileChangedAt).getTime() + 24 * 3600_000).toISOString() : undefined,
   }));
 }
 
@@ -115,11 +124,20 @@ export async function recordAccountsHealth(list: WorkerStatus['accounts'], now: 
     const set: Record<string, unknown> = { lastHealthAt: now };
     const fw = Number(a.floodWaitUntil);
     if (Number.isFinite(fw) && fw > now.getTime()) set.floodWaitUntil = new Date(fw);
+    // Anti-freeze: bugungi ishlatilish, qurilma izi, proksi turi; holat o'zgarsa — dasturchiga xabar
+    const usage = sanitizeUsage(a.usage);
+    if (usage) set.usage = usage;
+    if (typeof a.device === 'string') set.device = a.device.slice(0, 120);
+    if (typeof a.proxy === 'string') set.proxy = a.proxy.slice(0, 80);
+    if (a.health) await applyAccountHealth(String(a.id), a.health, now).catch(() => false);
     if (a.connected === true) {
       set.status = 'connected';
       if (typeof a.tgUserId === 'string' && TG_ID_RE.test(a.tgUserId)) set.tgUserId = a.tgUserId;
       if (typeof a.username === 'string' && UN_RE.test(a.username)) set.username = a.username;
       await AiTgAccount.updateOne({ _id: a.id }, { $set: set });
+    } else if (typeof a.error === 'string' && ['proxy_invalid', 'proxy_lib_missing', 'account_banned', 'account_frozen'].includes(a.error)) {
+      // Anti-freeze: TG_PROXIES xato (proksisiz ulanmaydi) yoki Telegram akkauntni bloklagan — panelda aniq sabab
+      await AiTgAccount.updateOne({ _id: a.id, status: { $nin: ['awaiting_code', 'awaiting_password'] } }, { $set: { ...set, status: 'error', lastError: a.error } });
     } else if (a.error === 'duplicate_account') {
       // Shu Telegram akkaunt boshqa joyda (platforma yoki boshqa firma akkaunti) ulangan — worker bu sessiyani to'xtatdi
       await AiTgAccount.updateOne({ _id: a.id }, { $set: { ...set, status: 'error', lastError: 'duplicate_account' } });
@@ -130,24 +148,59 @@ export async function recordAccountsHealth(list: WorkerStatus['accounts'], now: 
   }
 }
 
-/** Hovuzda ulangan (tirik) akkaunt bormi — kanal mavjudligi uchun. */
+/** Ishlatsa bo'ladigan akkauntlar: ulangan, tirik, FloodWait/chegara yo'q va Telegram cheklovi (muzlatish/spam/ban) yo'q. */
+const usableFilter = (now: Date): any => ({
+  status: 'connected', lastHealthAt: { $gt: new Date(now.getTime() - FRESH_MS) },
+  $and: [
+    { $or: [{ floodWaitUntil: null }, { floodWaitUntil: { $lte: now } }] },
+    { $or: [{ limitedUntil: null }, { limitedUntil: { $lte: now } }] },
+    healthyFilter(now),
+  ],
+});
+
+/** Qo'ng'iroq chegarasi to'lgan (worker health'idagi usage bo'yicha). */
+export const callCapReached = (u: any): boolean => {
+  const c = u?.call;
+  return !!c && Number.isFinite(c.capDay) && (c.day >= c.capDay || (Number.isFinite(c.capHour) && c.hour >= c.capHour));
+};
+
+/** Hovuzda ulangan (tirik, cheklanmagan) akkaunt bormi — kanal mavjudligi uchun. */
 export async function poolHasLiveAccount(now: Date = new Date()): Promise<boolean> {
-  return !!(await AiTgAccount.exists({
-    status: 'connected', lastHealthAt: { $gt: new Date(now.getTime() - FRESH_MS) },
-    $or: [{ floodWaitUntil: null }, { floodWaitUntil: { $lte: now } }],
-  }));
+  const rows: any[] = await AiTgAccount.find(usableFilter(now)).select('usage').limit(MAX_POOL_ACCOUNTS).lean();
+  return rows.some((r) => !callCapReached(r.usage));
 }
 
-/** Hovuzdagi BO'SH akkaunt (yaratilish tartibida) va uning AI ismi. Yo'q bo'lsa null. */
-export async function pickPoolAccount(now: Date = new Date()): Promise<{ id: string; name?: string } | null> {
-  const rows: any[] = await AiTgAccount.find({
-    status: 'connected', lastHealthAt: { $gt: new Date(now.getTime() - FRESH_MS) },
-    $or: [{ floodWaitUntil: null }, { floodWaitUntil: { $lte: now } }],
-  }).sort({ createdAt: 1 }).select('_id label').lean();
+/**
+ * Hovuzdagi BO'SH akkaunt va uning AI ismi. Yo'q bo'lsa null. Anti-freeze tartibi (owner 2026-10-23):
+ *  1) shu xodim bilan oxirgi gaplashgan akkaunt (u bilan dialog bor — Telegram uchun "tanish", sovuq qo'ng'iroq emas);
+ *  2) qolganlari — eng uzoq ishlatilmagan (LRU), yuk akkauntlar orasida tekis taqsimlanadi;
+ *  cheklangan (muzlatilgan/spam/ban), chegarasi to'lgan yoki FloodWait'dagi akkauntlar tanlanmaydi.
+ */
+export async function pickPoolAccount(now: Date = new Date(), opts: { employeeId?: string } = {}): Promise<{ id: string; name?: string } | null> {
+  const all: any[] = await AiTgAccount.find(usableFilter(now)).sort({ createdAt: 1 }).select('_id label usage lastUsedAt createdAt').lean();
+  const rows = all.filter((r) => !callCapReached(r.usage));
   if (!rows.length) return null;
   const busy = await busyIds(rows.map((r) => String(r._id)));
-  const free = rows.find((r) => !busy.has(String(r._id)));
-  return free ? { id: String(free._id), ...(free.label ? { name: String(free.label) } : {}) } : null;
+  const free = rows.filter((r) => !busy.has(String(r._id)));
+  if (!free.length) return null;
+  let pick: any = null;
+  if (opts.employeeId && isObjectIdString(opts.employeeId) && free.length > 1) {
+    const last: any = await AiCallSession.findOne({ channel: 'telegram_call', employeeId: opts.employeeId, tgAccountId: { $in: free.map((r) => String(r._id)) } })
+      .sort({ createdAt: -1 }).select('tgAccountId').lean().catch(() => null);
+    if (last?.tgAccountId) pick = free.find((r) => String(r._id) === String(last.tgAccountId)) || null;
+  }
+  if (!pick) {
+    const t = (r: any) => (r.lastUsedAt ? new Date(r.lastUsedAt).getTime() : 0);
+    pick = [...free].sort((a, b) => t(a) - t(b) || new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())[0];
+  }
+  return { id: String(pick._id), ...(pick.label ? { name: String(pick.label) } : {}) };
+}
+
+/** Worker akkauntni chegaraga/cheklovga ko'ra rad etdi — shu vaqtgacha boshqa akkauntlar ishlatiladi. */
+export async function limitAccount(id: string, seconds: number, now: Date = new Date()): Promise<void> {
+  if (!isObjectIdString(id)) return;
+  const until = new Date(now.getTime() + Math.max(5, Math.min(86_400, Math.floor(seconds))) * 1000);
+  await AiTgAccount.updateOne({ _id: id }, { $max: { limitedUntil: until } }).catch(() => undefined);
 }
 
 export async function accountBusy(id: string): Promise<boolean> {
@@ -157,6 +210,12 @@ export async function accountBusy(id: string): Promise<boolean> {
 export async function markSessionAccount(sessionId: string, accountId: string | null): Promise<void> {
   if (!accountId) return;
   await AiCallSession.updateOne({ _id: sessionId }, { $set: { tgAccountId: accountId } }).catch(() => undefined);
+  await AiTgAccount.updateOne({ _id: accountId }, { $set: { lastUsedAt: new Date() } }).catch(() => undefined);
+}
+
+export async function handleAccountHealthEvent(ev: { account?: string; health: unknown }): Promise<boolean> {
+  if (ev.account) return isObjectIdString(String(ev.account)) ? applyAccountHealth(String(ev.account), ev.health) : false;
+  return applyPlatformHealth(ev.health);
 }
 
 let initialized = false;
@@ -168,5 +227,7 @@ export function initCompanyAccounts(): void {
     if (ev?.type === 'health' && Array.isArray(ev.status?.accounts)) {
       recordAccountsHealth(ev.status.accounts).catch((e) => console.error('[aiVoice/telegram] akkaunt holati yozilmadi:', (e as Error).message));
     }
+    // Anti-freeze: holat o'zgarishi darhol (30 s health'ni kutmasdan) — boshqa akkauntga yo'naltirish + dasturchiga xabar
+    if (ev?.type === 'account.health') handleAccountHealthEvent(ev).catch((e) => console.error('[aiVoice/telegram] akkaunt cheklovi yozilmadi:', (e as Error).message));
   });
 }

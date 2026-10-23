@@ -336,11 +336,24 @@ describe("AI akkauntlari profili (owner 2026-10-19): bittalab va hammasiga birda
     expect(seen[0]).toMatchObject({ account: String(a1._id), firstName: 'Jasur', lastName: 'AI', username: '@jasur_ai', photo });
     const d1: any = await AiTgAccount.findById(a1._id).lean();
     expect(d1).toMatchObject({ label: 'Jasur', displayName: 'Jasur AI' });
+    expect(d1.profileChangedAt).toBeInstanceOf(Date);
+
+    // Anti-freeze (owner 2026-10-23): profil akkauntga kuniga 1 marta — 24 soat ichida qayta o'zgartirish 429
+    const again = await request(app).post(`${Q}/${a1._id}/profile`).set('Authorization', tok(dev)).send({ lastName: 'Yana' });
+    expect(again.status).toBe(429);
+    expect(again.body.error).toBe('profile_cooldown');
+    expect(again.body.retryAfterSec).toBeGreaterThan(23 * 3600);
+    expect(seen).toHaveLength(1);
+    const cooled = await request(app).post(`${Q}/profile-bulk`).set('Authorization', tok(dev)).send({ ids: [String(a1._id), String(a2._id)], lastName: 'ERP' });
+    expect(cooled.body.results).toEqual([{ id: String(a1._id), ok: false, error: 'profile_cooldown' }, { id: String(a2._id), ok: true }]);
+    await AiTgAccount.updateMany({}, { $unset: { profileChangedAt: 1 } });
+    seen.splice(1);
 
     const bulk = await request(app).post(`${Q}/profile-bulk`).set('Authorization', tok(dev)).send({ ids: [String(a1._id), String(a2._id)], lastName: 'ERP', username: 'hammaga' });
     expect(bulk.status).toBe(200);
     expect(bulk.body.results).toEqual([{ id: String(a1._id), ok: true }, { id: String(a2._id), ok: true }]);
     expect(seen.slice(1).map((p) => [p.account, p.lastName, p.username])).toEqual([[String(a1._id), 'ERP', undefined], [String(a2._id), 'ERP', undefined]]);
+    await AiTgAccount.updateMany({}, { $unset: { profileChangedAt: 1 } });
 
     const bad = await request(app).post(`${Q}/${a2._id}/profile`).set('Authorization', tok(dev)).send({ username: 'band_nom' });
     expect(bad.status).toBe(409);

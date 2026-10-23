@@ -107,6 +107,8 @@ export default defineConfig({
           }
           // Other large vendors
           if (id.includes('node_modules/sonner')) return 'vendor-toast';
+          // 3D (AI ofis) — faqat lazy OfficeScene ishlatadi; umumiy 'vendor'ga tushsa har sahifada yuklanadi
+          if (/node_modules\/(three|three-stdlib|@react-three|troika-[^/]+|@monogrid|maath|meshline|camera-controls|zustand|its-fine|suspend-react|react-reconciler|react-use-measure|@use-gesture|detect-gpu|hls\.js|stats-gl|stats\.js|tunnel-rat|webgl-constants|webgl-sdf-generator|bidi-js|@mediapipe|three-mesh-bvh|@dimforge|lil-gui)\//.test(id)) return 'vendor-three';
           // Remaining node_modules
           if (id.includes('node_modules')) return 'vendor';
         },

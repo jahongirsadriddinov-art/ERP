@@ -24,6 +24,9 @@
     "@capacitor/share": "^7.0.4",
     "@capacitor/status-bar": "^7.0.6",
     "@hugeicons/core-free-icons": "^4.3.4",
+    "@react-three/drei": "^9.122.0",
+    "@react-three/fiber": "^8.18.0",
+    "@types/three": "^0.170.0",
     "capacitor-native-biometric": "^4.2.2",
     "i18next": "^26.3.6",
     "jsqr": "^1.4.0",
@@ -36,6 +39,7 @@
     "socket.io-client": "^4.8.3",
     "sonner": "2.0.3",
     "tailwind-merge": "3.2.0",
+    "three": "^0.170.0",
     "tw-animate-css": "1.3.8",
     "uisfx": "^0.4.0"
   },

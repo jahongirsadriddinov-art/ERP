@@ -15,6 +15,7 @@ import Back from "@hugeicons/core-free-icons/ArrowLeft01Icon";
 import Pulse from "@hugeicons/core-free-icons/Activity01Icon";
 import Refresh from "@hugeicons/core-free-icons/Refresh01Icon";
 import Alert from "@hugeicons/core-free-icons/Alert02Icon";
+import OfficeIcon from "@hugeicons/core-free-icons/Desk01Icon";
 import BetaBadge from "../../BetaBadge";
 import {
   AI_UNMET_REASONS, isNotReady, platformApi, type AiUnmetPage, type AiUnmetReason, type AiUsageSummary, type PlatformCompany, type PlatformCompanyView, type PlatformOverview,
@@ -36,10 +37,12 @@ import { oneOf, usePersistentState } from "../../../lib/persistentState";
 const TelegramAccountPanel = lazy(() => import("../TelegramAccountPanel"));
 // Firma Telegram akkauntlari — alohida bo'lim (owner 2026-10-19)
 const CompanyTgAccounts = lazy(() => import("../CompanyTgAccounts"));
+// AI ofis (owner 2026-10-22) — 3D agentlar ofisi + boshqaruv markazi; three.js faqat shu lazy chunk'da
+const AiOffice = lazy(() => import("./office/AiOffice"));
 
-type Tab = "overview" | "companies" | "usage" | "telegram" | "tgAccounts" | "archives" | "audit" | "unmet";
+type Tab = "overview" | "office" | "companies" | "usage" | "telegram" | "tgAccounts" | "archives" | "audit" | "unmet";
 const TABS: { key: Tab; icon: any }[] = [
-  { key: "overview", icon: Pulse }, { key: "companies", icon: Building }, { key: "usage", icon: Chart },
+  { key: "overview", icon: Pulse }, { key: "office", icon: OfficeIcon }, { key: "companies", icon: Building }, { key: "usage", icon: Chart },
   { key: "telegram", icon: Telegram }, { key: "tgAccounts", icon: Users }, { key: "archives", icon: Archive }, { key: "audit", icon: History },
   { key: "unmet", icon: Alert },
 ];
@@ -69,6 +72,7 @@ export default function AiPlatformPanel() {
         ))}
       </div>
       {tab === "overview" && <Overview />}
+      {tab === "office" && <Suspense fallback={<Skeleton />}><AiOffice /></Suspense>}
       {tab === "companies" && <Companies />}
       {tab === "usage" && <Usage />}
       {tab === "telegram" && <Suspense fallback={<Skeleton />}><TelegramAccountPanel /></Suspense>}

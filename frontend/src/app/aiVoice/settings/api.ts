@@ -171,7 +171,7 @@ export interface ApiResult<T> { ok: boolean; status: number; data: T; error: str
 
 const BASE = "/api/ai-voice";
 
-async function call<T>(method: string, path: string, body?: unknown): Promise<ApiResult<T>> {
+export async function call<T>(method: string, path: string, body?: unknown): Promise<ApiResult<T>> {
   try {
     const r = await fetch(`${API_BASE}${BASE}${path}`, {
       method,

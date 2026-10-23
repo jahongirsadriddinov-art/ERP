@@ -3,7 +3,7 @@ import { useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import { Html } from "@react-three/drei";
 import * as THREE from "three";
 import type { OfficeAgent } from "./officeApi";
-import { BOUNDS, ROOMS, doorPoint, entryCell, cellCenter, roomWalls, type Desk, type Grid, type Poi, type Pose, type Rect } from "./layout";
+import { BOUNDS, ROOMS, cellIndex, doorPoint, entryCell, cellCenter, hash as hashId, roomWalls, walkable, type Desk, type Grid, type Poi, type Pose, type Rect } from "./layout";
 import { lerpAngle, type Crowd, type Goal } from "./crowd";
 import { BOX, CLAUDE, CYL, EYE, SPHERE, mix } from "./props";
 import { PLAYER_START, SEATS, TEA_SPOTS, type SeatKind, type SeatTarget, type Target, type WalkBridge } from "./walk";
@@ -154,7 +154,9 @@ export const Agent = memo(function Agent({ agent, desk, poi, tour, crowd, select
   const [near, setNear] = useState(false);
   const isBoss = agent.id === "manager";
   const tint = useMemo(() => mix(CLAUDE, agent.color || CLAUDE, agent.kind === "tg" ? 0 : 0.16), [agent.color, agent.kind]);
-  const st = useRef({ tourIdx: 0, celebrateAt: -1, prevTask: agent.task?.status, phase: Math.random() * 10, nearCheck: 0, near: false });
+  const st = useRef({ tourIdx: 0, celebrateAt: -1, prevTask: agent.task?.status, phase: Math.random() * 10, nearCheck: 0, near: false, goal: null as (Goal & { pose: GoalPose }) | null, pendingKey: "", pendingAt: 0 });
+  // Hamma bo'sh agent bir vaqtda o'rnidan turmasin — har biri o'z kechikishi bilan (0–9 s) yo'lga chiqadi
+  const stagger = useMemo(() => (hashId(agent.id) % 10), [agent.id]);
 
   const deskGoal = (pose: GoalPose): Goal & { pose: GoalPose } => ({ key: `desk:${pose}`, x: desk.chair.x, z: desk.chair.z, face: desk.dir > 0 ? 0 : Math.PI, pose });
   const baseGoal = agent.activity === "task" || agent.activity === "chat" || agent.activity === "call" ? deskGoal("work")
@@ -180,6 +182,13 @@ export const Agent = memo(function Agent({ agent, desk, poi, tour, crowd, select
     const dt = Math.min(dtRaw, 0.05);
     const t = clock.elapsedTime + s.phase;
     let goal: Goal & { pose: GoalPose } = baseGoal;
+    // Dam olish joyi almashsa — kechikish bilan (ish boshlanishi esa darhol)
+    if (!s.goal) s.goal = goal;
+    else if (s.goal.key !== goal.key) {
+      if (s.pendingKey !== goal.key) { s.pendingKey = goal.key; s.pendingAt = clock.elapsedTime; }
+      if (goal.pose === "work" || goal.pose === "think" || clock.elapsedTime - s.pendingAt >= stagger) s.goal = goal;
+      else goal = s.goal;
+    }
     const cur = crowd.get(agent.id);
     if (tour && tour.length) {
       if (cur && cur.arrived && cur.key.startsWith("tour:") && crowd.time > cur.arrivedAt + 2.2) s.tourIdx = (s.tourIdx + 1) % tour.length;
@@ -230,7 +239,7 @@ export const Agent = memo(function Agent({ agent, desk, poi, tour, crowd, select
 
   const failed = agent.task?.status === "failed" && agent.activity !== "task";
   const click = (e: ThreeEvent<MouseEvent>) => { e.stopPropagation(); onSelect(agent.id); };
-  const scale = isBoss ? 1.35 : 1.15;
+  const scale = isBoss ? 1.2 : 1.0;
   const statusDot = agent.activity === "task" ? "#5ea8ff" : agent.activity === "call" ? "#2dd4bf" : agent.activity === "chat" ? "#a78bfa"
     : agent.activity === "review" ? "#ffb020" : failed ? "#ff3b30" : agent.task?.status === "done" ? "#34c759" : "#b8b2aa";
   const label = showLabel || hover || near || talking || !!speech;
@@ -316,8 +325,20 @@ export function Player({ crowd, grid, bridge, agents, holding, youLabel }: {
     // Buyruqlar (DOM'dan)
     while (bridge.cmds.length) {
       const c = bridge.cmds.shift()!;
-      if (c.type === "goto") { s.agentGoal = null; s.focus = null; standUp(); crowd.setGoal("me", { key: `goto:${c.key}:${clock.elapsedTime}`, x: c.x, z: c.z, face: c.face }, c.stop || 0); }
-      else if (c.type === "gotoAgent") { standUp(); s.agentGoal = c.id; s.focus = c.id; s.retarget = 0; s.nearKey = "?"; }
+      // "Qayerga?" — bir zumda ko'chish (teleport) eng yaqin bo'sh pol katagiga; kamera ham darhol
+      if (c.type === "goto") { s.agentGoal = null; s.focus = null; standUp(); if (crowd.teleport("me", { x: c.x, z: c.z }, c.face)) { s.yaw = c.face; s.camInit = false; } }
+      else if (c.type === "gotoAgent") {
+        standUp(); s.agentGoal = null; s.focus = c.id; s.nearKey = "?";
+        const a = crowd.get(c.id);
+        if (a) {
+          // Agent oldiga (u qaragan tomonga 1.2 m) — bo'sh katak topilmasa, yon tomonlardan
+          for (const ang of [0, Math.PI / 2, -Math.PI / 2, Math.PI]) {
+            const fx = Math.sin(a.rot + ang), fz = Math.cos(a.rot + ang);
+            const p = { x: a.pos.x + fx * 1.2, z: a.pos.z + fz * 1.2 };
+            if (walkable(grid, cellIndex(p))) { crowd.teleport("me", p, Math.atan2(-fx, -fz)); s.yaw = Math.atan2(-fx, -fz); s.camInit = false; break; }
+          }
+        }
+      }
       else if (c.type === "sit") { s.agentGoal = null; s.seat = c.target; s.sitting = false; crowd.setGoal("me", { key: `seat:${c.target.key}:${clock.elapsedTime}`, x: c.target.x, z: c.target.z, face: c.target.face }); }
       else if (c.type === "stand") standUp();
     }
@@ -389,6 +410,7 @@ export function Player({ crowd, grid, bridge, agents, holding, youLabel }: {
     s.scan -= dt;
     if (s.scan <= 0) {
       s.scan = 0.15;
+      bridge.onPos?.(w.pos.x, w.pos.z);
       let best: Target | null = null, bd = Infinity;
       // "Qayerga?" orqali tanlangan agent yonida bo'lsa — o'sha birinchi
       const f = s.focus ? crowd.get(s.focus) : undefined;

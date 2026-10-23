@@ -416,3 +416,42 @@ test('AI ofis: ovoz, musiqa (Yandex havola), kino havolasi va agent bilan ovozli
   await expect.poll(() => calls.tasks.at(-1)).toEqual({ agentKey: 'smm', text: '2 ta post tayyorla' });
   expect(errors, errors.join('\n')).toEqual([]);
 });
+
+test('AI ofis: yurish — tugma bosib turilsa eshikdan to\'xtamay o\'tadi; musiqa maydonidagi fokus WASD\'ni to\'smaydi', async ({ page }, info) => {
+  test.setTimeout(120_000);
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  const calls: Calls = { tasks: [], approves: [], officeGets: 0 };
+  await mockApi(page, calls);
+  await seed(page);
+  await openOffice(page);
+  const enter = page.getByTestId('ai-office-enter');
+  if (!(await enter.isVisible().catch(() => false))) { test.skip(true, "WebGL yo'q"); return; }
+  // Musiqa paneli: Yandex maydoniga fokus — keyin ofisga kirish
+  await page.getByTestId('ai-office-media-open').first().click();
+  await page.getByTestId('ai-office-yandex').click();
+  await page.getByTestId('ai-office-yandex').type('abc');
+  await enter.click();
+  const walk = page.getByTestId('ai-office-walk');
+  await expect(walk).toBeVisible();
+  if (info.project.name === 'telefon') await page.getByTestId('ai-office-rotate-skip').click();
+  await expect(page.locator('[data-testid="ai-office-walk"] canvas')).toBeVisible({ timeout: 30_000 });
+  await expect(walk).toHaveAttribute('data-pos', /.+/, { timeout: 20_000 });
+  const pos = async () => (await walk.getAttribute('data-pos'))!.split(',').map(Number);
+
+  // Marketing xonasiga (eshik ichiga) ko'chish → S bosib turiladi: orqaga, eshikdan yo'lakka chiqadi (qayta bosmasdan)
+  await page.getByTestId('ai-office-goto').click();
+  await page.getByTestId('ai-office-goto-place-marketing').click();
+  await expect.poll(async () => (await pos())[1], { timeout: 10_000 }).toBeGreaterThan(10);
+  const [, z0] = await pos();
+  await page.keyboard.down('s');
+  await expect.poll(async () => (await pos())[1], { timeout: 20_000 }).toBeLessThan(8.2); // yo'lakda (devor 9.6 da)
+  await page.keyboard.up('s');
+  expect(z0).toBeGreaterThan(10);
+  // W — yana xonaga qaytib kiradi
+  await page.keyboard.down('w');
+  await expect.poll(async () => (await pos())[1], { timeout: 20_000 }).toBeGreaterThan(10.4);
+  await page.keyboard.up('w');
+  await page.getByTestId('ai-office-exit').click();
+  expect(errors, errors.join('\n')).toEqual([]);
+});

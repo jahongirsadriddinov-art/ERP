@@ -52,6 +52,7 @@ export default function WalkMode({ agents, profiles, setup, scene, onExit, onCha
   const bridge = useMemo(() => newBridge(() => {}, () => {}), []);
   bridge.onNear = setNear;
   bridge.onSeat = setSeat;
+  bridge.onPos = (x, z) => { if (root.current) root.current.dataset.pos = `${x.toFixed(2)},${z.toFixed(2)}`; };
   const touch = typeof window !== "undefined" && (window.matchMedia?.("(pointer: coarse)").matches ?? false);
   const overlay = !!talking || seat === "computer" || seat === "game" || mediaOpen;
   const movie = media?.cinema ? parseVideoLink(media.cinema) : null;
@@ -91,7 +92,11 @@ export default function WalkMode({ agents, profiles, setup, scene, onExit, onCha
   useEffect(() => { if (seat === "computer" || seat === "game") try { document.exitPointerLock?.(); } catch { /* */ } }, [seat]);
   useEffect(() => { if (!note) return; const i = setTimeout(() => setNote(null), 2500); return () => clearTimeout(i); }, [note]);
 
-  // Klaviatura
+  // Klaviatura. MUHIM (owner: "eshikka kirganda qotib qolyapti"): tinglovchilar BIR MARTA o'rnatiladi — ilgari ular
+  // `near`/`interact` o'zgarganda (eshik yoki agent yoniga kelganda) qayta o'rnatilib, bosilgan tugmalar to'plami
+  // tozalanardi va o'yinchi to'xtab qolardi. Endi tugmalar faqat oyna fokusni yo'qotsa (blur / sahifa yashirinsa) tozalanadi.
+  const live = useRef({ interact, overlay, talking, seat, onExit });
+  live.current = { interact, overlay, talking, seat, onExit };
   useEffect(() => {
     const keys = new Set<string>();
     const upd = () => {
@@ -101,27 +106,41 @@ export default function WalkMode({ agents, profiles, setup, scene, onExit, onCha
       i.run = keys.has("shift");
     };
     const typing = (e: KeyboardEvent) => { const el = e.target as HTMLElement | null; return !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable); };
+    const MOVE = ["w", "a", "s", "d", "arrowup", "arrowdown", "arrowleft", "arrowright", "shift", "ц", "ф", "ы", "в"];
+    const norm = (k: string) => ({ ц: "w", ф: "a", ы: "s", в: "d" } as Record<string, string>)[k] || k;
     const kd = (e: KeyboardEvent) => {
       if (typing(e)) return;
-      const key = e.key.toLowerCase();
-      if (key === "escape") { if (talking) setTalking(null); else if (seat) bridge.cmds.push({ type: "stand" }); else if (!document.pointerLockElement && !document.fullscreenElement) onExit(); return; }
-      if (overlay) return;
-      if (key === "e") { interact(); e.preventDefault(); return; }
-      if (key === "v") { bridge.input.fp = !bridge.input.fp; setFp(bridge.input.fp); return; }
-      if (["w", "a", "s", "d", "arrowup", "arrowdown", "arrowleft", "arrowright", "shift"].includes(key)) { keys.add(key); upd(); e.preventDefault(); }
+      const L = live.current;
+      const key = norm(e.key.toLowerCase());
+      if (key === "escape") { if (L.talking) setTalking(null); else if (L.seat) bridge.cmds.push({ type: "stand" }); else if (!document.pointerLockElement && !document.fullscreenElement) L.onExit(); return; }
+      if (MOVE.includes(key)) { keys.add(key); upd(); e.preventDefault(); return; }
+      if (L.overlay) return;
+      if (key === "e" || key === "у") { L.interact(); e.preventDefault(); return; }
+      if (key === "v" || key === "м") { bridge.input.fp = !bridge.input.fp; setFp(bridge.input.fp); }
     };
-    const ku = (e: KeyboardEvent) => { keys.delete(e.key.toLowerCase()); upd(); };
-    const blur = () => { keys.clear(); upd(); };
+    const ku = (e: KeyboardEvent) => { keys.delete(norm(e.key.toLowerCase())); if (e.key === "Shift") keys.delete("shift"); upd(); };
+    const clear = () => { keys.clear(); upd(); };
+    const vis = () => { if (document.hidden) clear(); };
     window.addEventListener("keydown", kd);
     window.addEventListener("keyup", ku);
-    window.addEventListener("blur", blur);
-    return () => { window.removeEventListener("keydown", kd); window.removeEventListener("keyup", ku); window.removeEventListener("blur", blur); blur(); };
-  }, [bridge, interact, overlay, talking, seat, onExit]);
+    window.addEventListener("blur", clear);
+    document.addEventListener("visibilitychange", vis);
+    return () => { window.removeEventListener("keydown", kd); window.removeEventListener("keyup", ku); window.removeEventListener("blur", clear); document.removeEventListener("visibilitychange", vis); clear(); };
+  }, [bridge]);
+  // Kirishda fokusni ofisga olish: musiqa vidjeti (iframe) yoki maydonda qolgan fokus WASD'ni "yutib" yubormasin
+  useEffect(() => {
+    try { (document.activeElement as HTMLElement | null)?.blur?.(); } catch { /* */ }
+    root.current?.focus({ preventScroll: true });
+    window.focus?.();
+  }, []);
 
   // Sichqoncha / barmoq bilan qarash
   const drag = useRef<{ id: number; x: number; y: number; moved: number } | null>(null);
   const onDown = (e: React.PointerEvent) => {
     if (overlay || (e.target as HTMLElement).closest("[data-ui]")) return;
+    // Sahnaga bosildi — fokus ofisga (maydon/iframe'da qolgan fokus tugmalarni to'smasin)
+    try { (document.activeElement as HTMLElement | null)?.blur?.(); } catch { /* */ }
+    root.current?.focus({ preventScroll: true });
     drag.current = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: 0 };
   };
   const onMove = (e: React.PointerEvent) => {
@@ -161,7 +180,7 @@ export default function WalkMode({ agents, profiles, setup, scene, onExit, onCha
   }, [agents, q]);
 
   return (
-    <div ref={root} className="fixed inset-0 z-[90] bg-[#0f1115] select-none overscroll-none touch-none" data-testid="ai-office-walk"
+    <div ref={root} tabIndex={-1} className="fixed inset-0 z-[90] bg-[#0f1115] select-none overscroll-none touch-none outline-none" data-testid="ai-office-walk"
       onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={() => { drag.current = null; }}
       onContextMenu={(e) => e.preventDefault()}>
       <Suspense fallback={null}>

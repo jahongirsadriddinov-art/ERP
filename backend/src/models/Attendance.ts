@@ -33,5 +33,9 @@ const AttendanceSchema = new Schema<AttendanceDoc>({
 }, { timestamps: true });
 
 AttendanceSchema.index({ userId: 1, date: 1 }, { unique: true });
+// Firma bo'yicha kunlik/davr so'rovlari (dashboard, /attendance?all=1, insights) — companyId indeksi umuman yo'q edi
+AttendanceSchema.index({ companyId: 1, date: -1 });
+// Har daqiqalik bot cron'i (services/bot.ts checkExpiredLiveLocations) firmasiz {date} bo'yicha so'raydi
+AttendanceSchema.index({ date: 1 });
 
 export default mongoose.model<AttendanceDoc>('Attendance', AttendanceSchema);

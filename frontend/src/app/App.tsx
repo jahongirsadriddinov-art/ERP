@@ -3,21 +3,17 @@ import { startBackground, stopBackground } from "./lib/background";
 import { useState, useRef, useEffect, useMemo, lazy, Suspense } from "react";
 import { useScrollMemory } from "./lib/persistentState";
 import Building2 from "@hugeicons/core-free-icons/Building02Icon";
-import Users from "@hugeicons/core-free-icons/UserMultipleIcon";
-import HardHat from "@hugeicons/core-free-icons/HardHatIcon";
 import Package from "@hugeicons/core-free-icons/Package01Icon";
 import Plus from "@hugeicons/core-free-icons/PlusSignIcon";
 import ArrowLeft from "@hugeicons/core-free-icons/ArrowLeft01Icon";
 import CheckCircle from "@hugeicons/core-free-icons/CheckmarkCircle01Icon";
 import Clock from "@hugeicons/core-free-icons/Clock01Icon";
 import AlertTriangle from "@hugeicons/core-free-icons/Alert02Icon";
-import ChevronRight from "@hugeicons/core-free-icons/ArrowRight01Icon";
 import MapPin from "@hugeicons/core-free-icons/PinLocation01Icon";
 import Phone from "@hugeicons/core-free-icons/PhoneIcon";
 import User from "@hugeicons/core-free-icons/UserIcon";
 import X from "@hugeicons/core-free-icons/Cancel01Icon";
 import Check from "@hugeicons/core-free-icons/Tick01Icon";
-import Download from "@hugeicons/core-free-icons/Download01Icon";
 import BarChart2 from "@hugeicons/core-free-icons/BarChartIcon";
 import DollarSign from "@hugeicons/core-free-icons/DollarSignIcon";
 import MessageCircle from "@hugeicons/core-free-icons/Message01Icon";
@@ -26,91 +22,54 @@ import ChevronUp from "@hugeicons/core-free-icons/ArrowUp01Icon";
 import Send from "@hugeicons/core-free-icons/SendIcon";
 import TrendingDown from "@hugeicons/core-free-icons/TradeDownIcon";
 import Wallet from "@hugeicons/core-free-icons/Wallet01Icon";
-import LogOut from "@hugeicons/core-free-icons/Logout01Icon";
-import Camera from "@hugeicons/core-free-icons/Camera01Icon";
 import Home from "@hugeicons/core-free-icons/Home01Icon";
-import UserPlus from "@hugeicons/core-free-icons/UserAdd01Icon";
-import Edit from "@hugeicons/core-free-icons/Edit02Icon";
-import Settings from "@hugeicons/core-free-icons/Settings02Icon";
 import Megaphone from "@hugeicons/core-free-icons/Megaphone01Icon";
 import AiSparkles from "@hugeicons/core-free-icons/AiSparklesIcon";
 import Trash from "@hugeicons/core-free-icons/Delete02Icon";
 import Search from "@hugeicons/core-free-icons/Search01Icon";
 import AlertCircle from "@hugeicons/core-free-icons/AlertCircleIcon";
-import ChevronLeft from "@hugeicons/core-free-icons/ArrowLeft01Icon";
 import Loader2 from "@hugeicons/core-free-icons/Loading03Icon";
-import Paperclip from "@hugeicons/core-free-icons/Attachment01Icon";
-import Mic from "@hugeicons/core-free-icons/Mic01Icon";
-import VideoIcon from "@hugeicons/core-free-icons/Video01Icon";
 import ImageIcon from "@hugeicons/core-free-icons/Image01Icon";
 import MapIcon from "@hugeicons/core-free-icons/MapIcon";
-import FileText from "@hugeicons/core-free-icons/FileTextIcon";
-import CornerDownLeft from "@hugeicons/core-free-icons/CornerDownLeftIcon";
-import Share2 from "@hugeicons/core-free-icons/Share01Icon";
-import SquareCheck from "@hugeicons/core-free-icons/CheckmarkSquare01Icon";
-import Trash2 from "@hugeicons/core-free-icons/Delete02Icon";
 import MoreHorizontal from "@hugeicons/core-free-icons/MoreHorizontalIcon";
-import Upload from "@hugeicons/core-free-icons/Upload01Icon";
-import Palette from "@hugeicons/core-free-icons/PaletteIcon";
 import Sun from "@hugeicons/core-free-icons/Sun01Icon";
 import Moon from "@hugeicons/core-free-icons/Moon02Icon";
 import Monitor from "@hugeicons/core-free-icons/ComputerIcon";
 import Smartphone from "@hugeicons/core-free-icons/SmartPhone01Icon";
 import TabletIcon from "@hugeicons/core-free-icons/Tablet01Icon";
-import LogOutDevice from "@hugeicons/core-free-icons/Logout03Icon";
-import PhoneOff from "@hugeicons/core-free-icons/PhoneOff01Icon";
-import MicOff from "@hugeicons/core-free-icons/MicOff01Icon";
-import VideoOff from "@hugeicons/core-free-icons/VideoOffIcon";
-import Users2 from "@hugeicons/core-free-icons/UserGroup02Icon";
-import Copy from "@hugeicons/core-free-icons/Copy01Icon";
-import Bell from "@hugeicons/core-free-icons/BellIcon";
-import Pin from "@hugeicons/core-free-icons/PinIcon";
-import PinOff from "@hugeicons/core-free-icons/PinOffIcon";
 import CheckCheck from "@hugeicons/core-free-icons/Tick02Icon";
-import Languages from "@hugeicons/core-free-icons/TranslateIcon";
-import CreditCard from "@hugeicons/core-free-icons/CreditCardIcon";
-import Calendar from "@hugeicons/core-free-icons/Calendar01Icon";
 import QrCode from "@hugeicons/core-free-icons/QrCodeIcon";
 import WifiOff from "@hugeicons/core-free-icons/WifiOff01Icon";
-import Euro from "@hugeicons/core-free-icons/EuroIcon";
 import RefreshCw from "@hugeicons/core-free-icons/Refresh01Icon";
 import Lock from "@hugeicons/core-free-icons/LockIcon";
-import Volume2 from "@hugeicons/core-free-icons/VolumeHighIcon";
-import VolumeX from "@hugeicons/core-free-icons/VolumeOffIcon";
 import { MorphIcon, type IconNode } from "morphicons/react";
 import { IconTile, type IconTone } from "./components/IconTile";
 import { toast, Toaster } from "sonner";
-import { isSoundEnabled, setSoundEnabled, getSoundVolume, setSoundVolume, playSound, sfx } from "./sound";
-import { createPortal } from "react-dom";
+import { playSound, sfx } from "./sound";
 import { useTranslation } from "react-i18next";
-import { API_BASE, parseSmetaFile, uploadChatMedia, offlineQueueCount } from "./api";
+import { API_BASE, offlineQueueCount } from "./api";
 import NotificationCenter from "./NotificationCenter";
 import { AnnouncementComposer, AnnouncementContent, AnnouncementPopup, type AnnouncementData } from "./AnnouncementParts";
-import { connectSocket, getSocket, disconnectSocket } from "./socket";
+import { connectSocket, getSocket } from "./socket";
 import { isAiCallActive, decideCallOffer } from "./aiVoice/bus";
 import { motion, AnimatePresence } from "motion/react";
 // Katta sahifalar alohida fayllarda va kerak bo'lganda yuklanadi (owner 2026-10-19: App.tsx'ni bo'lish)
 const AdminDashboard = lazy(() => import("./AdminDashboard").then((m) => ({ default: m.AdminDashboard })));
 const ObjectDetailPage = lazy(() => import("./ObjectDetailPage").then((m) => ({ default: m.ObjectDetailPage })));
 const FinancePage = lazy(() => import("./FinancePage").then((m) => ({ default: m.FinancePage })));
-import { EquipmentDetails } from "./EquipmentExtras";
-import { PieceworkTab, useCompanyFeatures } from "./Piecework";
-import { DailyReports } from "./DailyReports";
-import { setSiteLanguage, SiteLang, langLabel } from "./i18n";
+import { setSiteLanguage, SiteLang } from "./i18n";
 import { isTelegramMiniApp, getTelegramInitData, markManualLogout, clearManualLogout, telegramAutoLoginAllowed } from "./telegramWebApp";
 import { isChatMuted, useChatPrefs } from "./chat/chatPrefs";
 import { buildEntries as buildChatEntries, navUnreadCount } from "./chat/chatModel";
-import { installAndroidBackHandler, isAndroid, saveOrShareBlob, openExternalUrl, isNative, isTabletOrLarger, notifyOS, ensureNotifyPermission, appInForeground } from "./platform";
+import { installAndroidBackHandler, isAndroid, saveOrShareBlob, isNative, isTabletOrLarger, notifyOS, ensureNotifyPermission, appInForeground } from "./platform";
 import QrLoginPanel from "./QrLoginPanel";
-import { AppDownloadCards } from "./AppDownload";
 import { openMediaViewer } from "./MediaViewer";
 import { VoicePlayer, VideoPlayer } from "./MediaPlayers";
-import { guessExpType } from "./lib/expense";
 import LanguageSwitcher from "./i18n/LanguageSwitcher";
-import { Skeleton, SkeletonList, SkeletonPage, SkeletonMessage, SkeletonTable, SkeletonProfile } from "./Skeleton";
-import { useGeoTracker, accuracyQuality, QUALITY_COLOR, type GpsStatus } from "./useGeoTracker";
+import { Skeleton, SkeletonList, SkeletonPage, SkeletonMessage } from "./Skeleton";
+import { useGeoTracker } from "./useGeoTracker";
 import PullToRefresh from "./PullToRefresh";
-import { isPinSet, useAppLock, markActiveNow, clearPin, PinSetupScreen, PinLockScreen, ChangePinModal, ForgotPinScreen, syncPinFromServer, isBiometricEnabled, setBiometricEnabled, biometricAvailable, biometricSupported, tryBiometricUnlock, nativeBiometricSupported, registerWebAuthnBiometric, getLockTimeoutMin, setLockTimeoutMin, LOCK_TIMEOUT_OPTIONS } from "./AppLock";
+import { isPinSet, useAppLock, markActiveNow, clearPin, PinSetupScreen, PinLockScreen, ForgotPinScreen, syncPinFromServer, isBiometricEnabled, biometricSupported, tryBiometricUnlock } from "./AppLock";
 
 // recharts og'ir kutubxona — faqat "Hisobotlar" bo'limiga kirilganda yuklanadi
 // (boshlang'ich bundle hajmini kamaytiradi, sayt tezroq ochiladi).
@@ -512,65 +471,6 @@ function getLivePosition(timeoutMs = 8000, minSamples = 2): Promise<{ pos: Geolo
   });
 }
 const DEV_PHONE = "+998900960890"; // dasturchi raqami — parol bilan kiradi (Telegram kod emas)
-
-// ─── Seed Data ────────────────────────────────────────────────────────────────
-const SEED_USERS: AppUser[] = [
-  { id: "u1", name: "Karimov Bobur", role: "direktor", phone: "+998901001111", projectIds: ["p1","p2","p3"] },
-  { id: "u2", name: "Toshmatov Sardor", role: "orinbosar", phone: "+998912002222", projectIds: ["p1","p2","p3"] },
-  { id: "u3", name: "Rahimov Ulugbek", role: "prorab", phone: "+998903003333", brigade: "1-Brigada", projectIds: ["p1","p3"] },
-  { id: "u4", name: "Nazarov Sherzod", role: "prorab", phone: "+998904004444", brigade: "2-Brigada", projectIds: ["p2"] },
-  { id: "u5", name: "Yusupov Anvar", role: "brigadir", phone: "+998935005555", brigade: "1-Brigada", projectIds: ["p1"] },
-  { id: "u6", name: "Xasanov Lochin", role: "brigadir", phone: "+998936006666", brigade: "2-Brigada", projectIds: ["p2"] },
-  { id: "u7", name: "Abdullayev Muxammad", role: "ishchi", phone: "+998977007777", brigade: "1-Brigada", projectIds: ["p1"] },
-  { id: "u8", name: "Sotvoldiyev Sarvar", role: "ishchi", phone: "+998978008888", brigade: "1-Brigada", projectIds: ["p1"] },
-  { id: "u9", name: "Razzaqov Doniyor", role: "ishchi", phone: "+998979009999", brigade: "2-Brigada", projectIds: ["p2"] },
-  { id: "u10", name: "Qurbonov Jasur", role: "ishchi", phone: "+998971001010", brigade: "2-Brigada", projectIds: ["p2"] },
-];
-const SEED_PROJECTS: Project[] = [
-  { id: "p1", name: "Yunusobod 15-mavze", location: "Toshkent, Yunusobod", foremanId: "u3",
-    startDate: "2026-03-15", status: "active", budget: 850000000, pdfFile: "yunusobod.pdf",
-    requiredMaterials: [
-      { id: "m1", name: "G'isht M-150", quantity: 50000, unit: "dona", category: "Qurilish" },
-      { id: "m2", name: "Tsement M-400", quantity: 200, unit: "qop", category: "Qurilish" },
-      { id: "m3", name: "Armatura 12mm", quantity: 5000, unit: "kg", category: "Metal" },
-    ]},
-  { id: "p2", name: "Sergeli savdo markazi", location: "Toshkent, Sergeli", foremanId: "u4",
-    startDate: "2026-01-20", status: "active", budget: 1200000000, pdfFile: "sergeli.pdf",
-    requiredMaterials: [
-      { id: "m4", name: "Beton konstruksiya", quantity: 120, unit: "dona", category: "Konstruksiya" },
-      { id: "m5", name: "Oyna 6mm", quantity: 400, unit: "m²", category: "Qurilish" },
-    ]},
-  { id: "p3", name: "Chilonzor ko'p qavatli", location: "Toshkent, Chilonzor", foremanId: "u3",
-    startDate: "2026-05-01", status: "paused", budget: 600000000,
-    requiredMaterials: [
-      { id: "m6", name: "G'isht M-200", quantity: 100000, unit: "dona", category: "Qurilish" },
-    ]},
-];
-const SEED_TRANSFERS: Transfer[] = [
-  { id: "t1", materialName: "G'isht M-150", quantity: 20000, unit: "dona", fromUserId: "u2", toUserId: "u3", projectId: "p1", sentDate: "2026-06-10", status: "confirmed", confirmedDate: "2026-06-11" },
-  { id: "t2", materialName: "Tsement M-400", quantity: 80, unit: "qop", fromUserId: "u2", toUserId: "u3", projectId: "p1", sentDate: "2026-06-15", status: "pending" },
-  { id: "t3", materialName: "Beton konstruksiya", quantity: 50, unit: "dona", fromUserId: "u4", toUserId: "u6", projectId: "p2", sentDate: "2026-06-12", status: "confirmed", confirmedDate: "2026-06-14", defect: "3 ta konstruksiyada yoriq" },
-  { id: "t4", materialName: "Oyna 6mm", quantity: 100, unit: "m²", fromUserId: "u4", toUserId: "u6", projectId: "p2", sentDate: "2026-06-20", status: "pending" },
-  { id: "t5", materialName: "Armatura 12mm", quantity: 2000, unit: "kg", fromUserId: "u3", toUserId: "u5", projectId: "p1", sentDate: "2026-06-21", status: "pending" },
-];
-const SEED_EXPENSES: Expense[] = [
-  { id: "e1", type: "oylik", amount: 5000000, toUserId: "u3", projectId: "p1", description: "Iyun oyligi – Prorab Rahimov", date: "2026-06-01", status: "confirmed", createdById: "u1", confirmedById: "u3" },
-  { id: "e2", type: "oylik", amount: 3500000, toUserId: "u5", projectId: "p1", description: "Iyun oyligi – Brigadir Yusupov", date: "2026-06-01", status: "confirmed", createdById: "u1", confirmedById: "u5" },
-  { id: "e3", type: "oylik", amount: 2500000, toUserId: "u7", projectId: "p1", description: "Iyun oyligi – Abdullayev", date: "2026-06-01", status: "pending", createdById: "u1" },
-  { id: "e4", type: "oylik", amount: 2500000, toUserId: "u8", projectId: "p1", description: "Iyun oyligi – Sotvoldiyev", date: "2026-06-01", status: "pending", createdById: "u1" },
-  { id: "e5", type: "material", amount: 45000000, projectId: "p1", description: "G'isht M-150 xarid (20,000 dona)", date: "2026-06-10", status: "confirmed", createdById: "u2" },
-  { id: "e6", type: "material", amount: 12000000, projectId: "p2", description: "Beton konstruksiya xarid", date: "2026-06-12", status: "confirmed", createdById: "u2" },
-  { id: "e7", type: "oylik", amount: 5000000, toUserId: "u4", projectId: "p2", description: "Iyun oyligi – Prorab Nazarov", date: "2026-06-01", status: "confirmed", createdById: "u1", confirmedById: "u4" },
-  { id: "e8", type: "transport", amount: 2800000, projectId: "p1", description: "Material tashish (yuk mashina)", date: "2026-06-15", status: "confirmed", createdById: "u2" },
-  { id: "e9", type: "jihozlar", amount: 8500000, projectId: "p2", description: "Arra va burg'u jihozlar", date: "2026-06-18", status: "confirmed", createdById: "u2" },
-  { id: "e10", type: "boshqa", amount: 1200000, projectId: "p3", description: "Loyiha hujjatlari", date: "2026-06-05", status: "confirmed", createdById: "u1" },
-];
-const SEED_MSGS: Msg[] = [
-  { id: "msg1", fromUserId: "u3", toUserId: "u1", text: "Direktor, Yunusobod obyektida tsement tugay deyapti", timestamp: "2026-06-22T09:00:00", read: false },
-  { id: "msg2", fromUserId: "u1", toUserId: "u3", text: "Yaxshi, bugun yuboritaman", timestamp: "2026-06-22T09:15:00", read: true },
-  { id: "msg3", fromUserId: "u5", toUserId: "u3", text: "Prorab, armatura qachon keladi?", timestamp: "2026-06-22T10:30:00", read: false },
-  { id: "msg4", fromUserId: "u4", toUserId: "u2", text: "O'rinbosar, Sergeli obyektida oyna kerak", timestamp: "2026-06-22T08:00:00", read: false },
-];
 
 // index.html'dagi boshlang'ich loader bilan AYNAN bir xil — yuklanish bitta uzluksiz loader bo'lib ko'rinadi
 // Yangi "shisha" (shaffof, blur) bildirishnoma dizayni — eski richColors (to'q yashil/qizil
@@ -1385,7 +1285,6 @@ export async function fetchLiveCurrencyRates(): Promise<void> {
 }
 
 export function fmtUsd(uzs: number): string { return "$" + (uzs / LIVE_USD_RATE).toFixed(2); }
-function fmtEur(uzs: number): string { return "€" + (uzs / LIVE_EUR_RATE).toFixed(2); }
 
 
 
@@ -2913,6 +2812,8 @@ export default function App() {
         if (document.visibilityState === 'visible' && !socket.connected) {
           socket.connect();
         }
+        // Yashirin paytda o'tkazib yuborilgan zaxira so'rovlar — qaytishi bilan darhol bir marta
+        if (document.visibilityState === 'visible' && pollSkipped) { pollSkipped = false; poll(); }
       };
       document.addEventListener('visibilitychange', onVisibility);
 
@@ -2931,7 +2832,14 @@ export default function App() {
           }
         }).catch(()=>{});
       };
-      const intv = setInterval(() => { fetchMsgs(); fetchGroups(); fetchTx(); }, 12000);
+      // Oyna/ilova yashirin (fon, boshqa tab) bo'lsa zaxira so'rovlar yuborilmaydi — hech kim ko'rmaydi,
+      // lekin har 12 s'da butun xabar/guruh/tranzaksiya ro'yxatlari qayta yuklanardi. Qaytganda darhol yangilanadi.
+      const poll = () => { fetchMsgs(); fetchGroups(); fetchTx(); };
+      let pollSkipped = false;
+      const intv = setInterval(() => {
+        if (document.visibilityState === 'hidden') { pollSkipped = true; return; }
+        poll();
+      }, 12000);
       return () => {
         clearInterval(intv);
         document.removeEventListener('visibilitychange', onVisibility);

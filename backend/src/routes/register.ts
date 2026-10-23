@@ -1,6 +1,5 @@
 import { trialBlockedReason, markTrial } from '../services/trialGuard';
 import { Router } from 'express';
-import jwt from 'jsonwebtoken';
 import Registration from '../models/Registration';
 import User from '../models/User';
 import Company from '../models/Company';

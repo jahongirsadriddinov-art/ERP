@@ -10,9 +10,6 @@ import Trash2 from "@hugeicons/core-free-icons/Delete02Icon";
 import Edit from "@hugeicons/core-free-icons/Edit02Icon";
 import Zap from "@hugeicons/core-free-icons/FlashIcon";
 import AiSparkles from "@hugeicons/core-free-icons/AiSparklesIcon";
-import UserGroup from "@hugeicons/core-free-icons/UserGroup02Icon";
-import MessageIcon from "@hugeicons/core-free-icons/Message01Icon";
-import CalendarIcon from "@hugeicons/core-free-icons/Calendar03Icon";
 import Mic from "@hugeicons/core-free-icons/Mic01Icon";
 import MicOff from "@hugeicons/core-free-icons/MicOff01Icon";
 import VolumeHigh from "@hugeicons/core-free-icons/VolumeHighIcon";
@@ -74,8 +71,6 @@ function StreamingText({ text, onTick }: { text: string; onTick?: () => void }) 
 // (server'ga hech narsa yuborilmaydi, to'liq mahalliy). Har ikkalasi ham
 // qo'llab-quvvatlanmasa (masalan ba'zi brauzerlar/WebView'lar) tugmalar
 // shunchaki ko'rsatilmaydi — "ishlamaydigan tugma" ko'rsatishdan ko'ra yaxshiroq.
-const SpeechRecognitionAPI: any = typeof window !== 'undefined' ? ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition) : null;
-const speechRecognitionSupported = !!SpeechRecognitionAPI;
 const speechSynthesisSupported = typeof window !== 'undefined' && 'speechSynthesis' in window;
 
 // XATO TUZATILDI ("ovozli o'qiganda inglizcha gapirdi"): faqat

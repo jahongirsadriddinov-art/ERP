@@ -1,3 +1,4 @@
+import "../../../i18n/aiVoiceNs";
 import { useTranslation } from "react-i18next";
 import Archive from "@hugeicons/core-free-icons/Archive02Icon";
 import { adminApi } from "../api";

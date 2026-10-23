@@ -4,7 +4,7 @@
 // dinamik aniqlanadi (hardcode yo'q).
 
 import { ExtractedLine, WorkRow, NormRow } from './types';
-import { findUnitInLine, tokenizeNumbers, isShifr, isNormativeShifr } from './normalize';
+import { findUnitInLine, tokenizeNumbers, isShifr } from './normalize';
 
 const NORM_RE = /^(\d+\.\d+)\s+(.*)$/;      // "3.1 ..."
 const WORK_RE = /^(\d+)\s+(\S.*)$/;          // "3 Е1101-013-03 ..."

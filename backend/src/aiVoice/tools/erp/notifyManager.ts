@@ -3,7 +3,7 @@ import User from '../../../models/User';
 import { resolveManagers } from '../../lib/managers';
 import { postChatDm } from '../../lib/chatPost';
 import { truncateText } from '../../lib/untrusted';
-import { cf, ALL_CHANNELS, ALL_ROLES, ASSIST, fullName, L, notFound, ok } from './common';
+import { cf, ALL_CHANNELS, ALL_ROLES, ASSIST, L, notFound, ok } from './common';
 
 // notifyManager — xodimning rahbariga xabar (lib/managers.ts: avval obyekt prorabi, bo'lmasa SHU
 // firma direktori/o'rinbosari; notifyAdmins EMAS). Ilova bildirishnomasi (createNotification push'ni

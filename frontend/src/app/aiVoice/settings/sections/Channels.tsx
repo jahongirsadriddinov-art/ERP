@@ -1,3 +1,4 @@
+import "../../../i18n/aiVoiceNs";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { MorphIcon } from "morphicons/react";
@@ -10,8 +11,8 @@ import Bell from "@hugeicons/core-free-icons/Notification03Icon";
 import Telegram from "@hugeicons/core-free-icons/TelegramIcon";
 import type { SectionProps } from "../sectionProps";
 import { adminApi, CHANNEL_NAMES, type AiChannelsStatus } from "../api";
-import { addChannel, missingChannels, moveItem, normalizeHHmm, removeChannel } from "../scheduleHelpers";
-import { Badge, Card, Chip, Field, More, NumField, Skeleton, TimeField } from "../ui";
+import { addChannel, missingChannels, moveItem, removeChannel } from "../scheduleHelpers";
+import { Badge, Card, Chip, Field, More, NumField, Skeleton } from "../ui";
 
 // "Kimga qanday murojaat": murojaat tartibi (1 → 2 → …, javob bo'lmasa keyingisi; yuqoriga/pastga, takrorsiz),
 // eslatmalar qayerga boradi, ulanishlar holati (faqat o'qish). Qo'ng'iroq raqamlari — "Qo'shimcha" ichida.

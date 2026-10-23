@@ -2,7 +2,7 @@ import { Router } from 'express';
 import PayrollRecord from '../models/PayrollRecord';
 import Attendance from '../models/Attendance';
 import User from '../models/User';
-import { scoped, stamped } from '../middleware/scope';
+import { scoped } from '../middleware/scope';
 import { getTenant } from '../middleware/tenantContext';
 import { requireOwnerOrAdmin } from '../middleware/auth';
 import { logAudit } from '../services/audit';
@@ -39,8 +39,18 @@ router.post('/calculate', requireOwnerOrAdmin, async (req, res) => {
     const existing = new Map((await PayrollRecord.find({ companyId: t?.companyId, period }).select('userId bonuses deductions status').lean())
       .map((r: any) => [String(r.userId), r]));
 
+    // Barcha xodimlar davomati bitta so'rovda (avval har xodim uchun alohida so'rov — N+1)
+    const attByUser = new Map<string, any[]>();
+    if (users.length) {
+      const allAtt = await Attendance.find({ userId: { $in: users.map(u => String(u._id)) }, date: { $regex: `^${period}` } }).lean();
+      for (const a of allAtt) {
+        const arr = attByUser.get(a.userId);
+        if (arr) arr.push(a); else attByUser.set(a.userId, [a]);
+      }
+    }
+
     for (const u of users) {
-      const attendance = await Attendance.find({ userId: String(u._id), date: { $regex: `^${period}` } }).lean();
+      const attendance = attByUser.get(String(u._id)) || [];
       const presentDays = attendance.filter(a => ['present', 'late', 'half'].includes(a.status)).length;
       const totalWorkHours = attendance.reduce((s, a) => s + (a.workHours || 0), 0);
       const baseSalary = u.baseSalary || 0;

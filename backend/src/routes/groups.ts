@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import Group from '../models/Group';
 import User from '../models/User';
-import { emitToUser, getIO, leaveGroupRoom } from '../services/socket';
+import { emitToUser, leaveGroupRoom } from '../services/socket';
 import { scoped, stamped } from '../middleware/scope';
 import { getTenant } from '../middleware/tenantContext';
 

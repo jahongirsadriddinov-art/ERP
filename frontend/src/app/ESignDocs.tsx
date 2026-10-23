@@ -80,33 +80,6 @@ export function SignaturePad({ onChange }: { onChange: (dataUrl: string | null) 
   );
 }
 
-// Yuklangan rasmni (imzo / pechat) kichraytirib PNG data URL qiladi. `removeWhite` — oq fonni shaffof qiladi
-// (qog'ozga qo'yilgan imzo/muhr surati hujjat ustida toza ko'rinsin).
-async function fileToPng(file: File, max: number, removeWhite: boolean): Promise<string> {
-  const url = URL.createObjectURL(file);
-  try {
-    const img = await new Promise<HTMLImageElement>((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
-    let side = max;
-    for (let attempt = 0; attempt < 4; attempt++) {
-      const r = Math.min(1, side / Math.max(img.width, img.height));
-      const c = document.createElement("canvas"); c.width = Math.max(1, Math.round(img.width * r)); c.height = Math.max(1, Math.round(img.height * r));
-      const ctx = c.getContext("2d")!; ctx.drawImage(img, 0, 0, c.width, c.height);
-      if (removeWhite) {
-        const d = ctx.getImageData(0, 0, c.width, c.height); const px = d.data;
-        for (let i = 0; i < px.length; i += 4) {
-          const lum = (px[i] + px[i + 1] + px[i + 2]) / 3;
-          if (lum > 225) px[i + 3] = 0; else if (lum > 190) px[i + 3] = Math.round(px[i + 3] * (225 - lum) / 35);
-        }
-        ctx.putImageData(d, 0, 0);
-      }
-      const out = c.toDataURL("image/png");
-      if (out.length <= 380_000) return out;
-      side = Math.round(side * 0.75);
-    }
-    throw new Error("TOO_BIG");
-  } finally { URL.revokeObjectURL(url); }
-}
-
 export type StampPos = { x: number; y: number; size: number }; // imzo blokiga nisbatan: markaz (0..1) va kenglik (blok kengligiga nisbatan)
 export const DEFAULT_STAMP_POS: StampPos = { x: 0.83, y: 0.49, size: 0.31 };
 

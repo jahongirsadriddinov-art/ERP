@@ -8,7 +8,6 @@ import Plus from "@hugeicons/core-free-icons/PlusSignIcon";
 import AlertTriangle from "@hugeicons/core-free-icons/Alert02Icon";
 import ChevronRight from "@hugeicons/core-free-icons/ArrowRight01Icon";
 import MapPin from "@hugeicons/core-free-icons/PinLocation01Icon";
-import User from "@hugeicons/core-free-icons/UserIcon";
 import X from "@hugeicons/core-free-icons/Cancel01Icon";
 import Check from "@hugeicons/core-free-icons/Tick01Icon";
 import Download from "@hugeicons/core-free-icons/Download01Icon";
@@ -32,7 +31,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { EquipmentDetails } from "./EquipmentExtras";
 import { saveOrShareBlob, openExternalUrl } from "./platform";
 import { SkeletonList } from "./Skeleton";
-import { Avatar, ESignDocs, EscClose, LocationInput, ROLE_LABELS, RoleBadge, SendTransferModal, TransferRow, fmt, i18n_common_close, isAdmin, roleLabel, useBackupActions, useModalPresence, type AppUser, type Project, type Role, type SmetaResult, type Transfer, ManagementModalShell } from "./App";
+import { Avatar, ESignDocs, EscClose, LocationInput, ROLE_LABELS, RoleBadge, SendTransferModal, TransferRow, fmt, isAdmin, roleLabel, useBackupActions, type AppUser, type Project, type Role, type SmetaResult, type Transfer, ManagementModalShell } from "./App";
 
 export function AdminDashboard({ currentUser, users, projects, transfers, setUsers, onSendTransfer, onConfirmTransfer, onRejectTransfer, onSelectProject, onAddUser, onUpdateUser, onDeleteUser, onAddProject, hasFeature }:
   { currentUser: AppUser; users: AppUser[]; projects: Project[]; transfers: Transfer[];

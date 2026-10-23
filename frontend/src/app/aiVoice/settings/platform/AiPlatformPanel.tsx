@@ -1,3 +1,4 @@
+import "../../../i18n/aiVoiceNs";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";

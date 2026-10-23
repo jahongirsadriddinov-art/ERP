@@ -1,3 +1,4 @@
+import "../../../i18n/aiVoiceNs";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import History from "@hugeicons/core-free-icons/File01Icon";

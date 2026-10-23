@@ -1,3 +1,4 @@
+import "../../i18n/aiVoiceNs";
 import { useTranslation } from "react-i18next";
 import { MorphIcon } from "morphicons/react";
 import UserIcon from "@hugeicons/core-free-icons/UserCircleIcon";

@@ -1,6 +1,7 @@
 import { subscriptionFeatures } from '../middleware/requireFeature';
 import { DEFAULT_FEATURE_KEYS } from '../config/plans';
 import { Router } from 'express';
+import mongoose from 'mongoose';
 import Subscription from '../models/Subscription';
 import User from '../models/User';
 import Company from '../models/Company';
@@ -10,7 +11,7 @@ import { getTenant } from '../middleware/tenantContext';
 import { bot } from '../services/bot';
 import { createSubscriptionPaymentOrder } from '../services/subscriptionPayments';
 import { extendPeriodEnd } from '../utils/subscriptionPeriod';
-import { PLAN_CONFIG, SelectedPlan, getPlanInfo, ALL_FEATURE_KEYS } from '../config/plans';
+import { PLAN_CONFIG, SelectedPlan } from '../config/plans';
 
 const router = Router();
 
@@ -130,15 +131,29 @@ router.get('/', requireDeveloper, async (req, res) => {
   try {
     const subs = await Subscription.find().sort({ requestedAt: -1, createdAt: -1 });
 
-    const enriched = await Promise.all(subs.map(async (s) => {
-      const [company, user, payments] = await Promise.all([
-        Company.findById(s.companyId).lean().catch(() => null),
-        s.userId ? User.findById(s.userId).lean().catch(() => null) : Promise.resolve(null),
-        // Dasturchi har bir obunaning HAQIQIY to'lov tarixini (avtomatik
-        // Roxiy orqalimi, qachon, qancha, qaysi holatda) ko'ra olishi
-        // uchun — oxirgi 10 tasi kifoya (juda uzun ro'yxat kerak emas).
-        Payment.find({ subscriptionId: String(s._id) }).sort({ createdAt: -1 }).limit(10).lean().catch(() => []),
-      ]);
+    // Firma/foydalanuvchi/to'lovlar — 3 ta umumiy so'rov (avval har obuna uchun 3 tadan — N+1)
+    const validIds = (ids: unknown[]) => [...new Set(ids.filter((id) => !!id && mongoose.isValidObjectId(id)).map(String))];
+    const [companies, users, allPayments] = await Promise.all([
+      Company.find({ _id: { $in: validIds(subs.map((s) => s.companyId)) } }).lean().catch(() => [] as any[]),
+      User.find({ _id: { $in: validIds(subs.map((s) => s.userId)) } }).lean().catch(() => [] as any[]),
+      Payment.find({ subscriptionId: { $in: subs.map((s) => String(s._id)) } }).sort({ createdAt: -1 }).lean().catch(() => [] as any[]),
+    ]);
+    const companyById = new Map((companies as any[]).map((c) => [String(c._id), c]));
+    const userById = new Map((users as any[]).map((u) => [String(u._id), u]));
+    // Dasturchi har bir obunaning HAQIQIY to'lov tarixini (avtomatik
+    // Roxiy orqalimi, qachon, qancha, qaysi holatda) ko'ra olishi
+    // uchun — oxirgi 10 tasi kifoya (juda uzun ro'yxat kerak emas).
+    const paymentsBySub = new Map<string, any[]>();
+    for (const p of allPayments as any[]) {
+      const k = String(p.subscriptionId);
+      const arr = paymentsBySub.get(k) || [];
+      if (arr.length < 10) { arr.push(p); paymentsBySub.set(k, arr); }
+    }
+
+    const enriched = subs.map((s) => {
+      const company = companyById.get(String(s.companyId)) || null;
+      const user = s.userId ? userById.get(String(s.userId)) || null : null;
+      const payments = paymentsBySub.get(String(s._id)) || [];
       const now = new Date();
       let computedStatus = s.status;
       if (computedStatus === 'active' && s.currentPeriodEnd && s.currentPeriodEnd < now) {
@@ -179,7 +194,7 @@ router.get('/', requireDeveloper, async (req, res) => {
           createdAt: p.createdAt,
         })),
       };
-    }));
+    });
 
     res.json(enriched);
   } catch (err) {

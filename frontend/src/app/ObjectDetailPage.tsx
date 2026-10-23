@@ -2,7 +2,6 @@ import { confirmDialog } from "./lib/confirmDialog";
 import { useState, useRef, useEffect } from "react";
 import { oneOf, usePersistentState } from "./lib/persistentState";
 import { ActionSheet } from "./components/SwipeRow";
-import Building2 from "@hugeicons/core-free-icons/Building02Icon";
 import Package from "@hugeicons/core-free-icons/Package01Icon";
 import ArrowLeft from "@hugeicons/core-free-icons/ArrowLeft01Icon";
 import CheckCircle from "@hugeicons/core-free-icons/CheckmarkCircle01Icon";

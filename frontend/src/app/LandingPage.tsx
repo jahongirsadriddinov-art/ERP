@@ -8,7 +8,6 @@ import Send from "@hugeicons/core-free-icons/SendIcon";
 import ChevronDown from "@hugeicons/core-free-icons/ArrowDown01Icon";
 import CheckCircle from "@hugeicons/core-free-icons/CheckmarkCircle01Icon";
 import Smartphone from "@hugeicons/core-free-icons/SmartPhone01Icon";
-import Laptop from "@hugeicons/core-free-icons/LaptopIcon";
 import FileSpreadsheet from "@hugeicons/core-free-icons/FileSpreadsheetIcon";
 import ShieldCheck from "@hugeicons/core-free-icons/ShieldCheckIcon";
 import Sparkles from "@hugeicons/core-free-icons/SparklesIcon";

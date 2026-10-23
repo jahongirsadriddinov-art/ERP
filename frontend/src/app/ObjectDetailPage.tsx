@@ -311,15 +311,16 @@ export function ObjectDetailPage({ project, currentUser, users, transfers, onBac
                         </tr>
                       );
                     })}
-                    {filteredMats.length === 0 && (
-                      <tr><td colSpan={5} className="px-2 py-10 text-center text-muted-foreground">
-                        <IconTile icon={Package} tone="orange" size="xl" variant="soft" className="mx-auto mb-3" />
-                        {project.requiredMaterials.length === 0 ? t('objectDetail.noSmeta') : t('common.notFound')}
-                      </td></tr>
-                    )}
                   </tbody>
                 </table>
               </div>
+              {/* Bo'sh holat jadvaldan tashqarida — telefonda keng jadval ichida ekrandan chetga chiqib, ikonka matnga yopishardi */}
+              {filteredMats.length === 0 && (
+                <div className="flex flex-col items-center gap-3 px-6 py-10 text-center text-muted-foreground" data-testid="smeta-empty">
+                  <IconTile icon={Package} tone="orange" size="xl" variant="soft" />
+                  <p className="text-sm max-w-xs">{project.requiredMaterials.length === 0 ? t('objectDetail.noSmeta') : t('common.notFound')}</p>
+                </div>
+              )}
             </div>
           </div>
         )}

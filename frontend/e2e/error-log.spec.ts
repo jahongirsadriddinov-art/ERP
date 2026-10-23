@@ -133,3 +133,26 @@ test("Dasturchi paneli → Profil: xavfsizlik va sayt ko'rinishi bo'limlari ochi
   await expect(prof.locator('[data-settings-group="company"]')).toHaveCount(0);
   expect(errors, errors.join('\n')).toEqual([]);
 });
+
+test("PIN qulfi ilova USTIDA chiqadi: ochilganda sahifa qayta yuklanmaydi (musiqa/video to'xtamaydi)", async ({ page }) => {
+  const { createHash } = await import('crypto');
+  const salt = 'a'.repeat(32);
+  const hash = createHash('sha256').update(salt + '1234').digest('hex');
+  await mockApi(page, { lists: [], patches: [] } as Calls);
+  await seed(page);
+  await page.addInitScript(([s, h]) => {
+    localStorage.setItem('erp_pinSalt', s); localStorage.setItem('erp_pinHash', h);
+    if (!sessionStorage.getItem('locked-once')) { localStorage.setItem('erp_forceLocked', '1'); sessionStorage.setItem('locked-once', '1'); }
+  }, [salt, hash]);
+  await page.route(/\/api\/pin(\?|$)/, (r) => r.fulfill({ status: 200, headers: { 'Access-Control-Allow-Origin': '*' }, json: { set: true, salt, hash } }));
+  await page.goto('/');
+  const layer = page.getByTestId('pin-lock-layer');
+  await expect(layer).toBeVisible({ timeout: 20_000 });
+  // ilova orqada allaqachon yuklangan (qulf ostida), lekin bosib bo'lmaydi
+  await expect(page.getByTestId('dev-tab-errors')).toBeAttached();
+  await page.evaluate(() => { (window as any).__noReload = 1; });
+  for (const d of ['1', '2', '3', '4']) await layer.getByRole('button', { name: d, exact: true }).click();
+  await expect(layer).toHaveCount(0, { timeout: 10_000 });
+  await expect(page.getByTestId('dev-tab-errors')).toBeVisible();
+  expect(await page.evaluate(() => (window as any).__noReload)).toBe(1);
+});

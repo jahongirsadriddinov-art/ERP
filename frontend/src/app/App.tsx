@@ -2983,34 +2983,34 @@ export default function App() {
       <AppToaster/>
     </>
   );
-  if (appLocked && forgotPin) return (
-    <>
-      <ForgotPinScreen
-        onDone={() => { setForgotPin(false); playSound("unlock"); unlockApp(); setPinRefresh(v => v + 1); toast.success(tApp('pinLock.resetDone')); }}
-        onCancel={() => setForgotPin(false)}
-        onLogout={() => {
-          setForgotPin(false); clearPin();
-          localStorage.removeItem("currentUser"); localStorage.removeItem("token");
-          setCurrentUser(null); setAuthView("login");
-        }} />
-      <AppToaster/>
-    </>
+  // Owner 2026-10-23: PIN qulfi endi ilova USTIDAGI qatlam — avval ilova o'rniga chizilardi va ochilganda hammasi qayta
+  // yuklanib, musiqa/video to'xtab qolardi. Orqadagi ilova `inert` (bosib ham, klaviatura bilan ham kirib bo'lmaydi).
+  const lockEl = !appLocked ? null : forgotPin ? (
+    <ForgotPinScreen
+      onDone={() => { setForgotPin(false); playSound("unlock"); unlockApp(); setPinRefresh(v => v + 1); toast.success(tApp('pinLock.resetDone')); }}
+      onCancel={() => setForgotPin(false)}
+      onLogout={() => {
+        setForgotPin(false); clearPin();
+        localStorage.removeItem("currentUser"); localStorage.removeItem("token");
+        setCurrentUser(null); setAuthView("login");
+      }} />
+  ) : (
+    <PinLockScreen onUnlock={()=>{playSound("unlock");unlockApp();}}
+      onForgot={() => setForgotPin(true)}
+      onLockedOut={() => {
+        toast.error("Ko'p marta noto'g'ri PIN kiritildi — xavfsizlik uchun qayta kirishingiz kerak.");
+        localStorage.removeItem("currentUser"); localStorage.removeItem("token");
+        setCurrentUser(null); setAuthView("login");
+      }} />
   );
-  if (appLocked) return (
-    <>
-      <PinLockScreen onUnlock={()=>{playSound("unlock");unlockApp();}}
-        onForgot={() => setForgotPin(true)}
-        onLockedOut={() => {
-          toast.error("Ko'p marta noto'g'ri PIN kiritildi — xavfsizlik uchun qayta kirishingiz kerak.");
-          localStorage.removeItem("currentUser"); localStorage.removeItem("token");
-          setCurrentUser(null); setAuthView("login");
-        }} />
-      <AppToaster/>
-    </>
+  const lockLayer = lockEl && (
+    <div className="fixed inset-0 z-[999990] overflow-y-auto bg-background" data-testid="pin-lock-layer">{lockEl}</div>
   );
+  const inertProps = appLocked ? ({ inert: "" } as Record<string, string>) : {};
   // Dasturchi (super-admin) — alohida panel: barcha firmalar va foydalanuvchilar
   if (liveUser.role === "dasturchi") return (
-    <div className={siteBg ? "with-bg min-h-[100dvh]" : "min-h-[100dvh]"} style={!siteBg ? undefined : (siteBg.startsWith("linear-gradient") || siteBg.startsWith("radial-gradient")) ? { background: siteBg } : { backgroundImage: `url(${siteBg})`, backgroundSize: "cover", backgroundPosition: "center", backgroundAttachment: "fixed" }}>
+    <>
+    <div {...inertProps} className={siteBg ? "with-bg min-h-[100dvh]" : "min-h-[100dvh]"} style={!siteBg ? undefined : (siteBg.startsWith("linear-gradient") || siteBg.startsWith("radial-gradient")) ? { background: siteBg } : { backgroundImage: `url(${siteBg})`, backgroundSize: "cover", backgroundPosition: "center", backgroundAttachment: "fixed" }}>
       <Suspense fallback={<div className="min-h-screen bg-background"><SkeletonPage variant="dashboard" /></div>}>
         <DeveloperPanel currentUser={liveUser} onLogout={()=>{playSound("lock");setCurrentUser(null);setAuthView("login");}}
           profileEl={
@@ -3033,6 +3033,8 @@ export default function App() {
       </Suspense>
       <AppToaster/>
     </div>
+    {lockLayer}
+    </>
   );
   // MUHIM: bular avval initialLoading gate'idan KEYIN hisoblanardi — ya'ni
   // header (logo/nav/bell/avatar) ham initialLoading tugagunicha umuman
@@ -3485,7 +3487,8 @@ export default function App() {
   const currentProject = selProject ? (projects.find(p=>p.id===selProject.id)??selProject) : null;
 
   return (
-    <div className={`h-[100dvh] flex flex-col overflow-hidden font-['Inter',sans-serif] ${siteBg ? 'with-bg' : ''}`} style={(() => { if (!siteBg) return { background: 'var(--background)' }; const isImg = !siteBg.startsWith('linear-gradient') && !siteBg.startsWith('radial-gradient'); return isImg ? { backgroundImage: `url(${siteBg})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' } : { background: siteBg }; })()}>
+    <>
+    <div {...inertProps} className={`h-[100dvh] flex flex-col overflow-hidden font-['Inter',sans-serif] ${siteBg ? 'with-bg' : ''}`} style={(() => { if (!siteBg) return { background: 'var(--background)' }; const isImg = !siteBg.startsWith('linear-gradient') && !siteBg.startsWith('radial-gradient'); return isImg ? { backgroundImage: `url(${siteBg})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' } : { background: siteBg }; })()}>
       {/* MUHIM: safe-area-inset-top yo'q edi — sayt endi PWA (manifest.json/
           sw.js) sifatida "Bosh ekranga qo'shish" orqali TO'LIQ EKRAN (standalone)
           rejimda ochilsa, veb-kontent OS status-bar (soat/tarmoq/batareya)
@@ -3868,5 +3871,7 @@ export default function App() {
       {/* Bildirishnoma toast'lari */}
       <AppToaster/>
     </div>
+    {lockLayer}
+    </>
   );
 }

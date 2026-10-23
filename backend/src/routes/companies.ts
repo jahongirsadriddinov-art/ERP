@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import mongoose from 'mongoose';
 import Company from '../models/Company';
 import User from '../models/User';
 import ObjectModel from '../models/Object';
@@ -33,11 +34,23 @@ router.use(requireDeveloper);
 router.get('/', async (_req, res) => {
   try {
     const companies = await Company.find().sort({ createdAt: -1 }).lean();
-    const result = await Promise.all(companies.map(async (c) => {
+    // 3 ta umumiy so'rov (avval har firma uchun 3 tadan — N+1)
+    const cids = companies.map((c) => String(c._id));
+    const ownerIds = [...new Set(companies.map((c) => c.ownerUserId).filter((id): id is string => !!id && mongoose.isValidObjectId(id)))];
+    const countBy = async (Model: any) => new Map<string, number>(
+      (await Model.aggregate([{ $match: { companyId: { $in: cids } } }, { $group: { _id: '$companyId', n: { $sum: 1 } } }]))
+        .map((r: any) => [String(r._id), r.n]));
+    const [userCounts, objectCounts, owners] = cids.length ? await Promise.all([
+      countBy(User),
+      countBy(ObjectModel),
+      ownerIds.length ? User.find({ _id: { $in: ownerIds } }).select('firstName lastName phone').lean() : [],
+    ]) : [new Map<string, number>(), new Map<string, number>(), []];
+    const ownerById = new Map((owners as any[]).map((o) => [String(o._id), o]));
+    const result = companies.map((c) => {
       const cid = String(c._id);
-      const userCount = await User.countDocuments({ companyId: cid });
-      const objectCount = await ObjectModel.countDocuments({ companyId: cid });
-      const owner = c.ownerUserId ? await User.findById(c.ownerUserId).select('firstName lastName phone').lean() : null;
+      const userCount = userCounts.get(cid) || 0;
+      const objectCount = objectCounts.get(cid) || 0;
+      const owner = c.ownerUserId ? ownerById.get(String(c.ownerUserId)) || null : null;
       return {
         id: cid,
         branchId: c.branchId,
@@ -51,7 +64,7 @@ router.get('/', async (_req, res) => {
         objectCount,
         owner: owner ? { name: `${owner.firstName} ${owner.lastName || ''}`.trim(), phone: owner.phone } : null,
       };
-    }));
+    });
     res.json(result);
   } catch (err) {
     console.error('companies GET error:', err);

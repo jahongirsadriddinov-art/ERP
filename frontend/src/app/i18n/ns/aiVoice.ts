@@ -724,6 +724,9 @@ export const uz = {
         flood_wait: "Telegram vaqtincha chekladi — birozdan keyin urinib ko'ring",
         not_authorized: "Akkaunt ulanmagan",
         worker_offline: "Worker ulanmagan",
+        profile_cooldown: "Profilni akkauntga kuniga 1 marta o'zgartirish mumkin (tez-tez o'zgartirish Telegram'da muzlatishga olib keladi) — ertaga urinib ko'ring",
+        account_frozen: "Akkaunt Telegram'da muzlatilgan — profilni o'zgartirib bo'lmaydi",
+        spam_limited: "Akkauntda spam cheklovi bor — profilni hozir o'zgartirmang",
       },
     },
     company: {
@@ -743,6 +746,10 @@ export const uz = {
       err: {
         duplicate_account: "Bu Telegram akkaunt boshqa joyda ham ulangan (platforma akkaunti yoki boshqa AI akkaunt). Bir akkaunt ikki joyda bo'lsa qo'ng'iroq \"band\" bo'lib qoladi — shu yerdan o'chiring yoki boshqa raqam ulang.",
         worker_not_authorized: "Telegram sessiyasi bekor qilingan — qayta ulang",
+        proxy_invalid: "TG_PROXIES dagi proksi manzili xato — akkaunt proksisiz ulanmaydi (worker .env / Railway Variables)",
+        proxy_lib_missing: "Proksi uchun python-socks o'rnatilmagan — workerda pip install -r requirements.txt",
+        account_banned: "Telegram bu raqamni bloklagan — boshqa raqam ulang",
+        account_frozen: "Telegram akkauntni muzlatgan — @SpamBot orqali apellyatsiya qiling",
       },
       step: { phone: "Telefon raqami (+998…)", code: "Telegram yuborgan kod", password: "2 bosqichli parol" },
       stepHint: {
@@ -752,6 +759,18 @@ export const uz = {
       },
       rules: "Har akkaunt bir vaqtda bitta qo'ng'iroq qiladi. Qo'ng'iroq qilgan odamning firmasi ERP botdagi bog'lanishidan (/start + telefon) aniqlanadi. Har akkaunt uchun alohida raqam (SIM) kerak; Telegram API kaliti (api_id/api_hash) hammasi uchun bitta — qayta kiritish shart emas.",
       status: { connected: "Ulangan", disconnected: "Ulanmagan", awaiting_code: "Kod kutilmoqda", awaiting_password: "Parol kutilmoqda", error: "Xato" },
+      health: {
+        state: { ok: "Sog'", frozen: "Muzlatilgan", spam_limited: "Spam cheklovi", banned: "Bloklangan (ban)", unauthorized: "Sessiya bekor qilingan" },
+        until: "{{time}} gacha", limited: "Chegarada — {{time}} gacha boshqa akkauntlar", warmup: "Isitilmoqda", warmupUntil: "Isitilmoqda — {{time}} gacha past chegara",
+        help: {
+          frozen: "Telegram akkauntni muzlatgan — AI undan qo'ng'iroq/xabar qilmaydi. Raqamni telefonda oching → @SpamBot → /start, apellyatsiya yuboring. Akkauntni o'chirmang va profilini o'zgartirmang.",
+          spam_limited: "Telegram notanishlarga yozish/qo'ng'iroqni chekladi (PEER_FLOOD). AI vaqtincha bu akkauntdan chiquvchi qo'ng'iroq qilmaydi. @SpamBot orqali tekshiring.",
+          banned: "Telegram raqamni bloklagan. Akkauntni o'chirib, boshqa (eski, haqiqiy SIM) raqam ulang.",
+          unauthorized: "Telegram sessiyani tugatgan — akkauntni qayta ulang.",
+        },
+        appeal: "Apellyatsiya", today: "Bugun:", device: "Qurilma", proxy: "Proksi", noProxy: "Proksi yo'q (tavsiya: O'zbekistondagi proksi, TG_PROXIES)",
+        kind: { call: "qo'ng'iroq", cold: "notanishga", dm: "xabar", import: "kontakt" },
+      },
     },
     avatar: {
       title: "Video avatar",
@@ -1601,6 +1620,9 @@ export const ru = {
         flood_wait: "Telegram временно ограничил — попробуйте чуть позже",
         not_authorized: "Аккаунт не подключён",
         worker_offline: "Воркер не подключён",
+        profile_cooldown: "Профиль аккаунта можно менять раз в сутки (частая смена ведёт к заморозке в Telegram) — попробуйте завтра",
+        account_frozen: "Аккаунт заморожен в Telegram — профиль менять нельзя",
+        spam_limited: "У аккаунта спам-ограничение — не меняйте профиль сейчас",
       },
     },
     company: {
@@ -1620,6 +1642,10 @@ export const ru = {
       err: {
         duplicate_account: "Этот Telegram-аккаунт подключён ещё в другом месте (аккаунт платформы или другой аккаунт ИИ). Если один аккаунт в двух местах, звонок получает «занято» — удалите его здесь или подключите другой номер.",
         worker_not_authorized: "Сессия Telegram отозвана — подключите заново",
+        proxy_invalid: "Неверный адрес прокси в TG_PROXIES — аккаунт не подключается без прокси (worker .env / Railway Variables)",
+        proxy_lib_missing: "Для прокси не установлен python-socks — на воркере pip install -r requirements.txt",
+        account_banned: "Telegram заблокировал этот номер — подключите другой",
+        account_frozen: "Telegram заморозил аккаунт — подайте апелляцию через @SpamBot",
       },
       step: { phone: "Номер телефона (+998…)", code: "Код от Telegram", password: "Пароль двухэтапной проверки" },
       stepHint: {
@@ -1629,6 +1655,18 @@ export const ru = {
       },
       rules: "Каждый аккаунт ведёт один звонок одновременно. Фирма звонящего определяется по привязке в ERP-боте (/start + телефон). Для каждого аккаунта нужен свой номер (SIM); ключ Telegram API (api_id/api_hash) общий — вводить заново не нужно.",
       status: { connected: "Подключён", disconnected: "Не подключён", awaiting_code: "Ждёт код", awaiting_password: "Ждёт пароль", error: "Ошибка" },
+      health: {
+        state: { ok: "В порядке", frozen: "Заморожен", spam_limited: "Спам-ограничение", banned: "Заблокирован (бан)", unauthorized: "Сессия отозвана" },
+        until: "до {{time}}", limited: "Лимит — до {{time}} работают другие аккаунты", warmup: "Прогрев", warmupUntil: "Прогрев — пониженные лимиты до {{time}}",
+        help: {
+          frozen: "Telegram заморозил аккаунт — ИИ не звонит и не пишет с него. Откройте номер на телефоне → @SpamBot → /start, подайте апелляцию. Не удаляйте аккаунт и не меняйте профиль.",
+          spam_limited: "Telegram ограничил сообщения/звонки незнакомым (PEER_FLOOD). ИИ временно не звонит с этого аккаунта. Проверьте через @SpamBot.",
+          banned: "Telegram заблокировал номер. Удалите аккаунт и подключите другой (старый, с настоящей SIM) номер.",
+          unauthorized: "Telegram завершил сессию — подключите аккаунт заново.",
+        },
+        appeal: "Апелляция", today: "Сегодня:", device: "Устройство", proxy: "Прокси", noProxy: "Без прокси (рекомендуется прокси в Узбекистане, TG_PROXIES)",
+        kind: { call: "звонки", cold: "незнакомым", dm: "сообщения", import: "контакты" },
+      },
     },
     avatar: {
       title: "Видео-аватар",

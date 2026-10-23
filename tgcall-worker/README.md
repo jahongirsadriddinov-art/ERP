@@ -121,6 +121,40 @@ yoki antivirus `python.exe` ga chiquvchi UDP ulanishni ruxsat qilsin.
 - Kiruvchi qo'ng'iroqlar AI akkauntiga avtomatik rad etiladi; unga yozilgan xabarlar AI'ga uzatilmaydi
   (faqat bog'lash kodlari tekshiriladi).
 
+## Akkauntlar muzlatilmasin (anti-freeze)
+Telegram AI akkauntlarini **muzlatadi** (freeze / spam cheklovi), agar ular "avtomatlashtirilgan" ko'rinsa. Asosiy sabablar
+va worker nima qiladi:
+
+| Xavf | Worker endi nima qiladi | Sizdan nima kerak |
+|---|---|---|
+| Nostandart mijoz izi ("QurilishERP AI", "Windows") | Har akkauntga bir marta Telegram Desktop'ga o'xshash **barqaror** iz (kompyuter modeli, "Windows 10/11 x64", "6.x x64", til ru/uz/en) — `data/accounts/<id>.device.json` (sessiya yonida, har ishga tushishda o'zgarmaydi) | Hech narsa. `TG_APP_VERSIONS` bilan Telegram Desktop versiyalari ro'yxatini yangilab turish mumkin |
+| O'zbek raqam + AQSh/Yevropa datacenter IP'si (Railway) | Akkauntga alohida proksi: `TG_PROXIES` (pastda) | Raqam mamlakatidagi (O'zbekiston) **rezident yoki mobil** proksi, har akkauntga alohida IP |
+| Ko'p notanishga qo'ng'iroq/xabar, ko'p kontakt importi | Soatlik/kunlik chegaralar (qo'ng'iroq, DM, javob, import, "sovuq" murojaat), qo'ng'iroqlar orasida 40–90 s tasodifiy pauza, bir odamga kuniga ≤ 4 qo'ng'iroq (oralig'i ≥ 10 daq) | — |
+| Yangi akkauntdan darhol katta hajm | **Isitish**: workerga qo'shilgan/qayta kirilgan kundan 7 kun past chegaralar (`TG_WARMUP_DAYS`) | Akkauntni oldin oddiy ishlating (kontaktlar, bir necha suhbat) |
+| Profilni tez-tez o'zgartirish | Backend profilni (ism/rasm/bio/username) akkauntga **kuniga 1 marta** o'zgartirishga ruxsat beradi | — |
+| FloodWait'ga e'tibor bermaslik | Telegram aytgan soniyalar aniq kutiladi | — |
+
+**Muzlatish aniqlanadi**: `FROZEN_METHOD_INVALID`, `PEER_FLOOD`, `USER_DEACTIVATED_BAN`, `AUTH_KEY_UNREGISTERED` xatolari va
+har 30 daqiqada `help.getAppConfig` (`freeze_until_date`, `freeze_appeal_url`). Shunday akkaunt qo'ng'iroq/DM uchun
+ishlatilmaydi, qo'ng'iroqlar sog' akkauntlarga o'tadi, dasturchiga Telegram bot orqali yo'riqnoma boradi, panelda
+"Muzlatilgan … gacha" va apellyatsiya havolasi ko'rinadi. Muzlatilgan akkauntni ochib **@SpamBot**ga `/start` yozing
+yoki apellyatsiya havolasini oching.
+
+### Proksi sozlash (`TG_PROXIES`)
+```
+TG_PROXIES={"<akkaunt id>":"socks5://user:parol@uz-proxy.example:1080","platform":"http://user:parol@host:8080","*":"socks5://..."}
+```
+- kalit: akkaunt id'si (panelda/bazadagi 24 belgili id), `platform` — platforma akkaunti, `*` — qolganlari;
+- formatlar: `socks5://`, `socks4://`, `http://`, `mtproto://<secret>@host:port`, `tg://proxy?server=..&port=..&secret=..`;
+- SOCKS/HTTP uchun `python-socks` kerak (`requirements.txt`da bor). Proksi xato yozilsa akkaunt **ishga tushmaydi**
+  (proksisiz "jimgina" ulanmaydi), panelda `proxy_invalid` ko'rinadi;
+- proksi faqat Telegram API ulanishiga ta'sir qiladi — qo'ng'iroq ovozi (UDP) to'g'ridan-to'g'ri ketadi.
+
+### Chegaralarni sozlash (`TG_LIMITS`, ixtiyoriy)
+```
+TG_LIMITS={"call":{"hour":12,"day":60},"cold":{"hour":4,"day":20},"warmup":{"call":{"hour":3,"day":10}},"warmupDays":7}
+```
+
 ## Zaxira nusxa
 `data\` papkasi va `.env` faylini (shifrlangan USB/xavfsiz joyga) saqlab qo'ying. Ular yo'qolsa —
 yangi kalit yaratiladi: Render'dagi `AIV_WORKER_PUBKEY` ni yangilash va Telegram'ga qayta kirish kerak.
@@ -136,6 +170,8 @@ yangi kalit yaratiladi: Render'dagi `AIV_WORKER_PUBKEY` ni yangilash va Telegram
 | `sessiya fayli shu TG_SESSION_KEY bilan ochilmadi` | `.env` dagi kalit o'zgargan — panel orqali qayta kiring |
 | `Telegram sessiyasi bekor qilingan` | Telegram'da "Faol seanslar"dan o'chirilgan — panel orqali qayta kiring |
 | Panelda `flood_wait` | Telegram vaqtincha cheklagan — ko'rsatilgan vaqt o'tguncha kuting |
+| Panelda "Muzlatilgan" / "Spam cheklovi" | Akkauntni telefonda oching → @SpamBot → `/start` yoki apellyatsiya havolasi; yuqoridagi "anti-freeze" bo'limiga qarang |
+| Panelda `proxy_invalid` / `proxy_lib_missing` | `TG_PROXIES` formati xato / `pip install -r requirements.txt` |
 
 ## Testlar
 ```

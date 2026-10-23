@@ -20,7 +20,14 @@ import { Badge, Card, type Tone } from "./ui";
 // qo'ng'iroq bo'sh akkaunt orqali ketadi; qo'ng'iroq qiluvchining firmasi ERP botdagi bog'lanishdan aniqlanadi.
 // XAVFSIZLIK: telefon/kod/parol faqat komponent holatida, yuborilgach tozalanadi; hech qayerga saqlanmaydi.
 
-interface Acc { id: string; label?: string; status: string; username?: string; displayName?: string; phoneMasked?: string; busy: boolean; lastError?: string; floodWaitUntil?: string }
+interface UsageKind { hour: number; day: number; capHour: number; capDay: number }
+interface Usage { warmup?: boolean; warmupUntil?: number; call?: UsageKind; cold?: UsageKind; dm?: UsageKind; reply?: UsageKind; import?: UsageKind }
+interface Health { state: string; active: boolean; reason?: string; since?: number; until?: number; appealUrl?: string }
+interface Acc {
+  id: string; label?: string; status: string; username?: string; displayName?: string; phoneMasked?: string; busy: boolean; lastError?: string; floodWaitUntil?: string;
+  // Anti-freeze (owner 2026-10-23): Telegram cheklovi, bugungi ishlatilish, qurilma izi, proksi
+  health?: Health; usage?: Usage; device?: string; proxy?: string; limitedUntil?: string; profileNextAt?: string;
+}
 interface Res<T> { ok: boolean; data: T; error: string; body: any }
 type K = (s: string, o?: Record<string, unknown>) => string;
 
@@ -40,6 +47,55 @@ async function api<T>(method: "GET" | "POST" | "PATCH" | "DELETE", path: string,
 }
 
 const TONE: Record<string, Tone> = { connected: "green", awaiting_code: "amber", awaiting_password: "amber", error: "red", disconnected: "gray" };
+const HEALTH_TONE: Record<string, Tone> = { frozen: "red", banned: "red", unauthorized: "red", spam_limited: "amber" };
+const fmtTime = (v: number | string, lang: string) => {
+  try { return new Date(v).toLocaleString(lang === "ru" ? "ru-RU" : "uz-UZ", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }); } catch { return String(v); }
+};
+
+/** Akkaunt sog'ligi (owner 2026-10-23): sog' / isitilmoqda / chegarada / muzlatilgan … gacha / bloklangan + yo'riqnoma. */
+function AccHealth({ a, k, lang }: { a: Acc; k: K; lang: string }) {
+  if (a.status !== "connected" && !a.health?.active) return null;
+  const h = a.health?.active ? a.health : null;
+  const u = a.usage;
+  const kinds = (["call", "cold", "dm", "import"] as const).filter((x) => u?.[x]);
+  return (
+    <div className="mt-1 space-y-1" data-testid="ai-tg-account-health">
+      <div className="flex flex-wrap items-center gap-1.5">
+        {h ? (
+          <Badge tone={HEALTH_TONE[h.state] || "red"}>
+            {k(`health.state.${h.state}`)}{h.until ? ` · ${k("health.until", { time: fmtTime(h.until, lang) })}` : ""}
+          </Badge>
+        ) : a.limitedUntil ? (
+          <Badge tone="amber">{k("health.limited", { time: fmtTime(a.limitedUntil, lang) })}</Badge>
+        ) : (
+          <Badge tone="green">{k("health.state.ok")}</Badge>
+        )}
+        {u?.warmup && <Badge tone="sky">{u.warmupUntil ? k("health.warmupUntil", { time: fmtTime(u.warmupUntil, lang) }) : k("health.warmup")}</Badge>}
+      </div>
+      {h && (
+        <p className="text-[11px] text-red-700 dark:text-red-300" data-testid="ai-tg-account-health-help">
+          {k(`health.help.${h.state}`)}{" "}
+          {(h.state === "frozen" || h.state === "spam_limited") && (
+            <a className="underline font-semibold" href="https://t.me/SpamBot" target="_blank" rel="noreferrer noopener">@SpamBot</a>
+          )}
+          {h.appealUrl && (<>{" · "}<a className="underline font-semibold" href={h.appealUrl} target="_blank" rel="noreferrer noopener" data-testid="ai-tg-account-appeal">{k("health.appeal")}</a></>)}
+        </p>
+      )}
+      {kinds.length > 0 && (
+        <p className="text-[11px] text-muted-foreground tabular-nums" data-testid="ai-tg-account-usage">
+          {k("health.today")}{" "}
+          {kinds.map((x) => `${k(`health.kind.${x}`)} ${u![x]!.day}/${u![x]!.capDay}`).join(" · ")}
+        </p>
+      )}
+      {(a.device || a.status === "connected") && (
+        <p className="text-[11px] text-muted-foreground break-words">
+          {a.device ? `${k("health.device")}: ${a.device}` : ""}{a.device ? " · " : ""}
+          {a.proxy ? `${k("health.proxy")}: ${a.proxy}` : <span className="text-amber-700 dark:text-amber-300">{k("health.noProxy")}</span>}
+        </p>
+      )}
+    </div>
+  );
+}
 const inputCls = "h-11 w-full rounded-xl border border-border bg-card/70 px-3 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-60";
 const primaryBtn = "h-11 px-5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-50 inline-flex items-center justify-center gap-2";
 const smallBtn = "h-9 px-3 rounded-lg border border-border text-xs font-semibold inline-flex items-center gap-1.5 disabled:opacity-50";
@@ -188,6 +244,7 @@ export default function CompanyTgAccounts() {
                         {i18n.exists(`aiVoice.telegram.company.err.${a.lastError}`) ? k(`err.${a.lastError}`) : a.lastError}
                       </p>
                     )}
+                    <AccHealth a={a} k={k} lang={i18n.language} />
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-1.5">

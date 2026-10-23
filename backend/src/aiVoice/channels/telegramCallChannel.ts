@@ -15,7 +15,8 @@ import { reapStaleTelegramSessions, registerBridge, TelegramTransport, unregiste
 import { callWorker, WorkerRpcFailure } from '../telegram/workerRpc';
 import { ensureContactTgUserId } from '../telegram/tgLink';
 import { workerConnectedHere, workerHub } from '../telegram/workerNamespace';
-import { markSessionAccount, pickPoolAccount, poolHasLiveAccount } from '../telegram/companyAccounts';
+import { limitAccount, markSessionAccount, pickPoolAccount, poolHasLiveAccount } from '../telegram/companyAccounts';
+import { healthBlocked, LIMIT_REASONS, RESTRICT_REASONS } from '../telegram/antiFreeze';
 import { PLATFORM_SCOPE } from '../platform';
 import { avatarEnabled, avatarParam } from '../telegram/incomingCalls';
 
@@ -47,6 +48,8 @@ async function check(c: ChannelCtx, now: Date): Promise<Avail & { peer?: Peer; o
     const conn: any = await getConnection();
     if (!conn || conn.status !== 'connected') return { ok: false, reason: 'account_not_connected' };
     if (floodWaitActive(conn, now)) return { ok: false, reason: 'flood_wait' };
+    // Anti-freeze: Telegram platforma akkauntini muzlatgan/cheklagan — undan qo'ng'iroq qilinmaydi
+    if (healthBlocked(conn.health, now)) return { ok: false, reason: 'account_restricted' };
     if (dailyCount(conn, now) >= aiConfig.tgDailyCap) return { ok: false, reason: 'daily_cap' };
   }
   // Owner 2026-10-16: tgUserId ERP bot bog'lanishidan (kod shart emas)
@@ -130,16 +133,18 @@ export const telegramCallChannel: ChannelAdapter = {
     // C3: worker socket'i boshqa instansiyada yoki qayta ulanmoqda — fallback emas, qayta navbat
     if (!workerConnectedHere()) return unavailable('worker_not_here', new Date(now.getTime() + DEFER_MS));
     // Owner 2026-10-19: umumiy hovuzdagi BO'SH akkaunt; hammasi band/yo'q bo'lsa — platforma akkaunti (zaxira)
-    let picked = av.ownAccounts ? await pickPoolAccount(now) : null;
+    // Anti-freeze: shu xodim bilan avval gaplashgan akkaunt afzal, qolganlari — eng uzoq ishlatilmagani (LRU)
+    let picked = av.ownAccounts ? await pickPoolAccount(now, { employeeId: c.employeeId }) : null;
     if (av.ownAccounts && !picked) {
       await reapStaleTelegramSessions(now).catch(() => 0);
-      picked = await pickPoolAccount(now);
+      picked = await pickPoolAccount(now, { employeeId: c.employeeId });
     }
     const account = picked?.id || null;
     let reserved = false;
     if (!account) {
       const conn: any = await getConnection();
       if (!conn || conn.status !== 'connected') return unavailable('account_busy', new Date(now.getTime() + BUSY_DEFER_MS));
+      if (healthBlocked(conn.health, now)) return unavailable('account_restricted', new Date(now.getTime() + BUSY_DEFER_MS));
       // A1: akkaunt bo'yicha bir vaqtda 1 ta qo'ng'iroq
       // Tugagan, lekin bazada "faol" qolgan qo'ng'iroq akkauntni "band" ko'rsatmasin — darhol tozalanadi
       if (!(await telegramCapacity())) {
@@ -193,6 +198,18 @@ export const telegramCallChannel: ChannelAdapter = {
         await releaseDaily();
         const reason = String(res?.reason || 'rejected').slice(0, 60);
         if (reason === 'busy_worker') return unavailable('account_busy', new Date(now.getTime() + BUSY_DEFER_MS));
+        // Anti-freeze: worker akkaunt chegarasi/cheklovi bilan rad etdi
+        const retrySec = Math.max(5, Math.min(86_400, Number(res?.retryAfterSec) || 60));
+        // Shu odamga yaqinda qo'ng'iroq qilingan — boshqa akkauntdan ham emas, keyinroq
+        if (reason === 'peer_limited') return unavailable('peer_limited', new Date(now.getTime() + retrySec * 1000));
+        if (LIMIT_REASONS.has(reason) || RESTRICT_REASONS.has(reason)) {
+          if (account) {
+            // Hovuz akkaunti — u chetga olinadi, qo'ng'iroq tezda boshqa sog' akkauntdan qayta urinadi
+            await limitAccount(account, RESTRICT_REASONS.has(reason) ? 600 : retrySec, now);
+            return unavailable('account_limited', new Date(now.getTime() + 5_000));
+          }
+          if (LIMIT_REASONS.has(reason)) return unavailable(reason, new Date(now.getTime() + retrySec * 1000));
+        }
         return { outcome: 'unavailable', retryable: false, sessionId: handle.sessionId, errorCode: reason };
       }
     } catch (e) {

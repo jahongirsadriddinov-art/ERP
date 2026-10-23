@@ -10,6 +10,7 @@ import { localDate, zonedToUtc } from '../lib/zonedTime';
 import { sendToUser } from '../channels/botChannel';
 import { getCallConsent } from '../consent';
 import { backfillTgLinks, ensureContactTgUserId } from './tgLink';
+import { applyPlatformHealth, healthDto, sanitizeUsage } from './antiFreeze';
 import { callWorker, WorkerRpcFailure } from './workerRpc';
 import { getActiveWorker, workerConnectedHere, workerHub } from './workerNamespace';
 
@@ -88,6 +89,8 @@ export async function accountDto(now: Date = new Date()): Promise<AiTelegramAcco
     floodWaitUntil: floodWaitActive(c, now) ? new Date(c.floodWaitUntil).toISOString() : undefined,
     dailyCallCount: dailyCount(c, now),
     dailyCap: aiConfig.tgDailyCap,
+    health: healthDto(c?.health, now),
+    usage: c?.usage || undefined, device: c?.device || undefined, proxy: c?.proxy || undefined,
   };
 }
 
@@ -102,6 +105,12 @@ export async function recordHealth(status: WorkerStatus, now: Date = new Date())
   if (typeof status.udpOk === 'boolean') set.udpProbe = { ok: status.udpOk, at: now };
   const fw = Number(status.floodWaitUntil);
   if (Number.isFinite(fw) && fw > now.getTime()) set.floodWaitUntil = new Date(fw);
+  // Anti-freeze: platforma akkaunti cheklovi va bugungi ishlatilish
+  const usage = sanitizeUsage(status.usage);
+  if (usage) set.usage = usage;
+  if (typeof status.device === 'string') set.device = status.device.slice(0, 120);
+  if (typeof status.proxy === 'string') set.proxy = status.proxy.slice(0, 80);
+  if (status.health) await applyPlatformHealth(status.health, now).catch(() => false);
   const cur: any = await getConnection();
   if (status.connected === true) {
     set.status = 'connected';

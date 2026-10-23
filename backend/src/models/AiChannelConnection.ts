@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document } from 'mongoose';
+import { TgHealthSchema, type ITgHealth } from './AiTgAccount';
 
 // Telegram (user-account / bot) ulanishi holati. XAVFSIZLIK (review A5):
 // StringSession BU YERDA SAQLANMAYDI — u faqat worker diskida (TG_SESSION_KEY bilan
@@ -34,6 +35,11 @@ export interface IAiChannelConnection extends Document {
   avatarEnabled?: boolean;   // video avatar (dasturchi o'chirsa — kamera ko'rish baribir ishlaydi)
   openConversationBy?: string;
   openConversationAt?: Date;
+  /** Anti-freeze: platforma akkaunti Telegram cheklovi */
+  health?: ITgHealth;
+  usage?: Record<string, unknown>;
+  device?: string;
+  proxy?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -68,6 +74,10 @@ const AiChannelConnectionSchema = new Schema<IAiChannelConnection>({
   avatarEnabled: { type: Boolean, default: true },
   openConversationBy: String,
   openConversationAt: Date,
+  health: { type: TgHealthSchema, default: undefined },
+  usage: { type: Schema.Types.Mixed },
+  device: { type: String, maxlength: 120 },
+  proxy: { type: String, maxlength: 80 },
 }, { timestamps: true });
 
 AiChannelConnectionSchema.index({ scope: 1, companyId: 1, type: 1 }, { unique: true });

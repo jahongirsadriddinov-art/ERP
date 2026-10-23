@@ -2,7 +2,6 @@ import { Router, type Request, type Response, type NextFunction } from 'express'
 import AiActionAudit from '../../models/AiActionAudit';
 import AiChannelConnection from '../../models/AiChannelConnection';
 import AiEmployeeContact from '../../models/AiEmployeeContact';
-import AiUsageMetrics from '../../models/AiUsageMetrics';
 import User from '../../models/User';
 import { logAudit } from '../../services/audit';
 import { getBotInstance } from '../bot/botHooks';

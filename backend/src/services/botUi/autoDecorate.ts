@@ -3,7 +3,7 @@
 // AI (Gemini) ishlamasa — oddiy emoji mosligi va kalit so'zlar bo'yicha tanlanadi.
 import type { BotButtonStyle, BotEmojiPack, BotUiDraft } from '../../models/BotUiConfig';
 import { BOT_UI_CATALOG, messageEmojiCandidates, type BotUiCatalogItem } from './catalog';
-import { MESSAGE_KINDS, MESSAGE_KIND_KEYS } from './messageKinds';
+import { MESSAGE_KINDS } from './messageKinds';
 
 type Sticker = { id: string; emoji: string };
 type AiFn = (prompt: string) => Promise<any>;

@@ -29,10 +29,7 @@ import { PLAN_CONFIG, getPayablePlanKeys } from '../config/plans';
 import { createSubscriptionPaymentOrder } from './subscriptionPayments';
 import { persistUploadedFile } from './durableFiles';
 import { deriveWebhookSecret, canDecideSubscription, sendToCompanyAdmins } from './botSecurity';
-import {
-  registerBotInstance, dispatchAiCallback, dispatchAiMessage, aiBotResetChat, aiSuppressedMorningUserIds,
-  WORKER_OFFSHIFT_CALLBACK_RE, AI_BOT_COMMANDS, aiBotButtonText,
-} from '../aiVoice/bot/botHooks';
+import { registerBotInstance, dispatchAiCallback, dispatchAiMessage, aiBotResetChat, aiSuppressedMorningUserIds, WORKER_OFFSHIFT_CALLBACK_RE, aiBotButtonText } from '../aiVoice/bot/botHooks';
 import { aiConfig } from '../aiVoice/config';
 import { captureError } from './errorTracker';
 import { onBotLinked as onAiBotLinked } from '../aiVoice/telegram/tgLink';

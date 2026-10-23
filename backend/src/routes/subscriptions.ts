@@ -11,7 +11,7 @@ import { getTenant } from '../middleware/tenantContext';
 import { bot } from '../services/bot';
 import { createSubscriptionPaymentOrder } from '../services/subscriptionPayments';
 import { extendPeriodEnd } from '../utils/subscriptionPeriod';
-import { PLAN_CONFIG, SelectedPlan, getPlanInfo, ALL_FEATURE_KEYS } from '../config/plans';
+import { PLAN_CONFIG, SelectedPlan } from '../config/plans';
 
 const router = Router();
 

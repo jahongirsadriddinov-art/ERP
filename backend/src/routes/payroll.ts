@@ -2,7 +2,7 @@ import { Router } from 'express';
 import PayrollRecord from '../models/PayrollRecord';
 import Attendance from '../models/Attendance';
 import User from '../models/User';
-import { scoped, stamped } from '../middleware/scope';
+import { scoped } from '../middleware/scope';
 import { getTenant } from '../middleware/tenantContext';
 import { requireOwnerOrAdmin } from '../middleware/auth';
 import { logAudit } from '../services/audit';

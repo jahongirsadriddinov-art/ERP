@@ -4,12 +4,10 @@ import { checkRate } from '../utils/rateLimit';
 import ObjectForHints from '../models/Object';
 import { Router } from 'express';
 import Transaction from '../models/Transaction';
-import Material from '../models/Material';
 import { bot, notifyAdmins } from '../services/bot';
 import User from '../models/User';
 import { scoped, stamped } from '../middleware/scope';
 import { getTenant } from '../middleware/tenantContext';
-import { emitToUser } from '../services/socket';
 import { tb, BotLang } from '../i18n/bot';
 import { logAudit } from '../services/audit';
 // XATO TUZATILDI: bu faylda avval FAQAT Telegram bot xabari (bot.sendMessage)

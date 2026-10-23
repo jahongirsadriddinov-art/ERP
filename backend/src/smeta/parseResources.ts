@@ -3,7 +3,7 @@
 // Ko'p qatorli nomlar birlik+raqam topilguncha buferga yig'iladi.
 
 import { ExtractedLine, ResourceRow, ResourceGroup } from './types';
-import { findUnitInLine, tokenizeNumbers, isShifr, shortName, parseNum } from './normalize';
+import { findUnitInLine, tokenizeNumbers, isShifr, shortName } from './normalize';
 
 const GROUP_HEADERS: { re: RegExp; group: ResourceGroup }[] = [
   { re: /^ТРУДОВЫЕ\s+РЕСУРСЫ/i, group: 'labor' },

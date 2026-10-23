@@ -216,8 +216,16 @@ describe('content agentlari — Gemini', () => {
     expect(prompts[0]).toContain('SMM');
     expect(fetchMock).not.toHaveBeenCalled(); // avtomatik e'lon yo'q
 
-    expect((await post(`/agent-tasks/${r.body.task.id}/send`, { target: 'channel', index: 0 })).status).toBe(503);
+    expect((await post(`/agent-tasks/${r.body.task.id}/send`, { target: 'channel', index: 0 })).status).toBe(409);
     process.env.TELEGRAM_BOT_TOKEN = '123:abc';
+    // kanal yo'q, lekin dasturchi botga ulangan — o'z chatiga ketadi (owner 2026-10-23)
+    await User.updateOne({ _id: devId }, { telegramChatId: '5551234' });
+    const own = await post(`/agent-tasks/${r.body.task.id}/send`, { target: 'channel', index: 0 });
+    expect(own.status).toBe(200);
+    expect(own.body.sentTo).toBe('developer');
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).chat_id).toBe('5551234');
+    fetchMock.mockClear();
+    await User.updateOne({ _id: devId }, { $unset: { telegramChatId: 1 } });
     process.env.AGENT_TG_CHANNEL_ID = '@qurilish_kanal';
     expect((await post(`/agent-tasks/${r.body.task.id}/send`, { target: 'channel', index: 0 })).status).toBe(200);
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -282,7 +290,7 @@ describe('Boshliq va Hisobotchi', () => {
     expect(t.links).toEqual([{ label: 'Backend: PR', url: 'https://github.com/acme/erp/pull/7' }]);
 
     // DEVELOPER_CHAT_ID'ga yuborish — faqat sozlansa
-    expect((await post(`/agent-tasks/${r.body.task.id}/send`, { target: 'developer' })).status).toBe(503);
+    expect((await post(`/agent-tasks/${r.body.task.id}/send`, { target: 'developer' })).status).toBe(409);
     process.env.TELEGRAM_BOT_TOKEN = '123:abc';
     process.env.DEVELOPER_CHAT_ID = '777';
     expect((await post(`/agent-tasks/${r.body.task.id}/send`, { target: 'developer' })).status).toBe(200);

@@ -403,7 +403,7 @@ export default function DeveloperPanel({ currentUser, onLogout, profileEl }: { c
 
       {err && <div className="mx-4 md:mx-6 xl:mx-auto xl:max-w-7xl xl:w-[calc(100%-3rem)] mt-3 bg-red-500/10 text-red-700 dark:text-red-400 text-sm p-3 rounded-lg border border-red-500/20 flex-shrink-0">{err}</div>}
 
-      <div className={tab === "office" ? "flex-1 min-h-0 flex flex-col overflow-hidden p-3 md:px-6 md:pb-4" : `flex-1 md:min-h-0 md:overflow-y-auto p-4 md:px-[max(1.5rem,calc((100%-80rem)/2))] pb-24 ${["subscriptions", "firms", "users"].includes(tab) ? "grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-3 content-start [&>p]:col-span-full [&>*:only-child]:col-span-full" : "space-y-3"}`}>
+      <div className={tab === "office" ? "flex-1 min-h-0 flex flex-col overflow-hidden p-3 md:px-6 md:pb-4" : tab === "profile" ? "flex-1 min-h-0 flex flex-col overflow-hidden" : `flex-1 md:min-h-0 md:overflow-y-auto p-4 md:px-[max(1.5rem,calc((100%-80rem)/2))] pb-24 ${["subscriptions", "firms", "users"].includes(tab) ? "grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-3 content-start [&>p]:col-span-full [&>*:only-child]:col-span-full" : "space-y-3"}`}>
         {loading ? (
           <SkeletonList items={5}/>
         ) : tab === "subscriptions" ? (
@@ -700,7 +700,9 @@ export default function DeveloperPanel({ currentUser, onLogout, profileEl }: { c
             </div>
           ))
         ) : tab === "profile" ? (
-          <div className="pb-24" data-testid="dev-profile">{profileEl}</div>
+          // Profil o'z ustunlarini ichida aylantiradi (asosiy ilovadagidek) — balandlik shu yerda beriladi; aks holda
+          // ustunlardagi overscroll-contain g'ildirakni "yutib", sahifa umuman aylanmasdi (owner 2026-10-23)
+          <div className="flex-1 min-h-0 overflow-y-auto lg:overflow-hidden lg:flex lg:flex-col pb-24 lg:pb-0" data-testid="dev-profile">{profileEl}</div>
         ) : tab === "office" ? (
           <Suspense fallback={<SkeletonList items={3}/>}><AiOffice fill externalHost onNavigate={(k) => setTab(k as any)} erpLinks={[
             { key: "subscriptions", label: t('devPanel.tabs.subscriptions') }, { key: "firms", label: t('devPanel.tabs.firms', { count: companies.length }) },

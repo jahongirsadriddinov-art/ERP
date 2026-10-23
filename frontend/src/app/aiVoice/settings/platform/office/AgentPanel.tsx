@@ -153,7 +153,13 @@ export default function AgentPanel({ agent, profile, profiles, setup, onClose, o
                   <TaskCard key={x.id} task={x} k={k} profiles={profiles} childOf={childOf} nameOf={nameOf} onOpenAgent={onOpenAgent}
                     onCancel={() => act(officeApi.cancel(x.id))} onRetry={(id = x.id) => act(officeApi.retry(id))}
                     onApprove={(b) => act(officeApi.approve(x.id, b))}
-                    onSend={(target, index) => act(officeApi.send(x.id, target, index), k("actions.sentTg"))} />
+                    onSend={async (target, index) => {
+                      // kanal sozlanmagan bo'lsa server o'zingizning Telegram chatingizga yuboradi — shuni aytamiz
+                      const r: any = await officeApi.send(x.id, target, index);
+                      if (!r.ok) toast.error(errMsg(r.error, k));
+                      else toast.success(target === "channel" && r.data?.sentTo === "developer" ? k("actions.sentToMeNoChannel") : k("actions.sentTg"));
+                      load(); onChanged();
+                    }} />
                 ))}
           </div>
         </>

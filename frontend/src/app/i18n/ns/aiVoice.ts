@@ -88,7 +88,7 @@ export const uz = {
     empty: "Hali vazifa yo'q",
     actions: {
       cancel: "Bekor qilish", retry: "Qayta yuborish", approve: "Tasdiqlash — kod yozilsin", approvePlan: "Tasdiqlash va tarqatish", copy: "Nusxa",
-      copied: "Nusxa olindi", toChannel: "Kanalga yuborish", toDev: "Telegram'ga yuborish", sentTg: "Telegram'ga yuborildi", addRow: "Vazifa qo'shish",
+      copied: "Nusxa olindi", toChannel: "Kanalga yuborish", toDev: "Telegram'ga yuborish", sentTg: "Telegram'ga yuborildi", sentToMeNoChannel: "Kanal ulanmagan — post sizning Telegram'ingizga yuborildi. Kanalga chiqarish uchun Render'da AGENT_TG_CHANNEL_ID qo'ying (bot kanalda admin bo'lsin).", addRow: "Vazifa qo'shish",
       remove: "Olib tashlash", log: "Jurnal", open: "Ochish", openAgent: "Yangi agentni ochish",
     },
     spec: "Spetsifikatsiya — tekshiring, kerak bo'lsa tahrirlang",
@@ -99,7 +99,7 @@ export const uz = {
       rate_limited: "Juda ko'p buyruq — birozdan keyin urinib ko'ring",
       too_many_active: "Bu agentda faol vazifalar juda ko'p",
       agent_disabled: "Agent o'chirilgan",
-      not_configured: "Sozlanmagan: Telegram kanal/chat ID yoki bot tokeni yo'q",
+      not_configured: "Telegram ulanmagan: botga /start bosing (hisobingiz bot bilan bog'lansin) yoki Render'da AGENT_TG_CHANNEL_ID / DEVELOPER_CHAT_ID qo'ying",
       invalid: "Ma'lumot noto'g'ri",
       name_taken: "Bu nomli agent allaqachon bor",
       too_many: "Agentlar soni chegarasiga yetdi",
@@ -969,7 +969,7 @@ export const ru = {
     empty: "Заданий пока нет",
     actions: {
       cancel: "Отменить", retry: "Отправить снова", approve: "Одобрить — писать код", approvePlan: "Одобрить и раздать", copy: "Копировать",
-      copied: "Скопировано", toChannel: "В канал", toDev: "Отправить в Telegram", sentTg: "Отправлено в Telegram", addRow: "Добавить задачу",
+      copied: "Скопировано", toChannel: "В канал", toDev: "Отправить в Telegram", sentTg: "Отправлено в Telegram", sentToMeNoChannel: "Канал не подключён — пост отправлен вам в Telegram. Для публикации в канал укажите AGENT_TG_CHANNEL_ID в Render (бот — админ канала).", addRow: "Добавить задачу",
       remove: "Убрать", log: "Журнал", open: "Открыть", openAgent: "Открыть нового агента",
     },
     spec: "Спецификация — проверьте и при необходимости исправьте",

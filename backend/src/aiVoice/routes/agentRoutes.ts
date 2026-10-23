@@ -87,9 +87,9 @@ agentRoutes.post('/agent-tasks/:id/approve', wrap(async (req, res) => {
 
 agentRoutes.post('/agent-tasks/:id/send', wrap(async (req, res) => {
   const b = isObj(req.body) ? req.body : {};
-  const r = await sendTaskToTelegram(String(req.params.id), b.target, b.index);
+  const r = await sendTaskToTelegram(String(req.params.id), b.target, b.index, (req as any).user?.userId);
   if (!r.ok) return res.status(r.status || 400).json({ error: r.error });
-  res.json({ ok: true });
+  res.json({ ok: true, sentTo: r.sentTo });
 }));
 
 /** GitHub Actions qayta qo'ng'irog'i (auth yo'q — faqat umumiy sir). */

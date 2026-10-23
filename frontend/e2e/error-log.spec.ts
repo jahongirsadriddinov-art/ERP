@@ -131,6 +131,11 @@ test("Dasturchi paneli → Profil: xavfsizlik va sayt ko'rinishi bo'limlari ochi
   const prof = page.getByTestId('dev-profile');
   await expect(prof.locator('[data-settings-group="app"]')).toBeVisible({ timeout: 15_000 });
   await expect(prof.locator('[data-settings-group="company"]')).toHaveCount(0);
+  // aylantirish ishlaydi: pastdagi bo'lim (ilova yuklab olish / shrift) g'ildirak bilan ko'rinadi (owner 2026-10-23)
+  const last = prof.locator('[data-settings-group="app"]');
+  await last.hover();
+  for (let i = 0; i < 6; i++) await page.mouse.wheel(0, 600);
+  await expect.poll(async () => page.evaluate(() => [...document.querySelectorAll('[data-testid="dev-profile"], [data-testid="dev-profile"] *')].some((e) => (e as HTMLElement).scrollTop > 0))).toBe(true);
   expect(errors, errors.join('\n')).toEqual([]);
 });
 

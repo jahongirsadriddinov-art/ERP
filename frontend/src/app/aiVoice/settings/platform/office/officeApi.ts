@@ -43,5 +43,5 @@ export const officeApi = {
   transcribe: (audio: string, lang: "uz" | "ru") => call<{ text: string }>("POST", "/platform/office/transcribe", { audio, lang }),
   chat: (key: string, text: string, history: ChatMsg[]) => call<{ reply: string }>("POST", `/platform/agents/${encodeURIComponent(key)}/chat`, { text, history }),
   send: (id: string, target: "channel" | "developer", index?: number) =>
-    call<{ ok: true }>("POST", `/platform/agent-tasks/${id}/send`, { target, ...(index !== undefined ? { index } : {}) }),
+    call<{ ok: true; sentTo?: "channel" | "developer" }>("POST", `/platform/agent-tasks/${id}/send`, { target, ...(index !== undefined ? { index } : {}) }),
 };

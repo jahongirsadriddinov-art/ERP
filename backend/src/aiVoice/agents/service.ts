@@ -697,15 +697,24 @@ export async function __fireAutoReportForTests(): Promise<boolean> {
 }
 
 // ───────────── Telegram'ga yuborish (faqat dasturchi bosganda) ─────────────
-export async function sendTaskToTelegram(id: string, target: unknown, index: unknown): Promise<{ ok: boolean; error?: string; status?: number }> {
+export async function sendTaskToTelegram(id: string, target: unknown, index: unknown, requesterId?: string): Promise<{ ok: boolean; error?: string; status?: number; sentTo?: 'channel' | 'developer' }> {
   if (!/^[0-9a-f]{24}$/i.test(id)) return { ok: false, error: 'not_found', status: 404 };
   const t: any = await AgentTask.findById(id).lean();
   if (!t) return { ok: false, error: 'not_found', status: 404 };
   if (t.status !== 'done') return { ok: false, error: 'not_done', status: 409 };
   const c = agentConfig();
-  const chat = target === 'channel' ? c.tgChannel : target === 'developer' ? c.devChat : '';
   if (target !== 'channel' && target !== 'developer') return { ok: false, error: 'invalid', status: 400 };
-  if (!chat || !c.botToken) return { ok: false, error: 'not_configured', status: 503 };
+  // Owner 2026-10-23: kanal (AGENT_TG_CHANNEL_ID) yoki DEVELOPER_CHAT_ID qo'yilmagan bo'lsa — bosgan dasturchining
+  // o'z Telegram chatiga (botga /start bosgan akkaunt) yuboriladi; javobda qayerga ketgani aytiladi
+  let chat = target === 'channel' ? c.tgChannel : c.devChat;
+  let sentTo: 'channel' | 'developer' = target === 'channel' && c.tgChannel ? 'channel' : 'developer';
+  if (!chat || target === 'developer') {
+    const own: any = requesterId && /^[0-9a-f]{24}$/i.test(requesterId) ? await User.findById(requesterId).select('telegramChatId').lean().catch(() => null) : null;
+    if (!chat && own?.telegramChatId) chat = String(own.telegramChatId);
+    if (target === 'channel' && !c.tgChannel) sentTo = 'developer';
+  }
+  // sozlanmagan — server xatosi emas (409), xatolar ro'yxatini to'ldirmasin
+  if (!chat || !c.botToken) return { ok: false, error: 'not_configured', status: 409 };
   let text: string;
   if (typeof index === 'number' && Number.isInteger(index)) {
     const it = t.items?.[index];
@@ -725,8 +734,8 @@ export async function sendTaskToTelegram(id: string, target: unknown, index: unk
   } catch {
     return { ok: false, error: 'telegram_failed', status: 502 };
   }
-  await AgentTask.updateOne({ _id: id }, { $push: { log: logLine(target === 'channel' ? "Telegram kanalga yuborildi" : "Dasturchi chatiga yuborildi") } });
-  return { ok: true };
+  await AgentTask.updateOne({ _id: id }, { $push: { log: logLine(sentTo === 'channel' ? "Telegram kanalga yuborildi" : "Dasturchi chatiga yuborildi") } });
+  return { ok: true, sentTo };
 }
 
 // ───────────── Suhbat (owner 2026-10-23): agent o'z ishi haqidagi savolga javob beradi ─────────────

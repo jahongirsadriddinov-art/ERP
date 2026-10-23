@@ -294,14 +294,22 @@ router.get('/', async (req, res) => {
     // Owner 2026-10-22: byudjet va mijoz havolasi — faqat rahbarlarga (direktor/o'rinbosar/egasi)
     const tn = getTenant();
     const boss = !!tn?.isOwner || ['direktor', 'orinbosar'].includes(String(tn?.role)) || !!tn?.isDeveloper;
-    const objectsWithMaterials = await Promise.all(
-      objects.map(async (obj: any) => {
-        const materials = await Material.find({ objectId: obj._id }).lean();
-        if (boss) return { ...obj, materials };
-        const { budget: _b, budgetAlertLevel: _l, clientShareToken: _t, ...rest } = obj;
-        return { ...rest, materials };
-      })
-    );
+    // Bitta so'rov bilan barcha obyektlarning materiallari (avval har obyekt uchun alohida so'rov — N+1)
+    const allMaterials = objects.length
+      ? await Material.find({ objectId: { $in: objects.map((o: any) => o._id) } }).lean()
+      : [];
+    const byObject = new Map<string, any[]>();
+    for (const m of allMaterials) {
+      const k = String(m.objectId);
+      const arr = byObject.get(k);
+      if (arr) arr.push(m); else byObject.set(k, [m]);
+    }
+    const objectsWithMaterials = objects.map((obj: any) => {
+      const materials = byObject.get(String(obj._id)) || [];
+      if (boss) return { ...obj, materials };
+      const { budget: _b, budgetAlertLevel: _l, clientShareToken: _t, ...rest } = obj;
+      return { ...rest, materials };
+    });
     res.json(objectsWithMaterials);
   } catch (err) {
     res.status(500).json({ error: 'Server xatoligi' });

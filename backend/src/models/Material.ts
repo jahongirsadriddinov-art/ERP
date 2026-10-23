@@ -24,6 +24,8 @@ const MaterialSchema: Schema = new Schema({
 
 // Search va filtrlar uchun
 MaterialSchema.index({ companyId: 1, name: 1 });
+// Obyekt materiallari (GET /objects, smeta qayta yuklash, o'chirish) objectId bo'yicha so'raladi
+MaterialSchema.index({ objectId: 1 });
 MaterialSchema.index({ name: 'text' });
 
 export default mongoose.model<IMaterial>('Material', MaterialSchema);

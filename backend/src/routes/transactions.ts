@@ -25,6 +25,7 @@ import { sendPushToUser } from '../services/push';
 import { approveTransactionAction, confirmTransactionAction, rejectTransactionAction } from '../services/transactionActions';
 
 const router = Router();
+const TX_DEFAULTS = { status: 'pending', currency: 'UZS', requiresAdminApproval: false };
 
 // Idempotency cache: key → { id, result, expiresAt }
 // Duplicate POST /:id/confirm yoki yangi expense yaratilganda ikki marta yuborilishiga qarshi
@@ -56,8 +57,10 @@ router.get('/', async (req, res) => {
     const filter = isFinanceAdmin || !tenant?.userId
       ? scoped(incomeRule)
       : scoped({ $and: [incomeRule, { $or: [{ createdById: tenant.userId }, { toUserId: tenant.userId }, { fromUserId: tenant.userId }] }] });
-    const transactions = await Transaction.find(filter).sort({ createdAt: -1 });
-    res.json(transactions.map(t => ({ ...t.toObject(), id: t._id })));
+    // lean(): to'liq Mongoose hujjatini qurmasdan (katta ro'yxatda sezilarli tezroq). Sxema default'lari
+    // (hydrate paytida qo'shilardi) eski yozuvlar uchun javob o'zgarmasligi uchun shu yerda qo'yiladi.
+    const transactions: any[] = await Transaction.find(filter).sort({ createdAt: -1 }).lean();
+    res.json(transactions.map(t => ({ ...TX_DEFAULTS, ...t, approvalHistory: t.approvalHistory ?? [], id: t._id })));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server xatoligi' });

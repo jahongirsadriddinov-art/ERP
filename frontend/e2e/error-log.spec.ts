@@ -118,3 +118,18 @@ test('Dasturchi paneli → Xatolar: ro\'yxat, filtr, tafsilot va "Hal qilindi"',
   await expect(page.getByTestId('err-panel')).toBeVisible({ timeout: 20_000 });
   expect(errors, errors.join('\n')).toEqual([]);
 });
+
+test("Dasturchi paneli → Profil: xavfsizlik va sayt ko'rinishi bo'limlari ochiladi (panel yiqilmaydi)", async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await mockApi(page, { lists: [], patches: [] } as Calls);
+  await seed(page);
+  await page.goto('/');
+  const tab = page.getByTestId('dev-tab-profile');
+  await expect(tab).toBeVisible({ timeout: 20_000 });
+  await tab.click();
+  const prof = page.getByTestId('dev-profile');
+  await expect(prof.locator('[data-settings-group="app"]')).toBeVisible({ timeout: 15_000 });
+  await expect(prof.locator('[data-settings-group="company"]')).toHaveCount(0);
+  expect(errors, errors.join('\n')).toEqual([]);
+});

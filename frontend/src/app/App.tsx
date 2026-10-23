@@ -3015,7 +3015,11 @@ export default function App() {
         <DeveloperPanel currentUser={liveUser} onLogout={()=>{playSound("lock");setCurrentUser(null);setAuthView("login");}}
           profileEl={
             // Dasturchi uchun Profil (owner 2026-10-23): xavfsizlik + sayt ko'rinishi (til, rejim, rang, fon, shrift)
-            <ProfilePage devMode currentUser={liveUser} projects={[]} onUpdateAvatar={handleUpdateAvatar} onUpdateUser={handleUpdateUser}
+            <ProfilePage devMode currentUser={liveUser} projects={[]}
+              // MUHIM: handleUpdateAvatar/handleUpdateUser shu "return"dan PASTDA e'lon qilingan — bu yerda ishlatilsa
+              // "Cannot access before initialization" bilan butun panel yiqiladi. Dasturchi uchun mahalliy holat yetarli.
+              onUpdateAvatar={(url) => setCurrentUser(c => c ? { ...c, avatar: url } : c)}
+              onUpdateUser={(u) => setCurrentUser(u)}
               onLogout={()=>{playSound("lock");setCurrentUser(null);setAuthView("login");}}
               onCompanyNameChange={() => {}} onCompanyLogoChange={() => {}}
               onBgChange={bg => setSiteBg(bg)}

@@ -20,6 +20,7 @@ import { AppUser, ActiveCall, Msg } from "./App";
 import { playSound, stopAllSounds } from "./sound";
 import { API_BASE } from "./api";
 import { reportError } from "./lib/monitoring";
+import { classifyMediaError, isUserMediaState, mediaErrorMessage, permissionHowTo, detectMediaPlatform } from "./lib/mediaErrors";
 import { UserAvatar } from "./components/UserAvatar";
 
 // Qo'ng'iroq oynasi (WebRTC) — kamdan-kam ishlatiladi (faqat qo'ng'iroq
@@ -67,22 +68,36 @@ async function acquireMedia(video: boolean, facingMode: string, warn: (m: string
     for (let i = 0; i < 3; i++) {
       try { return keep(await md.getUserMedia({ audio: true, video: i === 0 ? { facingMode } : true })); }
       catch (e: any) {
-        if (e?.name === 'NotAllowedError') throw e;
         lastErr = e;
+        // Ruxsat berilmagan — qayta urinish befoyda; pastda faqat mikrofon bilan urinib ko'ramiz
+        // (foydalanuvchi faqat kamerani rad etgan bo'lishi mumkin — qo'ng'iroq ovoz bilan davom etadi)
+        if (classifyMediaError(e) === 'denied') break;
         if (!isBusy(e) || i === 2) break;
         await new Promise(r => setTimeout(r, 600 * (i + 1)));
       }
     }
-    // Kamera band/yo'q — kutilgan holat (qo'ng'iroq ovoz bilan davom etadi), dasturchiga xato sifatida yubormaymiz
-    if (!isBusy(lastErr) && lastErr?.name !== 'NotFoundError') reportError(`call camera: ${lastErr?.name || ''} ${lastErr?.message || ''}`);
-    warn(isBusy(lastErr)
-      ? "Kamera band (boshqa dastur yoki oynada ishlatilmoqda) — qo'ng'iroq kamerasiz davom etadi"
-      : "Kamera topilmadi — qo'ng'iroq kamerasiz davom etadi");
+    // Kamera band/yo'q/ruxsatsiz — kutilgan holat (qo'ng'iroq ovoz bilan davom etadi), dasturchiga xato sifatida yubormaymiz
+    const camKind = classifyMediaError(lastErr);
+    if (camKind === 'other') reportError(`call camera: ${lastErr?.name || ''} ${lastErr?.message || ''}`);
+    let audioOnly: MediaStream | null = null;
+    try { audioOnly = keep(await md.getUserMedia({ audio: true, video: false })); }
+    catch (e: any) {
+      if (classifyMediaError(e) === 'denied') throw e; // mikrofon ham rad etilgan — tashqarida tushunarli xabar
+      if (!isUserMediaState(e)) reportError(`call mic: ${e?.name || ''} ${e?.message || ''}`);
+      warn("Mikrofon band yoki topilmadi — siz eshitasiz, lekin sizni eshitishmaydi");
+      return new MediaStream();
+    }
+    warn(camKind === 'denied'
+      ? `Kameraga ruxsat berilmagan — qo'ng'iroq faqat ovoz bilan davom etadi. ${permissionHowTo(detectMediaPlatform(), 'camera')}`
+      : isBusy(lastErr)
+        ? "Kamera band (boshqa dastur yoki oynada ishlatilmoqda) — qo'ng'iroq kamerasiz davom etadi"
+        : "Kamera topilmadi — qo'ng'iroq kamerasiz davom etadi");
+    return audioOnly;
   }
   try { return keep(await md.getUserMedia({ audio: true, video: false })); }
   catch (e: any) {
-    if (e?.name === 'NotAllowedError') throw e;
-    reportError(`call mic: ${e?.name || ''} ${e?.message || ''}`);
+    if (classifyMediaError(e) === 'denied') throw e;
+    if (!isUserMediaState(e)) reportError(`call mic: ${e?.name || ''} ${e?.message || ''}`);
     warn("Mikrofon band yoki topilmadi — siz eshitasiz, lekin sizni eshitishmaydi");
     return new MediaStream();
   }
@@ -320,8 +335,10 @@ export default function CallOverlay({ currentUser, users, call, onClose, onSendM
         // accept() shu promise'ni kutib turib stream tayyor bo'lgandan keyin createAnswer qiladi
         streamReadyResolve.current?.(stream);
       } catch (e: any) {
-        reportError(`call media: ${e?.name || ''} ${e?.message || ''}`, undefined, { mode: call.mode });
-        toast.error(t('call.permissionRequired', { message: e?.message || '' })); onClose(); return;
+        // Ruxsat berilmagan / qurilma yo'q / band — foydalanuvchi holati, dastur xatosi emas: xato kuzatuvchiga yuborilmaydi
+        if (!isUserMediaState(e)) reportError(`call media: ${e?.name || ''} ${e?.message || ''}`, undefined, { mode: call.mode });
+        const m = mediaErrorMessage(e, { video: call.mode === 'video' });
+        toast.error(m.title, { description: m.description, duration: 10000 }); onClose(); return;
       }
       // 35 soniyada ulanish bo'lmasa — jim "Ulanmoqda..." o'rniga sababini aytamiz
       setTimeout(() => {

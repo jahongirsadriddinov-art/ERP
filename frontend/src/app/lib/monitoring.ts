@@ -6,7 +6,9 @@ import { isAndroid, isTauri } from "../platform";
 // Bir sessiyada bir xil xato faqat bir marta, jami ko'pi bilan 15 ta yuboriladi.
 // Oxirgisi: yangi versiya chiqqanda eski oynadagi bo'lak topilmasligi — xato emas, sahifa o'zi yangilanadi (lib/chunkReload.ts)
 const IGNORE = [/Language detection is not supported/i, /ResizeObserver loop/i, /Load failed|Failed to fetch|NetworkError/i, /AbortError/i,
-  /valid JavaScript MIME type|dynamically imported module|Importing a module script failed|Unable to preload CSS|ChunkLoadError/i];
+  /valid JavaScript MIME type|dynamically imported module|Importing a module script failed|Unable to preload CSS|ChunkLoadError/i,
+  // Kamera/mikrofon ruxsati berilmagan — foydalanuvchi holati, dastur xatosi emas (lib/mediaErrors.ts)
+  /NotAllowedError|user denied permission|Permission denied by (the )?user|Permission dismissed/i];
 const sent = new Set<string>();
 let count = 0;
 

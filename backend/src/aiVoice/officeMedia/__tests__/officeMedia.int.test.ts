@@ -131,3 +131,31 @@ describe('ofis ob-havosi (Open-Meteo)', () => {
     __setWeatherFetcherForTests(null);
   });
 });
+
+describe('o\'yin rekordlari va TTS', () => {
+  it('rekord: faqat kattasi saqlanadi, har dasturchining o\'zi, noto\'g\'ri o\'yin 400', async () => {
+    const put = (b: object, id = devId) => request(app).put(`${P}/office/scores`).set('Authorization', tok(id)).send(b);
+    expect((await put({ game: 'snake', score: 12 })).body.scores).toMatchObject({ snake: 12 });
+    expect((await put({ game: 'snake', score: 5 })).body.scores).toMatchObject({ snake: 12 });
+    expect((await put({ game: 'g2048', score: 2048 })).body.scores).toMatchObject({ snake: 12, g2048: 2048 });
+    expect((await put({ game: 'hack', score: 1 })).status).toBe(400);
+    expect((await put({ game: 'snake', score: -3 })).status).toBe(400);
+    expect((await request(app).get(`${P}/office/scores`).set('Authorization', tok(dev2))).body.scores).toEqual({});
+    expect((await request(app).get(`${P}/office/scores`).set('Authorization', tok(devId))).body.scores).toMatchObject({ snake: 12, g2048: 2048 });
+    expect((await request(app).get(`${P}/office/scores`).set('Authorization', tok(A.ownerId))).status).toBe(403);
+  });
+
+  it('TTS: matn → WAV (24 kHz), xatoda 503', async () => {
+    const { __setTtsForTests } = await import('../routes');
+    __setTtsForTests({ synth: async (text, o) => { expect(o.lang).toBe('uz'); expect(text).toBe('Salom'); return Buffer.alloc(4800); } });
+    const r = await request(app).post(`${P}/office/tts`).set('Authorization', tok(devId)).send({ text: 'Salom', lang: 'uz' });
+    expect(r.status).toBe(200);
+    const wav = Buffer.from(r.body.audio, 'base64');
+    expect(wav.subarray(0, 4).toString()).toBe('RIFF');
+    expect(wav.readUInt32LE(24)).toBe(24000);
+    __setTtsForTests({ synth: async () => { throw new Error('no key'); } });
+    expect((await request(app).post(`${P}/office/tts`).set('Authorization', tok(devId)).send({ text: 'x' })).status).toBe(503);
+    expect((await request(app).post(`${P}/office/tts`).set('Authorization', tok(devId)).send({ text: '' })).status).toBe(400);
+    __setTtsForTests(null);
+  });
+});

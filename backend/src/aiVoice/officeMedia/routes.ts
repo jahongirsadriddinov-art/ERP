@@ -4,7 +4,8 @@ import OfficeMedia from '../../models/OfficeMedia';
 import { hitRate } from '../lib/mongoRateLimit';
 import { aiConfig } from '../config';
 import { wavToPcm16, resamplePcm16 } from '../voice/audio';
-import { GeminiTranscriber, type Transcriber } from '../voice/geminiSpeech';
+import { GeminiTranscriber, GeminiTts, type Transcriber, type TtsSynth } from '../voice/geminiSpeech';
+import { pcm16ToWav } from '../voice/audio';
 import { chatWithAgent } from '../agents/service';
 import { isMediaFileUrl, parseVideoLink, parseYandexMusic } from './links';
 import { getOfficeWeather } from './weather';
@@ -27,6 +28,9 @@ const isObj = (v: unknown): v is Record<string, any> => !!v && typeof v === 'obj
 let transcriber: Transcriber = new GeminiTranscriber();
 /** Faqat testlar: soxta transkriptor (null — asl). */
 export function __setTranscriberForTests(t: Transcriber | null): void { transcriber = t || new GeminiTranscriber(); }
+let tts: TtsSynth = new GeminiTts();
+/** Faqat testlar: soxta TTS (null — asl). */
+export function __setTtsForTests(t: TtsSynth | null): void { tts = t || new GeminiTts(); }
 
 const mediaDto = (m: any) => ({
   yandex: m?.yandex || '', tracks: (m?.tracks || []).map((t: any) => ({ id: t.id, name: t.name, url: t.url })), cinema: m?.cinema || '',
@@ -34,6 +38,22 @@ const mediaDto = (m: any) => ({
 
 export const officeMediaRoutes = Router();
 officeMediaRoutes.use((_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
+
+const GAME_IDS = ['pong', 'snake', 'blocks', 'g2048', 'breakout', 'racer', 'ttt'];
+/** Mini-o'yinlar rekordlari (dasturchining o'zi). */
+officeMediaRoutes.get('/office/scores', wrap(async (req, res) => {
+  const d: any = await OfficeMedia.findOne({ userId: uid(req) }).select('scores').lean();
+  res.json({ scores: d?.scores || {} });
+}));
+/** Rekord yuborish: { game, score } — faqat kattaroq bo'lsa yoziladi. */
+officeMediaRoutes.put('/office/scores', wrap(async (req, res) => {
+  const b = isObj(req.body) ? req.body : {};
+  const game = String(b.game || ''), score = Math.floor(Number(b.score));
+  if (!GAME_IDS.includes(game) || !Number.isFinite(score) || score < 0 || score > 1e9) return res.status(400).json({ error: 'invalid' });
+  await OfficeMedia.updateOne({ userId: uid(req) }, { $max: { [`scores.${game}`]: score } }, { upsert: true });
+  const d: any = await OfficeMedia.findOne({ userId: uid(req) }).select('scores').lean();
+  res.json({ ok: true, scores: d?.scores || {} });
+}));
 
 /** Toshkentdagi hozirgi ob-havo (Open-Meteo, 10 daqiqa kesh) — ofis tashqarisi uchun. */
 officeMediaRoutes.get('/office/weather', wrap(async (_req, res) => {
@@ -89,6 +109,21 @@ officeMediaRoutes.post('/office/transcribe', wrap(async (req, res) => {
     res.json({ text: (r.text || '').slice(0, 2000) });
   } catch {
     res.status(502).json({ error: 'stt_failed' });
+  }
+}));
+
+/** Agent javobini ovozlashtirish (o'zbek/rus; Gemini TTS — qo'ng'iroqlardagi bilan bir xil). Tana: { text, lang } → { audio: base64 WAV }. */
+officeMediaRoutes.post('/office/tts', wrap(async (req, res) => {
+  const b = isObj(req.body) ? req.body : {};
+  const text = typeof b.text === 'string' ? b.text.trim().slice(0, 600) : '';
+  if (!text) return res.status(400).json({ error: 'invalid' });
+  const rl = await hitRate(`office:tts:${uid(req)}`, 200, 3_600_000);
+  if (!rl.allowed) return res.status(429).json({ error: 'rate_limited' });
+  try {
+    const pcm = await tts.synth(text, { voiceName: 'Kore', lang: b.lang === 'ru' ? 'ru' : 'uz', model: aiConfig.models.tts });
+    res.json({ audio: pcm16ToWav(pcm, 24_000).toString('base64'), mime: 'audio/wav' });
+  } catch {
+    res.status(503).json({ error: 'tts_unavailable' });
   }
 }));
 

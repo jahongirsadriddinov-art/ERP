@@ -9,6 +9,8 @@ export interface IOfficeMedia extends Document {
   yandex: string;
   tracks: { id: string; name: string; url: string }[];
   cinema: string;
+  /** Mini-o'yinlar rekordlari (o'yin id → eng yuqori ball). */
+  scores: Record<string, number>;
   updatedAt: Date;
 }
 
@@ -20,6 +22,7 @@ const OfficeMediaSchema = new Schema<IOfficeMedia>({
     default: [],
   },
   cinema: { type: String, default: '', maxlength: 2000 },
-}, { timestamps: true });
+  scores: { type: Schema.Types.Mixed, default: {} },
+}, { timestamps: true, minimize: false });
 
 export default mongoose.model<IOfficeMedia>('OfficeMedia', OfficeMediaSchema);

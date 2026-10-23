@@ -45,6 +45,8 @@ export class Pong {
   /** O'yinchi boshqaradi (chap raketka): -1 yuqoriga, +1 pastga; null — avtomatik (namoyish). */
   input: number | null = null;
   playing = false;
+  /** Raketka to'pni qaytarganda (o'yin "bip"i). */
+  onHit: (() => void) | null = null;
   reset(dir = 1) { this.ball = { x: 160, y: 90, vx: 150 * dir, vy: (Math.random() - 0.5) * 160 }; }
   update(dt: number) {
     const b = this.ball, P = 40;
@@ -54,8 +56,8 @@ export class Pong {
     this.left = Math.max(0, Math.min(180 - P, this.left)); this.right = Math.max(0, Math.min(180 - P, this.right));
     b.x += b.vx * dt; b.y += b.vy * dt;
     if (b.y < 4 || b.y > 176) { b.vy *= -1; b.y = Math.max(4, Math.min(176, b.y)); }
-    if (b.x < 18 && b.x > 8 && b.y > this.left && b.y < this.left + P && b.vx < 0) { b.vx = -b.vx * 1.04; b.vy += (b.y - (this.left + P / 2)) * 4; }
-    if (b.x > 302 && b.x < 312 && b.y > this.right && b.y < this.right + P && b.vx > 0) { b.vx = -b.vx * 1.04; b.vy += (b.y - (this.right + P / 2)) * 4; }
+    if (b.x < 18 && b.x > 8 && b.y > this.left && b.y < this.left + P && b.vx < 0) { b.vx = -b.vx * 1.04; b.vy += (b.y - (this.left + P / 2)) * 4; if (this.playing) this.onHit?.(); }
+    if (b.x > 302 && b.x < 312 && b.y > this.right && b.y < this.right + P && b.vx > 0) { b.vx = -b.vx * 1.04; b.vy += (b.y - (this.right + P / 2)) * 4; if (this.playing) this.onHit?.(); }
     if (b.x < -10) { this.score[1]++; this.reset(1); }
     if (b.x > 330) { this.score[0]++; this.reset(-1); }
     b.vx = Math.sign(b.vx) * Math.min(420, Math.abs(b.vx));

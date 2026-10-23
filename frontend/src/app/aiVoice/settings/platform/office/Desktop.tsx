@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { Badge, type Tone } from "../../ui";
 import { officeApi, type AgentTask, type TaskStatus } from "./officeApi";
 import type { Pong } from "./screens";
+import { beep } from "./sound";
 
 // AI ofis — egasining kompyuteri ("Mening ofisim" stolida o'tirganda ochiladi): ish stoli uslubidagi oyna va ilovalar —
 // Claude (Boshliqqa buyruq), Vazifalar, O'yin (Pong — TV'dagi bilan bir xil), ERP yorliqlari (chiqqandan keyin ochiladi).
@@ -134,7 +135,7 @@ export function GameView({ pong, k, big = false }: { pong: Pong | null; k: K; bi
     const c = pong.canvas;
     c.style.width = "100%"; c.style.height = "100%"; c.style.objectFit = "contain"; c.style.imageRendering = "pixelated";
     host.current.appendChild(c);
-    pong.playing = true; pong.input = 0; pong.score = [0, 0];
+    pong.playing = true; pong.input = 0; pong.score = [0, 0]; pong.onHit = () => beep(520 + Math.random() * 200);
     const keys = new Set<string>();
     const upd = () => { pong.input = (keys.has("s") || keys.has("arrowdown") ? 1 : 0) - (keys.has("w") || keys.has("arrowup") ? 1 : 0); };
     const kd = (e: KeyboardEvent) => { const key = e.key.toLowerCase(); if (["w", "s", "arrowup", "arrowdown"].includes(key)) { keys.add(key); upd(); e.preventDefault(); e.stopPropagation(); } };
@@ -144,7 +145,7 @@ export function GameView({ pong, k, big = false }: { pong: Pong | null; k: K; bi
     const i = setInterval(() => setScore([...pong.score] as [number, number]), 250);
     return () => {
       window.removeEventListener("keydown", kd, true); window.removeEventListener("keyup", ku, true); clearInterval(i);
-      pong.playing = false; pong.input = null;
+      pong.playing = false; pong.input = null; pong.onHit = null;
       if (c.parentElement === host.current) host.current?.removeChild(c);
     };
   }, [pong]);

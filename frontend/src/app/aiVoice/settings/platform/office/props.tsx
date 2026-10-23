@@ -1,4 +1,4 @@
-import { memo, useMemo, useRef } from "react";
+import { memo, useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { Billboard, Html, Instance, Instances } from "@react-three/drei";
 import * as THREE from "three";
@@ -491,15 +491,26 @@ export function GameCorner({ hub }: { hub: ScreenHub }) {
 }
 
 // ───────────── Kinozal: ekranda multfilm (canvas), pardalar, puflar, popkorn ─────────────
-export function Cinema({ hub }: { hub: ScreenHub }) {
+export function Cinema({ hub, videoSrc }: { hub: ScreenHub; videoSrc: string | null }) {
   const S = CINEMA.screen;
+  // To'g'ridan-to'g'ri video (mp4/webm) — ekranda video tekstura (ovozsiz; ovoz bilan — yurish rejimida kinoda o'tirganda)
+  const vtex = useMemo(() => {
+    if (!videoSrc || typeof document === "undefined") return null;
+    const v = document.createElement("video");
+    v.src = videoSrc; v.crossOrigin = "anonymous"; v.loop = true; v.muted = true; v.playsInline = true;
+    v.play().catch(() => {});
+    const t = new THREE.VideoTexture(v);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return { v, t };
+  }, [videoSrc]);
+  useEffect(() => () => { if (vtex) { vtex.v.pause(); vtex.v.removeAttribute("src"); vtex.v.load(); vtex.t.dispose(); } }, [vtex]);
   const bagColors = ["#e85d75", "#f2a541", "#5b8def", "#7bd389", "#b57edc", CLAUDE, "#3fa7a0"];
   return (
     <group>
       <Box p={[S.x, 1.75, S.z - 0.08]} s={[S.w + 0.4, 2.7, 0.1]} c="#15171c" />
       <mesh position={[S.x, 1.75, S.z - 0.02]}>
         <planeGeometry args={[S.w, 2.4]} />
-        <meshBasicMaterial map={hub.movie} toneMapped={false} />
+        <meshBasicMaterial map={vtex?.t || hub.movie} toneMapped={false} />
       </mesh>
       <Box p={[S.x - S.w / 2 - 0.4, 1.4, S.z + 0.1]} s={[0.5, 2.8, 0.3]} c="#9b2335" cast />
       <Box p={[S.x + S.w / 2 + 0.4, 1.4, S.z + 0.1]} s={[0.5, 2.8, 0.3]} c="#9b2335" cast />
@@ -515,10 +526,22 @@ export function Cinema({ hub }: { hub: ScreenHub }) {
 }
 
 /** Ochiq dam olish burchagi: divan, stolcha, suv kuleri, torsher. */
-export function Lounge() {
+export function Lounge({ musicOn }: { musicOn: boolean }) {
   const s = LOUNGE.sofa, t = LOUNGE.table;
   const bub = useRef<THREE.Mesh>(null);
-  useFrame(({ clock }) => { if (bub.current) { const k = (clock.elapsedTime * 0.4) % 1; bub.current.position.y = 1.15 + k * 0.4; bub.current.visible = k < 0.9; } });
+  const notes = useRef<(THREE.Mesh | null)[]>([]);
+  useFrame(({ clock }) => {
+    const tt = clock.elapsedTime;
+    if (bub.current) { const k = (tt * 0.4) % 1; bub.current.position.y = 1.15 + k * 0.4; bub.current.visible = k < 0.9; }
+    notes.current.forEach((n, i) => {
+      if (!n) return;
+      n.visible = musicOn;
+      if (!musicOn) return;
+      const k = (tt * 0.5 + i / 3) % 1;
+      n.position.set(RADIO.x + Math.sin(tt * 2 + i) * 0.25, 0.75 + k * 1.1, RADIO.z);
+      n.scale.setScalar(0.09 * (1 - k * 0.5));
+    });
+  });
   return (
     <group>
       <Box p={[(s.x0 + s.x1) / 2, 0.25, (s.z0 + s.z1) / 2]} s={[s.x1 - s.x0, 0.5, s.z1 - s.z0]} c="#7a5c99" cast recv />
@@ -534,9 +557,20 @@ export function Lounge() {
         <mesh ref={bub} geometry={SPHERE} position={[0, 1.2, 0]} scale={0.05}><meshBasicMaterial color="#ffffff" /></mesh>
       </group>
       <FloorLamp x={20.3} z={12.6} />
+      {/* Radio (musiqa pleyeri) — kofe stolchasida; chalganda notalar uchadi */}
+      <Box p={[RADIO.x, 0.52, RADIO.z]} s={[0.56, 0.3, 0.22]} c="#c0392b" cast />
+      <mesh position={[RADIO.x - 0.1, 0.52, RADIO.z + 0.112]}><circleGeometry args={[0.09, 20]} /><meshStandardMaterial color="#2b2d33" /></mesh>
+      <Box p={[RADIO.x + 0.16, 0.56, RADIO.z + 0.112]} s={[0.14, 0.08, 0.01]} c="#111" e={musicOn ? "#7cf37c" : undefined} ei={1.5} />
+      <Box p={[RADIO.x + 0.2, 0.78, RADIO.z]} s={[0.02, 0.22, 0.02]} c="#9aa3ad" />
+      {[0, 1, 2].map((i) => (
+        <mesh key={i} ref={(m) => { notes.current[i] = m; }} geometry={SPHERE} visible={false}>
+          <meshBasicMaterial color={["#f2c14e", "#e85d75", "#5b8def"][i]} toneMapped={false} />
+        </mesh>
+      ))}
     </group>
   );
 }
+const RADIO = { x: (LOUNGE.table.x0 + LOUNGE.table.x1) / 2, z: (LOUNGE.table.z0 + LOUNGE.table.z1) / 2 };
 
 export function Plants() {
   return (

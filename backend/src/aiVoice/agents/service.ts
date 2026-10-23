@@ -64,10 +64,11 @@ export function setupChecklist(): { codeReady: boolean; contentReady: boolean; i
 
 // ───────────── Test ilgaklari ─────────────
 type ContentRunner = (prompt: string) => Promise<any>;
-let contentRunner: ContentRunner = (p) => geminiTextToJson(p);
+const defaultRunner: ContentRunner = (p) => geminiTextToJson(p);
+let contentRunner: ContentRunner = defaultRunner;
 let officeInvalidate: () => void = () => {};
 /** Faqat testlar uchun: Gemini o'rniga soxta. null — asl holat. */
-export function __setContentRunnerForTests(fn: ContentRunner | null): void { contentRunner = fn || ((p) => geminiTextToJson(p)); }
+export function __setContentRunnerForTests(fn: ContentRunner | null): void { contentRunner = fn || defaultRunner; }
 export function onAgentChange(fn: () => void): void { officeInvalidate = fn; }
 let defaultsReady: Promise<void> | null = null;
 let autoTimer: NodeJS.Timeout | null = null;
@@ -726,4 +727,39 @@ export async function sendTaskToTelegram(id: string, target: unknown, index: unk
   }
   await AgentTask.updateOne({ _id: id }, { $push: { log: logLine(target === 'channel' ? "Telegram kanalga yuborildi" : "Dasturchi chatiga yuborildi") } });
   return { ok: true };
+}
+
+// ───────────── Suhbat (owner 2026-10-23): agent o'z ishi haqidagi savolga javob beradi ─────────────
+/** Agent bilan erkin suhbat — buyruq emas (vazifa yaratilmaydi). Javob: 1–4 gap, savol tilida, agent nomidan. */
+export async function chatWithAgent(key: string, rawText: unknown, rawHistory: unknown):
+  Promise<{ ok: true; reply: string } | { ok: false; status: number; error: string }> {
+  const text = typeof rawText === 'string' ? rawText.trim().slice(0, 2000) : '';
+  if (!text) return { ok: false, status: 400, error: 'invalid' };
+  await ensureDefaults();
+  const p = await AgentProfile.findOne({ key }).lean();
+  if (!p) return { ok: false, status: 404, error: 'agent_not_found' };
+  if (!geminiConfigured() && contentRunner === defaultRunner) return { ok: false, status: 503, error: 'not_configured' };
+  const history = (Array.isArray(rawHistory) ? rawHistory : []).slice(-8)
+    .filter((h: any) => h && (h.role === 'me' || h.role === 'agent') && typeof h.text === 'string')
+    .map((h: any) => `${h.role === 'me' ? 'Egasi' : p.name}: ${String(h.text).slice(0, 600)}`);
+  const tasks = (await listTasks({ agentKey: key, limit: 5 }))
+    .map((t) => `- [${t.status}] ${t.text.slice(0, 160)}${t.summary ? ` → ${t.summary.slice(0, 200)}` : ''}`);
+  const prompt = [
+    `Sen "${p.name}" agentisan (AI ofis xodimi). Roling: ${p.description || p.kind}.`,
+    p.systemPrompt ? `Ish yo'riqnomang (qisqa): ${p.systemPrompt.slice(0, 1500)}` : '',
+    tasks.length ? `So'nggi vazifalaring:\n${tasks.join('\n')}` : "Hozircha vazifang yo'q.",
+    history.length ? `Suhbat tarixi:\n${history.join('\n')}` : '',
+    `Egasi: ${text}`,
+    "Egasi bilan jonli suhbatlashyapsan (ovoz bilan ham o'qiladi). Savol tilida (o'zbekcha bo'lsa lotin yozuvida, ruscha bo'lsa ruscha) " +
+    "1–4 qisqa gap bilan, birinchi shaxsda, samimiy va aniq javob ber. Ish bajarilishi kerak bo'lsa — buni \"buyruq\" sifatida yuborishni taklif qil " +
+    "(suhbatda hech narsa bajarilmaydi). Faqat JSON qaytar: {\"reply\": \"...\"}",
+  ].filter(Boolean).join('\n\n');
+  try {
+    const out = await contentRunner(prompt);
+    const reply = typeof out?.reply === 'string' ? out.reply.trim().slice(0, 1500) : '';
+    if (!reply) return { ok: false, status: 502, error: 'empty' };
+    return { ok: true, reply };
+  } catch {
+    return { ok: false, status: 502, error: 'ai_failed' };
+  }
 }

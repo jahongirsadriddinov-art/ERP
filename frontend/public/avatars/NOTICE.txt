@@ -5,55 +5,39 @@ The list of avatars used by the app is frontend/src/app/avatars/manifest.ts.
 Source mapping:
 
 construction-worker-medium.webp              assets/Construction worker/Medium/3D/construction_worker_3d_medium.png
-man-dark.webp                                assets/Man/Dark/3D/man_3d_dark.png
 man-light.webp                               assets/Man/Light/3D/man_3d_light.png
-man-medium-dark.webp                         assets/Man/Medium-Dark/3D/man_3d_medium-dark.png
 man-medium-light.webp                        assets/Man/Medium-Light/3D/man_3d_medium-light.png
 man-medium.webp                              assets/Man/Medium/3D/man_3d_medium.png
-man-bald-dark.webp                           assets/Man bald/Dark/3D/man_bald_3d_dark.png
 man-bald-light.webp                          assets/Man bald/Light/3D/man_bald_3d_light.png
 man-bald-medium-light.webp                   assets/Man bald/Medium-Light/3D/man_bald_3d_medium-light.png
 man-bald-medium.webp                         assets/Man bald/Medium/3D/man_bald_3d_medium.png
-man-beard-dark.webp                          assets/Man beard/Dark/3D/man_beard_3d_dark.png
-man-beard-medium-dark.webp                   assets/Man beard/Medium-Dark/3D/man_beard_3d_medium-dark.png
 man-beard-medium-light.webp                  assets/Man beard/Medium-Light/3D/man_beard_3d_medium-light.png
 man-beard-medium.webp                        assets/Man beard/Medium/3D/man_beard_3d_medium.png
 man-blonde-hair-light.webp                   assets/Man blonde hair/Light/3D/man_blonde_hair_3d_light.png
 man-blonde-hair-medium-light.webp            assets/Man blonde hair/Medium-Light/3D/man_blonde_hair_3d_medium-light.png
-man-construction-worker-dark.webp            assets/Man construction worker/Dark/3D/man_construction_worker_3d_dark.png
 man-construction-worker-light.webp           assets/Man construction worker/Light/3D/man_construction_worker_3d_light.png
 man-construction-worker-medium.webp          assets/Man construction worker/Medium/3D/man_construction_worker_3d_medium.png
-man-curly-hair-dark.webp                     assets/Man curly hair/Dark/3D/man_curly_hair_3d_dark.png
 man-curly-hair-light.webp                    assets/Man curly hair/Light/3D/man_curly_hair_3d_light.png
-man-curly-hair-medium-dark.webp              assets/Man curly hair/Medium-Dark/3D/man_curly_hair_3d_medium-dark.png
 man-curly-hair-medium.webp                   assets/Man curly hair/Medium/3D/man_curly_hair_3d_medium.png
 man-red-hair-light.webp                      assets/Man red hair/Light/3D/man_red_hair_3d_light.png
 man-red-hair-medium-light.webp               assets/Man red hair/Medium-Light/3D/man_red_hair_3d_medium-light.png
 man-white-hair-light.webp                    assets/Man white hair/Light/3D/man_white_hair_3d_light.png
-man-white-hair-medium-dark.webp              assets/Man white hair/Medium-Dark/3D/man_white_hair_3d_medium-dark.png
 man-white-hair-medium.webp                   assets/Man white hair/Medium/3D/man_white_hair_3d_medium.png
-old-man-dark.webp                            assets/Old man/Dark/3D/old_man_3d_dark.png
 old-man-light.webp                           assets/Old man/Light/3D/old_man_3d_light.png
 old-man-medium.webp                          assets/Old man/Medium/3D/old_man_3d_medium.png
-old-woman-dark.webp                          assets/Old woman/Dark/3D/old_woman_3d_dark.png
 old-woman-light.webp                         assets/Old woman/Light/3D/old_woman_3d_light.png
 old-woman-medium.webp                        assets/Old woman/Medium/3D/old_woman_3d_medium.png
-older-person-dark.webp                       assets/Older person/Dark/3D/older_person_3d_dark.png
 older-person-medium-light.webp               assets/Older person/Medium-Light/3D/older_person_3d_medium-light.png
 person-light.webp                            assets/Person/Light/3D/person_3d_light.png
-person-medium-dark.webp                      assets/Person/Medium-Dark/3D/person_3d_medium-dark.png
 person-wearing-turban-medium-light.webp      assets/Person wearing turban/Medium-Light/3D/person_wearing_turban_3d_medium-light.png
 person-wearing-turban-medium.webp            assets/Person wearing turban/Medium/3D/person_wearing_turban_3d_medium.png
-woman-dark.webp                              assets/Woman/Dark/3D/woman_3d_dark.png
 woman-light.webp                             assets/Woman/Light/3D/woman_3d_light.png
-woman-medium-dark.webp                       assets/Woman/Medium-Dark/3D/woman_3d_medium-dark.png
 woman-medium-light.webp                      assets/Woman/Medium-Light/3D/woman_3d_medium-light.png
 woman-medium.webp                            assets/Woman/Medium/3D/woman_3d_medium.png
 woman-blonde-hair-light.webp                 assets/Woman blonde hair/Light/3D/woman_blonde_hair_3d_light.png
 woman-blonde-hair-medium-light.webp          assets/Woman blonde hair/Medium-Light/3D/woman_blonde_hair_3d_medium-light.png
 woman-construction-worker-light.webp         assets/Woman construction worker/Light/3D/woman_construction_worker_3d_light.png
 woman-construction-worker-medium.webp        assets/Woman construction worker/Medium/3D/woman_construction_worker_3d_medium.png
-woman-curly-hair-dark.webp                   assets/Woman curly hair/Dark/3D/woman_curly_hair_3d_dark.png
 woman-curly-hair-medium-light.webp           assets/Woman curly hair/Medium-Light/3D/woman_curly_hair_3d_medium-light.png
 woman-curly-hair-medium.webp                 assets/Woman curly hair/Medium/3D/woman_curly_hair_3d_medium.png
 woman-red-hair-light.webp                    assets/Woman red hair/Light/3D/woman_red_hair_3d_light.png
@@ -61,7 +45,6 @@ woman-red-hair-medium-light.webp             assets/Woman red hair/Medium-Light/
 woman-white-hair-light.webp                  assets/Woman white hair/Light/3D/woman_white_hair_3d_light.png
 woman-white-hair-medium.webp                 assets/Woman white hair/Medium/3D/woman_white_hair_3d_medium.png
 woman-with-headscarf-light.webp              assets/Woman with headscarf/Light/3D/woman_with_headscarf_3d_light.png
-woman-with-headscarf-medium-dark.webp        assets/Woman with headscarf/Medium-Dark/3D/woman_with_headscarf_3d_medium-dark.png
 woman-with-headscarf-medium-light.webp       assets/Woman with headscarf/Medium-Light/3D/woman_with_headscarf_3d_medium-light.png
 woman-with-headscarf-medium.webp             assets/Woman with headscarf/Medium/3D/woman_with_headscarf_3d_medium.png
 

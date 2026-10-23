@@ -112,6 +112,8 @@ export default function WalkMode({ agents, profiles, setup, scene, onExit, onCha
   live.current = { interact, overlay, talking, seat, onExit };
   useEffect(() => {
     const keys = new Set<string>();
+    // Owner 2026-10-23: Ctrl (yoki Alt) bosib turilsa — kursor chiqadi (tugmalarni bosish uchun), qo'yib yuborilsa — qarash qaytadi
+    let relock = false;
     const upd = () => {
       const i = bridge.input;
       i.mz = (keys.has("w") || keys.has("arrowup") ? 1 : 0) - (keys.has("s") || keys.has("arrowdown") ? 1 : 0);
@@ -125,6 +127,11 @@ export default function WalkMode({ agents, profiles, setup, scene, onExit, onCha
       if (typing(e)) return;
       const L = live.current;
       const key = norm(e.key.toLowerCase());
+      if ((key === "control" || key === "alt") && !e.repeat) {
+        if (document.pointerLockElement) { relock = true; try { document.exitPointerLock(); } catch { /* */ } }
+        if (key === "alt") e.preventDefault(); // Alt brauzer menyusini ochmasin
+        return;
+      }
       if (key === "escape") { if (L.talking) setTalking(null); else if (L.seat) bridge.cmds.push({ type: "stand" }); else if (!document.pointerLockElement && !document.fullscreenElement) L.onExit(); return; }
       // Panel/kompyuter ochiq — yangi bosishlar o'yinchini yurgizmaydi (lekin oldin bosib turilgani tozalanmaydi)
       if (L.overlay) return;
@@ -132,7 +139,15 @@ export default function WalkMode({ agents, profiles, setup, scene, onExit, onCha
       if (key === "e" || key === "у") { L.interact(); e.preventDefault(); return; }
       if (key === "v" || key === "м") { bridge.input.fp = !bridge.input.fp; setFp(bridge.input.fp); }
     };
-    const ku = (e: KeyboardEvent) => { keys.delete(norm(e.key.toLowerCase())); if (e.key === "Shift") keys.delete("shift"); upd(); };
+    const ku = (e: KeyboardEvent) => {
+      if ((e.key === "Control" || e.key === "Alt") && relock) {
+        relock = false;
+        // keydown'dan keyingi qisqa "foydalanuvchi harakati" ichida qayta qulflanadi; brauzer rad etsa — sahnani bosish kifoya
+        if (!live.current.overlay) try { (root.current as any)?.requestPointerLock?.()?.catch?.(() => {}); } catch { /* */ }
+        return;
+      }
+      keys.delete(norm(e.key.toLowerCase())); if (e.key === "Shift") keys.delete("shift"); upd();
+    };
     const clear = () => { keys.clear(); upd(); };
     const vis = () => { if (document.hidden) clear(); };
     window.addEventListener("keydown", kd);

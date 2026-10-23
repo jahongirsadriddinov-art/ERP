@@ -7,8 +7,8 @@ import { memojiFor, memojiHtml } from "../components/UserAvatar";
 const DIR = resolve(__dirname, "../../../public/avatars");
 
 describe("avatar manifest (Fluent 3D, faqat boshlar)", () => {
-  it("~60 ta, id noyob, fayl mavjud (≤10 KB), id = fayl nomi", () => {
-    expect(AVATARS.length).toBe(60);
+  it("43 ta (qora/to'q terililar olib tashlangan — owner 2026-10-23), id noyob, fayl mavjud (≤10 KB), id = fayl nomi", () => {
+    expect(AVATARS.length).toBe(43);
     expect(new Set(AVATARS.map((a) => a.id)).size).toBe(AVATARS.length);
     for (const a of AVATARS) {
       expect(a.file).toBe(`/avatars/${a.id}.webp`);
@@ -31,9 +31,10 @@ describe("avatar manifest (Fluent 3D, faqat boshlar)", () => {
     expect(notice).toContain("MIT License");
   });
   it("erkak/ayol to'plamlari yetarli, barcha teri ranglari bor", () => {
-    expect(AVATARS.filter((a) => a.gender === "m").length).toBeGreaterThanOrEqual(25);
-    expect(AVATARS.filter((a) => a.gender === "f").length).toBeGreaterThanOrEqual(20);
-    for (const tone of ["-light", "-medium-light", "-medium", "-medium-dark", "-dark"]) expect(AVATARS.some((a) => a.id.endsWith(tone)), tone).toBe(true);
+    expect(AVATARS.filter((a) => a.gender === "m").length).toBeGreaterThanOrEqual(20);
+    expect(AVATARS.filter((a) => a.gender === "f").length).toBeGreaterThanOrEqual(15);
+    for (const tone of ["-light", "-medium-light", "-medium"]) expect(AVATARS.some((a) => a.id.endsWith(tone)), tone).toBe(true);
+    expect(AVATARS.some((a) => /-(dark|medium-dark)$/.test(a.id))).toBe(false);
   });
   it("bust rasmlar (kaska, ro'mol) bosh doirani to'ldirishi uchun fit'ga ega", () => {
     for (const a of AVATARS.filter((x) => /construction-worker|headscarf/.test(x.id))) {

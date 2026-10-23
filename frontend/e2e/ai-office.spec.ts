@@ -27,6 +27,7 @@ const PROFILES = [
   ['role-prorab', 'Prorab yordamchisi', 'role', 'assistants', '#22c55e'], ['role-brigadir', 'Brigadir yordamchisi', 'role', 'assistants', '#f43f5e'], ['role-ishchi', 'Ishchi yordamchisi', 'role', 'assistants', '#64748b'],
 ].map(([key, name, kind, team, color]) => ({ key, name, kind, team, color, description: `${name} tavsifi`, systemPrompt: `Sen ${name}`, enabled: true, builtIn: true }));
 
+const spawned: any[] = [];
 function officeAgents() {
   const busy: Record<string, any> = {
     backend: { busy: true, activity: 'task', since: iso(320), task: { id: 't-be', status: 'running', text: 'Login API tezlashtirish' } },
@@ -41,6 +42,7 @@ function officeAgents() {
     ...PROFILES.map((p) => ({ id: p.key, name: p.name, kind: p.kind, team: p.team, color: p.color, busy: false, activity: 'idle', ...(p.kind === 'role' ? { role: p.key.slice(5) } : {}), ...(busy[p.key] || {}) })),
     { id: 'tg:aaaaaaaaaaaaaaaaaaaaaaaa', name: 'Jasur', kind: 'tg', team: 'ai', color: '#D97757', busy: true, activity: 'call', since: iso(75), status: 'connected' },
     { id: 'tg:bbbbbbbbbbbbbbbbbbbbbbbb', name: 'Sarvar', kind: 'tg', team: 'ai', color: '#D97757', busy: false, activity: 'idle', status: 'connected' },
+    ...spawned.map((p) => ({ id: p.key, name: p.name, kind: p.kind, team: p.team, color: p.color, busy: false, activity: 'idle' })),
   ];
 }
 
@@ -61,6 +63,8 @@ type Calls = { tasks: any[]; approves: { id: string; body: any }[]; officeGets: 
 
 async function mockApi(page: Page, calls: Calls) {
   const smmTasks: any[] = [];
+  const bossTasks: any[] = [];
+  spawned.length = 0;
   const bossTask = {
     id: 'bbbbbbbbbbbbbbbbbbbbbb01', agentKey: 'manager', agentKind: 'content', text: 'Yangi mijozlar jalb qilish', status: 'review', items: [], links: [], log: [{ at: iso(30), text: 'Reja tayyor' }],
     plan: [{ agentKey: 'smm', text: '3 ta post yoz' }, { agentKey: 'landing', text: 'Bosh sahifaga taklif bloki' }], createdAt: iso(60),
@@ -74,7 +78,7 @@ async function mockApi(page: Page, calls: Calls) {
     if (url.includes('/api/status')) return json({ siteEnabled: true, appEnabled: true, botEnabled: true });
     if (url.includes('/api/deploy/latest')) return json({ available: false });
     if (url.includes('/api/ai-voice/platform/office')) { calls.officeGets++; return json({ agents: officeAgents(), generatedAt: new Date().toISOString() }); }
-    if (url.includes('/api/ai-voice/platform/agents')) return json({ agents: PROFILES, setup: SETUP });
+    if (url.includes('/api/ai-voice/platform/agents')) return json({ agents: [...PROFILES, ...spawned], setup: SETUP });
     if (url.match(/\/platform\/agent-tasks\/[^/]+\/approve/)) {
       const id = url.split('/agent-tasks/')[1].split('/')[0];
       const body = req.postDataJSON();
@@ -85,6 +89,13 @@ async function mockApi(page: Page, calls: Calls) {
     if (url.includes('/platform/agent-tasks') && method === 'POST') {
       const body = req.postDataJSON();
       calls.tasks.push(body);
+      if (body.agentKey === 'manager') {
+        const p = { key: 'custom-0a1b2c3d', name: 'Ombor nazorati', kind: 'code', team: 'platform', color: '#22c55e', description: 'Ombor', systemPrompt: 'Sen ombor agentisan', enabled: true, builtIn: false };
+        spawned.push(p);
+        const st = { id: 'bbbbbbbbbbbbbbbbbbbbbb02', agentKey: 'manager', agentKind: 'content', text: body.text, status: 'done', spawnedKey: p.key, summary: "Yangi agent qo'shildi: Ombor nazorati", items: [], links: [], log: [], plan: [], createdAt: iso(0) };
+        bossTasks.unshift(st);
+        return json({ ok: true, task: st });
+      }
       const t = {
         id: `cccccccccccccccccccccc${String(calls.tasks.length).padStart(2, '0')}`, agentKey: body.agentKey, agentKind: 'content', text: body.text, status: 'done',
         summary: '2 ta tayyor post', items: [{ title: 'Smeta 5 daqiqada', text: "QurilishERP bilan smetani 5 daqiqada tuzing.", hashtags: ['#qurilish', '#erp'] }, { title: 'Prorab uchun', text: 'Ishchilar davomati — bitta tugma.' }],
@@ -97,7 +108,7 @@ async function mockApi(page: Page, calls: Calls) {
       const u = new URL(url);
       const key = u.searchParams.get('agentKey');
       if (key === 'smm') return json({ tasks: smmTasks });
-      if (key === 'manager') return json({ tasks: [bossTask] });
+      if (key === 'manager') return json({ tasks: [...bossTasks, bossTask] });
       if (!key) return json({ tasks: [bossTask, ...smmTasks] });
       return json({ tasks: [] });
     }
@@ -194,6 +205,14 @@ test('AI ofis: 3D sahna, agentlar, buyruq va natija (owner 2026-10-22)', async (
   await page.getByTestId('ai-office-approve-plan').click();
   await expect.poll(() => calls.approves.length).toBe(1);
   expect(calls.approves[0]).toEqual({ id: 'bbbbbbbbbbbbbbbbbbbbbb01', body: { plan: [{ agentKey: 'smm', text: '3 ta post yoz' }] } });
+
+  // Boshliq yangi agent yonlaydi → ofisda paydo bo'ladi, ochiladi
+  await page.getByTestId('ai-office-command').fill('Ombor ishi uchun agent yonla');
+  await page.getByTestId('ai-office-send').click();
+  await expect.poll(() => calls.tasks.at(-1)).toEqual({ agentKey: 'manager', text: 'Ombor ishi uchun agent yonla' });
+  await page.getByTestId('ai-office-open-spawned').click();
+  await expect(page.getByTestId('ai-office-panel-name')).toHaveText('Ombor nazorati');
+  await expect(page.getByTestId('ai-office-agent-custom-0a1b2c3d')).toBeVisible();
 
   // Code agenti — sozlanmagan: sozlash ro'yxati (sir nomlari) ko'rinadi
   await page.getByTestId('ai-office-agent-backend').click();

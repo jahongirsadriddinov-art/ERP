@@ -9,12 +9,13 @@ import jwt from 'jsonwebtoken';
 import type { MongoMemoryServer } from 'mongodb-memory-server';
 import AgentProfile from '../../models/AgentProfile';
 import AgentTask from '../../models/AgentTask';
+import AuditLog from '../../models/AuditLog';
 import User from '../../models/User';
 import { JWT_SECRET } from '../../middleware/auth';
 import { mountAiVoiceRoutes } from '../bootstrap';
 import { __resetOfficeCacheForTests } from '../office';
 import {
-  __drainAgentsForTests, __fireAutoReportForTests, __resetAgentsForTests, __setContentRunnerForTests, plainReport, reportPeriod,
+  __drainAgentsForTests, __fireAutoReportForTests, __resetAgentsForTests, __setContentRunnerForTests, fallbackAgentDraft, plainReport, reportPeriod, SPAWN_RE,
 } from '../agents/service';
 import { seedCompany, startMongo, stopMongo, type SeedCompany } from './helpers';
 
@@ -94,7 +95,7 @@ describe('agentlar ro\'yxati', () => {
     const keys = r.body.agents.map((a: any) => a.key);
     for (const k of ['manager', 'backend', 'frontend', 'database', 'ai', 'mobile', 'designer', 'security', 'qa', 'devpanel', 'devbot', 'smm', 'marketing',
       'reporter', 'feature', 'windows', 'android', 'miniapp', 'erpbot', 'landing', 'payments', 'devops', 'tgworker', 'translator', 'perf', 'analytics',
-      'support', 'docs', 'billing', 'role-direktor']) expect(keys).toContain(k);
+      'support', 'docs', 'billing', 'role-direktor', 'finance', 'chat', 'gps', 'botdesign', 'notify', 'monitoring']) expect(keys).toContain(k);
     expect(r.body.agents.find((a: any) => a.key === 'smm')).toMatchObject({ kind: 'content', team: 'growth', builtIn: true });
     expect(r.body.agents.find((a: any) => a.key === 'manager')).toMatchObject({ team: 'lead' });
     expect(r.body.setup.codeReady).toBe(true);
@@ -295,6 +296,55 @@ describe('Boshliq va Hisobotchi', () => {
     const reports = await AgentTask.find({ agentKey: 'reporter' }).sort({ createdAt: -1 }).lean();
     expect(reports.length).toBe(2);
     expect(reports[0]).toMatchObject({ status: 'done', summary: 'AI hisobot' });
+  });
+
+  it("Boshliq yangi agent yaratadi (Gemini): serverda saqlanadi, ofisda ko'rinadi, buyruq oladi, audit yoziladi", async () => {
+    __setContentRunnerForTests(async (p) => {
+      if (p.includes('yangi agent so')) return { name: 'Ombor nazorati', kind: 'code', team: 'platform', description: 'Ombor qoldiqlari moduli', systemPrompt: 'Sen ombor agentisan.' };
+      return { summary: 'ok', items: [{ title: 'a', text: 'b' }] };
+    });
+    const r = await post('/agent-tasks', { agentKey: 'manager', text: "Ombor ishi uchun agent yonla" });
+    await settle();
+    const t = (await get(`/agent-tasks/${r.body.task.id}`)).body.task;
+    expect(t.status).toBe('done');
+    expect(t.spawnedKey).toMatch(/^custom-[0-9a-f]{8}$/);
+    expect(t.summary).toContain('Ombor nazorati');
+    const prof = await AgentProfile.findOne({ key: t.spawnedKey }).lean();
+    expect(prof).toMatchObject({ name: 'Ombor nazorati', kind: 'code', team: 'platform', builtIn: false, createdBy: devId, systemPrompt: 'Sen ombor agentisan.' });
+    const office = await get('/office');
+    expect(office.body.agents.find((a: any) => a.id === t.spawnedKey)).toMatchObject({ name: 'Ombor nazorati', kind: 'code', team: 'platform' });
+    expect((await post('/agent-tasks', { agentKey: t.spawnedKey, text: 'Ombor sahifasi' })).status).toBe(200);
+    const audit = await AuditLog.findOne({ entity: 'ai_office_agent', entityId: t.spawnedKey }).lean();
+    expect(audit).toMatchObject({ action: 'create', userId: devId });
+    // Rejaga aylanmaydi
+    expect(t.plan).toEqual([]);
+  });
+
+  it("Boshliq yangi agent — AI'siz zaxira; nom band bo'lsa raqam qo'shiladi; oddiy maqsad esa reja bo'ladi", async () => {
+    __setContentRunnerForTests(async () => { throw new Error('GEMINI_API_KEY sozlanmagan'); });
+    const r = await post('/agent-tasks', { agentKey: 'manager', text: "yangi agent qo'sh: SMM postlar tahlili" });
+    await settle();
+    const t = (await get(`/agent-tasks/${r.body.task.id}`)).body.task;
+    expect(t.status).toBe('done');
+    const prof: any = await AgentProfile.findOne({ key: t.spawnedKey }).lean();
+    expect(prof.name).toBe('SMM postlar tahlili');
+    expect(prof).toMatchObject({ kind: 'content', team: 'growth' });
+    const r2 = await post('/agent-tasks', { agentKey: 'manager', text: "yangi agent qo'sh: SMM postlar tahlili" });
+    await settle();
+    const t2 = (await get(`/agent-tasks/${r2.body.task.id}`)).body.task;
+    expect((await AgentProfile.findOne({ key: t2.spawnedKey }).lean() as any).name).toBe('SMM postlar tahlili 2');
+    // Dasturchi qo'lda: bir xil nom 409
+    expect((await post('/agents', { name: 'smm postlar tahlili', kind: 'code' })).status).toBe(409);
+    const r3 = await post('/agent-tasks', { agentKey: 'manager', text: 'Mijozlar sonini oshirish' });
+    await settle();
+    expect((await get(`/agent-tasks/${r3.body.task.id}`)).body.task.status).toBe('review');
+  });
+
+  it('agent yaratish iborasi va zaxira loyiha', () => {
+    for (const s of ["Ombor ishi uchun agent yonla", "yangi agent qo'sh: X", 'Создай агента для склада', 'добавь нового агента', "GPS uchun agent yarat"]) expect(SPAWN_RE.test(s), s).toBe(true);
+    for (const s of ['Mijozlar sonini oshirish', 'Agentlar hisobotini ber']) expect(SPAWN_RE.test(s), s).toBe(false);
+    expect(fallbackAgentDraft('Ombor ishi uchun agent yonla')).toMatchObject({ name: 'Ombor', kind: 'code', team: 'platform' });
+    expect(fallbackAgentDraft("yangi agent qo'sh: Telegram bot reklamasi").team).toBe('growth');
   });
 
   it('hisobot davri va zaxira matn', () => {

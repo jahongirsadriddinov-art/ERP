@@ -91,7 +91,7 @@ export default function AiOffice() {
 
   const panel = sel && (
     <AgentPanel key={sel.id} agent={sel} profile={profile} profiles={profiles} setup={setup} onClose={() => setSelected(null)}
-      onChanged={changed} onProfile={loadProfiles} />
+      onChanged={() => { changed(); loadProfiles(); }} onProfile={loadProfiles} onOpenAgent={(id) => { loadProfiles(); loadOffice().then(() => select(id)); }} />
   );
 
   return (

@@ -29,13 +29,13 @@ agentRoutes.get('/agents', wrap(async (_req, res) => {
 }));
 
 agentRoutes.post('/agents', wrap(async (req, res) => {
-  const r = await createProfile(isObj(req.body) ? req.body : {}, uid(req));
-  if (!r.ok) return res.status(r.error === 'too_many' ? 409 : 400).json({ error: r.error });
+  const r = await createProfile(isObj(req.body) ? req.body : {}, uid(req), { req });
+  if (!r.ok) return res.status(r.error === 'too_many' || r.error === 'name_taken' ? 409 : 400).json({ error: r.error });
   res.json({ ok: true, agent: r.profile });
 }));
 
 agentRoutes.patch('/agents/:key', wrap(async (req, res) => {
-  const p = await updateProfile(String(req.params.key || '').slice(0, 40), isObj(req.body) ? req.body : {});
+  const p = await updateProfile(String(req.params.key || '').slice(0, 40), isObj(req.body) ? req.body : {}, uid(req), req);
   if (!p) return res.status(404).json({ error: 'agent_not_found' });
   res.json({ ok: true, agent: p });
 }));

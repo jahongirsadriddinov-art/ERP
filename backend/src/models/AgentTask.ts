@@ -20,6 +20,8 @@ export interface IAgentTask extends Document {
   /** Boshliq (manager): maqsad bo'lingan vazifalar; tasdiqdan keyin har biri alohida AgentTask (taskId). */
   plan: { agentKey: string; text: string; taskId?: string }[];
   parentId?: string;
+  /** Boshliq yaratgan yangi agent kaliti. */
+  spawnedKey?: string;
   items: AgentTaskItem[];
   links: AgentTaskLink[];
   log: { at: Date; text: string }[];
@@ -42,6 +44,7 @@ const AgentTaskSchema = new Schema<IAgentTask>({
     default: [],
   },
   parentId: { type: String },
+  spawnedKey: { type: String, maxlength: 40 },
   summary: { type: String, maxlength: 4000 },
   items: {
     type: [new Schema({

@@ -33,11 +33,11 @@ const ACTIVE: TaskStatus[] = ["queued", "review", "running"];
 async function copy(text: string, k: K) {
   try { await navigator.clipboard.writeText(text); toast.success(k("actions.copied")); } catch { toast.error(k("errors.generic")); }
 }
-const errMsg = (e: string, k: K) => (["rate_limited", "too_many_active", "agent_disabled", "not_configured", "invalid"].includes(e) ? k(`errors.${e}`) : k("errors.generic"));
+const errMsg = (e: string, k: K) => (["rate_limited", "too_many_active", "agent_disabled", "not_configured", "invalid", "name_taken", "too_many"].includes(e) ? k(`errors.${e}`) : k("errors.generic"));
 
-export default function AgentPanel({ agent, profile, profiles, setup, onClose, onChanged, onProfile }: {
+export default function AgentPanel({ agent, profile, profiles, setup, onClose, onChanged, onProfile, onOpenAgent }: {
   agent: OfficeAgent; profile?: AgentProfile; profiles: AgentProfile[]; setup: Setup | null;
-  onClose: () => void; onChanged: () => void; onProfile: () => void;
+  onClose: () => void; onChanged: () => void; onProfile: () => void; onOpenAgent: (id: string) => void;
 }) {
   const { t } = useTranslation();
   const k: K = (key, o) => t(`aiVoice.office.${key}`, o) as string;
@@ -144,7 +144,7 @@ export default function AgentPanel({ agent, profile, profiles, setup, onClose, o
             {tasks === null ? <div className="h-16 rounded-xl bg-muted/40 animate-pulse" />
               : !tasks.length ? <p className="text-xs text-muted-foreground" data-testid="ai-office-no-tasks">{k("empty")}</p>
                 : tasks.map((x) => (
-                  <TaskCard key={x.id} task={x} k={k} profiles={profiles} childOf={childOf} nameOf={nameOf}
+                  <TaskCard key={x.id} task={x} k={k} profiles={profiles} childOf={childOf} nameOf={nameOf} onOpenAgent={onOpenAgent}
                     onCancel={() => act(officeApi.cancel(x.id))} onRetry={(id = x.id) => act(officeApi.retry(id))}
                     onApprove={(b) => act(officeApi.approve(x.id, b))}
                     onSend={(target, index) => act(officeApi.send(x.id, target, index), k("actions.sentTg"))} />
@@ -156,8 +156,8 @@ export default function AgentPanel({ agent, profile, profiles, setup, onClose, o
   );
 }
 
-function TaskCard({ task, k, profiles, childOf, nameOf, onCancel, onRetry, onApprove, onSend }: {
-  task: AgentTask; k: K; profiles: AgentProfile[]; childOf: Map<string, AgentTask>; nameOf: (key: string) => string;
+function TaskCard({ task, k, profiles, childOf, nameOf, onCancel, onRetry, onApprove, onSend, onOpenAgent }: {
+  task: AgentTask; k: K; profiles: AgentProfile[]; childOf: Map<string, AgentTask>; nameOf: (key: string) => string; onOpenAgent: (id: string) => void;
   onCancel: () => void; onRetry: (id?: string) => void; onApprove: (b: { spec?: string; plan?: PlanItem[] }) => void;
   onSend: (target: "channel" | "developer", index?: number) => void;
 }) {
@@ -251,6 +251,11 @@ function TaskCard({ task, k, profiles, childOf, nameOf, onCancel, onRetry, onApp
           </div>
         );
       })}
+
+      {task.spawnedKey && (
+        <button type="button" onClick={() => onOpenAgent(task.spawnedKey!)} data-testid="ai-office-open-spawned"
+          className="h-8 px-3.5 rounded-full text-white text-[12px] font-semibold" style={{ background: "#D97757" }}>{k("actions.openAgent")}</button>
+      )}
 
       {task.links.length > 0 && (
         <div className="flex flex-wrap gap-1.5">

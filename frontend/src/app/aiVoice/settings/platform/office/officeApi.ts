@@ -18,7 +18,7 @@ export interface Setup { codeReady: boolean; contentReady: boolean; items: Setup
 export interface PlanItem { agentKey: string; text: string; taskId?: string }
 export interface AgentTask {
   id: string; agentKey: string; agentKind: "code" | "content"; text: string; status: TaskStatus; summary?: string; spec?: string;
-  parentId?: string; plan: PlanItem[]; items: { title: string; text: string; hashtags?: string[] }[]; links: { label: string; url: string }[];
+  parentId?: string; spawnedKey?: string; plan: PlanItem[]; items: { title: string; text: string; hashtags?: string[] }[]; links: { label: string; url: string }[];
   log: { at: string; text: string }[]; error?: string; createdAt: string; startedAt?: string; finishedAt?: string;
 }
 

@@ -3,6 +3,8 @@ import AgentProfile, { AGENT_TEAMS, type AgentTeam, type IAgentProfile } from '.
 import Company from '../../models/Company';
 import Subscription from '../../models/Subscription';
 import AgentTask, { AGENT_TASK_ACTIVE, type AgentTaskStatus } from '../../models/AgentTask';
+import User from '../../models/User';
+import { logAudit } from '../../services/audit';
 import { geminiConfigured, geminiTextToJson } from '../../services/gemini';
 import { AGENT_DEFAULTS } from './defaults';
 
@@ -19,6 +21,9 @@ export const REPORTER_KEY = 'reporter';
 export const FEATURE_KEY = 'feature';
 export const MANAGER_KEY = 'manager';
 export const MAX_PLAN_ITEMS = 8;
+export const MAX_AGENTS = 80;
+/** Boshliq buyrug'i yangi agent yaratish haqida: "X ishi uchun agent yonla", "yangi agent qo'sh: ...", "создай агента ...". */
+export const SPAWN_RE = /(agent\S*\s+(yonla|yoqla|qo['‘’`]?sh|yarat|och|ishga\s*tushir))|(yangi\s+agent)|(созда\S*\s+(нов\S*\s+)?агент)|(нов\S+\s+агент)|(добав\S*\s+(нов\S*\s+)?агент)/i;
 export const MAX_ACTIVE_PER_AGENT = 10;
 export const STALE_RUNNING_MS = 3 * 60 * 60_000;
 export const AUTO_REPORT_DELAY_MS = 60_000;
@@ -110,24 +115,35 @@ const cleanText = (v: unknown, max: number): string | undefined =>
   typeof v === 'string' ? v.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, '').trim().slice(0, max) : undefined;
 const COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 
-export async function createProfile(body: Record<string, unknown>, by: string): Promise<{ ok: true; profile: AgentProfileDto } | { ok: false; error: string }> {
+/** Audit: agent qo'shildi / o'zgardi (kim, qachon) — AuditLog, entity 'ai_office_agent'. */
+async function auditAgent(by: string, action: 'create' | 'update', key: string, description: string, req?: any, newValue?: unknown): Promise<void> {
+  const u: any = /^[0-9a-f]{24}$/i.test(by) ? await User.findById(by).select('firstName lastName role').lean().catch(() => null) : null;
+  await logAudit({
+    userId: by || 'system', userName: [u?.firstName, u?.lastName].filter(Boolean).join(' ') || 'Dasturchi', userRole: u?.role || 'dasturchi',
+    action, entity: 'ai_office_agent', entityId: key, description, newValue, req,
+  }).catch(() => {});
+}
+
+export async function createProfile(body: Record<string, unknown>, by: string, opts: { req?: any; via?: string } = {}): Promise<{ ok: true; profile: AgentProfileDto } | { ok: false; error: string }> {
   await ensureDefaults();
   const name = cleanText(body.name, 40);
   const kind = body.kind === 'content' ? 'content' : body.kind === 'code' ? 'code' : null;
   if (!name || !kind) return { ok: false, error: 'invalid' };
-  if (await AgentProfile.countDocuments({}) >= 60) return { ok: false, error: 'too_many' };
+  if (await AgentProfile.countDocuments({}) >= MAX_AGENTS) return { ok: false, error: 'too_many' };
+  if (await AgentProfile.exists({ name: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') })) return { ok: false, error: 'name_taken' };
   const color = typeof body.color === 'string' && COLOR_RE.test(body.color) ? body.color : '#6366f1';
-  const team = AGENT_TEAMS.includes(body.team as any) ? (body.team as AgentTeam) : kind === 'content' ? 'growth' : 'platform';
+  const team = AGENT_TEAMS.includes(body.team as any) && body.team !== 'lead' && body.team !== 'assistants' ? (body.team as AgentTeam) : kind === 'content' ? 'growth' : 'platform';
   const doc = await AgentProfile.create({
     key: `custom-${crypto.randomBytes(4).toString('hex')}`, name, kind, team, color,
     description: cleanText(body.description, 300) || '', systemPrompt: cleanText(body.systemPrompt, 4000) || '',
     enabled: true, order: 500, builtIn: false, createdBy: by,
   });
   officeInvalidate();
+  await auditAgent(by, 'create', doc.key, `AI ofis: yangi agent "${name}"${opts.via ? ` (${opts.via})` : ''}`, opts.req, { name, kind, team });
   return { ok: true, profile: profileDto(doc) };
 }
 
-export async function updateProfile(key: string, body: Record<string, unknown>): Promise<AgentProfileDto | null> {
+export async function updateProfile(key: string, body: Record<string, unknown>, by = '', req?: any): Promise<AgentProfileDto | null> {
   await ensureDefaults();
   const set: Record<string, unknown> = {};
   const name = cleanText(body.name, 40);
@@ -141,13 +157,14 @@ export async function updateProfile(key: string, body: Record<string, unknown>):
   if (AGENT_TEAMS.includes(body.team as any)) set.team = body.team;
   const doc = await AgentProfile.findOneAndUpdate({ key }, { $set: set }, { returnDocument: 'after' }).lean();
   officeInvalidate();
+  if (doc) await auditAgent(by, 'update', key, `AI ofis: agent "${(doc as any).name}" o'zgartirildi`, req, set);
   return doc ? profileDto(doc) : null;
 }
 
 // ───────────── Vazifalar ─────────────
 export const taskDto = (t: any) => ({
   id: String(t._id), agentKey: t.agentKey, agentKind: t.agentKind, text: t.text, status: t.status as AgentTaskStatus,
-  summary: t.summary || undefined, spec: t.spec || undefined, parentId: t.parentId || undefined,
+  summary: t.summary || undefined, spec: t.spec || undefined, parentId: t.parentId || undefined, spawnedKey: t.spawnedKey || undefined,
   plan: (t.plan || []).map((p: any) => ({ agentKey: p.agentKey, text: p.text, ...(p.taskId ? { taskId: String(p.taskId) } : {}) })),
   items: (t.items || []).map((i: any) => ({ title: i.title || '', text: i.text || '', ...(i.hashtags?.length ? { hashtags: i.hashtags } : {}) })),
   links: (t.links || []).map((l: any) => ({ label: l.label, url: l.url })),
@@ -252,7 +269,7 @@ async function transition(id: string, from: AgentTaskStatus[], status: AgentTask
 }
 
 const start = (id: string, profile: any, hasSpec: boolean): Promise<void> =>
-  profile.key === MANAGER_KEY ? draftPlan(id)
+  profile.key === MANAGER_KEY ? managerStart(id)
   : profile.kind === 'content' ? runContent(id, profile)
     : profile.key === FEATURE_KEY && !hasSpec ? draftSpec(id, profile)
       : dispatchCode(id, profile);
@@ -323,6 +340,69 @@ export async function approveTask(id: string, body: { spec?: unknown; plan?: unk
 }
 
 // ───────────── Boshliq (manager) ─────────────
+async function managerStart(id: string): Promise<void> {
+  const t: any = await AgentTask.findById(id).select('text').lean();
+  if (t && SPAWN_RE.test(String(t.text))) return spawnAgent(id);
+  return draftPlan(id);
+}
+
+const TEAM_HINTS: [RegExp, string][] = [
+  [/smm|post|marketing|reklama|kontent|matn|javob|support|mijoz|hujjat|qo'llanma|tarif|obuna|hisobot/i, 'growth'],
+  [/ilova|android|windows|tauri|apk|ios|sayt|landing|mini\s*app|gps|xarita/i, 'apps'],
+  [/\bai\b|bot|gemini|ovoz|qo'ng'iroq|telegram|bildirishnoma/i, 'ai'],
+  [/test|qa|xavfsiz|deploy|devops|server|tezlik|monitoring|xato|tarjima|i18n/i, 'ops'],
+];
+const CONTENT_RE = /smm|post|marketing|reklama|kontent|matn yoz|javob|support|mijozlar|hujjat|qo'llanma|maqola|kopirayt|sotuv/i;
+
+/** Boshliqdan yangi agent: nomi/roli Gemini bilan (yoki buyruqdan), serverda saqlanadi, ofisda o'z stolini oladi. */
+export function fallbackAgentDraft(text: string): { name: string; kind: 'code' | 'content'; team: string; description: string; systemPrompt: string } {
+  const after = text.includes(':') ? text.slice(text.indexOf(':') + 1) : text;
+  const core = after
+    .replace(/(yangi\s+)?agent\S*\s*(yonla|yoqla|qo['‘’`]?sh|yarat|och|ishga\s*tushir)\S*/ig, '')
+    .replace(/yangi\s+agent/ig, '').replace(/\s+(ishi\s+)?uchun\b/ig, '').replace(/[«»"']/g, '').replace(/\s+/g, ' ').trim();
+  const words = core.split(' ').filter(Boolean).slice(0, 4).join(' ');
+  const name = (words ? words[0].toUpperCase() + words.slice(1) : 'Yangi agent').slice(0, 40);
+  const kind = CONTENT_RE.test(text) ? 'content' : 'code';
+  const team = TEAM_HINTS.find(([re]) => re.test(text))?.[1] || (kind === 'content' ? 'growth' : 'platform');
+  const description = (core || text).slice(0, 300);
+  return { name, kind, team, description, systemPrompt: `Sen "${name}" agentisan. Vazifang: ${description}. Aniq, xavfsiz ishla; natijani qisqa xulosa bilan ber.` };
+}
+
+async function spawnAgent(id: string): Promise<void> {
+  if (!(await transition(id, ['queued'], 'running', { startedAt: new Date() }, "Yangi agent uchun stol tayyorlayapman"))) return;
+  const t: any = await AgentTask.findById(id).lean();
+  if (!t) return;
+  let draft = fallbackAgentDraft(String(t.text));
+  try {
+    const out = await contentRunner(`Sen AI ofis Boshlig'isan. Egasi yangi agent so'radi: """${t.text}"""
+Shu agentni tavsifla. Jamoalar: platform (backend/frontend/ma'lumotlar), apps (ilovalar, sayt), ai (AI va botlar), ops (sifat, xavfsizlik, deploy), growth (kontent, marketing, hisobot).
+Turi: "code" — kod yozadi (GitHub PR); "content" — matn/reja tayyorlaydi.
+FAQAT JSON qaytar: {"name": "qisqa nom (2-3 so'z, o'zbekcha)", "kind": "code|content", "team": "platform|apps|ai|ops|growth", "description": "1 jumla", "systemPrompt": "agent roli, sohasi va qoidalari (3-6 jumla)"}`);
+    if (out && typeof out === 'object' && typeof out.name === 'string' && out.name.trim()) {
+      draft = {
+        name: out.name, kind: out.kind === 'content' ? 'content' : out.kind === 'code' ? 'code' : draft.kind,
+        team: typeof out.team === 'string' ? out.team : draft.team,
+        description: typeof out.description === 'string' ? out.description : draft.description,
+        systemPrompt: typeof out.systemPrompt === 'string' && out.systemPrompt.trim() ? out.systemPrompt : draft.systemPrompt,
+      };
+    }
+  } catch { /* zaxira — buyruqdan */ }
+  const palette = ['#f97316', '#06b6d4', '#a855f7', '#22c55e', '#ec4899', '#eab308', '#3b82f6', '#14b8a6', '#ef4444', '#8b5cf6'];
+  const color = palette[parseInt(String(id).slice(-2), 16) % palette.length];
+  let r = await createProfile({ ...draft, color }, t.createdBy || '', { via: 'Boshliq' });
+  if (!r.ok && r.error === 'name_taken') r = await createProfile({ ...draft, name: `${draft.name.slice(0, 36)} 2`, color }, t.createdBy || '', { via: 'Boshliq' });
+  if (!r.ok) {
+    await transition(id, ['running'], 'failed', { error: r.error === 'too_many' ? 'too_many_agents' : 'agent_invalid' },
+      r.error === 'too_many' ? `Agentlar soni chegarasi (${MAX_AGENTS}) — avval keraksizini o'chiring` : "Agent ma'lumoti noto'g'ri");
+    return;
+  }
+  const p = r.profile;
+  await transition(id, ['running'], 'done', {
+    spawnedKey: p.key, summary: `Yangi agent qo'shildi: ${p.name} (${p.kind === 'code' ? 'kod' : 'kontent'} agenti). Ofisda o'z stoliga o'tirdi — unga buyruq berishingiz mumkin.`,
+    items: [{ title: p.name, text: `${p.description}\n\nRoli: ${p.systemPrompt}`.slice(0, 4000) }],
+  }, `Yangi agent: ${p.name}`);
+}
+
 async function taskableKeys(): Promise<Map<string, any>> {
   const rows: any[] = await AgentProfile.find({ kind: { $in: ['code', 'content'] }, enabled: true, key: { $nin: [MANAGER_KEY, REPORTER_KEY] } })
     .select('key name kind description').lean();

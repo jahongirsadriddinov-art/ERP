@@ -23,7 +23,7 @@ export const uz = {
     command: {
       label: "Buyruq",
       placeholder: "Nima qilish kerak? Oddiy tilda yozing…",
-      manager: "Katta maqsad yozing — Boshliq uni vazifalarga bo'lib, mos agentlarga beradi (avval sizga ko'rsatadi)",
+      manager: "Katta maqsad yozing — Boshliq uni vazifalarga bo'lib, mos agentlarga beradi (avval sizga ko'rsatadi). Yangi agent kerak bo'lsa: «Ombor ishi uchun agent yonla» yoki «yangi agent qo'sh: …»",
       reporter: "Masalan: bugungi hisobot",
       feature: "Yangi funksiyani oddiy tilda yozing — avval qisqa spetsifikatsiya tayyorlanadi, tasdiqlasangiz kod yoziladi",
       send: "Yuborish",
@@ -37,7 +37,7 @@ export const uz = {
     actions: {
       cancel: "Bekor qilish", retry: "Qayta yuborish", approve: "Tasdiqlash — kod yozilsin", approvePlan: "Tasdiqlash va tarqatish", copy: "Nusxa",
       copied: "Nusxa olindi", toChannel: "Kanalga yuborish", toDev: "Telegram'ga yuborish", sentTg: "Telegram'ga yuborildi", addRow: "Vazifa qo'shish",
-      remove: "Olib tashlash", log: "Jurnal", open: "Ochish",
+      remove: "Olib tashlash", log: "Jurnal", open: "Ochish", openAgent: "Yangi agentni ochish",
     },
     spec: "Spetsifikatsiya — tekshiring, kerak bo'lsa tahrirlang",
     plan: "Boshliq rejasi — keraksizini olib tashlang yoki tahrirlang",
@@ -49,6 +49,8 @@ export const uz = {
       agent_disabled: "Agent o'chirilgan",
       not_configured: "Sozlanmagan: Telegram kanal/chat ID yoki bot tokeni yo'q",
       invalid: "Ma'lumot noto'g'ri",
+      name_taken: "Bu nomli agent allaqachon bor",
+      too_many: "Agentlar soni chegarasiga yetdi",
       generic: "Xatolik yuz berdi",
     },
     setup: {
@@ -849,7 +851,7 @@ export const ru = {
     command: {
       label: "Задание",
       placeholder: "Что нужно сделать? Напишите простыми словами…",
-      manager: "Опишите большую цель — руководитель разобьёт её на задачи для агентов (сначала покажет вам)",
+      manager: "Опишите большую цель — руководитель разобьёт её на задачи для агентов (сначала покажет вам). Нужен новый агент: «создай агента для склада» или «yangi agent qo'sh: …»",
       reporter: "Например: отчёт за сегодня",
       feature: "Опишите новую функцию — сначала будет короткая спецификация, после одобрения — код",
       send: "Отправить",
@@ -863,7 +865,7 @@ export const ru = {
     actions: {
       cancel: "Отменить", retry: "Отправить снова", approve: "Одобрить — писать код", approvePlan: "Одобрить и раздать", copy: "Копировать",
       copied: "Скопировано", toChannel: "В канал", toDev: "Отправить в Telegram", sentTg: "Отправлено в Telegram", addRow: "Добавить задачу",
-      remove: "Убрать", log: "Журнал", open: "Открыть",
+      remove: "Убрать", log: "Журнал", open: "Открыть", openAgent: "Открыть нового агента",
     },
     spec: "Спецификация — проверьте и при необходимости исправьте",
     plan: "План руководителя — уберите лишнее или исправьте",
@@ -875,6 +877,8 @@ export const ru = {
       agent_disabled: "Агент выключен",
       not_configured: "Не настроено: нет ID канала/чата Telegram или токена бота",
       invalid: "Неверные данные",
+      name_taken: "Агент с таким именем уже есть",
+      too_many: "Достигнут лимит числа агентов",
       generic: "Произошла ошибка",
     },
     setup: {

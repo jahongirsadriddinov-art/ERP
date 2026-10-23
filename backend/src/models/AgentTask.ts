@@ -7,7 +7,17 @@ export type AgentTaskStatus = 'queued' | 'review' | 'running' | 'done' | 'failed
 /** review — "Yangi funksiya" agenti spetsifikatsiyani tayyorladi, egasi tasdig'ini kutadi. */
 export const AGENT_TASK_ACTIVE: AgentTaskStatus[] = ['queued', 'review', 'running'];
 
-export interface AgentTaskItem { title: string; text: string; hashtags?: string[] }
+/** SMM: qurilmada (brauzer IndexedDB) saqlangan media — serverda faqat metama'lumot (owner 2026-10-23). */
+export interface SmmMediaMeta { id: string; kind: 'image' | 'video'; mime?: string; w?: number; h?: number; size?: number; source?: string; at?: Date }
+export interface SmmPublishState { status: 'publishing' | 'published' | 'failed'; at?: Date; kind?: string; target?: string; mediaId?: string; messageId?: number; url?: string; error?: string; detail?: string }
+export interface AgentTaskItem {
+  title: string; text: string; hashtags?: string[];
+  // ── SMM (ixtiyoriy) ──
+  format?: 'post' | 'carousel' | 'reel' | 'story'; lang?: string; topic?: string; category?: string; imagePrompt?: string;
+  scenes?: { title: string; text: string }[]; media?: SmmMediaMeta[];
+  approval?: 'none' | 'pending' | 'approved' | 'rejected';
+  tg?: SmmPublishState; ig?: SmmPublishState;
+}
 export interface AgentTaskLink { label: string; url: string }
 
 export interface IAgentTask extends Document {
@@ -51,6 +61,22 @@ const AgentTaskSchema = new Schema<IAgentTask>({
       title: { type: String, maxlength: 200, default: '' },
       text: { type: String, maxlength: 4000, default: '' },
       hashtags: { type: [String], default: undefined },
+      format: { type: String, enum: ['post', 'carousel', 'reel', 'story'] },
+      lang: { type: String, maxlength: 8 },
+      topic: { type: String, maxlength: 300 },
+      category: { type: String, maxlength: 30 },
+      imagePrompt: { type: String, maxlength: 1500 },
+      scenes: { type: [new Schema({ title: { type: String, maxlength: 120 }, text: { type: String, maxlength: 400 } }, { _id: false })], default: undefined },
+      media: {
+        type: [new Schema({
+          id: { type: String, maxlength: 40 }, kind: { type: String, enum: ['image', 'video'] }, mime: { type: String, maxlength: 60 },
+          w: Number, h: Number, size: Number, source: { type: String, maxlength: 20 }, at: Date,
+        }, { _id: false })],
+        default: undefined,
+      },
+      approval: { type: String, enum: ['none', 'pending', 'approved', 'rejected'] },
+      tg: { type: Schema.Types.Mixed },
+      ig: { type: Schema.Types.Mixed },
     }, { _id: false })],
     default: [],
   },
@@ -65,6 +91,7 @@ const AgentTaskSchema = new Schema<IAgentTask>({
 AgentTaskSchema.index({ agentKey: 1, createdAt: -1 });
 AgentTaskSchema.index({ status: 1, updatedAt: 1 });
 AgentTaskSchema.index({ createdAt: -1 });
+AgentTaskSchema.index({ 'items.ig.mediaId': 1 }, { sparse: true });
 AgentTaskSchema.index({ parentId: 1 }, { partialFilterExpression: { parentId: { $type: 'string' } } });
 
 export default mongoose.model<IAgentTask>('AgentTask', AgentTaskSchema);

@@ -20,6 +20,7 @@ import { AppUser, ActiveCall, Msg } from "./App";
 import { playSound, stopAllSounds } from "./sound";
 import { API_BASE } from "./api";
 import { reportError } from "./lib/monitoring";
+import { UserAvatar } from "./components/UserAvatar";
 
 // Qo'ng'iroq oynasi (WebRTC) — kamdan-kam ishlatiladi (faqat qo'ng'iroq
 // paytida), shuning uchun alohida faylga chiqarilib React.lazy orqali
@@ -614,7 +615,7 @@ export default function CallOverlay({ currentUser, users, call, onClose, onSendM
         <div className="flex-1 min-h-0 overflow-y-auto p-2 flex">
         <div className={`grid ${cols} gap-2 w-full m-auto sm:max-w-[calc((100dvh-10rem)*var(--f))]`} style={{ ['--f' as any]: n <= 1 ? 1 : n === 2 ? 2 : n <= 4 ? 1 : n <= 6 ? 1.5 : 3 / Math.ceil(n / 3) }}>
           {tiles.map(tile => (
-            <VideoTile key={tile.id} id={tile.local ? 'self' : tile.id} stream={tile.stream} name={tile.name} cam={tile.cam} mic={tile.mic} local={tile.local} mirror={facingMode === 'user'} />
+            <VideoTile key={tile.id} id={tile.local ? 'self' : tile.id} seed={tile.id} photo={(tile.local ? currentUser : userById(tile.id))?.avatar} stream={tile.stream} name={tile.name} cam={tile.cam} mic={tile.mic} local={tile.local} mirror={facingMode === 'user'} />
           ))}
         </div>
         </div>
@@ -653,7 +654,7 @@ export default function CallOverlay({ currentUser, users, call, onClose, onSendM
                   if (!u) return null;
                   return (
                     <button key={uid} onClick={() => inviteUser(uid)} className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/5 text-left">
-                      <div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">{u.name.charAt(0)}</div>
+                      <UserAvatar seed={u.id} name={u.name} src={u.avatar} size={36} className="text-xs" />
                       <span className="text-white text-sm flex-1 truncate">{u.name}</span>
                     </button>
                   );
@@ -686,9 +687,13 @@ export default function CallOverlay({ currentUser, users, call, onClose, onSendM
           </div>
         ) : (
           <div className="w-full h-full flex flex-col items-center justify-center gap-4 text-white">
-            <div className="w-28 h-28 rounded-full bg-white/10 flex items-center justify-center">
-              {call.groupId ? <MorphIcon icon={Users2} className="w-12 h-12" /> : <span className="text-4xl font-bold">{title.charAt(0)}</span>}
-            </div>
+            {call.groupId || !call.peerId ? (
+              <div className="w-28 h-28 rounded-full bg-white/10 flex items-center justify-center">
+                {call.groupId ? <MorphIcon icon={Users2} className="w-12 h-12" /> : <span className="text-4xl font-bold">{title.charAt(0)}</span>}
+              </div>
+            ) : (
+              <UserAvatar seed={call.peerId} name={title} src={userById(call.peerId)?.avatar} size={112} className="text-4xl" />
+            )}
             <p className="text-xl font-semibold">{title}</p>
             <p className="text-white/60 text-sm">
               {status === 'incoming' ? t('call.incoming', { type: call.mode === 'video' ? t('call.typeVideo') : t('call.typeVoice') }) :
@@ -776,7 +781,7 @@ export default function CallOverlay({ currentUser, users, call, onClose, onSendM
                   if (!u) return null;
                   return (
                     <button key={uid} onClick={() => inviteUser(uid)} className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/5 text-left">
-                      <div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">{u.name.charAt(0)}</div>
+                      <UserAvatar seed={u.id} name={u.name} src={u.avatar} size={36} className="text-xs" />
                       <span className="text-white text-sm flex-1 truncate">{u.name}</span>
                     </button>
                   );
@@ -851,7 +856,7 @@ function useFlip(id: string): [boolean, () => void] {
 // Ba'zi qurilmalar (ayniqsa ba'zi Android old kameralari) tasvirni ko'zguga
 // o'xshab teskari uzatadi — kodda buni oldindan bilib bo'lmaydi, shuning uchun
 // har bir plitkada qo'lda "teskari qilish" tugmasi bor (tanlov eslab qolinadi).
-function VideoTile({ id, stream, name, cam, mic, local, mirror }: { id: string; stream: MediaStream | null; name: string; cam: boolean; mic: boolean; local: boolean; mirror: boolean }) {
+function VideoTile({ id, seed, photo, stream, name, cam, mic, local, mirror }: { id: string; seed: string; photo?: string; stream: MediaStream | null; name: string; cam: boolean; mic: boolean; local: boolean; mirror: boolean }) {
   const ref = useRef<HTMLVideoElement>(null);
   const [flip, toggleFlip] = useFlip(id);
   useEffect(() => {
@@ -872,7 +877,7 @@ function VideoTile({ id, stream, name, cam, mic, local, mirror }: { id: string; 
       )}
       {!showVideo && (
         <div className="absolute inset-0 flex items-center justify-center">
-          <div className="w-20 h-20 rounded-full bg-white/10 flex items-center justify-center text-3xl font-bold text-white">{(name || '?').charAt(0).toUpperCase()}</div>
+          <UserAvatar seed={seed} name={name} src={photo} size={80} className="text-3xl" />
         </div>
       )}
       <div className="absolute bottom-2 left-2 right-2 flex items-center gap-1.5">

@@ -28,7 +28,7 @@
   .ios-bottom-bar, .dark .ios-bottom-bar, .nav-pill-desktop { background: var(--card); }
   .nav-pill-indicator, .dark .nav-pill-indicator { background: var(--secondary); }
   .nav-active-pill { background: var(--primary); }
-  .tone-brand { --t1: var(--primary); --t2: var(--primary); }
+  .tone-brand { --t1: var(--primary); --t2: var(--primary); --t-sh: rgba(0,0,0,0.22); }
   .icon-tile--soft, .dark .icon-tile--soft { background: var(--secondary); }
   .dark .icon-tile--soft { color: var(--t1); }
 }

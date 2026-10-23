@@ -85,53 +85,75 @@ pre, code, kbd, samp { font-family: ui-monospace, "JetBrains Mono", Consolas, mo
 .icon-tile--md { width: 40px; height: 40px; border-radius: 12px; }
 .icon-tile--lg { width: 48px; height: 48px; border-radius: 15px; }
 .icon-tile--xl { width: 56px; height: 56px; border-radius: 18px; }
-.tone-blue   { --t1: #3B82F6; --t2: #1D4ED8; }
-.tone-sky    { --t1: #38BDF8; --t2: #0284C7; }
-.tone-teal   { --t1: #2DD4BF; --t2: #0F766E; }
-.tone-green  { --t1: #34D399; --t2: #059669; }
-.tone-lime   { --t1: #A3E635; --t2: #4D7C0F; }
-.tone-amber  { --t1: #FBBF24; --t2: #D97706; }
-.tone-orange { --t1: #FB923C; --t2: #EA580C; }
-.tone-rose   { --t1: #FB7185; --t2: #E11D48; }
-.tone-red    { --t1: #F87171; --t2: #DC2626; }
-.tone-violet { --t1: #A78BFA; --t2: #7C3AED; }
-.tone-slate  { --t1: #94A3B8; --t2: #475569; }
-.tone-brand  { --t1: color-mix(in srgb, var(--primary) 70%, #fff); --t2: var(--primary); }
+/* Tus palitrasi (owner 2026-10-23: "premium, ko'zni qamashtirmasin") — har tusda ikki YAQIN rang
+   (bir oz xiralashtirilgan), --t-sh — rangli soya (rgba: color-mix'siz eski WebView'da ham ishlaydi). */
+.tone-blue   { --t1: #6B9BF2; --t2: #3D66D6; --t-sh: rgba(61,102,214,0.42); }
+.tone-sky    { --t1: #62BDEB; --t2: #2F88C4; --t-sh: rgba(47,136,196,0.40); }
+.tone-teal   { --t1: #4CC6B4; --t2: #1E8C84; --t-sh: rgba(30,140,132,0.40); }
+.tone-green  { --t1: #5AC992; --t2: #279667; --t-sh: rgba(39,150,103,0.40); }
+.tone-lime   { --t1: #A9CF5C; --t2: #6A962E; --t-sh: rgba(106,150,46,0.40); }
+.tone-amber  { --t1: #F4C15A; --t2: #DD8F22; --t-sh: rgba(221,143,34,0.42); }
+.tone-orange { --t1: #F7A066; --t2: #DE6A33; --t-sh: rgba(222,106,51,0.42); }
+.tone-rose   { --t1: #F2879D; --t2: #D44E6F; --t-sh: rgba(212,78,111,0.40); }
+.tone-red    { --t1: #EF8679; --t2: #CF4B42; --t-sh: rgba(207,75,66,0.40); }
+.tone-violet { --t1: #A291F3; --t2: #6C55D6; --t-sh: rgba(108,85,214,0.42); }
+.tone-slate  { --t1: #97A3B6; --t2: #5A667C; --t-sh: rgba(90,102,124,0.38); }
+.tone-brand  { --t1: color-mix(in srgb, var(--primary) 62%, #fff); --t2: var(--primary); --t-sh: color-mix(in srgb, var(--primary) 45%, transparent); }
 
-/* solid — to'yingan gradient + ichki yorug'lik + rangli yumshoq soya */
+/* solid — ikki yaqin tusli gradient, yuqorida yumshoq yorug'lik, ichki nozik chegara,
+   rangli yumshoq soya, tiniq oq ikonka */
 .icon-tile--solid {
   color: #fff;
-  background: linear-gradient(150deg, var(--t1) 0%, var(--t2) 100%);
+  background: linear-gradient(160deg, var(--t1) 0%, var(--t2) 100%);
   box-shadow:
-    0 1px 1px rgba(0,0,0,0.10),
-    0 6px 14px -6px color-mix(in srgb, var(--t2) 75%, transparent),
-    inset 0 1px 0 rgba(255,255,255,0.40),
-    inset 0 -2px 6px rgba(0,0,0,0.12);
+    0 1px 2px rgba(15,23,42,0.10),
+    0 8px 18px -9px var(--t-sh, rgba(0,0,0,0.3)),
+    inset 0 1px 0 rgba(255,255,255,0.38),
+    inset 0 0 0 1px rgba(255,255,255,0.10),
+    inset 0 -1px 0 rgba(0,0,0,0.08);
 }
 .icon-tile--solid::before {
   content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
-  background: radial-gradient(110% 70% at 28% 0%, rgba(255,255,255,0.45), rgba(255,255,255,0) 60%);
+  border-radius: inherit;
+  background:
+    radial-gradient(120% 75% at 30% -5%, rgba(255,255,255,0.34), rgba(255,255,255,0) 58%),
+    linear-gradient(180deg, rgba(255,255,255,0) 55%, rgba(0,0,0,0.06));
 }
-.icon-tile--solid .icon-tile__glyph { filter: drop-shadow(0 1px 1px rgba(0,0,0,0.22)); }
+.icon-tile--solid .icon-tile__glyph { filter: drop-shadow(0 1px 1.5px rgba(0,0,0,0.20)); }
+.dark .icon-tile--solid {
+  box-shadow:
+    0 1px 2px rgba(0,0,0,0.30),
+    0 8px 20px -10px var(--t-sh, rgba(0,0,0,0.4)),
+    inset 0 1px 0 rgba(255,255,255,0.26),
+    inset 0 0 0 1px rgba(255,255,255,0.08),
+    inset 0 -1px 0 rgba(0,0,0,0.14);
+}
+.dark .icon-tile--solid::before {
+  background:
+    radial-gradient(120% 75% at 30% -5%, rgba(255,255,255,0.24), rgba(255,255,255,0) 58%),
+    linear-gradient(180deg, rgba(0,0,0,0) 50%, rgba(0,0,0,0.12));
+}
 
-/* soft — duotone: och fon, rangli ikonka, nozik chegarali */
+/* soft — duotone: och fon, rangli ikonka, nozik chegara va yuqoridan yorug'lik */
 .icon-tile--soft {
   color: var(--t2);
-  background: linear-gradient(150deg, color-mix(in srgb, var(--t1) 20%, var(--card)), color-mix(in srgb, var(--t2) 13%, var(--card)));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--t2) 16%, transparent), inset 0 1px 0 rgba(255,255,255,0.55);
+  background: linear-gradient(160deg, color-mix(in srgb, var(--t1) 18%, var(--card)), color-mix(in srgb, var(--t2) 12%, var(--card)));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--t2) 14%, transparent), inset 0 1px 0 rgba(255,255,255,0.6), 0 1px 2px color-mix(in srgb, var(--t2) 10%, transparent);
 }
 .dark .icon-tile--soft {
-  color: color-mix(in srgb, var(--t1) 85%, #fff);
-  background: linear-gradient(150deg, color-mix(in srgb, var(--t1) 24%, var(--card)), color-mix(in srgb, var(--t2) 16%, var(--card)));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--t1) 22%, transparent), inset 0 1px 0 rgba(255,255,255,0.06);
+  color: color-mix(in srgb, var(--t1) 88%, #fff);
+  background: linear-gradient(160deg, color-mix(in srgb, var(--t1) 20%, var(--card)), color-mix(in srgb, var(--t2) 13%, var(--card)));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--t1) 20%, transparent), inset 0 1px 0 rgba(255,255,255,0.07);
 }
 
 /* glass — rangli/qorong'i fon ustida */
 .icon-tile--glass {
   color: #fff;
-  background: rgba(255,255,255,0.16);
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.22), inset 0 1px 0 rgba(255,255,255,0.35);
+  background: linear-gradient(160deg, rgba(255,255,255,0.24), rgba(255,255,255,0.10));
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.22), inset 0 1px 0 rgba(255,255,255,0.40), 0 4px 12px -6px rgba(0,0,0,0.25);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
 }
+.icon-tile--glass .icon-tile__glyph { filter: drop-shadow(0 1px 1px rgba(0,0,0,0.15)); }
 
 /* Eski .icon-chip ham plitka ko'rinishiga yaqinlashtiriladi (ko'p joyda ishlatilgan) */
 .icon-chip {
@@ -144,6 +166,34 @@ pre, code, kbd, samp { font-family: ui-monospace, "JetBrains Mono", Consolas, mo
   background: linear-gradient(150deg, color-mix(in srgb, var(--accent) 18%, var(--card)), color-mix(in srgb, var(--accent) 10%, var(--card)));
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 16%, transparent);
 }
+
+/* ══ Foydalanuvchi avatari — 3D memoji + yumshoq gradient doira (components/UserAvatar.tsx) ══ */
+.memoji-avatar {
+  position: relative; overflow: hidden;
+  display: inline-flex; align-items: flex-end; justify-content: center;
+  border-radius: 9999px;
+  background:
+    radial-gradient(120% 90% at 30% 12%, rgba(255,255,255,0.55), rgba(255,255,255,0) 55%),
+    linear-gradient(155deg, hsl(var(--av-h1, 220), 82%, 88%), hsl(var(--av-h2, 250), 64%, 74%));
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.45), inset 0 -3px 8px -3px hsla(var(--av-h2, 250), 55%, 35%, 0.28);
+}
+.dark .memoji-avatar {
+  background:
+    radial-gradient(120% 90% at 30% 12%, rgba(255,255,255,0.16), rgba(255,255,255,0) 55%),
+    linear-gradient(155deg, hsl(var(--av-h1, 220), 42%, 40%), hsl(var(--av-h2, 250), 46%, 25%));
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.10), inset 0 -3px 8px -3px rgba(0,0,0,0.35);
+}
+.memoji-avatar__img {
+  width: 86%; height: 86%; margin-bottom: 2%;
+  object-fit: contain; pointer-events: none;
+  filter: drop-shadow(0 1px 1.5px rgba(0,0,0,0.18));
+}
+.memoji-avatar__photo { width: 100%; height: 100%; object-fit: cover; }
+.memoji-avatar__initials {
+  align-self: center; color: hsl(var(--av-h2, 250), 45%, 28%);
+  font-weight: 700; line-height: 1;
+}
+.dark .memoji-avatar__initials { color: #fff; }
 
 /* ══ Pastki navigatsiya (telefon/planshet) — mavzuga mos shisha ═════════════ */
 .ios-bottom-bar {

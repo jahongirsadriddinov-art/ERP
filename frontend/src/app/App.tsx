@@ -44,6 +44,7 @@ import RefreshCw from "@hugeicons/core-free-icons/Refresh01Icon";
 import Lock from "@hugeicons/core-free-icons/LockIcon";
 import { MorphIcon, type IconNode } from "morphicons/react";
 import { IconTile, type IconTone } from "./components/IconTile";
+import { UserAvatar } from "./components/UserAvatar";
 import { toast, Toaster } from "sonner";
 import { playSound, sfx } from "./sound";
 import { useTranslation } from "react-i18next";
@@ -502,16 +503,9 @@ export function CompanyLogo({ src, imgClass, iconClass }: { src?: string; imgCla
 }
 
 export function Avatar({ user, size = "md" }: { user: AppUser; size?: "sm"|"md"|"lg" }) {
+  // Rasm yoki (rasm yo'q bo'lsa) foydalanuvchiga barqaror 3D memoji — components/UserAvatar.tsx
   const sz = { sm: "w-7 h-7 text-sm", md: "w-9 h-9 text-sm", lg: "w-16 h-16 text-xl" }[size];
-  const [avatarBad, setAvatarBad] = useState(false);
-  useEffect(() => { setAvatarBad(false); }, [user.avatar]);
-  if (user.avatar && !avatarBad) return <img src={user.avatar} alt={user.name} className={`${sz} rounded-full object-cover flex-shrink-0`} onError={() => setAvatarBad(true)}/>;
-  const initials = (user.name || "").split(/\s+/).map(w => w.match(/[\p{L}\p{N}]/u)?.[0] || "").filter(Boolean).slice(0,2).join("") || "?";
-  return (
-    <div className={`${sz} rounded-full bg-primary/15 flex items-center justify-center font-bold text-primary dark:text-white flex-shrink-0 select-none`}>
-      {initials}
-    </div>
-  );
+  return <UserAvatar seed={user.id} name={user.name} src={user.avatar} className={sz} />;
 }
 
 export function RoleBadge({ role }: { role: Role }) {

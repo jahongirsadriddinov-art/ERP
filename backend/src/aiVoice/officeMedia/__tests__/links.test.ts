@@ -50,3 +50,17 @@ describe("Kino havolasi", () => {
     expect(isMediaFileUrl("https://x/clip.mp4", "video")).toBe(true);
   });
 });
+
+describe("Yandex Musiqa — yangi ulashish havolalari (owner 2026-10-23)", () => {
+  it("/playlists/{id}?utm_... , iframe HTML-kodi va eski xesh ko'rinishi qabul qilinadi; begona xost yo'q", () => {
+    expect(parseYandexMusic("https://music.yandex.ru/playlists/lk.3f2a9c1e-1111-2222-3333-444455556666?utm_source=desktop&utm_medium=copy_link"))
+      .toEqual({ kind: "yandex", embed: "https://music.yandex.ru/iframe/playlists/lk.3f2a9c1e-1111-2222-3333-444455556666", label: "playlist lk.3f2a9c1e-1111-2222-3333-444455556666" });
+    expect(parseYandexMusic('<iframe frameborder="0" src="https://music.yandex.ru/iframe/album/123/track/456" width="100%"></iframe>')?.embed)
+      .toBe("https://music.yandex.ru/iframe/#track/456/123");
+    expect(parseYandexMusic("https://music.yandex.ru/iframe/#playlist/jahon/1001")?.embed).toBe("https://music.yandex.ru/iframe/#playlist/jahon/1001");
+    expect(parseYandexMusic("https://music.yandex.ru/album/123?utm_source=desktop&utm_medium=copy_link")?.embed).toBe("https://music.yandex.ru/iframe/#album/123");
+    expect(parseYandexMusic("https://evil.example/playlists/lk.abc")).toBeNull();
+    expect(parseYandexMusic('<iframe src="javascript:alert(1)"></iframe>')).toBeNull();
+  });
+});
+

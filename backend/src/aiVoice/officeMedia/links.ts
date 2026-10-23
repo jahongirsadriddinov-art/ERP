@@ -31,9 +31,23 @@ const NUM = /^\d+$/;
 
 /** Yandex Musiqa ulashish havolasi → rasmiy iframe vidjeti (music.yandex.ru/iframe/#...). */
 export function parseYandexMusic(raw: unknown): MusicLink | null {
-  const u = url(raw);
+  // "Ulashish → HTML-kod" bilan olingan <iframe ... src="..."> ham qabul qilinadi (src ajratib olinadi)
+  let input = raw;
+  if (typeof raw === "string" && /<iframe/i.test(raw)) input = (/\bsrc=["']([^"']+)["']/i.exec(raw) || [])[1] || "";
+  const u = url(input);
   if (!u || !YANDEX_HOSTS.has(u.hostname.toLowerCase())) return null;
-  const p = u.pathname.split("/").filter(Boolean);
+  let p = u.pathname.split("/").filter(Boolean);
+  // iframe manzili: /iframe/... yoki eski "#playlist/..." xesh ko'rinishi — yo'l sifatida qayta tekshiriladi
+  if (p[0] === "iframe") {
+    p = p.slice(1);
+    if (!p.length && u.hash) p = u.hash.replace(/^#/, "").split("/").filter(Boolean);
+    if (p[0] === "playlist" && /^[A-Za-z0-9._-]{1,64}$/.test(p[1] || "") && NUM.test(p[2] || "")) p = ["users", p[1], "playlists", p[2]];
+    else if (p[0] === "track" && NUM.test(p[1] || "") && NUM.test(p[2] || "")) p = ["album", p[2], "track", p[1]];
+  }
+  // Yangi format (owner 2026-10-23): /playlists/{uuid yoki lk.uuid}?utm_source=...  → /iframe/playlists/{id}
+  if (p[0] === "playlists" && /^[A-Za-z0-9._-]{3,80}$/.test(p[1] || "") && p.length === 2) {
+    return { kind: "yandex", embed: `https://music.yandex.ru/iframe/playlists/${encodeURIComponent(p[1])}`, label: `playlist ${p[1]}` };
+  }
   // /album/{id}/track/{id}
   if (p[0] === "album" && NUM.test(p[1] || "") && p[2] === "track" && NUM.test(p[3] || "")) return { kind: "yandex", embed: `https://music.yandex.ru/iframe/#track/${p[3]}/${p[1]}`, label: `track ${p[3]}` };
   if (p[0] === "album" && NUM.test(p[1] || "") && p.length === 2) return { kind: "yandex", embed: `https://music.yandex.ru/iframe/#album/${p[1]}`, label: `album ${p[1]}` };

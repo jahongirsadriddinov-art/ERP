@@ -5,6 +5,7 @@ import { uploadChatMedia } from "../../../../api";
 import { officeApi, type OfficeMedia } from "./officeApi";
 import { isMediaFileUrl, parseVideoLink, parseYandexMusic } from "./media";
 import { player, sound, useMuted, usePlayer } from "./sound";
+import { openExternalUrl } from "../../../../platform";
 
 // AI ofis — musiqa va kino boshqaruvi (owner 2026-10-23):
 //  • Musiqa: Yandex Musiqa ulashish havolasi → rasmiy iframe vidjeti; o'z qo'shiqlari (yuklash) — pleylist, play/pause/keyingi/ovoz;
@@ -78,10 +79,21 @@ export default function MediaPanel({ media, onSaved, onClose }: { media: OfficeM
             <div className="space-y-1.5">
               <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Yandex Music</p>
               <div className="flex gap-1.5">
-                <input value={yandex} onChange={(e) => setYandex(e.target.value)} placeholder="https://music.yandex.ru/album/…" className={input} data-testid="ai-office-yandex" />
+                <input value={yandex} onChange={(e) => setYandex(e.target.value)} placeholder="https://music.yandex.ru/playlists/… (Ulashish → Havolani nusxalash)" className={input} data-testid="ai-office-yandex" />
                 <button type="button" disabled={busy || (!!yandex.trim() && !parseYandexMusic(yandex))} onClick={() => save({ yandex: yandex.trim() })} className={btn} data-testid="ai-office-yandex-save">{k("media.save")}</button>
               </div>
               {!!yandex.trim() && !parseYandexMusic(yandex) && <p className="text-[11.5px] text-red-600" data-testid="ai-office-yandex-invalid">{k("media.badYandex")}</p>}
+              {/* "Mening to'lqinim", pleylistlarim, qidiruv — Yandex'ning o'zida (ochiq API yo'q, faqat rasmiy vidjet joylanadi) */}
+              <div className="flex flex-wrap gap-1.5" data-testid="ai-office-yandex-links">
+                {[
+                  { k: "wave", label: "🌊 Moya volna", url: "https://music.yandex.ru/" },
+                  { k: "mine", label: "❤️ Mening pleylistlarim", url: "https://music.yandex.ru/home/collection" },
+                  { k: "search", label: "🔍 Qo'shiq qidirish", url: "https://music.yandex.ru/search" },
+                ].map((b) => (
+                  <button key={b.k} type="button" onClick={() => void openExternalUrl(b.url)} data-testid={`ai-office-yandex-open-${b.k}`}
+                    className="h-8 px-3 rounded-full bg-muted text-[12px] font-semibold hover:bg-muted/70">{b.label}</button>
+                ))}
+              </div>
               {ym && (muted ? (
                 <p className="text-[11.5px] text-muted-foreground rounded-xl bg-muted/50 px-3 py-2">{k("media.mutedHint")}</p>
               ) : (

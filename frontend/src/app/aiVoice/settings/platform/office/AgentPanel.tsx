@@ -12,6 +12,7 @@ import Tick from "@hugeicons/core-free-icons/Tick02Icon";
 import Gear from "@hugeicons/core-free-icons/Settings02Icon";
 import Telegram from "@hugeicons/core-free-icons/TelegramIcon";
 import { Badge, type Tone } from "../../ui";
+import AgentChat from "./AgentChat";
 import { officeApi, TEAMS, type AgentProfile, type AgentTask, type OfficeAgent, type PlanItem, type Setup, type TaskStatus } from "./officeApi";
 
 // AI ofis — agent kartasi: holat, buyruq qutisi, vazifalar (natija, nusxa, Telegram'ga yuborish, tasdiqlash), sozlash.
@@ -36,9 +37,11 @@ async function copy(text: string, k: K) {
 }
 const errMsg = (e: string, k: K) => (["rate_limited", "too_many_active", "agent_disabled", "not_configured", "invalid", "name_taken", "too_many"].includes(e) ? k(`errors.${e}`) : k("errors.generic"));
 
-export default function AgentPanel({ agent, profile, profiles, setup, onClose, onChanged, onProfile, onOpenAgent }: {
+export default function AgentPanel({ agent, profile, profiles, setup, onClose, onChanged, onProfile, onOpenAgent, onSpeak }: {
   agent: OfficeAgent; profile?: AgentProfile; profiles: AgentProfile[]; setup: Setup | null;
   onClose: () => void; onChanged: () => void; onProfile: () => void; onOpenAgent: (id: string) => void;
+  /** Agent javobini 3D'da gap pufagi qilib ko'rsatish (null — tugadi). */
+  onSpeak?: (text: string | null) => void;
 }) {
   const { t } = useTranslation();
   const k: K = (key, o) => t(`aiVoice.office.${key}`, o) as string;
@@ -115,6 +118,8 @@ export default function AgentPanel({ agent, profile, profiles, setup, onClose, o
           <MorphIcon icon={X} className="w-4 h-4" />
         </button>
       </div>
+
+      {agent.kind !== "tg" && <AgentChat key={agent.id} agent={agent} taskable={taskable} onCommand={(v) => submit(v)} onSpeak={onSpeak} />}
 
       {editing && profile && <EditAgent profile={profile} onSaved={() => { setEditing(false); onProfile(); onChanged(); }} />}
 

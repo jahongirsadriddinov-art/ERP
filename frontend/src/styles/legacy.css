@@ -24,4 +24,11 @@
   .icon-chip { background: var(--secondary); }
   .icon-chip-accent { background: var(--secondary); }
   .with-bg main { background: var(--background); }
+  /* Dizayn v5 (design-v5.css) — color-mix'siz zaxira */
+  .ios-bottom-bar, .dark .ios-bottom-bar, .nav-pill-desktop { background: var(--card); }
+  .nav-pill-indicator, .dark .nav-pill-indicator { background: var(--secondary); }
+  .nav-active-pill { background: var(--primary); }
+  .tone-brand { --t1: var(--primary); --t2: var(--primary); }
+  .icon-tile--soft, .dark .icon-tile--soft { background: var(--secondary); }
+  .dark .icon-tile--soft { color: var(--t1); }
 }

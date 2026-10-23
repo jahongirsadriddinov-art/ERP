@@ -14,6 +14,7 @@ import Copy from "@hugeicons/core-free-icons/Copy01Icon";
 import Edit from "@hugeicons/core-free-icons/Edit02Icon";
 import Trash from "@hugeicons/core-free-icons/Delete02Icon";
 import { MorphIcon } from "morphicons/react";
+import { IconTile } from "./components/IconTile";
 import { SwipeRow } from "./components/SwipeRow";
 import { IncomePanel } from "./IncomePanel";
 import { usePersistentState, oneOf } from "./lib/persistentState";
@@ -94,13 +95,13 @@ export function FinancePage({ currentUser, users, projects, expenses, onAddExpen
       {/* Header */}
       <div className="surface px-4 py-3 flex items-center justify-between flex-shrink-0">
         <div>
-          <h2 className="text-sm font-bold font-['Roboto_Slab',serif]">{t('finance.title')}</h2>
-          <p className="text-sm md:text-xs text-muted-foreground">{t('finance.totalConfirmed')} <span className="font-semibold text-accent">{fmt(totalExpense)}</span> <span className="text-[10px] text-muted-foreground/70">≈ {fmtUsd(totalExpense)}</span></p>
+          <h2 className="text-sm font-bold font-display">{t('finance.title')}</h2>
+          <p className="text-sm text-muted-foreground">{t('finance.totalConfirmed')} <span className="font-semibold text-accent">{fmt(totalExpense)}</span> <span className="text-[10px] text-muted-foreground/70">≈ {fmtUsd(totalExpense)}</span></p>
         </div>
         <div className="flex items-center gap-1.5">
-          {pendingMe>0&&<span className="text-sm md:text-xs bg-amber-500/15 text-amber-800 dark:text-amber-300 px-2 py-1 rounded-full font-semibold flex items-center gap-1 badge-pulse"><MorphIcon icon={Clock} className="w-3 h-3" />{t('finance.pendingCount', { count: pendingMe })}</span>}
-          <button onClick={()=>setShowCurrency(v=>!v)} title={t('currency.title')} aria-label={t('currency.title')} className="btn btn-outline flex items-center gap-1 text-sm md:text-xs px-2.5 py-1.5 rounded-full"><MorphIcon icon={DollarSign} className="w-3 h-3" /></button>
-          <button onClick={()=>setShowAdd(true)} className="btn btn-accent flex items-center gap-1 text-sm md:text-xs px-3 py-1.5 rounded-full"><MorphIcon icon={Plus} className="w-3 h-3" />{t('finance.addExpense')}</button>
+          {pendingMe>0&&<span className="text-sm bg-amber-500/15 text-amber-800 dark:text-amber-300 px-2 py-1 rounded-full font-semibold flex items-center gap-1 badge-pulse"><MorphIcon icon={Clock} className="w-3 h-3" />{t('finance.pendingCount', { count: pendingMe })}</span>}
+          <button onClick={()=>setShowCurrency(v=>!v)} title={t('currency.title')} aria-label={t('currency.title')} className="btn btn-outline flex items-center gap-1 text-sm px-2.5 py-1.5 rounded-full"><MorphIcon icon={DollarSign} className="w-3 h-3" /></button>
+          <button onClick={()=>setShowAdd(true)} className="btn btn-accent flex items-center gap-1 text-sm px-3 py-1.5 rounded-full"><MorphIcon icon={Plus} className="w-3 h-3" />{t('finance.addExpense')}</button>
         </div>
       </div>
       {/* Currency converter mini widget */}
@@ -163,7 +164,7 @@ export function FinancePage({ currentUser, users, projects, expenses, onAddExpen
       {/* List */}
       <div className="flex-1 overflow-y-auto space-y-2.5 scrollbar-hide">
         {filteredExpenses.length===0
-          ? <div className="text-center py-10 text-muted-foreground"><MorphIcon icon={Wallet} className="w-10 h-10 mx-auto mb-2 opacity-30" /><p className="text-sm md:text-xs">{t('finance.notFound')}</p></div>
+          ? <div className="text-center py-10 text-muted-foreground"><IconTile icon={Wallet} tone="green" size="xl" variant="soft" className="mx-auto mb-3" /><p className="text-sm">{t('finance.notFound')}</p></div>
           : filteredExpenses.map(e=>{
               const to=users.find(u=>u.id===e.toUserId);
               const proj=projects.find(p=>p.id===e.projectId);
@@ -206,11 +207,11 @@ export function FinancePage({ currentUser, users, projects, expenses, onAddExpen
                       {[(to?.name || e.recipientName) ? `→ ${to?.name || e.recipientName}` : "", creator ? `✍ ${creator.name}` : "", approver && e.status==="pending" ? `⏳ ${approver.name}` : ""].filter(Boolean).join("   ")}
                     </p>
                   )}
-                  {canConfirm&&<button onClick={e2=>{e2.stopPropagation();onConfirm(e.id);}} className="mt-2 w-full text-sm md:text-xs bg-green-600 text-white rounded py-1.5 hover:bg-green-700 font-semibold flex items-center justify-center gap-1"><MorphIcon icon={Check} className="w-3 h-3" />{t('finance.confirmAction')}</button>}
+                  {canConfirm&&<button onClick={e2=>{e2.stopPropagation();onConfirm(e.id);}} className="mt-2 w-full text-sm bg-green-600 text-white rounded py-1.5 hover:bg-green-700 font-semibold flex items-center justify-center gap-1"><MorphIcon icon={Check} className="w-3 h-3" />{t('finance.confirmAction')}</button>}
                   {canAdminApprove&&(
                     <div className="mt-2 flex gap-2" onClick={e2=>e2.stopPropagation()}>
-                      <button onClick={()=>onApprove?.(e.id)} className="flex-1 text-sm md:text-xs bg-green-600 text-white rounded py-1.5 hover:bg-green-700 font-semibold flex items-center justify-center gap-1"><MorphIcon icon={Check} className="w-3 h-3" />{t('approvalChain.approve')}</button>
-                      <button onClick={()=>onReject?.(e.id)} className="flex-1 text-sm md:text-xs bg-red-600 text-white rounded py-1.5 hover:bg-red-700 font-semibold flex items-center justify-center gap-1"><MorphIcon icon={X} className="w-3 h-3" />{t('approvalChain.reject')}</button>
+                      <button onClick={()=>onApprove?.(e.id)} className="flex-1 text-sm bg-green-600 text-white rounded py-1.5 hover:bg-green-700 font-semibold flex items-center justify-center gap-1"><MorphIcon icon={Check} className="w-3 h-3" />{t('approvalChain.approve')}</button>
+                      <button onClick={()=>onReject?.(e.id)} className="flex-1 text-sm bg-red-600 text-white rounded py-1.5 hover:bg-red-700 font-semibold flex items-center justify-center gap-1"><MorphIcon icon={X} className="w-3 h-3" />{t('approvalChain.reject')}</button>
                     </div>
                   )}
                 </div>
@@ -497,7 +498,7 @@ export function ExpenseDetailModal({ expense, users, projects, onClose }: { expe
           </div>
           <div className="surface divide-y divide-border/50 overflow-hidden">
             {rows.map(([label, value]) => (
-              <div key={label} className="flex items-center justify-between px-3 py-2 text-sm md:text-xs">
+              <div key={label} className="flex items-center justify-between px-3 py-2 text-sm">
                 <span className="text-muted-foreground">{label}</span>
                 <span className="font-medium text-foreground">{value}</span>
               </div>
@@ -517,7 +518,7 @@ export function ExpenseDetailModal({ expense, users, projects, onClose }: { expe
             </div>
           )}
           <button onClick={() => exportExpensesToCsv([expense], users, projects, `chiqim_${expense.date}.csv`)}
-            className="btn btn-outline w-full flex items-center justify-center gap-1.5 text-sm md:text-xs py-2.5 rounded-full">
+            className="btn btn-outline w-full flex items-center justify-center gap-1.5 text-sm py-2.5 rounded-full">
             <MorphIcon icon={Download} className="w-3.5 h-3.5" />{t('reports.exportExcel')}
           </button>
         </div>

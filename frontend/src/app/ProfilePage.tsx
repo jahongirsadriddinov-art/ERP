@@ -78,6 +78,7 @@ import Lock from "@hugeicons/core-free-icons/LockIcon";
 import Volume2 from "@hugeicons/core-free-icons/VolumeHighIcon";
 import VolumeX from "@hugeicons/core-free-icons/VolumeOffIcon";
 import { MorphIcon, type IconNode } from "morphicons/react";
+import { IconTile, type IconTone } from "./components/IconTile";
 import { toast, Toaster } from "sonner";
 import { isSoundEnabled, setSoundEnabled, getSoundVolume, setSoundVolume, playSound, sfx } from "./sound";
 import { createPortal } from "react-dom";
@@ -676,30 +677,30 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
   const hasAttendanceCard = (currentUser.role === 'ishchi' || currentUser.role === 'prorab' || currentUser.role === 'brigadir') && !!todayAttendance?.checkIn;
 
   const menuRows = [
-            { key: "bg" as const, icon: Palette, label: t('profile.bgThemes'), hint: null as string|null,
+            { key: "bg" as const, tone: "violet" as IconTone, desc: t('settingsUi.rowBg') as string|null, icon: Palette, label: t('profile.bgThemes'), hint: null as string|null,
               swatch: (bannerStyle as any).background ? { background: (bannerStyle as any).background } : { backgroundImage: (bannerStyle as any).backgroundImage, backgroundSize: 'cover' } },
-            { key: "appearance" as const, icon: themeMode === "light" ? Sun : themeMode === "dark" ? Moon : Monitor, label: t('profile.appearanceMode'), hint: APPEARANCE_LABELS[themeMode], swatch: null },
-            { key: "color" as const, icon: Palette, label: t('profile.colorTheme'), hint: t(`profile.colorThemeNames.${activeTheme.id}`, { defaultValue: activeTheme.name }), swatch: { background: `linear-gradient(135deg, ${activeTheme.primary}, ${activeTheme.accent})` } },
-            { key: "font" as const, icon: TextFont, label: t('profile.font', "Shrift"), hint: `${fontById(appFont).label} · ${fontScale}%`, swatch: null },
-            { key: "language" as const, icon: Languages, label: t('profile.language'), hint: langLabel(i18n.language as SiteLang), swatch: null },
-            { key: "perms" as const, icon: CheckCircle, label: t('profile.permissions'), hint: `${perms.filter(([,has])=>has).length}/${perms.length}`, swatch: null },
-            { key: "projects" as const, icon: Building2, label: t('profile.myObjects'), hint: String(myProjectCount), swatch: null },
+            { key: "appearance" as const, tone: "amber" as IconTone, desc: t('settingsUi.rowAppearance') as string|null, icon: themeMode === "light" ? Sun : themeMode === "dark" ? Moon : Monitor, label: t('profile.appearanceMode'), hint: APPEARANCE_LABELS[themeMode], swatch: null },
+            { key: "color" as const, tone: "rose" as IconTone, desc: t('settingsUi.rowColor') as string|null, icon: Palette, label: t('profile.colorTheme'), hint: t(`profile.colorThemeNames.${activeTheme.id}`, { defaultValue: activeTheme.name }), swatch: { background: `linear-gradient(135deg, ${activeTheme.primary}, ${activeTheme.accent})` } },
+            { key: "font" as const, tone: "sky" as IconTone, desc: t('settingsUi.rowFont') as string|null, icon: TextFont, label: t('profile.font', "Shrift"), hint: `${fontById(appFont).label} · ${fontScale}%`, swatch: null },
+            { key: "language" as const, tone: "blue" as IconTone, desc: t('settingsUi.rowLanguage') as string|null, icon: Languages, label: t('profile.language'), hint: langLabel(i18n.language as SiteLang), swatch: null },
+            { key: "perms" as const, tone: "green" as IconTone, desc: t('settingsUi.rowPerms') as string|null, icon: CheckCircle, label: t('profile.permissions'), hint: `${perms.filter(([,has])=>has).length}/${perms.length}`, swatch: null },
+            { key: "projects" as const, tone: "orange" as IconTone, desc: t('settingsUi.rowProjects') as string|null, icon: Building2, label: t('profile.myObjects'), hint: String(myProjectCount), swatch: null },
             // Tarifda "multi_currency" o'chirilgan bo'lsa bu qator umuman
             // ko'rsatilmaydi (subData.features hali kelmagan bo'lsa ham
             // ko'rsatiladi — yuklanish paytida bo'sh menyu ko'rinmasin).
             ...((!subData?.features || subData.features.includes('multi_currency')) ? [
-              { key: "currency" as const, icon: DollarSign, label: t('profile.currencyRate'), hint: null as string|null, swatch: null },
+              { key: "currency" as const, tone: "teal" as IconTone, desc: t('settingsUi.rowCurrency') as string|null, icon: DollarSign, label: t('profile.currencyRate'), hint: null as string|null, swatch: null },
             ] : []),
-            { key: "devices" as const, icon: Smartphone, label: t('profile.connectedDevices'), hint: null as string|null, swatch: null },
+            { key: "devices" as const, tone: "slate" as IconTone, desc: t('settingsUi.rowDevices') as string|null, icon: Smartphone, label: t('profile.connectedDevices'), hint: null as string|null, swatch: null },
             // AI ovozli yordamchi: firma sozlamalari — direktor / o'rinbosar / egasi (tarifda ai_assistant bo'lsa);
             // shaxsiy AI sozlamalari (rozilik, kanal, voz kechish) — har bir xodim uchun.
             ...((isAdmin(currentUser.role) || !!currentUser.isOwner) && (!subData?.features || subData.features.includes('ai_assistant')) ? [
-              { key: "aiVoice" as const, icon: AiPhone, label: t('aiVoice.menu.admin'), hint: t('aiVoice.menu.adminHint') as string|null, swatch: null },
+              { key: "aiVoice" as const, tone: "violet" as IconTone, desc: null as string|null, icon: AiPhone, label: t('aiVoice.menu.admin'), hint: t('aiVoice.menu.adminHint') as string|null, swatch: null },
             ] : []),
             ...(currentUser.role !== 'dasturchi' ? [
-              { key: "aiPrefs" as const, icon: AiVoiceIcon, label: t('aiVoice.menu.prefs'), hint: t('aiVoice.menu.prefsHint') as string|null, swatch: null },
+              { key: "aiPrefs" as const, tone: "sky" as IconTone, desc: null as string|null, icon: AiVoiceIcon, label: t('aiVoice.menu.prefs'), hint: t('aiVoice.menu.prefsHint') as string|null, swatch: null },
             ] : []),
-            ...(isAdmin(currentUser.role) ? [{ key: "subscription" as const, icon: CreditCard, label: t('profile.subscriptionStatus'),
+            ...(isAdmin(currentUser.role) ? [{ key: "subscription" as const, tone: "amber" as IconTone, desc: t('settingsUi.rowSubscription') as string|null, icon: CreditCard, label: t('profile.subscriptionStatus'),
               hint: subData?.status === 'active' ? (subData.daysLeft !== null ? t('profile.daysLeftValue', { count: subData.daysLeft }) : t('profile.subStatusActive')) : subData?.status === 'pending' ? t('profile.subStatusPending') : subData?.status === 'expired' ? t('profile.subStatusExpired') : subData?.status === 'rejected' ? t('profile.subStatusRejected') : subLoading ? "..." : t('common.notFound'),
               swatch: null }] : []),
             // XATO TUZATILDI ("backup'ni telefonga profil qismiga qo'sh"):
@@ -708,8 +709,8 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
             // ko'rsatilmaydi (`hidden lg:flex`), shu sabab mobil foydalanuvchi
             // (direktor/o'rinbosar) uchun backup imkoni butunlay yo'qolgan
             // edi. Endi Profil bo'limida — barcha o'lchamda ko'rinadi.
-            ...(isAdmin(currentUser.role) ? [{ key: "backup" as const, icon: Download, label: t('profile.backupTitle'), hint: null as string|null, swatch: null }] : []),
-            ...(isAdmin(currentUser.role) ? [{ key: "danger" as const, icon: AlertTriangle, label: t('safety.dangerMenu', "Xavfli zona"), hint: null as string|null, swatch: null }] : []),
+            ...(isAdmin(currentUser.role) ? [{ key: "backup" as const, tone: "blue" as IconTone, desc: t('settingsUi.rowBackup') as string|null, icon: Download, label: t('profile.backupTitle'), hint: null as string|null, swatch: null }] : []),
+            ...(isAdmin(currentUser.role) ? [{ key: "danger" as const, tone: "red" as IconTone, desc: t('settingsUi.rowDanger') as string|null, icon: AlertTriangle, label: t('safety.dangerMenu', "Xavfli zona"), hint: null as string|null, swatch: null }] : []),
   ];
 
   // ── Har bo'lim uchun alohida ekran (rasmdagi "Personal/General/..." kabi) ──
@@ -730,7 +731,7 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
           <button onClick={() => setActivePanel(null)} aria-label={t('common.back')} className="btn btn-ghost w-10 h-10 p-0 rounded-full flex-shrink-0"><MorphIcon icon={ChevronLeft} className="w-5 h-5" /></button>
           {activeRow && (activeRow.swatch
             ? <div className="w-10 h-10 rounded-xl flex-shrink-0 hidden md:block" style={activeRow.swatch}/>
-            : <div className="icon-chip w-10 h-10 hidden md:flex"><MorphIcon icon={activeRow.icon} className="w-5 h-5" /></div>)}
+            : <IconTile icon={activeRow.icon} tone={activeRow.tone} size="md" variant="solid" className="hidden md:inline-flex" />)}
           <div className="min-w-0">
             <h2 className="text-base md:text-lg font-bold truncate">{panelTitle}</h2>
             {activeRow?.hint && <p className="text-xs text-muted-foreground truncate">{activeRow.hint}</p>}
@@ -745,7 +746,7 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
                   className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left border liquid-transition ${row.key === activePanel ? "bg-primary/10 text-primary font-semibold border-primary/30" : "border-transparent hover:bg-muted/40 hover:border-border text-foreground"}`}>
                   {row.swatch
                     ? <div className="w-8 h-8 rounded-lg flex-shrink-0" style={row.swatch}/>
-                    : <div className="icon-chip w-8 h-8"><MorphIcon icon={row.icon} className="w-4 h-4" /></div>}
+                    : <IconTile icon={row.icon} tone={row.tone} size="sm" variant="soft" />}
                   <span className="text-sm flex-1 truncate">{row.label}</span>
                   {row.hint && <span className="text-[11px] text-foreground/60 truncate max-w-[7rem] flex-shrink-0">{row.hint}</span>}
                 </button>
@@ -772,16 +773,16 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
                 <span className="text-[10px] text-muted-foreground hidden sm:block">{t('profile.appliesSiteWide')}</span>
               </div>
               <div className="p-3">
-                <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 xl:grid-cols-7 gap-2">
+                <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-6 xl:grid-cols-7 gap-2.5">
                   {BG_TEMPLATES.map(bgT => {
                     const isCurrent = bgT.id === "default" ? (!profileBg || profileBg === "") : profileBg === bgT.value;
                     return (
                       <button key={bgT.id} onClick={() => applyBgTemplate(bgT.value)}
                         className={`relative rounded-lg sm:rounded-xl overflow-hidden border-2 liquid-transition ${isCurrent ? "border-primary shadow-md scale-[1.05]" : "border-transparent hover:border-primary/40"}`}
                         style={{ aspectRatio: "4/3", background: bgT.value || "var(--background)" }}>
-                        {bgT.id === "default" && <div className="absolute inset-0 flex items-center justify-center bg-muted/60"><span className="text-[8px] text-muted-foreground font-semibold">{t('profile.none')}</span></div>}
+                        {bgT.id === "default" && <div className="absolute inset-0 flex items-center justify-center bg-muted/60"><span className="text-[11px] text-muted-foreground font-semibold">{t('profile.none')}</span></div>}
                         {isCurrent && <div className="absolute top-0.5 right-0.5 w-3.5 h-3.5 bg-white/95 rounded-full flex items-center justify-center shadow"><MorphIcon icon={Check} className="w-2 h-2 text-primary" /></div>}
-                        {bgT.id !== "default" && <div className="absolute inset-x-0 bottom-0 py-0.5" style={{ background: "rgba(0,0,0,0.38)" }}><p className="text-center text-[7px] sm:text-[8px] text-white font-semibold">{t(`profile.bgTemplateNames.${bgT.id}`, { defaultValue: bgT.name })}</p></div>}
+                        {bgT.id !== "default" && <div className="absolute inset-x-0 bottom-0 py-0.5" style={{ background: "rgba(0,0,0,0.38)" }}><p className="text-center text-[11px] sm:text-[10px] text-white font-semibold truncate px-1">{t(`profile.bgTemplateNames.${bgT.id}`, { defaultValue: bgT.name })}</p></div>}
                       </button>
                     );
                   })}
@@ -789,7 +790,7 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
                     className="relative rounded-lg sm:rounded-xl overflow-hidden border-2 border-dashed border-border bg-muted/40 hover:bg-muted/70 hover:border-primary/40 flex flex-col items-center justify-center gap-0.5 liquid-transition"
                     style={{ aspectRatio: "4/3" }}>
                     <MorphIcon icon={Upload} className="w-3.5 h-3.5 text-muted-foreground" />
-                    <p className="text-[7px] sm:text-[8px] text-muted-foreground font-semibold">{t('profile.uploadPhotoShort')}</p>
+                    <p className="text-[11px] sm:text-[10px] text-muted-foreground font-semibold">{t('profile.uploadPhotoShort')}</p>
                   </button>
                 </div>
               </div>
@@ -1225,7 +1226,7 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
             </div>
           ) : (
             <>
-              <h2 className="text-xl font-bold font-['Roboto_Slab',serif]">{currentUser.name}</h2>
+              <h2 className="text-xl font-bold font-display">{currentUser.name}</h2>
               <div className="flex justify-center mt-2"><RoleBadge role={currentUser.role}/></div>
               <p className="text-xs text-muted-foreground mt-2 font-mono">{currentUser.phone}</p>
               {currentUser.brigade && <p className="text-xs text-muted-foreground mt-1">{currentUser.brigade}</p>}
@@ -1327,75 +1328,90 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
           </motion.div>
         )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-3 md:col-span-2">
-          {/* Qo'lda bloklash — 1 daqiqa kutmasdan, darhol PIN ekraniga o'tadi.
-            Barcha qurilmalarda (veb/APK/exe) ko'rinadi — biometrikdan farqli,
-            bunga maxsus native imkoniyat kerak emas. */}
-        <button onClick={onLockNow} className="group w-full flex items-center gap-3 rounded-2xl border border-border bg-card/60 px-3.5 py-3 text-left hover:border-primary/40 hover:bg-primary/[0.05] liquid-transition">
-                <span className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center flex-shrink-0"><MorphIcon icon={Lock} className="w-4 h-4" /></span>
-                <span className="text-sm font-semibold whitespace-nowrap truncate">{t('profile.lockNowBtn')}</span>
-        </button>
-
-        <motion.button initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28, delay: 0.26 }}
-          onClick={() => { markManualLogout(); localStorage.removeItem("currentUser"); localStorage.removeItem("token"); onLogout(); }}
-          className="group w-full flex items-center gap-3 rounded-2xl border border-red-500/20 bg-red-500/[0.04] px-3.5 py-3 text-left hover:border-red-500/45 hover:bg-red-500/10 liquid-transition">
-                <span className="w-9 h-9 rounded-xl bg-red-500/10 text-red-500 flex items-center justify-center flex-shrink-0"><MorphIcon icon={LogOut} className="w-4 h-4" /></span>
-                <span className="text-sm font-semibold text-red-600 dark:text-red-400 whitespace-nowrap truncate">{t('profile.logout')}</span>
-        </motion.button>
+          {/* Bloklash / chiqish — kompyuterda chap ustunda; telefonda sozlamalar ostida */}
+          <div className="hidden lg:block">
+            <button onClick={() => { markManualLogout(); localStorage.removeItem("currentUser"); localStorage.removeItem("token"); onLogout(); }}
+              className="surface settings-row rounded-2xl text-left">
+              <IconTile icon={LogOut} tone="red" size="md" variant="soft" />
+              <span className="flex-1 min-w-0"><span className="settings-row__label block text-red-600 dark:text-red-400">{t('profile.logout')}</span><span className="settings-row__hint block truncate">{t('settingsUi.rowLogout')}</span></span>
+            </button>
           </div>
         </div>
 
-        {/* O'ng ustun: sozlamalar katakchalari, audit, xavfsizlik, ilova yuklash */}
-        <div className="lg:col-span-8 xl:col-span-9 space-y-4 min-w-0 lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain lg:[scrollbar-width:thin] lg:px-2 lg:py-2 lg:pr-3">
-        {/* ── Sozlamalar menyusi: telefonda ro'yxat, planshet/noutbukda katakchalar ── */}
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28, delay: 0.06 }}>
-          <div className="surface border border-border overflow-hidden md:hidden">
-            {menuRows.map((row, i) => (
-              <button key={row.key} onClick={() => setActivePanel(row.key)}
-                className={`w-full flex items-center gap-3 px-4 py-3.5 hover:bg-muted/30 liquid-transition text-left ${i > 0 ? "border-t border-border/50" : ""}`}>
-                {row.swatch
-                  ? <div className="w-10 h-10 rounded-xl flex-shrink-0" style={row.swatch}/>
-                  : <div className="icon-chip"><MorphIcon icon={row.icon} className="w-4 h-4" /></div>}
-                <span className="text-sm font-medium flex-1">{row.label}</span>
-                {row.hint && <span className="text-xs text-muted-foreground">{row.hint}</span>}
-                <MorphIcon icon={ChevronRight} className="w-4 h-4 text-muted-foreground/60" />
-              </button>
-            ))}
-          </div>
-          <div className="hidden md:grid md:grid-cols-2 xl:grid-cols-3 gap-3">
-            {menuRows.map(row => (
-              <button key={row.key} onClick={() => setActivePanel(row.key)}
-                className="surface border border-border rounded-2xl p-4 flex items-center gap-3 text-left hover:border-primary/50 hover:bg-primary/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 liquid-transition min-w-0">
-                {row.swatch
-                  ? <div className="w-11 h-11 rounded-xl flex-shrink-0" style={row.swatch}/>
-                  : <div className="icon-chip w-11 h-11"><MorphIcon icon={row.icon} className="w-5 h-5" /></div>}
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold truncate">{row.label}</p>
-                  {row.hint && <p className="text-xs text-muted-foreground truncate mt-0.5">{row.hint}</p>}
+        {/* O'ng ustun: guruhlangan sozlamalar (Hisob / Xavfsizlik / Firma / AI / Ilova) */}
+        <div className="lg:col-span-8 xl:col-span-9 min-w-0 lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain lg:[scrollbar-width:thin] lg:px-2 lg:py-2 lg:pr-3">
+        {(() => {
+          const byKey = (k: string) => menuRows.find(r => r.key === k);
+          const renderRow = (row: (typeof menuRows)[number]) => (
+            <button key={row.key} onClick={() => setActivePanel(row.key)} className="settings-row">
+              {row.swatch
+                ? <span className="w-10 h-10 rounded-xl flex-shrink-0 shadow-sm ring-1 ring-black/5" style={row.swatch}/>
+                : <IconTile icon={row.icon} tone={row.tone} size="md" variant="soft" />}
+              <span className="flex-1 min-w-0">
+                <span className="settings-row__label block truncate">{row.label}</span>
+                {row.desc && <span className="settings-row__hint block truncate">{row.desc}</span>}
+              </span>
+              {row.hint && <span className="text-[13px] text-muted-foreground max-w-[38%] truncate text-right">{row.hint}</span>}
+              <MorphIcon icon={ChevronRight} className="w-4 h-4 text-muted-foreground/60 flex-shrink-0" />
+            </button>
+          );
+          const groups: { id: string; title: string; desc: string; keys: string[]; before?: React.ReactNode; after?: React.ReactNode }[] = [
+            { id: "account", title: t('settingsUi.account'), desc: t('settingsUi.accountDesc'), keys: ["perms", "projects"] },
+            { id: "security", title: t('settingsUi.security'), desc: t('settingsUi.securityDesc'), keys: ["devices"],
+              before: (
+                <button onClick={onLockNow} className="settings-row">
+                  <IconTile icon={Lock} tone="slate" size="md" variant="soft" />
+                  <span className="flex-1 min-w-0"><span className="settings-row__label block truncate">{t('profile.lockNowBtn')}</span><span className="settings-row__hint block truncate">{t('settingsUi.rowLock')}</span></span>
+                  <MorphIcon icon={ChevronRight} className="w-4 h-4 text-muted-foreground/60 flex-shrink-0" />
+                </button>
+              ),
+              after: (
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-1 gap-3 items-start mt-3">
+                  <SecuritySettingsCard />
+                  <BiometricToggleCard currentUserId={currentUser.id} />
                 </div>
-                <MorphIcon icon={ChevronRight} className="w-4 h-4 text-muted-foreground/60 flex-shrink-0" />
-              </button>
-            ))}
-          </div>
-        </motion.div>
-
-        {/* Audit log — faqat admin, va tarifda yoqilgan bo'lsa (subData.features
-            hali kelmagan bo'lsa ham ko'rsatiladi — quyida yozilganidek). */}
-        {(currentUser.role === 'direktor' || currentUser.role === 'orinbosar' || currentUser.role === 'dasturchi') &&
-          (!subData?.features || subData.features.includes('audit_log')) && (
-          <AuditLogSection token={localStorage.getItem("token") || ""} />
-        )}
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
-          <SecuritySettingsCard />
-          <BiometricToggleCard currentUserId={currentUser.id} />
-        </div>
-
-        {/* Ilovani yuklab olish — hali CI birorta ham APK/exe chiqarmagan
-            bo'lsa (yoki hali yuklanmoqda) komponent o'zi HECH NARSA
-            render qilmaydi (loadingFallback=false) — bo'sh joy qolmasin. */}
-        {/* Ilovaning o'zida "ilovani yuklab oling" ma'nosiz — faqat veb saytda */}
-        {!isNative() && <AppDownloadCards compact title={t('profile.appDownloadTitle')} loadingFallback={false} />}
+              ) },
+            { id: "company", title: t('settingsUi.company'), desc: t('settingsUi.companyDesc'), keys: ["subscription", "currency", "backup", "danger"],
+              after: (currentUser.role === 'direktor' || currentUser.role === 'orinbosar' || currentUser.role === 'dasturchi') &&
+                (!subData?.features || subData.features.includes('audit_log'))
+                ? <div className="mt-3"><AuditLogSection token={localStorage.getItem("token") || ""} /></div> : null },
+            { id: "ai", title: t('settingsUi.ai'), desc: t('settingsUi.aiDesc'), keys: ["aiVoice", "aiPrefs"] },
+            { id: "app", title: t('settingsUi.app'), desc: t('settingsUi.appDesc'), keys: ["language", "appearance", "color", "bg", "font"],
+              after: !isNative() ? <div className="mt-3"><AppDownloadCards compact title={t('profile.appDownloadTitle')} loadingFallback={false} /></div> : null },
+          ];
+          return (
+            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 28, delay: 0.06 }}
+              className="xl:columns-2 xl:gap-6">
+              {groups.map(g => {
+                const rows = g.keys.map(byKey).filter(Boolean) as (typeof menuRows)[number][];
+                if (!rows.length && !g.before && !g.after) return null;
+                return (
+                  <section key={g.id} data-settings-group={g.id} className="settings-group xl:!mt-0 xl:mb-6 break-inside-avoid">
+                    <div className="settings-group__head">
+                      <h3 className="settings-group__title">{g.title}</h3>
+                      <p className="settings-group__desc">{g.desc}</p>
+                    </div>
+                    {(rows.length > 0 || g.before) && (
+                      <div className="surface settings-list rounded-2xl">
+                        {g.before}
+                        {rows.map(renderRow)}
+                      </div>
+                    )}
+                    {g.after}
+                  </section>
+                );
+              })}
+              {/* Telefon/planshet: chiqish — eng pastda, alohida */}
+              <div className="lg:hidden mt-6">
+                <button onClick={() => { markManualLogout(); localStorage.removeItem("currentUser"); localStorage.removeItem("token"); onLogout(); }}
+                  className="surface settings-row rounded-2xl">
+                  <IconTile icon={LogOut} tone="red" size="md" variant="soft" />
+                  <span className="flex-1 min-w-0"><span className="settings-row__label block text-red-600 dark:text-red-400">{t('profile.logout')}</span><span className="settings-row__hint block truncate">{t('settingsUi.rowLogout')}</span></span>
+                </button>
+              </div>
+            </motion.div>
+          );
+        })()}
 
         </div>
       </div>

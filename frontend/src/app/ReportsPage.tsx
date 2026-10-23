@@ -63,7 +63,7 @@ function Card({ title, children, delay = 0, className = "", right, testId }: { t
       data-testid={testId} className={`surface border border-border rounded-2xl p-3 sm:p-4 min-w-0 ${className}`}>
       {title && (
         <div className="flex items-center justify-between gap-2 mb-3 min-w-0">
-          <p className="text-sm font-semibold font-['Roboto_Slab',serif] min-w-0 truncate">{title}</p>
+          <p className="text-sm font-semibold font-display min-w-0 truncate">{title}</p>
           {right}
         </div>
       )}
@@ -305,7 +305,7 @@ export default function ReportsPage({ projects, expenses, incomes, users, showIn
 
   const exportBtn = (
     <button type="button" onClick={doExport} disabled={exporting} data-testid="reports-export" aria-label={t('reports.exportExcel')} title={t('reports.exportExcel')}
-      className="btn btn-accent flex items-center justify-center gap-1.5 text-sm md:text-xs px-3 py-1.5 rounded-full flex-shrink-0 disabled:opacity-60 min-h-[34px]">
+      className="btn btn-accent flex items-center justify-center gap-1.5 text-sm px-3 py-1.5 rounded-full flex-shrink-0 disabled:opacity-60 min-h-[34px]">
       <MorphIcon icon={Download} className={`w-3.5 h-3.5 ${exporting ? "animate-bounce" : ""}`} />
       <span>{narrow ? "Excel" : t('reports.exportExcel')}</span>
     </button>
@@ -314,7 +314,7 @@ export default function ReportsPage({ projects, expenses, incomes, users, showIn
   const dateInput = "w-full min-w-0 max-w-full box-border text-xs border border-border rounded-full px-2.5 py-1.5 bg-input-background text-foreground";
   const filterPanel = (
     <div data-testid="reports-filter-panel" className="flex flex-col md:flex-row md:flex-wrap md:items-center gap-2 min-w-0">
-      <select aria-label={t('reports.table.project')} className="w-full md:w-56 min-w-0 max-w-full text-sm md:text-xs border border-border rounded-full px-3 py-1.5 bg-input-background focus:outline-none"
+      <select aria-label={t('reports.table.project')} className="w-full md:w-56 min-w-0 max-w-full text-sm border border-border rounded-full px-3 py-1.5 bg-input-background focus:outline-none"
         value={selProj} onChange={e => setSelProj(e.target.value)}>
         <option value="all">{t('reports.allProjects')}</option>
         {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -344,7 +344,7 @@ export default function ReportsPage({ projects, expenses, incomes, users, showIn
   const header = (
     <div ref={headerRef} data-testid="reports-header" className="surface border border-border rounded-2xl px-3 py-2.5 flex flex-col gap-2 flex-shrink-0 min-w-0 relative z-20">
       <div className="flex items-center gap-2 min-w-0">
-        <h2 className="text-base font-bold font-['Roboto_Slab',serif] min-w-0 truncate">{view === "control" ? t('control.title') : t('reports.title')}</h2>
+        <h2 className="text-base font-bold font-display min-w-0 truncate">{view === "control" ? t('control.title') : t('reports.title')}</h2>
         <div className="ml-auto flex items-center gap-2 flex-shrink-0">
           {viewToggle}
           {view === "finance" && !narrow && exportBtn}
@@ -598,7 +598,7 @@ export default function ReportsPage({ projects, expenses, incomes, users, showIn
         <Card delay={0.18} className="!p-0 overflow-hidden">
           <div className="flex flex-wrap items-center justify-between gap-2 px-3 sm:px-4 pt-3 sm:pt-4 pb-3">
             <div className="min-w-0">
-              <p className="text-sm font-semibold font-['Roboto_Slab',serif]">{t('reports.detailedTable')}</p>
+              <p className="text-sm font-semibold font-display">{t('reports.detailedTable')}</p>
               <span className="text-xs text-muted-foreground">{tableRows.length} {ops}</span>
             </div>
             <div className="flex flex-wrap gap-1">
@@ -647,7 +647,7 @@ export default function ReportsPage({ projects, expenses, incomes, users, showIn
             </div>
           ) : (
             <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
-              <table className="w-full text-sm md:text-xs">
+              <table className="w-full text-sm">
                 <thead className="sticky top-0 bg-card z-10"><tr className="border-y border-border">{[t('reports.table.date'), t('reports.table.description'), t('reports.table.type'), t('reports.table.to'), t('reports.table.project'), t('reports.table.amount')].map(h => <th key={h} className="text-left px-3 py-2 font-semibold text-muted-foreground whitespace-nowrap">{h}</th>)}</tr></thead>
                 <tbody>
                   {tableRows.slice(0, Math.max(tableLimit, 500)).map(e => {

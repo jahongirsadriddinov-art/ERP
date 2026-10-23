@@ -21,6 +21,7 @@ import Loader2 from "@hugeicons/core-free-icons/Loading03Icon";
 import Share2 from "@hugeicons/core-free-icons/Share01Icon";
 import Trash2 from "@hugeicons/core-free-icons/Delete02Icon";
 import { MorphIcon } from "morphicons/react";
+import { IconTile } from "./components/IconTile";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import { API_BASE, parseSmetaFile, uploadChatMedia } from "./api";
@@ -228,7 +229,7 @@ export function ObjectDetailPage({ project, currentUser, users, transfers, onBac
       </div>
       <div className="glass border-b border-border px-3 py-2 flex gap-1 overflow-x-auto scrollbar-hide">
         {([["required",t('objectDetail.tabRequired'),project.requiredMaterials.length], ["pending",t('objectDetail.tabPending'),pendT.length],["confirmed",t('objectDetail.tabConfirmed'),confT.length], ...(project.smeta ? [["smeta",t('objectDetail.tabSmeta'),project.smeta.resources.length] as [string,string,number]] : []), ["media",t('objectDetail.tabMedia'),mediaItems.length], ...(showPiecework ? [["piece",t('piecework.tab'),NaN] as [string,string,number]] : []), ...(canPlanFact ? [["plan",t('planFact.tab'),NaN] as [string,string,number]] : [])] as [string,string,number][]).map(([k,l,c])=>(
-          <button key={k} onClick={()=>setTab(k as any)} className={`relative flex items-center gap-1.5 text-sm md:text-xs py-2 px-3 rounded-full font-medium liquid-transition whitespace-nowrap ${tab===k?"text-primary":"text-muted-foreground hover:text-foreground"}`}>
+          <button key={k} onClick={()=>setTab(k as any)} className={`relative flex items-center gap-1.5 text-sm py-2 px-3 rounded-full font-medium liquid-transition whitespace-nowrap ${tab===k?"text-primary":"text-muted-foreground hover:text-foreground"}`}>
             {tab===k && (
               <motion.div layoutId="objectDetailTabPill" className="absolute inset-0 rounded-full bg-primary/10 -z-10"
                 transition={{ type: "spring", stiffness: 480, damping: 34 }}  />
@@ -313,7 +314,7 @@ export function ObjectDetailPage({ project, currentUser, users, transfers, onBac
                     })}
                     {filteredMats.length === 0 && (
                       <tr><td colSpan={5} className="px-2 py-10 text-center text-muted-foreground">
-                        <MorphIcon icon={Package} className="w-8 h-8 mx-auto mb-2 opacity-25" />
+                        <IconTile icon={Package} tone="orange" size="xl" variant="soft" className="mx-auto mb-3" />
                         {project.requiredMaterials.length === 0 ? t('objectDetail.noSmeta') : t('common.notFound')}
                       </td></tr>
                     )}
@@ -325,13 +326,13 @@ export function ObjectDetailPage({ project, currentUser, users, transfers, onBac
         )}
         {tab==="pending" && (
           <div className="flex-1 overflow-y-auto p-4 scrollbar-hide pb-24 sm:pb-4 space-y-2 animate-slide-up-fade">
-            {pendT.length===0?<div className="text-center py-10 text-muted-foreground animate-pop-in"><MorphIcon icon={CheckCircle} className="w-10 h-10 mx-auto mb-2 text-green-400 opacity-50" /><p className="text-sm md:text-xs">{t('objectDetail.noPending')}</p></div>
+            {pendT.length===0?<div className="text-center py-10 text-muted-foreground animate-pop-in"><IconTile icon={CheckCircle} tone="green" size="xl" variant="soft" className="mx-auto mb-3" /><p className="text-sm">{t('objectDetail.noPending')}</p></div>
             :pendT.map(t=><TransferRow key={t.id} t={t} currentUser={currentUser} allUsers={users} projects={[project]} onConfirm={onConfirm} onReject={onReject}/>)}
           </div>
         )}
         {tab==="confirmed" && (
           <div className="flex-1 overflow-y-auto p-4 scrollbar-hide pb-24 sm:pb-4 space-y-2 animate-slide-up-fade">
-            {confT.length===0?<div className="text-center py-10 text-muted-foreground animate-pop-in"><MorphIcon icon={Package} className="w-10 h-10 mx-auto mb-2 opacity-30" /><p className="text-sm md:text-xs">{t('objectDetail.noConfirmed')}</p></div>
+            {confT.length===0?<div className="text-center py-10 text-muted-foreground animate-pop-in"><IconTile icon={Package} tone="orange" size="xl" variant="soft" className="mx-auto mb-3" /><p className="text-sm">{t('objectDetail.noConfirmed')}</p></div>
             :confT.map(t=><TransferRow key={t.id} t={t} currentUser={currentUser} allUsers={users} projects={[project]} onConfirm={onConfirm} onReject={onReject}/>)}
           </div>
         )}
@@ -370,7 +371,7 @@ export function ObjectDetailPage({ project, currentUser, users, transfers, onBac
             {mediaLoading ? (
               <SkeletonList items={3} withAvatar={false} />
             ) : mediaItems.length === 0 ? (
-              <div className="text-center py-10 text-muted-foreground animate-pop-in"><MorphIcon icon={Camera} className="w-10 h-10 mx-auto mb-2 opacity-30" /><p className="text-sm md:text-xs">{t('objectDetail.mediaEmpty')}</p></div>
+              <div className="text-center py-10 text-muted-foreground animate-pop-in"><IconTile icon={Camera} tone="violet" size="xl" variant="soft" className="mx-auto mb-3" /><p className="text-sm">{t('objectDetail.mediaEmpty')}</p></div>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
                 {mediaItems.map(m => {
@@ -499,7 +500,7 @@ export function MaterialDetailsModal({ mat, confT, pendT, objectId, canEdit, onC
           <h3 className="font-semibold text-base truncate pr-4">{mat.name}</h3>
           <div className="flex items-center gap-2">
             {canEdit && !editing && <button onClick={()=>setEditing(true)} aria-label={tt('materialDetails.editBtn')} title={tt('materialDetails.editBtn')} className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-full liquid-transition"><MorphIcon icon={Edit} className="w-4 h-4" /></button>}
-            {onSend && <button onClick={()=>{onClose(); onSend();}} className="flex items-center gap-1.5 bg-primary text-white text-sm md:text-xs px-3 py-1.5 rounded-full hover:bg-primary/90 font-medium liquid-transition shadow-md shadow-primary/20"><MorphIcon icon={Send} className="w-3 h-3" />{tt('common.send')}</button>}
+            {onSend && <button onClick={()=>{onClose(); onSend();}} className="flex items-center gap-1.5 bg-primary text-white text-sm px-3 py-1.5 rounded-full hover:bg-primary/90 font-medium liquid-transition shadow-md shadow-primary/20"><MorphIcon icon={Send} className="w-3 h-3" />{tt('common.send')}</button>}
             <button aria-label={tt('common.close')} onClick={onClose} className="p-1.5 text-muted-foreground hover:bg-muted/50 rounded-full liquid-transition bg-muted/20"><MorphIcon icon={X} className="w-4 h-4" /></button>
           </div>
         </div>
@@ -532,32 +533,32 @@ export function MaterialDetailsModal({ mat, confT, pendT, objectId, canEdit, onC
         <div className="p-4 overflow-y-auto overflow-x-hidden">
           <div className="grid grid-cols-2 gap-3 mb-4">
             <div className="bg-muted p-2.5 rounded-lg border border-border">
-              <p className="text-sm md:text-xs text-muted-foreground mb-1">{tt('materialDetails.planned')}</p>
-              <p className="font-semibold text-sm">{mat.quantity.toLocaleString()} <span className="text-sm md:text-xs font-normal">{mat.unit}</span></p>
-              {mat.price ? <p className="text-sm md:text-xs text-muted-foreground mt-1">{tt('materialDetails.priceLabel', { price: fmt(mat.price), unit: mat.unit })}</p> : <p className="text-sm md:text-xs text-muted-foreground mt-1">{tt('materialDetails.noPriceSet')}</p>}
+              <p className="text-sm text-muted-foreground mb-1">{tt('materialDetails.planned')}</p>
+              <p className="font-semibold text-sm">{mat.quantity.toLocaleString()} <span className="text-sm font-normal">{mat.unit}</span></p>
+              {mat.price ? <p className="text-sm text-muted-foreground mt-1">{tt('materialDetails.priceLabel', { price: fmt(mat.price), unit: mat.unit })}</p> : <p className="text-sm text-muted-foreground mt-1">{tt('materialDetails.noPriceSet')}</p>}
             </div>
             <div className="bg-green-500/10 p-2.5 rounded-lg border border-green-500/20">
-              <p className="text-sm md:text-xs text-green-700 dark:text-green-400 mb-1">{tt('materialDetails.delivered')}</p>
-              <p className="font-semibold text-sm text-green-700 dark:text-green-400">{sent.toLocaleString()} <span className="text-sm md:text-xs font-normal">{mat.unit}</span></p>
-              {(mat.price ?? 0) > 0 && <p className="text-sm md:text-xs text-green-700/70 mt-1">{tt('materialDetails.totalSpent', { amount: fmt(totalSpent) })}</p>}
+              <p className="text-sm text-green-700 dark:text-green-400 mb-1">{tt('materialDetails.delivered')}</p>
+              <p className="font-semibold text-sm text-green-700 dark:text-green-400">{sent.toLocaleString()} <span className="text-sm font-normal">{mat.unit}</span></p>
+              {(mat.price ?? 0) > 0 && <p className="text-sm text-green-700/70 mt-1">{tt('materialDetails.totalSpent', { amount: fmt(totalSpent) })}</p>}
             </div>
           </div>
 
-          <h4 className="text-sm md:text-xs font-semibold mb-2">{tt('materialDetails.history')}</h4>
+          <h4 className="text-sm font-semibold mb-2">{tt('materialDetails.history')}</h4>
           {confT.filter(t=>t.materialName===mat.name).length === 0 && pendT.filter(t=>t.materialName===mat.name).length === 0 ? (
-             <p className="text-sm md:text-xs text-muted-foreground py-4 text-center">{tt('materialDetails.noHistory')}</p>
+             <p className="text-sm text-muted-foreground py-4 text-center">{tt('materialDetails.noHistory')}</p>
           ) : (
             <div className="space-y-2">
               {pendT.filter(t=>t.materialName===mat.name).map(t => (
-                <div key={t.id} className="border border-amber-200 bg-amber-50 dark:bg-amber-950/20 rounded p-2 text-sm md:text-xs">
+                <div key={t.id} className="border border-amber-200 bg-amber-50 dark:bg-amber-950/20 rounded p-2 text-sm">
                   <div className="flex justify-between font-semibold text-amber-700 dark:text-amber-500 mb-1"><span>{t.quantity.toLocaleString()} {t.unit} {tt('materialDetails.pendingSuffix')}</span><span>{(t.date || t.sentDate || '').split('T')[0]}</span></div>
-                  <p className="text-sm md:text-xs text-amber-700/70">{tt('materialDetails.sender', { name: t.fromUserName })}</p>
+                  <p className="text-sm text-amber-700/70">{tt('materialDetails.sender', { name: t.fromUserName })}</p>
                 </div>
               ))}
               {confT.filter(t=>t.materialName===mat.name).map(t => (
-                <div key={t.id} className="border border-border bg-card rounded p-2 text-sm md:text-xs">
-                  <div className="flex justify-between font-semibold mb-1"><span>{t.quantity.toLocaleString()} {t.unit}</span><span className="text-muted-foreground text-sm md:text-xs">{t.confirmedDate?.split('T')[0] || (t.date || t.sentDate || '').split('T')[0]}</span></div>
-                  <p className="text-sm md:text-xs text-muted-foreground">{tt('materialDetails.sender', { name: t.fromUserName })}</p>
+                <div key={t.id} className="border border-border bg-card rounded p-2 text-sm">
+                  <div className="flex justify-between font-semibold mb-1"><span>{t.quantity.toLocaleString()} {t.unit}</span><span className="text-muted-foreground text-sm">{t.confirmedDate?.split('T')[0] || (t.date || t.sentDate || '').split('T')[0]}</span></div>
+                  <p className="text-sm text-muted-foreground">{tt('materialDetails.sender', { name: t.fromUserName })}</p>
                 </div>
               ))}
             </div>

@@ -141,11 +141,27 @@ async function seed(page: Page) {
 
 async function openOffice(page: Page) {
   await page.goto('/');
-  const tab = page.getByRole('button', { name: /AI platforma/ }).first();
+  const tab = page.getByTestId('dev-tab-office');
   await expect(tab).toBeVisible({ timeout: 20_000 });
   await tab.click();
-  await page.getByTestId('ai-pf-tab-office').click();
   await expect(page.getByTestId('ai-office')).toBeVisible();
+}
+
+/** Ofis bitta ekranga sig'adi: sahifa skroli yo'q, ofis bloki ko'rinish oynasi ichida tugaydi. */
+async function expectFitsViewport(page: Page) {
+  const m = await page.evaluate(() => {
+    const el = document.querySelector('[data-testid="ai-office"]') as HTMLElement;
+    const r = el.getBoundingClientRect();
+    let scrollers = 0;
+    for (let p = el.parentElement; p; p = p.parentElement) {
+      const oy = getComputedStyle(p).overflowY;
+      if (p.scrollHeight > p.clientHeight + 2 && (oy === 'auto' || oy === 'scroll')) scrollers++;
+    }
+    return { sh: document.scrollingElement!.scrollHeight, ih: innerHeight, bottom: r.bottom, scrollers };
+  });
+  expect(m.sh).toBeLessThanOrEqual(m.ih + 2);
+  expect(m.bottom).toBeLessThanOrEqual(m.ih + 1);
+  expect(m.scrollers).toBe(0);
 }
 
 test('AI ofis: 3D sahna, agentlar, buyruq va natija (owner 2026-10-22)', async ({ page }, info) => {
@@ -164,20 +180,31 @@ test('AI ofis: 3D sahna, agentlar, buyruq va natija (owner 2026-10-22)', async (
   const hasCanvas = await canvas.isVisible();
   if (hasCanvas) {
     // r3f o'lchamni ResizeObserver bilan beradi — biroz kutiladi
-    await expect.poll(async () => { const b = await canvas.boundingBox(); return Math.min(b?.width || 0, b?.height || 0); }, { timeout: 10_000 }).toBeGreaterThan(330);
+    await expect.poll(async () => { const b = await canvas.boundingBox(); return Math.min(b?.width || 0, b?.height || 0); }, { timeout: 10_000 }).toBeGreaterThan(260);
     // Band agentlarning ism yorliqlari sahnada
     await expect(page.getByTestId('ai-office-label-backend')).toBeVisible({ timeout: 20_000 });
     await expect(page.getByTestId('ai-office-label-tg:aaaaaaaaaaaaaaaaaaaaaaaa')).toContainText('Jasur');
   }
-  // Agentlar ro'yxati (kartalar) — jamoalar bo'yicha
+  await expectFitsViewport(page);
+  await expect(page.getByTestId('ai-office-reset')).toBeVisible();
+  await page.getByTestId('ai-office-reset').click();
+  // Yordam chipi — yopiladi va eslab qolinadi
+  await expect(page.getByTestId('ai-office-hint')).toBeVisible();
+  await page.getByTestId('ai-office-hint-close').click();
+  await expect(page.getByTestId('ai-office-hint')).toHaveCount(0);
+  expect(await page.evaluate(() => localStorage.getItem('aiOffice.hint.v2'))).toBe('1');
+  // Agentlar ro'yxati (yon panel) — jamoalar bo'yicha, qidiruv bilan
   await expect(page.getByTestId('ai-office-agent-manager')).toContainText('Boshliq');
+  await page.getByTestId('ai-office-search').fill('hisob');
+  await expect(page.getByTestId('ai-office-agent-reporter')).toBeVisible();
+  await expect(page.getByTestId('ai-office-agent-backend')).toHaveCount(0);
+  await page.getByTestId('ai-office-search').fill('');
   await expect(page.getByTestId('ai-office-agent-backend')).toContainText('Login API tezlashtirish');
   await expect(page.getByTestId('ai-office-agent-role-prorab')).toContainText("Qo'ng'iroqda");
   await expect(page.getByTestId('ai-office-agent-reporter')).toBeVisible();
   await expect(page.getByTestId('ai-office-stats')).toContainText('Ishlayapti');
   await page.waitForTimeout(2500); // agentlar joylashib olsin, kadr chizilsin
   const scene = page.getByTestId('ai-office-canvas-wrap').or(nowebgl);
-  await scene.scrollIntoViewIfNeeded();
   await page.screenshot({ path: `test-results/office/office-${info.project.name}.png` });
   await scene.screenshot({ path: `test-results/office/office-scene-${info.project.name}.png` });
 
@@ -195,6 +222,7 @@ test('AI ofis: 3D sahna, agentlar, buyruq va natija (owner 2026-10-22)', async (
   expect(calls.tasks[0]).toEqual({ agentKey: 'smm', text: 'Haftalik 2 ta post tayyorla' });
   await expect(panel.getByTestId('ai-office-item-0')).toContainText('Smeta 5 daqiqada');
   await expect(panel.getByTestId('ai-office-item-0').getByRole('button', { name: 'Nusxa' })).toBeVisible();
+  await expectFitsViewport(page);
   await page.screenshot({ path: `test-results/office/office-smm-${info.project.name}.png` });
 
   // Boshliq: reja → bitta bandni olib tashlab tasdiqlash
@@ -212,6 +240,7 @@ test('AI ofis: 3D sahna, agentlar, buyruq va natija (owner 2026-10-22)', async (
   await expect.poll(() => calls.tasks.at(-1)).toEqual({ agentKey: 'manager', text: 'Ombor ishi uchun agent yonla' });
   await page.getByTestId('ai-office-open-spawned').click();
   await expect(page.getByTestId('ai-office-panel-name')).toHaveText('Ombor nazorati');
+  await page.getByTestId('ai-office-panel-close').click();
   await expect(page.getByTestId('ai-office-agent-custom-0a1b2c3d')).toBeVisible();
 
   // Code agenti — sozlanmagan: sozlash ro'yxati (sir nomlari) ko'rinadi
@@ -221,11 +250,69 @@ test('AI ofis: 3D sahna, agentlar, buyruq va natija (owner 2026-10-22)', async (
   await page.screenshot({ path: `test-results/office/office-backend-${info.project.name}.png` });
 
   // Rol yordamchisi buyruq olmaydi
+  await page.getByTestId('ai-office-panel-close').click();
   await page.getByTestId('ai-office-agent-role-direktor').click();
   await expect(page.getByTestId('ai-office-command')).toHaveCount(0);
 
   // Gorizontal skroll yo'q
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(1);
+  expect(errors, errors.join('\n')).toEqual([]);
+});
+
+test('AI ofis: "Ofisga kirish" — yurish rejimi, agent oldiga borib buyruq, o\'z kompyuteridan Boshliqqa buyruq', async ({ page }, info) => {
+  test.setTimeout(120_000);
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  const calls: Calls = { tasks: [], approves: [], officeGets: 0 };
+  await mockApi(page, calls);
+  await seed(page);
+  await openOffice(page);
+  const enter = page.getByTestId('ai-office-enter');
+  if (!(await enter.isVisible().catch(() => false))) { test.skip(true, "WebGL yo'q — yurish rejimi mavjud emas"); return; }
+  await enter.click();
+  const walk = page.getByTestId('ai-office-walk');
+  await expect(walk).toBeVisible();
+  // To'liq ekran headless'da bo'lmasligi mumkin — baribir butun oynani egallaydi
+  const box = await walk.boundingBox();
+  const vp = page.viewportSize()!;
+  expect(Math.round(box!.width)).toBe(vp.width);
+  expect(Math.round(box!.height)).toBe(vp.height);
+  await expect(page.locator('[data-testid="ai-office-walk"] canvas')).toBeVisible({ timeout: 30_000 });
+  if (info.project.name === 'telefon') await expect(page.getByTestId('ai-office-joystick')).toBeVisible();
+
+  // Agent oldiga borish (yo'l topib yuradi) → "Buyruq berish" → panel
+  await page.getByTestId('ai-office-goto').click();
+  await page.getByTestId('ai-office-goto-search').fill('SMM');
+  await page.getByTestId('ai-office-goto-agent-smm').click();
+  const act = page.getByTestId('ai-office-interact');
+  await expect(act).toContainText('SMM', { timeout: 45_000 });
+  await page.screenshot({ path: `test-results/office/office-walk-${info.project.name}.png` });
+  await act.click();
+  await expect(page.getByTestId('ai-office-walk-panel').getByTestId('ai-office-panel-name')).toHaveText('SMM');
+  await page.getByTestId('ai-office-walk-panel').getByTestId('ai-office-panel-close').click();
+
+  // O'z kompyuteriga o'tirish → Claude → Boshliqqa buyruq
+  await page.getByTestId('ai-office-goto').click();
+  await page.getByTestId('ai-office-goto-place-computer').click();
+  await expect(act).toContainText('Kompyuter', { timeout: 45_000 });
+  await act.click();
+  const pc = page.getByTestId('ai-office-pc');
+  await expect(pc).toBeVisible({ timeout: 20_000 });
+  await page.screenshot({ path: `test-results/office/office-pc-${info.project.name}.png` });
+  await page.getByTestId('ai-office-pc-input').fill('Yangi mijozlar uchun aksiya rejasi');
+  await page.getByTestId('ai-office-pc-send').click();
+  await expect.poll(() => calls.tasks.at(-1)).toEqual({ agentKey: 'manager', text: 'Yangi mijozlar uchun aksiya rejasi' });
+  await expect(page.getByTestId('ai-office-pc-tasks')).toContainText('Yangi mijozlar jalb qilish');
+  // O'yin ilovasi (Pong) — TV bilan bir xil canvas
+  await page.getByTestId('ai-office-pc-app-game').click();
+  await expect(page.getByTestId('ai-office-game').locator('canvas')).toBeVisible();
+  await page.getByTestId('ai-office-pc-close').click();
+  await expect(pc).toHaveCount(0);
+
+  await page.getByTestId('ai-office-exit').click();
+  await expect(walk).toHaveCount(0);
+  await expect(page.getByTestId('ai-office')).toBeVisible();
+  await expectFitsViewport(page);
   expect(errors, errors.join('\n')).toEqual([]);
 });

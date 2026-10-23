@@ -2218,17 +2218,28 @@ bot.on('message', async (msg: any) => {
           bot.sendMessage(chatId, tb(user.language, 'devNoMessages'), { reply_markup: await keyboardForUser(user, user.language) });
           return;
         }
-        const fromIds = [...new Set(msgs.map((m: any) => m.fromUserId))];
-        const senders = await User.find({ _id: { $in: fromIds } }).select('firstName lastName').lean();
+        // Owner 2026-10-23: "Chat tarixi" xato berardi — AI/tizim yozuvlarining fromUserId'si ObjectId emas (User.find
+        // CastError), matndagi * _ Markdown'ni buzardi, 50 xabar 4096 belgidan oshardi. Endi: faqat to'g'ri id'lar,
+        // HTML (escape) va uzunlik chegarasi.
+        const fromIds = [...new Set(msgs.map((m: any) => String(m.fromUserId || '')))].filter((id) => /^[a-f0-9]{24}$/i.test(id));
+        const senders = fromIds.length ? await User.find({ _id: { $in: fromIds } }).select('firstName lastName').lean() : [];
         const nameMap: Record<string, string> = {};
         (senders as any[]).forEach((u: any) => { nameMap[String(u._id)] = `${u.firstName} ${u.lastName || ''}`.trim(); });
         const typeLabel: Record<string, string> = { image: '[rasm]', video: '[video]', audio: '[ovoz xabari]', file: '[fayl]', location: '[joylashuv]' };
-        const lines = (msgs as any[]).reverse().map((m: any) => {
-          const name = nameMap[String(m.fromUserId)] || '—';
-          const body = m.type && m.type !== 'text' ? (typeLabel[m.type] || `[${m.type}]`) : (m.text || '—');
-          return `*${name}:* ${body}`;
-        }).join('\n');
-        bot.sendMessage(chatId, `${tb(user.language, 'devChatHistoryHeader')}\n\n${lines}`, { parse_mode: 'Markdown', reply_markup: await keyboardForUser(user, user.language) });
+        const esc = (v: string) => v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const all = (msgs as any[]).reverse().map((m: any) => {
+          const fid = String(m.fromUserId || '');
+          const name = nameMap[fid] || (/^ai[:_-]?/i.test(fid) ? 'AI' : '—');
+          const raw = m.type && m.type !== 'text' ? (typeLabel[m.type] || `[${m.type}]`) : String(m.text || '—');
+          const body = raw.length > 160 ? `${raw.slice(0, 157)}…` : raw;
+          return `<b>${esc(name)}:</b> ${esc(body)}`;
+        });
+        // Telegram chegarasi 4096 — eng oxirgi xabarlar qoladi
+        const header = tb(user.language, 'devChatHistoryHeader').replace(/\*/g, '');
+        const lines: string[] = [];
+        let len = header.length + 2;
+        for (let k = all.length - 1; k >= 0; k--) { if (len + all[k].length + 1 > 3900) break; lines.unshift(all[k]); len += all[k].length + 1; }
+        bot.sendMessage(chatId, `<b>${esc(header)}</b>\n\n${lines.join('\n')}`, { parse_mode: 'HTML', reply_markup: await keyboardForUser(user, user.language) });
       } catch (err) {
         console.error('[bot kb_chatHistory]', err);
         bot.sendMessage(chatId, tb(user.language, 'genericError'), { reply_markup: await keyboardForUser(user, user.language) });

@@ -59,9 +59,12 @@ const SETUP = {
   ],
 };
 
-type Calls = { tasks: any[]; approves: { id: string; body: any }[]; officeGets: number };
+type Calls = { tasks: any[]; approves: { id: string; body: any }[]; officeGets: number; media?: any[]; stt?: any[]; chats?: any[] };
 
 async function mockApi(page: Page, calls: Calls) {
+  const media: any = { yandex: '', tracks: [], cinema: '' };
+  // Tashqi vidjetlar (Yandex/YouTube) testda tarmoqqa chiqmasin
+  await page.route(/music\.yandex\.ru|youtube\.com|vk\.com|rutube\.ru/, (r) => r.fulfill({ status: 200, contentType: 'text/html', body: '<html><body>widget</body></html>' }));
   const smmTasks: any[] = [];
   const bossTasks: any[] = [];
   spawned.length = 0;
@@ -77,6 +80,12 @@ async function mockApi(page: Page, calls: Calls) {
     const json = (body: any, status = 200) => route.fulfill({ status, headers: CORS, json: body });
     if (url.includes('/api/status')) return json({ siteEnabled: true, appEnabled: true, botEnabled: true });
     if (url.includes('/api/deploy/latest')) return json({ available: false });
+    if (url.includes('/platform/office/media')) {
+      if (method === 'PUT') { const b = req.postDataJSON(); (calls.media ||= []).push(b); Object.assign(media, b); return json({ ok: true, media }); }
+      return json(media);
+    }
+    if (url.includes('/platform/office/transcribe')) { (calls.stt ||= []).push(req.postDataJSON()); return json({ text: 'Nima qilyapsan?' }); }
+    if (/\/platform\/agents\/[^/]+\/chat/.test(url)) { (calls.chats ||= []).push({ url, body: req.postDataJSON() }); return json({ reply: 'Haftalik postlar ustida ishlayapman.' }); }
     if (url.includes('/api/ai-voice/platform/office')) { calls.officeGets++; return json({ agents: officeAgents(), generatedAt: new Date().toISOString() }); }
     if (url.includes('/api/ai-voice/platform/agents')) return json({ agents: [...PROFILES, ...spawned], setup: SETUP });
     if (url.match(/\/platform\/agent-tasks\/[^/]+\/approve/)) {
@@ -141,11 +150,27 @@ async function seed(page: Page) {
 
 async function openOffice(page: Page) {
   await page.goto('/');
-  const tab = page.getByRole('button', { name: /AI platforma/ }).first();
+  const tab = page.getByTestId('dev-tab-office');
   await expect(tab).toBeVisible({ timeout: 20_000 });
   await tab.click();
-  await page.getByTestId('ai-pf-tab-office').click();
   await expect(page.getByTestId('ai-office')).toBeVisible();
+}
+
+/** Ofis bitta ekranga sig'adi: sahifa skroli yo'q, ofis bloki ko'rinish oynasi ichida tugaydi. */
+async function expectFitsViewport(page: Page) {
+  const m = await page.evaluate(() => {
+    const el = document.querySelector('[data-testid="ai-office"]') as HTMLElement;
+    const r = el.getBoundingClientRect();
+    let scrollers = 0;
+    for (let p = el.parentElement; p; p = p.parentElement) {
+      const oy = getComputedStyle(p).overflowY;
+      if (p.scrollHeight > p.clientHeight + 2 && (oy === 'auto' || oy === 'scroll')) scrollers++;
+    }
+    return { sh: document.scrollingElement!.scrollHeight, ih: innerHeight, bottom: r.bottom, scrollers };
+  });
+  expect(m.sh).toBeLessThanOrEqual(m.ih + 2);
+  expect(m.bottom).toBeLessThanOrEqual(m.ih + 1);
+  expect(m.scrollers).toBe(0);
 }
 
 test('AI ofis: 3D sahna, agentlar, buyruq va natija (owner 2026-10-22)', async ({ page }, info) => {
@@ -164,20 +189,38 @@ test('AI ofis: 3D sahna, agentlar, buyruq va natija (owner 2026-10-22)', async (
   const hasCanvas = await canvas.isVisible();
   if (hasCanvas) {
     // r3f o'lchamni ResizeObserver bilan beradi — biroz kutiladi
-    await expect.poll(async () => { const b = await canvas.boundingBox(); return Math.min(b?.width || 0, b?.height || 0); }, { timeout: 10_000 }).toBeGreaterThan(330);
+    await expect.poll(async () => { const b = await canvas.boundingBox(); return Math.min(b?.width || 0, b?.height || 0); }, { timeout: 10_000 }).toBeGreaterThan(260);
     // Band agentlarning ism yorliqlari sahnada
+    // Tartib: ismlar odatda yashirin (faqat tanlangan / sichqoncha ustida); "Ismlar" tugmasi — hammasi
+    await expect(page.getByTestId('ai-office-label-backend')).toHaveCount(0);
+    await page.getByTestId('ai-office-labels').click();
     await expect(page.getByTestId('ai-office-label-backend')).toBeVisible({ timeout: 20_000 });
     await expect(page.getByTestId('ai-office-label-tg:aaaaaaaaaaaaaaaaaaaaaaaa')).toContainText('Jasur');
+    await page.getByTestId('ai-office-labels').click();
+    await expect(page.getByTestId('ai-office-label-backend')).toHaveCount(0);
+    // Qo'ng'iroq pufaklari — ko'pi bilan 3 ta
+    expect(await page.locator('[data-testid^="ai-office-bubble-"]').count()).toBeLessThanOrEqual(3);
   }
-  // Agentlar ro'yxati (kartalar) — jamoalar bo'yicha
+  await expectFitsViewport(page);
+  await expect(page.getByTestId('ai-office-reset')).toBeVisible();
+  await page.getByTestId('ai-office-reset').click();
+  // Yordam chipi — yopiladi va eslab qolinadi
+  await expect(page.getByTestId('ai-office-hint')).toBeVisible();
+  await page.getByTestId('ai-office-hint-close').click();
+  await expect(page.getByTestId('ai-office-hint')).toHaveCount(0);
+  expect(await page.evaluate(() => localStorage.getItem('aiOffice.hint.v2'))).toBe('1');
+  // Agentlar ro'yxati (yon panel) — jamoalar bo'yicha, qidiruv bilan
   await expect(page.getByTestId('ai-office-agent-manager')).toContainText('Boshliq');
+  await page.getByTestId('ai-office-search').fill('hisob');
+  await expect(page.getByTestId('ai-office-agent-reporter')).toBeVisible();
+  await expect(page.getByTestId('ai-office-agent-backend')).toHaveCount(0);
+  await page.getByTestId('ai-office-search').fill('');
   await expect(page.getByTestId('ai-office-agent-backend')).toContainText('Login API tezlashtirish');
   await expect(page.getByTestId('ai-office-agent-role-prorab')).toContainText("Qo'ng'iroqda");
   await expect(page.getByTestId('ai-office-agent-reporter')).toBeVisible();
   await expect(page.getByTestId('ai-office-stats')).toContainText('Ishlayapti');
   await page.waitForTimeout(2500); // agentlar joylashib olsin, kadr chizilsin
   const scene = page.getByTestId('ai-office-canvas-wrap').or(nowebgl);
-  await scene.scrollIntoViewIfNeeded();
   await page.screenshot({ path: `test-results/office/office-${info.project.name}.png` });
   await scene.screenshot({ path: `test-results/office/office-scene-${info.project.name}.png` });
 
@@ -185,9 +228,14 @@ test('AI ofis: 3D sahna, agentlar, buyruq va natija (owner 2026-10-22)', async (
   await expect.poll(() => calls.officeGets, { timeout: 12_000 }).toBeGreaterThan(1);
 
   // SMM agentiga buyruq → natija (postlar, nusxa tugmasi)
+  // Ro'yxatdagi qator: nima qilyapti (holat matni)
+  await expect(page.getByTestId('ai-office-agent-backend')).toContainText('Kod yozyapti: Login API tezlashtirish');
   await page.getByTestId('ai-office-agent-smm').click();
   const panel = page.getByTestId('ai-office-panel');
   await expect(panel).toBeVisible();
+  // Topildi: sahnada ism yorlig'i (ajratilgan) + tafsilotlar
+  if (hasCanvas) await expect(page.getByTestId('ai-office-label-smm')).toBeVisible();
+  await expect(page.getByTestId('ai-office-panel-status')).toBeVisible();
   await expect(page.getByTestId('ai-office-panel-name')).toHaveText('SMM');
   await page.getByTestId('ai-office-command').fill('Haftalik 2 ta post tayyorla');
   await page.getByTestId('ai-office-send').click();
@@ -195,6 +243,7 @@ test('AI ofis: 3D sahna, agentlar, buyruq va natija (owner 2026-10-22)', async (
   expect(calls.tasks[0]).toEqual({ agentKey: 'smm', text: 'Haftalik 2 ta post tayyorla' });
   await expect(panel.getByTestId('ai-office-item-0')).toContainText('Smeta 5 daqiqada');
   await expect(panel.getByTestId('ai-office-item-0').getByRole('button', { name: 'Nusxa' })).toBeVisible();
+  await expectFitsViewport(page);
   await page.screenshot({ path: `test-results/office/office-smm-${info.project.name}.png` });
 
   // Boshliq: reja → bitta bandni olib tashlab tasdiqlash
@@ -212,6 +261,7 @@ test('AI ofis: 3D sahna, agentlar, buyruq va natija (owner 2026-10-22)', async (
   await expect.poll(() => calls.tasks.at(-1)).toEqual({ agentKey: 'manager', text: 'Ombor ishi uchun agent yonla' });
   await page.getByTestId('ai-office-open-spawned').click();
   await expect(page.getByTestId('ai-office-panel-name')).toHaveText('Ombor nazorati');
+  await page.getByTestId('ai-office-panel-close').click();
   await expect(page.getByTestId('ai-office-agent-custom-0a1b2c3d')).toBeVisible();
 
   // Code agenti — sozlanmagan: sozlash ro'yxati (sir nomlari) ko'rinadi
@@ -221,11 +271,148 @@ test('AI ofis: 3D sahna, agentlar, buyruq va natija (owner 2026-10-22)', async (
   await page.screenshot({ path: `test-results/office/office-backend-${info.project.name}.png` });
 
   // Rol yordamchisi buyruq olmaydi
+  await page.getByTestId('ai-office-panel-close').click();
   await page.getByTestId('ai-office-agent-role-direktor').click();
   await expect(page.getByTestId('ai-office-command')).toHaveCount(0);
 
   // Gorizontal skroll yo'q
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(1);
+  expect(errors, errors.join('\n')).toEqual([]);
+});
+
+test('AI ofis: "Ofisga kirish" — yurish rejimi, agent oldiga borib buyruq, o\'z kompyuteridan Boshliqqa buyruq', async ({ page }, info) => {
+  test.setTimeout(200_000);
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  const calls: Calls = { tasks: [], approves: [], officeGets: 0 };
+  await mockApi(page, calls);
+  await seed(page);
+  await openOffice(page);
+  const enter = page.getByTestId('ai-office-enter');
+  if (!(await enter.isVisible().catch(() => false))) { test.skip(true, "WebGL yo'q — yurish rejimi mavjud emas"); return; }
+  await enter.click();
+  const walk = page.getByTestId('ai-office-walk');
+  await expect(walk).toBeVisible();
+  // To'liq ekran headless'da bo'lmasligi mumkin — baribir butun oynani egallaydi
+  const box = await walk.boundingBox();
+  const vp = page.viewportSize()!;
+  expect(Math.round(box!.width)).toBe(vp.width);
+  expect(Math.round(box!.height)).toBe(vp.height);
+  await expect(page.locator('[data-testid="ai-office-walk"] canvas')).toBeVisible({ timeout: 30_000 });
+  if (info.project.name === 'telefon') {
+    // Telefon tik holatda — "yotqizing" oynasi (orientation.lock headless'da yo'q)
+    await expect(page.getByTestId('ai-office-rotate')).toBeVisible();
+    await page.getByTestId('ai-office-rotate-skip').click();
+    await expect(page.getByTestId('ai-office-joystick')).toBeVisible();
+  }
+
+  // Agent oldiga borish (yo'l topib yuradi) → "Buyruq berish" → panel
+  await page.getByTestId('ai-office-goto').click();
+  await page.getByTestId('ai-office-goto-search').fill('SMM');
+  await page.getByTestId('ai-office-goto-agent-smm').click();
+  const act = page.getByTestId('ai-office-interact');
+  await expect(act).toContainText('SMM', { timeout: 45_000 });
+  await page.screenshot({ path: `test-results/office/office-walk-${info.project.name}.png` });
+  await act.click();
+  await expect(page.getByTestId('ai-office-walk-panel').getByTestId('ai-office-panel-name')).toHaveText('SMM');
+  await page.getByTestId('ai-office-walk-panel').getByTestId('ai-office-panel-close').click();
+
+  // O'z kompyuteriga o'tirish → Claude → Boshliqqa buyruq
+  await page.getByTestId('ai-office-goto').click();
+  await page.getByTestId('ai-office-goto-place-computer').click();
+  await expect(act).toContainText('Kompyuter', { timeout: 45_000 });
+  await act.click();
+  const pc = page.getByTestId('ai-office-pc');
+  await expect(pc).toBeVisible({ timeout: 20_000 });
+  await page.screenshot({ path: `test-results/office/office-pc-${info.project.name}.png` });
+  await page.getByTestId('ai-office-pc-input').fill('Yangi mijozlar uchun aksiya rejasi');
+  await page.getByTestId('ai-office-pc-send').click();
+  await expect.poll(() => calls.tasks.at(-1)).toEqual({ agentKey: 'manager', text: 'Yangi mijozlar uchun aksiya rejasi' });
+  await expect(page.getByTestId('ai-office-pc-tasks')).toContainText('Yangi mijozlar jalb qilish');
+  // O'yin ilovasi (Pong) — TV bilan bir xil canvas
+  await page.getByTestId('ai-office-pc-app-game').click();
+  await expect(page.getByTestId('ai-office-game').locator('canvas')).toBeVisible();
+  await page.getByTestId('ai-office-pc-close').click();
+  await expect(pc).toHaveCount(0);
+
+  await page.getByTestId('ai-office-exit').click();
+  await expect(walk).toHaveCount(0);
+  await expect(page.getByTestId('ai-office')).toBeVisible();
+  await expectFitsViewport(page);
+  expect(errors, errors.join('\n')).toEqual([]);
+});
+
+test('AI ofis: ovoz, musiqa (Yandex havola), kino havolasi va agent bilan ovozli suhbat (soxta mikrofon)', async ({ page }) => {
+  test.setTimeout(90_000);
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  const calls: Calls = { tasks: [], approves: [], officeGets: 0 };
+  await mockApi(page, calls);
+  await seed(page);
+  // Soxta mikrofon: MediaRecorder 0.4 s jim WAV qaytaradi
+  await page.addInitScript(() => {
+    const wav = () => {
+      const n = 6400, b = new DataView(new ArrayBuffer(44 + n * 2));
+      const w = (o: number, s: string) => { for (let i = 0; i < s.length; i++) b.setUint8(o + i, s.charCodeAt(i)); };
+      w(0, 'RIFF'); b.setUint32(4, 36 + n * 2, true); w(8, 'WAVE'); w(12, 'fmt '); b.setUint32(16, 16, true); b.setUint16(20, 1, true); b.setUint16(22, 1, true);
+      b.setUint32(24, 16000, true); b.setUint32(28, 32000, true); b.setUint16(32, 2, true); b.setUint16(34, 16, true); w(36, 'data'); b.setUint32(40, n * 2, true);
+      return new Blob([b.buffer], { type: 'audio/wav' });
+    };
+    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia: async () => ({ getTracks: () => [{ stop() {} }] }) } });
+    (window as any).MediaRecorder = class {
+      state = 'inactive'; mimeType = 'audio/wav'; ondataavailable: any; onstop: any;
+      constructor(public stream: any) {}
+      start() { this.state = 'recording'; }
+      stop() { this.state = 'inactive'; this.ondataavailable?.({ data: wav() }); setTimeout(() => this.onstop?.(), 0); }
+    };
+  });
+  await openOffice(page);
+
+  // Ovoz: standart — o'chiq, eslab qolinadi
+  const mute = page.getByTestId('ai-office-mute').first();
+  await expect(mute).toHaveAttribute('aria-pressed', 'false');
+
+  // Musiqa: noto'g'ri havola — xato; to'g'ri — saqlanadi (PUT), ovoz o'chiq — vidjet yuklanmaydi
+  await page.getByTestId('ai-office-media-open').first().click();
+  const mp = page.getByTestId('ai-office-media');
+  await expect(mp).toBeVisible();
+  await page.getByTestId('ai-office-yandex').fill('https://music.yandex.ru.evil.com/album/1');
+  await expect(page.getByTestId('ai-office-yandex-invalid')).toBeVisible();
+  await expect(page.getByTestId('ai-office-yandex-save')).toBeDisabled();
+  await page.getByTestId('ai-office-yandex').fill('https://music.yandex.ru/album/123/track/456');
+  await page.getByTestId('ai-office-yandex-save').click();
+  await expect.poll(() => calls.media?.at(-1)).toEqual({ yandex: 'https://music.yandex.ru/album/123/track/456' });
+  await expect(page.getByTestId('ai-office-yandex-frame')).toHaveCount(0);
+  await mp.getByTestId('ai-office-mute').click();
+  await expect(page.getByTestId('ai-office-yandex-frame')).toHaveAttribute('src', 'https://music.yandex.ru/iframe/#track/456/123');
+  expect(await page.evaluate(() => localStorage.getItem('aiOffice.muted'))).toBe('0');
+  await mp.getByTestId('ai-office-mute').click();
+  expect(await page.evaluate(() => localStorage.getItem('aiOffice.muted'))).toBe('1');
+
+  // Kino: Kinopoisk — faqat "ochish" (sababi bilan); YouTube — tayyor
+  await page.getByTestId('ai-office-media-tab-cinema').click();
+  await page.getByTestId('ai-office-cinema-url').fill('https://hd.kinopoisk.ru/film/abc');
+  await page.getByTestId('ai-office-cinema-save').click();
+  await expect(page.getByTestId('ai-office-kinopoisk')).toContainText('DRM');
+  await page.getByTestId('ai-office-cinema-url').fill('https://youtu.be/dQw4w9WgXcQ');
+  await page.getByTestId('ai-office-cinema-save').click();
+  await expect(page.getByTestId('ai-office-cinema-ok')).toContainText('YouTube');
+  expect(calls.media?.at(-1)).toEqual({ cinema: 'https://youtu.be/dQw4w9WgXcQ' });
+  await mp.getByRole('button', { name: 'Yopish' }).click();
+
+  // Agent bilan ovozli suhbat: 🎤 → yozish → to'xtatish → matn (transkripsiya) → javob
+  await page.getByTestId('ai-office-agent-smm').click();
+  await page.getByTestId('ai-office-mic').click();
+  await expect(page.getByTestId('ai-office-mic')).toHaveAttribute('aria-pressed', 'true');
+  await page.getByTestId('ai-office-mic').click();
+  await expect(page.getByTestId('ai-office-chat-reply')).toHaveText('Haftalik postlar ustida ishlayapman.');
+  expect(calls.stt?.[0].audio.length).toBeGreaterThan(1000);
+  expect(calls.chats?.[0].url).toContain('/platform/agents/smm/chat');
+  expect(calls.chats?.[0].body).toMatchObject({ text: 'Nima qilyapsan?', history: [] });
+  // Yozib so'rash ham ishlaydi; "buyruq qilib yuborish" — vazifa
+  await page.getByTestId('ai-office-chat-input').fill('2 ta post tayyorla');
+  await page.getByTestId('ai-office-chat-to-task').click();
+  await expect.poll(() => calls.tasks.at(-1)).toEqual({ agentKey: 'smm', text: '2 ta post tayyorla' });
   expect(errors, errors.join('\n')).toEqual([]);
 });

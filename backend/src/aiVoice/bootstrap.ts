@@ -22,6 +22,7 @@ import platformRoutes from './routes/platformRoutes';
 import platformAdminRoutes from './routes/platformAdminRoutes';
 import chatRoutes from './routes/chatRoutes';
 import { agentCallbackRoutes, agentRoutes } from './routes/agentRoutes';
+import { officeMediaRoutes } from './officeMedia/routes';
 
 // AI ovozli yordamchini ishga tushirish (index.ts: startAutoSnapshots()'dan keyin startAiVoice()).
 // AI_VOICE_ENABLED o'chiq bo'lsa HECH NARSA qilmaydi: navbat, heartbeat, SIGTERM tinglovchisi yo'q —
@@ -34,7 +35,7 @@ import { agentCallbackRoutes, agentRoutes } from './routes/agentRoutes';
  */
 export function mountAiVoiceRoutes(app: Pick<Router, 'use'>): void {
   // platformAdminRoutes (firmalar, miya/limitlar, sarf, audit, arxivlar) — mos kelmasa P6 platformRoutes'ga o'tadi
-  app.use('/api/ai-voice/platform', requireAuth, requireDeveloper, platformAdminRoutes, platformRoutes, agentRoutes);
+  app.use('/api/ai-voice/platform', requireAuth, requireDeveloper, platformAdminRoutes, platformRoutes, agentRoutes, officeMediaRoutes);
   // AI ofis: GitHub Actions qayta qo'ng'irog'i — auth yo'q, faqat X-Agent-Secret (agentRoutes.ts)
   app.use('/api/ai-voice/agent-callback', agentCallbackRoutes);
   // Chatdagi AI kontakti (P7) — /me'dan OLDIN (aniqroq prefiks), workGate ALLOW ostida

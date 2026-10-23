@@ -22,6 +22,9 @@ export interface AgentTask {
   log: { at: string; text: string }[]; error?: string; createdAt: string; startedAt?: string; finishedAt?: string;
 }
 
+export interface OfficeMedia { yandex: string; tracks: { id: string; name: string; url: string }[]; cinema: string }
+export interface ChatMsg { role: "me" | "agent"; text: string }
+
 export const officeApi = {
   office: () => call<{ agents: OfficeAgent[]; generatedAt: string }>("GET", "/platform/office"),
   agents: () => call<{ agents: AgentProfile[]; setup: Setup }>("GET", "/platform/agents"),
@@ -35,6 +38,10 @@ export const officeApi = {
   cancel: (id: string) => call<{ ok: true; task: AgentTask }>("POST", `/platform/agent-tasks/${id}/cancel`, {}),
   retry: (id: string) => call<{ ok: true; task: AgentTask }>("POST", `/platform/agent-tasks/${id}/retry`, {}),
   approve: (id: string, b: { spec?: string; plan?: PlanItem[] }) => call<{ ok: true; task: AgentTask }>("POST", `/platform/agent-tasks/${id}/approve`, b),
+  media: () => call<OfficeMedia>("GET", "/platform/office/media"),
+  saveMedia: (b: Partial<OfficeMedia>) => call<{ ok: true; media: OfficeMedia }>("PUT", "/platform/office/media", b),
+  transcribe: (audio: string, lang: "uz" | "ru") => call<{ text: string }>("POST", "/platform/office/transcribe", { audio, lang }),
+  chat: (key: string, text: string, history: ChatMsg[]) => call<{ reply: string }>("POST", `/platform/agents/${encodeURIComponent(key)}/chat`, { text, history }),
   send: (id: string, target: "channel" | "developer", index?: number) =>
     call<{ ok: true }>("POST", `/platform/agent-tasks/${id}/send`, { target, ...(index !== undefined ? { index } : {}) }),
 };

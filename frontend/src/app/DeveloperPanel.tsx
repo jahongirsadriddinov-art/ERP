@@ -310,7 +310,7 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
   const expiringSoonCount = subs.filter(s => s.status === "active" && typeof s.daysLeft === "number" && s.daysLeft <= 3).length;
 
   return (
-    <div className="h-[100dvh] flex flex-col overflow-y-auto md:overflow-hidden overscroll-contain bg-background" style={{ paddingTop: "env(safe-area-inset-top)" }}>
+    <div className={`h-[100dvh] flex flex-col ${tab === "office" ? "overflow-hidden" : "overflow-y-auto md:overflow-hidden"} overscroll-contain bg-background`} style={{ paddingTop: "env(safe-area-inset-top)" }}>
       <header className="glass sticky top-0 z-20 px-4 py-3 flex items-center justify-between gap-2 border-b border-border/50 flex-shrink-0">
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-slate-700 to-slate-900 text-white flex items-center justify-center text-sm font-bold shadow-sm shrink-0">🛠</div>
@@ -327,7 +327,7 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
 
       {/* Umumiy ko'rinish — statistika kartochkalari, barcha tab'larda ko'rinadi */}
       {!loading && (
-        <div className="mx-4 md:mx-6 xl:mx-auto xl:max-w-7xl xl:w-[calc(100%-3rem)] mt-3 flex md:grid md:grid-cols-4 gap-2.5 flex-shrink-0 overflow-x-auto scrollbar-hide">
+        <div className={`mx-4 md:mx-6 xl:mx-auto xl:max-w-7xl xl:w-[calc(100%-3rem)] mt-3 ${tab === "office" ? "hidden md:grid" : "flex md:grid"} md:grid-cols-4 gap-2.5 flex-shrink-0 overflow-x-auto scrollbar-hide`}>
           {[
             { label: t('devPanel.stats.totalFirms'), value: companies.length, accent: "text-primary" },
             { label: t('devPanel.stats.activeSubs'), value: activeSubsCount, accent: "text-green-600 dark:text-green-400" },
@@ -394,7 +394,7 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
 
       {err && <div className="mx-4 md:mx-6 xl:mx-auto xl:max-w-7xl xl:w-[calc(100%-3rem)] mt-3 bg-red-500/10 text-red-700 dark:text-red-400 text-sm p-3 rounded-lg border border-red-500/20 flex-shrink-0">{err}</div>}
 
-      <div className={`flex-1 md:min-h-0 md:overflow-y-auto p-4 md:px-[max(1.5rem,calc((100%-80rem)/2))] pb-24 ${["subscriptions", "firms", "users"].includes(tab) ? "grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-3 content-start [&>p]:col-span-full [&>*:only-child]:col-span-full" : "space-y-3"}`}>
+      <div className={tab === "office" ? "flex-1 min-h-0 flex flex-col overflow-hidden p-3 md:px-6 md:pb-4" : `flex-1 md:min-h-0 md:overflow-y-auto p-4 md:px-[max(1.5rem,calc((100%-80rem)/2))] pb-24 ${["subscriptions", "firms", "users"].includes(tab) ? "grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-3 content-start [&>p]:col-span-full [&>*:only-child]:col-span-full" : "space-y-3"}`}>
         {loading ? (
           <SkeletonList items={5}/>
         ) : tab === "subscriptions" ? (
@@ -691,7 +691,11 @@ export default function DeveloperPanel({ currentUser, onLogout }: { currentUser:
             </div>
           ))
         ) : tab === "office" ? (
-          <Suspense fallback={<SkeletonList items={3}/>}><AiOffice /></Suspense>
+          <Suspense fallback={<SkeletonList items={3}/>}><AiOffice fill onNavigate={(k) => setTab(k as any)} erpLinks={[
+            { key: "subscriptions", label: t('devPanel.tabs.subscriptions') }, { key: "firms", label: t('devPanel.tabs.firms', { count: companies.length }) },
+            { key: "users", label: t('devPanel.tabs.users') }, { key: "messages", label: t('devPanel.tabs.messages') },
+            { key: "aiVoice", label: t('aiVoice.platform.title') }, { key: "server", label: t('devPanel.tabs.server') }, { key: "errors", label: t('devPanel.tabs.errors') },
+          ]} /></Suspense>
         ) : tab === "errors" ? (
           <Suspense fallback={<SkeletonList items={3}/>}><ErrorLogPanel /></Suspense>
         ) : tab === "server" ? (

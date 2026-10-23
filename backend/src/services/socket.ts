@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
 import { JWT_SECRET, JwtPayload, loadFreshUser } from '../middleware/auth';
 import Group from '../models/Group';
+import { isValidActiveVideoChat, videoChatDurationSec, safeDate } from './videoChatState';
 import User from '../models/User';
 import Message from '../models/Message';
 import Session from '../models/Session';
@@ -116,18 +117,64 @@ async function postVideoChatEvent(group: any, byUserId: string, text: string, vi
 // Faol video chatni yakunlaydi: oxirgi holatni saqlaydi, hammaga 'ended' yuboradi va
 // guruhga davomiylik bilan "tugadi" xabarini tashlaydi. silent — arvoh (server qayta
 // ishga tushgandan qolgan) holatni tozalashda xabar chiqarmaslik uchun.
-async function finishVideoChat(group: any, silent = false) {
-  const avc = group.activeVideoChat;
-  if (!avc) return;
-  const endedAt = new Date();
-  const durationSec = Math.max(0, Math.round((+endedAt - +new Date(avc.startedAt)) / 1000));
-  const startedBy = avc.startedBy;
-  const startedByName = avc.startedByName;
-  group.lastVideoChat = { startedAt: avc.startedAt, endedAt, startedByName, durationSec };
-  group.activeVideoChat = undefined;
-  await group.save();
-  io?.to(`group:${String(group._id)}`).emit('videochat:ended', { groupId: String(group._id), endedAt, durationSec });
-  if (!silent) await postVideoChatEvent(group, startedBy, `📹 Video chat tugadi · ${fmtDuration(durationSec)}`, { kind: 'ended', durationSec, by: startedByName });
+//
+// XATO TUZATILDI (unhandledRejection: "lastVideoChat.durationSec: Cast to Number failed for value NaN" va
+// "activeVideoChat.mode/startedAt/startedByName/startedBy required"): ikki handler (masalan disconnect va
+// videochat:leave) bir guruhni bir vaqtda o'qiydi; biri chatni tugatadi, ikkinchisi ESKIRGAN nusxada
+// participantIds'ni o'zgartirib save() qiladi — Mongoose faqat `$set: {'activeVideoChat.participantIds'}`
+// yuboradi va bazada startedAt/mode'siz "yarim" activeVideoChat paydo bo'ladi. Keyingi yakunlashda
+// startedAt yo'q → NaN, keyingi save() esa required xatosi bilan yiqiladi (try/catch'siz — unhandledRejection).
+// Endi: davomiylik xavfsiz hisoblanadi (yo'q/yaroqsiz → 0), yakunlash va ishtirokchilar ro'yxati ATOMIK
+// yangilanadi (ro'yxat faqat to'liq chat mavjud bo'lsa), yarim holat jimgina tozalanadi; hech biri otmaydi.
+export async function finishVideoChat(group: any, silent = false) {
+  try {
+    const avc = group?.activeVideoChat;
+    if (!avc) return;
+    const valid = isValidActiveVideoChat(avc);
+    const endedAt = new Date();
+    const durationSec = videoChatDurationSec(avc.startedAt, endedAt);
+    const startedBy = String(avc.startedBy || '');
+    const startedByName = String(avc.startedByName || 'Xodim');
+    const lastVideoChat = { startedAt: safeDate(avc.startedAt) || endedAt, endedAt, startedByName, durationSec };
+    // Atomik: hujjat validatsiyasini (yarim activeVideoChat) chetlab, holat to'liq olib tashlanadi (null emas, $unset)
+    await Group.updateOne({ _id: group._id }, { $unset: { activeVideoChat: 1 }, $set: { lastVideoChat } });
+    try { group.set?.('activeVideoChat', undefined); group.set?.('lastVideoChat', lastVideoChat); } catch { /* */ }
+    io?.to(`group:${String(group._id)}`).emit('videochat:ended', { groupId: String(group._id), endedAt, durationSec });
+    // Yarim (buzilgan) holat — "tugadi" xabari chiqarilmaydi (kim/qachon boshlagani noma'lum)
+    if (!silent && valid && startedBy) await postVideoChatEvent(group, startedBy, `📹 Video chat tugadi · ${fmtDuration(durationSec)}`, { kind: 'ended', durationSec, by: startedByName });
+  } catch (e) {
+    console.error('[videochat finish]', (e as Error).message);
+  }
+}
+
+// Ishtirokchilar ro'yxatini atomik saqlash — faqat chat hali TO'LIQ mavjud bo'lsa. Eskirgan nusxa endi tugagan
+// chatni "yarim" holda qayta yarata olmaydi. Natija: yangilangan ro'yxat yoki null (chat allaqachon tugagan).
+async function saveVideoChatParticipants(group: any, participantIds: string[]): Promise<string[] | null> {
+  const ids = [...new Set(participantIds.map(String))];
+  const res: any = await Group.findOneAndUpdate(
+    { _id: group._id, 'activeVideoChat.startedAt': { $exists: true }, 'activeVideoChat.startedBy': { $exists: true } },
+    { $set: { 'activeVideoChat.participantIds': ids } },
+    { returnDocument: 'after' },
+  ).lean().catch(() => null);
+  if (!res?.activeVideoChat) { try { group.set?.('activeVideoChat', undefined); } catch { /* */ } return null; }
+  const fresh = [...(res.activeVideoChat.participantIds || [])];
+  try { group.activeVideoChat.participantIds = fresh; } catch { /* */ }
+  return fresh;
+}
+
+// Ishtirokchi chiqdi: oxirgisi bo'lsa — chat yakunlanadi, aks holda ro'yxat atomik yangilanadi. Hech qachon otmaydi.
+export async function leaveVideoChat(group: any, userId: string) {
+  try {
+    const avc = group?.activeVideoChat;
+    if (!avc) return;
+    if (!isValidActiveVideoChat(avc)) { await finishVideoChat(group, true); return; }
+    const rest = (avc.participantIds || []).filter((id: string) => id !== userId);
+    if (rest.length === 0) { await finishVideoChat(group); return; }
+    const ids = await saveVideoChatParticipants(group, rest);
+    if (ids) io?.to(`group:${String(group._id)}`).emit('videochat:participants', { groupId: String(group._id), participantIds: ids });
+  } catch (e) {
+    console.error('[videochat leave]', (e as Error).message);
+  }
 }
 
 export function initSocket(httpServer: HttpServer): Server {
@@ -312,12 +359,16 @@ export function initSocket(httpServer: HttpServer): Server {
     // guruhni keyinroq ochsa ham "Qo'shilish" tugmasini ko'radi. Haqiqiy
     // media ulanishi (offer/answer/ice) hamon call:* orqali, frontend
     // o'zi qo'shimcha ravishda call:join'ni ham chaqiradi.
+    // Video chat handlerlari hech qachon unhandledRejection bilan yiqilmasin (masalan DB xatosi)
+    const guardVc = <A extends any[]>(name: string, fn: (...a: A) => Promise<unknown>) => (...a: A) => {
+      fn(...a).catch((e) => console.error(`[${name}]`, (e as Error)?.message));
+    };
     const requireMembership = async (groupId: string): Promise<any> => {
       const group = await Group.findById(groupId).catch(() => null);
       if (!group || !(group.memberIds || []).includes(userId)) return null;
       return group;
     };
-    socket.on('videochat:start', async (data: { groupId?: string; mode?: 'voice' | 'video' }, ack?: (r: any) => void) => {
+    socket.on('videochat:start', guardVc('videochat:start', async (data: { groupId?: string; mode?: 'voice' | 'video' }, ack?: (r: any) => void) => {
       if (!data?.groupId) return;
       const group = await requireMembership(data.groupId);
       if (!group) return;
@@ -325,8 +376,9 @@ export function initSocket(httpServer: HttpServer): Server {
       // ishga tushgan yoki xato bilan uzilgan) — eskisini tozalab, yangidan boshlaymiz.
       if (group.activeVideoChat) {
         const alive = (group.activeVideoChat.participantIds || []).filter((id: string) => userSockets.has(id));
-        if (alive.length === 0) await finishVideoChat(group, true);
-        else if (alive.length !== group.activeVideoChat.participantIds.length) group.activeVideoChat.participantIds = alive;
+        // Yarim (buzilgan) holat yoki hamma oflayn — jimgina tozalab, yangidan boshlaymiz
+        if (alive.length === 0 || !isValidActiveVideoChat(group.activeVideoChat)) await finishVideoChat(group, true);
+        else if (alive.length !== group.activeVideoChat.participantIds.length) await saveVideoChatParticipants(group, alive);
       }
       if (!group.activeVideoChat) {
         const starter = await User.findById(userId).select('firstName lastName').lean().catch(() => null);
@@ -359,51 +411,40 @@ export function initSocket(httpServer: HttpServer): Server {
         });
       } else {
         // Allaqachon faol — bu "boshlash" emas, "qo'shilish" bo'ladi.
-        if (!group.activeVideoChat.participantIds.includes(userId)) {
-          group.activeVideoChat.participantIds.push(userId);
-          await group.save();
-        }
-        io?.to(`group:${data.groupId}`).emit('videochat:participants', { groupId: data.groupId, participantIds: group.activeVideoChat.participantIds });
+        const ids = await saveVideoChatParticipants(group, [...(group.activeVideoChat.participantIds || []), userId]);
+        if (ids) io?.to(`group:${data.groupId}`).emit('videochat:participants', { groupId: data.groupId, participantIds: ids });
       }
       // Qo'shilayotgan kishi (joiner) HAMMA mavjud ishtirokchiga o'zi offer
       // yuboradi — glare (ikki tomonlama offer) bo'lmasligi uchun aniq qoida.
       ack?.({ participantIds: [...(group.activeVideoChat?.participantIds || [])] });
-    });
-    socket.on('videochat:join', async (data: { groupId?: string }) => {
+    }));
+    socket.on('videochat:join', guardVc('videochat:join', async (data: { groupId?: string }) => {
       if (!data?.groupId) return;
       const group = await requireMembership(data.groupId);
       if (!group?.activeVideoChat) return;
-      if (!group.activeVideoChat.participantIds.includes(userId)) {
-        group.activeVideoChat.participantIds.push(userId);
-        await group.save();
-      }
-      io?.to(`group:${data.groupId}`).emit('videochat:participants', { groupId: data.groupId, participantIds: group.activeVideoChat.participantIds });
-    });
-    socket.on('videochat:leave', async (data: { groupId?: string }) => {
+      if (!isValidActiveVideoChat(group.activeVideoChat)) { await finishVideoChat(group, true); return; }
+      const ids = await saveVideoChatParticipants(group, [...(group.activeVideoChat.participantIds || []), userId]);
+      if (ids) io?.to(`group:${data.groupId}`).emit('videochat:participants', { groupId: data.groupId, participantIds: ids });
+    }));
+    socket.on('videochat:leave', guardVc('videochat:leave', async (data: { groupId?: string }) => {
       if (!data?.groupId) return;
       const group = await requireMembership(data.groupId);
       if (!group?.activeVideoChat) return;
-      group.activeVideoChat.participantIds = group.activeVideoChat.participantIds.filter((id: string) => id !== userId);
-      if (group.activeVideoChat.participantIds.length === 0) {
-        await finishVideoChat(group);
-      } else {
-        await group.save();
-        io?.to(`group:${data.groupId}`).emit('videochat:participants', { groupId: data.groupId, participantIds: group.activeVideoChat.participantIds });
-      }
-    });
+      await leaveVideoChat(group, userId);
+    }));
     // XAVFSIZLIK: "hammaga tugatish" FAQAT boshlagan odam uchun — bu
     // tekshiruv MAJBURIY ravishda SERVERDA, chunki mijoz kodini o'zgartirib
     // (masalan brauzer konsolidan) tekshiruvsiz shu hodisani yuborishi
     // mumkin edi.
-    socket.on('videochat:end', async (data: { groupId?: string }) => {
+    socket.on('videochat:end', guardVc('videochat:end', async (data: { groupId?: string }) => {
       if (!data?.groupId) return;
       const group = await requireMembership(data.groupId);
       if (!group?.activeVideoChat || group.activeVideoChat.startedBy !== userId) return;
       await finishVideoChat(group);
-    });
+    }));
 
     // Eski "Qo'shilish" havolasi bosilganda — hozir faolmi yoki tugaganmi (va qachon).
-    socket.on('videochat:check', async (data: { groupId?: string }, ack?: (r: any) => void) => {
+    socket.on('videochat:check', guardVc('videochat:check', async (data: { groupId?: string }, ack?: (r: any) => void) => {
       if (!data?.groupId || typeof ack !== 'function') return;
       const group = await requireMembership(data.groupId);
       if (!group) return ack({ active: false, notFound: true });
@@ -415,7 +456,7 @@ export function initSocket(httpServer: HttpServer): Server {
         lastEndedAt: last?.endedAt || null,
         lastDurationSec: last?.durationSec ?? null,
       });
-    });
+    }));
 
     socket.on('disconnect', () => {
       if (userId) {
@@ -427,16 +468,8 @@ export function initSocket(httpServer: HttpServer): Server {
       // internet ketdi) — "arvoh" ishtirokchi bo'lib qolmasligi uchun chiqariladi.
       if (userId && !userSockets.has(userId)) {
         Group.find({ 'activeVideoChat.participantIds': userId }).then(async (gs: any[]) => {
-          for (const g of gs) {
-            g.activeVideoChat.participantIds = g.activeVideoChat.participantIds.filter((id: string) => id !== userId);
-            if (g.activeVideoChat.participantIds.length === 0) {
-              await finishVideoChat(g);
-            } else {
-              await g.save();
-              io?.to(`group:${String(g._id)}`).emit('videochat:participants', { groupId: String(g._id), participantIds: g.activeVideoChat.participantIds });
-            }
-          }
-        }).catch(() => {});
+          for (const g of gs) await leaveVideoChat(g, userId);
+        }).catch((e) => console.error('[videochat disconnect]', (e as Error).message));
       }
     });
   });

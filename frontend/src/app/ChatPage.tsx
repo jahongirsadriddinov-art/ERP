@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import { Fragment, useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -32,6 +32,7 @@ import { MessageList } from "./chat/MessageList";
 import { GroupCreateModal, GroupSettingsModal } from "./chat/GroupModals";
 import { useChatPrefs } from "./chat/chatPrefs";
 import { loadCustomWallpaper, wallpaperStyle } from "./chat/wallpaper";
+import { ActionSheet, type RowAction } from "./components/SwipeRow";
 import { buildEntries, groupKey, isDmUnread, isGroupUnread, userKey, type ChatEntry } from "./chat/chatModel";
 
 // App.tsx'dan ajratilgan — faqat shu sahifa ochilganda yuklanadi (boshlang'ich yuklanish tezroq).
@@ -66,7 +67,8 @@ export default function ChatPage({ currentUser, users, messages, groups, onlineU
   const [showNewGroup, setShowNewGroup] = useState(false);
   const [showGroupSettings, setShowGroupSettings] = useState(false);
   const [text, setText] = useState("");
-  const [ctxMenu, setCtxMenu] = useState<{msgId:string; x:number; y:number}|null>(null);
+  // Xabar amallari: sichqoncha (o'ng tugma) — kursor yonida menyu; teginish (uzoq bosish) — pastdan ActionSheet (Telegram kabi)
+  const [ctxMenu, setCtxMenu] = useState<{msgId:string; x:number; y:number; sheet?: boolean}|null>(null);
   const [replyTo, setReplyTo] = useState<Msg|null>(null);
   const [editingId, setEditingId] = useState<string|null>(null);
   const [editText, setEditText] = useState("");
@@ -282,6 +284,32 @@ export default function ChatPage({ currentUser, users, messages, groups, onlineU
   };
   const findMsg = useCallback((id: string) => messages.find(m => m.id === id) ?? null, [messages]);
 
+  const startReply = (m: Msg) => { setReplyTo(m); setEditingId(null); setEditText(""); };
+  // Xabar amallari (menyu va ActionSheet uchun bitta ro'yxat). Telegram'dagidek: matnni faqat yozgan odam tahrirlaydi;
+  // o'z xabarini o'zi, boshqanikini rahbar (direktor/o'rinbosar) o'chiradi — server ham shuni tekshiradi.
+  const msgActions = (m: Msg): RowAction[] => {
+    const mine = m.fromUserId === currentUser.id;
+    const canEdit = mine && !m.deleted && (!m.type || m.type === 'text') && m.status !== 'sending' && m.status !== 'failed';
+    const canDelete = !m.deleted && (mine || !!canModifyMessages);
+    const canCopy = !m.deleted && !!m.text;
+    const acts: (RowAction | false)[] = [
+      { key: 'reply', testId: 'msg-action-reply', label: tChat('chat.reply'), icon: CornerDownLeft, onClick: () => startReply(m) },
+      canCopy && { key: 'copy', testId: 'msg-action-copy', label: tChat('chat.copy'), icon: CopyIcon, onClick: () => {
+        navigator.clipboard?.writeText(m.text).then(() => toast.success(tChat('chat.copied'))).catch(() => toast.error(tChat('chat.actionFailed')));
+      } },
+      canEdit && { key: 'edit', testId: 'msg-action-edit', label: tChat('chat.edit'), icon: Edit, onClick: () => { setEditingId(m.id); setEditText(m.text); setReplyTo(null); } },
+      { key: 'pin', testId: 'msg-action-pin', label: m.pinned ? tChat('chat.unpin') : tChat('chat.pin'), icon: m.pinned ? PinOff : Pin, onClick: () => onPin(m.id) },
+      { key: 'forward', testId: 'msg-action-forward', label: tChat('chat.forward'), icon: Share2, onClick: () => setShowForward(m) },
+      { key: 'select', testId: 'msg-action-select', label: tChat('chat.select'), icon: SquareCheck, onClick: () => { setSelectMode(true); setSelected(new Set([m.id])); } },
+      canDelete && { key: 'delete', testId: 'msg-action-delete', label: tChat('chat.delete'), icon: Trash2, tone: 'danger', onClick: () => {
+        if (editingId === m.id) { setEditingId(null); setEditText(""); }
+        if (replyTo?.id === m.id) setReplyTo(null);
+        onDelete(m.id);
+      } },
+    ];
+    return acts.filter(Boolean) as RowAction[];
+  };
+
   const threadOpen = !!(selUser || selGroup);
   const headerTitle = selGroup ? (selGroup.devSupport ? tChat('common.roles.dasturchi') : selGroup.name) : selUser?.name || '';
 
@@ -333,7 +361,7 @@ export default function ChatPage({ currentUser, users, messages, groups, onlineU
       </div>
 
       {/* Suhbat oynasi */}
-      <div className={`${!(threadOpen||aiOpen)?'hidden md:flex':'flex'} flex-1 min-w-0 min-h-0 flex-col overflow-hidden bg-background`} onClick={e=>e.stopPropagation()}>
+      <div className={`${!(threadOpen||aiOpen)?'hidden md:flex':'flex'} flex-1 min-w-0 min-h-0 flex-col overflow-hidden bg-background max-md:pt-[env(safe-area-inset-top)]`} onClick={e=>e.stopPropagation()}>
         {aiOpen && !threadOpen ? (
           <AiChatThread userId={currentUser.id} onBack={() => setAiOpen(false)} />
         ) : !threadOpen ? (
@@ -422,7 +450,8 @@ export default function ChatPage({ currentUser, users, messages, groups, onlineU
               selectMode={selectMode}
               selected={selected}
               onToggleSelect={toggleSelect}
-              onContext={(msgId, x, y) => setCtxMenu({ msgId, x, y })}
+              onContext={(msgId, x, y, touch) => setCtxMenu({ msgId, x, y, sheet: touch })}
+              onReply={startReply}
               onRetry={(m) => { const { status, ...retry } = m; onSend(retry as Msg); }}
               onStartVideoChat={onStartVideoChat}
               onBackgroundClick={() => setCtxMenu(null)}
@@ -445,17 +474,18 @@ export default function ChatPage({ currentUser, users, messages, groups, onlineU
       </div>
 
       {/* Kontekst menyu — document.body'ga portal: sahifa `.page-enter` (will-change: transform) ichida,
-          aks holda position:fixed shu ota-elementga nisbatan joylashib, kesilib qolardi. */}
-      {ctxMenu && ctxMsg && createPortal(
+          aks holda position:fixed shu ota-elementga nisbatan joylashib, kesilib qolardi.
+          Telefon/planshetda (uzoq bosish) — pastdan chiqadigan ActionSheet; kompyuterda (o'ng tugma) — kursor yonida. */}
+      {ctxMenu && ctxMsg && (ctxMenu.sheet ? (
+        <ActionSheet testId="chat-msg-actions" title={tChat('chatUi.messageActions')} onClose={() => setCtxMenu(null)}
+          header={<MsgSheetPreview text={msgReplyPreview(tChat, ctxMsg)} who={ctxMsg.fromUserId === currentUser.id ? tChat('chat.you') : userById(ctxMsg.fromUserId)?.name || ''} />}
+          actions={msgActions(ctxMsg)} />
+      ) : createPortal(
         (() => {
-          // Telegram'dagidek: matnni faqat yozgan odam tahrirlaydi; o'z xabarini o'zi, boshqanikini rahbar o'chiradi
-          const mine = ctxMsg.fromUserId === currentUser.id;
-          const canEdit = mine && !ctxMsg.deleted && (!ctxMsg.type || ctxMsg.type === 'text');
-          const canDelete = !ctxMsg.deleted && (mine || !!canModifyMessages);
-          const canCopy = !ctxMsg.deleted && !!ctxMsg.text;
-          const rows = 4 + (canCopy ? 1 : 0) + (canEdit ? 1 : 0) + (canDelete ? 1 : 0);
+          const acts = msgActions(ctxMsg);
+          const hasDanger = acts.some(a => a.tone === 'danger');
           const menuW = 200;
-          const menuH = rows * 42 + 12 + (canDelete ? 9 : 0);
+          const menuH = acts.length * 42 + 12 + (hasDanger ? 9 : 0);
           const vw = window.innerWidth, vh = window.innerHeight;
           const left = Math.min(Math.max(8, ctxMenu.x), vw - menuW - 8);
           const top = Math.min(Math.max(8, ctxMenu.y), vh - menuH - 8);
@@ -464,36 +494,27 @@ export default function ChatPage({ currentUser, users, messages, groups, onlineU
             <>
             {/* Butun ekranni qoplovchi fon — qayerga tegilsa ham menyu yopiladi */}
             <div className="fixed inset-0 z-[69]" onClick={()=>setCtxMenu(null)} onContextMenu={e=>{e.preventDefault();setCtxMenu(null);}}/>
-            <div role="menu" className="fixed z-[70] glass p-1.5 rounded-2xl border border-white/20 shadow-2xl flex flex-col gap-0.5 animate-pop-in"
+            <EscClose onClose={() => setCtxMenu(null)} />
+            <div role="menu" aria-label={tChat('chatUi.messageActions')} data-testid="chat-msg-menu" className="fixed z-[70] glass p-1.5 rounded-2xl border border-white/20 shadow-2xl flex flex-col gap-0.5 animate-pop-in"
               style={{ top, left, width: menuW }}
               onClick={e=>e.stopPropagation()}>
-              <div role="menuitem" onClick={()=>{setReplyTo(ctxMsg);setEditingId(null);setCtxMenu(null);}} className={itemCls}><MorphIcon icon={CornerDownLeft} className="w-4 h-4" />{tChat('chat.reply')}</div>
-              {canCopy && (
-                <div role="menuitem" onClick={()=>{
-                  const txt = ctxMsg.text; setCtxMenu(null);
-                  navigator.clipboard?.writeText(txt).then(() => toast.success(tChat('chat.copied'))).catch(() => toast.error(tChat('chat.actionFailed')));
-                }} className={itemCls}><MorphIcon icon={CopyIcon} className="w-4 h-4" />{tChat('chat.copy')}</div>
-              )}
-              {canEdit && (
-                <div role="menuitem" onClick={()=>{setEditingId(ctxMsg.id);setEditText(ctxMsg.text);setReplyTo(null);setCtxMenu(null);}} className={itemCls}><MorphIcon icon={Edit} className="w-4 h-4" />{tChat('chat.edit')}</div>
-              )}
-              <div role="menuitem" onClick={()=>{onPin(ctxMsg.id);setCtxMenu(null);}} className={itemCls}>
-                <MorphIcon icon={ctxMsg.pinned ? PinOff : Pin} className="w-4 h-4" />{ctxMsg.pinned?tChat('chat.unpin'):tChat('chat.pin')}
-              </div>
-              <div role="menuitem" onClick={()=>{setShowForward(ctxMsg);setCtxMenu(null);}} className={itemCls}><MorphIcon icon={Share2} className="w-4 h-4" />{tChat('chat.forward')}</div>
-              <div role="menuitem" onClick={()=>{setSelectMode(true);setSelected(new Set([ctxMsg.id]));setCtxMenu(null);}} className={itemCls}><MorphIcon icon={SquareCheck} className="w-4 h-4" />{tChat('chat.select')}</div>
-              {canDelete && (
-                <>
-                  <div className="h-px bg-border/60 my-0.5"/>
-                  <div role="menuitem" onClick={()=>{onDelete(ctxMsg.id);setCtxMenu(null);}} className="flex items-center gap-3 px-3 py-2.5 hover:bg-red-500/10 text-red-500 rounded-xl cursor-pointer text-sm transition-colors"><MorphIcon icon={Trash2} className="w-4 h-4" />{tChat('chat.delete')}</div>
-                </>
-              )}
+              {acts.map(a => (
+                <Fragment key={a.key}>
+                  {a.tone === 'danger' && <div className="h-px bg-border/60 my-0.5"/>}
+                  <div role="menuitem" tabIndex={0} data-testid={a.testId}
+                    onClick={() => { setCtxMenu(null); a.onClick(); }}
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCtxMenu(null); a.onClick(); } }}
+                    className={a.tone === 'danger' ? "flex items-center gap-3 px-3 py-2.5 hover:bg-red-500/10 text-red-500 rounded-xl cursor-pointer text-sm transition-colors" : itemCls}>
+                    {a.icon && <MorphIcon icon={a.icon} className="w-4 h-4" />}{a.label}
+                  </div>
+                </Fragment>
+              ))}
             </div>
             </>
           );
         })(),
         document.body
-      )}
+      ))}
 
       {/* Yuborish (forward) */}
       {showForward && createPortal(
@@ -537,6 +558,16 @@ export default function ChatPage({ currentUser, users, messages, groups, onlineU
           onDelete={async () => { await onDeleteGroup(selGroup.id); setShowGroupSettings(false); closeChat(); }}
         />
       )}
+    </div>
+  );
+}
+
+/** ActionSheet tepasidagi xabar ko'rinishi (kimdan + qisqa matn). */
+function MsgSheetPreview({ who, text }: { who: string; text: string }) {
+  return (
+    <div className="mx-2 mb-1 rounded-2xl bg-muted/60 px-3 py-2 border-l-[3px] border-primary">
+      {who && <p className="text-[12px] font-semibold text-primary truncate">{who}</p>}
+      <p className="text-[13px] text-foreground/85 line-clamp-2 break-words">{text}</p>
     </div>
   );
 }

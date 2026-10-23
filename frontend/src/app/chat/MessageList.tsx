@@ -1,5 +1,6 @@
 // Suhbat oynasidagi xabarlar: sana ajratgichlari, Telegram uslubidagi pufakchalar (ketma-ket xabarlar guruhlanadi),
 // "Yangi xabarlar" chizig'i, pastga tushish tugmasi, yangi xabar kelganda silliq skroll (faqat pastda bo'lsa).
+// Teginishda: uzoq bosish — amallar (ActionSheet), pufakchani o'ngga surish — javob berish; iqtibosga bosish — asl xabarga o'tish.
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -12,6 +13,7 @@ import FileText from "@hugeicons/core-free-icons/FileTextIcon";
 import MapPin from "@hugeicons/core-free-icons/PinLocation01Icon";
 import VideoIcon from "@hugeicons/core-free-icons/Video01Icon";
 import ChevronDown from "@hugeicons/core-free-icons/ArrowDown01Icon";
+import ReplyIcon from "@hugeicons/core-free-icons/CornerDownLeftIcon";
 import { SafeImg, fmtVideoDuration, msgReplyPreview } from "../App";
 import type { AppUser, Group, Msg } from "../App";
 import { openMediaViewer } from "../MediaViewer";
@@ -22,6 +24,8 @@ import { ChatAvatar } from "./ChatAvatar";
 import { avatarColor, dayLabel, fmtClock, tashkentDayKey } from "./chatModel";
 
 const RUN_GAP_MS = 5 * 60_000;
+const SWIPE_REPLY_PX = 56; // shuncha surilsa — javob
+const SWIPE_MAX_PX = 80;
 const MEDIA_ONLY = new Set(["image", "video", "audio", "location", "video_invite"]);
 
 export interface MessageListProps {
@@ -37,7 +41,10 @@ export interface MessageListProps {
   selectMode: boolean;
   selected: Set<string>;
   onToggleSelect: (id: string) => void;
-  onContext: (msgId: string, x: number, y: number) => void;
+  /** touch=true — uzoq bosish (telefon/planshet): ActionSheet; aks holda o'ng tugma menyusi. */
+  onContext: (msgId: string, x: number, y: number, touch?: boolean) => void;
+  /** Pufakchani o'ngga surish (teginish) — shu xabarga javob. */
+  onReply?: (m: Msg) => void;
   onRetry: (m: Msg) => void;
   onStartVideoChat: (g: Group) => void;
   onBackgroundClick: () => void;
@@ -88,6 +95,11 @@ export function MessageList(p: MessageListProps) {
       else el.scrollTop = el.scrollHeight;
       nearBottomRef.current = distFromBottom() < 120;
       setShowDown(!nearBottomRef.current);
+      // Pastda hali o'qilmaganlar qolgan bo'lsa — "↓" tugmasida ularning soni
+      if (marker && !nearBottomRef.current) {
+        const idx = p.thread.findIndex((m) => m.id === p.firstUnreadId);
+        if (idx >= 0) setNewBelow(p.thread.length - idx);
+      }
     } else if (len > prevLenRef.current) {
       const last = p.thread[len - 1];
       if (nearBottomRef.current || last?.fromUserId === p.me.id) toBottom(true);
@@ -119,11 +131,62 @@ export function MessageList(p: MessageListProps) {
     if (d < 40) setNewBelow(0);
   };
 
-  const startLongPress = (msgId: string, e: React.TouchEvent) => {
+  // Teginish: uzoq bosish (450ms, qimirlamasdan) → amallar; o'ngga surish → javob (Telegram'dagi kabi "tortib qo'yib yuborish")
+  const lastTouchRef = useRef(0);
+  const swipeRef = useRef<{ m: Msg; el: HTMLElement; x: number; y: number; dx: number; lock: "h" | "v" | null; buzzed: boolean } | null>(null);
+  const endLongPress = () => { if (longPressRef.current) { clearTimeout(longPressRef.current); longPressRef.current = null; } };
+  const onBubbleTouchStart = (m: Msg, e: React.TouchEvent<HTMLElement>) => {
+    if (p.selectMode || e.touches.length > 1) return;
     const touch = e.touches[0];
-    longPressRef.current = setTimeout(() => p.onContext(msgId, touch.clientX, touch.clientY), 450);
+    lastTouchRef.current = Date.now();
+    swipeRef.current = { m, el: e.currentTarget, x: touch.clientX, y: touch.clientY, dx: 0, lock: null, buzzed: false };
+    endLongPress();
+    longPressRef.current = setTimeout(() => {
+      longPressRef.current = null;
+      const s = swipeRef.current;
+      if (s && s.lock === "h") return;
+      swipeRef.current = null;
+      try { navigator.vibrate?.(12); } catch { /* */ }
+      p.onContext(m.id, touch.clientX, touch.clientY, true);
+    }, 450);
   };
-  const endLongPress = () => { if (longPressRef.current) clearTimeout(longPressRef.current); };
+  const onBubbleTouchMove = (e: React.TouchEvent<HTMLElement>) => {
+    const s = swipeRef.current; if (!s) return;
+    const touch = e.touches[0];
+    const dx = touch.clientX - s.x, dy = touch.clientY - s.y;
+    if (!s.lock) {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      endLongPress();
+      s.lock = p.onReply && dx > 0 && Math.abs(dx) > Math.abs(dy) * 1.2 ? "h" : "v";
+    }
+    if (s.lock !== "h") return;
+    const d = Math.max(0, Math.min(SWIPE_MAX_PX, dx));
+    s.dx = d;
+    s.el.style.transition = "none";
+    s.el.style.transform = d ? `translate3d(${d}px,0,0)` : "";
+    s.el.style.setProperty("--swipe", String(Math.min(1, d / SWIPE_REPLY_PX)));
+    if (d >= SWIPE_REPLY_PX && !s.buzzed) { s.buzzed = true; try { navigator.vibrate?.(8); } catch { /* */ } }
+  };
+  const onBubbleTouchEnd = () => {
+    endLongPress();
+    const s = swipeRef.current; swipeRef.current = null;
+    if (!s || s.lock !== "h") return;
+    s.el.style.transition = "transform 200ms cubic-bezier(.2,.8,.2,1)";
+    s.el.style.transform = "";
+    s.el.style.setProperty("--swipe", "0");
+    if (s.dx >= SWIPE_REPLY_PX) p.onReply?.(s.m);
+  };
+
+  // Iqtibosga bosilsa — asl xabarga silliq o'tib, bir lahza yoritiladi
+  const jumpTo = (id: string) => {
+    const el = scrollRef.current?.querySelector<HTMLElement>(`[data-msg-id="${CSS.escape(id)}"]`);
+    if (!el) { toast.message(t("chatUi.originalMissing")); return; }
+    el.scrollIntoView({ block: "center", behavior: "smooth" });
+    el.classList.remove("chat-msg-flash");
+    void el.offsetWidth;
+    el.classList.add("chat-msg-flash");
+    setTimeout(() => el.classList.remove("chat-msg-flash"), 1400);
+  };
 
   // Ketma-ketlik: bir xil yuboruvchi, 5 daqiqa ichida, bir kunda → bitta "run"
   const meta = useMemo(() => p.thread.map((m, i) => {
@@ -177,7 +240,10 @@ export function MessageList(p: MessageListProps) {
           <p className="text-[13px] font-semibold mb-0.5 truncate" style={{ color: avatarColor(`u:${m.fromUserId}`) }}>{sender?.name || t("chat.unknownSender")}</p>
         )}
         {replyMsg && (
-          <div className={`rounded-lg pl-2 pr-2 py-1 mb-1 border-l-[3px] max-w-full ${mine ? "bg-white/15 border-white/70" : "bg-primary/8 border-primary"}`}>
+          <div role="button" tabIndex={0} data-testid="chat-msg-quote"
+            onClick={(e) => { e.stopPropagation(); if (!p.selectMode) jumpTo(replyMsg.id); }}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); jumpTo(replyMsg.id); } }}
+            className={`rounded-lg pl-2 pr-2 py-1 mb-1 border-l-[3px] max-w-full cursor-pointer ${mine ? "bg-white/15 border-white/70 hover:bg-white/25" : "bg-primary/8 border-primary hover:bg-primary/15"}`}>
             <p className={`text-[12px] font-semibold truncate ${mine ? "" : "text-primary"}`}>{replyMsg.fromUserId === p.me.id ? t("chat.you") : p.userById(replyMsg.fromUserId)?.name}</p>
             <p className="text-[12px] truncate opacity-80">{msgReplyPreview(t, replyMsg)}</p>
           </div>
@@ -288,9 +354,17 @@ export function MessageList(p: MessageListProps) {
             const tailCls = mine ? (mi.lastOfRun ? "rounded-br-[6px]" : "") : (mi.lastOfRun ? "rounded-bl-[6px]" : "");
             return (
               <Fragment key={m.id}>{sep}{marker}
-                <div data-testid="chat-msg" data-mine={mine ? "1" : "0"}
-                  className={`flex items-end gap-1.5 ${mine ? "justify-end" : "justify-start"} ${mi.firstOfRun ? "mt-2" : "mt-0.5"} ${p.selectMode ? "pl-8 relative cursor-pointer" : ""} ${isSel ? "bg-primary/10 -mx-2 px-2 rounded-lg" : ""}`}
-                  onClick={(e) => { e.stopPropagation(); if (p.selectMode) p.onToggleSelect(m.id); }}>
+                <div data-testid="chat-msg" data-mine={mine ? "1" : "0"} data-msg-id={m.id}
+                  className={`relative flex items-end gap-1.5 ${mine ? "justify-end" : "justify-start"} ${mi.firstOfRun ? "mt-2" : "mt-0.5"} ${p.selectMode ? "pl-8 cursor-pointer" : "touch-pan-y"} ${isSel ? "bg-primary/10 -mx-2 px-2 rounded-lg" : ""}`}
+                  onClick={(e) => { e.stopPropagation(); if (p.selectMode) p.onToggleSelect(m.id); }}
+                  onTouchStart={(e) => onBubbleTouchStart(m, e)} onTouchMove={onBubbleTouchMove} onTouchEnd={onBubbleTouchEnd} onTouchCancel={onBubbleTouchEnd}>
+                  {/* O'ngga surilganda chapdan chiqadigan "javob" belgisi */}
+                  {!p.selectMode && p.onReply && (
+                    <span aria-hidden className="pointer-events-none absolute left-0 top-1/2 w-8 h-8 -ml-10 -mt-4 rounded-full bg-card/90 shadow flex items-center justify-center text-primary"
+                      style={{ opacity: "var(--swipe, 0)", transform: "scale(calc(0.6 + var(--swipe, 0) * 0.4))" }}>
+                      <MorphIcon icon={ReplyIcon} className="w-4 h-4" />
+                    </span>
+                  )}
                   {p.selectMode && (
                     <span className={`absolute left-1 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${isSel ? "bg-primary border-primary" : "bg-card border-border"}`}>
                       {isSel && <MorphIcon icon={Check} className="w-3 h-3 text-white" />}
@@ -302,10 +376,17 @@ export function MessageList(p: MessageListProps) {
                     </span>
                   )}
                   <div
-                    onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); if (!p.selectMode) p.onContext(m.id, e.clientX, e.clientY); }}
-                    onTouchStart={(e) => { if (!p.selectMode) startLongPress(m.id, e); }}
-                    onTouchEnd={endLongPress} onTouchMove={endLongPress}
-                    className={`relative max-w-[82%] sm:max-w-[70%] min-w-[72px] px-3 py-1.5 rounded-[18px] shadow-[0_1px_1px_rgba(0,0,0,0.08)] ${tailCls}
+                    data-testid="chat-bubble"
+                    onContextMenu={(e) => {
+                      e.preventDefault(); e.stopPropagation();
+                      if (p.selectMode) return;
+                      // Teginishdagi (Android) uzoq bosish ham contextmenu beradi — u ActionSheet'ga
+                      const touch = Date.now() - lastTouchRef.current < 1500 || (e.nativeEvent as PointerEvent).pointerType === "touch";
+                      if (touch && !swipeRef.current && !longPressRef.current) return; // taymer allaqachon ochgan
+                      endLongPress(); swipeRef.current = null;
+                      p.onContext(m.id, e.clientX, e.clientY, touch);
+                    }}
+                    className={`relative max-w-[82%] sm:max-w-[70%] min-w-[72px] px-3 py-1.5 rounded-[18px] shadow-[0_1px_1px_rgba(0,0,0,0.08)] [-webkit-touch-callout:none] [@media(pointer:coarse)]:select-none ${tailCls}
                       ${mine ? "bg-primary text-primary-foreground" : "bg-card text-card-foreground"}
                       ${m.pinned ? "ring-1 ring-amber-400/60" : ""} ${m.status === "sending" ? "opacity-80" : ""}`}
                   >

@@ -18,6 +18,7 @@ import { getBackendUrl } from '../utils/backendUrl';
 import { createNotification } from '../services/notifications';
 import { checkRate } from '../utils/rateLimit';
 import { persistUploadedFile } from '../services/durableFiles';
+import { logAudit } from '../services/audit';
 
 if (ffmpegPath) ffmpeg.setFfmpegPath(ffmpegPath);
 
@@ -499,6 +500,20 @@ async function isModerator(u: any, msg: any): Promise<boolean> {
   const g: any = await Group.findById(String(msg.groupId)).select('devSupport').lean().catch(() => null);
   return !!g?.devSupport;
 }
+// Audit: kim, kimning xabarini tahrirladi/o'chirdi (rahbar boshqaning xabarini o'chirsa ham iz qoladi)
+async function auditMessage(req: any, action: 'update' | 'delete', msg: any, description: string, oldValue?: any, newValue?: any) {
+  const u = req.user;
+  const actor: any = await User.findById(String(u?.userId || '')).select('firstName lastName role').lean().catch(() => null);
+  await logAudit({
+    userId: String(u?.userId || ''),
+    userName: actor ? `${actor.firstName || ''} ${actor.lastName || ''}`.trim() : '',
+    userRole: String(u?.role || actor?.role || ''),
+    action, entity: 'message', entityId: String(msg._id),
+    description, oldValue, newValue,
+    companyId: msg.companyId ? String(msg.companyId) : (u?.companyId ? String(u.companyId) : undefined),
+    req,
+  });
+}
 async function isParticipant(msg: any, uid: string): Promise<boolean> {
   if (String(msg.fromUserId) === uid || String(msg.toUserId) === uid) return true;
   if (!msg.groupId) return false;
@@ -513,11 +528,13 @@ router.patch('/:id', async (req, res) => {
     const { text, pinned } = req.body || {};
     const msg = await Message.findOne(scoped({ _id: req.params.id }));
     if (!msg) return res.status(404).json({ error: 'Xabar topilmadi' });
+    let editedFrom: string | undefined;
     if (text !== undefined) {
       if (String(msg.fromUserId) !== uid) return res.status(403).json({ error: "Faqat o'z xabaringizni tahrirlay olasiz" });
       if (msg.deleted) return res.status(400).json({ error: "O'chirilgan xabarni tahrirlab bo'lmaydi" });
       const t = String(text).trim();
       if (!t || t.length > 4000) return res.status(400).json({ error: "Xabar matni bo'sh yoki juda uzun" });
+      if (t !== msg.text) editedFrom = msg.text;
       msg.text = t; msg.edited = true;
     }
     if (pinned !== undefined) {
@@ -525,6 +542,7 @@ router.patch('/:id', async (req, res) => {
       msg.pinned = !!pinned;
     }
     await msg.save();
+    if (editedFrom !== undefined) await auditMessage(req, 'update', msg, 'Xabar tahrirlandi', { text: editedFrom }, { text: msg.text });
     const payload = shape(msg);
     if (msg.groupId) emitToGroup(msg.groupId, 'message:edit', payload);
     else { emitToUser(msg.toUserId, 'message:edit', payload); emitToUser(msg.fromUserId, 'message:edit', payload); }
@@ -544,8 +562,11 @@ router.delete('/:id', async (req, res) => {
     if (String(msg.fromUserId) !== String(u?.userId || '') && !(await isModerator(u, msg))) {
       return res.status(403).json({ error: "Xabarni o'chirish ruxsati yo'q" });
     }
+    const byOther = String(msg.fromUserId) !== String(u?.userId || '');
     msg.deleted = true;
     await msg.save();
+    await auditMessage(req, 'delete', msg, byOther ? "Boshqa xodimning xabari o'chirildi" : "Xabar o'chirildi",
+      { text: msg.text, fromUserId: String(msg.fromUserId), toUserId: msg.toUserId ? String(msg.toUserId) : undefined, groupId: msg.groupId ? String(msg.groupId) : undefined });
     const payload = { id: String(msg._id), deleted: true };
     if (msg.groupId) emitToGroup(msg.groupId, 'message:delete', payload);
     else { emitToUser(msg.toUserId, 'message:delete', payload); emitToUser(msg.fromUserId, 'message:delete', payload); }

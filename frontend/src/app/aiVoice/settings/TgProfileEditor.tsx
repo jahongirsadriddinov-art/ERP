@@ -1,3 +1,4 @@
+import "../../i18n/aiVoiceNs";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";

@@ -1,3 +1,4 @@
+import "./i18n/aiVoiceNs";
 import { confirmDialog } from "./lib/confirmDialog";
 import { useState, useRef, useEffect, lazy, Suspense } from "react";
 import { oneOf, usePersistentState } from "./lib/persistentState";

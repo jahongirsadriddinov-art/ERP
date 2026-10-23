@@ -1,3 +1,4 @@
+import "../../../i18n/aiVoiceNs";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { MorphIcon } from "morphicons/react";

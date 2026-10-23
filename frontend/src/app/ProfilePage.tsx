@@ -1,3 +1,4 @@
+import "./i18n/aiVoiceNs";
 import { confirmDialog } from "./lib/confirmDialog";
 import { SnapshotsPanel, DangerZone } from "./components/DataSafety";
 import { useState, useRef, useEffect, useMemo, lazy, Suspense } from "react";

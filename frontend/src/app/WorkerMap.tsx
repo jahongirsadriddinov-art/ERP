@@ -13,6 +13,7 @@ import MapIcon from "@hugeicons/core-free-icons/MapsIcon";
 import { MorphIcon } from "morphicons/react";
 import { useTranslation } from "react-i18next";
 import { AppUser } from "./App";
+import { memojiHtml } from "./components/UserAvatar";
 
 interface GpsPoint { userId: string; lat: number; lng: number; accuracy?: number; timestamp: string; source?: 'site'|'bot_live'|'bot_once'; speed?: number; battery?: number; charging?: boolean; network?: string }
 
@@ -43,14 +44,15 @@ const TILES: Record<'light' | 'dark' | 'sat', { url: string; maxNative: number }
 const isDark = () => typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
 const escHtml = (v: string) => v.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 
-function workerDivIcon(name: string, live: boolean, stale: boolean) {
-  const initial = escHtml((name || '?').charAt(0).toUpperCase());
+// Marker ichida — foydalanuvchi rasmi yoki uning barqaror 3D memoji'si (components/UserAvatar.tsx)
+function workerDivIcon(user: AppUser, live: boolean, stale: boolean) {
+  const name = user.name;
   const short = escHtml((name || '').split(' ')[0].slice(0, 12));
   const ring = live ? (stale ? '#f59e0b' : '#22c55e') : '#94a3b8';
   const pulse = live && !stale ? `<span class="wm-pulse" style="background:${ring}"></span>` : '';
   return L.divIcon({
     className: 'wm-marker',
-    html: `<div class="wm-marker-wrap"><div class="wm-marker-inner" style="border-color:${ring}">${pulse}<span>${initial}</span></div><span class="wm-marker-tail" style="border-top-color:${ring}"></span><span class="wm-marker-name">${short}</span></div>`,
+    html: `<div class="wm-marker-wrap"><div class="wm-marker-inner" style="border-color:${ring}">${pulse}${memojiHtml(user.id, user.avatar)}</div><span class="wm-marker-tail" style="border-top-color:${ring}"></span><span class="wm-marker-name">${short}</span></div>`,
     iconSize: [40, 60],
     iconAnchor: [20, 44],
     popupAnchor: [0, -42],
@@ -144,7 +146,7 @@ export default function WorkerMap({ users, gpsLocations, focusUserId, track, onS
       seen.add(loc.userId);
       const live = isLiveSource(loc.source);
       const stale = (now - new Date(loc.timestamp).getTime()) > 15 * 60 * 1000; // 15 daqiqadan katta — "eskirgan"
-      const icon = workerDivIcon(user.name, live, stale);
+      const icon = workerDivIcon(user, live, stale);
       const existing = markersRef.current[loc.userId];
       if (existing) {
         existing.setLatLng([loc.lat, loc.lng]);
@@ -324,6 +326,7 @@ export default function WorkerMap({ users, gpsLocations, focusUserId, track, onS
           font-size: 12px; font-weight: 700;
           box-shadow: 0 3px 10px rgba(0,0,0,0.4);
         }
+        .wm-marker-inner .memoji-avatar { width: 100%; height: 100%; }
         .wm-marker-tail {
           position: absolute; left: 50%; bottom: 2px;
           width: 0; height: 0; margin-left: -5px;

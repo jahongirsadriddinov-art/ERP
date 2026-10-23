@@ -145,6 +145,34 @@ pre, code, kbd, samp { font-family: ui-monospace, "JetBrains Mono", Consolas, mo
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 16%, transparent);
 }
 
+/* ══ Foydalanuvchi avatari — 3D memoji + yumshoq gradient doira (components/UserAvatar.tsx) ══ */
+.memoji-avatar {
+  position: relative; overflow: hidden;
+  display: inline-flex; align-items: flex-end; justify-content: center;
+  border-radius: 9999px;
+  background:
+    radial-gradient(120% 90% at 30% 12%, rgba(255,255,255,0.55), rgba(255,255,255,0) 55%),
+    linear-gradient(155deg, hsl(var(--av-h1, 220), 82%, 88%), hsl(var(--av-h2, 250), 64%, 74%));
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.45), inset 0 -3px 8px -3px hsla(var(--av-h2, 250), 55%, 35%, 0.28);
+}
+.dark .memoji-avatar {
+  background:
+    radial-gradient(120% 90% at 30% 12%, rgba(255,255,255,0.16), rgba(255,255,255,0) 55%),
+    linear-gradient(155deg, hsl(var(--av-h1, 220), 42%, 40%), hsl(var(--av-h2, 250), 46%, 25%));
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.10), inset 0 -3px 8px -3px rgba(0,0,0,0.35);
+}
+.memoji-avatar__img {
+  width: 86%; height: 86%; margin-bottom: 2%;
+  object-fit: contain; pointer-events: none;
+  filter: drop-shadow(0 1px 1.5px rgba(0,0,0,0.18));
+}
+.memoji-avatar__photo { width: 100%; height: 100%; object-fit: cover; }
+.memoji-avatar__initials {
+  align-self: center; color: hsl(var(--av-h2, 250), 45%, 28%);
+  font-weight: 700; line-height: 1;
+}
+.dark .memoji-avatar__initials { color: #fff; }
+
 /* ══ Pastki navigatsiya (telefon/planshet) — mavzuga mos shisha ═════════════ */
 .ios-bottom-bar {
   left: 12px; right: 12px;

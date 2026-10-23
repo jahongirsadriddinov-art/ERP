@@ -1,0 +1,60 @@
+Default avatars in this folder (01.webp .. 32.webp) are derived from
+Microsoft Fluent Emoji (3D style), https://github.com/microsoft/fluentui-emoji
+resized from 256px PNG to 160px WebP. Source mapping:
+
+01.webp  assets/Man/Light/3D/man_3d_light.png
+02.webp  assets/Man/Medium/3D/man_3d_medium.png
+03.webp  assets/Woman/Light/3D/woman_3d_light.png
+04.webp  assets/Woman/Medium-Light/3D/woman_3d_medium-light.png
+05.webp  assets/Person/Default/3D/person_3d_default.png
+06.webp  assets/Man beard/Medium-Light/3D/man_beard_3d_medium-light.png
+07.webp  assets/Man beard/Medium/3D/man_beard_3d_medium.png
+08.webp  assets/Man curly hair/Light/3D/man_curly_hair_3d_light.png
+09.webp  assets/Woman curly hair/Medium/3D/woman_curly_hair_3d_medium.png
+10.webp  assets/Man blonde hair/Light/3D/man_blonde_hair_3d_light.png
+11.webp  assets/Woman blonde hair/Medium-Light/3D/woman_blonde_hair_3d_medium-light.png
+12.webp  assets/Man white hair/Medium-Light/3D/man_white_hair_3d_medium-light.png
+13.webp  assets/Woman white hair/Light/3D/woman_white_hair_3d_light.png
+14.webp  assets/Man red hair/Light/3D/man_red_hair_3d_light.png
+15.webp  assets/Old man/Medium-Light/3D/old_man_3d_medium-light.png
+16.webp  assets/Old woman/Light/3D/old_woman_3d_light.png
+17.webp  assets/Older person/Medium/3D/older_person_3d_medium.png
+18.webp  assets/Man construction worker/Medium/3D/man_construction_worker_3d_medium.png
+19.webp  assets/Man construction worker/Medium-Light/3D/man_construction_worker_3d_medium-light.png
+20.webp  assets/Woman construction worker/Light/3D/woman_construction_worker_3d_light.png
+21.webp  assets/Construction worker/Default/3D/construction_worker_3d_default.png
+22.webp  assets/Man office worker/Light/3D/man_office_worker_3d_light.png
+23.webp  assets/Woman office worker/Medium/3D/woman_office_worker_3d_medium.png
+24.webp  assets/Man technologist/Medium-Light/3D/man_technologist_3d_medium-light.png
+25.webp  assets/Woman technologist/Light/3D/woman_technologist_3d_light.png
+26.webp  assets/Man mechanic/Medium/3D/man_mechanic_3d_medium.png
+27.webp  assets/Woman mechanic/Medium-Light/3D/woman_mechanic_3d_medium-light.png
+28.webp  assets/Man factory worker/Light/3D/man_factory_worker_3d_light.png
+29.webp  assets/Woman with headscarf/Medium-Light/3D/woman_with_headscarf_3d_medium-light.png
+30.webp  assets/Woman with headscarf/Light/3D/woman_with_headscarf_3d_light.png
+31.webp  assets/Man teacher/Medium-Light/3D/man_teacher_3d_medium-light.png
+32.webp  assets/Woman scientist/Medium/3D/woman_scientist_3d_medium.png
+
+Licensed under the MIT License:
+
+MIT License
+
+Copyright (c) Microsoft Corporation.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE

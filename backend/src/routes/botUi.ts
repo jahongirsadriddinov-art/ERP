@@ -6,6 +6,7 @@ import { applyBotCommands } from '../services/botUi/commands';
 import { autoDecorate } from '../services/botUi/autoDecorate';
 import { parsePackName, tgCall, tgDownloadFile } from '../services/botUi/telegramApi';
 import { geminiTextToJson } from '../services/gemini';
+import { MESSAGE_KIND_KEYS } from '../services/botUi/messageKinds';
 
 // Bot dizayni (owner 2026-10-22) — /api/dev/bot-ui (index.ts: requireAuth + requireDeveloper — faqat dasturchi).
 const router = Router();
@@ -32,12 +33,16 @@ function view(doc: any) {
       buttons: doc?.buttons || {},
       messageEmoji: doc?.messageEmoji || [],
       messageEmojiEnabled: doc?.messageEmojiEnabled !== false,
+      messagePrefix: doc?.messagePrefix || {},
+      messagePrefixEnabled: doc?.messagePrefixEnabled !== false,
       stripEmojiWhenIcon: doc?.stripEmojiWhenIcon !== false,
       commands: doc?.commands || [],
       updatedAt: doc?.updatedAt || null,
     },
     packs: (doc?.packs || []).map(packSummary),
     draft: doc?.draft || null,
+    decorating: !!decorateJob,
+    decorateError: lastDecorateError,
   };
 }
 
@@ -119,6 +124,7 @@ router.put('/', async (req: Request, res: Response) => {
   }
   if ('messageEmoji' in body) set.messageEmoji = sanitizeMessageEmoji(body.messageEmoji);
   if ('messageEmojiEnabled' in body) set.messageEmojiEnabled = body.messageEmojiEnabled !== false;
+  if ('messagePrefixEnabled' in body) set.messagePrefixEnabled = body.messagePrefixEnabled !== false;
   if ('stripEmojiWhenIcon' in body) set.stripEmojiWhenIcon = body.stripEmojiWhenIcon !== false;
   let commandsChanged = false;
   if ('commands' in body) {
@@ -156,6 +162,7 @@ router.post('/packs', async (req: Request, res: Response) => {
   doc.packs = packs as any;
   await doc.save();
   stickerIndex = null;
+  await reloadBotUi(); // yangi paket emojilari darhol xabarlarda ishlasin
   res.json(view(doc.toObject()));
 });
 
@@ -164,25 +171,34 @@ router.delete('/packs/:name', async (req: Request, res: Response) => {
   doc.packs = (doc.packs || []).filter((p: any) => p.name !== req.params.name) as any;
   await doc.save();
   stickerIndex = null;
+  await reloadBotUi();
   res.json(view(doc.toObject()));
 });
 
 // ── AI bilan bezash (qoralama) ──
+// Fonda ishlaydi (owner 2026-10-23: "hardoim error beryapti lekin ishlayapti" — AI uzoq o'ylaganda brauzer
+// so'rovi uzilardi). POST darhol javob beradi (decorating: true), sahifa GET bilan tayyor bo'lguncha kutadi.
+let decorateJob: Promise<void> | null = null;
+let lastDecorateError: string | null = null;
+export function __decorateJobForTests() { return decorateJob; }
 router.post('/auto-decorate', async (req: Request, res: Response) => {
   const doc = await getDoc();
   const packs = (doc.toObject().packs || []) as BotEmojiPack[];
   if (!packs.length) return res.status(400).json({ error: "Avval kamida bitta emoji paketini qo'shing" });
-  const useAi = req.body?.useAi !== false;
-  // AI uzoq javob bersa (model band) — 25 s'dan keyin kalit so'zlar bo'yicha tanlanadi; ulanish uzilib qolmasin
-  const aiWithTimeout = (prompt: string) => Promise.race([
-    geminiTextToJson(prompt),
-    new Promise<never>((_, rej) => setTimeout(() => rej(new Error('AI 25 s ichida javob bermadi')), 25_000)),
-  ]);
-  const draft = await autoDecorate(packs, useAi ? aiWithTimeout : null);
-  doc.draft = draft as any;
-  doc.markModified('draft');
-  await doc.save();
-  res.json(view(doc.toObject()));
+  if (!decorateJob) {
+    const useAi = req.body?.useAi !== false;
+    const aiWithTimeout = (prompt: string) => Promise.race([
+      geminiTextToJson(prompt),
+      new Promise<never>((_, rej) => setTimeout(() => rej(new Error('AI 90 s ichida javob bermadi')), 90_000)),
+    ]);
+    lastDecorateError = null;
+    decorateJob = (async () => {
+      const draft = await autoDecorate(packs, useAi ? aiWithTimeout : null);
+      await BotUiConfig.updateOne({ key: 'global' }, { $set: { draft } });
+    })().catch((e: any) => { lastDecorateError = String(e?.message || e).slice(0, 200); })
+      .finally(() => { decorateJob = null; });
+  }
+  res.status(202).json({ ...view(doc.toObject()), decorating: true });
 });
 
 router.post('/draft/apply', async (req: Request, res: Response) => {
@@ -205,6 +221,10 @@ router.post('/draft/apply', async (req: Request, res: Response) => {
   doc.buttons = buttons as any;
   doc.markModified('buttons');
   doc.messageEmoji = sanitizeMessageEmoji([...me].map(([emoji, id]) => ({ emoji, id })));
+  const prefix: Record<string, string> = { ...(doc.messagePrefix || {}) };
+  for (const [k, id] of Object.entries<any>(draft.prefix || {})) if (MESSAGE_KIND_KEYS.has(k) && ID_RE.test(String(id))) prefix[k] = String(id);
+  doc.messagePrefix = prefix as any;
+  doc.markModified('messagePrefix');
   doc.draft = null;
   doc.updatedBy = req.user?.userId;
   await doc.save();

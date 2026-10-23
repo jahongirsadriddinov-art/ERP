@@ -79,7 +79,8 @@ async function withBotUi<T>(text: any, opts: any, send: (text: any, opts: any) =
   const dOpts = markup !== undefined && markup !== opts?.reply_markup ? { ...(m.opts || {}), reply_markup: markup } : m.opts;
   if (m.text === text && dOpts === opts) return send(text, opts);
   try { return await send(m.text, dOpts); }
-  catch (e) { if (isBadRequest(e) && !isParseError(e)) return send(text, opts); throw e; }
+  // bezakli variant rad etilsa (Premium yo'q, HTML'ga o'girishda xato) — asl xabar o'zgarishsiz yuboriladi
+  catch (e) { if (isBadRequest(e)) return send(text, opts); throw e; }
 }
 const rawSendMessage0 = bot.sendMessage.bind(bot);
 const rawSendMessage = (chatId: any, text: any, opts?: any) => withBotUi(text, opts, (t, o) => rawSendMessage0(chatId, t, o));

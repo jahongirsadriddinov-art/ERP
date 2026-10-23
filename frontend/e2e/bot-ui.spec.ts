@@ -44,7 +44,8 @@ async function mockApi(page: Page, st: State) {
       if (path === '/packs' && method === 'POST') { st.packs = [pack]; return json(view()); }
       if (path === '/auto-decorate') {
         st.draft = { source: 'ai', createdAt: new Date().toISOString(), buttons: { confirmYes: { iconCustomEmojiId: '1001', style: 'success' }, kb_chat: { iconCustomEmojiId: '1003' } }, messageEmoji: { '✅': '1001' } };
-        return json(view());
+        // fonda ishlaydi: POST darhol "decorating", qoralama keyingi GET'da keladi
+        return json({ ...view(), draft: null, decorating: true });
       }
       if (path === '/draft/apply') {
         st.config = { ...st.config, buttons: { ...st.config.buttons, confirmYes: { iconCustomEmojiId: '1001', style: 'success' }, kb_chat: { ...(st.config.buttons.kb_chat || {}), iconCustomEmojiId: '1003' } }, messageEmoji: [{ emoji: '✅', id: '1001' }] };
@@ -110,6 +111,7 @@ test('Dasturchi paneli → Bot dizayni: paket, matn/rang/emoji, AI qoralama, saq
 
   // AI bilan bezash → qoralama → qo'llash (matn tahriri saqlanib qoladi)
   await page.getByTestId('botui-ai').click();
+  await expect(page.getByTestId('botui-decorating')).toBeVisible();
   await expect(page.getByTestId('botui-draft')).toContainText('2 ta tugma');
   await page.getByTestId('botui-draft-apply').click();
   await expect(page.getByTestId('botui-draft')).toHaveCount(0);

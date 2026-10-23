@@ -33,6 +33,8 @@ export interface BotUiDraft {
   createdAt: Date;
   buttons: Record<string, { iconCustomEmojiId?: string; style?: BotButtonStyle }>;
   messageEmoji: Record<string, string>;
+  /** xabar turi → custom_emoji_id (emojisiz xabar boshiga) */
+  prefix?: Record<string, string>;
   note?: string;
 }
 
@@ -42,6 +44,9 @@ export interface IBotUiConfig extends Document {
   /** oddiy emoji → custom_emoji_id (xabar matnlarida almashtiriladi) */
   messageEmoji: { emoji: string; id: string }[];
   messageEmojiEnabled: boolean;
+  /** xabar turi (services/botUi/messageKinds) → custom_emoji_id; emojisiz xabar boshiga qo'yiladi */
+  messagePrefix: Record<string, string>;
+  messagePrefixEnabled: boolean;
   /** tugmaga ikonka qo'yilganda matn boshidagi oddiy emoji olib tashlansin (ikki marta ko'rinmasin) */
   stripEmojiWhenIcon: boolean;
   commands: { command: string; enabled: boolean; description: { uz?: string; ru?: string } }[];
@@ -61,6 +66,8 @@ const BotUiConfigSchema = new Schema<IBotUiConfig>({
   buttons: { type: Schema.Types.Mixed, default: {} },
   messageEmoji: { type: [{ emoji: String, id: String, _id: false }], default: [] },
   messageEmojiEnabled: { type: Boolean, default: true },
+  messagePrefix: { type: Schema.Types.Mixed, default: {} },
+  messagePrefixEnabled: { type: Boolean, default: true },
   stripEmojiWhenIcon: { type: Boolean, default: true },
   commands: { type: [{ command: String, enabled: { type: Boolean, default: true }, description: { uz: String, ru: String }, _id: false }], default: [] },
   packs: { type: [{ name: String, title: String, stickers: [StickerSchema], loadedAt: Date, _id: false }], default: [] },

@@ -12,12 +12,12 @@ type CatalogItem = { key: string; group: string; kind: "reply" | "inline"; meani
 type CommandItem = { command: string; meaning: string; defaults: { uz: string; ru: string }; aiOnly?: boolean };
 type Sticker = { id: string; emoji: string; animated?: boolean; video?: boolean };
 type Pack = { name: string; title: string; count: number; stickers: Sticker[] };
-type Draft = { source: "ai" | "keywords"; createdAt: string; buttons: Record<string, { iconCustomEmojiId?: string; style?: Style }>; messageEmoji: Record<string, string>; note?: string };
+type Draft = { source: "ai" | "keywords"; createdAt: string; buttons: Record<string, { iconCustomEmojiId?: string; style?: Style }>; messageEmoji: Record<string, string>; prefix?: Record<string, string>; note?: string };
 type Cmd = { command: string; enabled: boolean; description: { uz?: string; ru?: string } };
 type Data = {
   catalog: CatalogItem[]; commandsCatalog: CommandItem[]; messageEmojiCandidates: string[];
-  config: { buttons: Record<string, Override>; messageEmoji: { emoji: string; id: string }[]; messageEmojiEnabled: boolean; stripEmojiWhenIcon: boolean; commands: Cmd[] };
-  packs: Pack[]; draft: Draft | null; commandsError?: string | null;
+  config: { buttons: Record<string, Override>; messageEmoji: { emoji: string; id: string }[]; messageEmojiEnabled: boolean; messagePrefixEnabled?: boolean; stripEmojiWhenIcon: boolean; commands: Cmd[] };
+  packs: Pack[]; draft: Draft | null; commandsError?: string | null; decorating?: boolean; decorateError?: string | null;
 };
 
 const URL_BASE = `${API_BASE}/api/dev/bot-ui`;
@@ -33,7 +33,7 @@ const TXT = {
     draftInfo: (b: number, m: number) => `${b} ta tugma, ${m} ta xabar emojisi taklif qilindi`, buttons: "Tugmalar", preview: "Ko'rinishi", none: "Yo'q", pick: "Emoji tanlash",
     style: { "": "Standart", primary: "Ko'k", success: "Yashil", danger: "Qizil" } as Record<Style, string>,
     groups: { main: "Asosiy", admin: "Direktor", worker: "Ishchi", dev: "Dasturchi", system: "Tizim", inline: "Xabar ostida" } as Record<string, string>,
-    strip: "Ikonka qo'yilsa matndagi oddiy emoji olib tashlansin", msgs: "Xabarlardagi emoji", msgsOn: "Xabarlarda premium emoji ishlatilsin", cmds: "Buyruqlar", noPacks: "Avval emoji paketini qo'shing (t.me/addemoji/... havolasi).", search: "Emoji bo'yicha qidirish", aiOnly: "AI yoqilganda", visible: "Menyuda",
+    strip: "Ikonka qo'yilsa matndagi oddiy emoji olib tashlansin", msgs: "Xabarlardagi emoji", msgsOn: "Xabarlarda premium emoji ishlatilsin", prefixOn: "Emojisiz xabar boshiga mazmuniga mos emoji qo'yilsin", decorating: "AI bezamoqda… (1 daqiqagacha, sahifani yopsangiz ham davom etadi)", decorateFail: "AI bezay olmadi", cmds: "Buyruqlar", noPacks: "Avval emoji paketini qo'shing (t.me/addemoji/... havolasi).", search: "Emoji bo'yicha qidirish", aiOnly: "AI yoqilganda", visible: "Menyuda",
   },
   ru: {
     title: "Дизайн бота", hint: "Премиум-эмодзи и цвет на кнопках (Telegram Bot API: icon_custom_emoji_id, style), премиум-эмодзи в сообщениях. Работает, если у ВЛАДЕЛЬЦА бота есть Telegram Premium. Пустое поле — стандартный текст.",
@@ -42,7 +42,7 @@ const TXT = {
     draftInfo: (b: number, m: number) => `Предложено: ${b} кнопок, ${m} эмодзи сообщений`, buttons: "Кнопки", preview: "Предпросмотр", none: "Нет", pick: "Выбрать эмодзи",
     style: { "": "Обычный", primary: "Синий", success: "Зелёный", danger: "Красный" } as Record<Style, string>,
     groups: { main: "Основные", admin: "Директор", worker: "Работник", dev: "Разработчик", system: "Системные", inline: "Под сообщением" } as Record<string, string>,
-    strip: "Убирать обычный эмодзи из текста, если есть иконка", msgs: "Эмодзи в сообщениях", msgsOn: "Использовать премиум-эмодзи в сообщениях", cmds: "Команды", noPacks: "Сначала добавьте набор эмодзи (ссылка t.me/addemoji/...).", search: "Поиск по эмодзи", aiOnly: "при включённом ИИ", visible: "В меню",
+    strip: "Убирать обычный эмодзи из текста, если есть иконка", msgs: "Эмодзи в сообщениях", msgsOn: "Использовать премиум-эмодзи в сообщениях", prefixOn: "Ставить подходящий эмодзи в начало сообщений без эмодзи", decorating: "ИИ оформляет… (до минуты, можно закрыть страницу)", decorateFail: "ИИ не смог оформить", cmds: "Команды", noPacks: "Сначала добавьте набор эмодзи (ссылка t.me/addemoji/...).", search: "Поиск по эмодзи", aiOnly: "при включённом ИИ", visible: "В меню",
   },
 };
 
@@ -93,7 +93,7 @@ export default function BotUiPanel() {
   const [buttons, setButtons] = useState<Record<string, Override>>({});
   const [msgEmoji, setMsgEmoji] = useState<Record<string, string>>({});
   const [cmds, setCmds] = useState<Cmd[]>([]);
-  const [flags, setFlags] = useState({ messageEmojiEnabled: true, stripEmojiWhenIcon: true });
+  const [flags, setFlags] = useState({ messageEmojiEnabled: true, messagePrefixEnabled: true, stripEmojiWhenIcon: true });
   const [group, setGroup] = useState<string>("main");
   const [picker, setPicker] = useState<string | null>(null);
   const [packLink, setPackLink] = useState("");
@@ -108,11 +108,31 @@ export default function BotUiPanel() {
     setButtons(d.config.buttons || {});
     setMsgEmoji(Object.fromEntries((d.config.messageEmoji || []).map((e) => [e.emoji, e.id])));
     setCmds(d.commandsCatalog.map((c) => d.config.commands.find((x) => x.command === c.command) || { command: c.command, enabled: true, description: {} }));
-    setFlags({ messageEmojiEnabled: d.config.messageEmojiEnabled, stripEmojiWhenIcon: d.config.stripEmojiWhenIcon });
+    setFlags({ messageEmojiEnabled: d.config.messageEmojiEnabled, messagePrefixEnabled: d.config.messagePrefixEnabled !== false, stripEmojiWhenIcon: d.config.stripEmojiWhenIcon });
     setDirty(false);
   }, []);
 
   useEffect(() => { call("").then((d) => adopt(d)).catch((e) => toast.error(e.message)); }, [adopt]);
+
+  // AI bezash fonda ishlaydi (owner 2026-10-23: so'rov uzilib "xato" chiqardi) — tayyor bo'lguncha har 2.5 s so'raladi
+  const decorating = !!data?.decorating;
+  useEffect(() => {
+    if (!decorating) return;
+    let stop = false;
+    const started = Date.now();
+    const tick = async () => {
+      if (stop) return;
+      try {
+        const d = await call("");
+        if (stop) return;
+        adopt(d, true);
+        if (!d.decorating) { if (d.decorateError) toast.error(`${L.decorateFail}: ${d.decorateError}`); return; }
+      } catch { /* tarmoq uzilsa — keyingi urinish */ }
+      if (Date.now() - started < 3 * 60_000) setTimeout(tick, 2500);
+    };
+    const t = setTimeout(tick, 2500);
+    return () => { stop = true; clearTimeout(t); };
+  }, [decorating, adopt, L.decorateFail]);
 
   const stickers = useMemo(() => (data?.packs || []).flatMap((p) => p.stickers), [data]);
   const emojiOf = useCallback((id?: string) => stickers.find((s) => s.id === id)?.emoji, [stickers]);
@@ -174,13 +194,18 @@ export default function BotUiPanel() {
         <h2 className="text-base font-bold">{L.title}</h2>
         <p className="text-xs text-muted-foreground mt-1">{L.hint}</p>
         <div className="flex flex-wrap gap-2 mt-3">
-          <button type="button" disabled={busy || !data.packs.length} data-testid="botui-ai" onClick={() => run(async () => adopt(await call("/auto-decorate", { method: "POST", body: "{}" }), true))}
+          <button type="button" disabled={busy || decorating || !data.packs.length} data-testid="botui-ai" onClick={() => run(async () => adopt(await call("/auto-decorate", { method: "POST", body: "{}" }), true))}
             className="px-3.5 py-2 rounded-full bg-primary text-white text-sm font-semibold disabled:opacity-50">{L.ai}</button>
           <button type="button" disabled={busy} data-testid="botui-reset" onClick={() => { if (window.confirm(L.resetAsk)) void run(async () => adopt(await call("/reset", { method: "POST", body: "{}" }))); }}
             className="px-3.5 py-2 rounded-full bg-muted text-sm font-semibold">{L.reset}</button>
         </div>
       </div>
 
+      {decorating && (
+        <div className="rounded-2xl border border-primary/30 bg-primary/10 p-3 text-sm font-medium flex items-center gap-2" data-testid="botui-decorating">
+          <span className="w-4 h-4 rounded-full border-2 border-primary border-t-transparent animate-spin" />{L.decorating}
+        </div>
+      )}
       {data.draft && (
         <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3" data-testid="botui-draft">
           <p className="text-sm font-semibold">{L.draft} ({data.draft.source === "ai" ? "AI" : "keywords"}): {L.draftInfo(draftCount[0], draftCount[1])}</p>
@@ -288,6 +313,9 @@ export default function BotUiPanel() {
             <input type="checkbox" checked={flags.messageEmojiEnabled} onChange={(e) => { setDirty(true); setFlags((f) => ({ ...f, messageEmojiEnabled: e.target.checked })); }} />{L.msgsOn}
           </label>
         </div>
+        <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-2" data-testid="botui-prefix">
+          <input type="checkbox" checked={flags.messagePrefixEnabled} onChange={(e) => { setDirty(true); setFlags((f) => ({ ...f, messagePrefixEnabled: e.target.checked })); }} />{L.prefixOn}
+        </label>
         <div className="flex flex-wrap gap-1.5">
           {data.messageEmojiCandidates.map((e) => (
             <button key={e} type="button" onClick={() => setPicker(picker === `msg:${e}` ? null : `msg:${e}`)} data-testid={`botui-msg-${e}`}

@@ -39,7 +39,7 @@ import { MongoMemoryServer } from 'mongodb-memory-server';
 import User from '../models/User';
 import BotUiConfig from '../models/BotUiConfig';
 import { requireAuth, requireDeveloper, JWT_SECRET } from '../middleware/auth';
-import botUiRoutes, { stickerImageRouter } from './botUi';
+import botUiRoutes, { stickerImageRouter, __decorateJobForTests } from './botUi';
 import { decorateMarkup, __resetBotUiForTests } from '../services/botUi/runtime';
 import { tb } from '../i18n/bot';
 
@@ -137,14 +137,14 @@ describe('/api/dev/bot-ui', () => {
       buttons: { confirmYes: { icon: '1001', style: 'success' }, confirmNo: { icon: '1002', style: 'danger' }, kb_objects: { icon: '1004', style: 'pink' }, bogus: { icon: '1001' }, kb_report: { icon: '555' } },
       messages: { '✅': '1001', '🏗': '1004', '🔥': '424242' },
     };
-    const r = await api('dev').post('/auto-decorate');
-    expect(r.status).toBe(200);
+    const r = await decorate();
     expect(gem.prompt).toContain('confirmYes');
+    expect(gem.prompt).toContain('KINDS');
     expect(gem.prompt).toContain('1003 💬');
     const d = r.body.draft;
     expect(d.source).toBe('ai');
     expect(d.buttons.confirmYes).toEqual({ iconCustomEmojiId: '1001', style: 'success' });
-    expect(d.buttons.kb_objects).toEqual({ iconCustomEmojiId: '1004' }); // noto'g'ri style tashlandi
+    expect(d.buttons.kb_objects).toEqual({ iconCustomEmojiId: '1004', style: 'primary' }); // noto'g'ri style → vazifasiga qarab
     expect(d.buttons.bogus).toBeUndefined();
     expect(d.buttons.kb_report?.iconCustomEmojiId).toBeUndefined(); // paketda yo'q id
     expect(d.messageEmoji['🔥']).toBeUndefined();
@@ -163,9 +163,8 @@ describe('/api/dev/bot-ui', () => {
 
   it('AI xatosi → kalit so\'zlar bo\'yicha qoralama (izoh bilan)', async () => {
     gem.fail = true;
-    const r = await api('dev').post('/auto-decorate');
+    const r = await decorate();
     gem.fail = false;
-    expect(r.status).toBe(200);
     expect(r.body.draft.source).toBe('keywords');
     expect(r.body.draft.note).toMatch(/AI xatosi/);
     expect(r.body.draft.buttons.confirmYes.iconCustomEmojiId).toBe('1001'); // ✅ → ✅
@@ -195,3 +194,14 @@ describe('/api/dev/bot-ui', () => {
 });
 
 function tgDownloads() { return tg.downloads; }
+
+// AI bezash fonda ishlaydi: POST darhol 202 (decorating), tayyor bo'lgach GET qoralamani qaytaradi
+async function decorate() {
+  const p = await api('dev').post('/auto-decorate');
+  expect(p.status).toBe(202);
+  expect(p.body.decorating).toBe(true);
+  await __decorateJobForTests();
+  const r = await api('dev').get();
+  expect(r.body.decorating).toBe(false);
+  return r;
+}

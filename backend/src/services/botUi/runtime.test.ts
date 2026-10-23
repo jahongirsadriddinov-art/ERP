@@ -129,11 +129,26 @@ describe('botUi runtime — xabarlardagi premium emoji', () => {
     expect(r.text).toBe('<b><tg-emoji emoji-id="900">✅</tg-emoji> OK</b> <code>✅</code>');
   });
 
-  it('Markdown (eski) rejimi va o\'chirilgan holat o\'zgarmaydi', () => {
+  it('Markdown (eski) rejimi HTML\'ga o\'giriladi va bezaladi; o\'chirilgan holat o\'zgarmaydi', () => {
     use({ messageEmoji: [{ emoji: '✅', id: '900' }] });
     const o = { parse_mode: 'Markdown' };
-    expect(decorateMessage('✅ *ok*', o)).toEqual({ text: '✅ *ok*', opts: o });
+    expect(decorateMessage('✅ *ok* _x_ `a<b` [s](https://e.uz) 2\\*3', o)).toEqual({
+      text: '<tg-emoji emoji-id="900">✅</tg-emoji> <b>ok</b> <i>x</i> <code>a&lt;b</code> <a href="https://e.uz">s</a> 2*3',
+      opts: { parse_mode: 'HTML' },
+    });
     use({ messageEmoji: [{ emoji: '✅', id: '900' }], messageEmojiEnabled: false });
     expect(decorateMessage('✅', undefined).opts).toBeUndefined();
+  });
+  it('emojisiz xabar — mazmuniga mos premium emoji boshiga; xaritada yo\'q emoji paketdan topiladi', () => {
+    use({ packs: [{ stickers: [{ id: '501', emoji: '✅' }, { id: '502', emoji: '💰' }, { id: '503', emoji: 'ℹ️' }, { id: '504', emoji: '🔥' }] }] });
+    const a = decorateMessage("Chiqim saqlandi", undefined);
+    expect(a.text).toBe('✅ Chiqim saqlandi');
+    expect(a.opts.entities).toEqual([{ type: 'custom_emoji', offset: 0, length: 1, custom_emoji_id: '501' }]);
+    const b = decorateMessage('<b>Balans</b>: 5 000 so\'m', { parse_mode: 'HTML' });
+    expect(b.text).toBe('<tg-emoji emoji-id="502">💰</tg-emoji> <b>Balans</b>: 5 000 so\'m');
+    const c = decorateMessage('Yangi 🔥 xabar', undefined);
+    expect(c.opts.entities).toEqual([{ type: 'custom_emoji', offset: 6, length: 2, custom_emoji_id: '504' }]);
+    use({ packs: [{ stickers: [{ id: '501', emoji: '✅' }] }], messagePrefixEnabled: false });
+    expect(decorateMessage('Chiqim saqlandi', undefined)).toEqual({ text: 'Chiqim saqlandi', opts: undefined });
   });
 });

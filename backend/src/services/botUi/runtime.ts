@@ -11,6 +11,8 @@
 import BotUiConfig, { type BotButtonOverride, type BotButtonStyle } from '../../models/BotUiConfig';
 import { BOT_UI_CATALOG, UI_LANGS, defaultLabel, type BotUiCatalogItem, type UiLang } from './catalog';
 import { latinToCyrillicUz } from '../../utils/transliterate';
+import { pickByEmoji } from './autoDecorate';
+import { classifyMessage, markdownToHtml, MESSAGE_KIND_KEYS } from './messageKinds';
 
 export const BOT_UI_CACHE_MS = 60_000;
 const STYLES = new Set<BotButtonStyle>(['primary', 'success', 'danger']);
@@ -20,8 +22,15 @@ export interface BotUiSnapshot {
   messageEmoji: Map<string, string>; // FE0F'siz emoji → custom_emoji_id
   messageEmojiEnabled: boolean;
   stripEmojiWhenIcon: boolean;
+  /** qo'shilgan paketlardagi emojilar — xaritada yo'q oddiy emoji uchun ham mosi topiladi */
+  stickers: { id: string; emoji: string }[];
+  /** xabar turi (messageKinds) → custom_emoji_id: emojisiz xabar boshiga qo'yiladi */
+  messagePrefix: Record<string, string>;
+  messagePrefixEnabled: boolean;
 }
-const EMPTY: BotUiSnapshot = { buttons: {}, messageEmoji: new Map(), messageEmojiEnabled: true, stripEmojiWhenIcon: true };
+const EMPTY: BotUiSnapshot = { buttons: {}, messageEmoji: new Map(), messageEmojiEnabled: true, stripEmojiWhenIcon: true, stickers: [], messagePrefix: {}, messagePrefixEnabled: true };
+// oddiy emoji → paketdagi mos id (yoki null); snapshot almashganda tozalanadi
+let resolved = new Map<string, string | null>();
 
 let snap: BotUiSnapshot = EMPTY;
 let loadedAt = 0;
@@ -75,14 +84,37 @@ export function normalizeSnapshot(doc: any): BotUiSnapshot {
   for (const e of doc.messageEmoji || []) {
     if (e?.emoji && /^\d{1,32}$/.test(String(e.id || ''))) messageEmoji.set(stripVs(String(e.emoji)), String(e.id));
   }
+  const stickers: { id: string; emoji: string }[] = [];
+  const seen = new Set<string>();
+  for (const p of doc.packs || []) for (const st of p?.stickers || []) {
+    if (!st?.id || !/^\d{1,32}$/.test(String(st.id)) || seen.has(String(st.id))) continue;
+    seen.add(String(st.id)); stickers.push({ id: String(st.id), emoji: String(st.emoji || '') });
+  }
+  const messagePrefix: Record<string, string> = {};
+  for (const [k, v] of Object.entries<any>(doc.messagePrefix || {})) if (MESSAGE_KIND_KEYS.has(k) && /^\d{1,32}$/.test(String(v))) messagePrefix[k] = String(v);
   return {
     buttons, messageEmoji,
     messageEmojiEnabled: doc.messageEmojiEnabled !== false,
     stripEmojiWhenIcon: doc.stripEmojiWhenIcon !== false,
+    stickers, messagePrefix,
+    messagePrefixEnabled: doc.messagePrefixEnabled !== false,
   };
 }
 
-export function setBotUiSnapshot(s: BotUiSnapshot) { snap = s; loadedAt = Date.now(); version++; }
+export function setBotUiSnapshot(s: BotUiSnapshot) { snap = s; loadedAt = Date.now(); version++; resolved = new Map(); }
+
+/** Oddiy emoji → premium id: dasturchi tanlagani, bo'lmasa paketdagi aynan shu (yoki ma'nodosh) emoji. */
+function emojiIdFor(e: string): string | undefined {
+  const k = stripVs(e);
+  const set = snap.messageEmoji.get(k);
+  if (set) return set;
+  if (!snap.stickers.length) return undefined;
+  if (!resolved.has(k)) {
+    if (resolved.size > 2000) resolved.clear();
+    resolved.set(k, pickByEmoji(k, snap.stickers));
+  }
+  return resolved.get(k) || undefined;
+}
 export function getBotUiSnapshot() { return snap; }
 export function botUiVersion() { return version; }
 
@@ -214,11 +246,11 @@ export function canonicalizeUpdate(update: any): void {
 const PICTO_RE = /\p{Extended_Pictographic}️?/gu;
 const SKIP_ENTITY = new Set(['custom_emoji', 'code', 'pre', 'url', 'text_link', 'email', 'phone_number', 'mention', 'bot_command']);
 
-function plainEntities(text: string, existing: any[] | undefined, map: Map<string, string>) {
+function plainEntities(text: string, existing: any[] | undefined, lookup: (e: string) => string | undefined) {
   const ranges = (existing || []).filter(e => SKIP_ENTITY.has(e?.type)).map(e => [e.offset, e.offset + e.length]);
   const added: any[] = [];
   for (const m of text.matchAll(PICTO_RE)) {
-    const id = map.get(stripVs(m[0]));
+    const id = lookup(m[0]);
     if (!id) continue;
     const off = m.index!;
     if (ranges.some(([a, b]) => off < b && off + m[0].length > a)) continue;
@@ -228,7 +260,7 @@ function plainEntities(text: string, existing: any[] | undefined, map: Map<strin
   return added;
 }
 
-function htmlReplace(text: string, map: Map<string, string>): string {
+function htmlReplace(text: string, lookup: (e: string) => string | undefined): string {
   let depth = 0; let count = 0;
   return text.split(/(<[^>]+>)/g).map(seg => {
     if (seg.startsWith('<')) {
@@ -238,7 +270,7 @@ function htmlReplace(text: string, map: Map<string, string>): string {
     }
     if (depth > 0) return seg;
     return seg.replace(PICTO_RE, (e) => {
-      const id = map.get(stripVs(e));
+      const id = lookup(e);
       if (!id || count >= 100) return e;
       count++;
       return `<tg-emoji emoji-id="${id}">${e}</tg-emoji>`;
@@ -246,19 +278,44 @@ function htmlReplace(text: string, map: Map<string, string>): string {
   }).join('');
 }
 
-/** sendMessage/editMessageText uchun matn+opts — mos premium emoji qo'shadi. Markdown (eski) rejimi o'zgarmaydi. */
+/**
+ * sendMessage/editMessageText uchun matn+opts — premium emoji qo'shadi (owner 2026-10-23: hamma xabarda):
+ *  • matndagi har bir oddiy emoji → mos premium emoji (sozlangan, bo'lmasa paketdagi o'xshashi);
+ *  • emojisiz xabar boshiga — mazmuniga mos premium emoji (messageKinds);
+ *  • eski Markdown rejimi HTML'ga o'giriladi (Markdown premium emojini qo'llamaydi).
+ * Telegram rad etsa bot.ts bezaksiz asl xabarni qayta yuboradi.
+ */
 export function decorateMessage(text: any, opts: any): { text: any; opts: any } {
-  if (typeof text !== 'string' || !text || !snap.messageEmojiEnabled || !snap.messageEmoji.size) return { text, opts };
-  const mode = String(opts?.parse_mode || '');
+  if (typeof text !== 'string' || !text || !snap.messageEmojiEnabled) return { text, opts };
+  if (!snap.messageEmoji.size && !snap.stickers.length && !Object.keys(snap.messagePrefix).length) return { text, opts };
+  let mode = String(opts?.parse_mode || '');
+  let body = text;
+  let o = opts;
+  if (mode === 'Markdown') { body = markdownToHtml(text); mode = 'HTML'; o = { ...(opts || {}), parse_mode: 'HTML' }; }
+  const plain = mode.toUpperCase() === 'HTML' ? body.replace(/<[^>]+>/g, '') : body;
+  const hasEmoji = new RegExp(PICTO_RE.source, 'u').test(plain);
+  let prefix: { e: string; id: string } | null = null;
+  if (!hasEmoji && snap.messagePrefixEnabled) {
+    const kind = classifyMessage(plain);
+    const id = kind ? (snap.messagePrefix[kind.key] || emojiIdFor(kind.emoji)) : undefined;
+    if (kind && id) prefix = { e: kind.emoji, id };
+  }
   if (!mode) {
-    const added = plainEntities(text, opts?.entities, snap.messageEmoji);
-    if (!added.length) return { text, opts };
-    const entities = [...(Array.isArray(opts?.entities) ? opts.entities : []), ...added].sort((a, b) => a.offset - b.offset);
-    return { text, opts: { ...(opts || {}), entities } };
+    const added = plainEntities(body, o?.entities, emojiIdFor);
+    let entities = [...(Array.isArray(o?.entities) ? o.entities : []), ...added];
+    if (prefix) {
+      const head = `${prefix.e} `;
+      entities = entities.map(e => ({ ...e, offset: e.offset + head.length }));
+      entities.unshift({ type: 'custom_emoji', offset: 0, length: prefix.e.length, custom_emoji_id: prefix.id });
+      body = head + body;
+    }
+    if (!entities.length || (!added.length && !prefix)) return { text, opts };
+    return { text: body, opts: { ...(o || {}), entities: entities.sort((a, b) => a.offset - b.offset) } };
   }
   if (mode.toUpperCase() === 'HTML') {
-    const next = htmlReplace(text, snap.messageEmoji);
-    return next === text ? { text, opts } : { text: next, opts };
+    let next = htmlReplace(body, emojiIdFor);
+    if (prefix) next = `<tg-emoji emoji-id="${prefix.id}">${prefix.e}</tg-emoji> ${next}`;
+    return next === text && o === opts ? { text, opts } : { text: next, opts: o };
   }
   return { text, opts };
 }

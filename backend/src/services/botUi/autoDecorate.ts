@@ -3,6 +3,7 @@
 // AI (Gemini) ishlamasa — oddiy emoji mosligi va kalit so'zlar bo'yicha tanlanadi.
 import type { BotButtonStyle, BotEmojiPack, BotUiDraft } from '../../models/BotUiConfig';
 import { BOT_UI_CATALOG, messageEmojiCandidates, type BotUiCatalogItem } from './catalog';
+import { MESSAGE_KINDS, MESSAGE_KIND_KEYS } from './messageKinds';
 
 type Sticker = { id: string; emoji: string };
 type AiFn = (prompt: string) => Promise<any>;
@@ -62,13 +63,15 @@ export function pickByEmoji(base: string, stickers: Sticker[], used?: Set<string
   return null;
 }
 
-/** Tugma vazifasi bo'yicha rang: bekor/o'chirish/orqaga → danger, tasdiq/saqlash → success, asosiy amal → primary. */
-export function heuristicStyle(item: BotUiCatalogItem): BotButtonStyle | undefined {
+/** Tugma vazifasi bo'yicha rang (owner 2026-10-23: har bir tugmaga): bekor/o'chirish/orqaga → qizil,
+ *  tasdiq/saqlash/kelish → yashil, qolgan hamma amal → ko'k. */
+export function heuristicStyle(item: BotUiCatalogItem): BotButtonStyle {
   const k = item.key.toLowerCase();
   if (/\(danger\)/.test(item.meaning) || /cancel|reject|confirmno|disable|exit|end|back|checkout/.test(k)) return 'danger';
   if (/\(success\)/.test(item.meaning) || /confirm|accept|save|okbtn|enable|checkin/.test(k)) return 'success';
-  if (['kb_addExpense', 'kb_dailyReport', 'kb_openSite', 'kb_pendingApprovals', 'subPayLinkBtn', 'ai_ai', 'kb_broadcast'].includes(item.key)) return 'primary';
-  return undefined;
+  if (/delete|remove|stop|logout|leave|no$/.test(k) || /o'chir|удал|выйти|chiqish/i.test(item.defaults.uz)) return 'danger';
+  if (/approve|done|finish|yes$|pay/.test(k)) return 'success';
+  return 'primary';
 }
 
 function allStickers(packs: BotEmojiPack[]): Sticker[] {
@@ -97,7 +100,26 @@ export function keywordDraft(packs: BotEmojiPack[]): BotUiDraft {
     const id = pickByEmoji(e, stickers);
     if (id) messageEmoji[e] = id;
   }
-  return { source: 'keywords', createdAt: new Date(), buttons, messageEmoji };
+  const prefix: Record<string, string> = {};
+  for (const k of MESSAGE_KINDS) {
+    const id = pickByEmoji(k.emoji, stickers);
+    if (id) prefix[k.key] = id;
+  }
+  return { source: 'keywords', createdAt: new Date(), buttons, messageEmoji, prefix };
+}
+
+/** AI'ga yuboriladigan ro'yxat: har bir oddiy emoji uchun ko'pi bilan 3 ta variant, jami 300 — so'rov tez bo'lsin. */
+export function compactStickers(stickers: Sticker[]): Sticker[] {
+  const per = new Map<string, number>();
+  const out: Sticker[] = [];
+  for (const s of stickers) {
+    const k = vs(s.emoji) || '?';
+    const n = per.get(k) || 0;
+    if (n >= 3) continue;
+    per.set(k, n + 1); out.push(s);
+    if (out.length >= 300) break;
+  }
+  return out;
 }
 
 export function buildPrompt(stickers: Sticker[], emojis: string[]): string {
@@ -107,9 +129,10 @@ export function buildPrompt(stickers: Sticker[], emojis: string[]): string {
     'You decorate a Telegram bot of a construction-company ERP (Uzbek/Russian users).',
     'For EVERY button choose the single best custom emoji from EMOJIS (by meaning of the button and the emoji of each custom emoji),',
     'and a button style: "danger" (red) for cancel/reject/delete/disable/exit/back, "success" (green) for confirm/accept/save/enable/check-in,',
-    '"primary" (blue) for the few main actions, or "" (default) for the rest. Use "" for icon if nothing fits. Prefer different emojis for different buttons.',
-    'Also, for every plain emoji in MESSAGE_EMOJIS choose the best matching custom emoji id (same or very close meaning) or skip it.',
-    'Answer ONLY JSON: {"buttons":{"<key>":{"icon":"<id or empty>","style":"primary|success|danger|"}},"messages":{"<plain emoji>":"<id>"}}',
+    '"primary" (blue) for every other action. EVERY button must get a style and, whenever anything fits, an icon. Prefer different emojis for different buttons.',
+    'For every plain emoji in MESSAGE_EMOJIS choose the best matching custom emoji id (same or very close meaning).',
+    'For every message KIND choose the custom emoji that best fits messages of that kind (it is put in front of messages that have no emoji).',
+    'Answer ONLY JSON: {"buttons":{"<key>":{"icon":"<id or empty>","style":"primary|success|danger"}},"messages":{"<plain emoji>":"<id>"},"kinds":{"<kind key>":"<id>"}}',
     '',
     'BUTTONS (key | kind | meaning | current label):',
     btn,
@@ -119,11 +142,14 @@ export function buildPrompt(stickers: Sticker[], emojis: string[]): string {
     '',
     'MESSAGE_EMOJIS:',
     emojis.join(' '),
+    '',
+    'KINDS (key | meaning | typical emoji):',
+    MESSAGE_KINDS.map(k => `${k.key} | ${k.meaning} | ${k.emoji}`).join('\n'),
   ].join('\n');
 }
 
 /** AI natijasini tekshiradi: faqat mavjud kalitlar, mavjud emoji id'lari, ruxsat etilgan style'lar. */
-export function sanitizeAiResult(raw: any, stickers: Sticker[]): Pick<BotUiDraft, 'buttons' | 'messageEmoji'> {
+export function sanitizeAiResult(raw: any, stickers: Sticker[]): Pick<BotUiDraft, 'buttons' | 'messageEmoji' | 'prefix'> {
   const ids = new Set(stickers.map(s => s.id));
   const keys = new Set(BOT_UI_CATALOG.map(i => i.key));
   const buttons: BotUiDraft['buttons'] = {};
@@ -140,11 +166,13 @@ export function sanitizeAiResult(raw: any, stickers: Sticker[]): Pick<BotUiDraft
   for (const [e, id] of Object.entries<any>(raw?.messages || {})) {
     if (ids.has(String(id)) && /\p{Extended_Pictographic}/u.test(e) && e.length <= 8) messageEmoji[vs(e)] = String(id);
   }
-  return { buttons, messageEmoji };
+  const prefix: Record<string, string> = {};
+  for (const [k, id] of Object.entries<any>(raw?.kinds || {})) if (MESSAGE_KIND_KEYS.has(k) && ids.has(String(id))) prefix[k] = String(id);
+  return { buttons, messageEmoji, prefix };
 }
 
 export async function autoDecorate(packs: BotEmojiPack[], ai: AiFn | null): Promise<BotUiDraft> {
-  const stickers = allStickers(packs).slice(0, 800);
+  const stickers = compactStickers(allStickers(packs));
   if (!stickers.length) throw new Error('NO_PACKS');
   const fallback = keywordDraft(packs);
   if (!ai) return fallback;
@@ -154,8 +182,8 @@ export async function autoDecorate(packs: BotEmojiPack[], ai: AiFn | null): Prom
     if (!Object.keys(res.buttons).length) return { ...fallback, note: 'AI javobi bo\'sh — kalit so\'zlar bo\'yicha tanlandi' };
     // AI tanlamagan tugma/emoji'larni kalit so'z natijasi bilan to'ldiramiz
     const buttons = { ...res.buttons };
-    for (const [k, v] of Object.entries(fallback.buttons)) if (!buttons[k]) buttons[k] = v;
-    return { source: 'ai', createdAt: new Date(), buttons, messageEmoji: { ...fallback.messageEmoji, ...res.messageEmoji } };
+    for (const [k, v] of Object.entries(fallback.buttons)) buttons[k] = { ...v, ...(buttons[k] || {}) };
+    return { source: 'ai', createdAt: new Date(), buttons, messageEmoji: { ...fallback.messageEmoji, ...res.messageEmoji }, prefix: { ...fallback.prefix, ...res.prefix } };
   } catch (e: any) {
     return { ...fallback, note: `AI xatosi: ${String(e?.message || e).slice(0, 120)} — kalit so'zlar bo'yicha tanlandi` };
   }

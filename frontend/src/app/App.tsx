@@ -1271,6 +1271,9 @@ function AnnouncementsModal({ currentUser, onClose }: { currentUser: AppUser; on
 export let LIVE_USD_RATE = 12900;
 export let LIVE_EUR_RATE = 14100;
 export let LIVE_RATE_DATE = "";
+// Kapitalbank kursi (server bank.uz'dan oladi): buy — kirim, sell — chiqim
+export let LIVE_KAPITAL: { USD?: { buy: number; sell: number }; EUR?: { buy: number; sell: number }; updatedAt?: string } | null = null;
+export let LIVE_RATE_SOURCE = "";
 
 export async function fetchLiveCurrencyRates(): Promise<void> {
   try {
@@ -1280,6 +1283,8 @@ export async function fetchLiveCurrencyRates(): Promise<void> {
       LIVE_USD_RATE = data.USD || LIVE_USD_RATE;
       LIVE_EUR_RATE = data.EUR || LIVE_EUR_RATE;
       LIVE_RATE_DATE = data.date || "";
+      LIVE_KAPITAL = data.kapital || null;
+      LIVE_RATE_SOURCE = data.source || "";
     }
   } catch {}
 }

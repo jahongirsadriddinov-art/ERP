@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { fetchLiveCurrencyRates, fmt, LIVE_EUR_RATE, LIVE_USD_RATE, type Expense } from "../App";
+import { fetchLiveCurrencyRates, fmt, LIVE_EUR_RATE, LIVE_KAPITAL, LIVE_RATE_SOURCE, LIVE_USD_RATE, type Expense } from "../App";
 import { usePersistentState } from "../lib/persistentState";
 
 // Valyuta (owner 2026-10-23): kirim/chiqim so'm, dollar yoki yevroda kiritiladi — server kurs bo'yicha so'mga o'giradi
@@ -36,13 +36,17 @@ export function InUzsToggle({ value, onChange }: { value: boolean; onChange: (v:
 }
 
 /** Summa + valyuta tanlash; kiritilganda so'mdagi qiymati darhol ko'rinadi. */
-export function MoneyField({ amount, currency, onAmount, onCurrency, label, autoFocus, className }: {
+export function MoneyField({ amount, currency, onAmount, onCurrency, label, autoFocus, className, side = "sell" }: {
   amount: string; currency: Cur; onAmount: (v: string) => void; onCurrency: (c: Cur) => void; label: string; autoFocus?: boolean; className: string;
+  /** kirim — bank sotib olish kursi (buy), chiqim — sotish kursi (sell); server ham shunday hisoblaydi */
+  side?: "buy" | "sell";
 }) {
   const [, force] = useState(0);
   useEffect(() => { if (currency !== "UZS") void fetchLiveCurrencyRates().then(() => force((x) => x + 1)); }, [currency]);
   const n = Number(amount.replace(/\s/g, "").replace(",", ".")) || 0;
-  const rate = currency === "USD" ? LIVE_USD_RATE : currency === "EUR" ? LIVE_EUR_RATE : 1;
+  const kb = currency === "UZS" ? undefined : LIVE_KAPITAL?.[currency];
+  const custom = LIVE_RATE_SOURCE === "company";
+  const rate = currency === "UZS" ? 1 : (!custom && kb ? kb[side] : currency === "USD" ? LIVE_USD_RATE : LIVE_EUR_RATE);
   return (
     <div>
       <span className="text-xs font-semibold text-muted-foreground">{label}</span>
@@ -60,7 +64,7 @@ export function MoneyField({ amount, currency, onAmount, onCurrency, label, auto
       </div>
       {currency !== "UZS" && n > 0 && (
         <p className="text-xs text-muted-foreground mt-1.5" data-testid="money-preview">
-          ≈ <b className="text-foreground">{fmt(Math.round(n * rate))}</b> · {isRu() ? "курс" : "kurs"} 1 {SIGN[currency]} = {rate.toLocaleString("ru-RU")} {isRu() ? "сум" : "so'm"}
+          ≈ <b className="text-foreground">{fmt(Math.round(n * rate))}</b> · {isRu() ? "курс" : "kurs"} 1 {SIGN[currency]} = {rate.toLocaleString("ru-RU")} {isRu() ? "сум" : "so'm"}{!custom && kb ? ` · Kapitalbank (${side === "buy" ? (isRu() ? "покупка" : "sotib olish") : (isRu() ? "продажа" : "sotish")})` : ""}
         </p>
       )}
     </div>

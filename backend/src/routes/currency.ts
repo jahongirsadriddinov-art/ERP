@@ -34,10 +34,60 @@ async function fetchCBURates(): Promise<void> {
   }
 }
 
-// Bot/serverda boshqa valyutadagi summani so'mga o'girish uchun (firma kursi ustuvor)
-export async function getRatesForCompany(companyId?: string): Promise<{ USD: number; EUR: number }> {
+// ── Kapitalbank kursi (owner 2026-10-23: "Markaziy bankdan emas, Kapitalbankdagidek real, doim yangilanib tursin") ──
+// kapitalbank.uz Cloudflare himoyasi ortida (server so'roviga 403), shuning uchun kurs bank.uz'dagi Kapitalbank
+// sahifasidan olinadi: har valyuta uchun bank SOTIB OLISH (kirim — dollar bankka sotiladi) va SOTISH (chiqim — dollar
+// sotib olinadi) kursi. 30 daqiqa keshlanadi; olinmasa — Markaziy bank kursi (zaxira).
+export type BankRates = { USD?: { buy: number; sell: number }; EUR?: { buy: number; sell: number }; updatedAt?: string };
+let kapital: BankRates = {};
+let kapitalFetchedAt = 0;
+let kapitalLoading: Promise<void> | null = null;
+const KAPITAL_URL = 'https://bank.uz/uz/currency/bank/kapitalbank';
+
+/** bank.uz sahifasi matnidan Kapitalbank kurslari (test uchun eksport). */
+export function parseKapitalRates(html: string): BankRates {
+  const text = html.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ');
+  const out: BankRates = {};
+  const re = /Kod (USD|EUR) Birlik (\d+) Valyuta .{1,40}? Sotib olish ([\d ]+?(?:[.,]\d+)?) Sotish ([\d ]+?(?:[.,]\d+)?) Yangilanish vaqti ([\d.]+ [\d:]+)/g;
+  const num = (v: string) => Number(v.replace(/\s/g, '').replace(',', '.'));
+  for (const m of text.matchAll(re)) {
+    const unit = Number(m[2]) || 1;
+    const buy = num(m[3]) / unit, sell = num(m[4]) / unit;
+    // aqlga sig'adigan oraliq (sahifa tuzilishi o'zgarsa noto'g'ri raqam olinmasin)
+    if (!(buy > 1000 && sell > 1000 && buy < 100_000 && sell < 100_000 && sell >= buy * 0.9)) continue;
+    out[m[1] as 'USD' | 'EUR'] = { buy, sell };
+    out.updatedAt = out.updatedAt || m[5];
+  }
+  return out;
+}
+
+async function fetchKapitalRates(): Promise<void> {
+  try {
+    const res = await fetch(KAPITAL_URL, {
+      signal: AbortSignal.timeout(8000),
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Safari/537.36', 'Accept-Language': 'uz,ru;q=0.8' },
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const r = parseKapitalRates(await res.text());
+    if (r.USD) { kapital = r; }
+    else console.warn('[currency] Kapitalbank kursi sahifadan topilmadi');
+  } catch (e: any) {
+    console.warn('[currency] Kapitalbank kursi olinmadi:', e?.message);
+  } finally { kapitalFetchedAt = Date.now(); }
+}
+async function ensureKapital(): Promise<void> {
+  if (Date.now() - kapitalFetchedAt < 30 * 60_000) return;
+  kapitalLoading = kapitalLoading || fetchKapitalRates().finally(() => { kapitalLoading = null; });
+  await kapitalLoading;
+}
+export function getKapitalRates(): BankRates { return kapital; }
+
+// Bot/serverda boshqa valyutadagi summani so'mga o'girish uchun. Tartib: firma o'z kursi → Kapitalbank → Markaziy bank.
+// side: 'buy' — kirim (bank dollarni sotib oladi), 'sell' — chiqim (dollar sotib olinadi).
+export async function getRatesForCompany(companyId?: string, side: 'buy' | 'sell' = 'sell'): Promise<{ USD: number; EUR: number }> {
   if (Date.now() - lastFetch > 3600_000) await fetchCBURates();
-  let usd = cachedRates.USD, eur = cachedRates.EUR;
+  await ensureKapital();
+  let usd = kapital.USD?.[side] || cachedRates.USD, eur = kapital.EUR?.[side] || cachedRates.EUR;
   if (companyId) {
     const company: any = await Company.findById(companyId).select('customUsdRate customEurRate').lean().catch(() => null);
     if (company?.customUsdRate) usd = company.customUsdRate;
@@ -54,9 +104,10 @@ router.get('/rates', async (_req, res) => {
   if (Date.now() - lastFetch > 3600_000) {
     await fetchCBURates();
   }
+  await ensureKapital();
 
-  let usd = cachedRates.USD;
-  let eur = cachedRates.EUR;
+  let usd = kapital.USD?.sell || cachedRates.USD;
+  let eur = kapital.EUR?.sell || cachedRates.EUR;
   let custom = false;
 
   const t = getTenant();
@@ -71,7 +122,9 @@ router.get('/rates', async (_req, res) => {
     USD: usd,
     EUR: eur,
     date: new Date().toISOString().split('T')[0],
-    source: custom ? 'company' : (lastFetch > 0 ? 'CBU Uzbekistan' : 'hardcoded'),
+    source: custom ? 'company' : kapital.USD ? 'Kapitalbank' : (lastFetch > 0 ? 'CBU Uzbekistan' : 'hardcoded'),
+    // Kapitalbank: sotib olish (kirim) va sotish (chiqim) kurslari, bank yangilagan vaqt
+    kapital: kapital.USD ? kapital : null,
     // Admin panelda "CBU kursiga qaytarish" tugmasi uchun — firma o'z kursini
     // qo'ymagan bo'lsa ham CBU qiymati qanday ekanini frontend bilib turishi kerak.
     cbuUsd: cachedRates.USD,

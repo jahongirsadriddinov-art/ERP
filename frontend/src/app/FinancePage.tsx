@@ -593,7 +593,7 @@ export function EditExpenseModal({ expense, projects, onClose, onSaved }: { expe
       <div className="relative w-full sm:max-w-md bg-card rounded-t-3xl sm:rounded-3xl p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] space-y-3 max-h-[92dvh] overflow-y-auto animate-slide-up-fade" data-testid="edit-expense">
         <div className="mx-auto -mt-2 mb-1 h-1.5 w-10 rounded-full bg-muted sm:hidden" />
         <h3 className="text-base font-bold">{isIncome ? t('finance.editIncome', { defaultValue: "Kirimni o'zgartirish" }) : t('finance.editExpense', { defaultValue: "Chiqimni o'zgartirish" })}</h3>
-        <MoneyField label={t('finance.amountShort', { defaultValue: "Summa" })} amount={amount} currency={currency} onAmount={setAmount} onCurrency={setCurrency} className={field} />
+        <MoneyField label={t('finance.amountShort', { defaultValue: "Summa" })} amount={amount} currency={currency} onAmount={setAmount} onCurrency={setCurrency} className={field} side={isIncome ? "buy" : "sell"} />
         <label className="block"><span className="text-xs font-semibold text-muted-foreground">{t('finance.description', { defaultValue: 'Izoh' })}</span>
           <input value={description} maxLength={1000} onChange={(e) => setDescription(e.target.value)} className={field} /></label>
         {!isIncome && (

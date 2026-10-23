@@ -155,7 +155,7 @@ function AddIncomeModal({ currentUser, projects, onClose, onAdded }: { currentUs
       <div className="relative w-full sm:max-w-md bg-card rounded-t-3xl sm:rounded-3xl p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] space-y-3 animate-slide-up-fade" data-testid="income-modal">
         <div className="mx-auto -mt-2 mb-1 h-1.5 w-10 rounded-full bg-muted sm:hidden" />
         <h3 className="text-base font-bold">{k("addTitle")}</h3>
-        <MoneyField label={k("amount")} amount={amount} currency={currency} onAmount={setAmount} onCurrency={setCurrency} autoFocus className={field} />
+        <MoneyField label={k("amount")} amount={amount} currency={currency} onAmount={setAmount} onCurrency={setCurrency} autoFocus side="buy" className={field} />
         <label className="block"><span className="text-xs font-semibold text-muted-foreground">{k("source")}</span>
           <input value={description} maxLength={300} onChange={(e) => setDescription(e.target.value)} className={field} placeholder={k("sourcePh")} /></label>
         <div className="grid grid-cols-2 gap-2">

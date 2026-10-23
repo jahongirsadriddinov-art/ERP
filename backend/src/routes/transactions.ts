@@ -15,8 +15,9 @@ import { getRatesForCompany } from './currency';
 // Kirim/chiqim dollar yoki yevroda (owner 2026-10-23): asl summa va kurs saqlanadi, `amount` — doim so'mda
 // (barcha hisob-kitoblar shu bilan). Kurs: firma o'z kursi bo'lsa o'sha, bo'lmasa Markaziy bank.
 const FX = ['USD', 'EUR'] as const;
-async function toUzs(original: number, currency: 'USD' | 'EUR', rate?: number) {
-  const r = rate && rate > 0 ? rate : (await getRatesForCompany(getTenant()?.companyId))[currency];
+// Kirim — bankning sotib olish kursi, chiqim — sotish kursi (Kapitalbank, routes/currency.ts)
+async function toUzs(original: number, currency: 'USD' | 'EUR', rate?: number, side: 'buy' | 'sell' = 'sell') {
+  const r = rate && rate > 0 ? rate : (await getRatesForCompany(getTenant()?.companyId, side))[currency];
   return { amount: Math.round(original * r), rate: r };
 }
 // XATO TUZATILDI: bu faylda avval FAQAT Telegram bot xabari (bot.sendMessage)
@@ -161,7 +162,7 @@ router.post('/', async (req, res) => {
       // Expense types: oylik, material, jihozlar, transport, boshqa, expense, income
       txData.amount = Number(data.amount) || 0;
       if (FX.includes(data.currency) && txData.amount > 0) {
-        const { amount, rate } = await toUzs(txData.amount, data.currency);
+        const { amount, rate } = await toUzs(txData.amount, data.currency, undefined, data.type === 'income' ? 'buy' : 'sell');
         Object.assign(txData, {
           currency: data.currency, originalAmount: txData.amount, amount, uzsAmount: amount,
           [data.currency === 'USD' ? 'usdRate' : 'eurRate']: rate, rateDate: todayInTashkent(),
@@ -433,7 +434,7 @@ router.patch('/:id', async (req, res) => {
           if (FX.includes(cur as any)) {
             // valyuta o'zgarmasa — yozuvdagi kurs saqlanadi; o'zgarsa — bugungi kurs
             const keep = cur === tx.currency ? (cur === 'USD' ? tx.usdRate : tx.eurRate) : undefined;
-            const { amount, rate } = await toUzs(a, cur as 'USD' | 'EUR', keep);
+            const { amount, rate } = await toUzs(a, cur as 'USD' | 'EUR', keep, tx.type === 'income' ? 'buy' : 'sell');
             Object.assign(set, { currency: cur, originalAmount: a, amount, uzsAmount: amount, [cur === 'USD' ? 'usdRate' : 'eurRate']: rate });
             if (!keep) set.rateDate = todayInTashkent();
           } else { set.amount = a; set.uzsAmount = a; set.originalAmount = a; set.currency = 'UZS'; }

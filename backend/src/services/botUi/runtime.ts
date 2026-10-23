@@ -174,14 +174,34 @@ function findItem(text: string): { item: BotUiCatalogItem; lang: UiLang; custom?
   return null;
 }
 
+// Katalogda yo'q yoki sozlanmagan tugma (obyekt nomlari, ro'yxatlar, dinamik tugmalar) — owner 2026-10-23:
+// "botda nima bo'lsa hammasi": boshidagi emoji paketdan premium ikonka bo'ladi, rang vazifasiga qarab.
+// Reply-tugma matni o'zgarmaydi (bot shu matnni kutadi); inline tugmada matndagi emoji olib tashlanadi.
+const DANGER_RE = /bekor|o'chir|yo'q|rad et|chiqish|отмен|удал|нет|выйти|❌|🗑|⛔|🚫/i;
+const SUCCESS_RE = /tasdiq|saqla|qabul|ha|bajarildi|подтверд|сохран|принять|да|✅|✔/i;
+function autoDecorateButton(btn: any, isStr: boolean, text: string): any {
+  if (!snap.stickers.length || !snap.messageEmojiEnabled) return btn;
+  if (!isStr && (btn.icon_custom_emoji_id || btn.style)) return btn;
+  const lead = LEAD_EMOJI_RE.exec(text);
+  const e = lead ? (lead[0].match(new RegExp(PICTO_RE.source, 'u')) || [''])[0] : '';
+  const id = e ? emojiIdFor(e) : undefined;
+  const out: any = isStr ? { text } : { ...btn };
+  if (id) {
+    out.icon_custom_emoji_id = id;
+    const inline = !isStr && ('callback_data' in btn || 'url' in btn || 'web_app' in btn || 'switch_inline_query' in btn);
+    if (inline && snap.stripEmojiWhenIcon) out.text = text.replace(LEAD_EMOJI_RE, '') || text;
+  }
+  out.style = DANGER_RE.test(text) ? 'danger' : SUCCESS_RE.test(text) ? 'success' : 'primary';
+  return out;
+}
+
 function decorateButton(btn: any): any {
   const isStr = typeof btn === 'string';
   const text = isStr ? btn : btn?.text;
   if (typeof text !== 'string' || !text) return btn;
   const hit = findItem(text);
-  if (!hit) return btn;
-  const o = snap.buttons[hit.item.key];
-  if (!o) return btn;
+  const o = hit ? snap.buttons[hit.item.key] : undefined;
+  if (!hit || !o) return autoDecorateButton(btn, isStr, text);
   // AppSettings'da o'zgartirilgan matn bo'lsa va panelda matn berilmagan bo'lsa — o'sha matn saqlanadi
   const label = effectiveLabel(hit.item, hit.lang, snap, hit.custom && !(o.text && (hit.lang === 'ru' ? o.text.ru : o.text.uz)) ? text : undefined);
   remember(label, text);
@@ -193,7 +213,7 @@ function decorateButton(btn: any): any {
 
 /** reply_markup (obyekt yoki JSON satr) — tugmalarga sozlamani qo'llaydi. Asl obyekt o'zgartirilmaydi. */
 export function decorateMarkup(markup: any): any {
-  if (!markup || !Object.keys(snap.buttons).length) return markup;
+  if (!markup || (!Object.keys(snap.buttons).length && !snap.stickers.length)) return markup;
   let obj = markup;
   const wasString = typeof markup === 'string';
   if (wasString) { try { obj = JSON.parse(markup); } catch { return markup; } }

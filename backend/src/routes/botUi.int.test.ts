@@ -179,7 +179,8 @@ describe('/api/dev/bot-ui', () => {
     expect(r.body.config.buttons).toEqual({});
     expect(r.body.packs).toHaveLength(1);
     const kb = { keyboard: [[{ text: tb('uz', 'kb_chat') }]] };
-    expect(decorateMarkup(kb)).toBe(kb);
+    // sozlamalar tozalandi — matn standart; paketlar qolgani uchun ikonka/rang avtomatik qo'yiladi
+    expect(decorateMarkup(kb).keyboard[0][0].text).toBe(tb('uz', 'kb_chat'));
     const set = tg.calls.find(c => c.method === 'setMyCommands');
     expect(set?.body.commands[0]).toEqual({ command: 'start', description: 'Botni boshlash / Запуск' });
     const doc = await BotUiConfig.findOne({ key: 'global' }).lean();

@@ -151,4 +151,15 @@ describe('botUi runtime — xabarlardagi premium emoji', () => {
     use({ packs: [{ stickers: [{ id: '501', emoji: '✅' }] }], messagePrefixEnabled: false });
     expect(decorateMessage('Chiqim saqlandi', undefined)).toEqual({ text: 'Chiqim saqlandi', opts: undefined });
   });
+  it("katalogda yo'q (dinamik) tugmalar ham bezaladi: paketdan ikonka, vazifasiga qarab rang", () => {
+    use({ packs: [{ stickers: [{ id: '601', emoji: '🏗' }, { id: '602', emoji: '❌' }] }] });
+    const m = decorateMarkup({ inline_keyboard: [[{ text: '🏗 Yangi uy', callback_data: 'obj_1' }, { text: '❌ Bekor', callback_data: 'x' }, { text: 'Boshqa', callback_data: 'y' }]], });
+    expect(m.inline_keyboard[0]).toEqual([
+      { text: 'Yangi uy', callback_data: 'obj_1', icon_custom_emoji_id: '601', style: 'primary' },
+      { text: 'Bekor', callback_data: 'x', icon_custom_emoji_id: '602', style: 'danger' },
+      { text: 'Boshqa', callback_data: 'y', style: 'primary' },
+    ]);
+    const r = decorateMarkup({ keyboard: [['🏗 Obyekt A']] });
+    expect(r.keyboard[0][0]).toEqual({ text: '🏗 Obyekt A', icon_custom_emoji_id: '601', style: 'primary' }); // reply matni o'zgarmaydi
+  });
 });

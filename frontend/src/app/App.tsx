@@ -5,6 +5,7 @@ import { MoneyInput } from "./components/MoneyInput";
 import { CountUp } from "./components/CountUp";
 import { useState, useRef, useEffect, useMemo, Suspense } from "react";
 import { lazyRetry as lazy } from "./lib/lazyRetry";
+import SyncStatusBar from "./SyncStatusBar";
 import { useScrollMemory } from "./lib/persistentState";
 import Building2 from "@hugeicons/core-free-icons/Building02Icon";
 import Package from "@hugeicons/core-free-icons/Package01Icon";
@@ -41,9 +42,7 @@ import Moon from "@hugeicons/core-free-icons/Moon02Icon";
 import Monitor from "@hugeicons/core-free-icons/ComputerIcon";
 import Smartphone from "@hugeicons/core-free-icons/SmartPhone01Icon";
 import TabletIcon from "@hugeicons/core-free-icons/Tablet01Icon";
-import CheckCheck from "@hugeicons/core-free-icons/Tick02Icon";
 import QrCode from "@hugeicons/core-free-icons/QrCodeIcon";
-import WifiOff from "@hugeicons/core-free-icons/WifiOff01Icon";
 import RefreshCw from "@hugeicons/core-free-icons/Refresh01Icon";
 import Lock from "@hugeicons/core-free-icons/LockIcon";
 import { MorphIcon, type IconNode } from "morphicons/react";
@@ -52,7 +51,7 @@ import { UserAvatar } from "./components/UserAvatar";
 import { toast, Toaster } from "sonner";
 import { playSound, sfx } from "./sound";
 import { useTranslation } from "react-i18next";
-import { API_BASE, offlineQueueCount } from "./api";
+import { API_BASE } from "./api";
 import NotificationCenter from "./NotificationCenter";
 import { AnnouncementComposer, AnnouncementContent, AnnouncementPopup, type AnnouncementData } from "./AnnouncementParts";
 import { connectSocket, getSocket } from "./socket";
@@ -2228,10 +2227,7 @@ export default function App() {
       }
     };
     navigator.serviceWorker?.addEventListener?.('message', handleSWMsg);
-    // Ilovalardagi (SW'siz) oflayn navbat — api.ts
-    const onAppQueue = (e: Event) => handleSWMsg({ data: { type: 'SYNC_STATUS', ...(e as CustomEvent).detail } } as MessageEvent);
-    window.addEventListener('erp:offline-queue', onAppQueue);
-    if (offlineQueueCount() > 0) { setSyncPending(offlineQueueCount()); setSyncStatus('pending'); }
+    // Ilovaning o'z oflayn navbati (api.ts) — SyncStatusBar o'zi tinglaydi (bu yerda faqat SW navbati)
     // Oflayn qilingan amal serverda rad etildi (masalan ruxsat yo'q) — foydalanuvchi bilsin
     const onRejected = () => toast.error(tApp('sync.rejected'));
     window.addEventListener('erp:offline-rejected', onRejected);
@@ -2270,7 +2266,6 @@ export default function App() {
       window.removeEventListener('online', onOnline);
       window.removeEventListener('offline', onOffline);
       navigator.serviceWorker?.removeEventListener?.('message', handleSWMsg);
-      window.removeEventListener('erp:offline-queue', onAppQueue);
       window.removeEventListener('erp:offline-rejected', onRejected);
       window.removeEventListener('erp:offline-synced', onSynced);
       document.removeEventListener('visibilitychange', onVisible);
@@ -3525,25 +3520,8 @@ export default function App() {
       {/* Telefonda ochiq suhbat — Telegram'dagidek butun ekran: ilova sarlavhasi yashirinadi (suhbat sarlavhasi o'zi safe-area'ni oladi) */}
       <div className={(page === 'chat' && chatIsOpen) ? "hidden md:contents" : "contents"}>{headerEl}</div>
 
-      {/* Offline banner */}
-      {(isOffline || syncPending > 0 || syncStatus === 'synced') && (
-        <div className="flex justify-center px-3 pt-1.5 flex-shrink-0 pointer-events-none">
-        <div role="status" className={`sync-pill pointer-events-auto inline-flex items-center gap-2 max-w-full px-4 py-2 rounded-full text-xs sm:text-[13px] font-bold border shadow-xl transition-colors
-          ${isOffline ? 'bg-red-600 text-white border-white/25 shadow-red-900/40' :
-            syncStatus === 'synced' ? 'bg-emerald-600 text-white border-white/25 shadow-emerald-900/40' :
-            'bg-amber-500 text-black border-black/10 shadow-amber-900/30'}`}>
-          {isOffline ? (
-            <><MorphIcon icon={WifiOff} className="w-3.5 h-3.5 flex-shrink-0" /><span className="truncate">{tApp('sync.offline')}</span></>
-          ) : syncStatus === 'syncing' ? (
-            <><MorphIcon icon={Loader2} className="w-3.5 h-3.5 animate-spin" /><span>{tApp('sync.syncing')}</span></>
-          ) : syncStatus === 'synced' ? (
-            <><MorphIcon icon={CheckCheck} className="w-3.5 h-3.5" /><span>{tApp('sync.synced')}</span></>
-          ) : (
-            <><MorphIcon icon={AlertCircle} className="w-3.5 h-3.5" /><span>{tApp('sync.pending', { count: syncPending })}</span></>
-          )}
-        </div>
-        </div>
-      )}
+      {/* Aloqa/sinxronlash holati — sarlavha ostida to'liq enli qator (SyncStatusBar.tsx) */}
+      <SyncStatusBar isOffline={isOffline} sw={{ count: syncPending, status: syncStatus }} />
 
       {/* Top bar — admin only (Mobile/Tablet only) */}
       <div className={(page === 'chat' && chatIsOpen) ? "hidden md:block lg:hidden" : "block lg:hidden"}>

@@ -659,7 +659,6 @@ textarea {
   box-shadow: 0 30px 70px -20px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 /* Sinxron holati (offline) — kichik shaffof pill */
-.sync-pill { -webkit-backdrop-filter: blur(16px) saturate(1.6); backdrop-filter: blur(16px) saturate(1.6); }
 
 /* AI yordamchi — premium emoji plitkasi (shisha, ichki yorug'lik) */
 .ai-emoji-tile {

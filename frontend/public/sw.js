@@ -100,28 +100,46 @@ async function replayQueue() {
 
   notifyClients({ type: 'SYNC_STATUS', status: 'syncing', count: items.length });
 
+  // XATO TUZATILDI ("1 ta o'zgarish kutmoqda" abadiy): tarmoq xatosi yoki 5xx bilan yiqilgan yozuv urinishlar
+  // soniga qo'shilmay har safar qayta yuborilardi. Endi har urinish hisoblanadi; 5 martadan keyin (yoki 4xx —
+  // server qabul qilmadi) yozuv "failed" deb sababi bilan belgilanadi va kutilayotganlar sonidan chiqadi.
+  const MAX_SW_ATTEMPTS = 5;
+  const db2 = await openDB();
+  const save = (rec) => new Promise(r => {
+    const tx = db2.transaction('sync-queue', 'readwrite');
+    tx.objectStore('sync-queue').put(rec);
+    tx.oncomplete = r; tx.onerror = r;
+  });
+  const drop = (id) => new Promise(r => {
+    const tx = db2.transaction('sync-queue', 'readwrite');
+    tx.objectStore('sync-queue').delete(id);
+    tx.oncomplete = r; tx.onerror = r;
+  });
+  let failedNow = 0;
   for (const item of items) {
+    let status = 0;
     try {
       const resp = await fetch(item.url, {
         method: item.method,
         headers: item.headers || { 'Content-Type': 'application/json' },
         body: item.body,
       });
-      if (resp.ok || resp.status < 500) {
-        // Muvaffaqiyatli yoki server tomonidan rad etildi — queuedan olib tashlaymiz
-        const db2 = await openDB();
-        await new Promise(r => {
-          const tx = db2.transaction('sync-queue', 'readwrite');
-          tx.objectStore('sync-queue').delete(item.id);
-          tx.oncomplete = r;
-          tx.onerror = r;
-        });
-      }
-    } catch { /* tarmoq xatosi — keyingisiga o'tamiz */ }
+      status = resp.status;
+    } catch { /* tarmoq xatosi — status 0 */ }
+    if (status >= 200 && status < 300) { await drop(item.id); continue; }
+    if (status === 0 && self.navigator && self.navigator.onLine === false) continue; // internet yo'q — hisoblanmaydi
+    const attempts = (item.attempts || 0) + 1;
+    const permanent = status >= 400 && status < 500 && status !== 408 && status !== 409 && status !== 429;
+    if (permanent || attempts >= MAX_SW_ATTEMPTS) {
+      failedNow++;
+      await save({ ...item, attempts, status: 'failed', lastStatus: status, lastError: status ? ('HTTP ' + status) : "Server bilan aloqa yo'q" });
+    } else {
+      await save({ ...item, attempts, lastStatus: status });
+    }
   }
 
   const remaining = await getPendingCount();
-  notifyClients({ type: 'SYNC_STATUS', status: remaining === 0 ? 'synced' : 'pending', count: remaining });
+  notifyClients({ type: 'SYNC_STATUS', status: remaining === 0 ? 'synced' : 'pending', count: remaining, failed: failedNow });
 }
 
 /* ── Install & Activate ────────────────────────────────────────────────────── */

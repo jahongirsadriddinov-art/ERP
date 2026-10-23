@@ -16,6 +16,10 @@ export interface QueuedItem {
   ts: number;
   attempts: number;
   label?: string;
+  /** Qaytmas xato (4xx) yoki urinishlar tugadi — avtomatik yuborilmaydi, foydalanuvchi hal qiladi */
+  failed?: boolean;
+  lastError?: string;
+  lastStatus?: number;
 }
 
 const DB_NAME = 'erp-offline';

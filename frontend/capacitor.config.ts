@@ -24,6 +24,8 @@ const config: CapacitorConfig = {
     minWebViewVersion: 80,
     backgroundColor: '#F4F6FA',
     allowMixedContent: false,
+    // Ilovada brauzer "developer" oynasi (chrome://inspect) ochilmasin (owner 2026-10-23)
+    webContentsDebuggingEnabled: false,
   },
   plugins: {
     SplashScreen: {

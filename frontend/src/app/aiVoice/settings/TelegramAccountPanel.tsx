@@ -1,4 +1,5 @@
 import "../../i18n/aiVoiceNs";
+import { confirmDialog } from "../../lib/confirmDialog";
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -124,7 +125,7 @@ export default function TelegramAccountPanel() {
     toast.success(k(enabled ? "avatar.onToast" : "avatar.offToast"));
   };
   const logout = async () => {
-    if (!window.confirm(k("logout.confirm"))) return;
+    if (!(await confirmDialog(k("logout.confirm"), { danger: true }))) return;
     setBusy("logout");
     const r = await api("POST", "/logout", {});
     setBusy("");

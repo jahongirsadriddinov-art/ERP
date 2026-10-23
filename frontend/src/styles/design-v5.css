@@ -247,14 +247,8 @@ pre, code, kbd, samp { font-family: ui-monospace, "JetBrains Mono", Consolas, mo
 }
 
 /* "Jami chiqimlar" — telefonda chekkalari yumaloq, suzuvchi karta */
-.expense-glass {
-  background:
-    radial-gradient(120% 160% at 0% 0%, rgba(255,255,255,0.18), transparent 55%),
-    linear-gradient(120deg, color-mix(in srgb, var(--primary) 96%, #000), color-mix(in srgb, var(--primary) 72%, var(--accent)));
-}
-@media (max-width: 1023.98px) {
-  .expense-glass { margin: 2px 12px 8px; border-radius: 16px; }
-}
+/* "Jami chiqimlar" (owner 2026-10-23): to'liq enli, bir xil rang, chegarasiz, yumaloqlanmagan — orqa fon ko'rinmaydi */
+.expense-glass { background: var(--primary); box-shadow: none; border: 0; border-radius: 0; margin: 0; }
 
 /* ══ Sozlamalar (Profil) — guruhlangan ro'yxat ═══════════════════════════ */
 .settings-group + .settings-group { margin-top: 1.25rem; }
@@ -346,3 +340,18 @@ pre, code, kbd, samp { font-family: ui-monospace, "JetBrains Mono", Consolas, mo
 .sheet-action--danger { color: #dc2626; background: rgba(239, 68, 68, 0.08); border-color: rgba(239, 68, 68, 0.25); }
 .dark .sheet-action--danger { color: #f87171; }
 .sheet-action--primary { color: var(--primary); background: color-mix(in oklab, var(--primary) 9%, transparent); border-color: color-mix(in oklab, var(--primary) 28%, transparent); }
+
+/* ══ Blur o'chirildi (owner 2026-10-23: "saytni aylanib chiq, keraksiz blurlarni o'chir") ══════════════
+   Shaffof + blur panellar endi to'liq rangli — orqa fon ko'rinmaydi, telefonlarda ham tezroq. */
+*, *::before, *::after { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+.glass, .glass-btn, .ai-glass-panel, .nav-pill-desktop, .ios-bottom-bar, .dark .ios-bottom-bar, .sync-pill { background: var(--card) !important; }
+.liquid-glass, .liquid-glass-dark { background: #0e121e !important; }
+.with-bg header, .with-bg [class*="glass-card"], .with-bg [class*="bg-card"], .with-bg [class*="surface"], .with-bg [class*="stat-card"] { background: var(--card) !important; }
+.with-bg [class*="bg-background"] { background: var(--background) !important; }
+[data-sonner-toaster] [data-sonner-toast].erp-toast { background: var(--card) !important; }
+.dark [data-sonner-toaster] [data-sonner-toast].erp-toast { background: var(--card) !important; }
+/* komponentlardagi "bg-card/70 backdrop-blur" kabi juftliklar — endi to'liq rangli (qoraytirish fonlari o'zgarmaydi) */
+[class*="backdrop-blur"][class*="bg-card"], [class*="backdrop-blur"][class*="bg-background"] { background-color: var(--card) !important; }
+.modal-backdrop { background-color: rgba(0, 0, 0, 0.55); }
+/* Sarlavha foni pastga (Jami chiqimlar ustiga) xira bo'lib tushmasin — panel bir xil rangda tursin (owner 2026-10-23) */
+.nav-blur-top::before { inset: 0 !important; background: var(--background) !important; }

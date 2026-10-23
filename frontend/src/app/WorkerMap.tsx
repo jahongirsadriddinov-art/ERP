@@ -52,7 +52,7 @@ function workerDivIcon(user: AppUser, live: boolean, stale: boolean) {
   const pulse = live && !stale ? `<span class="wm-pulse" style="background:${ring}"></span>` : '';
   return L.divIcon({
     className: 'wm-marker',
-    html: `<div class="wm-marker-wrap"><div class="wm-marker-inner" style="border-color:${ring}">${pulse}${memojiHtml(user.id, user.avatar)}</div><span class="wm-marker-tail" style="border-top-color:${ring}"></span><span class="wm-marker-name">${short}</span></div>`,
+    html: `<div class="wm-marker-wrap"><div class="wm-marker-inner" style="border-color:${ring}">${pulse}${memojiHtml(user.id, user.avatar, user.name)}</div><span class="wm-marker-tail" style="border-top-color:${ring}"></span><span class="wm-marker-name">${short}</span></div>`,
     iconSize: [40, 60],
     iconAnchor: [20, 44],
     popupAnchor: [0, -42],

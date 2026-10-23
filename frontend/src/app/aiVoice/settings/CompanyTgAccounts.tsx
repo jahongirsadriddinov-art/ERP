@@ -1,4 +1,5 @@
 import "../../i18n/aiVoiceNs";
+import { confirmDialog } from "../../lib/confirmDialog";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -119,7 +120,7 @@ export default function CompanyTgAccounts() {
   };
 
   const logout = async (a: Acc) => {
-    if (!window.confirm(k("logoutConfirm"))) return;
+    if (!(await confirmDialog(k("logoutConfirm"), { danger: true }))) return;
     setBusy(`out:${a.id}`);
     const r = await api<{ accounts: Acc[] }>("POST", `/${a.id}/logout`, {});
     setBusy("");
@@ -127,7 +128,7 @@ export default function CompanyTgAccounts() {
     setAccounts(r.data.accounts);
   };
   const remove = async (a: Acc) => {
-    if (!window.confirm(k("removeConfirm"))) return;
+    if (!(await confirmDialog(k("removeConfirm"), { danger: true }))) return;
     setBusy(`rm:${a.id}`);
     const r = await api<{ accounts: Acc[] }>("DELETE", `/${a.id}`);
     setBusy("");

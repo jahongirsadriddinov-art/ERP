@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { confirmDialog } from "./lib/confirmDialog";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { API_BASE } from "./api";
@@ -196,7 +197,7 @@ export default function BotUiPanel() {
         <div className="flex flex-wrap gap-2 mt-3">
           <button type="button" disabled={busy || decorating || !data.packs.length} data-testid="botui-ai" onClick={() => run(async () => adopt(await call("/auto-decorate", { method: "POST", body: "{}" }), true))}
             className="px-3.5 py-2 rounded-full bg-primary text-white text-sm font-semibold disabled:opacity-50">{L.ai}</button>
-          <button type="button" disabled={busy} data-testid="botui-reset" onClick={() => { if (window.confirm(L.resetAsk)) void run(async () => adopt(await call("/reset", { method: "POST", body: "{}" }))); }}
+          <button type="button" disabled={busy} data-testid="botui-reset" onClick={async () => { if (await confirmDialog(L.resetAsk, { danger: true })) void run(async () => adopt(await call("/reset", { method: "POST", body: "{}" }))); }}
             className="px-3.5 py-2 rounded-full bg-muted text-sm font-semibold">{L.reset}</button>
         </div>
       </div>

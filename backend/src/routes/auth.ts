@@ -104,6 +104,14 @@ export async function issueSession(user: IUser, res: any, req: any, loginMethod:
 // bo'sh raqamga OTP kirish huquqi bermaydi, mavjud rol/firma tizimi buziladi).
 const OTP_TTL_MS = 2 * 60 * 1000;       // 2 daqiqa
 const OTP_MAX_ATTEMPTS = 5;
+const LOGIN_CODE_MAX_ATTEMPTS = 5;
+// Telegram kirish kodi bazada ochiq saqlanmaydi — foydalanuvchi id'si bilan tuzlangan SHA-256
+const loginCodeHash = (uid: string, code: string) => crypto.createHash('sha256').update(`login:${uid}:${code}`).digest('hex');
+function loginCodeMatches(stored: string, uid: string, code: string): boolean {
+  const a = Buffer.from(String(stored), 'utf8');
+  const b = Buffer.from(loginCodeHash(uid, code), 'utf8');
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
 const OTP_RESEND_COOLDOWN_MS = 60 * 1000; // 60 soniya
 
 router.post('/send-otp', async (req, res) => {
@@ -136,8 +144,9 @@ router.post('/send-otp', async (req, res) => {
       return res.status(404).json({ success: false, error: 'Bu raqam bilan foydalanuvchi topilmadi' });
     }
 
-    const code = Math.floor(1000 + Math.random() * 9000).toString(); // 1000-9999
-    const otpHash = await hashPassword(code);
+    // 6 xonali kriptografik kod; Eskiz shabloni rad etsa — pastda 4 xonali bilan bir marta qayta yuboriladi
+    let code = String(crypto.randomInt(100000, 1000000));
+    let otpHash = await hashPassword(code);
 
     // Eski OTP (agar bo'lsa) shu bilan bir yo'la bekor qilinadi — bitta
     // upsert, ikkita alohida so'rov (delete+create) o'rniga (tezroq).
@@ -147,7 +156,13 @@ router.post('/send-otp', async (req, res) => {
       { upsert: true, setDefaultsOnInsert: true }
     );
 
-    const sms = await sendOtpSms(phone, code);
+    let sms = await sendOtpSms(phone, code);
+    if (!sms.ok) {
+      code = String(crypto.randomInt(1000, 10000));
+      otpHash = await hashPassword(code);
+      await Otp.findOneAndUpdate({ phone }, { otpHash, attempts: 0, expiresAt: new Date(Date.now() + OTP_TTL_MS) });
+      sms = await sendOtpSms(phone, code);
+    }
     if (!sms.ok) {
       // OTP yozuvini qoldirmaymiz — yuborilmagan kodni keyin "to'g'ri" deb tekshirib bo'lmaydi.
       await Otp.deleteMany({ phone });
@@ -168,6 +183,7 @@ router.post('/send-otp', async (req, res) => {
     return res.json({
       success: true,
       message: 'Tasdiqlash kodi yuborildi',
+      codeLength: code.length,
       ...(isTestMode ? { devOtp: code, devNote: 'Eskiz TEST rejimida — kod SMS orqali kelmaydi, shuning uchun shu yerda ko\'rsatilyapti.' } : {}),
     });
   } catch (err) {
@@ -324,14 +340,17 @@ router.post('/send-code', async (req, res) => {
       return res.status(400).json({ error: 'Telegram botga ulanmagan. Iltimos botga kirib /start bosing va raqamingizni yuboring.' });
     }
 
-    const code = Math.floor(1000 + Math.random() * 9000).toString();
-    user.telegramVerificationCode = code;
+    // XAVFSIZLIK (owner 2026-10-23: "kodni buzib kirib bo'lmasin"): 6 xonali kriptografik kod (1 000 000 variant,
+    // avval 4 xonali Math.random edi), bazada faqat xeshi, 5 ta noto'g'ri urinishdan keyin bekor qilinadi.
+    const code = String(crypto.randomInt(100000, 1000000));
+    user.telegramVerificationCode = loginCodeHash(String(user._id), code);
     user.telegramVerificationCodeExpires = new Date(Date.now() + 2 * 60 * 1000); // 2 minutes expiry
+    user.telegramVerificationAttempts = 0;
     await user.save();
 
     await bot.sendMessage(user.telegramChatId, `Sizning tizimga kirish kodingiz: <code>${code}</code>\nKod 2 daqiqa davomida amal qiladi.`, { parse_mode: 'HTML' });
 
-    return res.json({ message: 'Kod yuborildi' });
+    return res.json({ message: 'Kod yuborildi', codeLength: 6 });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: 'Server xatoligi' });
@@ -376,17 +395,25 @@ router.post('/login', async (req, res) => {
       return res.status(404).json({ error: 'Foydalanuvchi topilmadi' });
     }
 
-    if (user.telegramVerificationCode !== code) {
-      return res.status(400).json({ error: 'Kod noto\'g\'ri' });
+    if (!user.telegramVerificationCode || (user.telegramVerificationCodeExpires && user.telegramVerificationCodeExpires < new Date())) {
+      return res.status(400).json({ error: "Kodning muddati tugagan — yangi kod so'rang" });
     }
-
-    if (user.telegramVerificationCodeExpires && user.telegramVerificationCodeExpires < new Date()) {
-      return res.status(400).json({ error: 'Kodning muddati tugagan' });
+    if (!loginCodeMatches(user.telegramVerificationCode, String(user._id), String(code))) {
+      const used = (user.telegramVerificationAttempts || 0) + 1;
+      if (used >= LOGIN_CODE_MAX_ATTEMPTS) {
+        user.telegramVerificationCode = undefined; user.telegramVerificationCodeExpires = undefined; user.telegramVerificationAttempts = 0;
+        await user.save();
+        return res.status(400).json({ error: "Kod noto'g'ri. Urinishlar tugadi — yangi kod so'rang." });
+      }
+      user.telegramVerificationAttempts = used;
+      await user.save();
+      return res.status(400).json({ error: `Kod noto'g'ri. ${LOGIN_CODE_MAX_ATTEMPTS - used} ta urinish qoldi.` });
     }
 
     // Clear the code so it cannot be reused
     user.telegramVerificationCode = undefined;
     user.telegramVerificationCodeExpires = undefined;
+    user.telegramVerificationAttempts = 0;
     await user.save();
 
     return issueSession(user, res, req);
@@ -556,7 +583,7 @@ router.post('/dev-password/request-reset', async (req, res) => {
   try {
     const dev = await User.findOne({ phone: DEVELOPER_PHONE });
     if (dev?.telegramChatId) {
-      const code = Math.floor(1000 + Math.random() * 9000).toString();
+      const code = String(crypto.randomInt(100000, 1000000));
       const otpHash = await hashPassword(code);
       await Otp.findOneAndUpdate(
         { phone: `devreset:${DEVELOPER_PHONE}` },

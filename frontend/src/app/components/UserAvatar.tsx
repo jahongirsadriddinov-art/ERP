@@ -23,9 +23,29 @@ function hash(s: string): number {
 /** Chat kalitlari ("u:<id>") va oddiy user.id bir xil yuzni bersin. */
 const normSeed = (seed: string) => (seed || "?").replace(/^u:/, "");
 
-export function memojiFor(seed: string): { src: string; h1: number; h2: number } {
+// Yuz jinsga mos bo'lsin (owner 2026-10-23: Jahongirga ayol yuzi tushgan edi) — public/avatars/NOTICE.txt tartibida
+const MALE = [1, 2, 6, 7, 8, 10, 12, 14, 15, 18, 19, 22, 24, 26, 28, 31];
+const FEMALE = [3, 4, 9, 11, 13, 16, 20, 23, 25, 27, 29, 30, 32];
+const MALE_IN_A = /^(hamza|murtaza|mirza|usama|isa|musa|yahya|zakariya|ota|mustafa|abdulla|ubayda|hudayfa|taha)$/i;
+/** Ism-familiyadan jins: o'zbek/rus familiyasi (-ova/-eva ayol, -ov/-ev erkak), bo'lmasa ism oxiri. */
+export function guessGender(name?: string): "m" | "f" | null {
+  const parts = (name || "").toLowerCase().replace(/[ʻʼ'`]/g, "").split(/\s+/).filter(Boolean);
+  if (!parts.length) return null;
+  for (const w of parts.slice(1).concat(parts[0])) {
+    if (/(ova|eva|yeva|ovna|evna|ina|aya)$/.test(w) && w.length > 4) return "f";
+    if (/(ov|ev|yev|ovich|evich|in|iy|oglu|o'g'li)$/.test(w) && w.length > 3) return "m";
+  }
+  const first = parts[0];
+  if (/(xon|gul|oy|bonu|niso|nisa|zoda)$/.test(first)) return "f";
+  if (/(a|ya)$/.test(first) && !MALE_IN_A.test(first)) return "f";
+  return "m";
+}
+
+export function memojiFor(seed: string, name?: string): { src: string; h1: number; h2: number } {
   const h = hash(normSeed(seed));
-  const n = (h % MEMOJI_COUNT) + 1;
+  const g = guessGender(name);
+  const pool = g === "m" ? MALE : g === "f" ? FEMALE : null;
+  const n = pool ? pool[h % pool.length] : (h % MEMOJI_COUNT) + 1;
   const [h1, h2] = HUES[Math.floor(h / MEMOJI_COUNT) % HUES.length];
   return { src: `/avatars/${n < 10 ? "0" : ""}${n}.webp`, h1, h2 };
 }
@@ -36,9 +56,9 @@ export function initialsOf(name: string): string {
 }
 
 /** Faqat memoji (fon + yuz) — HTML satr sifatida kerak bo'lgan joylar uchun (Leaflet marker). */
-export function memojiHtml(seed: string, photo?: string): string {
+export function memojiHtml(seed: string, photo?: string, name?: string): string {
   const esc = (v: string) => v.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
-  const m = memojiFor(seed);
+  const m = memojiFor(seed, name);
   if (photo) {
     return `<span class="memoji-avatar" style="--av-h1:${m.h1};--av-h2:${m.h2}"><img class="memoji-avatar__photo" src="${esc(photo)}" alt="" decoding="async" onerror="this.onerror=null;this.className='memoji-avatar__img';this.src='${m.src}'"/></span>`;
   }
@@ -70,7 +90,7 @@ export function UserAvatar({ seed, name, src, size, className = "", style, testI
         className={`user-avatar rounded-full object-cover flex-shrink-0 ${className}`} style={box} onError={() => setPhotoBad(true)} />
     );
   }
-  const m = memojiFor(seed);
+  const m = memojiFor(seed, name);
   return (
     <span data-testid={testId} title={title} role={label ? "img" : undefined} aria-label={label}
       className={`user-avatar memoji-avatar flex-shrink-0 select-none ${className}`}

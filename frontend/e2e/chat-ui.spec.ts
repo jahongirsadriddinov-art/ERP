@@ -224,8 +224,9 @@ test("Navbar chat belgisi O'qilmagan jildi bilan mos; modal ochilsa navbar yashi
   await page.getByTestId('chat-open-settings').click();
   await expect(nav).toHaveClass(/ios-bottom-bar-hidden/);
   await expect(page.locator('body')).toHaveClass(/modal-open/);
-  const blur = await page.locator('.fixed.inset-0.modal-backdrop').first().evaluate((el) => getComputedStyle(el).backdropFilter || (getComputedStyle(el) as any).webkitBackdropFilter);
-  expect(String(blur)).toContain('blur');
+  // owner 2026-10-23: blur o'chirildi — fon qoraytiriladi (shaffof emas)
+  const bg = await page.locator('.fixed.inset-0.modal-backdrop').first().evaluate((el) => getComputedStyle(el).backgroundColor);
+  expect(bg).not.toBe('rgba(0, 0, 0, 0)');
   await page.screenshot({ path: `test-results/modal-nav-hidden-${info.project.name}.png` });
   await page.keyboard.press('Escape');
   await page.mouse.click(10, 10);

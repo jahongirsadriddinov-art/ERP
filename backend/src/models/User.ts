@@ -8,6 +8,7 @@ export interface IUser extends Document {
   telegramChatId?: string;
   telegramVerificationCode?: string;
   telegramVerificationCodeExpires?: Date;
+  telegramVerificationAttempts?: number;
   pinSalt?: string;           // ilova qulfi PIN — faqat salt + SHA-256 xesh (PIN'ning o'zi emas)
   pinHash?: string;
   pinResetCodeHash?: string;
@@ -54,6 +55,7 @@ const UserSchema: Schema = new Schema({
   telegramChatId: { type: String },
   telegramVerificationCode: { type: String },
   telegramVerificationCodeExpires: { type: Date },
+  telegramVerificationAttempts: { type: Number, default: 0 },
   // select:false — hech qaysi ro'yxat/eksport (users, backup, payroll...) bularni qaytarmaydi
   pinSalt: { type: String, select: false },
   pinHash: { type: String, select: false },

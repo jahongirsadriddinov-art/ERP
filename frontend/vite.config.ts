@@ -22,7 +22,9 @@ function figmaAssetResolver() {
   }
 }
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
+  // Production'da konsolga ichki loglar chiqmasin (owner 2026-10-23); console.warn/error qoladi — xatolar kuzatuvi uchun
+  esbuild: mode === 'production' ? { drop: ['debugger'], pure: ['console.log', 'console.debug', 'console.info', 'console.trace'] } : {},
   define: {
     __APP_VERSION__: JSON.stringify(pkgVersion),
   },
@@ -129,4 +131,4 @@ export default defineConfig({
     port: 5173,
     host: true,
   },
-})
+}))

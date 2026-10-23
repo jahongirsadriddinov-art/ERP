@@ -1,4 +1,4 @@
-import { confirmDialog } from "./lib/confirmDialog";
+import { confirmDialog, promptDialog } from "./lib/confirmDialog";
 import { startBackground, stopBackground } from "./lib/background";
 import { useState, useRef, useEffect, useMemo, lazy, Suspense } from "react";
 import { useScrollMemory } from "./lib/persistentState";
@@ -1130,7 +1130,7 @@ export function useBackupActions() {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
-    const typed = window.prompt(t('dashboard.importConfirmPrompt') as string);
+    const typed = await promptDialog(t('dashboard.importConfirmPrompt') as string, { danger: true });
     // Katta/kichik harf farqi endi muhim emas — "TASDIQLAYMAN" yoki
     // "tasdiqlayman" (yoki aralash) baravar qabul qilinadi, faqat SO'Z
     // to'g'ri yozilishi muhim.
@@ -1281,6 +1281,27 @@ export async function fetchLiveCurrencyRates(): Promise<void> {
       LIVE_RATE_SOURCE = data.source || "";
     }
   } catch {}
+}
+
+// Sarlavhadagi kichik qator (telefon): bugungi sana va Kapitalbank dollar kursi
+function HeaderDayRate() {
+  const { i18n } = useTranslation();
+  const [rate, setRate] = useState<number | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void fetchLiveCurrencyRates().then(() => { if (alive) setRate(LIVE_KAPITAL?.USD?.sell || LIVE_USD_RATE); });
+    return () => { alive = false; };
+  }, []);
+  // Brauzerlarda uz-UZ formati ko'pincha yo'q ("M10 23") — oy va hafta kuni nomlari qo'lda
+  const ru = i18n.language?.startsWith("ru");
+  const now = new Date();
+  const MON = ru ? ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"] : ["yan", "fev", "mar", "apr", "may", "iyun", "iyul", "avg", "sen", "okt", "noy", "dek"];
+  const day = `${now.getDate()}-${MON[now.getMonth()]}`;
+  return (
+    <p className="lg:hidden text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 whitespace-nowrap truncate leading-tight mt-0.5" data-testid="header-day-rate" title={day}>
+      {rate ? `$1 = ${Math.round(rate).toLocaleString("ru-RU")}` : day}
+    </p>
+  );
 }
 
 export function fmtUsd(uzs: number): string { return "$" + (uzs / LIVE_USD_RATE).toFixed(2); }
@@ -1478,7 +1499,7 @@ function OtpBoxes({ value, onChange, length = 4, autoFocus, error }: { value: st
   };
 
   return (
-    <div className="relative flex justify-center gap-2.5">
+    <div className={`relative flex justify-center ${length > 4 ? "gap-1.5 sm:gap-2" : "gap-2.5"}`}>
       <input
         ref={realRef}
         type="text"
@@ -1493,7 +1514,7 @@ function OtpBoxes({ value, onChange, length = 4, autoFocus, error }: { value: st
       />
       {digits.map((d, i) => (
         <div key={i} onClick={() => realRef.current?.focus()}
-          className={`w-14 h-16 flex items-center justify-center text-2xl font-bold rounded-2xl border bg-white/50 dark:bg-black/20 shadow-inner liquid-transition ${error ? "border-red-500/50" : value.length === i ? "border-primary ring-2 ring-primary/50" : "border-border/50"}`}>
+          className={`${length > 4 ? "w-11 h-14 sm:w-12 sm:h-16 text-xl" : "w-14 h-16 text-2xl"} flex items-center justify-center font-bold rounded-2xl border bg-white/50 dark:bg-black/20 shadow-inner liquid-transition ${error ? "border-red-500/50" : value.length === i ? "border-primary ring-2 ring-primary/50" : "border-border/50"}`}>
           {d}
         </div>
       ))}
@@ -1506,6 +1527,7 @@ function LoginScreen({ onLogin, onRegister, onBack }: { onLogin: (u: any, compan
   const { t, i18n } = useTranslation();
   const [phone, setPhone] = useState("+998 ");
   const [code, setCode] = useState("");
+  const [codeLen, setCodeLen] = useState(6); // server aytgan kod uzunligi (6; eski server — 4)
   const [password, setPassword] = useState("");
   // Ish jarayonida obuna tugasa (API 402) — kirish ekrani darhol "obuna" holatida ochiladi
   const [initialBlocked] = useState<'pending'|'expired'|'rejected'|null>(() => {
@@ -1571,6 +1593,7 @@ function LoginScreen({ onLogin, onRegister, onBack }: { onLogin: (u: any, compan
         setError(data.error || t('login.genericError'));
         return;
       }
+      setCodeLen(Number(data.codeLength) === 6 ? 6 : 4);
       setStep("code");
       setTimeLeft(120);
     } catch (err) {
@@ -1656,7 +1679,7 @@ function LoginScreen({ onLogin, onRegister, onBack }: { onLogin: (u: any, compan
 
   // 4 xona to'lganda avtomatik yuborish (OTP qutilar bilan qulay oqim)
   useEffect(() => {
-    if (step === "code" && code.length === 4) handleCodeSubmit();
+    if (step === "code" && code.length === codeLen) handleCodeSubmit();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code, step]);
 
@@ -1859,7 +1882,7 @@ function LoginScreen({ onLogin, onRegister, onBack }: { onLogin: (u: any, compan
           <form onSubmit={handleCodeSubmit} className="space-y-4">
             <div>
               <label className="text-sm font-medium block mb-2 text-muted-foreground text-center">{t('login.codeLabel')}</label>
-              <OtpBoxes value={code} onChange={v => { setError(""); setCode(v); }} error={!!error} autoFocus/>
+              <OtpBoxes value={code} length={codeLen} onChange={v => { setError(""); setCode(v); }} error={!!error} autoFocus/>
             </div>
             <button type="submit" disabled={submitting} className="w-full bg-gradient-to-r from-primary via-primary to-blue-700 text-white text-sm font-bold py-3.5 rounded-full shadow-lg shadow-primary/30 hover:shadow-xl hover:shadow-primary/35 hover:-translate-y-0.5 active:scale-[0.98] liquid-transition disabled:opacity-60 disabled:pointer-events-none">
               {t('login.enterSystem')}
@@ -3029,11 +3052,15 @@ export default function App() {
   const headerEl = (
     <header className="nav-blur-top flex items-center gap-3 px-4 flex-shrink-0 z-50 sticky top-0"
       style={{ paddingTop: 'max(0.625rem, env(safe-area-inset-top))', paddingBottom: '0.625rem' }}>
-      <div className="nav-pill-desktop flex items-center gap-2.5 px-3 py-2 rounded-full flex-shrink-0">
+      <div className="nav-pill-desktop flex items-center gap-2.5 px-3 py-2 rounded-full min-w-0 flex-1 lg:flex-none lg:flex-shrink-0">
         <div className="w-7 h-7 rounded-full flex items-center justify-center overflow-hidden bg-gradient-to-br from-accent to-accent/75 shadow-sm flex-shrink-0">
           <CompanyLogo src={companyLogo} imgClass="w-full h-full object-contain" iconClass="w-3.5 h-3.5 text-white" />
         </div>
-        <span className="text-sm font-bold tracking-tight hidden lg:block whitespace-nowrap max-w-[140px] truncate">{companyName}</span>
+        {/* Telefonda (owner 2026-10-23: "tepada narsa kam") — firma nomi, bugungi sana va dollar kursi */}
+        <div className="min-w-0">
+          <p className="text-sm font-bold tracking-tight whitespace-nowrap max-w-full lg:max-w-[140px] truncate leading-tight">{companyName}</p>
+          <HeaderDayRate />
+        </div>
       </div>
       <nav className="hidden lg:flex items-center gap-0.5 lg:gap-1 nav-pill-desktop px-1.5 py-1.5 rounded-full w-fit flex-shrink-0">
         {NAV.map(n=>(

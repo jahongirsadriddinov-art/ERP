@@ -74,9 +74,10 @@ export function SwipeRow({ actions, onOpen, children, className = "", testId }: 
   };
 
   return (
-    <div ref={rootRef} className={`relative overflow-hidden rounded-2xl ${className}`} data-testid={testId}>
-      {actions.length > 0 && (
-        <div className="absolute inset-y-0 right-0 flex" style={{ width: max }} aria-hidden={dx === 0}>
+    <div ref={rootRef} className={`relative overflow-hidden rounded-[1.25rem] ${className}`} data-testid={testId}>
+      {/* Amal tugmalari faqat surilganda ko'rinadi — aks holda karta burchaklari ortidan qizil chiziq chiqib turardi (owner 2026-10-23) */}
+      {actions.length > 0 && dx !== 0 && (
+        <div className="absolute inset-y-[1px] right-[1px] flex rounded-r-[1.2rem] overflow-hidden" style={{ width: max }}>
           {actions.map((a) => (
             <button key={a.key} type="button" tabIndex={dx === 0 ? -1 : 0}
               onClick={(e) => { e.stopPropagation(); setDx(0); a.onClick(); }}
@@ -92,7 +93,7 @@ export function SwipeRow({ actions, onOpen, children, className = "", testId }: 
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); click(); } }}
         onContextMenu={(e) => { if (actions.length) { e.preventDefault(); setSheet(true); } }}
         onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd} onTouchCancel={onTouchEnd}
-        className="relative bg-card touch-pan-y select-none"
+        className="relative touch-pan-y select-none"
         style={{ transform: `translateX(${dx}px)`, transition: start.current ? "none" : "transform 220ms cubic-bezier(.2,.8,.2,1)" }}
       >
         {children}

@@ -20,7 +20,7 @@ type K = (key: string, o?: any) => string;
 export function MuteButton({ k, dark = false }: { k: K; dark?: boolean }) {
   const muted = useMuted();
   return (
-    <button type="button" onClick={() => sound.setMuted(!muted)} aria-pressed={!muted} data-testid="ai-office-mute" title={muted ? k("media.unmute") : k("media.mute")}
+    <button type="button" onClick={() => sound.setMuted(!muted)} aria-pressed={!muted} data-multi-tap data-testid="ai-office-mute" title={muted ? k("media.unmute") : k("media.mute")}
       className={dark ? "h-9 px-3 rounded-full bg-black/60 text-white text-[13px] font-semibold backdrop-blur" : "h-8 px-3 rounded-full border border-border bg-card/60 text-[12px] font-semibold inline-flex items-center gap-1.5"}>
       {muted ? "🔇" : "🔊"}<span className="sr-only">{muted ? k("media.unmute") : k("media.mute")}</span>
     </button>
@@ -59,7 +59,7 @@ function MiniPlayer({ k }: { k: K }) {
   const tr = ps.tracks[ps.index];
   const title = ps.playing && tr ? tr.name : m.yandexOn ? "Yandex Music" : tr?.name || "—";
   return (
-    <div className="fixed z-[120] left-2 bottom-2 sm:left-4 sm:bottom-4 flex items-center gap-1.5 rounded-full bg-card text-foreground border border-border shadow-2xl pl-3 pr-1 py-1 max-w-[calc(100vw-16px)]" data-testid="ai-office-mini">
+    <div className="fixed z-[120] left-2 bottom-2 sm:left-4 sm:bottom-4 flex items-center gap-1.5 rounded-full bg-card text-foreground border border-border shadow-2xl pl-3 pr-1 py-1 max-w-[calc(100vw-16px)]" data-multi-tap data-testid="ai-office-mini">
       <span className="text-[12px] font-semibold truncate max-w-[160px]">🎵 {title}</span>
       {!!ps.tracks.length && <button type="button" onClick={() => player.toggle()} className="w-8 h-8 rounded-full hover:bg-muted" aria-label="play/pause" data-testid="ai-office-mini-toggle">{ps.playing ? "⏸" : "▶"}</button>}
       {!!ps.tracks.length && <button type="button" onClick={() => player.next()} className="w-8 h-8 rounded-full hover:bg-muted" aria-label="next">⏭</button>}
@@ -216,7 +216,7 @@ export function MediaPanel({ k, embedded = false }: { k: K; embedded?: boolean }
               </div>
               <label className="flex items-center gap-1.5 text-[11.5px] text-muted-foreground"><input type="checkbox" checked={keep} onChange={(e) => setKeep(e.target.checked)} /> {k("media.keepHere")}</label>
               {!ps.tracks.length && <p className="text-[11.5px] text-muted-foreground">{k("media.noSongs")}</p>}
-              <div className="space-y-1" data-testid="ai-office-tracklist">
+              <div className="space-y-1" data-multi-tap data-testid="ai-office-tracklist">
                 {ps.tracks.map((tr, i) => {
                   const cur = ps.index === i;
                   const si = media.tracks.findIndex((x) => x.id === tr.id);
@@ -237,7 +237,7 @@ export function MediaPanel({ k, embedded = false }: { k: K; embedded?: boolean }
                 })}
               </div>
               {!!ps.tracks.length && (
-                <div className="space-y-1 pt-1">
+                <div className="space-y-1 pt-1" data-multi-tap>
                   <div className="flex items-center gap-2">
                     <button type="button" onClick={() => player.prev()} className="w-9 h-9 rounded-full bg-muted">⏮</button>
                     <button type="button" onClick={() => player.toggle()} className="w-10 h-10 rounded-full bg-foreground text-background" data-testid="ai-office-player-toggle">{ps.playing ? "⏸" : "▶"}</button>

@@ -389,8 +389,10 @@ export function Player({ crowd, grid, bridge, agents, holding, youLabel }: {
       camera.position.copy(target);
       camera.lookAt(target.x + fx * Math.cos(s.pitch), target.y - Math.sin(s.pitch), target.z + fz * Math.cos(s.pitch));
     } else {
-      let dist = 4.4;
-      const back = (d: number) => new THREE.Vector3(head.x - fx * d * Math.cos(s.pitch), head.y + 0.4 + d * Math.sin(s.pitch), head.z - fz * d * Math.cos(s.pitch));
+      let dist = THREE.MathUtils.clamp(inp.zoom || 4.2, 1.8, 9);
+      // Yelka ustidan (o'ngga 0.55 m surilgan) uchinchi shaxs kamerasi
+      const rx = -Math.cos(s.yaw) * 0.55, rz = Math.sin(s.yaw) * 0.55;
+      const back = (d: number) => new THREE.Vector3(head.x + rx - fx * d * Math.cos(s.pitch), head.y + 0.4 + d * Math.sin(s.pitch), head.z + rz - fz * d * Math.cos(s.pitch));
       let p = back(dist);
       // Tashqi devorlar ichida qolsin (orqa/chap baland devor) — masofa qisqaradi
       while (dist > 1.2 && (p.x < BOUNDS.x0 + 0.3 || p.x > BOUNDS.x1 + 3 || p.z < BOUNDS.z0 + 0.3 || p.z > BOUNDS.z1 + 3)) { dist -= 0.2; p = back(dist); }
@@ -403,7 +405,7 @@ export function Player({ crowd, grid, bridge, agents, holding, youLabel }: {
       if (!s.camInit) { s.camPos.copy(p); s.camInit = true; }
       s.camPos.lerp(p, Math.min(1, dt * 8));
       camera.position.copy(s.camPos);
-      camera.lookAt(head.x + fx * 0.6, head.y + 0.2, head.z + fz * 0.6);
+      camera.lookAt(head.x + rx * 0.6 + fx * 1.2, head.y + 0.2, head.z + rz * 0.6 + fz * 1.2);
     }
 
     // Yaqin atrofdagi narsa (har ~0.15 s): agent → o'rindiq → choy

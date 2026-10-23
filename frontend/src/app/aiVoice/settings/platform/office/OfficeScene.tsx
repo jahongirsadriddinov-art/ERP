@@ -30,6 +30,7 @@ export interface OfficeSceneProps {
   youLabel: string;
   walk?: SceneWalk | null;
   onContextLost?: () => void;
+  onContextRestored?: () => void;
   onHub?: (hub: ScreenHub | null) => void;
   /** Ro'yxatdan "topish": n o'zgarsa — kamera shu agentga uchib boradi. */
   focus?: { id: string; n: number } | null;
@@ -43,7 +44,7 @@ export interface OfficeSceneProps {
   musicOn?: boolean;
 }
 
-export default function OfficeScene({ agents, selectedId, onSelect, showAllLabels, compact, dark, resetKey, zoneNames, youLabel, walk, onContextLost, onHub, focus, speech, cinemaSrc, cinemaThumb, musicOn }: OfficeSceneProps) {
+export default function OfficeScene({ agents, selectedId, onSelect, showAllLabels, compact, dark, resetKey, zoneNames, youLabel, walk, onContextLost, onContextRestored, onHub, focus, speech, cinemaSrc, cinemaThumb, musicOn }: OfficeSceneProps) {
   const layoutKey = agents.map((a) => `${a.id}:${a.team}:${a.kind}`).join("|");
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const layout = useMemo(() => computeLayout(agents.map((a) => ({ id: a.id, team: a.team, kind: a.kind }))), [layoutKey]);
@@ -109,7 +110,12 @@ export default function OfficeScene({ agents, selectedId, onSelect, showAllLabel
         onPointerMissed={() => { if (!walk) onSelect(null); }}
         onCreated={({ gl }) => {
           gl.setClearColor(0x000000, 0);
+          // preventDefault — brauzer kontekstni qaytaradi; three.js o'zi qayta ishga tushadi, teksturalar qayta yuklanadi
           gl.domElement.addEventListener("webglcontextlost", (e) => { e.preventDefault(); onContextLost?.(); });
+          gl.domElement.addEventListener("webglcontextrestored", () => {
+            for (const t of [...Object.values(hub.textures), hub.movie, hub.tv, hub.sky]) t.needsUpdate = true;
+            onContextRestored?.();
+          });
         }}
         data-testid="ai-office-canvas"
       >

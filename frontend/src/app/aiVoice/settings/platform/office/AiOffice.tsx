@@ -137,7 +137,16 @@ export default function AiOffice({ fill = false, onNavigate, erpLinks = [], exte
   const locate = useCallback((id: string) => { select(id); setFocus((f) => ({ id, n: (f?.n || 0) + 1 })); }, [select]);
   const onSpeak = useCallback((id: string) => (text: string | null) => setSpeech(text ? { id, text } : null), []);
   const exitWalk = useCallback(() => setWalking(false), []);
-  const lostCb = useCallback(() => setLost(true), []);
+  // WebGL konteksti yo'qolsa — avval brauzer o'zi qaytarishini kutamiz (odatda 1–3 s); qaytmasa (yoki 2-marta) — qo'lda qayta yuklash
+  const lostTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lostCount = useRef(0);
+  const lostCb = useCallback(() => {
+    lostCount.current++;
+    if (lostTimer.current) clearTimeout(lostTimer.current);
+    lostTimer.current = setTimeout(() => setLost(true), lostCount.current >= 2 ? 2500 : 6000);
+  }, []);
+  const restoredCb = useCallback(() => { if (lostTimer.current) clearTimeout(lostTimer.current); setLost(false); }, []);
+  useEffect(() => () => { if (lostTimer.current) clearTimeout(lostTimer.current); }, []);
   const dismissHint = () => { setHint(false); try { localStorage.setItem(HINT_KEY, "1"); } catch { /* */ } };
 
   const sel = agents?.find((a) => a.id === selected) || null;
@@ -231,7 +240,7 @@ export default function AiOffice({ fill = false, onNavigate, erpLinks = [], exte
           ) : agents ? (
             <Suspense fallback={<div className="absolute inset-0 p-4"><Skeleton h="h-full" /></div>}>
               <OfficeScene key={sceneKey} agents={agents} selectedId={selected} onSelect={select} showAllLabels={showAll} compact={compact} dark={dark}
-                resetKey={resetKey} zoneNames={zoneNames} youLabel={k("walk.you")} onContextLost={lostCb}
+                resetKey={resetKey} zoneNames={zoneNames} youLabel={k("walk.you")} onContextLost={lostCb} onContextRestored={restoredCb}
                 focus={focus} speech={speech} cinemaSrc={cinemaSrc} cinemaThumb={cinemaThumb} musicOn={musicOn} />
             </Suspense>
           ) : (

@@ -15,6 +15,8 @@ export interface WalkInput {
   mx: number; mz: number;
   /** Qarash (piksel, yig'iladi; sahna har kadrda o'qib nolga tushiradi). */
   lookX: number; lookY: number;
+  /** Kamera masofasi (g'ildirak bilan), 1.8 … 9 m. */
+  zoom: number;
   run: boolean;
   /** Birinchi shaxs ko'rinishi (V). */
   fp: boolean;
@@ -28,7 +30,7 @@ export interface WalkBridge {
   onPos?: (x: number, z: number) => void;
 }
 export const newBridge = (onNear: WalkBridge["onNear"], onSeat: WalkBridge["onSeat"]): WalkBridge => ({
-  input: { mx: 0, mz: 0, lookX: 0, lookY: 0, run: false, fp: false }, cmds: [], onNear, onSeat,
+  input: { mx: 0, mz: 0, lookX: 0, lookY: 0, zoom: 4.2, run: false, fp: false }, cmds: [], onNear, onSeat,
 });
 
 const towards = (x: number, z: number, tx: number, tz: number) => Math.atan2(tx - x, tz - z);
@@ -65,3 +67,7 @@ export function places(): { key: string; zone: ZoneKey | "computer"; x: number; 
   return out;
 }
 export const GAME_TV = GAME.tv;
+
+/** Sichqoncha/barmoq sezgirligi (0.4 … 2.5) — eslab qolinadi. */
+export const SENS_KEY = "aiOffice.sens";
+export const readSens = () => { try { const v = Number(localStorage.getItem(SENS_KEY)); return v >= 0.4 && v <= 2.5 ? v : 1; } catch { return 1; } };

@@ -333,6 +333,20 @@ test('AI ofis: "Ofisga kirish" — yurish rejimi, agent oldiga borib buyruq, o\'
   // O'yin ilovasi (Pong) — TV bilan bir xil canvas
   await page.getByTestId('ai-office-pc-app-game').click();
   await expect(page.getByTestId('ai-office-game').locator('canvas')).toBeVisible();
+  // Boshqa o'yinlar: 2048, ilon, X-O — tanlanadi va tugmalar bilan o'ynaladi
+  for (const g of ['g2048', 'snake', 'ttt', 'blocks', 'breakout', 'racer']) {
+    await page.getByTestId(`ai-office-game-${g}`).click();
+    await expect(page.getByTestId(`ai-office-game-${g}`)).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByTestId('ai-office-game').locator('canvas')).toBeVisible();
+  }
+  await page.getByTestId('ai-office-game-a').click();
+  // Kompyuterdagi musiqa, kino, fayllar ilovalari
+  await page.getByTestId('ai-office-pc-app-music').click();
+  await expect(page.getByTestId('ai-office-pc-media')).toBeVisible();
+  await page.getByTestId('ai-office-pc-app-cinema').click();
+  await expect(page.getByTestId('ai-office-pc-media').getByTestId('ai-office-cinema-url')).toBeVisible();
+  await page.getByTestId('ai-office-pc-app-files').click();
+  await expect(page.getByTestId('ai-office-pc-files')).toBeVisible();
   await page.getByTestId('ai-office-pc-close').click();
   await expect(pc).toHaveCount(0);
 

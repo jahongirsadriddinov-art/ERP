@@ -7,7 +7,7 @@ import { currentMovie, mediaStore, useMedia } from "./mediaStore";
 import { ROOMS } from "./layout";
 import AgentPanel from "./AgentPanel";
 import { Desktop, GameView, type ErpLink } from "./Desktop";
-import { newBridge, places, type SeatKind, type Target } from "./walk";
+import { newBridge, places, readSens, SENS_KEY, type SeatKind, type Target } from "./walk";
 import type { ScreenHub } from "./screens";
 import type { OfficeSceneProps } from "./OfficeScene";
 
@@ -36,6 +36,10 @@ export default function WalkMode({ agents, profiles, setup, scene, onExit, onCha
   const [locked, setLocked] = useState(false);
   const [fp, setFp] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  const [sens, setSens] = useState(readSens);
+  const sensRef = useRef(sens); sensRef.current = sens;
+  const [help, setHelp] = useState(() => { try { return localStorage.getItem("aiOffice.walkHelp") !== "1"; } catch { return true; } });
+  const closeHelp = () => { setHelp(false); try { localStorage.setItem("aiOffice.walkHelp", "1"); } catch { /* */ } };
   const mm = useMedia();
   const inCinema = useRef(false);
   const [speech, setSpeech] = useState<{ id: string; text: string } | null>(null);
@@ -122,8 +126,9 @@ export default function WalkMode({ agents, profiles, setup, scene, onExit, onCha
       const L = live.current;
       const key = norm(e.key.toLowerCase());
       if (key === "escape") { if (L.talking) setTalking(null); else if (L.seat) bridge.cmds.push({ type: "stand" }); else if (!document.pointerLockElement && !document.fullscreenElement) L.onExit(); return; }
-      if (MOVE.includes(key)) { keys.add(key); upd(); e.preventDefault(); return; }
+      // Panel/kompyuter ochiq — yangi bosishlar o'yinchini yurgizmaydi (lekin oldin bosib turilgani tozalanmaydi)
       if (L.overlay) return;
+      if (MOVE.includes(key)) { keys.add(key); upd(); e.preventDefault(); return; }
       if (key === "e" || key === "у") { L.interact(); e.preventDefault(); return; }
       if (key === "v" || key === "м") { bridge.input.fp = !bridge.input.fp; setFp(bridge.input.fp); }
     };
@@ -147,6 +152,8 @@ export default function WalkMode({ agents, profiles, setup, scene, onExit, onCha
   const drag = useRef<{ id: number; x: number; y: number; moved: number } | null>(null);
   const onDown = (e: React.PointerEvent) => {
     if (overlay || (e.target as HTMLElement).closest("[data-ui]")) return;
+    // Telefonda qarash — faqat ekranning o'ng yarmidan (chapda joystik)
+    if (e.pointerType === "touch" && e.clientX < window.innerWidth * 0.4) return;
     // Sahnaga bosildi — fokus ofisga (maydon/iframe'da qolgan fokus tugmalarni to'smasin)
     try { (document.activeElement as HTMLElement | null)?.blur?.(); } catch { /* */ }
     root.current?.focus({ preventScroll: true });
@@ -158,7 +165,7 @@ export default function WalkMode({ agents, profiles, setup, scene, onExit, onCha
     if (!d || d.id !== e.pointerId) return;
     const dx = e.clientX - d.x, dy = e.clientY - d.y;
     d.moved += Math.abs(dx) + Math.abs(dy);
-    bridge.input.lookX += dx * (touch ? 1.6 : 1); bridge.input.lookY += dy * (touch ? 1.2 : 1);
+    bridge.input.lookX += dx * (touch ? 1.6 : 1) * sensRef.current; bridge.input.lookY += dy * (touch ? 1.2 : 1) * sensRef.current;
     d.x = e.clientX; d.y = e.clientY;
   };
   const onUp = (e: React.PointerEvent) => {
@@ -172,7 +179,11 @@ export default function WalkMode({ agents, profiles, setup, scene, onExit, onCha
   // Pointer lock paytida harakat (mousemove hujjatda)
   useEffect(() => {
     if (!locked) return;
-    const mm = (e: MouseEvent) => { bridge.input.lookX += e.movementX; bridge.input.lookY += e.movementY; };
+    // Pointer Lock'dagi ba'zan keladigan katta "sakrash"lar (brauzer xatosi) e'tiborsiz qoldiriladi
+    const mm = (e: MouseEvent) => {
+      if (Math.abs(e.movementX) > 250 || Math.abs(e.movementY) > 250) return;
+      bridge.input.lookX += e.movementX * sensRef.current; bridge.input.lookY += e.movementY * sensRef.current;
+    };
     document.addEventListener("mousemove", mm);
     return () => document.removeEventListener("mousemove", mm);
   }, [locked, bridge]);
@@ -191,7 +202,8 @@ export default function WalkMode({ agents, profiles, setup, scene, onExit, onCha
   return (
     <div ref={root} tabIndex={-1} className="fixed inset-0 z-[90] bg-[#0f1115] select-none overscroll-none touch-none outline-none" data-testid="ai-office-walk"
       onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={() => { drag.current = null; }}
-      onContextMenu={(e) => e.preventDefault()}>
+      onContextMenu={(e) => e.preventDefault()}
+      onWheel={(e) => { if ((e.target as HTMLElement).closest("[data-ui]")) return; bridge.input.zoom = Math.max(1.8, Math.min(9, bridge.input.zoom + e.deltaY * 0.004)); }}>
       <Suspense fallback={null}>
         <OfficeScene agents={agents} selectedId={talking} onSelect={() => {}} resetKey={0} {...scene}
           walk={{ bridge, talkingId: talking, holding }} onHub={setHub} speech={speech} />
@@ -255,7 +267,18 @@ export default function WalkMode({ agents, profiles, setup, scene, onExit, onCha
       )}
       {!locked && !touch && !overlay && <div className="pointer-events-none absolute inset-0 grid place-items-center"><span className="w-1.5 h-1.5 rounded-full bg-white/70" /></div>}
 
-      {touch && !overlay && <Joystick onMove={(x, z) => { bridge.input.mx = x; bridge.input.mz = z; bridge.input.run = Math.hypot(x, z) > 0.92; }} />}
+      {touch && !overlay && <Joystick onMove={(x, z, run) => { bridge.input.mx = x; bridge.input.mz = z; bridge.input.run = run; }} />}
+      {help && !overlay && !menu && (
+        <div data-ui className="absolute z-30 right-2 top-14 w-[min(300px,calc(100vw-16px))] rounded-2xl bg-black/75 text-white backdrop-blur p-3 space-y-2 text-[12px]" data-testid="ai-office-walk-help">
+          <div className="flex items-center"><p className="font-bold text-[13px] flex-1">🎮 {k("walk.helpTitle")}</p>
+            <button type="button" onClick={closeHelp} className="w-7 h-7 rounded-full hover:bg-white/15" aria-label={k("close")} data-testid="ai-office-walk-help-close">✕</button></div>
+          <p className="whitespace-pre-line leading-relaxed opacity-90">{touch ? k("walk.helpTouch") : k("walk.helpKeys")}</p>
+          <label className="flex items-center gap-2"><span className="opacity-80">{k("walk.sens")}</span>
+            <input type="range" min={0.4} max={2.5} step={0.1} value={sens} data-testid="ai-office-sens" className="flex-1"
+              onChange={(e) => { const v = Number(e.target.value); setSens(v); try { localStorage.setItem(SENS_KEY, String(v)); } catch { /* */ } }} /></label>
+        </div>
+      )}
+      {!help && !menu && <button data-ui type="button" onClick={() => setHelp(true)} className="absolute z-20 right-2 top-14 w-9 h-9 rounded-full bg-black/60 text-white font-bold" aria-label={k("walk.helpTitle")} data-testid="ai-office-walk-help-open">?</button>}
 
       {/* Agent bilan suhbat — buyruq paneli */}
       {sel && (
@@ -267,14 +290,14 @@ export default function WalkMode({ agents, profiles, setup, scene, onExit, onCha
       )}
       {seat === "computer" && (
         <div data-ui className="absolute inset-0 z-40">
-          <Desktop pong={hub?.pong || null} links={erpLinks} onClose={() => bridge.cmds.push({ type: "stand" })}
+          <Desktop hub={hub} links={erpLinks} onClose={() => bridge.cmds.push({ type: "stand" })}
             onLink={(key) => { onExit(); onNavigate?.(key); }} />
         </div>
       )}
       {seat === "game" && (
         <div data-ui className="absolute inset-0 z-40 grid place-items-center p-3 bg-black/50">
           <div className="w-full max-w-[760px] aspect-[16/10] max-h-full flex flex-col">
-            <GameView pong={hub?.pong || null} k={k} big />
+            <GameView hub={hub} k={k} big />
             <button type="button" onClick={() => bridge.cmds.push({ type: "stand" })} className="mt-2 self-center h-9 px-4 rounded-full bg-white text-[#1f2328] text-[13px] font-semibold">{k("walk.stand")}</button>
           </div>
         </div>
@@ -284,24 +307,27 @@ export default function WalkMode({ agents, profiles, setup, scene, onExit, onCha
 }
 
 /** Ekrandagi joystik (telefon): chap pastda; markazdan og'ish → harakat yo'nalishi. */
-function Joystick({ onMove }: { onMove: (x: number, z: number) => void }) {
+function Joystick({ onMove }: { onMove: (x: number, z: number, run: boolean) => void }) {
   const base = useRef<HTMLDivElement>(null);
   const [knob, setKnob] = useState({ x: 0, y: 0 });
   const id = useRef<number | null>(null);
-  const R = 52;
+  // Ikki marta tegish — yugurish (keyingi qo'yib yuborishgacha)
+  const lastTap = useRef(0);
+  const run = useRef(false);
+  const R = 62;
   const upd = (e: React.PointerEvent) => {
     const b = base.current!.getBoundingClientRect();
     let dx = e.clientX - (b.left + b.width / 2), dy = e.clientY - (b.top + b.height / 2);
     const d = Math.hypot(dx, dy);
     if (d > R) { dx = (dx / d) * R; dy = (dy / d) * R; }
     setKnob({ x: dx, y: dy });
-    onMove(dx / R, -dy / R);
+    onMove(dx / R, -dy / R, run.current || Math.hypot(dx, dy) > R * 0.95);
   };
-  const end = () => { id.current = null; setKnob({ x: 0, y: 0 }); onMove(0, 0); };
+  const end = () => { id.current = null; run.current = false; setKnob({ x: 0, y: 0 }); onMove(0, 0, false); };
   return (
     <div data-ui ref={base} data-testid="ai-office-joystick"
-      className="absolute z-20 left-[max(1rem,env(safe-area-inset-left))] bottom-[max(1.25rem,env(safe-area-inset-bottom))] w-[128px] h-[128px] rounded-full bg-white/15 border border-white/30 backdrop-blur touch-none"
-      onPointerDown={(e) => { e.stopPropagation(); id.current = e.pointerId; (e.target as HTMLElement).setPointerCapture?.(e.pointerId); upd(e); }}
+      className="absolute z-20 left-[max(1rem,env(safe-area-inset-left))] bottom-[max(1.25rem,env(safe-area-inset-bottom))] w-[150px] h-[150px] rounded-full bg-white/15 border border-white/30 backdrop-blur touch-none"
+      onPointerDown={(e) => { e.stopPropagation(); const now = performance.now(); run.current = now - lastTap.current < 320; lastTap.current = now; id.current = e.pointerId; (e.target as HTMLElement).setPointerCapture?.(e.pointerId); upd(e); }}
       onPointerMove={(e) => { e.stopPropagation(); if (id.current === e.pointerId) upd(e); }}
       onPointerUp={(e) => { e.stopPropagation(); end(); }} onPointerCancel={end}>
       <div className="absolute left-1/2 top-1/2 w-14 h-14 -ml-7 -mt-7 rounded-full bg-white/80 shadow-lg" style={{ transform: `translate(${knob.x}px, ${knob.y}px)` }} />

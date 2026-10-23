@@ -15,8 +15,9 @@ import { EscClose, fmt, fmtUsd, roleLabel, type AppUser, type Expense, type Proj
 import { EditExpenseModal } from "./FinancePage";
 import { MoneyField, moneyOf, useShowInUzs, InUzsToggle, parseAmount, type Cur } from "./components/Money";
 
-// Kirim (owner 2026-10-22): kirimni faqat direktor va o'rinbosar kiritadi. Direktor hammaning kirimini KIM kiritgani
-// bo'yicha ko'radi ("o'rinbosar shuncha so'm kirim qildi"), o'rinbosar — faqat o'zinikini (server shu qoida bilan beradi).
+// Kirim (owner 2026-10-23): kirimni HAR BIR rol kiritadi. Direktor va o'rinbosar hammaning kirimini KIM kiritgani
+// bo'yicha ko'radi ("prorab shuncha so'm kirim qildi"), boshqalar — faqat o'zinikini (server shu qoida bilan beradi).
+// Obyekt tanlovi — foydalanuvchiga ko'ringan (biriktirilgan) obyektlar; server ham shuni tekshiradi.
 
 export function IncomePanel({ currentUser, users, projects, incomes, onAdded, onUpdated, onDeleted }: {
   currentUser: AppUser; users: AppUser[]; projects: Project[]; incomes: Expense[];
@@ -27,7 +28,7 @@ export function IncomePanel({ currentUser, users, projects, incomes, onAdded, on
   const [person, setPerson] = useState<string>("all");
   const [showAdd, setShowAdd] = useState(false);
   const [edit, setEdit] = useState<Expense | null>(null);
-  const isDirector = currentUser.role === "direktor" || !!(currentUser as any).isOwner;
+  const isDirector = currentUser.role === "direktor" || currentUser.role === "orinbosar" || !!(currentUser as any).isOwner;
   const [inUzs, setInUzs] = useShowInUzs();
   const hasFx = incomes.some((e) => e.currency && e.currency !== "UZS");
 

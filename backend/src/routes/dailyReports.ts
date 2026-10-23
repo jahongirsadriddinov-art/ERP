@@ -7,6 +7,7 @@ import { getTenant } from '../middleware/tenantContext';
 import { todayInTashkent } from '../utils/tz';
 import { normalizeReport, parseReportText, saveReport } from '../services/dailyReport';
 import { logAudit } from '../services/audit';
+import { allowedObjectIds, canAccessObject, OBJECT_FORBIDDEN } from '../middleware/objectScope';
 
 // Kunlik hisobotlar (owner 2026-10-19) — ilovadan: matn (yoki ovoz yozuvi matni) → AI → ko'rib chiqish → saqlash.
 // Ko'rish: rahbar — hammasi; prorab/brigadir — o'z obyektlari; ishchi — o'zi yozganlari.
@@ -20,10 +21,11 @@ router.get('/', async (req, res) => {
     const filter: any = {};
     if (/^[a-f0-9]{24}$/i.test(q.objectId || '')) filter.objectId = q.objectId;
     if (!BOSS.includes(String(t?.role)) && !t?.isOwner) {
+      // Obyekt doirasi (owner 2026-10-23): biriktirilgan obyektlar (projectIds + foremanId)
+      const allowed = (await allowedObjectIds()) || [];
+      if (filter.objectId && !allowed.includes(String(filter.objectId))) return res.json([]);
       if (['prorab', 'brigadir'].includes(String(t?.role))) {
-        const me: any = await User.findById(t?.userId).select('projectIds').lean();
-        const own = (await ObjectModel.find(scoped({ foremanId: String(t?.userId) })).select('_id').lean()).map((o: any) => String(o._id));
-        filter.$or = [{ userId: String(t?.userId) }, { objectId: { $in: [...own, ...(me?.projectIds || []).map(String)] } }];
+        filter.$or = [{ userId: String(t?.userId) }, { objectId: { $in: allowed } }];
       } else filter.userId = String(t?.userId);
     }
     const items = await DailyReport.find(scoped(filter)).sort({ date: -1, createdAt: -1 }).limit(60).lean();
@@ -37,7 +39,8 @@ router.post('/parse', async (req, res) => {
   try {
     const text = String(req.body?.text || '').trim();
     if (text.length < 5) return res.status(400).json({ error: 'Hisobot matni juda qisqa' });
-    const objs: any[] = await ObjectModel.find(scoped({ status: { $ne: 'completed' } }) as any).select('name').limit(60).lean();
+    const allowed = await allowedObjectIds();
+    const objs: any[] = await ObjectModel.find(scoped({ status: { $ne: 'completed' }, ...(allowed === null ? {} : { _id: { $in: allowed } }) }) as any).select('name').limit(60).lean();
     const parsed = await parseReportText(text, objs.map((o) => String(o.name || ''))).catch(() => null);
     if (!parsed) return res.status(422).json({ error: "AI hisobotni tushunmadi — aniqroq yozing" });
     res.json(parsed);
@@ -56,6 +59,7 @@ router.post('/', async (req, res) => {
     if (/^[a-f0-9]{24}$/i.test(String(req.body?.objectId || ''))) {
       const o: any = await ObjectModel.findOne(scoped({ _id: req.body.objectId })).select('name').lean();
       if (!o) return res.status(404).json({ error: 'Obyekt topilmadi' });
+      if (!(await canAccessObject(o._id))) return res.status(403).json(OBJECT_FORBIDDEN);
       objectId = String(o._id); objectName = String(o.name);
     }
     const me: any = await User.findById(t?.userId).select('firstName lastName').lean();
@@ -107,6 +111,7 @@ router.patch('/:id', async (req, res) => {
       else {
         const o: any = /^[a-f0-9]{24}$/i.test(String(req.body.objectId)) ? await ObjectModel.findOne(scoped({ _id: req.body.objectId })).select('name').lean() : null;
         if (!o) return res.status(404).json({ error: 'Obyekt topilmadi' });
+        if (!(await canAccessObject(o._id))) return res.status(403).json(OBJECT_FORBIDDEN);
         Object.assign(set, { objectId: String(o._id), objectName: String(o.name) });
       }
     }

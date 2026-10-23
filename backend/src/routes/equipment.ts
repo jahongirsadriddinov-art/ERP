@@ -9,6 +9,7 @@ import EquipmentLog from '../models/EquipmentLog';
 import { todayInTashkent } from '../utils/tz';
 import { getBackendUrl } from '../utils/backendUrl';
 import { randomBytes } from 'crypto';
+import { allowedObjectIds, canAccessObject, OBJECT_FORBIDDEN } from '../middleware/objectScope';
 
 const router = Router();
 
@@ -17,7 +18,10 @@ const router = Router();
 // o'zgartira/o'chira oladi (objects.ts'dagi bir xil naqsh).
 router.get('/', async (req, res) => {
   try {
-    const list = await Equipment.find(scoped()).sort({ createdAt: -1 }).lean();
+    // Obyekt doirasi (owner 2026-10-23): rahbar bo'lmagan xodim — biriktirilgan obyektlardagi va o'ziga berilgan texnika
+    const allowed = await allowedObjectIds();
+    const own = allowed === null ? {} : { $or: [{ objectId: { $in: allowed } }, { assignedToUserId: String(getTenant()?.userId || '') }] };
+    const list = await Equipment.find(scoped(own)).sort({ createdAt: -1 }).lean();
     // XAVFSIZLIK (audit 2026-10-22): treker tokeni bilan login'siz motor-soat/joylashuv yoziladi
     // (/api/public/telemetry/:token) — oddiy xodim uni olib, soxta ma'lumot (yoqilg'i o'g'irligini
     // yashirish uchun motor-soat) yubora olardi. Token faqat rahbarga qaytariladi.
@@ -96,11 +100,17 @@ router.patch('/:id', requireOwnerOrAdmin, async (req, res) => {
   }
 });
 
+// Obyekt doirasi: rahbar — hammasi; boshqalar — biriktirilgan obyektdagi yoki o'ziga berilgan texnika
+async function equipmentVisible(eq: any): Promise<boolean> {
+  if (String(eq?.assignedToUserId || '') === String(getTenant()?.userId || '-')) return true;
+  return canAccessObject(eq?.objectId);
+}
+
 // ── Texnika jurnali: ishlagan soat, yoqilg'i (prorab/rahbar qo'lda) ──
 router.get('/:id/logs', async (req, res) => {
   try {
-    const eq = await Equipment.findOne(scoped({ _id: req.params.id })).select('_id').lean();
-    if (!eq) return res.status(404).json({ error: 'Topilmadi' });
+    const eq: any = await Equipment.findOne(scoped({ _id: req.params.id })).select('_id objectId assignedToUserId').lean();
+    if (!eq || !(await equipmentVisible(eq))) return res.status(404).json({ error: 'Topilmadi' });
     const logs = await EquipmentLog.find({ equipmentId: String(req.params.id) }).sort({ date: -1, createdAt: -1 }).limit(120).lean();
     res.json(logs.map((l: any) => ({ ...l, id: l._id })));
   } catch (err) {
@@ -113,6 +123,7 @@ router.post('/:id/logs', async (req, res) => {
     if (!['direktor', 'orinbosar', 'prorab', 'brigadir'].includes(String(t?.role)) && !t?.isOwner) return res.status(403).json({ error: "Ruxsat yo'q" });
     const eq: any = await Equipment.findOne(scoped({ _id: req.params.id }));
     if (!eq) return res.status(404).json({ error: 'Topilmadi' });
+    if (!(await equipmentVisible(eq))) return res.status(403).json(OBJECT_FORBIDDEN);
     const b = req.body || {};
     const n = (v: unknown, max: number) => (v === undefined || v === null || v === '' ? undefined : Number.isFinite(Number(v)) && Number(v) >= 0 && Number(v) <= max ? Number(v) : NaN);
     const hours = n(b.hours, 24), fuel = n(b.fuel, 5000), engineHours = n(b.engineHours, 1e7);

@@ -14,6 +14,7 @@ import { getBackendUrl } from '../utils/backendUrl';
 import { randomBytes } from 'crypto';
 import { planFactFor, type PlanFact } from '../services/planFact';
 import { analyzeMedia } from '../services/photoAnalysis';
+import { allowedObjectIds, canAccessObject } from '../middleware/objectScope';
 
 const coordsFromBody = (lat: any, lng: any, radius: any) => {
   const out: any = {};
@@ -257,9 +258,9 @@ async function planFactScope(): Promise<{ filter: Record<string, unknown>; boss:
   const boss = !!t?.isOwner || ['direktor', 'orinbosar'].includes(String(t?.role));
   if (boss) return { filter: scoped({}), boss };
   if (['prorab', 'brigadir'].includes(String(t?.role))) {
-    const me: any = await User.findById(t?.userId).select('projectIds').lean().catch(() => null);
-    const ids = (me?.projectIds || []).map(String);
-    return { filter: scoped({ $or: [{ foremanId: String(t?.userId) }, { _id: { $in: ids } }] }), boss };
+    // Obyekt doirasi (owner 2026-10-23): faqat biriktirilgan obyektlar (projectIds + foremanId)
+    const ids = (await allowedObjectIds()) || [];
+    return { filter: scoped({ _id: { $in: ids } }), boss };
   }
   return null;
 }
@@ -279,7 +280,8 @@ router.get('/:id/plan-fact', async (req, res) => {
     if (!/^[a-f0-9]{24}$/i.test(String(req.params.id))) return res.status(400).json({ error: "Noto'g'ri id" });
     const sc = await planFactScope();
     if (!sc) return res.status(403).json({ error: "Ruxsat yo'q" });
-    const [one] = await planFactFor({ ...sc.filter, _id: req.params.id });
+    // $and — doira filtridagi _id ($in) ustidan yozib yuborilmasin
+    const [one] = await planFactFor({ $and: [sc.filter, { _id: req.params.id }] });
     if (!one) return res.status(404).json({ error: 'Obyekt topilmadi' });
     res.json(planFactVisible([one], sc.boss)[0]);
   } catch (err) {
@@ -290,7 +292,9 @@ router.get('/:id/plan-fact', async (req, res) => {
 
 router.get('/', async (req, res) => {
   try {
-    const objects = await ObjectModel.find(scoped()).sort({ createdAt: -1 }).lean();
+    // Obyekt doirasi (owner 2026-10-23): rahbardan boshqa rol faqat o'ziga biriktirilgan obyektlarni ko'radi
+    const allowed = await allowedObjectIds();
+    const objects = await ObjectModel.find(scoped(allowed === null ? {} : { _id: { $in: allowed } })).sort({ createdAt: -1 }).lean();
     // Owner 2026-10-22: byudjet va mijoz havolasi — faqat rahbarlarga (direktor/o'rinbosar/egasi)
     const tn = getTenant();
     const boss = !!tn?.isOwner || ['direktor', 'orinbosar'].includes(String(tn?.role)) || !!tn?.isDeveloper;
@@ -464,7 +468,7 @@ router.delete('/:id', requireOwnerOrAdmin, async (req, res) => {
 router.get('/:id/media', async (req, res) => {
   try {
     const obj = await ObjectModel.findOne(scoped({ _id: req.params.id })).select('_id').lean();
-    if (!obj) return res.status(404).json({ error: 'Obyekt topilmadi' });
+    if (!obj || !(await canAccessObject(req.params.id))) return res.status(404).json({ error: 'Obyekt topilmadi' });
     const media = await ProjectMedia.find({ objectId: req.params.id }).sort({ createdAt: -1 }).lean();
     res.json(media.map(m => ({ id: m._id, type: m.type, url: m.url, caption: m.caption, uploadedBy: m.uploadedBy, createdAt: m.createdAt })));
   } catch (err) {
@@ -483,7 +487,7 @@ router.post('/:id/media', async (req, res) => {
     if (!['image', 'video'].includes(type)) return res.status(400).json({ error: "Tur 'image' yoki 'video' bo'lishi kerak" });
 
     const obj = await ObjectModel.findOne(scoped({ _id: req.params.id })).select('_id').lean();
-    if (!obj) return res.status(404).json({ error: 'Obyekt topilmadi' });
+    if (!obj || !(await canAccessObject(req.params.id))) return res.status(404).json({ error: 'Obyekt topilmadi' });
 
     const actor = await User.findById(t.userId).lean().catch(() => null);
     if (!actor) return res.status(401).json({ error: 'Foydalanuvchi topilmadi' });
@@ -525,7 +529,7 @@ router.patch('/:id/media/:mediaId', async (req, res) => {
     const t = getTenant();
     if (!t?.userId) return res.status(401).json({ error: 'Autentifikatsiya talab etiladi' });
     const media = await ProjectMedia.findOne(scoped({ _id: req.params.mediaId, objectId: req.params.id }));
-    if (!media) return res.status(404).json({ error: 'Topilmadi' });
+    if (!media || !(await canAccessObject(req.params.id))) return res.status(404).json({ error: 'Topilmadi' });
     const isOwner = String(media.uploadedBy?.userId) === String(t.userId);
     const isBoss = t.role === 'direktor' || t.role === 'orinbosar';
     if (!isOwner && !isBoss) return res.status(403).json({ error: 'Faqat yuklagan xodim yoki admin tahrirlay oladi' });
@@ -545,7 +549,7 @@ router.delete('/:id/media/:mediaId', async (req, res) => {
     const t = getTenant();
     if (!t?.userId) return res.status(401).json({ error: 'Autentifikatsiya talab etiladi' });
     const media = await ProjectMedia.findOne(scoped({ _id: req.params.mediaId, objectId: req.params.id }));
-    if (!media) return res.status(404).json({ error: 'Topilmadi' });
+    if (!media || !(await canAccessObject(req.params.id))) return res.status(404).json({ error: 'Topilmadi' });
     const isOwner = String(media.uploadedBy?.userId) === String(t.userId);
     const isBoss = t.role === 'direktor' || t.role === 'orinbosar';
     if (!isOwner && !isBoss) return res.status(403).json({ error: 'Faqat yuklagan xodim yoki admin o\'chira oladi' });

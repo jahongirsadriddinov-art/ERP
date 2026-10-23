@@ -12,6 +12,7 @@ import { normalizePhone, isValidUzPhone, hashPassword, verifyPassword, isStrongP
 import { checkRate } from '../utils/rateLimit';
 import { issueTokenWithSession } from '../services/sessions';
 import { GuardCaller, checkRoleAssign, checkTargetAccess, formatPhone, phoneTaken, auditUserAction } from '../utils/userGuards';
+import { onPhoneChanged } from '../services/telegramIdentity';
 
 const router = Router();
 
@@ -733,6 +734,8 @@ router.put('/users/:id', requireAuth, requireOwnerOrAdmin, async (req, res) => {
     if (Array.isArray(projectIds)) user.projectIds = projectIds;
     if (phoneChange) user.phone = newPhone;
     await user.save();
+    // Owner 2026-10-23: raqam o'zgardi — eski Telegram (bot, AI qo'ng'iroqlari, AI kontakti) darhol unutiladi
+    if (phoneChange) await onPhoneChanged(String(user._id), oldPhone, newPhone);
 
     // Rol va telefon o'zgarishi — eng nozik amallar (imtiyoz eskalatsiyasi / hisobni egallash) —
     // audit jurnaliga yoziladi.

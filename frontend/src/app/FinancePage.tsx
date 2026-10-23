@@ -51,9 +51,9 @@ export function FinancePage({ currentUser, users, projects, expenses, onAddExpen
   const [filtersOpen, setFiltersOpen] = useState(false);
   // Owner 2026-10-22: o'zi qo'shganini — o'zi (tasdiqlanmaguncha), hammasini — direktor/o'rinbosar (backend bilan bir xil qoida)
   const isBoss = ['direktor','orinbosar'].includes(currentUser.role) || !!(currentUser as any).isOwner;
-  // Kirim bo'limi — faqat direktor/o'rinbosar (owner 2026-10-22)
+  // Kirim bo'limi — HAMMA rolga (owner 2026-10-23): rahbar hammaning kirimini, boshqalar faqat o'zinikini ko'radi (server beradi)
   const [section, setSection] = usePersistentState<"exp" | "inc">("finance.section", "exp", oneOf(["exp", "inc"]));
-  const showIncome = isBoss && section === "inc";
+  const showIncome = section === "inc";
   const canEdit = (e: Expense) => isBoss || (e.createdById === currentUser.id && e.status !== "confirmed");
   const removeExp = async (e: Expense) => {
     if (!(await confirmDialog(t('finance.deleteConfirm', { defaultValue: "Bu yozuv o'chirilsinmi?" }), { danger: true, okText: t('common.delete', { defaultValue: "O'chirish" }) }))) return;
@@ -90,7 +90,7 @@ export function FinancePage({ currentUser, users, projects, expenses, onAddExpen
     jihozlar: { icon: WrenchIc, tone: "violet", acc: "#8b5cf6" }, transport: { icon: TruckIc, tone: "teal", acc: "#14b8a6" },
     boshqa: { icon: MoreIc, tone: "slate", acc: "#64748b" }, expense: { icon: InvoiceIc, tone: "amber", acc: "#f59e0b" },
   };
-  const sectionTabs = isBoss && (
+  const sectionTabs = (
     <div className="flex p-1 rounded-full bg-muted flex-shrink-0" role="tablist" data-testid="finance-section">
       {(["exp", "inc"] as const).map((s) => (
         <button key={s} type="button" role="tab" aria-selected={section === s} onClick={() => setSection(s)}

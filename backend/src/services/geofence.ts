@@ -3,6 +3,7 @@
 // aniqlanib, obyektga saqlab qo'yiladi. Hech bir obyektning koordinatasi bo'lmasa — cheklov qo'llanmaydi.
 import ObjectModel from '../models/Object';
 import User from '../models/User';
+import { assignedObjectIdsFor } from '../middleware/objectScope';
 
 export const DEFAULT_GEOFENCE_M = 300;
 
@@ -31,10 +32,11 @@ export type GeofenceResult = { ok: true; objectName?: string; distance?: number 
 /** Ishchining joylashuvi uning obyektlaridan birining hududida-mi? */
 export async function checkGeofence(userId: string, companyId: string | undefined, lat: number, lng: number): Promise<GeofenceResult> {
   if (!companyId) return { ok: true };
-  const user: any = await User.findById(userId).select('projectIds role').lean().catch(() => null);
+  const user: any = await User.findById(userId).select('projectIds role isOwner companyId').lean().catch(() => null);
   // Owner 2026-10-22: prorablarga joy tekshiruvi qo'llanmaydi (ular bir necha obyekt orasida yuradi)
   if (user?.role === 'prorab') return { ok: true };
-  const assigned: string[] = (user?.projectIds || []).map(String);
+  // Obyekt doirasi (owner 2026-10-23): biriktirilgan obyektlar = projectIds + o'zi prorab/mas'ul bo'lgan obyektlar
+  const assigned: string[] = user ? ((await assignedObjectIdsFor({ ...user, companyId }).catch(() => null)) || []) : [];
   const q: any = { companyId, status: { $ne: 'completed' } };
   if (assigned.length) q._id = { $in: assigned };
   let objs: any[] = await ObjectModel.find(q).select('name location lat lng geofenceRadius').lean();

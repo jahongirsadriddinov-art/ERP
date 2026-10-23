@@ -13,6 +13,7 @@ import { relayMessageToTelegram } from './messages';
 import { geminiAudioToJson, geminiConfigured } from '../services/gemini';
 import { checkRate } from '../utils/rateLimit';
 import { GuardCaller, checkRoleAssign, checkTargetAccess, formatPhone, phoneTaken, auditUserAction } from '../utils/userGuards';
+import { onPhoneChanged } from '../services/telegramIdentity';
 
 // Pullik AI xizmatlarini suiiste'moldan himoya — foydalanuvchi bo'yicha chegaralar
 const aiLimit = (name: string, max: number, windowMs: number) => (req: Request, res: Response, next: NextFunction) => {
@@ -420,8 +421,10 @@ router.post('/execute', requireAuth, requireBoss, requireFeature('ai_assistant')
       if (changes.lastName !== undefined) user.lastName = String(changes.lastName || '').trim();
       if (changes.role) user.role = changes.role;
       if (changes.brigade !== undefined) user.brigade = changes.brigade ? String(changes.brigade).trim() : '';
+      const phoneChanged = !!newPhone && newPhone !== before.phone;
       if (newPhone) user.phone = newPhone;
       await user.save();
+      if (phoneChanged) await onPhoneChanged(String(user._id), before.phone, newPhone);
 
       const updatedName = `${user.firstName}${user.lastName ? ' ' + user.lastName : ''}`;
       await auditUserAction(caller, req, {

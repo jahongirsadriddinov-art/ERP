@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import User from '../models/User';
 import ObjectModel from '../models/Object';
+import { allowedObjectIds } from '../middleware/objectScope';
 import Material from '../models/Material';
 import Transaction from '../models/Transaction';
 import Message from '../models/Message';
@@ -27,6 +28,8 @@ router.get('/', async (req, res) => {
     if (!actor) return res.status(401).json({ error: 'Foydalanuvchi topilmadi' });
 
     const results: Record<string, any[]> = {};
+    // Obyekt doirasi (owner 2026-10-23): rahbar bo'lmagan xodim faqat biriktirilgan obyektlar/materiallarni topadi
+    const allowedObjs = await allowedObjectIds();
 
     const searches: Promise<void>[] = [];
 
@@ -50,7 +53,7 @@ router.get('/', async (req, res) => {
 
     if (types.includes('objects')) {
       searches.push((async () => {
-        const filter = { ...scoped(), $or: [{ name: regex }, { location: regex }] };
+        const filter = { ...scoped(), $or: [{ name: regex }, { location: regex }], ...(allowedObjs === null ? {} : { _id: { $in: allowedObjs } }) };
         const objects = await ObjectModel.find(filter).select('name location status').limit(10).lean();
         results.objects = objects.map(o => ({ id: o._id, name: o.name, location: o.location, status: o.status, _type: 'object' }));
       })());
@@ -58,7 +61,7 @@ router.get('/', async (req, res) => {
 
     if (types.includes('materials')) {
       searches.push((async () => {
-        const filter = { ...scoped(), name: regex };
+        const filter = { ...scoped(), name: regex, ...(allowedObjs === null ? {} : { objectId: { $in: allowedObjs } }) };
         const mats = await Material.find(filter).select('name unit needed remaining objectId').limit(10).lean();
         results.materials = mats.map(m => ({ id: m._id, name: m.name, unit: m.unit, needed: m.needed, remaining: m.remaining, objectId: m.objectId, _type: 'material' }));
       })());

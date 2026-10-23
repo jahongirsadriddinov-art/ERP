@@ -7,6 +7,7 @@ import { getTenant } from '../middleware/tenantContext';
 import { requireOwnerOrAdmin } from '../middleware/auth';
 import { getBackendUrl } from '../utils/backendUrl';
 import { logAudit } from '../services/audit';
+import { allowedObjectIds, canAccessObject, optionalObjectAllowed, OBJECT_FORBIDDEN } from '../middleware/objectScope';
 
 const router = Router();
 
@@ -25,7 +26,13 @@ router.get('/', async (req, res) => {
   try {
     const { objectId } = req.query as Record<string, string>;
     const filter: any = scoped();
-    if (objectId) filter.objectId = objectId;
+    if (objectId) filter.objectId = String(objectId);
+    // Obyekt doirasi (owner 2026-10-23): rahbar bo'lmagan xodim — biriktirilgan obyektlar hujjatlari + o'zi yuklaganlar
+    const allowed = await allowedObjectIds();
+    if (allowed !== null) {
+      if (objectId && !allowed.includes(String(objectId))) return res.json([]);
+      filter.$or = [{ objectId: { $in: allowed } }, { 'uploadedBy.userId': String(getTenant()?.userId || '') }];
+    }
     const list = await CompanyDocument.find(filter).sort({ createdAt: -1 }).lean();
     res.json(list.map(d => ({ ...d, id: d._id })));
   } catch (err) {
@@ -43,6 +50,7 @@ router.post('/', async (req, res) => {
     if (!title || !String(title).trim()) return res.status(400).json({ error: 'Sarlavha kerak' });
     if (!fileUrl || !isOwnFileUrl(String(fileUrl))) return res.status(400).json({ error: "Fayl avval /api/messages/upload orqali yuklanishi kerak" });
 
+    if (!(await optionalObjectAllowed(objectId))) return res.status(403).json(OBJECT_FORBIDDEN);
     const actor = await User.findById(t.userId).lean().catch(() => null);
     if (!actor) return res.status(401).json({ error: 'Foydalanuvchi topilmadi' });
 
@@ -141,6 +149,7 @@ router.patch('/:id', async (req, res) => {
     }
     if (objectId !== undefined) {
       if (objectId && !(await ObjectModel.exists(scoped({ _id: String(objectId) })).catch(() => null))) return res.status(400).json({ error: 'Obyekt topilmadi' });
+      if (!(await optionalObjectAllowed(objectId))) return res.status(403).json(OBJECT_FORBIDDEN);
       set.objectId = objectId ? String(objectId) : undefined;
     }
     if (!Object.keys(set).length) return res.status(400).json({ error: "O'zgartirish yo'q" });

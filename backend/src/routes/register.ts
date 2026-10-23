@@ -1,3 +1,4 @@
+import { linkTelegram } from '../services/telegramIdentity';
 import { trialBlockedReason, markTrial } from '../services/trialGuard';
 import { Router } from 'express';
 import Registration from '../models/Registration';
@@ -406,6 +407,8 @@ router.post('/complete', async (req, res) => {
     // Firma egasini bog'laymiz
     createdCompany.ownerUserId = String(ownerUser._id);
     await createdCompany.save();
+    // Bitta Telegram ↔ bitta xodim (owner 2026-10-23): shu Telegram boshqa hisobda bo'lsa — undan ko'chiriladi
+    if (reg.telegramChatId) await linkTelegram(String(ownerUser._id), String(reg.telegramChatId), reg.telegramUserId).catch(() => undefined);
 
     if (isFreePlan) markTrial(req, { tg: reg.telegramUserId, phone: reg.phone, companyId: String(createdCompany._id), userId: String(ownerUser._id) }).catch(() => {});
     const now = new Date();

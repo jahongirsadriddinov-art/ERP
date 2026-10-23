@@ -10,6 +10,7 @@ import { tb, BotLang } from '../i18n/bot';
 import { logAudit } from '../services/audit';
 import { checkRate } from '../utils/rateLimit';
 import { requireOwnerOrAdmin } from '../middleware/auth';
+import { canAccessObject, OBJECT_FORBIDDEN } from '../middleware/objectScope';
 
 const router = Router();
 
@@ -23,6 +24,8 @@ const router = Router();
 // o'sha safar chetda qolib ketgan edi.
 router.get('/object/:objectId', async (req, res) => {
   try {
+    // Obyekt doirasi (owner 2026-10-23): biriktirilmagan obyekt materiallari — ko'rinmaydi
+    if (!(await canAccessObject(req.params.objectId))) return res.status(404).json({ error: 'Obyekt topilmadi' });
     const materials = await Material.find(scoped({ objectId: req.params.objectId }));
     res.json(materials);
   } catch (err) {
@@ -128,6 +131,7 @@ router.post('/send', async (req, res) => {
     if (!material) {
       return res.status(404).json({ error: 'Material topilmadi' });
     }
+    if (!(await canAccessObject(material.objectId))) return res.status(403).json(OBJECT_FORBIDDEN);
 
     if (material.remaining < amount) {
       return res.status(400).json({ error: 'Bunday miqdorda qoldiq yo\'q' });

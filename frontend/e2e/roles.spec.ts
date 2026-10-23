@@ -75,10 +75,12 @@ for (const role of ROLES) {
       await expect(page.getByRole('button', { name: 'AI Yordamchi' })).toHaveCount(isBoss(role) ? 1 : 0);
     }
 
-    // ── Moliya: Kirimlar bo'limi faqat rahbarga ──
+    // ── Moliya: Kirimlar bo'limi HAMMA rolga (owner 2026-10-23); kim kiritgani bo'yicha guruh — faqat rahbarga ──
     const section = page.getByTestId('finance-section');
-    if (isBoss(role)) await expect(section.getByRole('tab', { name: 'Kirimlar' })).toBeVisible();
-    else await expect(section).toHaveCount(0);
+    await section.getByRole('tab', { name: 'Kirimlar' }).click({ timeout: 20_000 });
+    await expect(page.getByTestId('income-add')).toBeVisible();
+    await expect(page.getByTestId('income-panel')).toContainText(isBoss(role) ? 'Jami kirim (hamma)' : 'Siz kiritgan kirim');
+    await section.getByRole('tab', { name: 'Chiqimlar' }).click();
 
     // ── Rahbar bo'limlari ochiladi (xatosiz) ──
     if (isBoss(role)) {

@@ -31,7 +31,8 @@ beforeAll(async () => {
   const mk = async (k: string, d: any) => { ids[k] = String((await User.create(d))._id); };
   await mk('owner', { firstName: 'Ega', phone: '+998905000001', role: 'direktor', isOwner: true, companyId: A });
   await mk('ish', { firstName: 'Ishchi', phone: '+998905000002', role: 'ishchi', companyId: A });
-  await Equipment.create({ name: 'Ekskavator', companyId: A, trackerToken: TOKEN } as any);
+  // Obyekt doirasi (owner 2026-10-23): ishchi faqat o'ziga berilgan / o'z obyektidagi texnikani ko'radi
+  await Equipment.create({ name: 'Ekskavator', companyId: A, trackerToken: TOKEN, assignedToUserId: ids.ish } as any);
 }, 120_000);
 
 afterAll(async () => {

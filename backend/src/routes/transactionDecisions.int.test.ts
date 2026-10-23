@@ -138,19 +138,21 @@ describe("tahrirlash (owner 2026-10-22): o'zi qo'shganini â€” o'zi, hammasini â€
   });
 });
 
-describe("kirim (owner 2026-10-22): faqat direktor/o'rinbosar kiritadi; direktor hammasini, o'rinbosar o'zinikini ko'radi", () => {
+describe("kirim (owner 2026-10-23): hamma kiritadi; direktor va o'rinbosar hammasini, boshqalar o'zinikini ko'radi", () => {
   const list = (k: string) => request(app).get('/api/transactions').set('Authorization', tok(k));
   const add = (k: string, body: any) => request(app).post('/api/transactions').set('Authorization', tok(k)).send(body);
   it('kiritish va ko\'rish qoidalari', async () => {
-    expect((await add('prorab', { type: 'income', amount: 5_000_000, description: 'Avans' })).status).toBe(403);
+    const pr = await add('prorab', { type: 'income', amount: 5_000_000, description: 'Avans' });
+    expect(pr.status).toBe(201);
+    expect(pr.body.status).toBe('confirmed');
     const r1 = await add('orin', { type: 'income', amount: 7_000_000, description: "Mijozdan to'lov" });
     expect(r1.status).toBeLessThan(300);
     await mkTx({ type: 'income', amount: 9_000_000, createdById: ids.owner, description: 'Direktor kirimi' });
     const own = (await list('owner')).body.filter((t: any) => t.type === 'income').map((t: any) => t.description).sort();
-    expect(own).toEqual(['Direktor kirimi', "Mijozdan to'lov"]);
-    const orin = (await list('orin')).body.filter((t: any) => t.type === 'income').map((t: any) => t.description);
-    expect(orin).toEqual(["Mijozdan to'lov"]);
-    expect((await list('prorab')).body.some((t: any) => t.type === 'income')).toBe(false);
+    expect(own).toEqual(['Avans', 'Direktor kirimi', "Mijozdan to'lov"]);
+    const orin = (await list('orin')).body.filter((t: any) => t.type === 'income').map((t: any) => t.description).sort();
+    expect(orin).toEqual(['Avans', 'Direktor kirimi', "Mijozdan to'lov"]);
+    expect((await list('prorab')).body.filter((t: any) => t.type === 'income').map((t: any) => t.description)).toEqual(['Avans']);
   });
   it("dollarda kirim (owner 2026-10-23): so'mga kurs bo'yicha o'giriladi, asl summa va kurs saqlanadi; tahrirda kurs saqlanadi", async () => {
     const r = await add('owner', { type: 'income', amount: 1_000, currency: 'USD', description: 'Dollar avans' });

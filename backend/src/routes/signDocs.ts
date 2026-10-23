@@ -7,6 +7,7 @@ import { getTenant } from '../middleware/tenantContext';
 import { nextSequence } from '../models/Counter';
 import { checkRate } from '../utils/rateLimit';
 import { logAudit } from '../services/audit';
+import { optionalObjectAllowed, OBJECT_FORBIDDEN } from '../middleware/objectScope';
 
 // Elektron hujjatlar va imzo. Yaratish/imzolash — rahbar va prorab; mijoz — ochiq havola orqali.
 const router = Router();
@@ -109,6 +110,8 @@ router.post('/', async (req, res) => {
     if (!ok) return res.status(403).json({ error: "Ruxsat yo'q" });
     const { type, data, projectId } = req.body || {};
     if (!TYPES.includes(type)) return res.status(400).json({ error: "Noto'g'ri hujjat turi" });
+    // Obyekt doirasi (owner 2026-10-23): prorab faqat o'z obyekti bo'yicha hujjat tuzadi
+    if (typeof projectId === 'string' && !(await optionalObjectAllowed(projectId))) return res.status(403).json(OBJECT_FORBIDDEN);
     const t = getTenant()!;
     const seq = await nextSequence(`signdoc-${t.companyId}-${type}-${new Date().getFullYear()}`);
     const number = `${PREFIX[type]}-${new Date().getFullYear()}-${String(seq).padStart(3, '0')}`;
@@ -136,7 +139,10 @@ router.put('/:id', async (req, res) => {
     if (!isBossUser(user) && String(doc.createdBy || '') !== String(getTenant()!.userId)) return res.status(403).json({ error: "Faqat hujjatni tuzgan xodim yoki direktor/o'rinbosar o'zgartira oladi" });
     if (doc.signatures.length) return res.status(409).json({ error: "Imzolangan hujjatni o'zgartirib bo'lmaydi" });
     doc.data = cleanData(req.body?.data);
-    if (typeof req.body?.projectId === 'string') doc.projectId = req.body.projectId;
+    if (typeof req.body?.projectId === 'string') {
+      if (!(await optionalObjectAllowed(req.body.projectId))) return res.status(403).json(OBJECT_FORBIDDEN);
+      doc.projectId = req.body.projectId;
+    }
     await doc.save();
     res.json({ ...doc.toObject(), id: doc._id });
   } catch (e) {

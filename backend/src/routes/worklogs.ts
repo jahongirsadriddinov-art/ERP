@@ -8,6 +8,7 @@ import { getTenant } from '../middleware/tenantContext';
 import { todayInTashkent } from '../utils/tz';
 import { createNotification } from '../services/notifications';
 import { logAudit } from '../services/audit';
+import { allowedObjectIds, canAccessObject, OBJECT_FORBIDDEN } from '../middleware/objectScope';
 
 // Ishbay hisob (owner 2026-10-19, ixtiyoriy): bajarilgan hajm × narx. Firma features.piecework yoqmagan bo'lsa —
 // yozish mumkin emas (o'qish ham bo'sh). Kiritadi: rahbar, prorab, brigadir; tasdiqlaydi: rahbar yoki o'sha
@@ -33,6 +34,12 @@ router.get('/', async (req, res) => {
     if (/^\d{4}-\d{2}$/.test(q.period || '')) filter.date = { $regex: `^${q.period}` };
     if (/^[a-f0-9]{24}$/i.test(q.objectId || '')) filter.objectId = q.objectId;
     if (!MANAGERS.includes(String(t?.role)) && !t?.isOwner) filter.userId = String(t?.userId);
+    else if (!isBoss(t)) {
+      // Obyekt doirasi (owner 2026-10-23): prorab/brigadir — faqat biriktirilgan obyektlar yozuvlari
+      const allowed = (await allowedObjectIds()) || [];
+      if (filter.objectId && !allowed.includes(String(filter.objectId))) return res.json({ enabled: true, items: [] });
+      if (!filter.objectId) filter.objectId = { $in: allowed };
+    }
     const items = await WorkLog.find(scoped(filter)).sort({ date: -1, createdAt: -1 }).limit(500).lean();
     res.json({ enabled: true, items: items.map((x: any) => ({ ...x, id: x._id })) });
   } catch (err) {
@@ -58,6 +65,7 @@ router.post('/', async (req, res) => {
       User.findById(t?.userId).select('firstName lastName role').lean(),
     ]);
     if (!obj || !worker || !actor) return res.status(404).json({ error: 'Obyekt yoki xodim topilmadi' });
+    if (!(await canAccessObject(obj._id))) return res.status(403).json(OBJECT_FORBIDDEN);
     const date = /^\d{4}-\d{2}-\d{2}$/.test(String(b.date || '')) ? String(b.date) : todayInTashkent();
     const name = (u: any) => `${u.firstName} ${u.lastName || ''}`.trim();
     const log = await WorkLog.create(stamped({
@@ -82,6 +90,7 @@ router.patch('/:id/:decision', async (req, res) => {
     const log: any = await WorkLog.findOne(scoped({ _id: req.params.id }));
     if (!log) return res.status(404).json({ error: 'Topilmadi' });
     if (log.status !== 'pending') return res.status(409).json({ error: 'Allaqachon hal qilingan' });
+    if (!(await canAccessObject(log.objectId))) return res.status(404).json({ error: 'Topilmadi' });
     const obj: any = await ObjectModel.findOne(scoped({ _id: log.objectId })).select('foremanId').lean();
     if (!isBoss(t) && String(obj?.foremanId || '') !== String(t?.userId)) return res.status(403).json({ error: "Faqat rahbar yoki obyekt prorabi tasdiqlaydi" });
     if (String(log.createdBy?.userId) === String(t?.userId) && !isBoss(t)) return res.status(403).json({ error: "O'zingiz kiritgan yozuvni o'zingiz tasdiqlay olmaysiz" });

@@ -120,6 +120,11 @@ beforeAll(async () => {
   objA = String(((await ObjectModel.create({ name: 'Alfa uy', companyId: A, foremanId: ids.prorab } as any)) as any)._id);
   objA2 = String(((await ObjectModel.create({ name: 'Alfa ombor', companyId: A, foremanId: ids.brig } as any)) as any)._id);
   objB = String(((await ObjectModel.create({ name: 'Beta uy', companyId: B } as any)) as any)._id);
+  // Obyekt doirasi (owner 2026-10-23): rahbar bo'lmaganlar faqat biriktirilgan obyektlarda ishlaydi
+  // (ish — ikkalasi, ish2 — Alfa uy, prorab — Alfa uy prorabi + Alfa ombor, brig — Alfa ombor prorabi, prorab2 — hech biri)
+  await User.updateOne({ _id: ids.ish }, { $set: { projectIds: [objA, objA2] } });
+  await User.updateOne({ _id: ids.ish2 }, { $set: { projectIds: [objA] } });
+  await User.updateOne({ _id: ids.prorab }, { $set: { projectIds: [objA2] } });
 }, 180_000);
 
 afterAll(async () => {
@@ -151,6 +156,11 @@ describe('obyektlar', () => {
     expect(names(await get('ish', '/api/objects'))).not.toContain('Beta uy');
     expect(names(await get('bossB', '/api/objects'))).toEqual(['Beta uy']);
     expect(await status(get('dev', '/api/objects'))).toBe(403);
+    // Obyekt doirasi: biriktirilmagan obyekt ko'rinmaydi
+    expect(names(await get('ish2', '/api/objects'))).toEqual(['Alfa uy']);
+    expect(names(await get('brig', '/api/objects'))).toEqual(['Alfa ombor']);
+    expect(names(await get('prorab2', '/api/objects'))).toEqual([]);
+    expect(names(await get('orin', '/api/objects'))).toEqual(expect.arrayContaining(['Alfa uy', 'Alfa ombor']));
   });
 
   it("smeta yuklash (butun material ro'yxatini almashtiradi) — rahbar yoki obyekt prorabi; ishchi/boshqa prorab — 403", async () => {
@@ -221,21 +231,39 @@ describe('tranzaksiyalar', () => {
     expect(await status(del('brig', `/api/transactions/${old._id}`))).toBe(200);
   });
 
-  it("kirim: faqat rahbar kiritadi; o'rinbosar direktor kirimini ko'rmaydi va o'zgartira/o'chira olmaydi", async () => {
-    for (const k of ['prorab', 'brig', 'ish']) expect(await status(post(k, '/api/transactions', { type: 'income', amount: 1_000_000 }))).toBe(403);
+  it("kirim (owner 2026-10-23): hamma kiritadi; direktor va o'rinbosar hammasini, qolganlar faqat o'zinikini ko'radi", async () => {
     const dirInc = await post('owner', '/api/transactions', { type: 'income', amount: 9_000_000, description: 'Direktor kirimi' });
     expect(dirInc.status).toBe(201);
     const orinInc = await post('orin', '/api/transactions', { type: 'income', amount: 4_000_000, description: "O'rinbosar kirimi" });
     expect(orinInc.status).toBe(201);
+    // Rahbar bo'lmaganlar ham kiritadi — tasdiqlovchisiz, darhol hisobga tushadi; obyekt — faqat biriktirilgani (yoki obyektsiz)
+    const prInc = await post('prorab', '/api/transactions', { type: 'income', amount: 2_000_000, description: 'Prorab kirimi', projectId: objA, status: 'confirmed' });
+    expect(prInc.status).toBe(201);
+    expect(prInc.body.status).toBe('confirmed');
+    expect(prInc.body.requiresAdminApproval).toBeFalsy();
+    expect(prInc.body.createdById).toBe(ids.prorab);
+    expect((await post('ish', '/api/transactions', { type: 'income', amount: 500_000, description: 'Ishchi kirimi' })).status).toBe(201);
+    expect((await post('brig', '/api/transactions', { type: 'income', amount: 700_000, description: 'Brigadir kirimi', projectId: objA2 })).status).toBe(201);
+    expect(await status(post('brig', '/api/transactions', { type: 'income', amount: 1, description: 'Begona obyekt', projectId: objA }))).toBe(403);
+    expect(await status(post('ish2', '/api/transactions', { type: 'income', amount: 1, description: 'Begona obyekt', projectId: objA2 }))).toBe(403);
     const incomes = async (k: string) => (await get(k, '/api/transactions')).body.filter((t: any) => t.type === 'income').map((t: any) => t.description).sort();
-    expect(await incomes('owner')).toEqual(['Direktor kirimi', "O'rinbosar kirimi"]);
-    expect(await incomes('orin')).toEqual(["O'rinbosar kirimi"]);
-    for (const k of ['prorab', 'brig', 'ish', 'bossB']) expect(await incomes(k)).toEqual([]);
-    expect(await status(patch('orin', `/api/transactions/${dirInc.body._id}`, { amount: 1 }))).toBe(403);
-    expect(await status(del('orin', `/api/transactions/${dirInc.body._id}`))).toBe(403);
+    const all = ['Brigadir kirimi', 'Direktor kirimi', 'Ishchi kirimi', "O'rinbosar kirimi", 'Prorab kirimi'];
+    expect(await incomes('owner')).toEqual(all);
+    expect(await incomes('orin')).toEqual(all);
+    expect(await incomes('prorab')).toEqual(['Prorab kirimi']);
+    expect(await incomes('brig')).toEqual(['Brigadir kirimi']);
+    expect(await incomes('ish')).toEqual(['Ishchi kirimi']);
+    for (const k of ['ish2', 'prorab2', 'bossB']) expect(await incomes(k)).toEqual([]);
+    // Tuzatish: o'rinbosar — hammasini; kiritgan — o'zinikini (tasdiqlangan bo'lsa ham); boshqasi — 403
+    expect(await status(patch('orin', `/api/transactions/${dirInc.body._id}`, { amount: 9_100_000 }))).toBe(200);
+    expect(await status(patch('prorab', `/api/transactions/${prInc.body._id}`, { amount: 2_100_000 }))).toBe(200);
+    expect(await status(patch('prorab', `/api/transactions/${prInc.body._id}`, { projectId: objB }))).toBe(400);
+    expect(await status(patch('ish', `/api/transactions/${prInc.body._id}`, { amount: 1 }))).toBe(403);
+    expect(await status(del('ish', `/api/transactions/${prInc.body._id}`))).toBe(403);
     expect(await status(patch('orin', `/api/transactions/${orinInc.body._id}`, { amount: 4_500_000 }))).toBe(200);
     expect(await status(patch('owner', `/api/transactions/${orinInc.body._id}`, { amount: 5_000_000 }))).toBe(200);
     expect(await status(del('bossB', `/api/transactions/${dirInc.body._id}`))).toBe(404);
+    expect(await status(del('prorab', `/api/transactions/${prInc.body._id}`))).toBe(200);
   });
 
   it("ro'yxat: ishchi faqat o'ziga tegishlisini, rahbar firmaning hammasini ko'radi; boshqa firma — ko'rinmaydi; dasturchi — 403", async () => {
@@ -327,7 +355,7 @@ describe('hujjatlar', () => {
 describe('texnika', () => {
   it("jihoz — rahbar qo'shadi/o'zgartiradi/o'chiradi; jurnal — kiritgan o'zinikini, rahbar hammasini", async () => {
     expect(await status(post('prorab', '/api/equipment', { name: 'Kran' }))).toBe(403);
-    const r = await post('orin', '/api/equipment', { name: 'Kran' });
+    const r = await post('orin', '/api/equipment', { name: 'Kran', objectId: objA2 });
     expect(r.status).toBe(201);
     const id = String(r.body.id);
     expect((await get('ish', '/api/equipment')).body.map((e: any) => e.name)).toContain('Kran');

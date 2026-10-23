@@ -32,7 +32,8 @@ import { deriveWebhookSecret, canDecideSubscription, sendToCompanyAdmins } from 
 import { registerBotInstance, dispatchAiCallback, dispatchAiMessage, aiBotResetChat, aiSuppressedMorningUserIds, WORKER_OFFSHIFT_CALLBACK_RE, aiBotButtonText } from '../aiVoice/bot/botHooks';
 import { aiConfig } from '../aiVoice/config';
 import { captureError } from './errorTracker';
-import { onBotLinked as onAiBotLinked } from '../aiVoice/telegram/tgLink';
+import { objectQueryForUser as userObjectQuery } from '../middleware/objectScope';
+import { linkTelegram } from './telegramIdentity';
 import { decorateMarkup, decorateMessage, canonicalizeUpdate, refreshBotUiIfStale, ensureBotUiLoaded, registerExtraLabelSource } from './botUi/runtime';
 import { applyBotCommands } from './botUi/commands';
 
@@ -759,6 +760,8 @@ async function relayBotMessageToSite(session: BotChatSession, data: {
 }
 
 const isAdmin = (role: string) => role === 'direktor' || role === 'orinbosar';
+// Obyekt doirasi (owner 2026-10-23): rahbar bo'lmagan xodimga botdagi obyekt ro'yxati/tanlovi/AI maslahatlari
+// faqat o'ziga biriktirilgan obyektlardan iborat — userObjectQuery (middleware/objectScope.ts)
 const isDev = (role: string) => role === 'dasturchi';
 const WORKER_ROLES = ['ishchi', 'prorab', 'brigadir'];
 const isWorker = (role: string) => WORKER_ROLES.includes(role);
@@ -1142,11 +1145,11 @@ bot.on('contact', async (msg: any) => {
     // Bitta Telegram chat — faqat BITTA xodimga. Avval bir chat ikki yozuvga bog'lanib qolishi mumkin edi
     // (masalan xodim raqami vaqtincha boshqa odamniki bo'lganda) — natijada chiqim tasdiqlash xabari
     // tanlangan odamga emas, o'sha chat egasiga borardi. Endi boshqa yozuvlardan uziladi.
-    await User.updateMany({ telegramChatId: chatId.toString(), _id: { $ne: user._id } }, { $unset: { telegramChatId: 1 } }).catch(() => {});
+    // Owner 2026-10-23: raqam/Telegram almashganda eski akkaunt (chat, Telegram user id, AI kontakti, AI sessiyalari)
+    // ham to'liq uziladi va AI darhol yangi Telegram'ni taniydi — services/telegramIdentity.ts
+    await linkTelegram(String(user._id), chatId.toString(), msg.from?.id ? String(msg.from.id) : undefined);
     user.telegramChatId = chatId.toString();
-    await user.save();
-    // AI (owner 2026-10-16): Telegram user id bot bog'lanishidan — AI kontaktiga darhol (kod shart emas)
-    void onAiBotLinked(String(user._id));
+    if (msg.from?.id) user.telegramUserId = String(msg.from.id);
 
     const lang = user.language as BotLang | undefined;
     let welcomeText = tb(lang, 'contactConfirmed', { name: `${user.firstName} ${user.lastName || ''}`.trim(), role: user.role });
@@ -1223,7 +1226,7 @@ async function handleReportInput(msg: any, chatId: number): Promise<boolean> {
   pendingReportEntry.delete(chatId);
   const user: any = await User.findOne({ telegramChatId: chatId.toString() }).catch(() => null);
   if (!user || !user.companyId) return true;
-  const objs: any[] = await ObjectModel.find({ companyId: user.companyId, status: { $ne: 'completed' } }).select('name').limit(60).lean().catch(() => []);
+  const objs: any[] = await ObjectModel.find(await userObjectQuery(user, { status: { $ne: 'completed' } })).select('name').limit(60).lean().catch(() => []);
   const names = objs.map((o) => String(o.name || ''));
   const notice = await bot.sendMessage(chatId, RL(user, '⏳ Tahlil qilinmoqda…', '⏳ Анализирую…'));
   let report: ParsedReport | null = null;
@@ -1247,7 +1250,7 @@ async function handleReportInput(msg: any, chatId: number): Promise<boolean> {
   }
   // Obyekt: aytilgan nom bo'yicha, bo'lmasa — xodimning yagona obyekti
   let obj: any = report.objectName ? await matchExpenseProject(user, report.objectName) : null;
-  if (!obj && Array.isArray(user.projectIds) && user.projectIds.length === 1) obj = await ObjectModel.findById(user.projectIds[0]).select('name').lean().catch(() => null);
+  if (!obj && Array.isArray(user.projectIds) && user.projectIds.length === 1) obj = await ObjectModel.findOne(await userObjectQuery(user, { _id: String(user.projectIds[0]) })).select('name').lean().catch(() => null);
   if (!obj && objs.length === 1) obj = objs[0];
   const id = Math.random().toString(36).slice(2, 10);
   pendingReportDrafts.set(id, { chatId, userId: String(user._id), report, objectId: obj ? String(obj._id) : undefined, objectName: obj ? String(obj.name) : report.objectName, createdAt: Date.now() });
@@ -1311,7 +1314,7 @@ const normName = (x: string) => x.toLowerCase()
 async function matchExpenseProject(user: any, name?: string) {
   const q = normName(name || '');
   if (q.length < 2) return null;
-  const objs = await ObjectModel.find(user.companyId ? { companyId: user.companyId } : {}).select('name').lean();
+  const objs = await ObjectModel.find(await userObjectQuery(user)).select('name').lean();
   const qTokens = q.split(' ').filter(Boolean);
   let best: any = null, bestScore = 0;
   for (const o of objs as any[]) {
@@ -1408,7 +1411,7 @@ async function handleDraftEditInput(msg: any, chatId: number): Promise<boolean> 
     if (st.field === 'text') {
       const cq = user.companyId ? { companyId: user.companyId } : { _id: null };
       const [hObjs, hUsers] = await Promise.all([
-        ObjectModel.find(cq).select('name').limit(60).lean().catch(() => []),
+        ObjectModel.find(await userObjectQuery(user)).select('name').limit(60).lean().catch(() => []),
         User.find(cq).select('firstName lastName').limit(80).lean().catch(() => []),
       ]);
       const p = await textToExpense(text, today, {
@@ -1487,7 +1490,7 @@ async function handleExpenseInput(msg: any, chatId: number): Promise<boolean> {
         const link = await bot.getFileLink(photo.file_id);
         const buf = Buffer.from(await (await fetch(link)).arrayBuffer());
         const cq = user.companyId ? { companyId: user.companyId } : { _id: null };
-        const hObjs: any[] = await ObjectModel.find(cq).select('name').limit(60).lean().catch(() => []);
+        const hObjs: any[] = await ObjectModel.find(await userObjectQuery(user)).select('name').limit(60).lean().catch(() => []);
         parsed = await receiptToExpense(buf, photo.mime_type || 'image/jpeg', todayInTashkent(), { objects: hObjs.map(o => String(o.name || '')) });
       } catch (e: any) {
         bot.deleteMessage(chatId, notice.message_id).catch(() => {});
@@ -1511,7 +1514,7 @@ async function handleExpenseInput(msg: any, chatId: number): Promise<boolean> {
         const buf = Buffer.from(await (await fetch(link)).arrayBuffer());
         const cq = user.companyId ? { companyId: user.companyId } : { _id: null };
         const [hObjs, hUsers] = await Promise.all([
-          ObjectModel.find(cq).select('name').limit(60).lean().catch(() => []),
+          ObjectModel.find(await userObjectQuery(user)).select('name').limit(60).lean().catch(() => []),
           User.find(cq).select('firstName lastName').limit(80).lean().catch(() => []),
         ]);
         parsed = await voiceToExpense(buf, media.mime_type || 'audio/ogg', todayInTashkent(), heardOut, {
@@ -2399,7 +2402,7 @@ bot.on('message', async (msg: any) => {
     if (text === SL('admin', 'kb_objects')) {
       try {
         const ObjectModel = require('../models/Object').default;
-        const filter = user.companyId ? { companyId: user.companyId } : {};
+        const filter = user.companyId ? await userObjectQuery(user) : {};
         const objects = await ObjectModel.find(filter).limit(20);
         if (objects.length === 0) {
           bot.sendMessage(chatId, tb(user.language, 'admNoObjects'), { reply_markup: await keyboardForUser(user, user.language) });

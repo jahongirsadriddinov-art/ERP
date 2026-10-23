@@ -11,6 +11,7 @@ import { getTenant } from '../middleware/tenantContext';
 import { tb, BotLang } from '../i18n/bot';
 import { logAudit } from '../services/audit';
 import { getRatesForCompany } from './currency';
+import { allowedObjectIds, optionalObjectAllowed, OBJECT_FORBIDDEN } from '../middleware/objectScope';
 
 // Kirim/chiqim dollar yoki yevroda (owner 2026-10-23): asl summa va kurs saqlanadi, `amount` — doim so'mda
 // (barcha hisob-kitoblar shu bilan). Kurs: firma o'z kursi bo'lsa o'sha, bo'lmasa Markaziy bank.
@@ -56,10 +57,10 @@ router.get('/', async (req, res) => {
   try {
     const tenant = getTenant();
     const isFinanceAdmin = tenant?.isDeveloper || tenant?.role === 'direktor' || tenant?.role === 'orinbosar';
-    // Kirim (owner 2026-10-22): direktor (va firma egasi) — hammaning kirimini; o'rinbosar — faqat o'zi kiritganini;
-    // boshqa rollar kirimni ko'rmaydi
-    const isDirector = !!tenant?.isDeveloper || tenant?.role === 'direktor' || !!tenant?.isOwner;
-    const incomeRule: Record<string, unknown> = isDirector ? {} : tenant?.role === 'orinbosar' && tenant?.userId
+    // Kirim (owner 2026-10-23): HAR KIM kirim kiritadi. Direktor, o'rinbosar (va firma egasi) — hammaning kirimini
+    // (kim kiritgani bo'yicha guruhlab); boshqa rollar — faqat o'zi kiritganini.
+    const isBossViewer = !!tenant?.isDeveloper || tenant?.role === 'direktor' || tenant?.role === 'orinbosar' || !!tenant?.isOwner;
+    const incomeRule: Record<string, unknown> = isBossViewer ? {} : tenant?.userId
       ? { $or: [{ type: { $ne: 'income' } }, { createdById: tenant.userId }] }
       : { type: { $ne: 'income' } };
     const filter = isFinanceAdmin || !tenant?.userId
@@ -82,13 +83,10 @@ router.post('/', async (req, res) => {
 
     // Validate required fields
     const VALID_TYPES = ['transfer', 'expense', 'income', 'oylik', 'material', 'jihozlar', 'transport', 'boshqa'];
-    // Kirimni faqat direktor va o'rinbosar kiritadi (owner 2026-10-22); tarifga bog'liq emas
-    if (req.body?.type === 'income') {
-      const tn = getTenant();
-      const me = tn?.userId ? await User.findById(tn.userId).select('role isOwner').lean().catch(() => null) as any : null;
-      const boss = !!tn?.isDeveloper || (me && (['direktor', 'orinbosar'].includes(me.role) || me.isOwner));
-      if (!boss) return res.status(403).json({ error: "Kirimni faqat direktor yoki o'rinbosar kirita oladi" });
-    }
+    // Kirim (owner 2026-10-23): endi har bir rol kiritadi; tarifga bog'liq emas. Obyekt doirasi pastda (projectId).
+    // Obyekt doirasi (owner 2026-10-23): rahbar bo'lmagan xodim faqat o'ziga biriktirilgan obyekt (yoki obyektsiz) bo'yicha
+    // chiqim/kirim/yukxat kiritadi
+    if (!(await optionalObjectAllowed(data?.projectId))) return res.status(403).json(OBJECT_FORBIDDEN);
     if (!data.type) {
       return res.status(400).json({ success: false, errors: [{ field: 'type', message: 'Tur kiritilishi shart' }] });
     }
@@ -193,7 +191,10 @@ router.post('/', async (req, res) => {
     // tasdiqlashini xodimning O'ZI tanlashi SHART (aniq talab) — bo'sh
     // "istalgan admin tasdiqlasin" endi qabul qilinmaydi.
     const creatorId = txData.createdById || getTenant()?.userId;
-    if (txData.type !== 'transfer' && creatorId) {
+    // Kirim (tushum) — pul to'lash emas, shu sabab tasdiqlovchi talab qilinmaydi: kiritgan zahoti hisobga tushadi,
+    // rahbar uni "kim kiritdi" bo'yicha ko'radi (owner 2026-10-23)
+    if (txData.type === 'income') { txData.status = 'confirmed'; txData.toUserId = undefined; }
+    if (txData.type !== 'transfer' && txData.type !== 'income' && creatorId) {
       const creator = await User.findById(creatorId).catch(() => null);
       if (creator && !['direktor', 'orinbosar'].includes(creator.role)) {
         txData.requiresAdminApproval = true;
@@ -370,7 +371,8 @@ router.post('/scan-receipt', async (req, res) => {
     const { image, mimeType } = req.body || {};
     if (typeof image !== 'string' || image.length < 500 || image.length > 8_000_000) return res.status(400).json({ error: "Surat noto'g'ri yoki juda katta" });
     const mt = typeof mimeType === 'string' && /^image\/(jpeg|png|webp|heic)$/.test(mimeType) ? mimeType : 'image/jpeg';
-    const objs: any[] = t.companyId ? await ObjectForHints.find({ companyId: t.companyId }).select('name').limit(60).lean() : [];
+    const allowed = await allowedObjectIds();
+    const objs: any[] = t.companyId ? await ObjectForHints.find({ companyId: t.companyId, ...(allowed === null ? {} : { _id: { $in: allowed } }) }).select('name').limit(60).lean() : [];
     const r = await receiptToExpense(Buffer.from(image, 'base64'), mt, todayInTashkent(), { objects: objs.map(o => String(o.name)) });
     if (!r) return res.status(422).json({ error: "Chekdan summani o'qib bo'lmadi — aniqroq, yorug' joyda suratga oling" });
     res.json(r);
@@ -387,13 +389,13 @@ router.post('/scan-receipt', async (req, res) => {
 const EXPENSE_TYPES = ['expense', 'oylik', 'material', 'jihozlar', 'transport', 'boshqa'];
 // Yozuvga egalik (PATCH/DELETE uchun): rahbar (direktor/o'rinbosar/ega) — hammasi; aks holda faqat qo'shgan xodim.
 // Yukxatda createdById eski yozuvlarda yo'q — yuboruvchi (fromUserId) qo'shgan hisoblanadi.
-// Kirim: o'rinbosar faqat o'zi kiritganini ko'radi — demak faqat o'zinikini o'zgartiradi/o'chiradi (direktorniki ko'rinmaydi).
-function txAccess(tx: any, actor: any, actingUserId: string): { isBoss: boolean; allowed: boolean } {
+// Kirim (owner 2026-10-23): direktor va o'rinbosar hammasini ko'radi va tuzatadi; boshqalar — faqat o'zi kiritganini
+// (kirim darhol tasdiqlangan hisoblanadi, shu sabab kiritgan xodim o'z kirimini tasdiqlangan bo'lsa ham tuzata oladi).
+function txAccess(tx: any, actor: any, actingUserId: string): { isBoss: boolean; allowed: boolean; editConfirmed: boolean } {
   const isBoss = !!actor && (['direktor', 'orinbosar'].includes(actor.role) || !!actor.isOwner);
   const me = String(actingUserId);
   const isCreator = String(tx.createdById || '') === me || (tx.type === 'transfer' && !tx.createdById && String(tx.fromUserId || '') === me);
-  if (tx.type === 'income' && actor?.role === 'orinbosar' && !actor?.isOwner && !isCreator) return { isBoss, allowed: false };
-  return { isBoss, allowed: isBoss || isCreator };
+  return { isBoss, allowed: isBoss || isCreator, editConfirmed: isBoss || (isCreator && tx.type === 'income') };
 }
 router.patch('/:id', async (req, res) => {
   try {
@@ -402,9 +404,9 @@ router.patch('/:id', async (req, res) => {
     const tx: any = await Transaction.findOne(scoped({ _id: req.params.id }));
     if (!tx) return res.status(404).json({ error: 'Topilmadi' });
     const actor = await User.findById(actingUserId).catch(() => null);
-    const { isBoss, allowed } = txAccess(tx, actor, actingUserId);
+    const { allowed, editConfirmed } = txAccess(tx, actor, actingUserId);
     if (!allowed) return res.status(403).json({ error: "Faqat direktor, o'rinbosar yoki yozuvni qo'shgan xodim o'zgartira oladi" });
-    if (tx.status === 'confirmed' && !isBoss) return res.status(409).json({ error: "Tasdiqlangan yozuvni faqat direktor yoki o'rinbosar o'zgartira oladi" });
+    if (tx.status === 'confirmed' && !editConfirmed) return res.status(409).json({ error: "Tasdiqlangan yozuvni faqat direktor yoki o'rinbosar o'zgartira oladi" });
     const b = req.body || {};
     const errors: { field: string; message: string }[] = [];
     const set: Record<string, unknown> = {};
@@ -418,6 +420,7 @@ router.patch('/:id', async (req, res) => {
     if (b.projectId !== undefined) {
       if (b.projectId === null || b.projectId === '') set.projectId = undefined;
       else if (!(await ObjectForHints.exists(scoped({ _id: String(b.projectId) })).catch(() => null))) errors.push({ field: 'projectId', message: 'Obyekt topilmadi' });
+      else if (!(await optionalObjectAllowed(b.projectId))) return res.status(403).json(OBJECT_FORBIDDEN);
       else set.projectId = String(b.projectId);
     }
     if (tx.type === 'transfer') {
@@ -475,7 +478,7 @@ router.delete('/:id', async (req, res) => {
     const tx = await Transaction.findOne(scoped({ _id: req.params.id }));
     if (!tx) return res.status(404).json({ error: 'Topilmadi' });
     const actor = await User.findById(actingUserId).catch(() => null);
-    const { isBoss, allowed } = txAccess(tx, actor, actingUserId);
+    const { allowed, editConfirmed } = txAccess(tx, actor, actingUserId);
     if (!allowed) {
       return res.status(403).json({ error: 'Faqat direktor, orinbosar yoki yozuvni yaratgan xodim o\'chira oladi' });
     }
@@ -486,7 +489,7 @@ router.delete('/:id', async (req, res) => {
     // kerak bo'lsa, yangi (masalan manfiy) tranzaksiya yaratish orqali
     // qilinishi kerak, tarixni yo'q qilish orqali emas.
     // Tasdiqlangan yozuvni faqat direktor/o'rinbosar o'chira oladi (audit jurnalida eski qiymati qoladi)
-    if (tx.status === 'confirmed' && !isBoss) {
+    if (tx.status === 'confirmed' && !editConfirmed) {
       return res.status(409).json({ error: "Tasdiqlangan yozuvni faqat direktor yoki o'rinbosar o'chira oladi" });
     }
     const snapshot = tx.toObject();

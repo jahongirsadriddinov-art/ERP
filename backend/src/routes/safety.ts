@@ -5,6 +5,7 @@ import { scoped, stamped } from '../middleware/scope';
 import { getTenant } from '../middleware/tenantContext';
 import { logAudit } from '../services/audit';
 import { sendPushToUser } from '../services/push';
+import { allowedObjectIds, optionalObjectAllowed, OBJECT_FORBIDDEN } from '../middleware/objectScope';
 
 const router = Router();
 
@@ -13,7 +14,10 @@ const router = Router();
 // hodisani birinchi ko'radigan aynan dala xodimi bo'ladi.
 router.get('/', async (req, res) => {
   try {
-    const list = await SafetyIncident.find(scoped()).sort({ createdAt: -1 }).limit(500).lean();
+    // Obyekt doirasi (owner 2026-10-23): rahbar bo'lmagan xodim — biriktirilgan obyektlar hodisalari + o'zi qayd etganlar
+    const allowed = await allowedObjectIds();
+    const own = allowed === null ? {} : { $or: [{ objectId: { $in: allowed } }, { 'reportedBy.userId': String(getTenant()?.userId || '') }] };
+    const list = await SafetyIncident.find(scoped(own)).sort({ createdAt: -1 }).limit(500).lean();
     res.json(list.map(i => ({ ...i, id: i._id })));
   } catch (err) {
     res.status(500).json({ error: 'Server xatoligi' });
@@ -26,6 +30,7 @@ router.post('/', async (req, res) => {
     if (!t?.userId) return res.status(401).json({ error: 'Autentifikatsiya talab etiladi' });
     const { objectId, title, description, severity, photos, occurredAt } = req.body || {};
     if (!title || !String(title).trim()) return res.status(400).json({ error: 'Sarlavha kerak' });
+    if (!(await optionalObjectAllowed(objectId))) return res.status(403).json(OBJECT_FORBIDDEN);
 
     const actor = await User.findById(t.userId).lean().catch(() => null);
     if (!actor) return res.status(401).json({ error: 'Foydalanuvchi topilmadi' });
@@ -115,7 +120,10 @@ router.patch('/:id', async (req, res) => {
     if (title !== undefined) { const tt = String(title || '').trim().slice(0, 300); if (!tt) return res.status(400).json({ error: 'Sarlavha kerak' }); set.title = tt; }
     if (description !== undefined) set.description = description ? String(description).slice(0, 2000) : undefined;
     if (severity !== undefined) { if (!['low', 'medium', 'high', 'critical'].includes(severity)) return res.status(400).json({ error: "Noto'g'ri daraja" }); set.severity = severity; }
-    if (objectId !== undefined) set.objectId = objectId ? String(objectId) : undefined;
+    if (objectId !== undefined) {
+      if (!(await optionalObjectAllowed(objectId))) return res.status(403).json(OBJECT_FORBIDDEN);
+      set.objectId = objectId ? String(objectId) : undefined;
+    }
     if (photos !== undefined) set.photos = Array.isArray(photos) ? photos.slice(0, 10).map(String) : [];
     if (occurredAt !== undefined) { const d = new Date(occurredAt); if (isNaN(+d)) return res.status(400).json({ error: "Sana noto'g'ri" }); set.occurredAt = d; }
     if (!Object.keys(set).length) return res.status(400).json({ error: "O'zgartirish yo'q" });

@@ -3,6 +3,7 @@ import { getTenant } from '../middleware/tenantContext';
 import { scoped } from '../middleware/scope';
 import Material from '../models/Material';
 import ObjectModel from '../models/Object';
+import { canAccessObject } from '../middleware/objectScope';
 import Transaction from '../models/Transaction';
 import User from '../models/User';
 import { logAudit } from '../services/audit';
@@ -22,7 +23,7 @@ router.get('/material/:id', async (req, res) => {
     if (!tenant?.userId) return res.status(401).json({ error: 'Autentifikatsiya talab etiladi' });
 
     const mat = await Material.findOne(scoped({ _id: req.params.id })).lean();
-    if (!mat) return res.status(404).json({ error: 'Material topilmadi' });
+    if (!mat || !(await canAccessObject(mat.objectId))) return res.status(404).json({ error: 'Material topilmadi' });
 
     res.json({
       type: 'material',
@@ -47,7 +48,7 @@ router.get('/object/:id', async (req, res) => {
     if (!tenant?.userId) return res.status(401).json({ error: 'Autentifikatsiya talab etiladi' });
 
     const obj = await ObjectModel.findOne(scoped({ _id: req.params.id })).lean();
-    if (!obj) return res.status(404).json({ error: 'Obyekt topilmadi' });
+    if (!obj || !(await canAccessObject(obj._id))) return res.status(404).json({ error: 'Obyekt topilmadi' });
 
     res.json({
       type: 'object',
@@ -102,10 +103,10 @@ router.post('/scan', async (req, res) => {
 
     if (type === 'material') {
       entityData = await Material.findOne(scoped({ _id: id })).lean();
-      if (!entityData) return res.status(404).json({ error: 'Material topilmadi' });
+      if (!entityData || !(await canAccessObject(entityData.objectId))) return res.status(404).json({ error: 'Material topilmadi' });
     } else if (type === 'object') {
       entityData = await ObjectModel.findOne(scoped({ _id: id })).lean();
-      if (!entityData) return res.status(404).json({ error: 'Obyekt topilmadi' });
+      if (!entityData || !(await canAccessObject(entityData._id))) return res.status(404).json({ error: 'Obyekt topilmadi' });
     } else if (type === 'transaction') {
       // GET /api/transactions bilan bir xil ko'rinish: rahbar — hammasi; boshqalar — faqat o'zi ishtirok etgan
       const boss = (actor as any).isOwner || ['direktor', 'orinbosar'].includes(String(actor.role));

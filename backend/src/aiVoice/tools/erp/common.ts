@@ -4,6 +4,7 @@ import type { AiRole, Purpose, ToolChannel, ToolCtx, ToolResult } from '../types
 import { inCompany } from '../types';
 import { isObjectIdString } from '../../lib/ids';
 import { localDate } from '../../lib/zonedTime';
+import { assignedObjectIdsFor } from '../../../middleware/objectScope';
 
 // ERP tool'lari uchun umumiy yordamchilar. QOIDA: har bir so'rov inCompany(ctx) bilan AN'IQ
 // firma filtriga ega (scoped()ga tayanilmaydi); ko'rinish doirasi (obyektlar) shu yerda hisoblanadi.
@@ -60,17 +61,11 @@ export async function loadMe(ctx: ToolCtx): Promise<any | null> {
  */
 export async function visibleObjectIds(ctx: ToolCtx): Promise<string[] | null> {
   if (isBoss(ctx)) return null;
+  // Yagona manba (owner 2026-10-23): sayt, bot va AI bir xil obyekt doirasini ishlatadi (middleware/objectScope.ts)
   const me: any = await loadMe(ctx);
-  const own = ((me?.projectIds || []) as unknown[]).filter(isObjectIdString) as string[];
-  if (ctx.role === 'ishchi') {
-    if (!own.length) return [];
-    const objs: any[] = await ObjectModel.find(inCompany(ctx, { _id: { $in: own } })).select('_id').lean();
-    return objs.map((o) => String(o._id));
-  }
-  const or: Record<string, unknown>[] = [{ foremanId: ctx.userId }];
-  if (own.length) or.push({ _id: { $in: own } });
-  const objs: any[] = await ObjectModel.find(inCompany(ctx, { $or: or })).select('_id').lean();
-  return objs.map((o) => String(o._id));
+  if (!me) return [];
+  const ids = await assignedObjectIdsFor({ _id: ctx.userId, role: ctx.role, isOwner: false, companyId: ctx.companyId, projectIds: me.projectIds });
+  return ids || [];
 }
 
 export function canSeeObject(visible: string[] | null, objectId: string): boolean {

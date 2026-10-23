@@ -1,3 +1,4 @@
+import { linkTelegram } from '../services/telegramIdentity';
 import crypto from 'crypto';
 import express, { Router, type Request } from 'express';
 import Payment from '../models/Payment';
@@ -178,6 +179,8 @@ async function settleRoxiy(payment: any, p: { status?: string; orderHash?: strin
         });
         createdCompany.ownerUserId = String(ownerUser._id);
         await createdCompany.save();
+        // Bitta Telegram ↔ bitta xodim (owner 2026-10-23)
+        if (pending.telegramChatId) await linkTelegram(String(ownerUser._id), String(pending.telegramChatId), pending.telegramUserId).catch(() => undefined);
 
         const now = new Date();
         const days = typeof claimed.days === 'number' && claimed.days > 0 ? claimed.days : 30;

@@ -88,7 +88,7 @@ export default function AgentChat({ agent, taskable, onCommand, onSpeak }: {
         </div>
       )}
       <div className="flex items-end gap-1.5">
-        <button type="button" onClick={mic} data-testid="ai-office-mic" aria-pressed={rec === "rec"} title={k("chat.mic")} aria-label={k("chat.mic")}
+        <button type="button" onClick={mic} data-multi-tap data-testid="ai-office-mic" aria-pressed={rec === "rec"} title={k("chat.mic")} aria-label={k("chat.mic")}
           className={`w-10 h-10 flex-shrink-0 rounded-full grid place-items-center text-lg ${rec === "rec" ? "bg-red-500 text-white animate-pulse" : rec === "stt" ? "bg-muted opacity-60" : "bg-muted hover:bg-muted/70"}`}>
           {rec === "stt" ? "…" : "🎤"}
         </button>

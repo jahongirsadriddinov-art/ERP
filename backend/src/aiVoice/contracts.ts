@@ -431,11 +431,12 @@ export interface WorkerAntiFreeze {
   proxy?: string;
 }
 
-export type WorkerCallState = 'dialing' | 'ringing' | 'connected' | 'ended';
+/** accepted — suhbatdosh javob berdi, media (kalit almashinuvi/p2p) hali ulanmagan; connected — media ulandi */
+export type WorkerCallState = 'dialing' | 'ringing' | 'accepted' | 'connected' | 'ended';
 export type WorkerCallEndReason =
   | 'completed' | 'busy' | 'declined' | 'timeout' | 'privacy' | 'blocked' | 'outdated' | 'flood_wait' | 'spam_limited' | 'account_frozen' | 'network' | 'hangup' | 'error';
 export type WorkerEvent =
-  | { type: 'call.state'; sessionId: string; state: WorkerCallState; reason?: WorkerCallEndReason; at: number; /** ulanmaslik bosqichi: accept | key_exchange | p2p_connect | connect_timeout | record */ stage?: string }
+  | { type: 'call.state'; sessionId: string; state: WorkerCallState; reason?: WorkerCallEndReason; at: number; /** ulanmaslik bosqichi: accept | key_exchange | p2p_connect | connect_timeout | record */ stage?: string; /** terish urinishlari (worker qayta urinishlari bilan) */ attempts?: number; /** oxirgi xato sinfi nomi (matn emas) */ errorClass?: string }
   | { type: 'health'; status: WorkerStatus; at: number }
   | { type: 'binding.matched'; employeeId: string; tgUserId: string; username?: string; at: number }
   /** AI akkauntiga yozilgan oddiy xabar (owner 2026-10-22) — telegram/dmChat.ts javob beradi */

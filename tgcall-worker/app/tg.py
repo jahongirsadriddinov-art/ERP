@@ -129,6 +129,13 @@ async def handle_phone_call_update(rt: "TelegramRuntime", pc: Any) -> None:
             rt.call_users[pc.id] = (uid, pc.access_hash)
         if name == "PhoneCallWaiting" and getattr(pc, "receive_date", None) and rt.calls:
             await rt.calls.on_ringing(uid)
+        # Chiquvchi qo'ng'iroqqa javob berildi (biz admin) — "accepted" (media hali ulanmagan)
+        if name in ("PhoneCallAccepted", "PhoneCall") and rt.calls and uid:
+            me = getattr(rt, "me_id", None)
+            if not me or int(getattr(pc, "admin_id", 0) or 0) == me:
+                on_acc = getattr(rt.calls, "on_accepted", None)
+                if on_acc:
+                    await on_acc(uid)
         return
     if name == "PhoneCallDiscarded":
         entry = rt.call_users.pop(pc.id, None)

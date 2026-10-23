@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import time
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Optional, Protocol
@@ -52,6 +53,20 @@ _PEER_REASON = {"mismatch": "peer_mismatch", "import_limited": "import_limited",
                 "privacy_restricted": "privacy_restricted"}
 _SID_HEX = set("0123456789abcdefABCDEF")
 
+# -- Qayta urinishlar ("Ошибка соединения", owner 2026-10-23) --
+# Jiringlashdan OLDIN yiqilgan (signalizatsiya/Telegram server xatosi) qo'ng'iroq — foydalanuvchi hech narsa
+# sezmagan, darhol yana teriladi (2 marta, 2 s / 5 s kutib). Javob berilgandan keyin media ulanmasa (kalit
+# almashinuvi / p2p — Telegram'da "Ошибка соединения") — bir marta qayta teriladi (TG_CALL_MEDIA_RETRIES).
+PRE_RING_RETRIES = 2
+MEDIA_RETRIES = max(0, int(os.environ.get("TG_CALL_MEDIA_RETRIES", "1") or 0))
+RETRY_BACKOFF_S = (2.0, 5.0, 8.0)
+_MEDIA_STAGES = ("accept", "key_exchange", "p2p_connect")
+_RETRYABLE = ("network", "error")
+
+
+def _mask_sid(sid: str) -> str:
+    return f"~{sid[-6:]}" if sid else "-"
+
 
 @dataclass
 class ActiveCall:
@@ -62,6 +77,10 @@ class ActiveCall:
     max_duration_sec: int
     state: str = "dialing"           # dialing | ringing | connected | ended
     ringing_sent: bool = False
+    accepted: bool = False           # suhbatdosh javob berdi (media hali ulanmagan bo'lishi mumkin)
+    attempt: int = 0                 # terish urinishi (qayta urinishlar bilan)
+    media_retries: int = 0
+    last_error: Optional[str] = None # oxirgi xato sinfi (diagnostika; matn emas)
     end_reason: Optional[str] = None
     discard_reason: Optional[str] = None
     finished: bool = False
@@ -112,12 +131,24 @@ class CallManager:
     def active_count(self) -> int:
         return 1 if self.active and self.active.state != "ended" else 0
 
+    def _clog(self, c: ActiveCall, event: str, **kv: Any) -> None:
+        """Tuzilgan (key=value) log — keyingi ulanmaslikda aniq sabab ko'rinsin. Telefon/ID yo'q."""
+        parts = [f"call_event={event}", f"sid={_mask_sid(c.session_id)}", f"attempt={c.attempt}",
+                 f"dir={'in' if c.incoming else 'out'}", f"state={c.state}", f"accepted={int(c.accepted)}",
+                 f"t_ms={int((time.monotonic() - c.started_at) * 1000)}"]
+        parts += [f"{k}={v}" for k, v in kv.items() if v is not None and v != ""]
+        log.info(" ".join(parts))
+
     async def _event(self, c: ActiveCall, state: str, reason: Optional[str] = None, stage: Optional[str] = None) -> None:
         ev: dict = {"type": "call.state", "sessionId": c.session_id, "state": state, "at": int(self._now_ms())}
         if reason:
             ev["reason"] = reason
         if stage:
             ev["stage"] = stage
+        if state == "ended":
+            ev["attempts"] = max(1, c.attempt)
+            if c.last_error:
+                ev["errorClass"] = c.last_error[:40]
         try:
             await self._emit(ev)
         except Exception as e:  # socket uzilgan — backend 20 s'da o'zi yopadi
@@ -166,31 +197,78 @@ class CallManager:
         c.task = asyncio.ensure_future(self._run(c))
         return {"accepted": True}
 
+    def _retry_delay(self, c: ActiveCall, reason: str, stage: Optional[str], timed_out: bool) -> Optional[float]:
+        """Qayta terish kerakmi va qancha kutib. None — yo'q (qo'ng'iroq yakunlanadi)."""
+        if c.incoming or c.end_reason or reason not in _RETRYABLE or not self.engine.ready:
+            return None
+        if c.accepted or (stage in _MEDIA_STAGES and not timed_out):
+            # Javob berildi, media ulanmadi ("Ошибка соединения") — bir marta qayta teriladi
+            if c.media_retries >= MEDIA_RETRIES:
+                return None
+            c.media_retries += 1
+            return RETRY_BACKOFF_S[min(c.media_retries, len(RETRY_BACKOFF_S) - 1)]
+        if timed_out or c.ringing_sent:
+            return None       # jiringladi-yu javob bo'lmadi / umuman ulanmadi — qayta terish befoyda
+        pre = c.attempt - c.media_retries
+        if pre > PRE_RING_RETRIES:
+            return None
+        return RETRY_BACKOFF_S[min(pre - 1, len(RETRY_BACKOFF_S) - 1)]
+
     async def _run(self, c: ActiveCall) -> None:
         await self._event(c, "dialing")
-        t0 = time.monotonic()
-        try:
-            await asyncio.wait_for(self.engine.play(c.user_id, c.timeout_sec), timeout=c.timeout_sec + CONNECT_GRACE_S)
-        except asyncio.CancelledError:
-            await self._finish(c, c.end_reason or "hangup")
-            return
-        except asyncio.TimeoutError:
-            log.warning("qo'ng'iroq ulanmadi: network (bosqich: %s, %.1f s)", self._stage(c) or "connect_timeout", time.monotonic() - t0)
-            await self._safe_hangup(c)
-            await self._finish(c, c.end_reason or "network", "connect_timeout")
-            return
-        except Exception as e:
-            fs = flood_seconds(e)
-            if fs:
-                self.flood_wait_until_ms = self._now_ms() + fs * 1000
-            reason = map_call_error(e, c.discard_reason)
-            stage = self._stage(c)
-            log.info("qo'ng'iroq ulanmadi: %s (bosqich: %s, xato: %s, %.1f s)", reason, stage or "-", type(e).__name__, time.monotonic() - t0)
+        while True:
+            c.attempt += 1
+            t0 = time.monotonic()
+            self._clog(c, "dial")
+            timed_out = False
+            try:
+                await asyncio.wait_for(self.engine.play(c.user_id, c.timeout_sec), timeout=c.timeout_sec + CONNECT_GRACE_S)
+                break
+            except asyncio.CancelledError:
+                await self._finish(c, c.end_reason or "hangup")
+                return
+            except asyncio.TimeoutError:
+                timed_out = True
+                reason, stage = "network", (self._stage(c) or "connect_timeout")
+                c.last_error = "ConnectTimeout"
+                report_stage = "connect_timeout"
+            except Exception as e:
+                fs = flood_seconds(e)
+                if fs:
+                    self.flood_wait_until_ms = self._now_ms() + fs * 1000
+                reason = map_call_error(e, c.discard_reason)
+                stage = self._stage(c)
+                c.last_error = type(e).__name__
+                report_stage = stage
+            self._clog(c, "connect_failed", reason=reason, stage=stage, err=c.last_error,
+                       discard=c.discard_reason, ms=int((time.monotonic() - t0) * 1000))
             # Telegram'dagi qo'ng'iroq ham yopiladi (pytgcalls ulanish xatosida discard qilmaydi) — aks holda
             # akkaunt serverda "qo'ng'iroqda" qolib, keyingi qo'ng'iroq "band" bo'ladi
             await self._safe_hangup(c)
-            await self._finish(c, c.end_reason or reason, stage)
-            return
+            delay = self._retry_delay(c, reason, stage, timed_out)
+            if delay is None:
+                await self._finish(c, c.end_reason or reason, report_stage)
+                return
+            self._clog(c, "retry_scheduled", in_s=delay, reason=reason, stage=stage)
+            clear = getattr(self.engine, "clear_stage", None)
+            if clear:
+                try:
+                    clear(c.user_id)
+                except Exception:
+                    pass
+            c.discard_reason = None
+            c.accepted = False
+            c.ringing_sent = False
+            c.state = "dialing"
+            try:
+                await asyncio.sleep(delay)
+            except asyncio.CancelledError:
+                await self._finish(c, c.end_reason or "hangup")
+                return
+            if c.end_reason:
+                await self._finish(c, c.end_reason)
+                return
+            await self._event(c, "dialing", stage="retry")
         if c.state == "ended" or c.end_reason:
             await self._safe_hangup(c)
             await self._finish(c, c.end_reason or "hangup")
@@ -203,6 +281,7 @@ class CallManager:
             await self._finish(c, "error")
             return
         c.state = "connected"
+        self._clog(c, "media_connected")
         await self._event(c, "connected")
 
         async def send(pcm: bytes) -> None:
@@ -269,6 +348,7 @@ class CallManager:
         if c.finished:
             return
         c.finished = True
+        self._clog(c, "ended", reason=reason, stage=stage, err=c.last_error)
         clear = getattr(self.engine, "clear_stage", None)
         if clear:
             try:
@@ -384,6 +464,14 @@ class CallManager:
             c.ringing_sent = True
             c.state = "ringing"
             await self._event(c, "ringing")
+
+    async def on_accepted(self, user_id: int) -> None:
+        """Suhbatdosh javob berdi (PhoneCallAccepted / PhoneCall) — media ulanishi endi boshlanadi."""
+        c = self.active
+        if c and c.user_id == user_id and not c.accepted and c.state in ("dialing", "ringing"):
+            c.accepted = True
+            self._clog(c, "accepted", stage=self._stage(c))
+            await self._event(c, "accepted")
 
     def on_discarded(self, user_id: int, reason: Optional[str]) -> None:
         if user_id in self._incoming_pending:

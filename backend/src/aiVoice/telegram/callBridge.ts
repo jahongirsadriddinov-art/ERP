@@ -190,6 +190,11 @@ async function applyEndSideEffects(b: { employeeId: string; companyId: string },
 
 // ───────────── Worker voqealari ─────────────
 
+// Qo'ng'iroq ulanmaganda (media / tarmoq) — zaxira xabar (telegram/callFailureNotice.ts; health.ts ulaydi)
+export type CallFailureNotifier = (p: { sessionId: string; employeeId: string; companyId: string; reason: string; stage?: string }) => Promise<void>;
+let failureNotifier: CallFailureNotifier | null = null;
+export function setCallFailureNotifier(fn: CallFailureNotifier | null): void { failureNotifier = fn; }
+
 export async function handleCallState(ev: Extract<WorkerEvent, { type: 'call.state' }>, now: Date = new Date()): Promise<void> {
   const sid = String(ev?.sessionId || '');
   if (!/^[0-9a-fA-F]{24}$/.test(sid)) return;
@@ -211,6 +216,10 @@ export async function handleCallState(ev: Extract<WorkerEvent, { type: 'call.sta
     case 'ringing':
       await AiCallSession.updateOne({ _id: sid, isActive: true, status: { $in: ['queued', 'dialing', 'ringing'] } }, { $set: { status: 'ringing', ringingAt: now } });
       return;
+    case 'accepted':
+      // Javob berildi, media hali ulanmagan — "Ошибка соединения" shu va 'connected' orasida bo'ladi
+      console.info(`[aiVoice/telegram] call_event=accepted sid=…${sid.slice(-6)}`);
+      return;
     case 'connected':
       if (b.answered) return;
       b.answered = true;
@@ -220,8 +229,14 @@ export async function handleCallState(ev: Extract<WorkerEvent, { type: 'call.sta
     case 'ended': {
       b.ended = true;
       // Ulanmaslik bosqichi (worker diagnostikasi) — faqat qisqa kod, endReason'da ko'rinadi
-      const stage = typeof ev.stage === 'string' && /^[a-z_]{1,24}$/.test(ev.stage) ? `@${ev.stage}` : '';
+      const stage = typeof ev.stage === 'string' && /^[a-z0-9_]{1,24}$/.test(ev.stage) ? `@${ev.stage}` : '';
       const m = mapEndReason(ev.reason, b.answered);
+      const failedToConnect = !b.answered && (ev.reason === 'network' || ev.reason === 'error');
+      if (failedToConnect) {
+        // Tuzilgan log — keyingi ulanmaslikda aniq sabab (bosqich, xato sinfi, urinishlar) ko'rinsin
+        const cls = typeof ev.errorClass === 'string' ? ev.errorClass.replace(/[^\w.]/g, '').slice(0, 40) : '';
+        console.warn(`[aiVoice/telegram] call_event=failed sid=…${sid.slice(-6)} reason=${ev.reason} stage=${ev.stage || '-'} attempts=${Number(ev.attempts) || 1}${cls ? ` err=${cls}` : ''}`);
+      }
       try {
         await applyEndSideEffects(b, ev.reason);
         // Avval aniq holat bilan yakunlanadi; menejerning keyingi finishSession'i no-op bo'ladi
@@ -229,6 +244,11 @@ export async function handleCallState(ev: Extract<WorkerEvent, { type: 'call.sta
       } finally {
         dropBridge(sid);
         try { await b.handle.end(m.aiv); } catch { /* allaqachon yopilgan */ }
+      }
+      // Qo'ng'iroq ulanmadi — bot orqali matnli xabar (zaxira kanal); hech qachon otmaydi
+      if (failedToConnect && failureNotifier) {
+        failureNotifier({ sessionId: sid, employeeId: b.employeeId, companyId: b.companyId, reason: ev.reason!, stage: ev.stage })
+          .catch((e) => console.error('[aiVoice/telegram] zaxira xabar:', (e as Error).message));
       }
       return;
     }

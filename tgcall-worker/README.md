@@ -172,6 +172,7 @@ yangi kalit yaratiladi: Render'dagi `AIV_WORKER_PUBKEY` ni yangilash va Telegram
 | Panelda `flood_wait` | Telegram vaqtincha cheklagan — ko'rsatilgan vaqt o'tguncha kuting |
 | Panelda "Muzlatilgan" / "Spam cheklovi" | Akkauntni telefonda oching → @SpamBot → `/start` yoki apellyatsiya havolasi; yuqoridagi "anti-freeze" bo'limiga qarang |
 | Panelda `proxy_invalid` / `proxy_lib_missing` | `TG_PROXIES` formati xato / `pip install -r requirements.txt` |
+| Telefonda **"Ошибка соединения"** (jiringlaydi, javob berasiz, ovoz ulanmaydi) | Media (UDP) ulanmadi. Worker logida `call_event=connect_failed ... stage=... err=...` qatoriga qarang. `stage=key_exchange` — kalit almashinuvi (kutubxona versiyasi: `py-tgcalls`/`ntgcalls`ni yangilang); `stage=p2p_connect` — UDP yo'q yoki bloklangan: **UDP tekshiruvi** OK bo'lsin, Firewall/antivirus `python.exe` ga chiquvchi UDP ruxsat bersin, VPN/korporativ tarmoqni o'chiring. Railway/Docker'da ishlatilsa — chiquvchi UDP ruxsat etilgan bo'lishi shart. Worker bir marta o'zi qayta teradi (`TG_CALL_MEDIA_RETRIES`, standart 1); baribir ulanmasa xodimga bot orqali matnli xabar boradi |
 
 ## Testlar
 ```

@@ -1,6 +1,7 @@
 import type { JobQueue } from '../queue/jobQueue';
 import { initAccountService, recordHealth, runMaintenance } from './accountService';
-import { initCallBridge } from './callBridge';
+import { initCallBridge, setCallFailureNotifier } from './callBridge';
+import { makeCallFailureNotifier } from './callFailureNotice';
 import { initCompanyAccounts, recordAccountsHealth } from './companyAccounts';
 import { initDmChat } from './dmChat';
 import { initIncomingCalls } from './incomingCalls';
@@ -27,6 +28,7 @@ export async function runHealthCheck(now: Date = new Date()): Promise<void> {
 export function registerHandlers(q: JobQueue): void {
   initAccountService();
   initCallBridge();
+  setCallFailureNotifier(makeCallFailureNotifier());
   initIncomingCalls();
   initCompanyAccounts();
   initDmChat();

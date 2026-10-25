@@ -18,6 +18,9 @@ import { IconTile } from "./components/IconTile";
 import { SwipeRow } from "./components/SwipeRow";
 import { IncomePanel } from "./IncomePanel";
 import { MoneyField, moneyOf, useShowInUzs, InUzsToggle, parseAmount, type Cur } from "./components/Money";
+import { MoneyInput } from "./components/MoneyInput";
+import { CountUp } from "./components/CountUp";
+import { amountToInput, fmtNumber, parseMoney } from "./lib/money";
 import UserIc from "@hugeicons/core-free-icons/UserIcon";
 import PackageIc from "@hugeicons/core-free-icons/Package01Icon";
 import WrenchIc from "@hugeicons/core-free-icons/Wrench01Icon";
@@ -114,7 +117,7 @@ export function FinancePage({ currentUser, users, projects, expenses, onAddExpen
       <div className="surface px-4 py-3 flex items-center justify-between flex-shrink-0">
         <div>
           <h2 className="text-sm font-bold font-display">{t('finance.title')}</h2>
-          <p className="text-sm text-muted-foreground">{t('finance.totalConfirmed')} <span className="font-semibold text-accent">{fmt(totalExpense)}</span> <span className="text-[10px] text-muted-foreground/70">≈ {fmtUsd(totalExpense)}</span></p>
+          <p className="text-sm text-muted-foreground">{t('finance.totalConfirmed')} <CountUp value={totalExpense} format={fmt} className="font-semibold text-accent" testId="finance-total" /> <CountUp value={totalExpense} format={fmtUsd} className="text-[10px] text-muted-foreground/70" prefix="≈ " /></p>
         </div>
         <div className="flex items-center gap-1.5">
           {pendingMe>0&&<span className="text-sm bg-amber-500/15 text-amber-800 dark:text-amber-300 px-2 py-1 rounded-full font-semibold flex items-center gap-1 badge-pulse"><MorphIcon icon={Clock} className="w-3 h-3" />{t('finance.pendingCount', { count: pendingMe })}</span>}
@@ -133,16 +136,16 @@ export function FinancePage({ currentUser, users, projects, expenses, onAddExpen
               <option value="uzs2eur">UZS → EUR</option>
               <option value="eur2uzs">EUR → UZS</option>
             </select>
-            <input type="number" value={currencyAmount} onChange={e=>setCurrencyAmount(e.target.value)}
+            <MoneyInput value={currencyAmount} onChange={setCurrencyAmount} currency={currencyMode.startsWith("uzs") ? "UZS" : "USD"}
               placeholder={currencyMode.startsWith("uzs")?"UZS":currencyMode.startsWith("usd")?"USD":"EUR"}
               className="flex-1 min-w-[80px] text-sm border border-border rounded-xl px-3 py-1.5 bg-input-background focus:outline-none"/>
             {(() => {
-              const n = parseFloat(currencyAmount);
-              const result = currencyAmount && !isNaN(n) ? (
-                currencyMode==="uzs2usd" ? "$" + (n/LIVE_USD_RATE).toFixed(2) :
-                currencyMode==="usd2uzs" ? (n*LIVE_USD_RATE).toLocaleString() + " UZS" :
-                currencyMode==="uzs2eur" ? "€" + (n/LIVE_EUR_RATE).toFixed(2) :
-                currencyMode==="eur2uzs" ? (n*LIVE_EUR_RATE).toLocaleString() + " UZS" : null
+              const n = parseMoney(currencyAmount);
+              const result = currencyAmount && n > 0 ? (
+                currencyMode==="uzs2usd" ? "$" + fmtNumber(n/LIVE_USD_RATE) :
+                currencyMode==="usd2uzs" ? fmtNumber(Math.round(n*LIVE_USD_RATE)) + " UZS" :
+                currencyMode==="uzs2eur" ? "€" + fmtNumber(n/LIVE_EUR_RATE) :
+                currencyMode==="eur2uzs" ? fmtNumber(Math.round(n*LIVE_EUR_RATE)) + " UZS" : null
               ) : null;
               return (
                 <button type="button" disabled={!result} title={result ? t('currency.copyHint') : undefined}
@@ -209,7 +212,7 @@ export function FinancePage({ currentUser, users, projects, expenses, onAddExpen
                       <div className="flex items-start justify-between gap-3">
                         <p className="text-[15px] font-semibold leading-snug text-foreground line-clamp-2 min-w-0">{e.description || expLabel(t, e.type as ExpType)}</p>
                         <div className="text-right flex-shrink-0">
-                          <p className="fin-amount text-[17px] whitespace-nowrap">{m.main}</p>
+                          <p className="fin-amount text-[17px] whitespace-nowrap"><CountUp value={m.num} format={m.fmt} /></p>
                           {m.sub && <p className="text-[11px] text-muted-foreground whitespace-nowrap tabular-nums">{m.sub}</p>}
                         </div>
                       </div>
@@ -259,8 +262,9 @@ export function AddExpenseModal({ currentUser, projects, allUsers, onClose, onAd
   const { t } = useTranslation();
   const [form, setForm] = useState({ type: "oylik" as ExpType, amount: "", projectId: projects[0]?.id || "", description: "", toUserId: "", approverId: "", date: new Date().toISOString().split("T")[0] });
   const [err, setErr] = useState("");
-  const [boshqaRows, setBoshqaRows] = useState<{ name: string; price: string }[]>([{ name: "", price: "" }]);
-  // "Boshqa" — nima ekanini qo'lda yozish yoki avval yozilganlardan tanlash (owner 2026-10-22); bo'sh — "Boshqa"
+  // Owner 2026-10-23: materiallar ro'yxati (nomi + narxi) FAQAT "Material" turida; "Boshqa" — oddiy: nomi + summa
+  const [matRows, setMatRows] = useState<{ name: string; price: string }[]>([{ name: "", price: "" }]);
+  // "Boshqa" — nima ekanini qo'lda yozish yoki avval yozilganlardan tanlash (owner 2026-10-22)
   const [otherLabel, setOtherLabel] = useState("");
   const savedLabels: string[] = (() => { try { return JSON.parse(localStorage.getItem("erp_otherLabels") || "[]"); } catch { return []; } })();
   // Chek/nakladnoy suratidan to'ldirish — AI summa, sana, tavsif va turni o'qiydi; foydalanuvchi tekshirib yuboradi
@@ -276,13 +280,16 @@ export function AddExpenseModal({ currentUser, projects, allUsers, onClose, onAd
       const d = await r.json().catch(() => ({}));
       if (!r.ok) { setErr(d.error || t('common.error')); return; }
       const type = (["oylik", "material", "jihozlar", "transport", "boshqa"].includes(d.category) ? d.category : "material") as ExpType;
-      setForm(f => ({ ...f, type: type === "boshqa" ? "material" : type, amount: String(Math.round(d.amount)), description: d.description || f.description, date: d.date || f.date }));
+      const t2 = type === "boshqa" ? "material" : type;
+      setForm(f => ({ ...f, type: t2, amount: amountToInput(Math.round(d.amount)), description: d.description || f.description, date: d.date || f.date }));
+      if (t2 === "material") setMatRows([{ name: d.description || "", price: amountToInput(Math.round(d.amount)) }]);
       toast.success(t('addExpense.receiptRead', "Chek o'qildi — tekshirib, yuboring"));
     } catch { setErr(t('common.error')); }
     finally { setScanning(false); }
   };
 
-  const boshqaTotal = boshqaRows.reduce((s, r) => s + (Number(r.price) || 0), 0);
+  const matTotal = matRows.reduce((s, r) => s + parseMoney(r.price), 0);
+  const amountNum = parseMoney(form.amount);
   // Admin (direktor/orinbosar) o'zi chiqim yaratsa — tasdiqlash shart emas
   // (backendda ham xuddi shu qoida: creator direktor/orinbosar bo'lsa
   // requiresAdminApproval qo'yilmaydi). Boshqa har qanday rol — kim
@@ -295,43 +302,44 @@ export function AddExpenseModal({ currentUser, projects, allUsers, onClose, onAd
     setErr("");
     if (needsApprover && !form.approverId) { setErr(t('addExpense.errApproverRequired')); return; }
 
-    if (form.type === "boshqa") {
-      const valid = boshqaRows.filter(r => r.name.trim() && r.price);
+    if (form.type === "material") {
+      const valid = matRows.filter(r => r.name.trim() && parseMoney(r.price) > 0);
       if (valid.length === 0) { setErr(t('addExpense.errNeedMaterial')); return; }
       onAdd({
         id: `e${Date.now()}`,
-        type: "boshqa",
-        amount: boshqaTotal,
+        type: "material",
+        amount: valid.reduce((s, r) => s + parseMoney(r.price), 0),
         toUserId: form.toUserId || undefined,
         approverId: needsApprover ? form.approverId : undefined,
         projectId: form.projectId,
-        description: (otherLabel.trim() ? `${otherLabel.trim()} — ` : "") + valid.map(r => `${r.name}: ${Number(r.price).toLocaleString()} so'm`).join("; "),
+        description: valid.map(r => `${r.name.trim()}: ${fmtNumber(parseMoney(r.price))} so'm`).join("; "),
         date: form.date,
         status: form.toUserId ? "pending" : "confirmed",
         createdById: currentUser.id
       });
-      if (otherLabel.trim()) {
-        try { localStorage.setItem("erp_otherLabels", JSON.stringify([otherLabel.trim(), ...savedLabels.filter(l => l !== otherLabel.trim())].slice(0, 15))); } catch { /* */ }
-      }
       onClose();
       return;
     }
 
-    if (!form.amount || +form.amount <= 0) { setErr(t('addExpense.errAmountRequired')); return; }
+    if (form.type === "boshqa" && !otherLabel.trim()) { setErr(t('addExpense.errOtherName', "Chiqim nomini yozing")); return; }
+    if (!(amountNum > 0)) { setErr(t('addExpense.errAmountRequired')); return; }
     if (form.type === "oylik" && !form.toUserId) { setErr(t('addExpense.errSalaryRecipient')); return; }
+    if (form.type === "boshqa") {
+      try { localStorage.setItem("erp_otherLabels", JSON.stringify([otherLabel.trim(), ...savedLabels.filter(l => l !== otherLabel.trim())].slice(0, 15))); } catch { /* */ }
+    }
     if ((form.type as string) === "income") {
-      onAdd({ id: `i${Date.now()}`, type: "income" as any, amount: +form.amount, projectId: form.projectId, description: form.description, date: form.date, status: "confirmed", createdById: currentUser.id });
+      onAdd({ id: `i${Date.now()}`, type: "income" as any, amount: amountNum, projectId: form.projectId, description: form.description, date: form.date, status: "confirmed", createdById: currentUser.id });
       onClose();
       return;
     }
     onAdd({
       id: `e${Date.now()}`,
       type: form.type,
-      amount: +form.amount,
+      amount: amountNum,
       toUserId: form.toUserId || undefined,
       approverId: needsApprover ? form.approverId : undefined,
       projectId: form.projectId,
-      description: form.description,
+      description: form.type === "boshqa" ? otherLabel.trim() : form.description,
       date: form.date,
       status: form.toUserId ? "pending" : "confirmed",
       createdById: currentUser.id
@@ -340,9 +348,9 @@ export function AddExpenseModal({ currentUser, projects, allUsers, onClose, onAd
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" >
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" data-kb-sheet>
       <EscClose onClose={onClose} />
-      <div className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-sm max-h-[88vh] supports-[height:1dvh]:max-h-[88dvh] overflow-y-auto scrollbar-hide animate-slide-up-fade" onClick={e => e.stopPropagation()}>
+      <div className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-sm max-h-[88vh] supports-[height:1dvh]:max-h-[88dvh] overflow-y-auto overscroll-contain scrollbar-hide animate-slide-up-fade" data-testid="add-expense" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-4 py-3.5 border-b border-border" style={{ background: "linear-gradient(to right, rgba(217,70,15,0.06), transparent)" }}>
           <h3 className="font-bold text-sm flex items-center gap-2"><MorphIcon icon={TrendingDown} className="w-4 h-4 text-accent" />{t('addExpense.title')}</h3>
           <button aria-label={t('addExpense.close')} onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted liquid-transition"><MorphIcon icon={X} className="w-4 h-4 text-muted-foreground" /></button>
@@ -376,26 +384,21 @@ export function AddExpenseModal({ currentUser, projects, allUsers, onClose, onAd
             </div>
           </div>
 
-          {/* Boshqa: dynamic material rows — replaces amount + description fields */}
-          {form.type === "boshqa" ? (
+          {/* Material: materiallar ro'yxati (nomi + narxi) — summa avtomatik */}
+          {form.type === "material" ? (
             <div>
-              <label className="text-[10px] font-bold block mb-1.5 text-muted-foreground uppercase tracking-wider">{t('addExpense.otherKind', "Bu nima? (ixtiyoriy)")}</label>
-              <input list="erp-other-labels" value={otherLabel} onChange={e => setOtherLabel(e.target.value)} maxLength={60}
-                placeholder={t('addExpense.otherKindPh', "Masalan: Ovqat, Ijara, Kommunal — bo'sh bo'lsa \"Boshqa\"")}
-                className="w-full min-w-0 h-11 text-base sm:text-sm border border-border rounded-xl px-3 bg-input-background focus:outline-none mb-3" data-testid="other-label" />
-              <datalist id="erp-other-labels">{savedLabels.map(l => <option key={l} value={l} />)}</datalist>
               <label className="text-[10px] font-bold block mb-2 text-muted-foreground uppercase tracking-wider">{t('addExpense.materialsLabel')}</label>
               <div className="space-y-2">
-                {boshqaRows.map((row, i) => (
+                {matRows.map((row, i) => (
                   <div key={i} className="flex gap-1.5 items-center">
-                    <input placeholder={t('addExpense.materialPlaceholder', { n: i + 1 })}
+                    <input placeholder={t('addExpense.materialPlaceholder', { n: i + 1 })} data-testid="mat-name"
                       className="flex-1 min-w-0 text-base sm:text-sm border border-border rounded-lg px-2.5 h-11 bg-input-background focus:outline-none"
-                      value={row.name} onChange={e => { const r = [...boshqaRows]; r[i] = {...r[i], name: e.target.value}; setBoshqaRows(r); }}/>
-                    <input type="number" min="0" placeholder={t('addExpense.pricePlaceholder')}
-                      className="w-24 flex-shrink-0 text-base sm:text-sm border border-border rounded-lg px-2.5 h-11 bg-input-background focus:outline-none"
-                      value={row.price} onChange={e => { const r = [...boshqaRows]; r[i] = {...r[i], price: e.target.value}; setBoshqaRows(r); }}/>
-                    {boshqaRows.length > 1 && (
-                      <button type="button" onClick={() => setBoshqaRows(rows => rows.filter((_, j) => j !== i))}
+                      value={row.name} onChange={e => { const r = [...matRows]; r[i] = {...r[i], name: e.target.value}; setMatRows(r); }}/>
+                    <MoneyInput placeholder={t('addExpense.pricePlaceholder')} data-testid="mat-price"
+                      className="w-28 flex-shrink-0 text-base sm:text-sm border border-border rounded-lg px-2.5 h-11 bg-input-background focus:outline-none tabular-nums"
+                      value={row.price} onChange={v => { setErr(""); const r = [...matRows]; r[i] = {...r[i], price: v}; setMatRows(r); }}/>
+                    {matRows.length > 1 && (
+                      <button type="button" aria-label={t('common.delete', { defaultValue: "O'chirish" })} onClick={() => setMatRows(rows => rows.filter((_, j) => j !== i))}
                         className="p-1.5 text-muted-foreground hover:text-destructive rounded-lg hover:bg-red-500/10 liquid-transition">
                         <MorphIcon icon={X} className="w-3.5 h-3.5" />
                       </button>
@@ -403,29 +406,40 @@ export function AddExpenseModal({ currentUser, projects, allUsers, onClose, onAd
                   </div>
                 ))}
               </div>
-              <button type="button" onClick={() => setBoshqaRows(r => [...r, { name: "", price: "" }])}
+              <button type="button" onClick={() => setMatRows(r => [...r, { name: "", price: "" }])}
                 className="mt-2.5 flex items-center gap-1.5 text-sm text-primary hover:bg-primary/5 px-2.5 py-1.5 rounded-lg liquid-transition font-semibold">
                 <MorphIcon icon={Plus} className="w-3.5 h-3.5" />{t('addExpense.addRow')}
               </button>
-              {boshqaTotal > 0 && (
+              {matTotal > 0 && (
                 <div className="mt-2.5 flex items-center justify-between p-3 rounded-xl border border-accent/20" style={{ background: "rgba(217,70,15,0.05)" }}>
                   <span className="text-xs text-muted-foreground font-semibold">{t('addExpense.totalPayment')}</span>
-                  <span className="text-sm font-bold text-accent">{boshqaTotal.toLocaleString()} so'm</span>
+                  <span className="text-sm font-bold text-accent tabular-nums" data-testid="mat-total">{fmt(matTotal)}</span>
                 </div>
               )}
             </div>
           ) : (
             <>
+              {/* Boshqa — oddiy: nomi (qo'lda yoki avval yozilganlardan) + summa */}
+              {form.type === "boshqa" && (
+                <div>
+                  <label className="text-[10px] font-bold block mb-1.5 text-muted-foreground uppercase tracking-wider">{t('addExpense.otherNameLabel', "Nomi *")}</label>
+                  <input list="erp-other-labels" value={otherLabel} onChange={e => { setErr(""); setOtherLabel(e.target.value); }} maxLength={60}
+                    placeholder={t('addExpense.otherNamePh', "Masalan: Ovqat, Ijara, Kommunal")}
+                    className="w-full min-w-0 h-11 text-base sm:text-sm border border-border rounded-xl px-3 bg-input-background focus:outline-none" data-testid="other-label" />
+                  <datalist id="erp-other-labels">{savedLabels.map(l => <option key={l} value={l} />)}</datalist>
+                </div>
+              )}
               <div>
                 <label className="text-[10px] font-bold block mb-1.5 text-muted-foreground uppercase tracking-wider">{t('addExpense.amountLabel')}</label>
-                <input type="number" min="1" className="w-full text-sm border border-border rounded-lg px-2.5 py-2.5 bg-input-background focus:outline-none"
-                  placeholder={t('addExpense.amountPlaceholder')} value={form.amount} onChange={e => { setErr(""); setForm({...form, amount: e.target.value}); }} required/>
+                <MoneyInput className="w-full h-11 text-base sm:text-sm border border-border rounded-lg px-2.5 bg-input-background focus:outline-none tabular-nums" data-testid="expense-amount"
+                  placeholder={t('addExpense.amountPlaceholder')} value={form.amount} onChange={v => { setErr(""); setForm(f => ({...f, amount: v})); }} required/>
               </div>
+              {form.type !== "boshqa" && (
               <div>
                 <label className="text-[10px] font-bold block mb-1.5 text-muted-foreground uppercase tracking-wider">
                   {t('addExpense.descLabel')} <span className="normal-case font-normal">{t('addExpense.optional')}</span>
                 </label>
-                <input className="w-full text-sm border border-border rounded-lg px-2.5 py-2.5 bg-input-background focus:outline-none"
+                <input className="w-full text-base sm:text-sm border border-border rounded-lg px-2.5 py-2.5 bg-input-background focus:outline-none"
                   placeholder={t('addExpense.descPlaceholder')} value={form.description} onChange={e => { setErr(""); setForm({...form, description: e.target.value}); }}/>
                 {(() => {
                   const g = guessExpType(form.description);
@@ -437,6 +451,7 @@ export function AddExpenseModal({ currentUser, projects, allUsers, onClose, onAd
                   ) : null;
                 })()}
               </div>
+              )}
             </>
           )}
 
@@ -558,7 +573,7 @@ export function EditExpenseModal({ expense, projects, onClose, onSaved }: { expe
   const { t } = useTranslation();
   const fx = expense.currency && expense.currency !== "UZS" && expense.originalAmount ? expense.currency as Cur : null;
   const [currency, setCurrency] = useState<Cur>(fx || "UZS");
-  const [amount, setAmount] = useState(String((fx ? expense.originalAmount : expense.amount) || ""));
+  const [amount, setAmount] = useState(() => amountToInput(fx ? expense.originalAmount : expense.amount, fx || "UZS"));
   const [description, setDescription] = useState(expense.description || "");
   const [type, setType] = useState<string>(expense.type);
   const [date, setDate] = useState(expense.date || "");
@@ -587,10 +602,10 @@ export function EditExpenseModal({ expense, projects, onClose, onSaved }: { expe
   };
   const field = "w-full h-12 rounded-xl border border-border bg-input-background px-3 text-base sm:text-sm focus:outline-none focus:border-primary";
   return (
-    <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center" role="dialog" aria-modal="true">
+    <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center" role="dialog" aria-modal="true" data-kb-sheet>
       <EscClose onClose={onClose} />
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative w-full sm:max-w-md bg-card rounded-t-3xl sm:rounded-3xl p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] space-y-3 max-h-[92dvh] overflow-y-auto animate-slide-up-fade" data-testid="edit-expense">
+      <div className="relative w-full sm:max-w-md bg-card rounded-t-3xl sm:rounded-3xl p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] space-y-3 max-h-[92dvh] overflow-y-auto overscroll-contain animate-slide-up-fade" data-testid="edit-expense">
         <div className="mx-auto -mt-2 mb-1 h-1.5 w-10 rounded-full bg-muted sm:hidden" />
         <h3 className="text-base font-bold">{isIncome ? t('finance.editIncome', { defaultValue: "Kirimni o'zgartirish" }) : t('finance.editExpense', { defaultValue: "Chiqimni o'zgartirish" })}</h3>
         <MoneyField label={t('finance.amountShort', { defaultValue: "Summa" })} amount={amount} currency={currency} onAmount={setAmount} onCurrency={setCurrency} className={field} side={isIncome ? "buy" : "sell"} />
@@ -615,7 +630,7 @@ export function EditExpenseModal({ expense, projects, onClose, onSaved }: { expe
         </div>
         <div className="flex gap-2 pt-1">
           <button type="button" onClick={onClose} className="flex-1 h-12 rounded-xl border border-border font-semibold">{t('common.cancel', { defaultValue: 'Bekor qilish' })}</button>
-          <button type="button" disabled={busy || !Number(String(amount).replace(/\s/g, ""))} onClick={save} className="flex-1 h-12 rounded-xl bg-primary text-white font-semibold disabled:opacity-50 inline-flex items-center justify-center gap-2" data-testid="edit-expense-save">
+          <button type="button" disabled={busy || !parseAmount(amount)} onClick={save} className="flex-1 h-12 rounded-xl bg-primary text-white font-semibold disabled:opacity-50 inline-flex items-center justify-center gap-2" data-testid="edit-expense-save">
             {busy && <MorphIcon icon={Loader2} className="w-4 h-4 animate-spin" />}{t('common.save', { defaultValue: 'Saqlash' })}
           </button>
         </div>

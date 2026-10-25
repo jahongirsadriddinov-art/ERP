@@ -1,5 +1,8 @@
 import { confirmDialog, promptDialog } from "./lib/confirmDialog";
 import { startBackground, stopBackground } from "./lib/background";
+import { fmtNumber, parseMoney } from "./lib/money";
+import { MoneyInput } from "./components/MoneyInput";
+import { CountUp } from "./components/CountUp";
 import { useState, useRef, useEffect, useMemo, lazy, Suspense } from "react";
 import { useScrollMemory } from "./lib/persistentState";
 import Building2 from "@hugeicons/core-free-icons/Building02Icon";
@@ -401,7 +404,8 @@ export function msgReplyPreview(t: (key: string, opts?: any) => string, m: { typ
   return m.text || '';
 }
 export const CHART_COLORS = ["#1B3A6B", "#D2440F", "#1B7A4B", "#F0A500", "#7B2D8B"];
-export const fmt = (n?: number) => (n || 0).toLocaleString("uz-UZ") + " so'm";
+// Owner 2026-10-23: minglar NUQTA bilan ("1.250.000 so'm") — kiritish maydonlari bilan bir xil ko'rinish
+export const fmt = (n?: number) => fmtNumber(n || 0) + " so'm";
 
 // Ishlagan vaqtni "X soat Y daqiqa" ko'rinishida, ANIQ ko'rsatadi — saqlangan
 // workHours (0.1 soatgacha yaxlitlangan, masalan 5 daqiqa "0.1 soat" bo'lib
@@ -776,7 +780,7 @@ export function SendTransferModal({ currentUser, projects, allUsers, onClose, on
         projectId,
         sentDate: new Date().toISOString().split("T")[0],
         status: "pending",
-        price: mat.price ? Number(mat.price) : undefined,
+        price: mat.price ? parseMoney(mat.price) || undefined : undefined,
         note: note || undefined
       });
     });
@@ -829,9 +833,9 @@ export function SendTransferModal({ currentUser, projects, allUsers, onClose, on
                         </div>
                         <div>
                           <label className="text-[10px] text-muted-foreground block mb-1 font-semibold uppercase">{t('sendTransfer.priceLabel')}</label>
-                          <input type="number" min="0" placeholder="0"
-                            className="w-full text-sm border border-border rounded-lg px-2.5 py-1.5 bg-input-background focus:outline-none shadow-sm"
-                            value={sel.price} onChange={e => updateMat(sel.name, "price", e.target.value)}/>
+                          <MoneyInput placeholder="0"
+                            className="w-full text-base sm:text-sm border border-border rounded-lg px-2.5 py-1.5 bg-input-background focus:outline-none shadow-sm tabular-nums"
+                            value={String(sel.price ?? "")} onChange={v => updateMat(sel.name, "price", v)}/>
                         </div>
                       </div>
                     </div>
@@ -935,11 +939,11 @@ export function SendTransferModal({ currentUser, projects, allUsers, onClose, on
                                 }
                               }}
                             />
-                            <input type="number" min="0" placeholder={t('sendTransfer.pricePlaceholder')}
-                              className="w-full text-sm border border-border rounded-lg px-2.5 py-1.5 bg-input-background focus:outline-none shadow-sm"
-                              value={cm.price} onChange={e => {
+                            <MoneyInput placeholder={t('sendTransfer.pricePlaceholder')}
+                              className="w-full text-base sm:text-sm border border-border rounded-lg px-2.5 py-1.5 bg-input-background focus:outline-none shadow-sm tabular-nums"
+                              value={cm.price} onChange={v => {
                                 const newMats = [...customMats];
-                                newMats[i].price = e.target.value;
+                                newMats[i].price = v;
                                 setCustomMats(newMats);
                               }}
                               onKeyDown={e => {
@@ -1304,7 +1308,8 @@ function HeaderDayRate() {
   const [rate, setRate] = useState<number | null>(null);
   useEffect(() => {
     let alive = true;
-    void fetchLiveCurrencyRates().then(() => { if (alive) setRate(LIVE_KAPITAL?.USD?.sell || LIVE_USD_RATE); });
+    // Firma o'z kursini qo'ygan bo'lsa — o'sha (server /rates USD'da beradi), aks holda Kapitalbank sotish kursi
+    void fetchLiveCurrencyRates().then(() => { if (alive) setRate(LIVE_RATE_SOURCE === "company" ? LIVE_USD_RATE : (LIVE_KAPITAL?.USD?.sell || LIVE_USD_RATE)); });
     return () => { alive = false; };
   }, []);
   // Brauzerlarda uz-UZ formati ko'pincha yo'q ("M10 23") — oy va hafta kuni nomlari qo'lda
@@ -1314,12 +1319,12 @@ function HeaderDayRate() {
   const day = `${now.getDate()}-${MON[now.getMonth()]}`;
   return (
     <p className="lg:hidden text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 whitespace-nowrap truncate leading-tight mt-0.5" data-testid="header-day-rate" title={day}>
-      {rate ? `$1 = ${Math.round(rate).toLocaleString("ru-RU")}` : day}
+      {rate ? `$1 = ${fmtNumber(Math.round(rate))}` : day}
     </p>
   );
 }
 
-export function fmtUsd(uzs: number): string { return "$" + (uzs / LIVE_USD_RATE).toFixed(2); }
+export function fmtUsd(uzs: number): string { return "$" + fmtNumber(uzs / LIVE_USD_RATE); }
 
 
 
@@ -1487,7 +1492,7 @@ function BottomFinanceBar({ expenses, projects }: { expenses: Expense[]; project
       )}
       <button onClick={()=>setOpen(!open)} className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-white/5 transition-colors">
         <div className="flex items-center gap-2"><MorphIcon icon={TrendingDown} className="w-4 h-4 text-white/90" /><span className="text-sm text-white/90">{t('finance.totalExpenses')}</span></div>
-        <div className="flex items-center gap-2 min-w-0"><span className="text-sm font-bold font-mono truncate">{fmt(total)}</span><MorphIcon icon={open ? ChevronUp : ChevronDown} className="w-4 h-4 text-white/60 flex-shrink-0" /></div>
+        <div className="flex items-center gap-2 min-w-0"><CountUp value={total} format={fmt} className="text-sm font-bold font-mono truncate" testId="total-expenses-bar" /><MorphIcon icon={open ? ChevronUp : ChevronDown} className="w-4 h-4 text-white/60 flex-shrink-0" /></div>
       </button>
     </div>
   );

@@ -52,8 +52,10 @@ import LanguageSwitcher from "./i18n/LanguageSwitcher";
 import { SkeletonList } from "./Skeleton";
 import { accuracyQuality, QUALITY_COLOR, type GpsStatus } from "./useGeoTracker";
 import { ChangePinModal, isBiometricEnabled, setBiometricEnabled, biometricAvailable, nativeBiometricSupported, registerWebAuthnBiometric, getLockTimeoutMin, setLockTimeoutMin, LOCK_TIMEOUT_OPTIONS } from "./AppLock";
-import { Avatar, BG_TEMPLATES, COLOR_THEMES, CompanyLogo, RoleBadge, fmtWorkDuration, isAdmin, resizeImageFile } from "./App";
+import { Avatar, BG_TEMPLATES, COLOR_THEMES, CompanyLogo, RoleBadge, fmtWorkDuration, isAdmin, resizeImageFile, fetchLiveCurrencyRates } from "./App";
 import type { AppUser, Project } from "./App";
+import { MoneyInput } from "./components/MoneyInput";
+import { amountToInput, fmtNumber, parseMoney } from "./lib/money";
 import AiPhone from "@hugeicons/core-free-icons/AiPhone01Icon";
 import AiVoiceIcon from "@hugeicons/core-free-icons/AiVoiceIcon";
 // AI ovozli yordamchi sozlamalari — alohida chunk (faqat panel ochilganda yuklanadi)
@@ -133,14 +135,12 @@ function AuditLogSection({ token }: { token: string }) {
 }
 
 
-// "Kurslarim" (o'quv kurslari) o'rniga — foydalanuvchi "kurs" deganda VALYUTA
-// KURSINI nazarda tutgan edi. Backend'da bu allaqachon tayyor edi
-// (/api/currency/rates — O'zbekiston Markaziy Banki'dan USD/EUR, soatlik
-// keshlanadi), lekin frontendda faqat FinancePage'ning ichki konvertatsiyasi
-// uchun ishlatilgan, alohida ko'rinadigan joyi yo'q edi — shu joy shu bo'ladi.
+// Valyuta kursi (Profil → Valyuta kursi). Manba (owner 2026-10-23): Kapitalbank (bank.uz sahifasi) — kirimda bankning
+// sotib olish, chiqimda sotish kursi; firma o'z kursini qo'ysa — u ustun. Kapitalbank olinmasa — Markaziy bank (zaxira).
 function CurrencyPanel({ canEdit }: { canEdit: boolean }) {
   const { t } = useTranslation();
-  const [rates, setRates] = useState<{ UZS: number; USD: number; EUR: number; date: string; source: string; cbuUsd?: number; cbuEur?: number } | null>(null);
+  type Bank = { buy: number; sell: number };
+  const [rates, setRates] = useState<{ UZS: number; USD: number; EUR: number; date: string; source: string; cbuUsd?: number; cbuEur?: number; kapital?: { USD?: Bank; EUR?: Bank; updatedAt?: string } | null } | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ usd: '', eur: '' });
@@ -150,14 +150,16 @@ function CurrencyPanel({ canEdit }: { canEdit: boolean }) {
     setLoading(true);
     fetch(`${API_BASE}/api/currency/rates`)
       .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d) setRates(d); })
+      .then(d => { if (d) { setRates(d); void fetchLiveCurrencyRates(); } }) // sarlavhadagi "$1 = …" ham yangilansin
       .catch(() => {})
       .finally(() => setLoading(false));
   };
   useEffect(() => { load(); }, []);
 
   const openEdit = () => {
-    setForm({ usd: rates?.USD ? String(Math.round(rates.USD)) : '', eur: rates?.EUR ? String(Math.round(rates.EUR)) : '' });
+    // Firma o'z kursi bo'lsa — o'sha qiymat; bo'lmasa bo'sh (placeholder'da Kapitalbank kursi ko'rinadi)
+    const custom = rates?.source === 'company';
+    setForm({ usd: custom && rates?.USD ? amountToInput(rates.USD) : '', eur: custom && rates?.EUR ? amountToInput(rates.EUR) : '' });
     setEditing(true);
   };
 
@@ -168,7 +170,7 @@ function CurrencyPanel({ canEdit }: { canEdit: boolean }) {
       const r = await fetch(`${API_BASE}/api/currency/custom`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ usdRate: form.usd ? Number(form.usd) : null, eurRate: form.eur ? Number(form.eur) : null }),
+        body: JSON.stringify({ usdRate: form.usd ? parseMoney(form.usd) || null : null, eurRate: form.eur ? parseMoney(form.eur) || null : null }),
       });
       if (!r.ok) { const e = await r.json().catch(()=>({})); toast.error(e.error || t('currency.genericError')); return; }
       toast.success(t('currency.rateSaved'));
@@ -178,7 +180,7 @@ function CurrencyPanel({ canEdit }: { canEdit: boolean }) {
     finally { setSaving(false); }
   };
 
-  // "CBU kursiga qaytarish" — o'z kursini o'chirib, markaziy bank kursiga qaytadi
+  // "Kapitalbank kursiga qaytarish" — firma o'z kursini o'chiradi (server yana Kapitalbank kursini beradi)
   const resetToCbu = async () => {
     setForm({ usd: '', eur: '' });
     setSaving(true);
@@ -197,9 +199,12 @@ function CurrencyPanel({ canEdit }: { canEdit: boolean }) {
   };
 
   const rows = rates ? [
-    { code: 'USD', label: t('currency.usdName'), icon: DollarSign, value: rates.USD },
-    { code: 'EUR', label: t('currency.eurName'), icon: Euro, value: rates.EUR },
+    { code: 'USD', label: t('currency.usdName'), icon: DollarSign, value: rates.USD, bank: rates.kapital?.USD },
+    { code: 'EUR', label: t('currency.eurName'), icon: Euro, value: rates.EUR, bank: rates.kapital?.EUR },
   ] : [];
+  const n0 = (v?: number) => fmtNumber(Math.round(v || 0));
+  const bankHint = (b?: Bank) => b ? t('currency.kapitalNow', { buy: n0(b.buy), sell: n0(b.sell) }) : '';
+  const isCustom = rates?.source === 'company';
 
   return (
     <div className="space-y-3">
@@ -211,22 +216,24 @@ function CurrencyPanel({ canEdit }: { canEdit: boolean }) {
           <p className="text-xs text-muted-foreground -mt-2">{t('currency.setCustomHint')}</p>
           <div>
             <label className="text-xs font-medium text-muted-foreground mb-1 block">{t('currency.usdLabel')}</label>
-            <input type="number" value={form.usd} onChange={e => setForm(p => ({...p, usd: e.target.value}))}
-              placeholder={String(Math.round(rates.cbuUsd || rates.USD))}
-              className="w-full bg-muted/60 border border-border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-primary"/>
+            <MoneyInput value={form.usd} onChange={v => setForm(p => ({...p, usd: v}))} data-testid="currency-usd"
+              placeholder={n0(rates.kapital?.USD?.sell || rates.cbuUsd || rates.USD)}
+              className="w-full bg-muted/60 border border-border rounded-xl px-3 py-2.5 text-base sm:text-sm tabular-nums focus:outline-none focus:border-primary"/>
+            {rates.kapital?.USD && <p className="text-[11px] text-muted-foreground mt-1" data-testid="currency-usd-hint">{bankHint(rates.kapital.USD)}</p>}
           </div>
           <div>
             <label className="text-xs font-medium text-muted-foreground mb-1 block">{t('currency.eurLabel')}</label>
-            <input type="number" value={form.eur} onChange={e => setForm(p => ({...p, eur: e.target.value}))}
-              placeholder={String(Math.round(rates.cbuEur || rates.EUR))}
-              className="w-full bg-muted/60 border border-border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-primary"/>
+            <MoneyInput value={form.eur} onChange={v => setForm(p => ({...p, eur: v}))} data-testid="currency-eur"
+              placeholder={n0(rates.kapital?.EUR?.sell || rates.cbuEur || rates.EUR)}
+              className="w-full bg-muted/60 border border-border rounded-xl px-3 py-2.5 text-base sm:text-sm tabular-nums focus:outline-none focus:border-primary"/>
+            {rates.kapital?.EUR && <p className="text-[11px] text-muted-foreground mt-1">{bankHint(rates.kapital.EUR)}</p>}
           </div>
           <div className="flex gap-2 pt-1">
             <button onClick={saveCustom} disabled={saving} className="flex-1 btn btn-primary text-sm py-2.5 rounded-xl disabled:opacity-60">{t('currency.save')}</button>
             <button onClick={() => setEditing(false)} disabled={saving} className="flex-1 btn btn-outline text-sm py-2.5 rounded-xl">{t('currency.cancel')}</button>
           </div>
-          {rates.source === 'company' && (
-            <button onClick={resetToCbu} disabled={saving} className="w-full text-xs text-muted-foreground underline pt-1">{t('currency.resetToCbuBtn')}</button>
+          {isCustom && (
+            <button onClick={resetToCbu} disabled={saving} data-testid="currency-reset" className="w-full btn btn-outline text-sm py-2.5 rounded-xl">{t('currency.resetToCbuBtn')}</button>
           )}
         </div>
       ) : rates ? (
@@ -238,14 +245,18 @@ function CurrencyPanel({ canEdit }: { canEdit: boolean }) {
                 <div>
                   <p className="text-sm font-semibold">1 {r.code}</p>
                   <p className="text-xs text-muted-foreground">{r.label}</p>
+                  {r.bank && <p className="text-[11px] text-muted-foreground">{bankHint(r.bank)}</p>}
                 </div>
               </div>
-              <p className="text-base font-bold">{Math.round(r.value).toLocaleString('uz-UZ')} {t('common.som')}</p>
+              <p className="text-base font-bold tabular-nums">{n0(r.value)} {t('common.som')}</p>
             </div>
           ))}
           <p className="text-xs text-muted-foreground text-center pt-1">
-            {t('currency.sourceLabel')} {rates.source === 'company' ? t('currency.sourceCompany') : rates.source === 'CBU Uzbekistan' ? t('currency.sourceCbu') : t('currency.sourceDefault')} • {rates.date}
+            {t('currency.sourceLabel')} {rates.source === 'company' ? t('currency.sourceCompany') : rates.source === 'Kapitalbank' ? t('currency.sourceKapital') : rates.source === 'CBU Uzbekistan' ? t('currency.sourceCbu') : t('currency.sourceDefault')} • {rates.date}
           </p>
+          {isCustom && canEdit && (
+            <button onClick={resetToCbu} disabled={saving} data-testid="currency-reset" className="w-full btn btn-outline text-sm py-2.5 rounded-xl">{t('currency.resetToCbuBtn')}</button>
+          )}
           <div className="flex gap-2">
             <button onClick={load} className="flex-1 btn btn-outline text-sm py-2.5 rounded-xl flex items-center justify-center gap-2">
               <MorphIcon icon={RefreshCw} className="w-4 h-4" />{t('currency.refresh')}

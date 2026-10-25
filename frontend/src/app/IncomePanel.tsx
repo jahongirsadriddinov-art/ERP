@@ -14,6 +14,7 @@ import { confirmDialog } from "./lib/confirmDialog";
 import { EscClose, fmt, fmtUsd, roleLabel, type AppUser, type Expense, type Project } from "./App";
 import { EditExpenseModal } from "./FinancePage";
 import { MoneyField, moneyOf, useShowInUzs, InUzsToggle, parseAmount, type Cur } from "./components/Money";
+import { CountUp } from "./components/CountUp";
 
 // Kirim (owner 2026-10-23): kirimni HAR BIR rol kiritadi. Direktor va o'rinbosar hammaning kirimini KIM kiritgani
 // bo'yicha ko'radi ("prorab shuncha so'm kirim qildi"), boshqalar — faqat o'zinikini (server shu qoida bilan beradi).
@@ -58,8 +59,8 @@ export function IncomePanel({ currentUser, users, projects, incomes, onAdded, on
       <div className="surface px-4 py-3 flex items-center justify-between gap-3 flex-shrink-0">
         <div className="min-w-0">
           <p className="text-xs text-muted-foreground">{isDirector ? k("totalAll") : k("totalMine")}</p>
-          <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400 font-mono">{fmt(total)}</p>
-          <p className="text-[11px] text-muted-foreground font-mono">≈ {fmtUsd(total)}</p>
+          <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400 font-mono"><CountUp value={total} format={fmt} testId="income-total" /></p>
+          <p className="text-[11px] text-muted-foreground font-mono"><CountUp value={total} format={fmtUsd} prefix="≈ " /></p>
         </div>
         <button type="button" onClick={() => setShowAdd(true)} className="h-11 px-4 rounded-full bg-emerald-600 text-white font-semibold inline-flex items-center gap-1.5 flex-shrink-0" data-testid="income-add">
           <MorphIcon icon={Plus} className="w-4 h-4" />{k("add")}
@@ -71,7 +72,7 @@ export function IncomePanel({ currentUser, users, projects, incomes, onAdded, on
           <button type="button" onClick={() => setPerson("all")}
             className={`flex-shrink-0 rounded-2xl px-4 py-2.5 text-left border ${person === "all" ? "bg-primary text-white border-primary" : "surface border-border"}`}>
             <p className="text-xs font-semibold">{k("everyone")}</p>
-            <p className="text-sm font-bold font-mono">{fmt(total)}</p>
+            <p className="text-sm font-bold font-mono"><CountUp value={total} format={fmt} /></p>
           </button>
           {byPerson.map((p) => {
             const u = users.find((x) => x.id === p.id);
@@ -79,7 +80,7 @@ export function IncomePanel({ currentUser, users, projects, incomes, onAdded, on
               <button key={p.id} type="button" onClick={() => setPerson(p.id)}
                 className={`flex-shrink-0 rounded-2xl px-4 py-2.5 text-left border ${person === p.id ? "bg-primary text-white border-primary" : "surface border-border"}`}>
                 <p className="text-xs font-semibold truncate max-w-[10rem]">{nameOf(p.id)}{u ? ` · ${roleLabel(t, u.role)}` : ""}</p>
-                <p className="text-sm font-bold font-mono">{fmt(p.total)}</p>
+                <p className="text-sm font-bold font-mono"><CountUp value={p.total} format={fmt} /></p>
                 <p className="text-[10px] opacity-75">{k("count", { count: p.count })}</p>
               </button>
             );
@@ -104,7 +105,7 @@ export function IncomePanel({ currentUser, users, projects, incomes, onAdded, on
                   <div className="flex items-start justify-between gap-3">
                     <p className="font-semibold text-[15px] leading-snug line-clamp-2 min-w-0">{e.description || k("noNote")}</p>
                     <div className="text-right flex-shrink-0">
-                      <p className="fin-amount text-[17px] whitespace-nowrap" data-testid="income-amount">+{moneyOf(e, inUzs).main}</p>
+                      <p className="fin-amount text-[17px] whitespace-nowrap" data-testid="income-amount"><CountUp value={moneyOf(e, inUzs).num} format={moneyOf(e, inUzs).fmt} prefix="+" /></p>
                       {moneyOf(e, inUzs).sub && <p className="text-[11px] text-muted-foreground whitespace-nowrap tabular-nums">{moneyOf(e, inUzs).sub}</p>}
                     </div>
                   </div>
@@ -150,10 +151,10 @@ function AddIncomeModal({ currentUser, projects, onClose, onAdded }: { currentUs
   };
   const field = "w-full h-12 rounded-xl border border-border bg-input-background px-3 text-base sm:text-sm focus:outline-none focus:border-primary";
   return (
-    <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center" role="dialog" aria-modal="true">
+    <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center" role="dialog" aria-modal="true" data-kb-sheet>
       <EscClose onClose={onClose} />
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative w-full sm:max-w-md bg-card rounded-t-3xl sm:rounded-3xl p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] space-y-3 animate-slide-up-fade" data-testid="income-modal">
+      <div className="relative w-full sm:max-w-md bg-card rounded-t-3xl sm:rounded-3xl p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] space-y-3 max-h-[92dvh] overflow-y-auto overscroll-contain animate-slide-up-fade" data-testid="income-modal">
         <div className="mx-auto -mt-2 mb-1 h-1.5 w-10 rounded-full bg-muted sm:hidden" />
         <h3 className="text-base font-bold">{k("addTitle")}</h3>
         <MoneyField label={k("amount")} amount={amount} currency={currency} onAmount={setAmount} onCurrency={setCurrency} autoFocus side="buy" className={field} />

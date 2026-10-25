@@ -11,6 +11,7 @@ import { installDevtoolsGuard } from "./app/lib/devtoolsGuard";
 import { shouldStartLocked, showPrivacyCover } from "./app/AppLock";
 import { installScrollEdgeFade } from "./app/lib/scrollFade";
 import { installLegacyColorFallback, installDvhFallback } from "./app/lib/legacyCss";
+import { installKeyboardAvoid } from "./app/lib/keyboardAvoid";
 import { applyAppFont, applyFontScale, applyFontWeight } from "./app/lib/fonts";
 
 installErrorReporting();
@@ -26,6 +27,8 @@ installScrollEdgeFade();
 // Eski Android WebView (Chrome < 111): ranglar va ekran balandligi uchun moslik
 installDvhFallback();
 installLegacyColorFallback();
+// iPhone / Telegram: klaviatura fokusdagi maydonni yopmasin (modal va varaqlar ko'rinadigan qismga sig'adi)
+installKeyboardAvoid();
 // Profilda tanlangan shrift (qurilmada saqlanadi) — birinchi chizishdan oldin
 applyAppFont();
 applyFontScale();

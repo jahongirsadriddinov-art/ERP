@@ -28,6 +28,8 @@ import { motion } from "motion/react";
 import { PlanFactCard } from "./PlanFact";
 import { PieceworkTab, useCompanyFeatures } from "./Piecework";
 import { DailyReports } from "./DailyReports";
+import { MoneyInput } from "./components/MoneyInput";
+import { parseMoney } from "./lib/money";
 import { openMediaViewer } from "./MediaViewer";
 import { SkeletonList } from "./Skeleton";
 import { EscClose, LocationInput, SMETA_GROUP_LABEL, SMETA_GROUP_ORDER, SafeImg, SendTransferModal, TransferRow, fmt, fmtNum, hwheel, isAdmin, useModalPresence, type AppUser, type Project, type ReqMat, type SmetaResourceRow, type SmetaResult, type SmetaWorkRow, type Transfer } from "./App";
@@ -483,10 +485,10 @@ export function MaterialDetailsModal({ mat, confT, pendT, objectId, canEdit, onC
     try {
       const res = await fetch(`${API_BASE}/api/materials/object/${objectId}/by-name`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ currentName: mat.name, name: eName.trim(), unit: eUnit.trim(), needed: Number(eQty) || 0, price: ePrice ? Number(ePrice) : null }),
+        body: JSON.stringify({ currentName: mat.name, name: eName.trim(), unit: eUnit.trim(), needed: Number(eQty) || 0, price: ePrice ? parseMoney(ePrice) : null }),
       });
       if (res.ok) {
-        onUpdated?.({ name: eName.trim(), unit: eUnit.trim(), quantity: Number(eQty) || 0, price: ePrice ? Number(ePrice) : undefined });
+        onUpdated?.({ name: eName.trim(), unit: eUnit.trim(), quantity: Number(eQty) || 0, price: ePrice ? parseMoney(ePrice) : undefined });
         setEditing(false);
       } else toast.error(tt('common.error'));
     } catch { toast.error(tt('common.error')); }
@@ -522,7 +524,7 @@ export function MaterialDetailsModal({ mat, confT, pendT, objectId, canEdit, onC
             </div>
             <div>
               <label className="text-xs text-muted-foreground block mb-1">{tt('objectDetail.colPrice')}</label>
-              <input type="number" min="0" value={ePrice} onChange={e=>setEPrice(e.target.value)} className="w-full text-sm border border-border rounded-lg px-3 py-2 bg-input-background focus:outline-none" />
+              <MoneyInput value={ePrice} onChange={setEPrice} className="w-full text-base sm:text-sm border border-border rounded-lg px-3 py-2 bg-input-background focus:outline-none tabular-nums" />
             </div>
             <div className="flex gap-2 pt-1">
               <button onClick={()=>setEditing(false)} className="btn btn-outline flex-1 py-2">{tt('common.cancel')}</button>
@@ -723,11 +725,11 @@ export function ProjectEditModal({ project, users, onClose, onSave }:
     try {
       const res = await fetch(`${API_BASE}/api/objects/${project.id}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim(), budget: budget ? Number(budget) : null, location: location.trim(), foremanId: foremanId || null, ...(coords ? { lat: coords.lat, lng: coords.lng } : {}), geofenceRadius: radius.trim() ? Number(radius) : null }),
+        body: JSON.stringify({ name: name.trim(), budget: budget ? parseMoney(budget) : null, location: location.trim(), foremanId: foremanId || null, ...(coords ? { lat: coords.lat, lng: coords.lng } : {}), geofenceRadius: radius.trim() ? Number(radius) : null }),
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error || t('common.error')); return; }
-      onSave({ name: name.trim(), budget: budget ? Number(budget) : 0, location: location.trim(), foremanId: foremanId || undefined, geofenceRadius: data.geofenceRadius ?? 0, ...(data.lat != null ? { lat: data.lat, lng: data.lng } : {}) } as any);
+      onSave({ name: name.trim(), budget: budget ? parseMoney(budget) : 0, location: location.trim(), foremanId: foremanId || undefined, geofenceRadius: data.geofenceRadius ?? 0, ...(data.lat != null ? { lat: data.lat, lng: data.lng } : {}) } as any);
     } catch { setError(t('common.error')); } finally { setSaving(false); }
   };
 
@@ -748,8 +750,8 @@ export function ProjectEditModal({ project, users, onClose, onSave }:
           </div>
           <div>
             <label className="text-xs text-muted-foreground block mb-1">{t('objectDetail.editBudgetLabel')}</label>
-            <input type="number" min="0" value={budget} onChange={e => setBudget(e.target.value)}
-              className="w-full text-sm border border-border rounded-lg px-3 py-2 bg-input-background focus:outline-none" />
+            <MoneyInput value={budget} onChange={setBudget}
+              className="w-full text-base sm:text-sm border border-border rounded-lg px-3 py-2 bg-input-background focus:outline-none tabular-nums" />
           </div>
           <div>
             <label className="text-xs text-muted-foreground block mb-1">{t('objectDetail.editLocationLabel')}</label>

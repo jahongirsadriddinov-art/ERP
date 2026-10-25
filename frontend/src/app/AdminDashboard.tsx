@@ -1,3 +1,5 @@
+import { MoneyInput } from "./components/MoneyInput";
+import { parseMoney } from "./lib/money";
 import { confirmDialog } from "./lib/confirmDialog";
 import { useState, useRef, useEffect, Suspense } from "react";
 import Building2 from "@hugeicons/core-free-icons/Building02Icon";
@@ -547,7 +549,7 @@ export function AddUserModal({ currentUser, users, projects, onClose, onAdd }:
       role: form.role,
       brigade: (form.role === "brigadir" || form.role === "ishchi") ? (form.brigade === "__new__" ? form.newBrigade : form.brigade) : undefined,
       projectIds: form.projectIds,
-      baseSalary: form.baseSalary ? Number(form.baseSalary) : undefined,
+      baseSalary: form.baseSalary ? parseMoney(form.baseSalary) : undefined,
     };
     setErr(""); setSubmitting(true);
     const result = await onAdd(newUser);
@@ -592,8 +594,8 @@ export function AddUserModal({ currentUser, users, projects, onClose, onAdd }:
           {isAdmin(currentUser.role) && (
             <div>
               <label className="text-sm font-medium block mb-1">{t('addUser.baseSalaryLabel')}</label>
-              <input type="number" min="0" className="w-full text-sm border border-border rounded px-3 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary"
-                placeholder={t('addUser.baseSalaryPlaceholder') as string} value={form.baseSalary} onChange={e => setForm({...form, baseSalary: e.target.value})}/>
+              <MoneyInput className="w-full text-base sm:text-sm border border-border rounded px-3 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary tabular-nums"
+                placeholder={t('addUser.baseSalaryPlaceholder') as string} value={form.baseSalary} onChange={v => setForm({...form, baseSalary: v})}/>
             </div>
           )}
           {(form.role === "brigadir" || form.role === "ishchi") && (
@@ -662,7 +664,7 @@ export function EditUserModal({ user, currentUser, onClose, onUpdate }: { user: 
         </div>
         <form onSubmit={e => {
           e.preventDefault();
-          onUpdate({ ...user, ...form, baseSalary: form.baseSalary ? Number(form.baseSalary) : undefined });
+          onUpdate({ ...user, ...form, baseSalary: form.baseSalary ? parseMoney(form.baseSalary) : undefined });
           onClose();
         }} className="p-4 space-y-3">
           <div>
@@ -688,8 +690,8 @@ export function EditUserModal({ user, currentUser, onClose, onUpdate }: { user: 
           {isAdmin(currentUser.role) && (
             <div>
               <label className="text-sm font-medium block mb-1">{t('addUser.baseSalaryLabel')}</label>
-              <input type="number" min="0" className="w-full text-sm border border-border rounded px-2.5 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary"
-                placeholder={t('addUser.baseSalaryPlaceholder') as string} value={form.baseSalary} onChange={e => setForm({...form, baseSalary: e.target.value})}/>
+              <MoneyInput className="w-full text-base sm:text-sm border border-border rounded px-2.5 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary tabular-nums"
+                placeholder={t('addUser.baseSalaryPlaceholder') as string} value={form.baseSalary} onChange={v => setForm({...form, baseSalary: v})}/>
             </div>
           )}
           {["ishchi", "brigadir"].includes(form.role) && (
@@ -727,7 +729,7 @@ export function AddObjectModal({ users, onClose, onAdd }:
     try {
       const res = await fetch(API_BASE + '/api/objects', {
         method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({name: form.name, budget: form.budget ? Number(form.budget) : undefined, location: form.location || undefined, foremanId: form.foremanId || undefined, ...(coords ? { lat: coords.lat, lng: coords.lng } : {}), geofenceRadius: radius.trim() ? Number(radius) : null})
+        body: JSON.stringify({name: form.name, budget: form.budget ? parseMoney(form.budget) : undefined, location: form.location || undefined, foremanId: form.foremanId || undefined, ...(coords ? { lat: coords.lat, lng: coords.lng } : {}), geofenceRadius: radius.trim() ? Number(radius) : null})
       });
       if (!res.ok) throw new Error();
       const obj = await res.json();
@@ -782,7 +784,7 @@ export function AddObjectModal({ users, onClose, onAdd }:
             <input type="number" inputMode="numeric" min={50} max={100000} step={50} placeholder={t('addObject.geofenceOff', "Bo'sh — tekshirilmaydi")} className="w-full text-base sm:text-sm border border-border rounded-xl px-3 h-11 bg-input-background focus:outline-none" value={radius} onChange={e=>setRadius(e.target.value)}/>
             <p className="text-[11px] text-muted-foreground mt-1">Bo'sh qoldirsangiz — "Ishga keldim" joyi tekshirilmaydi. Prorablarga tekshiruv qo'llanmaydi.</p>
             <p className="text-[11px] text-muted-foreground mt-1">{coords ? t('addObject.geofenceOk', "✓ Obyekt nuqtasi tanlandi — ishchilar faqat shu radius ichida ishga kela oladi") : t('addObject.geofenceHint', "Manzilni xaritadan tanlang — shunda ishchilar faqat obyektda \"Ishga keldim\" bosa oladi")}</p></div>
-          <div><label className="text-sm font-medium block mb-1">{t('addObject.budgetLabel')}</label><input type="number" className="w-full text-sm border border-border rounded px-3 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary" placeholder="50000000" value={form.budget} onChange={e=>setForm({...form,budget:e.target.value})}/></div>
+          <div><label className="text-sm font-medium block mb-1">{t('addObject.budgetLabel')}</label><MoneyInput className="w-full text-base sm:text-sm border border-border rounded px-3 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary tabular-nums" placeholder="50.000.000" value={form.budget} onChange={v=>setForm({...form,budget:v})}/></div>
           <div>
             <label className="text-sm font-medium block mb-1">{t('addObject.foremanLabel')}</label>
             <select className="w-full text-sm border border-border rounded px-3 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary" value={form.foremanId} onChange={e=>setForm({...form,foremanId:e.target.value})}>
@@ -1143,10 +1145,10 @@ export function PayrollModal({ users, onClose }: { users: AppUser[]; onClose: ()
               </div>
               <p className="text-[10px] text-muted-foreground mb-1.5">{t('management.payDaysWorked', { days: r.presentDays })} · {t('management.payBase', { amount: r.baseSalary.toLocaleString() })}{r.pieceworkPay ? ` · ${t('piecework.payCol')}: ${Number(r.pieceworkPay).toLocaleString()}` : ''}</p>
               <div className="grid grid-cols-3 gap-1.5">
-                <input type="number" defaultValue={r.bonuses} placeholder={t('management.payBonus') as string} disabled={r.status==='paid'}
-                  onBlur={e=>patch(r.id, { bonuses: Number(e.target.value)||0 })} className="text-xs border border-border rounded-lg px-2 py-1.5 bg-input-background focus:outline-none disabled:opacity-50" />
-                <input type="number" defaultValue={r.deductions} placeholder={t('management.payDeduction') as string} disabled={r.status==='paid'}
-                  onBlur={e=>patch(r.id, { deductions: Number(e.target.value)||0 })} className="text-xs border border-border rounded-lg px-2 py-1.5 bg-input-background focus:outline-none disabled:opacity-50" />
+                <MoneyInput defaultValue={r.bonuses || ""} placeholder={t('management.payBonus') as string} disabled={r.status==='paid'}
+                  onBlur={e=>patch(r.id, { bonuses: parseMoney(e.target.value) })} className="text-xs border border-border rounded-lg px-2 py-1.5 bg-input-background focus:outline-none disabled:opacity-50" />
+                <MoneyInput defaultValue={r.deductions || ""} placeholder={t('management.payDeduction') as string} disabled={r.status==='paid'}
+                  onBlur={e=>patch(r.id, { deductions: parseMoney(e.target.value) })} className="text-xs border border-border rounded-lg px-2 py-1.5 bg-input-background focus:outline-none disabled:opacity-50" />
                 <select value={r.status} disabled={r.status==='paid'} onChange={e=>patch(r.id, { status: e.target.value })} className="text-xs border border-border rounded-lg px-2 py-1.5 bg-input-background focus:outline-none disabled:opacity-50">
                   {Object.keys(statusLabel).map(k => <option key={k} value={k}>{statusLabel[k]}</option>)}
                 </select>

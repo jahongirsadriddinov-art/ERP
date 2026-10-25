@@ -493,7 +493,9 @@ export const AppToaster = () => {
       toastOptions={{ className: "erp-toast", duration: 3800 }} />
   );
 };
-export const BootLoader = () => <div className="boot-loader"><div className="logo-wrap"><div className="spinner" /></div></div>;
+// Ilova ICHIDAGI loader — mavzu rangida (index.html'dagi dastlabki amber loader faqat birinchi yuklash uchun;
+// uni ilova ichida qayta ishlatganda qanday mavzu bo'lsa ham sariq kvadrat chiqardi — owner 2026-10-26)
+export const BootLoader = () => <div className="app-loader"><span className="app-loader__spin" /></div>;
 
 // ─── Small Components ─────────────────────────────────────────────────────────
 // Rasm yuklanmasa (fayl o'chgan/tarmoq xatosi) — "singan rasm" belgisi o'rniga tartibli belgi.

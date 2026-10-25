@@ -370,3 +370,9 @@ html.privacy-cover body::after { content: ""; position: fixed; inset: 0; z-index
 .sf-top { -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 22px); mask-image: linear-gradient(to bottom, transparent 0, #000 22px); }
 .sf-bottom { -webkit-mask-image: linear-gradient(to top, transparent 0, #000 22px); mask-image: linear-gradient(to top, transparent 0, #000 22px); }
 .sf-top.sf-bottom { -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 22px, #000 calc(100% - 22px), transparent 100%); mask-image: linear-gradient(to bottom, transparent 0, #000 22px, #000 calc(100% - 22px), transparent 100%); }
+
+/* Ilova ichidagi yuklash loaderi — mavzu rangida, neytral (owner 2026-10-26: "loader o'rniga sariq chiqyapti") */
+.app-loader { min-height: 60vh; display: flex; align-items: center; justify-content: center; background: var(--background); }
+.app-loader__spin { width: 30px; height: 30px; border-radius: 50%; border: 3px solid color-mix(in srgb, var(--foreground) 14%, transparent); border-top-color: var(--primary); animation: app-loader-spin 0.7s linear infinite; }
+@keyframes app-loader-spin { to { transform: rotate(360deg); } }
+@supports not (color: color-mix(in srgb, red, blue)) { .app-loader__spin { border-color: var(--border); border-top-color: var(--primary); } }

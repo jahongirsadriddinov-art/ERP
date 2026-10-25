@@ -153,6 +153,8 @@ test("PIN qulfi ilova USTIDA chiqadi: ochilganda sahifa qayta yuklanmaydi (musiq
   await page.goto('/');
   const layer = page.getByTestId('pin-lock-layer');
   await expect(layer).toBeVisible({ timeout: 20_000 });
+  // maxfiylik qoplamasi qulf ekrani chizilgach olinadi (PIN tugmalari bosiladigan bo'ladi)
+  await expect.poll(() => page.evaluate(() => document.documentElement.classList.contains('privacy-cover'))).toBe(false);
   // ilova orqada allaqachon yuklangan (qulf ostida), lekin bosib bo'lmaydi
   await expect(page.getByTestId('dev-tab-errors')).toBeAttached();
   await page.evaluate(() => { (window as any).__noReload = 1; });

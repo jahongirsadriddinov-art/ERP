@@ -50,6 +50,24 @@ function getLockThresholdMs(): number {
   return getLockTimeoutMin() * 60 * 1000;
 }
 
+// ── Maxfiylik qoplamasi (owner 2026-10-25: "ilova ochilganda avval ichi ko'rinib, keyin PIN chiqyapti") ──
+// PIN kerak bo'ladigan holatda ilova birinchi kadrdan to'liq yopiladi; fonga o'tganda ham darhol yopiladi
+// (telefonning "oxirgi ekran" rasmi va qaytgandagi bir lahzada ichi ko'rinmasin). Qulf ekrani chizilgach olinadi.
+const COVER = "privacy-cover";
+export function showPrivacyCover(): void { try { document.documentElement.classList.add(COVER); } catch { /* */ } }
+export function hidePrivacyCover(): void {
+  try { requestAnimationFrame(() => requestAnimationFrame(() => document.documentElement.classList.remove(COVER))); } catch { /* */ }
+}
+/** Ilova ishga tushganda (React'dan oldin) — PIN so'ralishi kerakmi. */
+export function shouldStartLocked(): boolean {
+  try {
+    if (!localStorage.getItem(PIN_HASH_KEY) || !localStorage.getItem("currentUser")) return false;
+    if (localStorage.getItem(FORCE_LOCKED_KEY) === '1') return true;
+    const last = Number(localStorage.getItem(LAST_ACTIVE_KEY) || 0);
+    return !!last && Date.now() - last > getLockThresholdMs();
+  } catch { return false; }
+}
+
 // PIN'ni ko'r-ko'rona urinib topishga qarshi — 5 marta ketma-ket noto'g'ri
 // kiritilsa, mahalliy PIN tozalanadi va to'liq qayta login talab qilinadi
 // (4 xonali PIN'da atigi 10 000 kombinatsiya bor — cheklovsiz urinish
@@ -302,12 +320,14 @@ export function useAppLock(pinIsSet: boolean) {
     const onChange = () => {
       if (document.visibilityState === 'hidden') {
         markActiveNow();
+        showPrivacyCover(); // fondagi "oxirgi ekran" rasmida ham ichi ko'rinmasin
         return;
       }
       const last = Number(localStorage.getItem(LAST_ACTIVE_KEY) || 0);
       const staleNow = !!last && Date.now() - last > getLockThresholdMs();
       if (staleNow) setLocked(true); // bu yerda markActiveNow() CHAQIRILMAYDI — xuddi shu sabab
       else markActiveNow();
+      hidePrivacyCover(); // qulf kerak bo'lsa — qulf ekrani chizilgandan keyin olinadi
     };
     document.addEventListener('visibilitychange', onChange);
     return () => document.removeEventListener('visibilitychange', onChange);

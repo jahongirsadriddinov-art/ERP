@@ -8,12 +8,21 @@ import MediaViewer from "./app/MediaViewer.tsx";
 import { installErrorReporting } from "./app/lib/monitoring";
 import { installNativeContextMenuGuard } from "./app/lib/nativeContextMenu";
 import { installDevtoolsGuard } from "./app/lib/devtoolsGuard";
+import { shouldStartLocked, showPrivacyCover } from "./app/AppLock";
+import { installScrollEdgeFade } from "./app/lib/scrollFade";
 import { installLegacyColorFallback, installDvhFallback } from "./app/lib/legacyCss";
 import { applyAppFont, applyFontScale, applyFontWeight } from "./app/lib/fonts";
 
 installErrorReporting();
 installNativeContextMenuGuard();
 installDevtoolsGuard();
+// PIN so'raladigan bo'lsa — birinchi kadrdan ilova ichi yopiq (App qulf ekranini chizgach olinadi)
+if (shouldStartLocked()) {
+  showPrivacyCover();
+  // xavfsizlik zaxirasi: biror sabab bilan ilova chizilmasa — ekran butunlay bo'sh qolib ketmasin
+  setTimeout(() => document.documentElement.classList.remove("privacy-cover"), 10_000);
+}
+installScrollEdgeFade();
 // Eski Android WebView (Chrome < 111): ranglar va ekran balandligi uchun moslik
 installDvhFallback();
 installLegacyColorFallback();

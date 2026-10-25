@@ -70,7 +70,7 @@ import LanguageSwitcher from "./i18n/LanguageSwitcher";
 import { Skeleton, SkeletonList, SkeletonPage, SkeletonMessage } from "./Skeleton";
 import { useGeoTracker } from "./useGeoTracker";
 import PullToRefresh from "./PullToRefresh";
-import { isPinSet, useAppLock, markActiveNow, clearPin, PinSetupScreen, PinLockScreen, ForgotPinScreen, syncPinFromServer, isBiometricEnabled, biometricSupported, tryBiometricUnlock } from "./AppLock";
+import { hidePrivacyCover, isPinSet, useAppLock, markActiveNow, clearPin, PinSetupScreen, PinLockScreen, ForgotPinScreen, syncPinFromServer, isBiometricEnabled, biometricSupported, tryBiometricUnlock } from "./AppLock";
 
 // recharts og'ir kutubxona — faqat "Hisobotlar" bo'limiga kirilganda yuklanadi
 // (boshlang'ich bundle hajmini kamaytiradi, sayt tezroq ochiladi).
@@ -2362,6 +2362,8 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [liveUser?.id, pinIsSet]);
   const { locked: appLocked, unlock: unlockApp, lock: lockAppNow } = useAppLock(!!liveUser && pinIsSet);
+  // Boshlang'ich/fondan qaytgandagi maxfiylik qoplamasi — qulf ekrani (yoki ochiq ilova) chizilgach olinadi
+  useEffect(() => { hidePrivacyCover(); }, [appLocked, liveUser?.id]);
   const isWorkerRole = liveUser ? ['ishchi', 'prorab', 'brigadir'].includes(liveUser.role) : false;
 
   // Tarifga qarab qaysi funksiyalar yoqilganini bilish uchun — admin

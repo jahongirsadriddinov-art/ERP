@@ -227,11 +227,18 @@ router.post('/complete', async (req, res) => {
     if (!company?.name?.trim()) return res.status(400).json({ error: 'Firma nomi kiritilishi shart' });
     if (company?.inn && !/^\d{9}$/.test(String(company.inn))) return res.status(400).json({ error: 'INN 9 raqamdan iborat bo\'lishi kerak' });
 
-    // Bitta Telegram akkaunt = bitta firma egasi (v1.2)
+    // Bitta Telegram akkaunt = bitta firma egasi (v1.2). Owner 2026-10-26: eski, firmasiz qolib ketgan yozuv
+    // (firma o'chirilgan yoki eski xato qurboni) yangi ro'yxatdan o'tishni to'sib qo'yardi — endi u tozalanadi.
     if (reg.telegramUserId) {
-      const alreadyOwner = await User.findOne({ telegramUserId: reg.telegramUserId, isOwner: true });
-      if (alreadyOwner) {
-        return res.status(409).json({ error: 'Bu Telegram akkaunt allaqachon boshqa firma egasi. Bitta akkaunt bitta firma ocha oladi.' });
+      const owners = await User.find({ telegramUserId: reg.telegramUserId, isOwner: true });
+      for (const prev of owners) {
+        const liveCompany = prev.companyId ? await Company.findById(prev.companyId).select('_id name').lean().catch(() => null) : null;
+        if (liveCompany) {
+          return res.status(409).json({ error: `Bu Telegram akkaunt allaqachon "${(liveCompany as any).name}" firmasining egasi. Bitta akkaunt bitta firma ocha oladi.` });
+        }
+        // firmasi yo'q (o'chirilgan) — eski bog'lanish olib tashlanadi, yangi firma ochishga yo'l ochiladi
+        await User.updateOne({ _id: prev._id }, { $unset: { telegramUserId: 1, telegramChatId: 1 } });
+        console.warn('[register] firmasiz eski egalik tozalandi:', String(prev._id));
       }
     }
     // Telefon band bo'lib qolmaganini qayta tekshiramiz (race)

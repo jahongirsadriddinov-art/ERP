@@ -10,6 +10,7 @@ import { installNativeContextMenuGuard } from "./app/lib/nativeContextMenu";
 import { installDevtoolsGuard } from "./app/lib/devtoolsGuard";
 import { shouldStartLocked, showPrivacyCover } from "./app/AppLock";
 import { installScrollEdgeFade } from "./app/lib/scrollFade";
+import { installExternalLinkGuard } from "./app/lib/externalLinks";
 import { installLegacyColorFallback, installDvhFallback } from "./app/lib/legacyCss";
 import { installKeyboardAvoid } from "./app/lib/keyboardAvoid";
 import { applyAppFont, applyFontScale, applyFontWeight } from "./app/lib/fonts";
@@ -24,6 +25,7 @@ if (shouldStartLocked()) {
   setTimeout(() => document.documentElement.classList.remove("privacy-cover"), 10_000);
 }
 installScrollEdgeFade();
+installExternalLinkGuard();
 // Eski Android WebView (Chrome < 111): ranglar va ekran balandligi uchun moslik
 installDvhFallback();
 installLegacyColorFallback();

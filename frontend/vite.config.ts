@@ -10,6 +10,20 @@ import { readFileSync } from 'fs'
 const pkgVersion = process.env.VITE_APP_VERSION || JSON.parse(readFileSync(path.resolve(__dirname, 'package.json'), 'utf-8')).version
 
 
+// Har build uchun noyob id — ochiq oyna yangi deploy chiqqanini /version.json orqali biladi va o'zi yangilanadi
+// (lib/autoUpdate.ts; owner 2026-10-25: "yangilanish faqat refreshdan keyin yuklanyapti")
+const BUILD_ID = process.env.VITE_BUILD_ID || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+
+function versionManifest() {
+  return {
+    name: 'version-manifest',
+    apply: 'build' as const,
+    generateBundle(this: any) {
+      this.emitFile({ type: 'asset', fileName: 'version.json', source: JSON.stringify({ build: BUILD_ID, version: pkgVersion }) })
+    },
+  }
+}
+
 function figmaAssetResolver() {
   return {
     name: 'figma-asset-resolver',
@@ -27,9 +41,11 @@ export default defineConfig(({ mode }) => ({
   esbuild: mode === 'production' ? { drop: ['debugger'], pure: ['console.log', 'console.debug', 'console.info', 'console.trace'] } : {},
   define: {
     __APP_VERSION__: JSON.stringify(pkgVersion),
+    __BUILD_ID__: JSON.stringify(BUILD_ID),
   },
   plugins: [
     figmaAssetResolver(),
+    versionManifest(),
     react(),
     tailwindcss(),
   ],

@@ -622,7 +622,7 @@ export default function CallOverlay({ currentUser, users, call, onClose, onSendM
     const cols = n <= 1 ? 'grid-cols-1' : n === 2 ? 'grid-cols-1 sm:grid-cols-2' : n <= 4 ? 'grid-cols-2' : n <= 6 ? 'grid-cols-2 sm:grid-cols-3' : 'grid-cols-3';
     const canInvite = !!call.groupMemberIds?.length;
     return (
-      <div className="fixed inset-0 z-[100] bg-[#0A0E1C] flex flex-col animate-fade-in">
+      <div data-call-active="" className="fixed inset-0 z-[100] bg-[#0A0E1C] flex flex-col animate-fade-in">
         <div className="flex-shrink-0 px-4 pb-2 flex items-center gap-3" style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }}>
           <div className="min-w-0 flex-1">
             <p className="text-white font-semibold text-sm truncate">{call.groupName || title}</p>
@@ -685,7 +685,7 @@ export default function CallOverlay({ currentUser, users, call, onClose, onSendM
   }
 
   return (
-    <div className="fixed inset-0 z-[100] bg-[#0A0E1C] flex flex-col animate-fade-in">
+    <div data-call-active="" className="fixed inset-0 z-[100] bg-[#0A0E1C] flex flex-col animate-fade-in">
       {audioBlocked && (
         <button onClick={() => { window.dispatchEvent(new CustomEvent('erp:call-audio-unlock')); setAudioBlocked(false); }}
           className="absolute top-[max(1rem,env(safe-area-inset-top))] left-1/2 -translate-x-1/2 z-20 px-5 py-2.5 rounded-full bg-white text-black text-sm font-bold shadow-2xl animate-pulse">

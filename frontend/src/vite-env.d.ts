@@ -2,3 +2,4 @@
 
 // vite.config.ts'dagi `define` orqali build vaqtida kiritiladi (package.json versiyasi).
 declare const __APP_VERSION__: string;
+declare const __BUILD_ID__: string;

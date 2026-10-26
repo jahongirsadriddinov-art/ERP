@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { lazyRetry as lazy, reloadWhenVisible } from "./app/lib/lazyRetry";
 import { isTelegramMiniApp } from "./app/telegramWebApp";
 import { installTelegramLifecycle } from "./app/lib/telegramLifecycle";
+import { startAutoUpdate } from "./app/lib/autoUpdate";
 
 import { createRoot } from "react-dom/client";
 import { MotionConfig } from "motion/react";
@@ -98,6 +99,8 @@ createRoot(document.getElementById("root")!).render(
 // O'rnatilgan ilovalarda (Windows/Android) fayllar ilova ichida — Service Worker kerak emas va eski
 // keshlangan sahifa yangilanishdan keyin ilovani "yuklanmoqda"da qotirib qo'yishi mumkin edi. O'chiramiz.
 const IS_NATIVE_APP = !!((window as any).__TAURI_INTERNALS__ || (window as any).Capacitor?.isNativePlatform?.());
+// Yangi deploy — ochiq oynada o'zi, xavfsiz paytda qo'llanadi (lib/autoUpdate.ts)
+startAutoUpdate({ isNative: IS_NATIVE_APP, toast: (m) => { import("sonner").then(({ toast }) => toast.success(m)).catch(() => {}); }, getRegistration: () => navigator.serviceWorker?.getRegistration() ?? Promise.resolve(undefined) });
 if (IS_NATIVE_APP && 'serviceWorker' in navigator) {
   navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister())).catch(() => {});
   if ('caches' in window) caches.keys().then(ks => ks.forEach(k => caches.delete(k))).catch(() => {});
@@ -105,7 +108,7 @@ if (IS_NATIVE_APP && 'serviceWorker' in navigator) {
 if ('serviceWorker' in navigator && !IS_NATIVE_APP) {
   window.addEventListener('load', async () => {
     try {
-      const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+      const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/', updateViaCache: 'none' });
 
       // Push notification subscription — faqat login bo'lgandan keyin
       // VAPID public key backenddan olinadi, shundan so'ng subscribe qilinadi.

@@ -31,6 +31,8 @@ import currencyRoutes from './routes/currency';
 import dashboardRoutes from './routes/dashboard';
 import clientErrorRoutes from './routes/clientErrors';
 import backupRoutes from './routes/backup';
+import devBackupRoutes from './routes/devBackup';
+import { startOffsiteBackupScheduler } from './services/offsiteBackup';
 import plansRoutes from './routes/plans';
 import promocodesRoutes from './routes/promocodes';
 import qrloginRoutes from './routes/qrlogin';
@@ -306,6 +308,7 @@ app.use('/api/daily-reports',   requireAuth, blockDeveloper, dailyReportsRoutes)
 app.use('/api/export1c',        requireAuth, blockDeveloper, export1cRoutes);
 app.use('/api/announcements',   requireAuth, blockDeveloper, announcementsRoutes);
 app.use('/api/dev-announcements', requireAuth, requireDeveloper, devAnnouncementsRoutes);
+app.use('/api/dev/backup',      requireAuth, requireDeveloper, devBackupRoutes); // tashqi zaxira (S3/R2 + Telegram), tiklash
 app.use('/api/dev/uptime',      requireAuth, requireDeveloper, uptimeRoutes); // UptimeRobot holati (read-only kalit)
 app.use('/api/dev/bot-ui',      requireAuth, requireDeveloper, botUiRoutes); // Bot dizayni: tugma matni/premium emoji/rang, buyruqlar
 app.use('/api/bot-ui-sticker',  botUiStickerRoutes); // faqat qo'shilgan emoji paketlari rasmlari (<img> token yubormaydi)
@@ -391,6 +394,8 @@ mongoose.connect(MONGODB_URI)
     await reloadPlanCache();
     // Kunlik avtomatik zaxira nusxalar (har firma uchun)
     startAutoSnapshots();
+    // Tashqi (off-site) zaxira: butun baza har kuni S3/R2 va dasturchi Telegram'iga, shifrlangan (services/offsiteBackup)
+    startOffsiteBackupScheduler();
     // AI ovozli yordamchi (AI_VOICE_ENABLED o'chiq bo'lsa hech narsa qilmaydi)
     startAiVoice();
     // Jiddiy ogohlantirish o'qilmasa AI qo'ng'iroq qiladi — navbat ishlovchisi (services/companyAlerts.ts)

@@ -111,30 +111,34 @@ export async function restoreSnapshot(snapshotId: string, companyId: string, by:
 }
 
 // ── Tozalash (reset) bo'limlari — har biri qaysi ma'lumotni o'chiradi ─────────
-export const RESET_SCOPES: Record<string, { label: string; run: (cid: string, keepUserIds: string[]) => Promise<number> }> = {
-  expenses: { label: "Chiqimlar, o'tkazmalar va hisobotlar", run: async cid => (await Transaction.deleteMany({ companyId: cid })).deletedCount || 0 },
+const sumCounts = async (ps: Promise<number>[]) => (await Promise.all(ps)).reduce((a, x) => a + x, 0);
+type ResetScope = { label: string; run: (cid: string, keepUserIds: string[]) => Promise<number>; count: (cid: string, keepUserIds: string[]) => Promise<number> };
+export const RESET_SCOPES: Record<string, ResetScope> = {
+  expenses: { label: "Chiqimlar, o'tkazmalar va hisobotlar", run: async cid => (await Transaction.deleteMany({ companyId: cid })).deletedCount || 0,
+    count: cid => Transaction.countDocuments({ companyId: cid }) },
   objects: { label: "Obyektlar (materiallar, rasm/videolar bilan)", run: async cid => {
     const r = await Promise.all([ObjectModel.deleteMany({ companyId: cid }), Material.deleteMany({ companyId: cid }), ProjectMedia.deleteMany({ companyId: cid })]);
     return r.reduce((a, x) => a + (x.deletedCount || 0), 0);
-  } },
-  staff: { label: "Xodimlar (rahbarlardan tashqari)", run: async (cid, keep) => (await User.deleteMany({ companyId: cid, role: { $in: ['prorab', 'brigadir', 'ishchi'] }, _id: { $nin: keep }, isOwner: { $ne: true } })).deletedCount || 0 },
+  }, count: cid => sumCounts([ObjectModel.countDocuments({ companyId: cid }), Material.countDocuments({ companyId: cid }), ProjectMedia.countDocuments({ companyId: cid })]) },
+  staff: { label: "Xodimlar (rahbarlardan tashqari)", run: async (cid, keep) => (await User.deleteMany({ companyId: cid, role: { $in: ['prorab', 'brigadir', 'ishchi'] }, _id: { $nin: keep }, isOwner: { $ne: true } })).deletedCount || 0,
+    count: (cid, keep) => User.countDocuments({ companyId: cid, role: { $in: ['prorab', 'brigadir', 'ishchi'] }, _id: { $nin: keep }, isOwner: { $ne: true } }) },
   attendance: { label: "Davomat va GPS izlari", run: async cid => {
     const GpsLocation = mongoose.model('GpsLocation');
     const r = await Promise.all([Attendance.deleteMany({ companyId: cid }), GpsLocation.deleteMany({ companyId: cid })]);
     return r.reduce((a, x: any) => a + (x.deletedCount || 0), 0);
-  } },
+  }, count: cid => sumCounts([Attendance.countDocuments({ companyId: cid }), mongoose.model('GpsLocation').countDocuments({ companyId: cid })]) },
   chat: { label: "Xabarlar va guruhlar", run: async cid => {
     const r = await Promise.all([Message.deleteMany({ companyId: cid }), Group.deleteMany({ companyId: cid })]);
     return r.reduce((a, x) => a + (x.deletedCount || 0), 0);
-  } },
+  }, count: cid => sumCounts([Message.countDocuments({ companyId: cid }), Group.countDocuments({ companyId: cid })]) },
   documents: { label: "Hujjatlar va e-imzolar", run: async cid => {
     const r = await Promise.all([CompanyDocument.deleteMany({ companyId: cid }), SignedDoc.deleteMany({ companyId: cid })]);
     return r.reduce((a, x) => a + (x.deletedCount || 0), 0);
-  } },
+  }, count: cid => sumCounts([CompanyDocument.countDocuments({ companyId: cid }), SignedDoc.countDocuments({ companyId: cid })]) },
   other: { label: "Jihozlar, xavfsizlik, ish haqi, e'lonlar", run: async cid => {
     const r = await Promise.all([Equipment.deleteMany({ companyId: cid }), SafetyIncident.deleteMany({ companyId: cid }), PayrollRecord.deleteMany({ companyId: cid }), Announcement.deleteMany({ companyId: cid })]);
     return r.reduce((a, x) => a + (x.deletedCount || 0), 0);
-  } },
+  }, count: cid => sumCounts([Equipment.countDocuments({ companyId: cid }), SafetyIncident.countDocuments({ companyId: cid }), PayrollRecord.countDocuments({ companyId: cid }), Announcement.countDocuments({ companyId: cid })]) },
 };
 
 // ── Kunlik avtomatik nusxa — har 6 soatda tekshiriladi, firma uchun oxirgi 22 soatda nusxa bo'lmasa olinadi.

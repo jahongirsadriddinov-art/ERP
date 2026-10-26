@@ -15,6 +15,7 @@ import Session from '../models/Session';
 import { clearTrialMarks } from '../services/trialGuard';
 import { kickUser } from '../services/socket';
 import { aiRevokeAccess } from '../aiVoice/sessions';
+import { backupBeforeRiskyOp } from '../services/offsiteBackup';
 
 const router = Router();
 
@@ -128,6 +129,9 @@ router.delete('/:id', async (req, res) => {
       deletedBy: { userId: actingUserId || '', name: actorName, role: actor?.role || 'dasturchi' },
       snapshot: { company: c, users, objects, materials, transactions, messages, groups, subscriptions },
     });
+
+    // Tashqi (off-site) shifrlangan arxiv — firmaning BARCHA kolleksiyalari (CompanyBackup faqat 7 tasini saqlaydi)
+    await backupBeforeRiskyOp(cidStr, 'pre_delete_company', { userId: actingUserId || '', name: actorName, role: actor?.role || 'dasturchi' });
 
     // Cascade: firmaga tegishli barcha yozuvlarni o'chiramiz
     const [u, o, m, t, msg, g, s] = await Promise.all([

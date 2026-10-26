@@ -51,7 +51,7 @@ router.patch('/:id/read', async (req, res) => {
     const notif = await Notification.findOneAndUpdate(
       { _id: req.params.id, recipientId: tenant.userId },
       { read: true },
-      { new: true }
+      { returnDocument: 'after' }
     );
     if (!notif) return res.status(404).json({ error: 'Topilmadi' });
     res.json({ id: notif._id, read: notif.read });

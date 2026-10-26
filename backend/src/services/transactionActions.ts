@@ -52,7 +52,7 @@ function runSaveInsights(doc: any) {
 
 /** Faqat 'pending' bo'lsa o'tkazadi; boshqa so'rov oldin ulgurgan bo'lsa — null. */
 async function transition(txFilter: Record<string, unknown>, id: unknown, update: Record<string, unknown>) {
-  const doc = await Transaction.findOneAndUpdate({ ...txFilter, _id: id, status: 'pending' } as any, update, { new: true });
+  const doc = await Transaction.findOneAndUpdate({ ...txFilter, _id: id, status: 'pending' } as any, update, { returnDocument: 'after' });
   if (doc) runSaveInsights(doc);
   return doc;
 }

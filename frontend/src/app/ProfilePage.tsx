@@ -222,13 +222,7 @@ function CurrencyPanel({ canEdit }: { canEdit: boolean }) {
               className="w-full bg-muted/60 border border-border rounded-xl px-3 py-2.5 text-base sm:text-sm tabular-nums focus:outline-none focus:border-primary"/>
             {rates.kapital?.USD && <p className="text-[11px] text-muted-foreground mt-1" data-testid="currency-usd-hint">{bankHint(rates.kapital.USD)}</p>}
           </div>
-          <div>
-            <label className="text-xs font-medium text-muted-foreground mb-1 block">{t('currency.eurLabel')}</label>
-            <MoneyInput value={form.eur} onChange={v => setForm(p => ({...p, eur: v}))} data-testid="currency-eur"
-              placeholder={n0(rates.kapital?.EUR?.sell || rates.cbuEur || rates.EUR)}
-              className="w-full bg-muted/60 border border-border rounded-xl px-3 py-2.5 text-base sm:text-sm tabular-nums focus:outline-none focus:border-primary"/>
-            {rates.kapital?.EUR && <p className="text-[11px] text-muted-foreground mt-1">{bankHint(rates.kapital.EUR)}</p>}
-          </div>
+          {/* Yevro olib tashlandi (owner 2026-10-26: "hamma joydan euroni olib tashla") — faqat so'm va dollar */}
           <div className="flex gap-2 pt-1">
             <button onClick={saveCustom} disabled={saving} className="flex-1 btn btn-primary text-sm py-2.5 rounded-xl disabled:opacity-60">{t('currency.save')}</button>
             <button onClick={() => setEditing(false)} disabled={saving} className="flex-1 btn btn-outline text-sm py-2.5 rounded-xl">{t('currency.cancel')}</button>

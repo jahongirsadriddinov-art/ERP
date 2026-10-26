@@ -1318,8 +1318,8 @@ function HeaderDayRate() {
   const MON = ru ? ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"] : ["yan", "fev", "mar", "apr", "may", "iyun", "iyul", "avg", "sen", "okt", "noy", "dek"];
   const day = `${now.getDate()}-${MON[now.getMonth()]}`;
   return (
-    <p className="lg:hidden text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 whitespace-nowrap truncate leading-tight mt-0.5" data-testid="header-day-rate" title={day}>
-      {rate ? `$1 = ${fmtNumber(Math.round(rate))}` : day}
+    <p className="lg:hidden text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 whitespace-nowrap leading-none flex-shrink-0" data-testid="header-day-rate" title={day}>
+      {rate ? `$${fmtNumber(Math.round(rate))}` : day}
     </p>
   );
 }
@@ -3089,15 +3089,13 @@ export default function App() {
   const headerEl = (
     <header className="nav-blur-top flex items-center gap-3 px-4 flex-shrink-0 z-50 sticky top-0"
       style={{ paddingTop: 'max(0.625rem, env(safe-area-inset-top))', paddingBottom: '0.625rem' }}>
-      <div className="nav-pill-desktop flex items-center gap-2.5 px-3 py-2 rounded-full min-w-0 flex-1 lg:flex-none lg:flex-shrink-0">
-        <div className="w-7 h-7 rounded-full flex items-center justify-center overflow-hidden bg-gradient-to-br from-accent to-accent/75 shadow-sm flex-shrink-0">
-          <CompanyLogo src={companyLogo} imgClass="w-full h-full object-contain" iconClass="w-3.5 h-3.5 text-white" />
+      {/* Owner 2026-10-26: sarlavha yana balandlashib ketgandi — bitta qator: logo + firma nomi, kurs yonida kichik */}
+      <div className="nav-pill-desktop flex items-center gap-2 px-2.5 py-1.5 rounded-full min-w-0 flex-1 lg:flex-none lg:flex-shrink-0">
+        <div className="w-6 h-6 rounded-full flex items-center justify-center overflow-hidden bg-gradient-to-br from-accent to-accent/75 shadow-sm flex-shrink-0">
+          <CompanyLogo src={companyLogo} imgClass="w-full h-full object-contain" iconClass="w-3 h-3 text-white" />
         </div>
-        {/* Telefonda (owner 2026-10-23: "tepada narsa kam") — firma nomi, bugungi sana va dollar kursi */}
-        <div className="min-w-0">
-          <p className="text-sm font-bold tracking-tight whitespace-nowrap max-w-full lg:max-w-[140px] truncate leading-tight">{companyName}</p>
-          <HeaderDayRate />
-        </div>
+        <p className="text-[13px] font-bold tracking-tight truncate leading-none min-w-0">{companyName}</p>
+        <HeaderDayRate />
       </div>
       <nav className="hidden lg:flex items-center gap-0.5 lg:gap-1 nav-pill-desktop px-1.5 py-1.5 rounded-full w-fit flex-shrink-0">
         {NAV.map(n=>(

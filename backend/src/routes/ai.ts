@@ -489,7 +489,7 @@ router.put('/conversations/:id', ...convGuard, async (req, res) => {
   try {
     const uid = String(getTenant()?.userId || '');
     const messages = cleanMessages(req.body?.messages);
-    const c = await AiConversation.findOneAndUpdate({ _id: req.params.id, userId: uid }, { messages }, { new: true });
+    const c = await AiConversation.findOneAndUpdate({ _id: req.params.id, userId: uid }, { messages }, { returnDocument: 'after' });
     if (!c) return res.status(404).json({ error: 'Topilmadi' });
     res.json({ ok: true });
   } catch { res.status(500).json({ error: 'Server xatoligi' }); }

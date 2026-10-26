@@ -147,7 +147,7 @@ router.put('/custom', requireAuth, requireOwnerOrAdmin, requireFeature('multi_cu
   if (eurRate !== undefined) update.customEurRate = (eurRate && eurRate > 0) ? eurRate : null;
 
   try {
-    const company = await Company.findByIdAndUpdate(t.companyId, update, { new: true }).select('customUsdRate customEurRate').lean();
+    const company = await Company.findByIdAndUpdate(t.companyId, update, { returnDocument: 'after' }).select('customUsdRate customEurRate').lean();
     if (!company) return res.status(404).json({ error: 'Firma topilmadi' });
     res.json({ ok: true, customUsdRate: company.customUsdRate || null, customEurRate: company.customEurRate || null });
   } catch (err) {

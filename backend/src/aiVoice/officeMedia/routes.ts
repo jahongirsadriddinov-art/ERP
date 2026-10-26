@@ -91,7 +91,7 @@ officeMediaRoutes.put('/office/media', wrap(async (req, res) => {
     }
     set.tracks = tracks;
   }
-  const doc = await OfficeMedia.findOneAndUpdate({ userId: uid(req) }, { $set: set }, { upsert: true, new: true, setDefaultsOnInsert: true }).lean();
+  const doc = await OfficeMedia.findOneAndUpdate({ userId: uid(req) }, { $set: set }, { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }).lean();
   res.json({ ok: true, media: mediaDto(doc) });
 }));
 

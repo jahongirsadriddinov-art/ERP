@@ -37,7 +37,7 @@ router.post('/subscribe', async (req, res) => {
     await PushSubscription.findOneAndUpdate(
       { endpoint },
       stamped({ userId: tenant.userId, endpoint, keys }),
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: 'after' }
     );
     res.json({ ok: true });
   } catch { res.status(500).json({ error: 'Server xatoligi' }); }

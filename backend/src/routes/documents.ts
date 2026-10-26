@@ -86,7 +86,7 @@ router.patch('/:id/expiry', requireOwnerOrAdmin, async (req, res) => {
     const v = req.body?.expiresAt;
     const exp = v === null || v === '' ? null : typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v) && !isNaN(Date.parse(v)) ? new Date(v) : undefined;
     if (exp === undefined) return res.status(400).json({ error: "Sana noto'g'ri" });
-    const doc = await CompanyDocument.findOneAndUpdate(scoped({ _id: req.params.id }), exp ? { $set: { expiresAt: exp } } : { $unset: { expiresAt: 1 } }, { new: true }).lean();
+    const doc = await CompanyDocument.findOneAndUpdate(scoped({ _id: req.params.id }), exp ? { $set: { expiresAt: exp } } : { $unset: { expiresAt: 1 } }, { returnDocument: 'after' }).lean();
     if (!doc) return res.status(404).json({ error: 'Topilmadi' });
     res.json({ ...doc, id: (doc as any)._id });
   } catch (err) {

@@ -71,7 +71,7 @@ router.post('/calculate', requireOwnerOrAdmin, async (req, res) => {
           },
           $setOnInsert: { bonuses: 0, deductions: 0 },
         },
-        { upsert: true, new: true }
+        { upsert: true, returnDocument: 'after' }
       );
       results.push({ ...rec!.toObject(), id: rec!._id });
     }

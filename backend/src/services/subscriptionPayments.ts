@@ -56,7 +56,7 @@ export async function createSubscriptionPaymentOrder(
   const sub = await Subscription.findOneAndUpdate(
     { companyId },
     { $setOnInsert: { companyId, userId, status: 'pending' } },
-    { upsert: true, new: true, sort: { createdAt: -1 } }
+    { upsert: true, returnDocument: 'after', sort: { createdAt: -1 } }
   );
 
   // Dasturchi rad etgan obunani foydalanuvchi o'zi to'lab, tekshiruvsiz

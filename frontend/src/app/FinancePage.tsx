@@ -262,6 +262,8 @@ export function AddExpenseModal({ currentUser, projects, allUsers, onClose, onAd
   { currentUser: AppUser; projects: Project[]; allUsers: AppUser[]; onClose: () => void; onAdd: (e: Expense) => void; allowIncome?: boolean }) {
   const { t } = useTranslation();
   const [form, setForm] = useState({ type: "oylik" as ExpType, amount: "", projectId: projects[0]?.id || "", description: "", toUserId: "", approverId: "", date: new Date().toISOString().split("T")[0] });
+  // Valyuta — tahrirlashdagidek (owner 2026-10-26): so'm / $ / €, server kurs bo'yicha so'mga o'giradi
+  const [currency, setCurrency] = useState<Cur>("UZS");
   const [err, setErr] = useState("");
   // Owner 2026-10-23: materiallar ro'yxati (nomi + narxi) FAQAT "Material" turida; "Boshqa" — oddiy: nomi + summa
   const [matRows, setMatRows] = useState<{ name: string; price: string }[]>([{ name: "", price: "" }]);
@@ -334,7 +336,7 @@ export function AddExpenseModal({ currentUser, projects, allUsers, onClose, onAd
       try { localStorage.setItem("erp_otherLabels", JSON.stringify([otherLabel.trim(), ...savedLabels.filter(l => l !== otherLabel.trim())].slice(0, 15))); } catch { /* */ }
     }
     if ((form.type as string) === "income") {
-      onAdd({ id: `i${Date.now()}`, type: "income" as any, amount: amountNum, projectId: form.projectId, description: form.description, date: form.date, status: "confirmed", createdById: currentUser.id });
+      onAdd({ id: `i${Date.now()}`, type: "income" as any, amount: amountNum, ...(currency !== "UZS" ? { currency } : {}), projectId: form.projectId, description: form.description, date: form.date, status: "confirmed", createdById: currentUser.id });
       onClose();
       return;
     }
@@ -342,6 +344,7 @@ export function AddExpenseModal({ currentUser, projects, allUsers, onClose, onAd
       id: `e${Date.now()}`,
       type: form.type,
       amount: amountNum,
+      ...(currency !== "UZS" ? { currency } : {}),
       toUserId: form.toUserId || undefined,
       approverId: needsApprover ? form.approverId : undefined,
       projectId: form.projectId,
@@ -435,11 +438,10 @@ export function AddExpenseModal({ currentUser, projects, allUsers, onClose, onAd
                   <datalist id="erp-other-labels">{savedLabels.map(l => <option key={l} value={l} />)}</datalist>
                 </div>
               )}
-              <div>
-                <label className="text-[10px] font-bold block mb-1.5 text-muted-foreground uppercase tracking-wider">{t('addExpense.amountLabel')}</label>
-                <MoneyInput className="w-full h-11 text-base sm:text-sm border border-border rounded-lg px-2.5 bg-input-background focus:outline-none tabular-nums" data-testid="expense-amount"
-                  placeholder={t('addExpense.amountPlaceholder')} value={form.amount} onChange={v => { setErr(""); setForm(f => ({...f, amount: v})); }} required/>
-              </div>
+              <MoneyField label={t('addExpense.amountLabel')} amount={form.amount} currency={currency}
+                onAmount={v => { setErr(""); setForm(f => ({ ...f, amount: v })); }} onCurrency={setCurrency}
+                side={(form.type as string) === "income" ? "buy" : "sell"} testId="expense-amount"
+                className="w-full h-11 text-base sm:text-sm border border-border rounded-lg px-2.5 bg-input-background focus:outline-none tabular-nums" />
               {form.type !== "boshqa" && (
               <div>
                 <label className="text-[10px] font-bold block mb-1.5 text-muted-foreground uppercase tracking-wider">

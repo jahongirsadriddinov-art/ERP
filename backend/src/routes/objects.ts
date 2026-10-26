@@ -364,7 +364,7 @@ router.patch('/:id', requireOwnerOrAdmin, async (req, res) => {
     // Manzil o'zgarib, yangi nuqta berilmasa — eski nuqta noto'g'ri bo'lib qoladi: tozalaymiz (keyin manzildan qayta aniqlanadi)
     if (location !== undefined && lat === undefined && String(location || '').trim() !== String(before.location || '').trim()) { update.lat = undefined; update.lng = undefined; }
 
-    const obj = await ObjectModel.findOneAndUpdate(scoped({ _id: req.params.id }), update, { new: true });
+    const obj = await ObjectModel.findOneAndUpdate(scoped({ _id: req.params.id }), update, { returnDocument: 'after' });
 
     const t = getTenant();
     if (t?.userId) {
@@ -395,7 +395,7 @@ router.patch('/:id/status', requireOwnerOrAdmin, async (req, res) => {
     }
     const before = await ObjectModel.findOne(scoped({ _id: req.params.id })).lean();
     if (!before) return res.status(404).json({ error: 'Obyekt topilmadi' });
-    const obj = await ObjectModel.findOneAndUpdate(scoped({ _id: req.params.id }), { status }, { new: true });
+    const obj = await ObjectModel.findOneAndUpdate(scoped({ _id: req.params.id }), { status }, { returnDocument: 'after' });
 
     const t = getTenant();
     if (t?.userId && before.status !== status) {

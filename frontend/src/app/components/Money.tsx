@@ -41,8 +41,8 @@ export function InUzsToggle({ value, onChange }: { value: boolean; onChange: (v:
 }
 
 /** Summa + valyuta tanlash; kiritilganda so'mdagi qiymati darhol ko'rinadi. */
-export function MoneyField({ amount, currency, onAmount, onCurrency, label, autoFocus, className, side = "sell" }: {
-  amount: string; currency: Cur; onAmount: (v: string) => void; onCurrency: (c: Cur) => void; label: string; autoFocus?: boolean; className: string;
+export function MoneyField({ amount, currency, onAmount, onCurrency, label, autoFocus, className, side = "sell", testId = "money-amount" }: {
+  amount: string; currency: Cur; onAmount: (v: string) => void; onCurrency: (c: Cur) => void; label: string; autoFocus?: boolean; className: string; testId?: string;
   /** kirim — bank sotib olish kursi (buy), chiqim — sotish kursi (sell); server ham shunday hisoblaydi */
   side?: "buy" | "sell";
 }) {
@@ -56,10 +56,10 @@ export function MoneyField({ amount, currency, onAmount, onCurrency, label, auto
     <div>
       <span className="text-xs font-semibold text-muted-foreground">{label}</span>
       <div className="flex gap-2 mt-1">
-        <MoneyInput autoFocus={autoFocus} value={amount} currency={currency} placeholder="0" data-testid="money-amount"
+        <MoneyInput autoFocus={autoFocus} value={amount} currency={currency} placeholder="0" data-testid={testId}
           onChange={onAmount} className={`${className} flex-1 min-w-0 tabular-nums`} />
         <div className="flex p-1 rounded-xl bg-muted flex-shrink-0" role="radiogroup" aria-label="Valyuta">
-          {(["UZS", "USD", "EUR"] as Cur[]).map((c) => (
+          {(["UZS", "USD"] as Cur[]).map((c) => (
             <button key={c} type="button" role="radio" aria-checked={currency === c} data-testid={`money-cur-${c}`} onClick={() => { onCurrency(c); onAmount(formatMoneyInput(amount, c)); }}
               className={`h-10 min-w-[2.75rem] px-2 rounded-lg text-sm font-bold liquid-transition ${currency === c ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"}`}>
               {c === "UZS" ? (isRu() ? "сум" : "so'm") : SIGN[c]}

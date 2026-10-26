@@ -44,7 +44,7 @@ router.patch('/features', requireAuth, requireOwnerOrAdmin, async (req, res) => 
   const set: Record<string, boolean> = {};
   for (const k of FEATURE_KEYS) if (typeof req.body?.[k] === 'boolean') set[`features.${k}`] = req.body[k];
   if (!Object.keys(set).length) return res.status(400).json({ error: "Hech narsa o'zgartirilmadi" });
-  const c: any = await Company.findByIdAndUpdate(t.companyId, { $set: set }, { new: true }).select('features').lean();
+  const c: any = await Company.findByIdAndUpdate(t.companyId, { $set: set }, { returnDocument: 'after' }).select('features').lean();
   emitToCompany(t.companyId, 'company:features', c?.features || {});
   res.json(c?.features || {});
 });
@@ -72,7 +72,7 @@ router.patch('/me', requireAuth, requireOwnerOrAdmin, async (req, res) => {
   if (Object.keys(update).length === 0) return res.status(400).json({ error: 'Hech narsa o\'zgartirilmadi' });
 
   try {
-    const company = await Company.findByIdAndUpdate(t.companyId, update, { new: true }).select('name logoUrl branchId').lean();
+    const company = await Company.findByIdAndUpdate(t.companyId, update, { returnDocument: 'after' }).select('name logoUrl branchId').lean();
     if (!company) return res.status(404).json({ error: 'Firma topilmadi' });
     emitToCompany(t.companyId, 'company:update', { name: company.name, logoUrl: company.logoUrl || '', branchId: company.branchId });
     res.json({ ok: true, name: company.name, logoUrl: company.logoUrl || '', branchId: company.branchId });

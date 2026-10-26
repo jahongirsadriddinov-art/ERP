@@ -1,5 +1,6 @@
 import "./i18n/aiVoiceNs";
 import { confirmDialog } from "./lib/confirmDialog";
+import Trash from "@hugeicons/core-free-icons/Delete02Icon";
 import { SnapshotsPanel, DangerZone } from "./components/DataSafety";
 import { useState, useRef, useEffect, Suspense } from "react";
 import { lazyRetry as lazy } from "./lib/lazyRetry";
@@ -360,6 +361,18 @@ function SecuritySettingsCard() {
   );
 }
 
+/** Qurilmada saqlangan vaqtinchalik ma'lumotlar (owner 2026-10-26). Kirish, PIN va mavzu saqlanadi. */
+async function clearDeviceCache(t: (k: string, d?: string) => string): Promise<void> {
+  if (!await confirmDialog(t('profile.clearCacheAsk', "Shu qurilmadagi vaqtinchalik ma'lumotlar o'chirilsinmi? Serverdagilar qoladi."), { danger: true })) return;
+  const KEEP = /^(token|currentUser|erp_pin|erp_lastActiveAt|erp_forceLocked|erp_lockTimeoutMin|erp_themeMode|erp_colorTheme|erp_profileBg|erp_font|erp_lang|i18nextLng)/;
+  try { for (const k of Object.keys(localStorage)) if (!KEEP.test(k)) localStorage.removeItem(k); } catch { /* */ }
+  try { sessionStorage.clear(); } catch { /* */ }
+  try { (await caches.keys()).forEach((k) => void caches.delete(k)); } catch { /* */ }
+  try { (indexedDB as any).databases?.().then?.((ds: any[]) => ds.forEach((d) => d.name && indexedDB.deleteDatabase(d.name))); } catch { /* */ }
+  toast.success(t('profile.cacheCleared', "Tozalandi"));
+  setTimeout(() => location.reload(), 600);
+}
+
 export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdateUser, onCompanyNameChange, onCompanyLogoChange, onBgChange, onColorThemeChange, colorTheme, themeMode, onThemeModeChange, canEditCompany, todayAttendance, onCheckIn, onCheckOut, gpsTracking, gpsStatus, onLockNow, canBackup, backupLoading, onBackup, importLoading, onImportBackup, importFileRef, devMode }:
   { currentUser: AppUser; projects: Project[]; onUpdateAvatar: (url: string) => void; onLogout: () => void; onUpdateUser: (u: AppUser) => void; onCompanyNameChange: (name: string) => void; onCompanyLogoChange: (logo: string) => void; onBgChange: (bg: string) => void; onColorThemeChange: (id: string) => void; colorTheme: string; themeMode: "light"|"dark"|"system"; onThemeModeChange: (m: "light"|"dark"|"system") => void; canEditCompany?: boolean; todayAttendance: null | { status: string; checkIn?: string; checkOut?: string; workHours?: number }; onCheckIn: () => void; onCheckOut: () => void; gpsTracking: boolean; onLockNow: () => void; gpsStatus?: GpsStatus;
     canBackup?: boolean; backupLoading?: boolean; onBackup?: () => void; importLoading?: boolean; onImportBackup?: (e: React.ChangeEvent<HTMLInputElement>) => void; importFileRef?: React.RefObject<HTMLInputElement>;
@@ -511,7 +524,7 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
   const changeScale = (v: number) => { setFontScale(v); applyFontScale(v); };
   const [fontWeight, setFontWeightState] = useState<FontWeightMode>(getFontWeight);
   const changeWeight = (w: FontWeightMode) => { setFontWeightState(w); applyFontWeight(w); };
-  const [activePanel, setActivePanel] = useState<null | "danger" | "font" | "bg" | "appearance" | "color" | "perms" | "projects" | "language" | "subscription" | "currency" | "sound" | "devices" | "backup" | "aiVoice" | "aiPrefs">(null);
+  const [activePanel, setActivePanel] = useState<null | "danger" | "font" | "bg" | "appearance" | "color" | "perms" | "projects" | "language" | "subscription" | "currency" | "sound" | "devices" | "backup" | "aiVoice" | "aiPrefs" | "cache">(null);
   const APPEARANCE_LABELS: Record<string, string> = { light: t('profile.themeLight'), dark: t('profile.themeDark'), system: t('profile.themeSystem') };
 
   // ── Ovoz effektlari (uisfx, "zen" pack) — yoqilgan/o'chirilgan va balandlik
@@ -650,6 +663,7 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
             ...((!subData?.features || subData.features.includes('multi_currency')) ? [
               { key: "currency" as const, tone: "teal" as IconTone, desc: t('settingsUi.rowCurrency') as string|null, icon: DollarSign, label: t('profile.currencyRate'), hint: null as string|null, swatch: null },
             ] : []),
+            { key: "cache" as const, tone: "amber" as IconTone, desc: t('settingsUi.rowCache', "Shu qurilmada saqlangan vaqtinchalik ma'lumotlar") as string|null, icon: Trash, label: t('profile.clearCache', "Keshni tozalash"), hint: null as string|null, swatch: null },
             { key: "devices" as const, tone: "slate" as IconTone, desc: t('settingsUi.rowDevices') as string|null, icon: Smartphone, label: t('profile.connectedDevices'), hint: null as string|null, swatch: null },
             // AI ovozli yordamchi: firma sozlamalari — direktor / o'rinbosar / egasi (tarifda ai_assistant bo'lsa);
             // shaxsiy AI sozlamalari (rozilik, kanal, voz kechish) — har bir xodim uchun.
@@ -918,6 +932,17 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
                 {importLoading ? <MorphIcon icon={Loader2} className="w-4 h-4 animate-spin" /> : <MorphIcon icon={Upload} className="w-4 h-4" />}
                 {t('dashboard.importBackup')}
               </button></>}
+            </div>
+          )}
+          {activePanel === "cache" && (
+            <div className="space-y-3" data-testid="cache-panel">
+              <p className="text-sm text-muted-foreground">
+                {t('profile.cacheHint', "Qo'lda kiritgan ma'lumotlaringiz shu qurilmada ham saqlanadi (internet yo'qolsa yo'qolmaydi). Bu yerda ularni va vaqtinchalik fayllarni tozalash mumkin. Serverdagi ma'lumotlar o'chmaydi.")}
+              </p>
+              <button type="button" data-testid="cache-clear" onClick={() => void clearDeviceCache(t)}
+                className="w-full h-12 rounded-xl bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/25 font-semibold">
+                {t('profile.clearCache', "Keshni tozalash")}
+              </button>
             </div>
           )}
           {activePanel === "devices" && (
@@ -1335,7 +1360,7 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
                 (!subData?.features || subData.features.includes('audit_log'))
                 ? <div className="mt-3"><AuditLogSection token={localStorage.getItem("token") || ""} /></div> : null },
             { id: "ai", title: t('settingsUi.ai'), desc: t('settingsUi.aiDesc'), keys: ["aiVoice", "aiPrefs"] },
-            { id: "app", title: t('settingsUi.app'), desc: t('settingsUi.appDesc'), keys: ["language", "appearance", "color", "bg", "font"],
+            { id: "app", title: t('settingsUi.app'), desc: t('settingsUi.appDesc'), keys: ["language", "appearance", "color", "bg", "font", "cache"],
               after: !isNative() ? <div className="mt-3"><AppDownloadCards compact title={t('profile.appDownloadTitle')} loadingFallback={false} /></div> : null },
           ];
           const shownGroups = devMode ? groups.filter(g => g.id === "security" || g.id === "app") : groups;

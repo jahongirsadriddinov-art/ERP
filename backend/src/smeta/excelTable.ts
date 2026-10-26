@@ -18,7 +18,7 @@ const HEAD: Record<Col, RegExp> = {
   code: /шифр|код|обосн|shifr|kod|asos/i,
 };
 
-const SKIP_ROW = /^(итого|всего|jami|жами|итог|ндс|qqs|ққс|накладн|сметная\s*прибыль)/i;
+const SKIP_ROW = /^(итого|всего|jami|жами|итог|ндс|qqs|ққс|накладн|сметная\s*прибыль|зарплата|эксплуатац|строительные\s*материалы|транспортные\s*расход|оборудование|прочие\s*затраты|страхование)/i;
 
 const norm = (v: unknown) => String(v ?? '').replace(/[   ]/g, ' ').replace(/\s+/g, ' ').trim();
 
@@ -71,7 +71,8 @@ function matchCols(rows: unknown[][], r: number, combine: boolean): Partial<Reco
 const isHeaderCols = (c: Partial<Record<Col, number>>) => c.name !== undefined && c.unit !== undefined && c.qty !== undefined;
 
 function findHeader(rows: unknown[][]): Header | null {
-  const limit = Math.min(rows.length, 40);
+  // Owner 2026-10-26: katta ofertalarda jadval sarlavhasi 40-qatordan ancha pastda bo'ladi
+  const limit = Math.min(rows.length, 400);
   // Avval bitta qator; topilmasa — 2 qatorga bo'lingan (birlashtirilgan kataklar) sarlavha
   for (const combine of [false, true]) {
     for (let r = 0; r < limit; r++) {

@@ -110,6 +110,7 @@ export interface BotUiCommandItem { command: string; meaning: string; defaults: 
 export const BOT_UI_COMMANDS: BotUiCommandItem[] = [
   { command: 'start', meaning: 'start the bot', defaults: lit('Botni boshlash', 'Запуск бота') },
   { command: 'res', meaning: 'reset / refresh the bot', defaults: lit('Botni yangilash', 'Обновить бота') },
+  { command: 'qollanma', meaning: 'step-by-step guide for the user role', defaults: lit("Qo'llanma (o'z rolim bo'yicha)", 'Руководство по моей роли') },
   { command: 'ai', meaning: 'AI assistant', defaults: lit('AI yordamchi', 'AI помощник'), aiOnly: true },
   { command: 'jadval', meaning: 'work schedule (managers)', defaults: lit('Ish jadvali (rahbar)', 'График работы'), aiOnly: true },
 ];

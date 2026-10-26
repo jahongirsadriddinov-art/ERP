@@ -22,6 +22,7 @@ import AppSettings from '../models/AppSettings';
 import { initRegistrationScene, isInRegistration } from './registrationScene';
 import { emitToUser, emitToGroup, emitToCompanyBosses } from './socket';
 import { tb, langLabel, BotLang } from '../i18n/bot';
+import { guideText, guideRoleOf } from './guides';
 import { getBackendUrl } from '../utils/backendUrl';
 import { uploadFileToCloud } from '../config/cloudinary';
 import { todayInTashkent, tashkentHour } from '../utils/tz';
@@ -2549,6 +2550,35 @@ bot.on('message', async (msg: any) => {
 
     // Unknown admin message — show keyboard
     bot.sendMessage(chatId, tb(user.language, 'chooseFromMenu'), { reply_markup: await keyboardForUser(user, user.language) });
+    return;
+  }
+
+  // ── Qo'llanma (owner 2026-10-26): har kim O'Z ROLI bo'yicha yo'riqnoma oladi ──
+  if (text === '/qollanma_yubor' || text === '/guide_send') {
+    if (!developer && !isAdmin(user.role)) {
+      bot.sendMessage(chatId, user.language === 'ru' ? 'Эта команда только для руководителя.' : "Bu buyruq faqat rahbar uchun.");
+      return;
+    }
+    try {
+      const where: any = { telegramChatId: { $exists: true, $ne: null } };
+      if (!developer) where.companyId = String(user.companyId || '');
+      const people = await User.find(where).select('telegramChatId role language firstName').lean();
+      let sent = 0;
+      for (const p of people as any[]) {
+        try {
+          await bot.sendMessage(String(p.telegramChatId), guideText(p.role, p.language === 'ru' ? 'ru' : 'uz'), { parse_mode: 'HTML' });
+          sent++;
+        } catch { /* bloklangan yoki chat o'chirilgan — o'tkazib yuboramiz */ }
+      }
+      bot.sendMessage(chatId, user.language === 'ru' ? `Руководство отправлено: ${sent} сотрудникам.` : `Qo'llanma ${sent} ta xodimga yuborildi.`);
+    } catch {
+      bot.sendMessage(chatId, tb(user.language, 'genericError'));
+    }
+    return;
+  }
+
+  if (text === '/qollanma' || text === '/guide' || text === '/yordam') {
+    bot.sendMessage(chatId, guideText(user.role, user.language === 'ru' ? 'ru' : 'uz'), { parse_mode: 'HTML' });
     return;
   }
 

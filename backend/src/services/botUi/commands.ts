@@ -12,6 +12,7 @@ export function legacyCommands(aiEnabled: boolean): Cmd[] {
   return [
     { command: 'start', description: 'Botni boshlash / Запуск' },
     { command: 'res', description: 'Botni yangilash / Обновить бота' },
+    { command: 'qollanma', description: "Qo'llanma / Руководство" },
     ...(aiEnabled ? [{ command: 'ai', description: 'AI yordamchi / AI помощник' }, { command: 'jadval', description: 'Ish jadvali (rahbar) / График работы' }] : []),
   ];
 }

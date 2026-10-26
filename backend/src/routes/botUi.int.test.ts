@@ -82,7 +82,7 @@ describe('/api/dev/bot-ui', () => {
     expect(r.status).toBe(200);
     const keys = r.body.catalog.map((i: any) => i.key);
     expect(keys).toEqual(expect.arrayContaining(['kb_chat', 'kb_addExpense', 'kb_devSettings', 'confirmYes', 'exp_okBtn', 'ai_ai']));
-    expect(r.body.commandsCatalog.map((c: any) => c.command)).toEqual(['start', 'res', 'ai', 'jadval']);
+    expect(r.body.commandsCatalog.map((c: any) => c.command)).toEqual(['start', 'res', 'qollanma', 'ai', 'jadval']);
     expect(r.body.config.buttons).toEqual({});
   });
 
@@ -97,8 +97,8 @@ describe('/api/dev/bot-ui', () => {
     const d = decorateMarkup({ keyboard: [[{ text: tb('uz', 'kb_chat') }]] });
     expect(d.keyboard[0][0]).toEqual({ text: 'Suhbat', icon_custom_emoji_id: '1003', style: 'primary' });
     const sets = tg.calls.filter(c => c.method === 'setMyCommands');
-    expect(sets[0].body.commands).toEqual([{ command: 'start', description: 'Boshlash' }]);
-    expect(sets[1].body).toEqual({ commands: [{ command: 'start', description: 'Старт' }], language_code: 'ru' });
+    expect(sets[0].body.commands).toEqual([{ command: 'start', description: 'Boshlash' }, { command: 'qollanma', description: "Qo'llanma (o'z rolim bo'yicha)" }]);
+    expect(sets[1].body).toEqual({ commands: [{ command: 'start', description: 'Старт' }, { command: 'qollanma', description: 'Руководство по моей роли' }], language_code: 'ru' });
   });
 
   it('PUT: noto\'g\'ri qiymatlar va matn to\'qnashuvi → 400', async () => {

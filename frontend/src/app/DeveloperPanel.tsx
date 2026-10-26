@@ -28,6 +28,8 @@ import { AnnouncementComposer, GlobalAnnouncementList } from "./AnnouncementPart
 const ServerStatusPanel = lazy(() => import("./ServerStatusPanel"));
 // Xatolar jurnali (server/sayt/bot/fon ishlari) — alohida chunk
 const ErrorLogPanel = lazy(() => import("./ErrorLogPanel"));
+// Tashqi (off-site) zaxira: holat, "Hozir zaxira olish", arxivlar va tiklash
+const BackupPanel = lazy(() => import("./BackupPanel"));
 // AI platforma boshqaruvi (firmalar, AI miyasi, limitlar, xarajat, Telegram hisobi, arxiv, audit) — alohida chunk
 const AiPlatformPanel = lazy(() => import("./aiVoice/settings/platform/AiPlatformPanel"));
 // Bot dizayni: tugma matnlari, premium emoji, rang, buyruqlar — alohida chunk
@@ -40,8 +42,8 @@ const OfficeMediaHost = lazy(() => import("./aiVoice/settings/platform/office/Me
 // ─── Developer Panel ────────────────────────────────────────────────────────────
 export default function DeveloperPanel({ currentUser, onLogout, profileEl }: { currentUser: AppUser; onLogout: () => void; /** Profil tabi — sayt ko'rinishi (App.tsx beradi) */ profileEl?: ReactNode }) {
   const { t } = useTranslation();
-  const [tab, setTab] = usePersistentState<"firms" | "users" | "subscriptions" | "messages" | "plans" | "promocodes" | "announcements" | "aiVoice" | "botUi" | "server" | "errors" | "office" | "profile">(
-    "dev.tab", "subscriptions", oneOf(["firms", "users", "subscriptions", "messages", "plans", "promocodes", "announcements", "aiVoice", "botUi", "server", "errors", "office", "profile"]));
+  const [tab, setTab] = usePersistentState<"firms" | "users" | "subscriptions" | "messages" | "plans" | "promocodes" | "announcements" | "aiVoice" | "botUi" | "server" | "backup" | "errors" | "office" | "profile">(
+    "dev.tab", "subscriptions", oneOf(["firms", "users", "subscriptions", "messages", "plans", "promocodes", "announcements", "aiVoice", "botUi", "server", "backup", "errors", "office", "profile"]));
   const [annReload, setAnnReload] = useState(0);
   const [companies, setCompanies] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
@@ -385,6 +387,9 @@ export default function DeveloperPanel({ currentUser, onLogout, profileEl }: { c
           <button onClick={() => setTab("server")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "server" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
             {t('devPanel.tabs.server')}
           </button>
+          <button onClick={() => setTab("backup")} data-testid="dev-tab-backup" className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "backup" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
+            {t('devPanel.tabs.backup')}
+          </button>
           <button onClick={() => setTab("profile")} data-testid="dev-tab-profile" className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "profile" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
             👤 {t('devPanel.tabs.profile', { defaultValue: 'Profil' })}
           </button>
@@ -708,12 +713,15 @@ export default function DeveloperPanel({ currentUser, onLogout, profileEl }: { c
           <Suspense fallback={<SkeletonList items={3}/>}><AiOffice fill externalHost onNavigate={(k) => setTab(k as any)} erpLinks={[
             { key: "subscriptions", label: t('devPanel.tabs.subscriptions') }, { key: "firms", label: t('devPanel.tabs.firms', { count: companies.length }) },
             { key: "users", label: t('devPanel.tabs.users') }, { key: "messages", label: t('devPanel.tabs.messages') },
-            { key: "aiVoice", label: t('aiVoice.platform.title') }, { key: "server", label: t('devPanel.tabs.server') }, { key: "errors", label: t('devPanel.tabs.errors') },
+            { key: "aiVoice", label: t('aiVoice.platform.title') }, { key: "server", label: t('devPanel.tabs.server') },
+            { key: "backup", label: t('devPanel.tabs.backup') }, { key: "errors", label: t('devPanel.tabs.errors') },
           ]} /></Suspense>
         ) : tab === "errors" ? (
           <Suspense fallback={<SkeletonList items={3}/>}><ErrorLogPanel /></Suspense>
         ) : tab === "server" ? (
           <Suspense fallback={<SkeletonList items={3}/>}><ServerStatusPanel /></Suspense>
+        ) : tab === "backup" ? (
+          <Suspense fallback={<SkeletonList items={3}/>}><BackupPanel /></Suspense>
         ) : tab === "botUi" ? (
           <Suspense fallback={<SkeletonList items={3}/>}><BotUiPanel /></Suspense>
         ) : tab === "aiVoice" ? (

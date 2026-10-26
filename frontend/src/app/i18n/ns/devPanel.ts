@@ -14,6 +14,7 @@ export const uz = {
       announcements: "📢 E'lon",
       botUi: "🎨 Bot dizayni",
       server: "🟢 Server",
+      backup: "🗄 Zaxira",
       errors: "🐞 Xatolar",
     },
     server: {
@@ -223,6 +224,7 @@ export const ru = {
       announcements: "📢 Объявление",
       botUi: "🎨 Дизайн бота",
       server: "🟢 Сервер",
+      backup: "🗄 Резервная копия",
       errors: "🐞 Ошибки",
     },
     server: {

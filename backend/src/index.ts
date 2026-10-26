@@ -28,6 +28,7 @@ import searchRoutes from './routes/search';
 import qrRoutes from './routes/qr';
 import notificationRoutes from './routes/notifications';
 import currencyRoutes from './routes/currency';
+import tickerRoutes from './routes/ticker';
 import dashboardRoutes from './routes/dashboard';
 import clientErrorRoutes from './routes/clientErrors';
 import backupRoutes from './routes/backup';
@@ -296,6 +297,7 @@ app.use('/api/geocode',         requireAuth, geocodeRoutes);
 // CBU/standart kursini qaytaradi (o'zining ichida shunday loyihalangan);
 // PUT /custom o'zi requireAuth talab qiladi — shu sabab bu yerda optionalAuth.
 app.use('/api/currency',        optionalAuth, currencyRoutes);
+app.use('/api/ticker',          optionalAuth, tickerRoutes); // sarlavha satri: kurs, ob-havo, yangiliklar
 app.use('/api/files',           filesRoutes); // Cloudinary proksi — auth shart emas (bloklangan tarmoqlar uchun)
 app.use('/api/status',          statusRoutes); // sayt yoqiq/o'chiqligi — login ekranidan OLDIN ham so'raladi, auth shart emas
 app.use('/api/equipment',       requireAuth, blockDeveloper, equipmentRoutes);

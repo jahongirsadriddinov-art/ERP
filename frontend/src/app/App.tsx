@@ -1303,25 +1303,57 @@ export async function fetchLiveCurrencyRates(): Promise<void> {
   } catch {}
 }
 
-// Sarlavhadagi kichik qator (telefon): bugungi sana va Kapitalbank dollar kursi
-function HeaderDayRate() {
+// Sarlavhadagi aylanma satr (owner 2026-10-26: "dollar kursi almashib tursin — yangiliklar, ob-havo va
+// hokazo ham bo'lsin"). Bandlar serverdan keladi (/api/ticker: kurs, Toshkent ob-havosi, yangilik sarlavhalari),
+// birinchi band — bugungi sana. Har 6 soniyada yumshoq almashadi; so'rov muvaffaqiyatsiz bo'lsa sana qoladi.
+let TICKER_CACHE: { at: number; items: { kind: string; text: string; icon?: string }[] } = { at: 0, items: [] };
+
+function HeaderTicker() {
   const { i18n } = useTranslation();
-  const [rate, setRate] = useState<number | null>(null);
-  useEffect(() => {
-    let alive = true;
-    // Firma o'z kursini qo'ygan bo'lsa — o'sha (server /rates USD'da beradi), aks holda Kapitalbank sotish kursi
-    void fetchLiveCurrencyRates().then(() => { if (alive) setRate(LIVE_RATE_SOURCE === "company" ? LIVE_USD_RATE : (LIVE_KAPITAL?.USD?.sell || LIVE_USD_RATE)); });
-    return () => { alive = false; };
-  }, []);
-  // Brauzerlarda uz-UZ formati ko'pincha yo'q ("M10 23") — oy va hafta kuni nomlari qo'lda
   const ru = i18n.language?.startsWith("ru");
   const now = new Date();
   const MON = ru ? ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"] : ["yan", "fev", "mar", "apr", "may", "iyun", "iyul", "avg", "sen", "okt", "noy", "dek"];
   const day = `${now.getDate()}-${MON[now.getMonth()]}`;
+  const [items, setItems] = useState<{ kind: string; text: string; icon?: string }[]>(() => TICKER_CACHE.items);
+  const [i, setI] = useState(0);
+
+  useEffect(() => {
+    let alive = true;
+    if (Date.now() - TICKER_CACHE.at < 15 * 60_000 && TICKER_CACHE.items.length) { setItems(TICKER_CACHE.items); return; }
+    fetch(`${API_BASE}/api/ticker`, { headers: authHeader() })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        const list = Array.isArray(d?.items) ? d.items.slice(0, 8) : [];
+        if (!list.length) return;
+        TICKER_CACHE = { at: Date.now(), items: list };
+        if (alive) setItems(list);
+      })
+      .catch(() => { /* tarmoq yo'q — sana ko'rinadi */ });
+    return () => { alive = false; };
+  }, []);
+
+  const all = [{ kind: "day", text: day, icon: "📅" }, ...items];
+  useEffect(() => {
+    if (all.length < 2) return;
+    const t = setInterval(() => setI((v) => (v + 1) % all.length), 6000);
+    return () => clearInterval(t);
+  }, [all.length]);
+
+  const cur = all[i % all.length];
+  const tone = cur.kind === "rate" ? "text-emerald-600 dark:text-emerald-400"
+    : cur.kind === "weather" ? "text-sky-600 dark:text-sky-400"
+    : cur.kind === "news" ? "text-muted-foreground" : "text-muted-foreground";
   return (
-    <p className="lg:hidden text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 whitespace-nowrap leading-none flex-shrink-0" data-testid="header-day-rate" title={day}>
-      {rate ? `$${fmtNumber(Math.round(rate))}` : day}
-    </p>
+    <span className="hidden sm:flex lg:hidden xl:flex items-center gap-1 min-w-0 max-w-[42%] flex-shrink" data-testid="header-day-rate" title={cur.text}>
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.span key={`${i}-${cur.text}`}
+          initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
+          transition={{ duration: 0.28 }}
+          className={`text-[11px] font-semibold whitespace-nowrap leading-none truncate ${tone}`}>
+          {cur.icon ? `${cur.icon} ` : ""}{cur.text}
+        </motion.span>
+      </AnimatePresence>
+    </span>
   );
 }
 
@@ -2367,7 +2399,7 @@ export default function App() {
   }, [liveUser?.id, pinIsSet]);
   const { locked: appLocked, unlock: unlockApp, lock: lockAppNow } = useAppLock(!!liveUser && pinIsSet);
   // Boshlang'ich/fondan qaytgandagi maxfiylik qoplamasi — qulf ekrani (yoki ochiq ilova) chizilgach olinadi
-  useEffect(() => { hidePrivacyCover(); }, [appLocked, liveUser?.id]);
+  useEffect(() => { if (!pinSyncing) hidePrivacyCover(); }, [appLocked, liveUser?.id, pinSyncing]);
   const isWorkerRole = liveUser ? ['ishchi', 'prorab', 'brigadir'].includes(liveUser.role) : false;
 
   // Tarifga qarab qaysi funksiyalar yoqilganini bilish uchun — admin
@@ -3091,12 +3123,12 @@ export default function App() {
     <header className="nav-blur-top flex items-center gap-3 px-4 flex-shrink-0 z-50 sticky top-0"
       style={{ paddingTop: 'max(0.625rem, env(safe-area-inset-top))', paddingBottom: '0.625rem' }}>
       {/* Owner 2026-10-26: sarlavha yana balandlashib ketgandi — bitta qator: logo + firma nomi, kurs yonida kichik */}
-      <div className="nav-pill-desktop flex items-center gap-2 px-2.5 py-1.5 rounded-full min-w-0 flex-1 lg:flex-none lg:flex-shrink-0">
-        <div className="w-6 h-6 rounded-full flex items-center justify-center overflow-hidden bg-gradient-to-br from-accent to-accent/75 shadow-sm flex-shrink-0">
-          <CompanyLogo src={companyLogo} imgClass="w-full h-full object-contain" iconClass="w-3 h-3 text-white" />
+      <div className="nav-pill-desktop flex items-center gap-2 px-1.5 py-1.5 rounded-full min-w-0 flex-1 lg:flex-none lg:flex-shrink-0">
+        <div className="w-9 h-9 rounded-full flex items-center justify-center overflow-hidden bg-gradient-to-br from-accent to-accent/75 shadow-sm flex-shrink-0">
+          <CompanyLogo src={companyLogo} imgClass="w-full h-full object-contain" iconClass="w-[18px] h-[18px] text-white" />
         </div>
-        <p className="text-[13px] font-bold tracking-tight truncate leading-none min-w-0">{companyName}</p>
-        <HeaderDayRate />
+        <p className="text-[15px] font-bold tracking-tight truncate leading-tight min-w-0">{companyName}</p>
+        <HeaderTicker />
       </div>
       <nav className="hidden lg:flex items-center gap-0.5 lg:gap-1 nav-pill-desktop px-1.5 py-1.5 rounded-full w-fit flex-shrink-0">
         {NAV.map(n=>(

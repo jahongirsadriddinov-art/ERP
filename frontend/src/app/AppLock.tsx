@@ -61,7 +61,10 @@ export function hidePrivacyCover(): void {
 /** Ilova ishga tushganda (React'dan oldin) — PIN so'ralishi kerakmi. */
 export function shouldStartLocked(): boolean {
   try {
-    if (!localStorage.getItem(PIN_HASH_KEY) || !localStorage.getItem("currentUser")) return false;
+    if (!localStorage.getItem("currentUser")) return false;
+    // PIN hali bu qurilmaga tushmagan bo'lsa ham (serverdan kelmoqda) — oldingi seansdan "PIN bor" belgisi
+    // qolgan bo'lsa qoplama qo'yiladi, aks holda skelet ko'rinib, keyin PIN chiqardi.
+    if (!localStorage.getItem(PIN_HASH_KEY)) return localStorage.getItem(PIN_KNOWN_KEY) === '1';
     if (localStorage.getItem(FORCE_LOCKED_KEY) === '1') return true;
     const last = Number(localStorage.getItem(LAST_ACTIVE_KEY) || 0);
     return !!last && Date.now() - last > getLockThresholdMs();
@@ -104,9 +107,14 @@ async function makePinPair(pin: string): Promise<{ salt: string; hash: string }>
   const salt = randomHex(16);
   return { salt, hash: await sha256Hex(salt + pin) };
 }
+// PIN shu hisobda BORLIGI belgisi (owner 2026-10-26: "kirgan vaqt, PIN'dan oldin ilova ichi ko'rinib
+// ketyapti"). Serverdan PIN kelishi bir necha soniya ketadi — shu paytgacha nima bo'lishini bilmay turib
+// ilova ichini ko'rsatmaslik uchun, oldingi seansdan qolgan shu belgiga qarab qoplama darhol qo'yiladi.
+const PIN_KNOWN_KEY = 'erp_pinKnown';
 function storePinLocally(salt: string, hash: string) {
   localStorage.setItem(PIN_SALT_KEY, salt);
   localStorage.setItem(PIN_HASH_KEY, hash);
+  try { localStorage.setItem(PIN_KNOWN_KEY, '1'); } catch { /* */ }
 }
 // PIN hisobga bog'lanadi: bu qurilmada saqlanadi VA serverga (faqat salt+xesh) yuboriladi —
 // boshqa qurilmada login qilinganda qayta so'ralmaydi.
@@ -124,6 +132,7 @@ export async function syncPinFromServer(): Promise<boolean> {
     if (!r.ok) return false;
     const d = await r.json();
     if (d?.set && d.salt && d.hash) { storePinLocally(d.salt, d.hash); return true; }
+    try { localStorage.removeItem(PIN_KNOWN_KEY); } catch { /* */ }   // serverda PIN yo'q — keyingi safar qoplama kerak emas
   } catch {}
   return false;
 }
@@ -146,6 +155,7 @@ export async function verifyPin(pin: string): Promise<{ ok: boolean; lockedOut?:
   return { ok: false, attemptsLeft: MAX_FAILED_ATTEMPTS - attempts };
 }
 export function clearPin(): void {
+  localStorage.removeItem(PIN_KNOWN_KEY);
   localStorage.removeItem(PIN_HASH_KEY);
   localStorage.removeItem(PIN_SALT_KEY);
   localStorage.removeItem(BIOMETRIC_KEY);

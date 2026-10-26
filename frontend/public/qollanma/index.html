@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>QurilishERP — Qo'llanma</title>
+<meta name="description" content="QurilishERP qo'llanmasi: direktor, o'rinbosar, prorab, brigadir va ishchi uchun qadam-baqadam yo'riqnoma.">
+<meta name="theme-color" content="#0B1220">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='26' fill='%23F59E0B'/%3E%3Cpath d='M26 74V48h22V26h26v48z' fill='%230B1220'/%3E%3C/svg%3E">
+<style>
+  :root{
+    --bg:#F6F7F9; --card:#FFFFFF; --text:#0E1726; --muted:#5B6678; --line:#E3E7EE;
+    --brand:#B45309; --brand-soft:#FEF3C7; --accent:#0E7490; --ok:#047857; --warn:#B91C1C;
+    --shadow:0 1px 2px rgba(16,24,40,.06),0 8px 24px rgba(16,24,40,.06);
+  }
+  :root:not([data-theme="light"]){ color-scheme:light dark }
+  @media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){
+    --bg:#0B1220; --card:#121C2E; --text:#E9EEF7; --muted:#9AA7BC; --line:#22304A;
+    --brand:#F59E0B; --brand-soft:#2A2110; --accent:#22D3EE; --ok:#34D399; --warn:#FB7185;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.35);
+  }}
+  :root[data-theme="dark"]{
+    --bg:#0B1220; --card:#121C2E; --text:#E9EEF7; --muted:#9AA7BC; --line:#22304A;
+    --brand:#F59E0B; --brand-soft:#2A2110; --accent:#22D3EE; --ok:#34D399; --warn:#FB7185;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    line-height:1.55;-webkit-font-smoothing:antialiased}
+  a{color:var(--brand)}
+  .wrap{max-width:860px;margin:0 auto;padding:0 16px}
+
+  header{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--bg) 88%,transparent);
+    backdrop-filter:saturate(180%) blur(12px);border-bottom:1px solid var(--line)}
+  .bar{display:flex;align-items:center;gap:10px;padding:12px 0}
+  .logo{width:34px;height:34px;border-radius:10px;background:var(--brand);display:grid;place-items:center;flex:0 0 auto}
+  .logo svg{width:20px;height:20px}
+  .title{font-weight:800;letter-spacing:-.02em;font-size:17px;margin:0;flex:1;min-width:0;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ghost{appearance:none;border:1px solid var(--line);background:var(--card);color:var(--muted);
+    border-radius:999px;padding:7px 12px;font-size:13px;font-weight:600;cursor:pointer}
+  .ghost:hover{color:var(--text)}
+
+  .hero{padding:28px 0 10px}
+  .hero h1{font-size:clamp(26px,6vw,40px);line-height:1.15;letter-spacing:-.03em;margin:0 0 10px}
+  .hero p{color:var(--muted);margin:0;font-size:clamp(15px,3.6vw,17px);max-width:60ch}
+
+  .search{position:relative;margin:18px 0 6px}
+  .search input{width:100%;padding:13px 14px 13px 42px;border-radius:14px;border:1px solid var(--line);
+    background:var(--card);color:var(--text);font-size:16px;outline:none;box-shadow:var(--shadow)}
+  .search input:focus{border-color:var(--brand)}
+  .search svg{position:absolute;left:14px;top:50%;transform:translateY(-50%);width:18px;height:18px;
+    stroke:var(--muted);fill:none;stroke-width:2}
+
+  nav.roles{display:flex;gap:8px;overflow-x:auto;padding:14px 0 6px;scrollbar-width:none}
+  nav.roles::-webkit-scrollbar{display:none}
+  .chip{flex:0 0 auto;border:1px solid var(--line);background:var(--card);color:var(--muted);
+    border-radius:999px;padding:9px 14px;font-size:14px;font-weight:650;cursor:pointer;white-space:nowrap;
+    transition:transform .12s ease,background .18s ease,color .18s ease,border-color .18s ease}
+  .chip:hover{transform:translateY(-1px)}
+  .chip[aria-selected="true"]{background:var(--brand);border-color:var(--brand);color:#fff}
+
+  section.role{display:none;padding:6px 0 10px;animation:in .25s ease both}
+  section.role.on{display:block}
+  @keyframes in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+  .lead{display:flex;gap:12px;align-items:flex-start;background:var(--card);border:1px solid var(--line);
+    border-radius:18px;padding:16px;box-shadow:var(--shadow);margin:10px 0 18px}
+  .lead .ico{font-size:28px;line-height:1}
+  .lead h2{margin:0 0 4px;font-size:19px;letter-spacing:-.02em}
+  .lead p{margin:0;color:var(--muted);font-size:15px}
+
+  ol.steps{list-style:none;counter-reset:s;margin:0;padding:0}
+  ol.steps li{counter-increment:s;position:relative;background:var(--card);border:1px solid var(--line);
+    border-radius:16px;padding:16px 16px 16px 58px;margin-bottom:10px;box-shadow:var(--shadow)}
+  ol.steps li::before{content:counter(s);position:absolute;left:14px;top:14px;width:30px;height:30px;
+    border-radius:10px;background:var(--brand-soft);color:var(--brand);display:grid;place-items:center;
+    font-weight:800;font-size:14px}
+  ol.steps b{font-weight:750}
+  ol.steps .d{color:var(--muted);font-size:15px;display:block;margin-top:2px}
+
+  .tips{margin:16px 0 4px;border-left:3px solid var(--ok);background:color-mix(in srgb,var(--card) 92%,var(--ok));
+    border-radius:0 14px 14px 0;padding:12px 14px}
+  .tips p{margin:0 0 8px;font-size:14.5px}
+  .tips p:last-child{margin:0}
+
+  details.faq{background:var(--card);border:1px solid var(--line);border-radius:14px;margin-bottom:8px;
+    padding:12px 14px;box-shadow:var(--shadow)}
+  details.faq summary{cursor:pointer;font-weight:650;list-style:none}
+  details.faq summary::-webkit-details-marker{display:none}
+  details.faq summary::after{content:"+";float:right;color:var(--muted);font-weight:800}
+  details.faq[open] summary::after{content:"–"}
+  details.faq p{color:var(--muted);margin:8px 0 0;font-size:15px}
+
+  h3.sec{font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:26px 0 10px}
+  .empty{display:none;text-align:center;color:var(--muted);padding:28px 0}
+  .empty.on{display:block}
+  footer{border-top:1px solid var(--line);margin-top:36px;padding:22px 0 40px;color:var(--muted);font-size:14px}
+  footer a{font-weight:650;text-decoration:none}
+  mark{background:var(--brand-soft);color:inherit;border-radius:3px;padding:0 2px}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap bar">
+    <span class="logo" aria-hidden="true"><svg viewBox="0 0 100 100"><path d="M26 74V48h22V26h26v48z" fill="#0B1220"/></svg></span>
+    <p class="title">QurilishERP — Qo'llanma</p>
+    <button class="ghost" id="theme" type="button" aria-label="Mavzu">🌓</button>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="hero">
+    <h1>Ishni qanday boshlash kerak</h1>
+    <p>O'z rolingizni tanlang — faqat sizga kerak bo'lgan qadamlar ko'rsatiladi. Telefonda ham, kompyuterda ham bir xil ishlaydi.</p>
+  </div>
+
+  <div class="search">
+    <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/></svg>
+    <input id="q" type="search" placeholder="Qidirish: davomat, chek, smeta, oylik…" autocomplete="off" aria-label="Qidirish">
+  </div>
+
+  <nav class="roles" id="tabs" role="tablist" aria-label="Rollar"></nav>
+  <div id="content"></div>
+  <p class="empty" id="empty">Hech narsa topilmadi. Boshqa so'z bilan qidirib ko'ring.</p>
+
+  <h3 class="sec">Ko'p so'raladigan savollar</h3>
+  <div id="faq"></div>
+</main>
+
+<footer class="wrap">
+  <p>Savol bo'lsa — botga yozing: <a href="https://t.me/qurilish_erp_bot">@qurilish_erp_bot</a><br>
+  Tizimga kirish: <a href="https://erp-firma.uz">erp-firma.uz</a></p>
+</footer>
+
+<script>
+const GUIDES = [
+  {
+    id:"direktor", ico:"👔", name:"Direktor",
+    title:"Direktor uchun",
+    intro:"Firmaning barcha obyektlari, puli va xodimlari sizda. Kunlik nazorat — 5 daqiqa.",
+    steps:[
+      ["Tizimga kirish","erp-firma.uz saytiga yoki ilovaga telefon raqamingiz bilan kiring. Birinchi kirishda PIN-kod o'ylab toping — keyin har safar shu so'raladi."],
+      ["Xodim qo'shish","«Boshqaruv» → «Xodim qo'shish»: ism, telefon, rol va asosiy oylik. Xodim shu raqam bilan kiradi va botga /start yozadi."],
+      ["Obyekt ochish","«Obyektlar» → «+»: nom, manzil, byudjet va prorab. Prorab faqat o'ziga biriktirilgan obyektni ko'radi."],
+      ["Smeta yuklash","Obyekt ichida ⋯ → «Smeta yuklash». Excel (oferta), PDF yoki Word — material ro'yxati va byudjet o'zi chiqadi. Fayldagi barcha varaqlar o'qiladi."],
+      ["Chiqimni tasdiqlash","«Moliya» bo'limida tasdiq kutayotganlar tepada. Chek rasmi har bir chiqimga biriktirilgan — ko'rib «Tasdiqlash» yoki «Rad etish»."],
+      ["Hisobot","«Hisobotlar» → davr va filtrlar. Kirim, chiqim, foyda va obyektlar bo'yicha taqsimot; «Excel» tugmasi bilan yuklab olasiz."],
+      ["Oylik","«Boshqaruv» → «Oylik»: davomat bo'yicha hisoblanadi, bonus yoki ushlanma qo'shib «To'landi» deb belgilaysiz."]
+    ],
+    tips:[
+      "Har qanday narx maydonida so'm yoki dollar tanlash mumkin — kurs avtomatik qo'llanadi.",
+      "Botga ovozli xabar yuborib ham chiqim kiritasiz: «Bugun 3 tonna sement 12 million».",
+      "Ma'lumotlar har kuni shifrlanib zaxiraga ketadi — server o'chsa ham yo'qolmaydi."
+    ]
+  },
+  {
+    id:"orinbosar", ico:"🤝", name:"O'rinbosar",
+    title:"O'rinbosar uchun",
+    intro:"Direktor bilan deyarli bir xil huquq: barcha obyekt, xodim va pul harakati.",
+    steps:[
+      ["Tizimga kirish","Telefon raqamingiz bilan kiring va PIN-kod o'rnating."],
+      ["Kunlik nazorat","Bosh sahifada faol obyektlar, bugungi davomat va kutilayotgan o'tkazmalar ko'rinadi."],
+      ["Chiqimni tasdiqlash","«Moliya» — prorablar kiritgan chiqimlarni chek rasmi bilan tekshirib tasdiqlaysiz."],
+      ["Material o'tkazmasi","«Materiallar» → obyektdan obyektga yuborish; qabul qilgan odam botda tasdiqlaydi."],
+      ["Xodimlar","«Boshqaruv» → xodimni tahrirlash, obyektga biriktirish, oyligini o'zgartirish."],
+      ["Hisobot","Davr, obyekt va tur bo'yicha filtr; Excelga yuklash."]
+    ],
+    tips:[
+      "Obyektga odam biriktirmasangiz, u obyektni umuman ko'rmaydi.",
+      "Tasdiqlanmagan chiqim hisobotga kirmaydi — kechiktirmang."
+    ]
+  },
+  {
+    id:"prorab", ico:"🏗", name:"Prorab",
+    title:"Prorab uchun",
+    intro:"Siz faqat o'zingizga biriktirilgan obyektlarni ko'rasiz va ularning kundalik ishini yuritasiz.",
+    steps:[
+      ["Tizimga kirish","Raqamingiz bilan kiring, PIN o'rnating. Botga /start yozing — xabarlar shu yerga keladi."],
+      ["Davomat","Ertalab «Davomat» → ishchilarni belgilang. Ishchi botdan «Ishni boshlash» bilan o'zi ham belgilanadi (GPS tekshiriladi)."],
+      ["Chiqim kiritish","«Moliya» → «+»: turi, summa, izoh. Chekni suratga oling — summa va sana o'zi o'qiladi."],
+      ["Material so'rash","Obyekt → «Kerakli materiallar» → «+». Rahbar ko'radi va yuboradi."],
+      ["Material qabul qilish","Botga kelgan xabarda «Qabul qildim» tugmasini bosasiz — ombor hisobi avtomatik yangilanadi."],
+      ["Ish hajmi","Obyekt → «Reja/Fakt» yoki «Ishbay»: bajarilgan ish hajmi yoki foizini kiriting."],
+      ["Surat va hisobot","Obyekt → «Media»: kunlik suratlarni yuklang, rahbar masofadan ko'radi."]
+    ],
+    tips:[
+      "Internet bo'lmasa ham ilova ishlaydi — kiritganingiz qurilmada saqlanadi va aloqa paydo bo'lishi bilan yuboriladi.",
+      "Chiqimni botdan ovoz bilan kiritish — eng tez yo'li."
+    ]
+  },
+  {
+    id:"brigadir", ico:"👷", name:"Brigadir",
+    title:"Brigadir uchun",
+    intro:"Brigadangizning davomati, materiali va kundalik ishi sizda.",
+    steps:[
+      ["Tizimga kirish","Raqamingiz bilan kiring, PIN o'rnating, botga /start yozing."],
+      ["Davomat","«Davomat» → brigadangizni belgilang. Kechikkan yoki kelmaganni izohi bilan belgilang."],
+      ["Material","Kelgan materialni botdagi «Qabul qildim» tugmasi bilan tasdiqlang — aks holda ombor hisobi to'g'ri bo'lmaydi."],
+      ["Chiqim","Kichik xarajatlarni (transport, ovqat) chek surati bilan kiriting — prorab tasdiqlaydi."],
+      ["Ishbay","«Ishbay» bo'limida brigada bajargan hajmni kiriting — oylik shunga qarab hisoblanadi."]
+    ],
+    tips:[
+      "Har kuni kechqurun davomatni yopish odat bo'lsin — oylik aynan shundan hisoblanadi.",
+      "Chek yo'qolgan bo'lsa, izohga nima uchun ketganini yozing."
+    ]
+  },
+  {
+    id:"ishchi", ico:"🔧", name:"Ishchi",
+    title:"Ishchi uchun",
+    intro:"Sizga kerak bo'lgani — kelganingizni belgilash va vazifalarni ko'rish. Hammasi 3 ta tugma.",
+    steps:[
+      ["Botni ulash","Telegramda botni oching, /start yozing va raqamingizni yuboring."],
+      ["Ishni boshlash","Obyektga kelganingizda botda «Ishni boshlash» tugmasini bosing. Joylashuvga ruxsat bering — obyekt hududida ekanligingiz tekshiriladi."],
+      ["Ishni tugatish","Ketishdan oldin «Ishni tugatish». Ish vaqtingiz shundan hisoblanadi."],
+      ["Material qabul qilish","Sizga material yuborilsa botga xabar keladi — «Qabul qildim» tugmasini bosing."],
+      ["Oyligingiz","Ilovada «Profil» → oylik va davomat tarixingiz ko'rinadi."]
+    ],
+    tips:[
+      "Joylashuvga ruxsat bermasangiz davomat belgilanmaydi.",
+      "Internet bo'lmasa ham tugmani bosing — aloqa paydo bo'lgach o'zi yuboriladi."
+    ]
+  }
+];
+
+const FAQ = [
+  ["PIN-kodni unutdim, nima qilaman?","Ilovadan chiqib, telefon raqamingiz bilan qaytadan kiring — yangi PIN o'rnatiladi. Ma'lumotlar yo'qolmaydi."],
+  ["Telefon raqamim o'zgardi","Rahbaringiz «Boshqaruv» bo'limida raqamni yangilaydi. Shundan keyin yangi Telegram akkauntingizdan botga /start yozing."],
+  ["Internet yo'q joyda ishlaydimi?","Ha. Kiritgan ma'lumotingiz telefonda saqlanadi va aloqa paydo bo'lishi bilan o'zi yuboriladi. Tepadagi chiziqda nechta yozuv navbatda turgani ko'rinadi."],
+  ["Chekni qo'lda kiritsam bo'ladimi?","Bo'ladi. Chek rasmi ixtiyoriy, lekin rasm bo'lsa summa va sana avtomatik o'qiladi va tasdiqlash tezlashadi."],
+  ["Chiqimni dollarda kiritsam bo'ladimi?","Ha, har qanday narx maydonida so'm yoki dollar tanlanadi. Kurs (Kapitalbank) avtomatik qo'llanadi, hisob so'mda yuritiladi."],
+  ["Smetani qaysi formatda yuklayman?","Excel (.xlsx/.xls), PDF, Word yoki CSV. Exceldagi barcha varaqlar — ОФЕРТА, РЕСУРС va boshqalari — o'qiladi."],
+  ["Ma'lumotlar yo'qolib ketmaydimi?","Yo'q. Butun baza har kuni shifrlangan holda tashqi zaxiraga olinadi va tiklash imkoni bor."],
+  ["Ilovani qayerdan yuklayman?","erp-firma.uz saytining pastidan Android (APK) va Windows (EXE) versiyalari yuklanadi. Brauzerda ham to'liq ishlaydi."]
+];
+
+const tabs = document.getElementById('tabs');
+const content = document.getElementById('content');
+const faqBox = document.getElementById('faq');
+const q = document.getElementById('q');
+const empty = document.getElementById('empty');
+const esc = (s) => s.replace(/[&<>]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+
+GUIDES.forEach((g, i) => {
+  const b = document.createElement('button');
+  b.className = 'chip'; b.type = 'button'; b.role = 'tab';
+  b.setAttribute('aria-selected', String(i === 0));
+  b.dataset.id = g.id;
+  b.textContent = g.ico + ' ' + g.name;
+  b.addEventListener('click', () => show(g.id, true));
+  tabs.appendChild(b);
+
+  const s = document.createElement('section');
+  s.className = 'role' + (i === 0 ? ' on' : '');
+  s.id = 'r-' + g.id;
+  s.innerHTML =
+    '<div class="lead"><span class="ico">' + g.ico + '</span><div><h2>' + esc(g.title) + '</h2><p>' + esc(g.intro) + '</p></div></div>' +
+    '<ol class="steps">' + g.steps.map(([t, d]) =>
+      '<li><b>' + esc(t) + '</b><span class="d">' + esc(d) + '</span></li>').join('') + '</ol>' +
+    '<div class="tips">' + g.tips.map((t) => '<p>💡 ' + esc(t) + '</p>').join('') + '</div>';
+  content.appendChild(s);
+});
+
+faqBox.innerHTML = FAQ.map(([a, b]) =>
+  '<details class="faq"><summary>' + esc(a) + '</summary><p>' + esc(b) + '</p></details>').join('');
+
+function show(id, push) {
+  for (const b of tabs.children) b.setAttribute('aria-selected', String(b.dataset.id === id));
+  for (const s of content.children) s.classList.toggle('on', s.id === 'r-' + id);
+  if (push) { try { history.replaceState(null, '', '#' + id); } catch (e) {} }
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// Qidiruv: barcha rollar bo'yicha, mos qatorlar belgilanadi
+q.addEventListener('input', () => {
+  const v = q.value.trim().toLowerCase();
+  if (!v) {
+    tabs.style.display = '';
+    for (const s of content.children) s.classList.toggle('on', s.id === 'r-' + (tabs.querySelector('[aria-selected="true"]')?.dataset.id || GUIDES[0].id));
+    content.querySelectorAll('mark').forEach((m) => m.replaceWith(m.textContent));
+    empty.classList.remove('on');
+    return;
+  }
+  tabs.style.display = 'none';
+  let found = 0;
+  for (let i = 0; i < content.children.length; i++) {
+    const s = content.children[i], g = GUIDES[i];
+    const hay = (g.title + ' ' + g.intro + ' ' + g.steps.map((x) => x.join(' ')).join(' ') + ' ' + g.tips.join(' ')).toLowerCase();
+    const hit = hay.includes(v);
+    s.classList.toggle('on', hit);
+    if (hit) found++;
+  }
+  empty.classList.toggle('on', found === 0);
+});
+
+document.getElementById('theme').addEventListener('click', () => {
+  const now = document.documentElement.getAttribute('data-theme');
+  const dark = now ? now === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+  const next = dark ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  try { localStorage.setItem('qollanma.theme', next); } catch (e) {}
+});
+try { const t = localStorage.getItem('qollanma.theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}
+
+const h = (location.hash || '').replace('#', '');
+if (GUIDES.some((g) => g.id === h)) show(h, false);
+</script>
+</body>
+</html>

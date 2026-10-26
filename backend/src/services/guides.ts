@@ -160,7 +160,11 @@ export function guideText(role: string | undefined, lang: GuideLang = 'uz'): str
   const numbered = g.steps.map((s, i) => `${i + 1}. ${s}`).join('\n\n');
   const tips = g.tips.map((t) => `💡 ${t}`).join('\n');
   const help = lang === 'ru' ? 'Вопрос? Напишите боту — ответит AI-помощник.' : 'Savol bo‘lsa — shu yerga yozing, AI yordamchi javob beradi.';
-  return `<b>${g.title}</b>\n\n${g.intro}\n\n${numbered}\n\n${tips}\n\n<i>${help}</i>`;
+  // Barcha rollar uchun to'liq qo'llanma sayti (owner 2026-10-26)
+  const site = lang === 'ru'
+    ? '\n\nℹ️ Полное руководство: https://erp-firma.uz/qollanma/'
+    : '\n\nℹ️ To‘liq qo‘llanma (barcha rollar): https://erp-firma.uz/qollanma/';
+  return `<b>${g.title}</b>\n\n${g.intro}\n\n${numbered}\n\n${tips}${site}\n\n<i>${help}</i>`;
 }
 
 /** Qo'llanma mavjud rollar (tarqatish uchun). */

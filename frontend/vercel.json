@@ -59,7 +59,7 @@
   ],
   "rewrites": [
     {
-      "source": "/((?!assets/).*)",
+      "source": "/((?!assets/|qollanma).*)",
       "destination": "/index.html"
     }
   ]

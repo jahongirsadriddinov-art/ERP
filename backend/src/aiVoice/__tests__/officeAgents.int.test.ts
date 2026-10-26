@@ -18,6 +18,7 @@ import {
   __drainAgentsForTests, __fireAutoReportForTests, __resetAgentsForTests, __setContentRunnerForTests, fallbackAgentDraft, plainReport, reportPeriod, SPAWN_RE,
 } from '../agents/service';
 import { seedCompany, startMongo, stopMongo, type SeedCompany } from './helpers';
+import { __resetChannelCacheForTests } from '../smm/channel';
 
 let mongo: MongoMemoryServer;
 let A: SeedCompany;
@@ -62,7 +63,11 @@ beforeEach(async () => {
   await AgentProfile.deleteMany({});
   await AgentTask.deleteMany({});
   fetchMock.mockReset();
-  fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+  __resetChannelCacheForTests();
+  // Telegram Bot API — JSON {ok:true}; boshqalar (GitHub) — 204
+  fetchMock.mockImplementation(async (url: any) => (String(url).startsWith('https://api.telegram.org/')
+    ? new Response(JSON.stringify({ ok: true, result: { message_id: 1 } }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+    : new Response(null, { status: 204 })));
   vi.stubGlobal('fetch', fetchMock);
 });
 
@@ -227,10 +232,11 @@ describe('content agentlari — Gemini', () => {
     fetchMock.mockClear();
     await User.updateOne({ _id: devId }, { $unset: { telegramChatId: 1 } });
     process.env.AGENT_TG_CHANNEL_ID = '@qurilish_kanal';
+    __resetChannelCacheForTests();
     expect((await post(`/agent-tasks/${r.body.task.id}/send`, { target: 'channel', index: 0 })).status).toBe(200);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0][0]).toBe('https://api.telegram.org/bot123:abc/sendMessage');
-    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({ chat_id: '@qurilish_kanal', text: 'Post 1\n\nSmeta 5 daqiqada\n\n#qurilish' });
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({ chat_id: '@qurilish_kanal', parse_mode: 'HTML', text: '<b>Post 1</b>\n\nSmeta 5 daqiqada\n\n#qurilish' });
 
     __setContentRunnerForTests(async () => { throw new Error('503 overloaded'); });
     const r2 = await post('/agent-tasks', { agentKey: 'marketing', text: 'Kampaniya' });

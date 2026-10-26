@@ -11,6 +11,8 @@ const KEYS: string[] = (process.env.GEMINI_API_KEYS || process.env.GEMINI_API_KE
 let keyIdx = 0;
 
 export const geminiConfigured = () => KEYS.length > 0;
+/** Kalitlar ro'yxati (har chaqiruvda env'dan) — rasm yaratish kabi to'g'ridan-to'g'ri REST so'rovlar uchun (smm/render.ts). */
+export const geminiApiKeys = (): string[] => [...new Set((process.env.GEMINI_API_KEYS || process.env.GEMINI_API_KEY || '').split(',').map(k => k.trim()).filter(Boolean))];
 
 const isQuota = (e: any) => /RESOURCE_EXHAUSTED|429|quota|rate limit/i.test(String(e?.message || e));
 const isTransient = (e: any) => /503|502|500|high demand|overloaded|unavailable|fetch failed|ECONNRESET|ETIMEDOUT/i.test(String(e?.message || e));

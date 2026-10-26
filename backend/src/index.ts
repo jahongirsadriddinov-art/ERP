@@ -397,6 +397,8 @@ mongoose.connect(MONGODB_URI)
     void import('./services/companyAlerts').then((m) => m.ensureEscalationJob()).catch(() => undefined);
     // Biznes nazoratchilari: o'g'irlik/anomaliya, narx, hujjat muddatlari, texnika, kunlik brifing (services/insights)
     void import('./services/insights').then((m) => m.startInsights()).catch((e) => console.error('[insights] ishga tushmadi:', e?.message));
+    // SMM avtopilot (jadval, Instagram statistikasi, token yangilash, vaqtinchalik fayllarni tozalash) — aiVoice/smm/autopilot.ts
+    void import('./aiVoice/smm/autopilot').then((m) => m.startSmm()).catch((e) => console.error('[smm] ishga tushmadi:', e?.message));
     console.log('✅ Tarif keshi yuklandi');
   })
   .catch((err) => console.error('MongoDB connection error:', err?.message || err));

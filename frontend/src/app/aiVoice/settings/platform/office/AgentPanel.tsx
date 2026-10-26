@@ -1,5 +1,5 @@
 import "../../../../i18n/aiVoiceNs";
-import { useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { MorphIcon } from "morphicons/react";
@@ -13,6 +13,12 @@ import Gear from "@hugeicons/core-free-icons/Settings02Icon";
 import Telegram from "@hugeicons/core-free-icons/TelegramIcon";
 import { Badge, type Tone } from "../../ui";
 import AgentChat from "./AgentChat";
+import SmmPostCard from "./smm/SmmPostCard";
+import SmmSettingsPanel from "./smm/SmmSettingsPanel";
+import { smmApi, type SmmSettings, type SmmStatus } from "./smm/smmApi";
+// recharts og'ir — statistika faqat shu tab ochilganda yuklanadi
+const SmmStats = lazy(() => import("./smm/SmmStats"));
+export const SMM_AGENTS = ["smm", "marketing"];
 import { officeApi, TEAMS, type AgentProfile, type AgentTask, type OfficeAgent, type PlanItem, type Setup, type TaskStatus } from "./officeApi";
 
 // AI ofis — agent kartasi: holat, buyruq qutisi, vazifalar (natija, nusxa, Telegram'ga yuborish, tasdiqlash), sozlash.
@@ -52,6 +58,15 @@ export default function AgentPanel({ agent, profile, profiles, setup, onClose, o
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
+  const isSmm = SMM_AGENTS.includes(agent.id);
+  const [smmTab, setSmmTab] = useState<"posts" | "autopilot" | "stats">("posts");
+  const [smm, setSmm] = useState<{ settings: SmmSettings | null; status: SmmStatus | null }>({ settings: null, status: null });
+  const loadSmm = useCallback(async () => {
+    if (!isSmm) return;
+    const r = await smmApi.settings();
+    if (r.ok && r.data) setSmm({ settings: r.data.settings, status: r.data.status });
+  }, [isSmm]);
+  useEffect(() => { loadSmm(); }, [loadSmm]);
 
   const load = useCallback(async () => {
     if (!taskable) return;
@@ -123,7 +138,19 @@ export default function AgentPanel({ agent, profile, profiles, setup, onClose, o
 
       {editing && profile && <EditAgent profile={profile} onSaved={() => { setEditing(false); onProfile(); onChanged(); }} />}
 
-      {!taskable ? (
+      {isSmm && (
+        <div className="flex gap-1 rounded-full bg-muted/50 p-1" role="tablist" data-testid="smm-tabs">
+          {(["posts", "autopilot", "stats"] as const).map((x) => (
+            <button key={x} type="button" role="tab" aria-selected={smmTab === x} onClick={() => setSmmTab(x)} data-testid={`smm-tab-${x}`}
+              className={`flex-1 h-8 rounded-full text-[12px] font-semibold ${smmTab === x ? "bg-background shadow-sm" : "text-muted-foreground"}`}>{t(`aiVoice.office.smm.tabs.${x}`)}</button>
+          ))}
+        </div>
+      )}
+      {isSmm && smmTab === "autopilot" ? (
+        <SmmSettingsPanel settings={smm.settings} status={smm.status} onSaved={loadSmm} />
+      ) : isSmm && smmTab === "stats" ? (
+        <Suspense fallback={<div className="h-32 rounded-xl bg-muted/40 animate-pulse" />}><SmmStats /></Suspense>
+      ) : !taskable ? (
         <p className="text-xs text-muted-foreground rounded-xl bg-muted/40 px-3 py-2.5">{k("command.noTasks")}</p>
       ) : (
         <>
@@ -150,7 +177,7 @@ export default function AgentPanel({ agent, profile, profiles, setup, onClose, o
             {tasks === null ? <div className="h-16 rounded-xl bg-muted/40 animate-pulse" />
               : !tasks.length ? <p className="text-xs text-muted-foreground" data-testid="ai-office-no-tasks">{k("empty")}</p>
                 : tasks.map((x) => (
-                  <TaskCard key={x.id} task={x} k={k} profiles={profiles} childOf={childOf} nameOf={nameOf} onOpenAgent={onOpenAgent}
+                  <TaskCard key={x.id} task={x} k={k} profiles={profiles} smm={isSmm ? { ...smm, reload: () => { load(); onChanged(); }, openSettings: () => setSmmTab("autopilot") } : undefined} childOf={childOf} nameOf={nameOf} onOpenAgent={onOpenAgent}
                     onCancel={() => act(officeApi.cancel(x.id))} onRetry={(id = x.id) => act(officeApi.retry(id))}
                     onApprove={(b) => act(officeApi.approve(x.id, b))}
                     onSend={async (target, index) => {
@@ -168,8 +195,8 @@ export default function AgentPanel({ agent, profile, profiles, setup, onClose, o
   );
 }
 
-function TaskCard({ task, k, profiles, childOf, nameOf, onCancel, onRetry, onApprove, onSend, onOpenAgent }: {
-  task: AgentTask; k: K; profiles: AgentProfile[]; childOf: Map<string, AgentTask>; nameOf: (key: string) => string; onOpenAgent: (id: string) => void;
+function TaskCard({ task, k, profiles, childOf, nameOf, onCancel, onRetry, onApprove, onSend, onOpenAgent, smm }: {
+  task: AgentTask; k: K; smm?: { settings: SmmSettings | null; status: SmmStatus | null; reload: () => void; openSettings: () => void }; profiles: AgentProfile[]; childOf: Map<string, AgentTask>; nameOf: (key: string) => string; onOpenAgent: (id: string) => void;
   onCancel: () => void; onRetry: (id?: string) => void; onApprove: (b: { spec?: string; plan?: PlanItem[] }) => void;
   onSend: (target: "channel" | "developer", index?: number) => void;
 }) {
@@ -249,7 +276,10 @@ function TaskCard({ task, k, profiles, childOf, nameOf, onCancel, onRetry, onApp
         </div>
       )}
 
-      {task.items.map((it, i) => {
+      {smm && task.items.map((it, i) => (
+        <SmmPostCard key={i} taskId={task.id} index={i} item={it} settings={smm.settings} status={smm.status} onChanged={smm.reload} onOpenSettings={smm.openSettings} />
+      ))}
+      {!smm && task.items.map((it, i) => {
         const full = [it.title, it.text, (it.hashtags || []).join(" ")].filter(Boolean).join("\n\n");
         return (
           <div key={i} className="rounded-lg border border-border px-2.5 py-2 space-y-1" data-testid={`ai-office-item-${i}`}>

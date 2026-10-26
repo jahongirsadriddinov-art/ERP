@@ -7,6 +7,9 @@ import User from '../../models/User';
 import { logAudit } from '../../services/audit';
 import { geminiConfigured, geminiTextToJson } from '../../services/gemini';
 import { AGENT_DEFAULTS } from './defaults';
+import { asSmmItem, featuresContext, newsContext, SMM_KEYS, smmFormatSpec } from '../smm/content';
+import { channelConfig, recordPremium, SITE_BUTTON_URL, siteButtonLabel } from '../smm/channel';
+import { tgSendPost } from '../smm/telegram';
 
 // AI ofis — boshqaruv markazi (owner 2026-10-22). Agentlar ro'yxati (AgentProfile), buyruqlar (AgentTask) va bajarish:
 //  • code agentlari → GitHub Actions repository_dispatch (event 'agent-task'); workflow (.github/workflows/agent-task.yml)
@@ -168,7 +171,7 @@ export const taskDto = (t: any) => ({
   id: String(t._id), agentKey: t.agentKey, agentKind: t.agentKind, text: t.text, status: t.status as AgentTaskStatus,
   summary: t.summary || undefined, spec: t.spec || undefined, parentId: t.parentId || undefined, spawnedKey: t.spawnedKey || undefined,
   plan: (t.plan || []).map((p: any) => ({ agentKey: p.agentKey, text: p.text, ...(p.taskId ? { taskId: String(p.taskId) } : {}) })),
-  items: (t.items || []).map((i: any) => ({ title: i.title || '', text: i.text || '', ...(i.hashtags?.length ? { hashtags: i.hashtags } : {}) })),
+  items: (t.items || []).map(itemDto),
   links: (t.links || []).map((l: any) => ({ label: l.label, url: l.url })),
   log: (t.log || []).slice(-50).map((l: any) => ({ at: new Date(l.at).toISOString(), text: l.text })),
   error: t.error || undefined,
@@ -177,6 +180,24 @@ export const taskDto = (t: any) => ({
   finishedAt: t.finishedAt ? new Date(t.finishedAt).toISOString() : undefined,
 });
 export type AgentTaskDto = ReturnType<typeof taskDto>;
+
+const isoOf = (d: unknown) => (d ? new Date(d as string).toISOString() : undefined);
+const pubDto = (p: any) => (p && p.status ? {
+  status: p.status, at: isoOf(p.at), ...(p.kind ? { kind: p.kind } : {}), ...(p.target ? { target: p.target } : {}),
+  ...(p.url ? { url: p.url } : {}), ...(p.error ? { error: p.error } : {}), ...(p.detail ? { detail: String(p.detail).slice(0, 300) } : {}),
+} : undefined);
+/** Item DTO — SMM maydonlari (format, slaydlar, qurilmadagi media metama'lumoti, e'lon holati) bo'lsa qo'shiladi. */
+export function itemDto(i: any) {
+  return {
+    title: i.title || '', text: i.text || '', ...(i.hashtags?.length ? { hashtags: i.hashtags } : {}),
+    ...(i.format ? { format: i.format } : {}), ...(i.lang ? { lang: i.lang } : {}), ...(i.topic ? { topic: i.topic } : {}),
+    ...(i.category ? { category: i.category } : {}), ...(i.imagePrompt ? { imagePrompt: i.imagePrompt } : {}), ...(i.editorNotes ? { editorNotes: i.editorNotes } : {}),
+    ...(i.scenes?.length ? { scenes: i.scenes.map((x: any) => ({ title: x.title || '', text: x.text || '' })) } : {}),
+    ...(i.media?.length ? { media: i.media.map((m: any) => ({ id: m.id, kind: m.kind, ...(m.mime ? { mime: m.mime } : {}), ...(m.w ? { w: m.w, h: m.h } : {}), ...(m.size ? { size: m.size } : {}), ...(m.source ? { source: m.source } : {}), ...(m.at ? { at: isoOf(m.at) } : {}) })) } : {}),
+    ...(i.approval && i.approval !== 'none' ? { approval: i.approval } : {}),
+    ...(pubDto(i.tg) ? { tg: pubDto(i.tg) } : {}), ...(pubDto(i.ig) ? { ig: pubDto(i.ig) } : {}),
+  };
+}
 
 const logLine = (text: string) => ({ at: new Date(), text: text.slice(0, 500) });
 
@@ -222,6 +243,19 @@ export async function createTask(agentKey: string, rawText: unknown, by: string,
   officeInvalidate();
   background(start(String(doc._id), profile, false));
   return { ok: true, task: taskDto(doc) };
+}
+
+/** Avtopilot uchun: vazifa yaratib, natijasini KUTISH (fon ishi emas). */
+export async function createTaskAndWait(agentKey: string, text: string, by: string): Promise<{ ok: true; task: AgentTaskDto } | { ok: false; error: string; status: number }> {
+  await ensureDefaults();
+  const profile: any = await AgentProfile.findOne({ key: agentKey }).lean();
+  if (!profile) return { ok: false, error: 'agent_not_found', status: 404 };
+  if (!profile.enabled) return { ok: false, error: 'agent_disabled', status: 409 };
+  const doc: any = await AgentTask.create({ agentKey, agentKind: profile.kind, text: text.slice(0, 4000), status: 'queued', createdBy: by, log: [logLine('Avtopilot vazifasi')] });
+  officeInvalidate();
+  await start(String(doc._id), profile, false);
+  const t = await AgentTask.findById(doc._id).lean();
+  return { ok: true, task: taskDto(t) };
 }
 
 export async function cancelTask(id: string): Promise<AgentTaskDto | null | 'not_active'> {
@@ -564,7 +598,17 @@ async function runContent(id: string, profile: any): Promise<void> {
   const t: any = await AgentTask.findById(id).lean();
   if (!t) return;
   if (profile.key === REPORTER_KEY) return runReport(id, t, profile);
-  const prompt = `${profile.systemPrompt || `Sen ${profile.name} agentisan.`}
+  const smm = SMM_KEYS.includes(profile.key);
+  const lang = (/\[lang:(uz|ru|both)\]/.exec(String(t.text))?.[1] as 'uz' | 'ru' | 'both' | undefined) || (/[а-яё]/i.test(String(t.text)) ? 'ru' : 'uz');
+  const prompt = smm ? `${profile.systemPrompt || `Sen ${profile.name} agentisan.`}
+
+Bugungi sana: ${new Date().toISOString().slice(0, 10)}.
+${featuresContext()}
+${await newsContext().catch(() => '')}
+Buyruq: """${t.text}"""
+
+${smmFormatSpec(lang)}
+Buyruqda son aytilmagan bo'lsa 2–4 ta item.` : `${profile.systemPrompt || `Sen ${profile.name} agentisan.`}
 
 Bugungi sana: ${new Date().toISOString().slice(0, 10)}.
 ${await contextFor(profile.key)}Dasturchidan buyruq: """${t.text}"""
@@ -573,7 +617,9 @@ Natijani FAQAT JSON ko'rinishida qaytar: {"summary": "1-3 jumla xulosa", "items"
 Tilni buyruq tilidan ol (o'zbekcha bo'lsa — lotin yozuvida o'zbekcha). 1–8 ta item. Hech narsani avtomatik e'lon qilma.`;
   try {
     const out = await contentRunner(prompt);
-    const items = asItems(out?.items);
+    const items = smm
+      ? (Array.isArray(out?.items) ? out.items : []).slice(0, 12).map((i: any) => asSmmItem(i, lang)).filter(Boolean) as any[]
+      : asItems(out?.items);
     if (!items.length) throw new Error('empty');
     await transition(id, ['running'], 'done', { summary: cleanText(out?.summary, 4000) || '', items }, `Tayyor — ${items.length} ta matn`);
   } catch (e) {
@@ -704,33 +750,32 @@ export async function sendTaskToTelegram(id: string, target: unknown, index: unk
   if (t.status !== 'done') return { ok: false, error: 'not_done', status: 409 };
   const c = agentConfig();
   if (target !== 'channel' && target !== 'developer') return { ok: false, error: 'invalid', status: 400 };
-  // Owner 2026-10-23: kanal (AGENT_TG_CHANNEL_ID) yoki DEVELOPER_CHAT_ID qo'yilmagan bo'lsa — bosgan dasturchining
-  // o'z Telegram chatiga (botga /start bosgan akkaunt) yuboriladi; javobda qayerga ketgani aytiladi
-  let chat = target === 'channel' ? c.tgChannel : c.devChat;
-  let sentTo: 'channel' | 'developer' = target === 'channel' && c.tgChannel ? 'channel' : 'developer';
+  // Owner 2026-10-23: kanal ulangan bo'lsa (UI'dan — SMM sozlamalari, yoki env AGENT_TG_CHANNEL_ID) post DOIM kanalga;
+  // kanal umuman yo'q bo'lsa — bosgan dasturchining o'z Telegram chatiga (javobda qayerga ketgani aytiladi)
+  const ch = await channelConfig();
+  let chat = target === 'channel' ? ch.chat : c.devChat;
+  let sentTo: 'channel' | 'developer' = target === 'channel' && ch.chat ? 'channel' : 'developer';
   if (!chat || target === 'developer') {
     const own: any = requesterId && /^[0-9a-f]{24}$/i.test(requesterId) ? await User.findById(requesterId).select('telegramChatId').lean().catch(() => null) : null;
     if (!chat && own?.telegramChatId) chat = String(own.telegramChatId);
-    if (target === 'channel' && !c.tgChannel) sentTo = 'developer';
+    if (target === 'channel' && !ch.chat) sentTo = 'developer';
   }
   // sozlanmagan — server xatosi emas (409), xatolar ro'yxatini to'ldirmasin
   if (!chat || !c.botToken) return { ok: false, error: 'not_configured', status: 409 };
-  let text: string;
+  let item: { title?: string; text?: string; hashtags?: string[] };
   if (typeof index === 'number' && Number.isInteger(index)) {
     const it = t.items?.[index];
     if (!it) return { ok: false, error: 'invalid', status: 400 };
-    text = [it.title, it.text, (it.hashtags || []).join(' ')].filter(Boolean).join('\n\n');
+    item = { title: it.title, text: it.text, hashtags: it.hashtags };
   } else {
-    text = t.summary || '';
+    item = { text: t.summary || '' };
   }
-  if (!text) return { ok: false, error: 'empty', status: 400 };
+  if (!item.text) return { ok: false, error: 'empty', status: 400 };
   try {
-    const res = await fetch(`https://api.telegram.org/bot${c.botToken}/sendMessage`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chat, text: text.slice(0, 4000), disable_web_page_preview: true }),
-      signal: AbortSignal.timeout(15_000),
-    });
-    if (!res.ok) return { ok: false, error: 'telegram_failed', status: 502 };
+    const url = SITE_BUTTON_URL();
+    const sent = await tgSendPost({ token: c.botToken, chat, username: sentTo === 'channel' ? ch.username : undefined, item, files: [],
+      ...(sentTo === 'channel' && ch.siteButton && typeof index === 'number' ? { button: { text: siteButtonLabel(url), url } } : {}) });
+    await recordPremium(sent);
   } catch {
     return { ok: false, error: 'telegram_failed', status: 502 };
   }

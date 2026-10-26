@@ -140,6 +140,40 @@ export default function WorkerMap({ users, gpsLocations, focusUserId, track, onS
     navigator.geolocation.getCurrentPosition((p) => withMap(mapRef.current, (m) => m.flyTo([p.coords.latitude, p.coords.longitude], 16, { duration: 0.6 })), () => {}, { enableHighAccuracy: true, timeout: 8000 });
   };
 
+  // ── "Men shu yerdaman" (owner 2026-10-26: "aynan qayerdaligimni ko'rsatadigan nuqta yo'q") ──
+  // Ko'k puls nuqta + aniqlik doirasi; joylashuv o'zgarsa darhol suriladi. Ruxsat berilmasa — hech narsa
+  // ko'rsatilmaydi (xatolik ham chiqmaydi), xarita avvalgidek ishlayveradi.
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    let dot: L.Marker | null = null;
+    let ring: L.Circle | null = null;
+    const icon = L.divIcon({
+      className: "",
+      html: '<div class="wm-me"><span class="wm-me-pulse"></span><span class="wm-me-dot"></span></div>',
+      iconSize: [22, 22], iconAnchor: [11, 11],
+    });
+    const id = navigator.geolocation.watchPosition((p) => {
+      const ll: [number, number] = [p.coords.latitude, p.coords.longitude];
+      const acc = Math.max(8, Math.min(200, p.coords.accuracy || 25));
+      withMap(mapRef.current, (m) => {
+        if (!dot) {
+          ring = L.circle(ll, { radius: acc, color: "#2563eb", weight: 1, opacity: 0.5, fillColor: "#3b82f6", fillOpacity: 0.12, interactive: false }).addTo(m);
+          dot = L.marker(ll, { icon, zIndexOffset: 1000, keyboard: false }).addTo(m);
+          dot.bindTooltip(t('gps.youAreHere', { defaultValue: "Siz shu yerdasiz" }), { direction: "top", offset: [0, -12] });
+        } else {
+          dot.setLatLng(ll);
+          ring?.setLatLng(ll);
+          ring?.setRadius(acc);
+        }
+      });
+    }, () => { /* ruxsat yo'q — nuqta ko'rsatilmaydi */ }, { enableHighAccuracy: true, maximumAge: 10_000, timeout: 20_000 });
+    return () => {
+      navigator.geolocation.clearWatch(id);
+      withMap(mapRef.current, (m) => { if (dot) m.removeLayer(dot); if (ring) m.removeLayer(ring); });
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Markerlar — gpsLocations o'zgarganda yangilanadi (yangi socket yangilanishi kelganda ham)
   useEffect(() => {
     const map = mapRef.current;
@@ -356,6 +390,14 @@ export default function WorkerMap({ users, gpsLocations, focusUserId, track, onS
            rejimda tayanch (surface) bilan mos kelmasdi. Endi CSS
            o'zgaruvchisidan olinadi. */
         .wm-map .leaflet-container { background: var(--muted); font-family: inherit; }
+        /* O'z joylashuvim — ko'k nuqta (Google/Yandex uslubi) */
+        .wm-me { position: relative; width: 22px; height: 22px; }
+        .wm-me-dot { position: absolute; inset: 5px; border-radius: 999px; background: #2563eb;
+          border: 2.5px solid #fff; box-shadow: 0 1px 6px rgba(0,0,0,.45); }
+        .wm-me-pulse { position: absolute; inset: 0; border-radius: 999px; background: rgba(37,99,235,.35);
+          animation: wm-me-anim 2s ease-out infinite; }
+        @keyframes wm-me-anim { 0% { transform: scale(.5); opacity: .7 } 100% { transform: scale(1.8); opacity: 0 } }
+        @media (prefers-reduced-motion: reduce) { .wm-me-pulse { animation: none; opacity: .25 } }
         /* Qorong'i rejimda OSM plitalarini (tile) invert qilib, xaritani
            ilovaning qolgan qismi bilan uyg'un qorong'i ko'rinishga
            keltiradi — markerlar/yorliqlar ta'sirlanmasligi uchun faqat

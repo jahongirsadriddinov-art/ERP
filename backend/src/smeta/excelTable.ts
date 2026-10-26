@@ -1,8 +1,15 @@
-// ─── Excel smeta — ustun sarlavhalari bo'yicha o'qish (owner 2026-10-19: "smetani kuchaytir") ─────────────────
-// Avvalgi Excel yo'li ustunlarni "birlik katagini topib" taxmin qilardi: birinchi ustun bo'sh qatorlarda siljib
-// ketar, mehnat/texnika ham "material" bo'lib qolardi. Bu modul jadvalni katak-katak o'qiydi, sarlavha qatorini
-// (rus / o'zbek lotin / kirill) topadi va ustunlarni NOMI bo'yicha bog'laydi. Bo'lim sarlavhalari ("Трудовые
-// затраты", "Материалы", "Mashina va mexanizmlar") va birlik ("чел.-ч", "маш.-ч") bo'yicha guruh aniqlanadi.
+// ─── Excel smeta/oferta — ustun sarlavhalari bo'yicha o'qish ────────────────────────────────────────────────
+// (owner 2026-10-19: "smetani kuchaytir"; owner 2026-10-26: "oferta to'liq va aniq chiqmayapti, narxlarini
+//  umuman ko'rsatmayapti, pastdagi boshqa varaqlarni ham o'qisin")
+//
+// Jadval katak-katak o'qiladi, sarlavha qatori (rus / o'zbek lotin / kirill) topiladi va ustunlar NOMI bo'yicha
+// bog'lanadi. Nimalar hisobga olinadi:
+//   • birlashtirilgan kataklar ochiladi — "Жами" ustuni ikkiga bo'linib ostida "бирлик нархи | сумма" turgan
+//     ofertalarda narx ustuni "summa" deb tanilib, narxlar umuman chiqmay qolardi;
+//   • sarlavha 1, 2 yoki 3 qatorga bo'lingan bo'lishi mumkin — eng to'liq moslik tanlanadi;
+//   • narx yoki summa yetishmasa — ikkinchisidan hisoblab to'ldiriladi;
+//   • sarlavhasi tanilmagan varaq ham bo'sh qolmaydi: birlik katagi bo'yicha zaxira o'qish ishlaydi;
+//   • har bir varaqdan nechta qator olingani ogohlantirishlarda ko'rinadi.
 
 import { applyCategories } from './categorize';
 import type { ParseResult, ResourceGroup, ResourceRow, SmetaMeta } from './types';
@@ -10,17 +17,20 @@ import type { ParseResult, ResourceGroup, ResourceRow, SmetaMeta } from './types
 type Col = 'name' | 'unit' | 'qty' | 'price' | 'total' | 'code';
 
 const HEAD: Record<Col, RegExp> = {
-  name: /наимен|nomi|nomlan|номи|номлан|ресурс|resurs|материал(?!ы\b)|naimen/i,
-  unit: /ед\.?\s*изм|единиц|ўлчов|o['ʻ`’]?lchov|olchov|birlik|бирлик|ед\.$|^ед$|изм\./i,
-  qty: /кол[-.\s]*во|количеств|miqdor|миқдор|микдор|hajm|ҳажм|объ[её]м|soni|сони/i,
-  price: /цена|narx|нарх|стоим[а-яёa-z]*\s*ед|за\s*ед|бирлик\s*нарх|birlik\s*narx/i,
+  name: /наимен|nomi|nomlan|номи|номлан|ресурс|resurs|материал(?!ы\b)|naimen|ish\s*turi|ишлар/i,
+  unit: /ед\.?\s*изм|единиц|ўлчов|улчов|o['ʻ`’]?lchov|olchov|birlig|бирлиг|^birlik$|^бирлик$|ед\.$|^ед$|изм\./i,
+  qty: /кол[-.\s]*во|количеств|miqdor|миқдор|микдор|hajm|ҳажм|хажм|объ[её]м|soni|сони/i,
+  price: /цена|нарх|narx|стоим[а-яёa-z]*\s*ед|за\s*ед|бирлик\s*нарх|birlik\s*narx|баҳо|бахо|baho|таклиф|taklif/i,
   total: /сумма|всего|jami|жами|summa|итого|общ[а-яёa-z]*\s*стоим|umumiy/i,
-  code: /шифр|код|обосн|shifr|kod|asos/i,
+  code: /шифр|код|обосн|shifr|^kod|asos/i,
 };
 
-const SKIP_ROW = /^(итого|всего|jami|жами|итог|ндс|qqs|ққс|накладн|сметная\s*прибыль|зарплата|эксплуатац|строительные\s*материалы|транспортные\s*расход|оборудование|прочие\s*затраты|страхование)/i;
+/** Har doim tashlanadigan jamlanma qatorlar. */
+const SUMMARY_ROW = /^(итого|всего|jami|жами|итог|ндс|qqs|ққс)/i;
+/** Smeta oxiridagi xarajat jamlanmalari — birligi bo'lmasa tashlanadi (bo'lim sarlavhasi bo'lsa — qoladi). */
+const SOFT_SKIP = /^(накладн|сметная\s*прибыль|зарплата|эксплуатац|строительные\s*материалы|транспортные\s*расход|прочие\s*затраты|страхование)/i;
 
-const norm = (v: unknown) => String(v ?? '').replace(/[   ]/g, ' ').replace(/\s+/g, ' ').trim();
+const norm = (v: unknown) => String(v ?? '').replace(/[   ]/g, ' ').replace(/\s+/g, ' ').trim();
 
 export function num(v: unknown): number | null {
   if (typeof v === 'number') return Number.isFinite(v) ? v : null;
@@ -50,15 +60,22 @@ export function groupOf(unit: string, section: string, name: string): ResourceGr
 
 interface Header { row: number; cols: Partial<Record<Col, number>> }
 
-function matchCols(rows: unknown[][], r: number, combine: boolean): Partial<Record<Col, number>> {
-  const width = Math.max(rows[r]?.length || 0, combine ? rows[r + 1]?.length || 0 : 0);
+/** r qatoridan boshlab `span` qatorni ustunlar bo'yicha birlashtirib sarlavhani o'qiydi. */
+function matchCols(rows: unknown[][], r: number, span: number): Partial<Record<Col, number>> {
+  let width = 0;
+  for (let i = 0; i < span; i++) width = Math.max(width, rows[r + i]?.length || 0);
   const cols: Partial<Record<Col, number>> = {};
   for (let c = 0; c < width; c++) {
-    const text = (combine ? `${norm(rows[r]?.[c])} ${norm(rows[r + 1]?.[c])}` : norm(rows[r]?.[c])).trim();
+    let text = '';
+    for (let i = 0; i < span; i++) {
+      const part = norm(rows[r + i]?.[c]);
+      // birlashtirilgan katak ochilgandan keyin bir xil matn takrorlanishi mumkin
+      if (part && !text.includes(part)) text += (text ? ' ' : '') + part;
+    }
     if (!text || text.length > 80) continue;
     for (const k of ['unit', 'qty', 'price', 'total', 'code', 'name'] as Col[]) {
       if (cols[k] === undefined && HEAD[k].test(text)) {
-        // "Стоимость единицы" — narx, umumiy summa emas
+        // "Стоимость единицы" / "бирлик нархи" — narx, umumiy summa emas
         if (k === 'total' && HEAD.price.test(text)) continue;
         cols[k] = c;
         break;
@@ -68,17 +85,25 @@ function matchCols(rows: unknown[][], r: number, combine: boolean): Partial<Reco
   return cols;
 }
 
-const isHeaderCols = (c: Partial<Record<Col, number>>) => c.name !== undefined && c.unit !== undefined && c.qty !== undefined;
+const isHeaderCols = (c: Partial<Record<Col, number>>) =>
+  c.name !== undefined && (c.unit !== undefined || c.code !== undefined) &&
+  (c.qty !== undefined || c.price !== undefined || c.total !== undefined);
 
 function findHeader(rows: unknown[][]): Header | null {
   // Owner 2026-10-26: katta ofertalarda jadval sarlavhasi 40-qatordan ancha pastda bo'ladi
   const limit = Math.min(rows.length, 400);
-  // Avval bitta qator; topilmasa — 2 qatorga bo'lingan (birlashtirilgan kataklar) sarlavha
-  for (const combine of [false, true]) {
-    for (let r = 0; r < limit; r++) {
-      const cols = matchCols(rows, r, combine);
-      if (isHeaderCols(cols)) return { row: combine ? r + 1 : r, cols };
+  for (let r = 0; r < limit; r++) {
+    // Bir xil qator uchun 1/2/3 qatorli sarlavhani sinab, eng ko'p ustun tanilganini olamiz:
+    // "Жами" ikki ustunga bo'linib ostida "бирлик нархи | сумма" turgan ofertalar shu sababli to'g'ri o'qiladi.
+    let best: { cols: Partial<Record<Col, number>>; span: number; score: number } | null = null;
+    for (const span of [1, 2, 3]) {
+      if (r + span > rows.length) break;
+      const cols = matchCols(rows, r, span);
+      if (!isHeaderCols(cols)) continue;
+      const score = Object.keys(cols).length + (cols.price !== undefined ? 1 : 0);
+      if (!best || score > best.score) best = { cols, span, score };
     }
+    if (best) return { row: r + best.span - 1, cols: best.cols };
   }
   return null;
 }
@@ -89,40 +114,94 @@ const isNumberingRow = (row: unknown[]) => {
   return cells.length > 2 && cells.every((x, i) => /^\d{1,2}$/.test(x) && (i === 0 || Number(x) === Number(cells[i - 1]) + 1));
 };
 
+// ─── Zaxira yo'l: sarlavhasi tanilmagan varaq ham bo'sh qolmasin ─────────────
+const LOOSE_UNITS = new Set([
+  'М2', 'М3', 'М', 'ШТ', 'КГ', 'Т', 'ТН', 'КОМ', 'КОМПЛ', 'КОМП', 'Л', 'ЕД', 'ПОГМ', 'ПМ', 'РУЛОН', 'МЕШОК',
+  'ПАЧКА', 'ЯЩИК', 'УПАК', 'ПАР', 'ДОН', 'ТА', 'ДОНА', 'ЧЕЛЧ', 'МАШЧ', 'ТОНН', 'КВМ', 'КУБМ',
+  'M2', 'M3', 'M', 'SHT', 'KG', 'T', 'TN', 'DONA', 'DON', 'TA', 'L', 'KOMPL', 'QOP', 'QUTI', 'METR', 'SM',
+  'MM', 'GR', 'LITR', 'TONNA',
+]);
+const unitKey = (s: string) => s.toUpperCase().replace(/[-.\s ]/g, '');
+
+function parseSheetLoose(rows: unknown[][], startIndex: number): ResourceRow[] {
+  const out: ResourceRow[] = [];
+  let index = startIndex;
+  for (const row of rows) {
+    const cells = (row || []).map(norm);
+    if (cells.length < 3) continue;
+    const ui = cells.findIndex((c, i) => i >= 1 && !!c && LOOSE_UNITS.has(unitKey(c)));
+    if (ui < 1) continue;
+    const name = cells.slice(0, ui).filter((c) => c && !/^[\d  ,.\-–]+$/.test(c)).join(' ').trim();
+    if (name.length < 2 || SUMMARY_ROW.test(name)) continue;
+    const nums: number[] = [];
+    for (let i = ui + 1; i < Math.min(ui + 7, cells.length); i++) {
+      const n = num(cells[i]);
+      if (n !== null && n > 0) nums.push(n);
+    }
+    if (!nums.length) continue;
+    const qty = nums[0];
+    const price = nums.length >= 2 ? nums[1] : null;
+    const total = nums.length >= 3 ? nums[nums.length - 1] : (price !== null ? Math.round(qty * price) : null);
+    index++;
+    out.push({
+      index, shifr: null, shifrNote: null,
+      rawName: name, shortName: name.split(' ').slice(0, 4).join(' '),
+      spec: null, unit: cells[ui], qty, price, total,
+      group: groupOf(cells[ui], '', name),
+      rawLine: cells.join('\t'), warnings: [],
+    });
+  }
+  return out;
+}
+
 export function parseExcelRows(sheets: Array<{ name: string; rows: unknown[][] }>, filename: string): ParseResult | null {
   const resources: ResourceRow[] = [];
-  let matchedSheets = 0;
+  const notes: string[] = [];
   let index = 0;
   for (const sh of sheets) {
+    const before = resources.length;
     const h = findHeader(sh.rows);
-    if (!h) continue;
-    matchedSheets++;
-    let section = '';
-    for (let r = h.row + 1; r < sh.rows.length; r++) {
-      const row = sh.rows[r] || [];
-      if (isNumberingRow(row)) continue;
-      const name = norm(row[h.cols.name!]);
-      const unit = norm(row[h.cols.unit!]);
-      const qty = num(row[h.cols.qty!]);
-      if (!name) continue;
-      if (SKIP_ROW.test(name)) continue;
-      if (!unit && (qty === null || qty === 0)) { section = name.slice(0, 120); continue; }   // bo'lim sarlavhasi
-      if (qty === null || qty <= 0 || !unit) continue;
-      const price = h.cols.price !== undefined ? num(row[h.cols.price]) : null;
-      let total = h.cols.total !== undefined ? num(row[h.cols.total]) : null;
-      if (total === null && price !== null) total = Math.round(qty * price);
-      const code = h.cols.code !== undefined ? norm(row[h.cols.code]) || null : null;
-      index++;
-      resources.push({
-        index, shifr: code, shifrNote: null,
-        rawName: name, shortName: name.split(' ').slice(0, 4).join(' '),
-        spec: null, unit, qty, price, total,
-        group: groupOf(unit, section, name),
-        rawLine: row.map(norm).join('\t'), warnings: [],
-      });
+    if (h) {
+      let section = '';
+      for (let r = h.row + 1; r < sh.rows.length; r++) {
+        const row = sh.rows[r] || [];
+        if (isNumberingRow(row)) continue;
+        const name = norm(row[h.cols.name!]);
+        if (!name || SUMMARY_ROW.test(name)) continue;
+        const unit = h.cols.unit !== undefined ? norm(row[h.cols.unit]) : '';
+        let qty = h.cols.qty !== undefined ? num(row[h.cols.qty]) : null;
+        let price = h.cols.price !== undefined ? num(row[h.cols.price]) : null;
+        let total = h.cols.total !== undefined ? num(row[h.cols.total]) : null;
+        // Raqamsiz qator — bo'lim sarlavhasi ("Материалы", "Оборудование", "Трудовые затраты")
+        if (!qty && !price && !total) { section = name.slice(0, 120); continue; }
+        if (SOFT_SKIP.test(name) && !unit) continue;   // smeta oxiridagi xarajat jamlanmalari
+        // Yetishmaganini ikkinchisidan hisoblaymiz — narx ustuni bo'lmagan ofertalarda ham narx ko'rinadi
+        if ((qty === null || qty <= 0) && price && total) qty = Math.round((total / price) * 1e4) / 1e4;
+        if (qty === null || qty <= 0) qty = total && !price ? 1 : 0;
+        if (qty <= 0) continue;
+        if (price === null && total) price = Math.round((total / qty) * 100) / 100;
+        if (total === null && price !== null) total = Math.round(qty * price);
+        const code = h.cols.code !== undefined ? norm(row[h.cols.code]) || null : null;
+        index++;
+        resources.push({
+          index, shifr: code, shifrNote: null,
+          rawName: name, shortName: name.split(' ').slice(0, 4).join(' '),
+          spec: null, unit: unit || '-', qty, price, total,
+          group: groupOf(unit, section, name),
+          rawLine: row.map(norm).join('\t'), warnings: [],
+        });
+      }
     }
+    // Sarlavha topilmadi yoki undan hech narsa chiqmadi — birlik katagi bo'yicha zaxira o'qish
+    if (resources.length === before) {
+      const loose = parseSheetLoose(sh.rows, index);
+      resources.push(...loose);
+      index += loose.length;
+    }
+    const got = resources.length - before;
+    notes.push(`${sh.name}: ${got ? `${got} qator${h ? '' : " (sarlavhasiz o'qildi)"}` : 'jadval topilmadi'}`);
   }
-  if (!matchedSheets) return null;
+  if (!resources.length) return null;
   applyCategories(resources);
   const sumOf = (g?: ResourceGroup) => Math.round(resources.filter((x) => !g || x.group === g).reduce((s, x) => s + (x.total ?? 0), 0));
   const grandTotal = sumOf();
@@ -133,25 +212,48 @@ export function parseExcelRows(sheets: Array<{ name: string; rows: unknown[][] }
   };
   const LABEL: Record<ResourceGroup, string> = { labor: 'Mehnat', machinery: 'Mashina va mexanizmlar', material: 'Materiallar', equipment: 'Jihozlar', general: 'Umumiy xarajatlar' };
   const groups = (['labor', 'machinery', 'material', 'equipment', 'general'] as ResourceGroup[]).filter((g) => resources.some((x) => x.group === g));
+  const noPrice = resources.filter((r) => r.price === null).length;
   return {
     meta, resources, works: [],
     totals: groups.map((g) => ({ group: LABEL[g], declared: 0, computed: sumOf(g), diff: 0, passed: true })),
     validation: {
       ok: resources.length > 0,
       checks: [],
-      warnings: resources.length ? [] : ['Sarlavha topildi, lekin qatorlarda miqdor/birlik yo\'q'],
+      warnings: [
+        `Varaqlar — ${notes.join('; ')}`,
+        ...(noPrice ? [`${noPrice} qatorda narx ko'rsatilmagan (faylning o'zida ham bo'sh)`] : []),
+      ],
       errors: [],
     },
   };
 }
 
-/** Excel faylidan (buffer) — har bir varaq katak-katak. Sarlavha topilmasa null (eski yo'lga qaytiladi). */
+/** Birlashtirilgan kataklar — qiymat butun maydonga yoziladi (ustunlar to'g'ri taqsimlanishi uchun). */
+function expandMerges(xlsx: any, sheet: any): void {
+  const merges: Array<{ s: { r: number; c: number }; e: { r: number; c: number } }> = sheet?.['!merges'] || [];
+  for (const m of merges) {
+    const src = sheet[xlsx.utils.encode_cell({ r: m.s.r, c: m.s.c })];
+    if (!src) continue;
+    for (let r = m.s.r; r <= m.e.r; r++) {
+      for (let c = m.s.c; c <= m.e.c; c++) {
+        const addr = xlsx.utils.encode_cell({ r, c });
+        if (!sheet[addr]) sheet[addr] = { t: src.t, v: src.v, w: src.w };
+      }
+    }
+  }
+}
+
+/** Excel faylidan (buffer) — har bir varaq katak-katak. Hech narsa topilmasa null (eski yo'lga qaytiladi). */
 export function parseExcelTable(buf: Buffer, filename: string): ParseResult | null {
   const xlsx = require('xlsx');
   const wb = xlsx.read(buf, { type: 'buffer', cellText: true, cellDates: false });
-  const sheets = wb.SheetNames.map((name: string) => ({
-    name,
-    rows: xlsx.utils.sheet_to_json(wb.Sheets[name], { header: 1, raw: true, defval: '', blankrows: true }) as unknown[][],
-  }));
+  const sheets = wb.SheetNames.map((name: string) => {
+    const sheet = wb.Sheets[name];
+    expandMerges(xlsx, sheet);
+    return {
+      name,
+      rows: xlsx.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: '', blankrows: true }) as unknown[][],
+    };
+  });
   return parseExcelRows(sheets, filename);
 }

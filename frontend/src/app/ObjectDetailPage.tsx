@@ -607,6 +607,16 @@ export function SmetaResultView({ smeta }: { smeta: SmetaResult }) {
           {smeta.validation.ok ? `✓ Tekshiruv o'tdi — ${smeta.resources.length} resurs, guruh summalari mos` : `⚠ ${smeta.validation.errors.length} xato`}
           {smeta.validation.warnings.length > 0 && ` · ${smeta.validation.warnings.length} ogohlantirish`}
         </div>
+        {/* Owner 2026-10-26: fayldagi har bir varaqdan nechta qator o'qilgani ko'rinib turishi kerak
+            ("pastda boshqa menyular ham bo'lishi mumkin — hammasini o'qisin"). */}
+        {smeta.validation.warnings.length > 0 && (
+          <details className="mt-2 text-[11px] text-muted-foreground">
+            <summary className="cursor-pointer select-none">Fayl haqida ({smeta.validation.warnings.length})</summary>
+            <ul className="mt-1 space-y-0.5 pl-3 list-disc leading-snug">
+              {smeta.validation.warnings.map((w, i) => <li key={i}>{w}</li>)}
+            </ul>
+          </details>
+        )}
       </div>
 
       {/* A: РЕСУРСНЫЙ РАСЧЕТ — 5 alohida guruh */}

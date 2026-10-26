@@ -23,6 +23,8 @@ import { initRegistrationScene, isInRegistration } from './registrationScene';
 import { emitToUser, emitToGroup, emitToCompanyBosses } from './socket';
 import { tb, langLabel, BotLang } from '../i18n/bot';
 import { guideText, guideRoleOf } from './guides';
+import { handleGroupCommand } from './botGroups';
+import { getTickerItems } from '../routes/ticker';
 import { getBackendUrl } from '../utils/backendUrl';
 import { uploadFileToCloud } from '../config/cloudinary';
 import { todayInTashkent, tashkentHour } from '../utils/tz';
@@ -1086,6 +1088,27 @@ async function blockedInBot(chatId: number | string | undefined, callbackId?: st
   return true;
 }
 
+// ── Guruh va kanallar (owner 2026-10-26) ──────────────────────────────────────
+let botUsernameCache: string | undefined;
+async function myUsername(): Promise<string | undefined> {
+  if (botUsernameCache !== undefined) return botUsernameCache;
+  try { botUsernameCache = (await bot.getMe())?.username; } catch { botUsernameCache = undefined; }
+  return botUsernameCache;
+}
+async function runGroupCommand(msg: any): Promise<void> {
+  try {
+    await handleGroupCommand(msg, {
+      send: (chatId: string, text: string, opts?: any) => bot.sendMessage(chatId, text, opts),
+      ticker: () => getTickerItems(),
+      botUsername: await myUsername(),
+    });
+  } catch (e) {
+    console.error('[bot group]', (e as Error)?.message);
+  }
+}
+// Kanalga yozilgan buyruq 'message' emas, 'channel_post' bo'lib keladi
+bot.on('channel_post', (msg: any) => { void runGroupCommand(msg); });
+
 bot.onText(/\/start/, async (msg: any) => {
   const chatId = msg.chat.id;
   // Deep-link token bilan /start bo'lsa (masalan "/start abc123") — registration
@@ -1786,6 +1809,9 @@ bot.on('message', async (msg: any) => {
   // shaxsiy (private) chatlar uchun mo'ljallangan).
   if (msg.chat.type !== 'private') {
     recordDiscoveredChat(String(msg.chat.id), msg.chat.title || msg.chat.username || String(msg.chat.id), msg.chat.type).catch(() => {});
+    // Guruh/kanal buyruqlari (owner 2026-10-26): firmaga bog'langan guruhda firma buyruqlari,
+    // umumiy guruh va kanalda esa ochiq buyruqlar ishlaydi. Qolgan barcha mantiq — faqat shaxsiy chatda.
+    await runGroupCommand(msg);
     return;
   }
 

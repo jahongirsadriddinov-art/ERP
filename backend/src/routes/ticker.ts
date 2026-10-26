@@ -50,13 +50,12 @@ async function getNews(): Promise<TickerItem[]> {
 
 const WEATHER_ICON: Record<string, string> = { sunny: '☀️', cloudy: '☁️', rain: '🌧', snow: '❄️', fog: '🌫' };
 
-// GET /api/ticker — sarlavha satri uchun bandlar
-router.get('/', async (_req, res) => {
+/** Kurs + ob-havo + yangiliklar (sarlavha satri va bot guruh buyruqlari uchun). */
+export async function getTickerItems(companyId?: string): Promise<TickerItem[]> {
   const items: TickerItem[] = [];
 
   try {
-    const t = getTenant();
-    const r = await getRatesForCompany(t?.companyId ? String(t.companyId) : undefined, 'sell');
+    const r = await getRatesForCompany(companyId, 'sell');
     if (r?.USD) items.push({ kind: 'rate', icon: '💵', text: `$ ${Math.round(r.USD).toLocaleString('ru-RU').replace(/ /g, '.')} so'm` });
   } catch { /* kurs bo'lmasa — qolganlari ko'rinadi */ }
 
@@ -66,7 +65,13 @@ router.get('/', async (_req, res) => {
   } catch { /* ob-havo bo'lmasa */ }
 
   try { items.push(...(await getNews())); } catch { /* yangilik bo'lmasa */ }
+  return items;
+}
 
+// GET /api/ticker — sarlavha satri uchun bandlar
+router.get('/', async (_req, res) => {
+  const t = getTenant();
+  const items = await getTickerItems(t?.companyId ? String(t.companyId) : undefined);
   res.set('Cache-Control', 'public, max-age=300');
   res.json({ items });
 });

@@ -31,6 +31,19 @@ export function commandsFor(saved: Saved | undefined | null, lang: 'uz' | 'ru', 
   return out;
 }
 
+/** Guruh va kanallardagi buyruqlar (owner 2026-10-26) — shaxsiy chatdagi ro'yxatdan boshqa. */
+export const GROUP_COMMANDS: Cmd[] = [
+  { command: 'bugun', description: "Bugungi davomat (firma guruhi)" },
+  { command: 'obyektlar', description: 'Faol obyektlar (firma guruhi)' },
+  { command: 'chiqim', description: 'Bugungi chiqimlar (firma guruhi)' },
+  { command: 'hisobot', description: "So'nggi 7 kun (firma guruhi)" },
+  { command: 'narx', description: 'Dollar kursi' },
+  { command: 'obhavo', description: "Ob-havo" },
+  { command: 'yangilik', description: 'Yangilik sarlavhalari' },
+  { command: 'qollanma', description: "Qo'llanma" },
+  { command: 'ulash', description: "Guruhni firmaga bog'lash (direktor)" },
+];
+
 export async function applyBotCommands(call: typeof tgCall = tgCall): Promise<void> {
   const doc: any = await BotUiConfig.findOne({ key: 'global' }).select('commands').lean().catch(() => null);
   const aiEnabled = !!aiConfig.enabled;
@@ -43,4 +56,10 @@ export async function applyBotCommands(call: typeof tgCall = tgCall): Promise<vo
   const ru = commandsFor(doc.commands, 'ru', aiEnabled)!;
   if (uz.length) await call('setMyCommands', { commands: uz }); else await call('deleteMyCommands', {});
   if (ru.length) await call('setMyCommands', { commands: ru, language_code: 'ru' }); else await call('deleteMyCommands', { language_code: 'ru' });
+  await applyGroupCommands(call);
+}
+
+/** Guruh/kanal ro'yxati — shaxsiy chatdagiga tegmaydi (scope: all_group_chats). */
+export async function applyGroupCommands(call: typeof tgCall = tgCall): Promise<void> {
+  await call('setMyCommands', { commands: GROUP_COMMANDS, scope: { type: 'all_group_chats' } }).catch(() => {});
 }

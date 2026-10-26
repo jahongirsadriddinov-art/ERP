@@ -78,3 +78,56 @@ export function MoneyField({ amount, currency, onAmount, onCurrency, label, auto
 
 /** Kiritilgan summa ("1.250.000", "12,5") → son. */
 export const parseAmount = (s: string) => parseMoney(s);
+
+/** Tanlangan valyutadagi summani so'mga o'giradi (server kurs qo'llamaydigan maydonlar uchun). */
+export function toUzs(amount: string | number, currency: Cur, side: "buy" | "sell" = "sell"): number {
+  const n = typeof amount === "number" ? amount : parseMoney(amount);
+  if (!n || currency === "UZS") return Math.round(n || 0);
+  const kb = LIVE_KAPITAL?.[currency];
+  const rate = LIVE_RATE_SOURCE !== "company" && kb ? kb[side] : currency === "USD" ? LIVE_USD_RATE : LIVE_EUR_RATE;
+  return Math.round(n * rate);
+}
+
+/** Narx kiritish + valyuta tanlash (owner 2026-10-26: "har qanday narx kiritadigan joyga valyuta tanlash").
+ *  Tashqariga DOIM so'mdagi qiymat beriladi — shu sababli hech bir forma/serverni o'zgartirmasdan ishlaydi.
+ *  Sarlavha (label) joyida qoladi: bu faqat maydonning o'zi. */
+export function PriceField({ value, onChange, className, placeholder, side = "sell", testId, autoFocus, required, disabled, wrapClassName = "" }: {
+  value: string; onChange: (uzs: string) => void; className: string; placeholder?: string;
+  side?: "buy" | "sell"; testId?: string; autoFocus?: boolean; required?: boolean; disabled?: boolean;
+  /** tashqi o'ramga sinf (masalan flex qatorda kenglik) */
+  wrapClassName?: string;
+}) {
+  const [cur, setCur] = useState<Cur>("UZS");
+  const [text, setText] = useState(value);
+  const [, force] = useState(0);
+  // So'mda kiritilayotganda tashqi qiymat bilan sinxron; valyutada — matn o'zimizda qoladi
+  useEffect(() => { if (cur === "UZS") setText(value); }, [value, cur]);
+  useEffect(() => { if (cur !== "UZS") void fetchLiveCurrencyRates().then(() => force((x) => x + 1)); }, [cur]);
+  const put = (t: string, c: Cur) => { setText(t); onChange(c === "UZS" ? t : String(toUzs(t, c, side) || "")); };
+  const n = parseMoney(text);
+  const kb = cur === "UZS" ? undefined : LIVE_KAPITAL?.[cur];
+  const rate = cur === "UZS" ? 1 : (LIVE_RATE_SOURCE !== "company" && kb ? kb[side] : cur === "USD" ? LIVE_USD_RATE : LIVE_EUR_RATE);
+  return (
+    <div className={wrapClassName}>
+      <div className="flex gap-1.5">
+        <MoneyInput autoFocus={autoFocus} required={required} disabled={disabled} value={text} currency={cur}
+          placeholder={placeholder ?? "0"} data-testid={testId} onChange={(v) => put(v, cur)}
+          className={`${className} flex-1 min-w-0 tabular-nums`} />
+        <div className="flex p-0.5 rounded-lg bg-muted flex-shrink-0" role="radiogroup" aria-label="Valyuta">
+          {(["UZS", "USD"] as Cur[]).map((c) => (
+            <button key={c} type="button" role="radio" aria-checked={cur === c} disabled={disabled} data-testid={`cur-${c}`}
+              onClick={() => { const t = formatMoneyInput(text, c); setCur(c); put(t, c); }}
+              className={`px-2 rounded-md text-xs font-bold liquid-transition ${cur === c ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"}`}>
+              {c === "UZS" ? (isRu() ? "сум" : "so'm") : SIGN[c]}
+            </button>
+          ))}
+        </div>
+      </div>
+      {cur !== "UZS" && n > 0 && (
+        <p className="text-[11px] text-muted-foreground mt-1" data-testid="price-preview">
+          ≈ <b className="text-foreground">{fmt(Math.round(n * rate))}</b> · 1 {SIGN[cur]} = {fmtNumber(rate)} {isRu() ? "сум" : "so'm"}
+        </p>
+      )}
+    </div>
+  );
+}

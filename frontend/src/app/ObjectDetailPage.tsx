@@ -29,6 +29,7 @@ import { PlanFactCard } from "./PlanFact";
 import { PieceworkTab, useCompanyFeatures } from "./Piecework";
 import { DailyReports } from "./DailyReports";
 import { MoneyInput } from "./components/MoneyInput";
+import { PriceField } from "./components/Money";
 import { parseMoney } from "./lib/money";
 import { openMediaViewer } from "./MediaViewer";
 import { SkeletonList } from "./Skeleton";
@@ -524,7 +525,7 @@ export function MaterialDetailsModal({ mat, confT, pendT, objectId, canEdit, onC
             </div>
             <div>
               <label className="text-xs text-muted-foreground block mb-1">{tt('objectDetail.colPrice')}</label>
-              <MoneyInput value={ePrice} onChange={setEPrice} className="w-full text-base sm:text-sm border border-border rounded-lg px-3 py-2 bg-input-background focus:outline-none tabular-nums" />
+              <PriceField value={ePrice} onChange={setEPrice} className="text-base sm:text-sm border border-border rounded-lg px-3 py-2 bg-input-background focus:outline-none" />
             </div>
             <div className="flex gap-2 pt-1">
               <button onClick={()=>setEditing(false)} className="btn btn-outline flex-1 py-2">{tt('common.cancel')}</button>
@@ -760,8 +761,8 @@ export function ProjectEditModal({ project, users, onClose, onSave }:
           </div>
           <div>
             <label className="text-xs text-muted-foreground block mb-1">{t('objectDetail.editBudgetLabel')}</label>
-            <MoneyInput value={budget} onChange={setBudget}
-              className="w-full text-base sm:text-sm border border-border rounded-lg px-3 py-2 bg-input-background focus:outline-none tabular-nums" />
+            <PriceField value={budget} onChange={setBudget}
+              className="text-base sm:text-sm border border-border rounded-lg px-3 py-2 bg-input-background focus:outline-none" />
           </div>
           <div>
             <label className="text-xs text-muted-foreground block mb-1">{t('objectDetail.editLocationLabel')}</label>

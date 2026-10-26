@@ -2,6 +2,7 @@ import { confirmDialog, promptDialog } from "./lib/confirmDialog";
 import { startBackground, stopBackground } from "./lib/background";
 import { fmtNumber, parseMoney } from "./lib/money";
 import { MoneyInput } from "./components/MoneyInput";
+import { PriceField } from "./components/Money";
 import { CountUp } from "./components/CountUp";
 import { useState, useRef, useEffect, useMemo, Suspense } from "react";
 import { lazyRetry as lazy } from "./lib/lazyRetry";
@@ -833,8 +834,8 @@ export function SendTransferModal({ currentUser, projects, allUsers, onClose, on
                         </div>
                         <div>
                           <label className="text-[10px] text-muted-foreground block mb-1 font-semibold uppercase">{t('sendTransfer.priceLabel')}</label>
-                          <MoneyInput placeholder="0"
-                            className="w-full text-base sm:text-sm border border-border rounded-lg px-2.5 py-1.5 bg-input-background focus:outline-none shadow-sm tabular-nums"
+                          <PriceField placeholder="0"
+                            className="text-base sm:text-sm border border-border rounded-lg px-2.5 py-1.5 bg-input-background focus:outline-none shadow-sm"
                             value={String(sel.price ?? "")} onChange={v => updateMat(sel.name, "price", v)}/>
                         </div>
                       </div>
@@ -939,8 +940,8 @@ export function SendTransferModal({ currentUser, projects, allUsers, onClose, on
                                 }
                               }}
                             />
-                            <MoneyInput placeholder={t('sendTransfer.pricePlaceholder')}
-                              className="w-full text-base sm:text-sm border border-border rounded-lg px-2.5 py-1.5 bg-input-background focus:outline-none shadow-sm tabular-nums"
+                            <PriceField placeholder={t('sendTransfer.pricePlaceholder')}
+                              className="text-base sm:text-sm border border-border rounded-lg px-2.5 py-1.5 bg-input-background focus:outline-none shadow-sm"
                               value={cm.price} onChange={v => {
                                 const newMats = [...customMats];
                                 newMats[i].price = v;

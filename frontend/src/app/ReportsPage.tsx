@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { oneOf, usePersistentState } from "./lib/persistentState";
+import { CountUp } from "./components/CountUp";
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   AreaChart, Area, CartesianGrid, Legend, ComposedChart, Line,
@@ -278,15 +279,16 @@ export default function ReportsPage({ projects, expenses, incomes, users, showIn
     : ranges.find(r => r[0] === range)![1];
   const money = (n: number) => narrow && Math.abs(n) >= 1e6 ? `${short(n)} so'm` : fmt(n);
   const ops = t('reports.ops', { defaultValue: "ta amal" });
-  const kpis: { label: string; value: string; title: string; sub: string; tone: string; grad: string; valueTone?: string }[] = [
+  // Owner 2026-10-26: kartalardagi raqamlar ham 0 dan sanab chiqadi
+  const kpis: { label: string; value: string; num?: number; prefix?: string; title: string; sub: string; tone: string; grad: string; valueTone?: string }[] = [
     ...(showIncome ? [
-      { label: t('reports.pnlIncome'), value: money(totalIncome), title: fmt(totalIncome), sub: `${filtInc.length} ${ops}`, tone: "text-muted-foreground", grad: "from-emerald-500/20 to-cyan-500/10" },
+      { label: t('reports.pnlIncome'), value: money(totalIncome), num: totalIncome, title: fmt(totalIncome), sub: `${filtInc.length} ${ops}`, tone: "text-muted-foreground", grad: "from-emerald-500/20 to-cyan-500/10" },
     ] : []),
-    { label: t('reports.totalExpense'), value: money(total), title: fmt(total), sub: delta != null ? `${delta > 0 ? "▲" : delta < 0 ? "▼" : "•"} ${Math.abs(delta)}% ${t('reports.vsPrev', { defaultValue: "oldingi davrga nisbatan" })}` : `${filtExp.length} ${ops}`, tone: delta != null && delta > 0 ? "text-rose-500" : delta != null ? "text-emerald-500" : "text-muted-foreground", grad: "from-orange-500/20 to-rose-500/10" },
+    { label: t('reports.totalExpense'), value: money(total), num: total, title: fmt(total), sub: delta != null ? `${delta > 0 ? "▲" : delta < 0 ? "▼" : "•"} ${Math.abs(delta)}% ${t('reports.vsPrev', { defaultValue: "oldingi davrga nisbatan" })}` : `${filtExp.length} ${ops}`, tone: delta != null && delta > 0 ? "text-rose-500" : delta != null ? "text-emerald-500" : "text-muted-foreground", grad: "from-orange-500/20 to-rose-500/10" },
     ...(showIncome && showBalance ? [
-      { label: t('reports.balance', { defaultValue: "Balans (kirim − chiqim)" }), value: `${net > 0 ? "+" : ""}${money(net)}`, title: fmt(net), sub: net >= 0 ? t('reports.profit', { defaultValue: "Foyda" }) : t('reports.loss', { defaultValue: "Zarar" }), tone: net >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400", grad: net >= 0 ? "from-emerald-500/20 to-emerald-500/5" : "from-rose-500/25 to-rose-500/5", valueTone: net >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400" },
+      { label: t('reports.balance', { defaultValue: "Balans (kirim − chiqim)" }), value: `${net > 0 ? "+" : ""}${money(net)}`, num: net, prefix: net > 0 ? "+" : "", title: fmt(net), sub: net >= 0 ? t('reports.profit', { defaultValue: "Foyda" }) : t('reports.loss', { defaultValue: "Zarar" }), tone: net >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400", grad: net >= 0 ? "from-emerald-500/20 to-emerald-500/5" : "from-rose-500/25 to-rose-500/5", valueTone: net >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400" },
     ] : []),
-    { label: t('reports.perDay', { defaultValue: "Kunlik o'rtacha" }), value: money(Math.round(total / spanDays)), title: fmt(Math.round(total / spanDays)), sub: `${spanDays} ${t('reports.days', { defaultValue: "kun" })}`, tone: "text-muted-foreground", grad: "from-indigo-500/20 to-violet-500/10" },
+    { label: t('reports.perDay', { defaultValue: "Kunlik o'rtacha" }), value: money(Math.round(total / spanDays)), num: Math.round(total / spanDays), title: fmt(Math.round(total / spanDays)), sub: `${spanDays} ${t('reports.days', { defaultValue: "kun" })}`, tone: "text-muted-foreground", grad: "from-indigo-500/20 to-violet-500/10" },
   ];
   const chartH = (desktop: number) => narrow ? Math.round(desktop * 0.8) : desktop;
   const yW = narrow ? 40 : 56;
@@ -395,7 +397,9 @@ export default function ReportsPage({ projects, expenses, incomes, users, showIn
             <motion.div key={k.label} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04, type: "spring", stiffness: 300, damping: 28 }}
               className={`relative overflow-hidden rounded-2xl border border-border p-3 sm:p-4 min-w-0 bg-gradient-to-br ${k.grad}`}>
               <p className="text-[11px] sm:text-xs text-muted-foreground font-medium truncate">{k.label}</p>
-              <p title={k.title} className={`text-base md:text-xl font-bold font-mono mt-1 truncate ${k.valueTone || ""}`}>{k.value}</p>
+              <p title={k.title} className={`text-base md:text-xl font-bold font-mono mt-1 truncate ${k.valueTone || ""}`}>
+                {k.num != null ? <CountUp value={k.num} format={money} prefix={k.prefix} /> : k.value}
+              </p>
               {k.sub && <p className={`text-[10px] sm:text-[11px] mt-1 font-medium truncate ${k.tone}`}>{k.sub}</p>}
             </motion.div>
           ))}

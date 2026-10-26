@@ -1,4 +1,9 @@
 import { MoneyInput } from "./components/MoneyInput";
+import { PriceField } from "./components/Money";
+import { CountUp } from "./components/CountUp";
+
+// Raqamlar 0 dan sanab chiqadi (owner 2026-10-26: hamma joyda)
+const n0 = (n: number) => String(Math.round(n));
 import { parseMoney } from "./lib/money";
 import { confirmDialog } from "./lib/confirmDialog";
 import { useState, useRef, useEffect, Suspense } from "react";
@@ -119,14 +124,14 @@ export function AdminDashboard({ currentUser, users, projects, transfers, setUse
     {stats && (
       <div className="flex-shrink-0 hidden lg:flex items-center gap-2 pl-3 pr-6 pt-3 pb-1 overflow-x-auto scrollbar-hide scroll-smooth">
         {[
-          { label: t('dashboard.activeObjects'), value: stats.activeProjects, color: "text-green-600 dark:text-green-400" },
-          { label: t('dashboard.totalStaff'), value: stats.totalEmployees, color: "text-blue-600 dark:text-blue-300" },
-          { label: t('dashboard.pendingTransfers'), value: stats.pendingTransfers, color: "text-amber-600 dark:text-amber-300" },
-          { label: t('dashboard.todayAttendance'), value: stats.todayAttendance, color: "text-primary" },
-          { label: t('dashboard.totalExpenses'), value: fmt(stats.totalExpenses), color: "text-foreground" },
+          { label: t('dashboard.activeObjects'), value: Number(stats.activeProjects) || 0, fmtV: n0, color: "text-green-600 dark:text-green-400" },
+          { label: t('dashboard.totalStaff'), value: Number(stats.totalEmployees) || 0, fmtV: n0, color: "text-blue-600 dark:text-blue-300" },
+          { label: t('dashboard.pendingTransfers'), value: Number(stats.pendingTransfers) || 0, fmtV: n0, color: "text-amber-600 dark:text-amber-300" },
+          { label: t('dashboard.todayAttendance'), value: Number(stats.todayAttendance) || 0, fmtV: n0, color: "text-primary" },
+          { label: t('dashboard.totalExpenses'), value: Number(stats.totalExpenses) || 0, fmtV: fmt, color: "text-foreground" },
         ].map(s => (
           <div key={s.label} className="surface rounded-lg px-3 py-1.5 flex items-center gap-2 flex-shrink-0 whitespace-nowrap liquid-transition hover:shadow-sm">
-            <span className={`text-sm font-bold font-mono ${s.color}`}>{s.value}</span>
+            <CountUp value={s.value} format={s.fmtV} className={`text-sm font-bold font-mono ${s.color}`} />
             <span className="text-[10px] text-muted-foreground">{s.label}</span>
           </div>
         ))}
@@ -594,7 +599,7 @@ export function AddUserModal({ currentUser, users, projects, onClose, onAdd }:
           {isAdmin(currentUser.role) && (
             <div>
               <label className="text-sm font-medium block mb-1">{t('addUser.baseSalaryLabel')}</label>
-              <MoneyInput className="w-full text-base sm:text-sm border border-border rounded px-3 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary tabular-nums"
+              <PriceField className="text-base sm:text-sm border border-border rounded px-3 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary"
                 placeholder={t('addUser.baseSalaryPlaceholder') as string} value={form.baseSalary} onChange={v => setForm({...form, baseSalary: v})}/>
             </div>
           )}
@@ -690,7 +695,7 @@ export function EditUserModal({ user, currentUser, onClose, onUpdate }: { user: 
           {isAdmin(currentUser.role) && (
             <div>
               <label className="text-sm font-medium block mb-1">{t('addUser.baseSalaryLabel')}</label>
-              <MoneyInput className="w-full text-base sm:text-sm border border-border rounded px-2.5 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary tabular-nums"
+              <PriceField className="text-base sm:text-sm border border-border rounded px-2.5 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary"
                 placeholder={t('addUser.baseSalaryPlaceholder') as string} value={form.baseSalary} onChange={v => setForm({...form, baseSalary: v})}/>
             </div>
           )}
@@ -784,7 +789,7 @@ export function AddObjectModal({ users, onClose, onAdd }:
             <input type="number" inputMode="numeric" min={50} max={100000} step={50} placeholder={t('addObject.geofenceOff', "Bo'sh — tekshirilmaydi")} className="w-full text-base sm:text-sm border border-border rounded-xl px-3 h-11 bg-input-background focus:outline-none" value={radius} onChange={e=>setRadius(e.target.value)}/>
             <p className="text-[11px] text-muted-foreground mt-1">Bo'sh qoldirsangiz — "Ishga keldim" joyi tekshirilmaydi. Prorablarga tekshiruv qo'llanmaydi.</p>
             <p className="text-[11px] text-muted-foreground mt-1">{coords ? t('addObject.geofenceOk', "✓ Obyekt nuqtasi tanlandi — ishchilar faqat shu radius ichida ishga kela oladi") : t('addObject.geofenceHint', "Manzilni xaritadan tanlang — shunda ishchilar faqat obyektda \"Ishga keldim\" bosa oladi")}</p></div>
-          <div><label className="text-sm font-medium block mb-1">{t('addObject.budgetLabel')}</label><MoneyInput className="w-full text-base sm:text-sm border border-border rounded px-3 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary tabular-nums" placeholder="50.000.000" value={form.budget} onChange={v=>setForm({...form,budget:v})}/></div>
+          <div><label className="text-sm font-medium block mb-1">{t('addObject.budgetLabel')}</label><PriceField className="text-base sm:text-sm border border-border rounded px-3 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary" placeholder="50.000.000" value={form.budget} onChange={v=>setForm({...form,budget:v})}/></div>
           <div>
             <label className="text-sm font-medium block mb-1">{t('addObject.foremanLabel')}</label>
             <select className="w-full text-sm border border-border rounded px-3 py-2 bg-input-background focus:outline-none focus:ring-1 focus:ring-primary" value={form.foremanId} onChange={e=>setForm({...form,foremanId:e.target.value})}>

@@ -403,8 +403,8 @@ export function AddExpenseModal({ currentUser, projects, allUsers, onClose, onAd
                     <input placeholder={t('addExpense.materialPlaceholder', { n: i + 1 })} data-testid="mat-name"
                       className="flex-1 min-w-0 text-base sm:text-sm border border-border rounded-lg px-2.5 h-11 bg-input-background focus:outline-none"
                       value={row.name} onChange={e => { const r = [...matRows]; r[i] = {...r[i], name: e.target.value}; setMatRows(r); }}/>
-                    <MoneyInput placeholder={t('addExpense.pricePlaceholder')} data-testid="mat-price"
-                      className="w-28 flex-shrink-0 text-base sm:text-sm border border-border rounded-lg px-2.5 h-11 bg-input-background focus:outline-none tabular-nums"
+                    <PriceField placeholder={t('addExpense.pricePlaceholder')} testId="mat-price" wrapClassName="w-44 flex-shrink-0"
+                      className="text-base sm:text-sm border border-border rounded-lg px-2.5 h-11 bg-input-background focus:outline-none"
                       value={row.price} onChange={v => { setErr(""); const r = [...matRows]; r[i] = {...r[i], price: v}; setMatRows(r); }}/>
                     {matRows.length > 1 && (
                       <button type="button" aria-label={t('common.delete', { defaultValue: "O'chirish" })} onClick={() => setMatRows(rows => rows.filter((_, j) => j !== i))}

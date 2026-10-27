@@ -93,7 +93,7 @@ nashrni o'zingiz qo'lda qilasiz (video/rasm va matn tayyor holda beriladi).
 1. `my.telegram.org` → *API development tools* → `api_id` va `api_hash` oling.
 2. Railway (tgcall-worker) → *Variables*: `TG_API_ID`, `TG_API_HASH`.
 3. Har bir AI akkaunt uchun **haqiqiy O'zbekiston raqami** (virtual raqam = blok).
-4. Proksi: akkaunt raqami qaysi davlatники bo'lsa, o'sha davlat mobil proksisi (Railway IP = blok sababi).
+4. Proksi: akkaunt raqami qaysi davlatniki bo'lsa, o'sha davlat mobil proksisi (Railway IP = blok sababi).
 
 ### 2.3 Claude token (kod yozadigan AI agentlar)
 

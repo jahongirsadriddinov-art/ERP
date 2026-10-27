@@ -161,7 +161,11 @@ app.use(cors({
         // etilmagan origin" bilan rad etilib kelgan edi (faqat .exe'da, veb va
         // Android'da emas — checkI qildim: veb ishlagan, .exe ishlamagan).
         hostname === 'tauri.localhost' ||
-        hostname.endsWith('.vercel.app')
+        hostname.endsWith('.vercel.app') ||
+        // Owner 2026-10-27: sayt Cloudflare'ga ko'chdi — o'z domenining barcha pastki domenlari
+        // (cf.erp-firma.uz kabi sinov manzillari) va Cloudflare'ning o'z havolalari
+        hostname === 'erp-firma.uz' || hostname.endsWith('.erp-firma.uz') ||
+        hostname.endsWith('.pages.dev') || hostname.endsWith('.workers.dev')
       ) {
         return callback(null, true);
       }

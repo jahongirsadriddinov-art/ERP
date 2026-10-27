@@ -20,7 +20,7 @@
   },
   // Fayl ko'prigi: /files/* Render'dan olinadi va Cloudflare chetida keshlanadi (trafikni tejash)
   "main": "worker/index.ts",
-  "vars": { "BACKEND_URL": "https://qurilisherp-backend.onrender.com" },
+  "vars": { "BACKEND_URL": "https://erpfirma-backend.up.railway.app" },
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",

@@ -180,7 +180,7 @@ export const uz = {
       createdToast: "Yangi tarif yaratildi",
     },
     planLabels: {
-      bepul: "1 oy bepul",
+      bepul: "Bepul sinov",
       "1month": "1 oylik",
       "3month": "3 oylik",
       "6month": "6 oylik",
@@ -390,7 +390,7 @@ export const ru = {
       createdToast: "Новый тариф создан",
     },
     planLabels: {
-      bepul: "1 месяц бесплатно",
+      bepul: "Бесплатный период",
       "1month": "1 месяц",
       "3month": "3 месяца",
       "6month": "6 месяцев",

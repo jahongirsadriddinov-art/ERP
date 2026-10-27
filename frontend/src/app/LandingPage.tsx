@@ -20,6 +20,7 @@ import Globe2 from "@hugeicons/core-free-icons/Globe02Icon";
 import { MorphIcon } from "morphicons/react";
 import { motion } from "motion/react";
 import { useTranslation } from "react-i18next";
+import { trialDays, useTrialDays } from "./lib/trial";
 import LanguageSwitcher from "./i18n/LanguageSwitcher";
 import { setSiteLanguage, SiteLang } from "./i18n";
 import { AppDownloadCards } from "./AppDownload";
@@ -124,10 +125,14 @@ const FOCUS_PATH: Record<LandingFocus, string> = {
   features: '/xususiyatlar', steps: '/qanday-ishlaydi', audience: '/kimlar-uchun', faq: '/savollar',
 };
 const DEFAULT_TITLE = 'QurilishERP — qurilish firmasi uchun ERP dastur: smeta, ombor, xodimlar hisobi';
-const DEFAULT_DESC = "Qurilish firmasini elektronlashtirish va raqamlashtirish uchun ERP dastur: obyektlar, smeta, materiallar va ombor hisobi, xarajatlar, ishchilar davomati va maosh, GPS nazorat, AI yordamchi va Telegram bot. Sayt, Android va Windows. Birinchi oy bepul.";
+const DESC_BASE = "Qurilish firmasini elektronlashtirish va raqamlashtirish uchun ERP dastur: obyektlar, smeta, materiallar va ombor hisobi, xarajatlar, ishchilar davomati va maosh, GPS nazorat, AI yordamchi va Telegram bot. Sayt, Android va Windows.";
+/** Bepul muddat admin panelidan belgilanadi — matn ham o'sha qiymat bilan tuziladi (owner 2026-10-27). */
+const descWithTrial = () => `${DESC_BASE} ${trialDays()} kun bepul.`;
 
 export default function LandingPage({ onLogin, onRegister, focus }: { onLogin: () => void; onRegister: () => void; focus?: LandingFocus }) {
   const { t, i18n } = useTranslation();
+  // Bepul sinov muddati admin panelidan belgilanadi (owner 2026-10-27)
+  const trial = useTrialDays();
   const [openFaq, setOpenFaq] = useState<number | null>(0);
   const year = useYear();
 
@@ -172,7 +177,7 @@ export default function LandingPage({ onLogin, onRegister, focus }: { onLogin: (
     { q: t('landing.faq1Q'), a: t('landing.faq1A') },
     { q: t('landing.faq2Q'), a: t('landing.faq2A') },
     { q: t('landing.faq3Q'), a: t('landing.faq3A') },
-    { q: t('landing.faq4Q'), a: t('landing.faq4A') },
+    { q: t('landing.faq4Q'), a: t('landing.faq4A', { days: trial }) },
     { q: t('landing.faq5Q'), a: t('landing.faq5A') },
     { q: t('landing.faq6Q'), a: t('landing.faq6A') },
     { q: t('landing.faq7Q'), a: t('landing.faq7A') },
@@ -195,7 +200,7 @@ export default function LandingPage({ onLogin, onRegister, focus }: { onLogin: (
     const meta = focus ? FOCUS_META[focus] : null;
     document.title = meta?.title || DEFAULT_TITLE;
     const descTag = document.querySelector('meta[name="description"]');
-    if (descTag) descTag.setAttribute('content', meta?.desc || DEFAULT_DESC);
+    if (descTag) descTag.setAttribute('content', meta?.desc || descWithTrial());
     const canonicalTag = document.querySelector('link[rel="canonical"]');
     const path = focus ? FOCUS_PATH[focus] : '/';
     if (canonicalTag) canonicalTag.setAttribute('href', `https://www.erp-firma.uz${path}`);
@@ -204,7 +209,7 @@ export default function LandingPage({ onLogin, onRegister, focus }: { onLogin: (
     // ketmasin.
     return () => {
       document.title = DEFAULT_TITLE;
-      if (descTag) descTag.setAttribute('content', DEFAULT_DESC);
+      if (descTag) descTag.setAttribute('content', descWithTrial());
       if (canonicalTag) canonicalTag.setAttribute('href', 'https://www.erp-firma.uz/');
     };
   }, [focus, t]);
@@ -341,7 +346,7 @@ export default function LandingPage({ onLogin, onRegister, focus }: { onLogin: (
               </button>
             </div>
             <p className="text-xs text-muted-foreground mt-4">
-              {t('landing.heroDisclaimer')}
+              {t('landing.heroDisclaimer', { days: trial })}
             </p>
           </motion.div>
 
@@ -526,7 +531,7 @@ export default function LandingPage({ onLogin, onRegister, focus }: { onLogin: (
         <div className="space-y-4 text-sm md:text-base text-muted-foreground leading-relaxed">
           <p>{t('landing.seoP1')}</p>
           <p>{t('landing.seoP2')}</p>
-          <p>{t('landing.seoP3')}</p>
+          <p>{t('landing.seoP3', { days: trial })}</p>
         </div>
       </section>}
 
@@ -599,7 +604,7 @@ export default function LandingPage({ onLogin, onRegister, focus }: { onLogin: (
             {t('landing.finalCtaTitle')}
           </h2>
           <p className="relative z-10 text-sm md:text-base text-white/80 mt-4 max-w-md mx-auto">
-            {t('landing.finalCtaSubtitle')}
+            {t('landing.finalCtaSubtitle', { days: trial })}
           </p>
           <button onClick={onRegister}
             className="relative z-10 mt-8 bg-white text-primary text-sm font-bold px-8 py-4 rounded-full shadow-2xl hover:-translate-y-0.5 hover:shadow-white/20 active:scale-[0.98] liquid-transition inline-flex items-center gap-2">

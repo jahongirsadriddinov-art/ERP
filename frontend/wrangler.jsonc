@@ -24,6 +24,9 @@
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
-    "not_found_handling": "single-page-application"
+    "not_found_handling": "single-page-application",
+    // Bu yo'llar statik fayl emas — avval Worker ishlaydi (aks holda SPA index.html qaytarib
+    // yuborardi va .exe/.apk o'rniga kirish sahifasi ochilardi)
+    "run_worker_first": ["/files/*", "/api/*", "/socket.io/*", "/uploads/*", "/health", "/webhook*"]
   }
 }

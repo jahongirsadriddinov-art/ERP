@@ -499,22 +499,7 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
                   );
                 })}
               </div>
-              {/* O'zim tanlayman — muddat + kerakli qo'shimchalar */}
-              <div className={`rounded-3xl border-2 p-4 ${selectedPlan === 'custom' ? "border-primary bg-primary/[0.05]" : "border-dashed border-border/70"}`}>
-                <button type="button" onClick={() => setCustomOpen(v => !v)} className="w-full flex items-center justify-between gap-3 text-left" data-testid="custom-plan-toggle">
-                  <span>
-                    <span className="block text-base font-bold">🧩 {t('plan.customTitle', "O'zim tanlayman")}</span>
-                    <span className="block text-xs text-muted-foreground">{selectedPlan === 'custom' && customPick ? `${customPick.total.toLocaleString('uz-UZ')} ${t('register.som')} · ${t('register.daysCount', { count: customPick.days })}` : t('plan.customHint', "Faqat kerakli qo'shimcha funksiyalarni tanlang")}</span>
-                  </span>
-                  <span className={`text-muted-foreground transition-transform ${customOpen ? "rotate-180" : ""}`}>▾</span>
-                </button>
-                {customOpen && (
-                  <div className="mt-4">
-                    <CustomPlanBuilder initial={customPick?.features} actionLabel={t('plan.chooseCustom', "Shu tarifni tanlash")}
-                      onPay={(_m, _f, pick) => { setCustomPick(pick); setSelectedPlan('custom'); setCustomOpen(false); }} />
-                  </div>
-                )}
-              </div>
+              {/* Owner 2026-10-27: "O'zim tanlayman" tarifi olib tashlandi — faqat tayyor tariflar qoladi */}
               <p className="text-xs text-center text-muted-foreground pt-1">{t('register.tarifFooter')}</p>
             </div>
           )}

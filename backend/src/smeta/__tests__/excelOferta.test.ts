@@ -74,7 +74,26 @@ describe("oferta — narx ustuni birlashtirilgan sarlavha ostida", () => {
     expect(note).toContain("Лист3: jadval topilmadi");
   });
 
-  it("bo'lim sarlavhalari saqlanadi, smeta oxiridagi xarajat jamlanmalari material bo'lib qolmaydi", () => {
+  it('narx/summa ustunining sarlavhasi tanilmasa — raqamlar joylashuvidan topiladi', () => {
+    // Owner 2026-10-27: "narx berilgan, lekin obyektda ko'rinmayapti" (ЛАК qatori).
+    // Sarlavhada faqat nom/birlik/miqdor bor; o'ngdagi ikki son — narx va summa.
+    const r = parseExcelRows([{
+      name: 'РЕСУРС',
+      rows: [
+        ['Шифр', 'Наименование', 'Ед.изм', 'Кол-во', '', '', ''],
+        ['43236', 'ЛАК', 'Т', 0.0208, 0.0014602, 34_455_000, 50_311],
+        ['43237', 'Грунтовка', 'Т', 0.05, 0.0021, 12_000_000, 600_000],
+        ['43238', 'Растворитель', 'Т', 0.1, 0.0032, 9_500_000, 950_000],
+      ],
+    }], 'resurs.xlsx')!;
+    expect(r.resources).toHaveLength(3);
+    // Miqdor summaga mos keladigan ustundan olinadi (0.0014602 x 34 455 000 = 50 311),
+    // "birlik uchun" ustuni (0.0208) emas — owner 2026-10-27 hujjati
+    expect(r.resources[0]).toMatchObject({ rawName: 'ЛАК', unit: 'Т', qty: 0.0014602, price: 34_455_000, total: 50_311 });
+    expect(r.resources[1].price).toBe(12_000_000);
+  });
+
+  it("bo'lim sarlavhalari saqlanadi; xarajat jamlanmalari material emas, 'umumiy xarajat' bo'lib qoladi", () => {
     const r = parseExcelRows([{
       name: 'S',
       rows: [
@@ -85,8 +104,12 @@ describe("oferta — narx ustuni birlashtirilgan sarlavha ostida", () => {
         ['Транспортные расходы', '', '', '', 1_000_000],
       ],
     }], 'x.xlsx')!;
+    // Owner 2026-10-27: hujjatdagi hech bir qator tushib qolmasin — jamlanmalar ham ko'rinadi,
+    // lekin material emas, 'general' (Umumiy xarajatlar) guruhida
+    // Jamlanma qatorlari material emas — alohida "summary" ro'yxatida (hujjatdagidek, summalari bilan)
     expect(r.resources.map((x) => x.rawName)).toEqual(['Насос КМ-80']);
     expect(r.resources[0].group).toBe('equipment');
+    expect(r.summary?.map((x) => [x.name, x.amount])).toEqual([['Зарплата', 7_000_000], ['Транспортные расходы', 1_000_000]]);
     expect(r.meta.totalWithoutVat).toBe(10_000_000);
   });
 });

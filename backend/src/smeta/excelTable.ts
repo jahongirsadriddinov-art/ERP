@@ -12,7 +12,7 @@
 //   • har bir varaqdan nechta qator olingani ogohlantirishlarda ko'rinadi.
 
 import { applyCategories } from './categorize';
-import type { ParseResult, ResourceGroup, ResourceRow, SmetaMeta } from './types';
+import type { ParseResult, ResourceGroup, ResourceRow, SmetaMeta, SummaryLine } from './types';
 
 type Col = 'name' | 'unit' | 'qty' | 'price' | 'total' | 'code';
 
@@ -30,7 +30,14 @@ const SUMMARY_ROW = /^(итого|всего|jami|жами|итог|ндс|qqs|�
 /** Smeta oxiridagi xarajat jamlanmalari — birligi bo'lmasa tashlanadi (bo'lim sarlavhasi bo'lsa — qoladi). */
 const SOFT_SKIP = /^(накладн|сметная\s*прибыль|зарплата|эксплуатац|строительные\s*материалы|транспортные\s*расход|прочие\s*затраты|страхование)/i;
 
+/** Jamlanma qatori: birligi "СУМ"/"SUM" yoki nomi ВСЕГО/ИТОГО/НДС kabi. */
+const MONEY_UNIT = /^(сум|сўм|сӹм|sum|so'?m|сумма)$/i;
+const SUMMARY_NAME = /^(зарплат|эксплуатац|строительные\s*материал|транспортн|оборудован|всего|итог|прочие|страхован|ндс|накладн|сметная\s*прибыл|qqs|ққс|jami|жами)/i;
+
 const norm = (v: unknown) => String(v ?? '').replace(/[   ]/g, ' ').replace(/\s+/g, ' ').trim();
+
+/** Kasrni yo'qotmasdan, suzuvchi nuqta shovqinini tozalaydi (0.1+0.2 kabi) — yaxlitlash EMAS. */
+export const exact = (n: number): number => Number(n.toFixed(6));
 
 export function num(v: unknown): number | null {
   if (typeof v === 'number') return Number.isFinite(v) ? v : null;
@@ -141,7 +148,7 @@ function parseSheetLoose(rows: unknown[][], startIndex: number): ResourceRow[] {
     if (!nums.length) continue;
     const qty = nums[0];
     const price = nums.length >= 2 ? nums[1] : null;
-    const total = nums.length >= 3 ? nums[nums.length - 1] : (price !== null ? Math.round(qty * price) : null);
+    const total = nums.length >= 3 ? nums[nums.length - 1] : (price !== null ? exact(qty * price) : null);
     index++;
     out.push({
       index, shifr: null, shifrNote: null,
@@ -154,14 +161,48 @@ function parseSheetLoose(rows: unknown[][], startIndex: number): ResourceRow[] {
   return out;
 }
 
+/** Sarlavhada narx/summa tanilmagan bo'lsa — ularni qatorlardagi raqamlar joylashuvidan topadi
+ *  (owner 2026-10-27: "narx berilgan, lekin obyektda ko'rinmayapti").
+ *  Smeta jadvallarida odatda eng o'ngdagi son — SUMMA, undan oldingisi — NARX. Faqat ko'pchilik
+ *  qatorda son turgan ustunlar hisobga olinadi; nom/birlik/miqdor/shifr ustunlariga tegilmaydi. */
+function inferMoneyCols(rows: unknown[][], h: Header): void {
+  if (h.cols.price !== undefined && h.cols.total !== undefined) return;
+  const taken = new Set([h.cols.name, h.cols.unit, h.cols.qty, h.cols.code].filter((v) => v !== undefined) as number[]);
+  const hits: Record<number, number> = {};
+  let sampled = 0;
+  for (let r = h.row + 1; r < rows.length && sampled < 60; r++) {
+    const row = rows[r] || [];
+    if (isNumberingRow(row)) continue;
+    const name = norm(row[h.cols.name!]);
+    if (!name || SUMMARY_ROW.test(name)) continue;
+    const qty = h.cols.qty !== undefined ? num(row[h.cols.qty]) : null;
+    if (!qty) continue;                      // faqat haqiqiy material qatorlari
+    sampled++;
+    for (let c = 0; c < row.length; c++) {
+      if (taken.has(c)) continue;
+      const v = num(row[c]);
+      if (v !== null && v > 0) hits[c] = (hits[c] || 0) + 1;
+    }
+  }
+  if (sampled < 3) return;
+  // kamida qatorlarning yarmida son turgan ustunlar, chapdan o'ngga
+  const cols = Object.keys(hits).map(Number).filter((c) => hits[c] >= sampled / 2).sort((a2, b2) => a2 - b2);
+  if (!cols.length) return;
+  const last = cols[cols.length - 1], prev = cols.length >= 2 ? cols[cols.length - 2] : undefined;
+  if (h.cols.total === undefined) h.cols.total = last;
+  if (h.cols.price === undefined && prev !== undefined && prev !== h.cols.total) h.cols.price = prev;
+}
+
 export function parseExcelRows(sheets: Array<{ name: string; rows: unknown[][] }>, filename: string): ParseResult | null {
   const resources: ResourceRow[] = [];
+  const summary: SummaryLine[] = [];
   const notes: string[] = [];
   let index = 0;
   for (const sh of sheets) {
     const before = resources.length;
     const h = findHeader(sh.rows);
     if (h) {
+      inferMoneyCols(sh.rows, h);
       let section = '';
       for (let r = h.row + 1; r < sh.rows.length; r++) {
         const row = sh.rows[r] || [];
@@ -174,36 +215,68 @@ export function parseExcelRows(sheets: Array<{ name: string; rows: unknown[][] }
         let total = h.cols.total !== undefined ? num(row[h.cols.total]) : null;
         // Raqamsiz qator — bo'lim sarlavhasi ("Материалы", "Оборудование", "Трудовые затраты")
         if (!qty && !price && !total) { section = name.slice(0, 120); continue; }
-        if (SOFT_SKIP.test(name) && !unit) continue;   // smeta oxiridagi xarajat jamlanmalari
+        // Owner 2026-10-27: "hujjatdagi barcha ma'lumot ko'rinsin". Smeta oxiridagi jamlanma blok
+        // (ЗАРПЛАТА, ЭКСПЛУАТАЦИЯ МАШИН, ВСЕГО, ПРОЧИЕ 17.27%, НДС 12%, ВСЕГО…) — material emas,
+        // alohida ro'yxat sifatida saqlanadi (summalarga ikki marta qo'shilmasin).
+        const amountOf = () => (total !== null ? total : price !== null ? price : null);
+        if ((MONEY_UNIT.test(unit) || !unit) && SUMMARY_NAME.test(name)) {
+          const amt = amountOf();
+          if (amt !== null) {
+            // foiz ustuni: qator ichidagi 0 < v <= 100 bo'lgan va summadan boshqa son
+            let percent: number | null = null;
+            for (const cell of row) {
+              const v = num(cell);
+              if (v === null || v === amt || v <= 0 || v > 100) continue;
+              percent = v <= 1 ? Math.round(v * 10000) / 100 : v;   // 0.1727 -> 17.27
+              break;
+            }
+            summary.push({ name, percent, amount: amt });
+          }
+          continue;
+        }
+        const isSummaryCost = SOFT_SKIP.test(name) && !unit;
         // Yetishmaganini ikkinchisidan hisoblaymiz — narx ustuni bo'lmagan ofertalarda ham narx ko'rinadi
-        if ((qty === null || qty <= 0) && price && total) qty = Math.round((total / price) * 1e4) / 1e4;
-        if (qty === null || qty <= 0) qty = total && !price ? 1 : 0;
-        if (qty <= 0) continue;
-        if (price === null && total) price = Math.round((total / qty) * 100) / 100;
-        if (total === null && price !== null) total = Math.round(qty * price);
+        if ((qty === null || qty <= 0) && price && total) qty = exact(total / price);
+        if (qty === null || qty <= 0) qty = 1;   // miqdor yozilmagan qator ham yo'qolmasin
+        if (price === null && total) price = exact(total / qty);
+        if (total === null && price !== null) total = exact(qty * price);
+        // Miqdorni summaga qarab aniqlashtiramiz: qator ichida qaysi son narxga ko'paytirilganda
+        // summani beradi, o'sha haqiqiy miqdor (resurs varaqlarida "birlik uchun" va "loyiha bo'yicha"
+        // ikkita ustun bo'ladi — sarlavha bo'yicha tanlangani noto'g'ri bo'lishi mumkin).
+        if (price && total && Math.abs(qty * price - total) > Math.abs(total) * 0.01) {
+          let best: { v: number; err: number } | null = null;
+          for (let c = 0; c < row.length; c++) {
+            if (c === h.cols.price || c === h.cols.total || c === h.cols.name || c === h.cols.unit || c === h.cols.code) continue;
+            const v = num(row[c]);
+            if (v === null || v <= 0) continue;
+            const err = Math.abs(v * price - total);
+            if (!best || err < best.err) best = { v, err };
+          }
+          if (best && best.err <= Math.abs(total) * 0.01) qty = best.v;
+        }
         const code = h.cols.code !== undefined ? norm(row[h.cols.code]) || null : null;
         index++;
         resources.push({
           index, shifr: code, shifrNote: null,
           rawName: name, shortName: name.split(' ').slice(0, 4).join(' '),
           spec: null, unit: unit || '-', qty, price, total,
-          group: groupOf(unit, section, name),
-          rawLine: row.map(norm).join('\t'), warnings: [],
+          group: isSummaryCost ? 'general' : groupOf(unit, section, name),
+          rawLine: row.map(norm).join('\t'), warnings: [], sheet: sh.name,
         });
       }
     }
     // Sarlavha topilmadi yoki undan hech narsa chiqmadi — birlik katagi bo'yicha zaxira o'qish
     if (resources.length === before) {
-      const loose = parseSheetLoose(sh.rows, index);
+      const loose = parseSheetLoose(sh.rows, index).map((r) => ({ ...r, sheet: sh.name }));
       resources.push(...loose);
       index += loose.length;
     }
     const got = resources.length - before;
     notes.push(`${sh.name}: ${got ? `${got} qator${h ? '' : " (sarlavhasiz o'qildi)"}` : 'jadval topilmadi'}`);
   }
-  if (!resources.length) return null;
+  if (!resources.length && !summary.length) return null;
   applyCategories(resources);
-  const sumOf = (g?: ResourceGroup) => Math.round(resources.filter((x) => !g || x.group === g).reduce((s, x) => s + (x.total ?? 0), 0));
+  const sumOf = (g?: ResourceGroup) => exact(resources.filter((x) => !g || x.group === g).reduce((s, x) => s + (x.total ?? 0), 0));
   const grandTotal = sumOf();
   const meta: SmetaMeta = {
     objectName: null, subObject: null, organization: null,
@@ -214,7 +287,7 @@ export function parseExcelRows(sheets: Array<{ name: string; rows: unknown[][] }
   const groups = (['labor', 'machinery', 'material', 'equipment', 'general'] as ResourceGroup[]).filter((g) => resources.some((x) => x.group === g));
   const noPrice = resources.filter((r) => r.price === null).length;
   return {
-    meta, resources, works: [],
+    meta, resources, works: [], ...(summary.length ? { summary } : {}),
     totals: groups.map((g) => ({ group: LABEL[g], declared: 0, computed: sumOf(g), diff: 0, passed: true })),
     validation: {
       ok: resources.length > 0,

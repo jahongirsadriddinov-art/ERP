@@ -34,6 +34,14 @@ export interface SmetaMeta {
 }
 
 // ─── 4-bo'lim: ЛОКАЛЬНЫЙ РЕСУРСНЫЙ СМЕТНЫЙ РАСЧЕТ ─────────────────────────────
+/** Hujjat oxiridagi jamlanma qatori (ЗАРПЛАТА, ВСЕГО, НДС 12% …) — owner 2026-10-27:
+ *  "hujjatda hamma narsa bor, lekin bu yerda ko'rinmayapti". Summalar faylda qanday bo'lsa shunday. */
+export interface SummaryLine {
+  name: string;
+  percent: number | null;   // "17.27%" bo'lsa 17.27
+  amount: number;
+}
+
 export interface ResourceRow {
   index: number;              // № п.п. (1..N)
   shifr: string | null;       // "9219" | "С" | null
@@ -47,6 +55,7 @@ export interface ResourceRow {
   total: number | null;
   group: ResourceGroup;
   category?: string;          // ixtiyoriy — categorize.ts
+  sheet?: string;             // fayldagi varaq nomi (ОФЕРТА / РЕСУРС …) — owner 2026-10-27
   rawLine: string;            // birlashtirilgan asl matn
   warnings: string[];
 }
@@ -106,4 +115,6 @@ export interface ParseResult {
   works: WorkRow[];           // 5-bo'lim
   totals: GroupTotal[];
   validation: Validation;
+  /** Hujjat oxiridagi jamlanma (ixtiyoriy) — owner 2026-10-27 */
+  summary?: SummaryLine[];
 }

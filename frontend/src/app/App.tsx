@@ -1352,13 +1352,23 @@ function HeaderTicker() {
   }, [all.length]);
 
   const cur = all[i % all.length];
+  // Owner 2026-10-27: "gap sig'mayapti — o'zi ko'rinmagan tarafiga qarab surilsin, qo'lda qilib bo'lmasin"
+  const boxRef = useRef<HTMLSpanElement | null>(null);
+  const textRef = useRef<HTMLSpanElement | null>(null);
+  const [shift, setShift] = useState(0);
+  useEffect(() => {
+    const box = boxRef.current, el = textRef.current;
+    if (!box || !el) { setShift(0); return; }
+    const over = Math.max(0, el.scrollWidth - box.clientWidth);
+    setShift(over > 4 ? over + 6 : 0);
+  }, [cur.text, cur.kind]);
   const ICON: Record<string, typeof CalendarIcon> = { day: CalendarIcon, rate: DollarIcon, weather: SunIcon, news: NewsIcon };
   const tone = cur.kind === "rate" ? "text-emerald-600 dark:text-emerald-400"
     : cur.kind === "weather" ? "text-sky-600 dark:text-sky-400"
     : "text-muted-foreground";
   // Balandlik QAT'IY (h-[15px]) — satr almashganda sarlavha "sakramaydi"; yangi band pastdan ko'tariladi.
   return (
-    <span className="relative block h-[15px] overflow-hidden min-w-0" data-testid="header-day-rate" title={cur.text}>
+    <span ref={boxRef} className="relative block h-[15px] overflow-hidden min-w-0" data-testid="header-day-rate" title={cur.text}>
       <AnimatePresence mode="popLayout" initial={false}>
         <motion.span key={`${i}-${cur.kind}`}
           initial={{ y: 15, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -15, opacity: 0 }}
@@ -1366,7 +1376,9 @@ function HeaderTicker() {
           className={`absolute inset-0 flex items-center gap-1 ${tone}`}>
           <MorphIcon icon={ICON[cur.kind] || CalendarIcon} className="w-3.5 h-3.5 flex-shrink-0 opacity-80" />
           {/* Owner 2026-10-27: belgi ikki marta chiqmasin — matn boshidagi $/emoji olib tashlanadi */}
-          <span className="text-[11.5px] font-semibold leading-none truncate">{cur.text.replace(/^[\s$€₽ \p{Extended_Pictographic}]+/u, "")}</span>
+          <motion.span ref={textRef} className="text-[11.5px] font-semibold leading-none whitespace-nowrap"
+            animate={shift ? { x: [0, -shift, -shift, 0] } : { x: 0 }}
+            transition={shift ? { duration: Math.max(4, shift / 16), times: [0, 0.45, 0.72, 1], ease: "linear", repeat: Infinity, repeatDelay: 1.2 } : { duration: 0.2 }}>{cur.text.replace(/^[\s$€₽ \p{Extended_Pictographic}]+/u, "")}</motion.span>
         </motion.span>
       </AnimatePresence>
     </span>

@@ -125,6 +125,10 @@ export function ObjectDetailPage({ project, currentUser, users, transfers, onBac
   const [initialTransferData, setInitialTransferData] = useState<Partial<Transfer> | undefined>();
   // Qidiruv (kiril+lotin) — real vaqtda material nomi bo'yicha filtr
   const filteredMats = project.requiredMaterials.filter(m => m.name.toLowerCase().includes(matSearch.trim().toLowerCase()));
+  // Minglab qator birdan chizilsa sahifa qotib qoladi — porsiya-porsiya ko'rsatiladi
+  const [matLimit, setMatLimit] = useState(200);
+  useEffect(() => { setMatLimit(200); }, [matSearch]);
+  const shownMats = filteredMats.slice(0, matLimit);
   
   return (
     <div className="flex flex-col flex-1 min-h-0 bg-background/50">
@@ -301,7 +305,7 @@ export function ObjectDetailPage({ project, currentUser, users, transfers, onBac
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredMats.map((m, i) => {
+                    {shownMats.map((m, i) => {
                       const total = m.price != null ? m.price * m.quantity : null;
                       return (
                         <tr key={m.id} onClick={() => setSelectedMat(m)}
@@ -317,6 +321,12 @@ export function ObjectDetailPage({ project, currentUser, users, transfers, onBac
                   </tbody>
                 </table>
               </div>
+              {filteredMats.length > shownMats.length && (
+                <button type="button" onClick={() => setMatLimit(n => n + 300)}
+                  className="w-full py-2.5 text-xs font-semibold text-primary hover:bg-primary/5 rounded-xl">
+                  Yana 300 ta ko'rsatish ({filteredMats.length - shownMats.length} qoldi)
+                </button>
+              )}
               {/* Bo'sh holat jadvaldan tashqarida — telefonda keng jadval ichida ekrandan chetga chiqib, ikonka matnga yopishardi */}
               {filteredMats.length === 0 && (
                 <div className="flex flex-col items-center gap-3 px-6 py-10 text-center text-muted-foreground" data-testid="smeta-empty">
@@ -579,9 +589,16 @@ export function SmetaResultView({ smeta }: { smeta: SmetaResult }) {
   const [openGroup, setOpenGroup] = useState<string | null>("material");
   const [openWork, setOpenWork] = useState<number | null>(null);
   const [openSection, setOpenSection] = useState<Record<string, boolean>>({});
+  // Guruhda minglab qator bo'lishi mumkin — avval 150 tasi, keyin "yana" bilan qo'shiladi
+  const [groupLimit, setGroupLimit] = useState<Record<string, number>>({});
+
+  // Owner 2026-10-27: hujjatda ОФЕРТА / РЕСУРС deb ajratilgan — shu yerda ham varaqlar bo'yicha ajratiladi
+  const sheets = Array.from(new Set(smeta.resources.map((r) => (r as any).sheet).filter(Boolean))) as string[];
+  const [selSheet, setSelSheet] = useState<string>("all");
+  const shown = selSheet === "all" ? smeta.resources : smeta.resources.filter((r) => (r as any).sheet === selSheet);
 
   const byGroup: Record<string, SmetaResourceRow[]> = {};
-  for (const r of smeta.resources) (byGroup[r.group] = byGroup[r.group] || []).push(r);
+  for (const r of shown) (byGroup[r.group] = byGroup[r.group] || []).push(r);
   const groupSum = (rows: SmetaResourceRow[]) => rows.reduce((s, r) => s + (r.total || 0), 0);
   const budget = smeta.meta?.totalWithoutVat ?? smeta.resources.reduce((s, r) => s + (r.total || 0), 0);
   const vat = smeta.meta?.totalWithVat;
@@ -620,10 +637,44 @@ export function SmetaResultView({ smeta }: { smeta: SmetaResult }) {
         )}
       </div>
 
+      {/* Hujjat oxiridagi jamlanma (ЗАРПЛАТА, ВСЕГО, НДС 12% …) — faylda qanday bo'lsa shunday */}
+      {!!(smeta as any).summary?.length && (
+        <div className="glass-card rounded-xl border border-border overflow-hidden">
+          <p className="text-sm font-bold px-4 pt-3 pb-1">СМЕТНАЯ СТОИМОСТЬ <span className="text-muted-foreground font-normal">(hujjatdan)</span></p>
+          <table className="w-full text-left text-xs">
+            <tbody>
+              {((smeta as any).summary as { name: string; percent: number | null; amount: number }[]).map((l, i) => {
+                const strong = /^(всего|итог|ндс)/i.test(l.name);
+                return (
+                  <tr key={i} className={`border-t border-border/40 ${strong ? "bg-muted/25 font-bold" : ""}`}>
+                    <td className="px-4 py-1.5">{l.name}</td>
+                    <td className="px-2 py-1.5 text-muted-foreground whitespace-nowrap">{l.percent != null ? `${l.percent}%` : ""}</td>
+                    <td className="px-4 py-1.5 text-right font-mono whitespace-nowrap">{fmtNum(l.amount)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Fayldagi varaqlar — ОФЕРТА, РЕСУРС va hokazo */}
+      {sheets.length > 1 && (
+        <div className="flex gap-1.5 overflow-x-auto scrollbar-hide px-1 pb-0.5" data-testid="smeta-sheets">
+          {["all", ...sheets].map((sh) => (
+            <button key={sh} type="button" onClick={() => setSelSheet(sh)}
+              className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold liquid-transition border ${selSheet === sh ? "bg-primary text-white border-primary" : "bg-card text-muted-foreground border-border hover:text-foreground"}`}>
+              {sh === "all" ? `Hammasi (${smeta.resources.length})` : `${sh} (${smeta.resources.filter((r) => (r as any).sheet === sh).length})`}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* A: РЕСУРСНЫЙ РАСЧЕТ — 5 alohida guruh */}
       <p className="text-sm font-bold px-1 pt-1">РЕСУРСНЫЙ РАСЧЕТ <span className="text-muted-foreground">({smeta.resources.length} qator)</span></p>
       {SMETA_GROUP_ORDER.filter(g => byGroup[g]?.length).map(g => {
         const rows = byGroup[g]; const sum = groupSum(rows); const open = openGroup === g;
+        const rowLimit = groupLimit[g] ?? 150;
         return (
           <div key={g} className="glass-card rounded-xl border border-border overflow-hidden">
             <button onClick={() => setOpenGroup(open ? null : g)} className="w-full flex items-center justify-between gap-2 px-4 py-3 hover:bg-muted/30">
@@ -644,7 +695,7 @@ export function SmetaResultView({ smeta }: { smeta: SmetaResult }) {
                     <th className="px-2 py-1.5">Ед.</th><th className="px-2 py-1.5 text-right">Кол-во</th><th className="px-2 py-1.5 text-right">Цена</th><th className="px-2 py-1.5 text-right">Сумма</th>
                   </tr></thead>
                   <tbody>
-                    {rows.map(r => (
+                    {rows.slice(0, rowLimit).map(r => (
                       <tr key={r.index} className={`border-t border-border/50 ${(r.total != null && r.total < 0) || r.qty < 0 ? "bg-red-500/5" : ""}`}>
                         <td className="px-2 py-1.5 text-muted-foreground">{r.index}</td>
                         <td className="px-2 py-1.5 font-mono text-muted-foreground">{r.shifr || "-"}</td>
@@ -655,6 +706,14 @@ export function SmetaResultView({ smeta }: { smeta: SmetaResult }) {
                         <td className="px-2 py-1.5 text-right font-mono font-semibold whitespace-nowrap">{fmtNum(r.total)}</td>
                       </tr>
                     ))}
+                    {rows.length > rowLimit && (
+                      <tr><td colSpan={7} className="px-2 py-2 text-center">
+                        <button type="button" onClick={() => setGroupLimit(p => ({ ...p, [g]: rowLimit + 300 }))}
+                          className="text-xs font-semibold text-primary hover:underline">
+                          Yana 300 ta ({rows.length - rowLimit} qoldi)
+                        </button>
+                      </td></tr>
+                    )}
                     <tr className="border-t-2 border-border bg-muted/30 font-bold"><td className="px-2 py-1.5" colSpan={6}>ИТОГО ПО ГРУППЕ:</td><td className="px-2 py-1.5 text-right font-mono whitespace-nowrap">{fmtNum(sum)}</td></tr>
                   </tbody>
                 </table>

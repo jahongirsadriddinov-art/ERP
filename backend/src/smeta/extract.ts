@@ -82,9 +82,8 @@ async function extractExcel(data: Buffer): Promise<ExtractResult> {
         const cell = sheet[cellAddr];
         if (!cell) { row.push(''); continue; }
         // Raqamli katakni formatsiz ko'rinishda olamiz
-        const val = cell.t === 'n'
-          ? (Number.isInteger(cell.v) ? String(cell.v) : String(Math.round(cell.v * 100) / 100))
-          : String(cell.v ?? '').trim();
+        // Owner 2026-10-27: son faylda qanday bo'lsa shunday olinadi (yaxlitlanmaydi)
+        const val = cell.t === 'n' ? String(cell.v) : String(cell.v ?? '').trim();
         row.push(val);
       }
       rows.push(row);

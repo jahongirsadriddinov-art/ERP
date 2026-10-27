@@ -6,6 +6,7 @@ import path from 'path';
 import fs from 'fs';
 import { parseSmeta as aiParse } from '../services/smetaParser';
 import { applyCategories } from './categorize';
+import { exact } from './excelTable';
 import { groupOf } from './excelTable';
 import type { ParseResult, ResourceRow } from './types';
 
@@ -22,14 +23,14 @@ export async function aiSmetaFallback(filePath: string, mimetype: string, ext: s
       return {
         index: i + 1, shifr: m.code || null, shifrNote: null,
         rawName: String(m.name || '').slice(0, 300), shortName: String(m.name || '').split(' ').slice(0, 4).join(' '),
-        spec: null, unit: String(m.unit || ''), qty, price, total: price !== null ? Math.round(qty * price) : null,
+        spec: null, unit: String(m.unit || ''), qty, price, total: price !== null ? exact(qty * price) : null,
         group: groupOf(String(m.unit || ''), '', String(m.name || '')),
         rawLine: '', warnings: ['AI orqali o\'qildi'],
       };
     }).filter((r) => r.rawName && r.qty > 0);
     if (!resources.length) return null;
     applyCategories(resources);
-    const total = Math.round(resources.reduce((s, r) => s + (r.total ?? 0), 0));
+    const total = exact(resources.reduce((s, r) => s + (r.total ?? 0), 0));
     return {
       meta: {
         objectName: null, subObject: null, organization: null,

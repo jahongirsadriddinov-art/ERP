@@ -11,7 +11,7 @@ import { validate } from './validate';
 import { applyCategories } from './categorize';
 import { parseNum } from './normalize';
 import { ExtractedLine, ParseResult, ResourceRow, SmetaMeta } from './types';
-import { groupOf, parseExcelTable } from './excelTable';
+import { exact, groupOf, parseExcelTable } from './excelTable';
 
 function parseMeta(lines: ExtractedLine[], filename: string): SmetaMeta {
   const text = lines.map(l => l.text);
@@ -95,7 +95,7 @@ function parseExcelDirect(lines: ExtractedLine[], filename: string): ParseResult
 
     const qty = nums[0] ?? 0;
     const price = nums.length >= 2 ? nums[1] : null;
-    const total = nums.length >= 3 ? nums[nums.length - 1] : (price ? Math.round(qty * price) : null);
+    const total = nums.length >= 3 ? nums[nums.length - 1] : (price ? exact(qty * price) : null);
 
     index++;
     resources.push({
@@ -112,13 +112,13 @@ function parseExcelDirect(lines: ExtractedLine[], filename: string): ParseResult
   const grandTotal = resources.reduce((s, r) => s + (r.total ?? 0), 0);
   const meta: SmetaMeta = {
     objectName: null, subObject: null, organization: null,
-    totalWithVat: null, totalWithoutVat: Math.round(grandTotal), vatAmount: null,
+    totalWithVat: null, totalWithoutVat: exact(grandTotal), vatAmount: null,
     currency: 'UZS', sourceFile: filename, parsedAt: new Date().toISOString(),
   };
 
   return {
     meta, resources, works: [],
-    totals: [{ group: 'Jami materiallar', declared: 0, computed: Math.round(grandTotal), diff: 0, passed: true }],
+    totals: [{ group: 'Jami materiallar', declared: 0, computed: exact(grandTotal), diff: 0, passed: true }],
     validation: {
       ok: resources.length > 0,
       checks: [],

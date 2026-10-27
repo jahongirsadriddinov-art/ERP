@@ -32,7 +32,10 @@ GitHub Actions varianti o'chirildi (bitta push ikki marta chiqmasligi uchun).
 **Qolgan 2 ta xavfsizlik tavsiyasi (dashboard'dan, 2 bosish):** Security → Settings → **Bot Fight Mode**;
 xohlasangiz **AI Labyrinth**.
 
-### 1.2 Cloudflare R2 — zaxira nusxalar uchun (bepul 10 GB)
+### 1.2 Cloudflare R2 — zaxira nusxalar uchun ✅ BAJARILDI (2026-10-27)
+
+Bucket `qurilisherp-backups`, Account API token (Object Read & Write), Render'da 4 ta o'zgaruvchi qo'yilgan.
+Birinchi zaxira muvaffaqiyatli yuklandi. Quyidagi qadamlar — tarix uchun.
 
 1. Cloudflare → *R2* → *Create bucket* → nomi: `qurilisherp-backups`.
 2. *Manage R2 API Tokens* → *Create API token* → ruxsat: **Object Read & Write** → yarating.
@@ -45,7 +48,7 @@ xohlasangiz **AI Labyrinth**.
 
 Qo'ymasangiz ham zaxira ishlaydi — har kuni shifrlangan nusxa sizning Telegramingizga keladi.
 
-### 1.3 Gemini kalitlari (sizda 12 ta bor)
+### 1.3 Gemini kalitlari ✅ BAJARILDI (2026-10-27)
 
 Hozir serverda nechta borligini bilmayman; mahalliy faylda **3 ta** turibdi va uchalasi ham ishlayapti.
 Barcha 12 tasini bitta qatorga vergul bilan yozing:
@@ -55,7 +58,7 @@ Barcha 12 tasini bitta qatorga vergul bilan yozing:
 Nima beradi: AI qo'ng'iroqlar, chek o'qish, ovozli chiqim, matn tahlili navbat bilan taqsimlanadi —
 bitta kalit limitga urilsa, keyingisi ishlaydi (hozir limitga urilib, ovoz yozish to'xtab qolgandi).
 
-### 1.4 Telegram bot — guruh va kanallar (yangi imkoniyat)
+### 1.4 Telegram bot — guruh va kanallar ✅ BAJARILDI (2026-10-27)
 
 1. Har bir firma uchun guruh oching, botni (`@qurilish_erp_bot`) qo'shing va **admin** qiling.
 2. Guruhda **direktor yoki o'rinbosar** `/ulash` deb yozsin → guruh shu firmaga bog'lanadi.
@@ -120,11 +123,12 @@ balans va *sender name* (`ESKIZ_FROM`) tasdiqlanganini tekshiring.
 
 ## 4. Siz qiladigan operativ ishlar
 
-- [ ] Cloudflare Pages loyihasini ulash va domenni biriktirish (1.1)
-- [ ] R2 bucket + 4 ta kalit (1.2) — zaxira to'liq bo'lishi uchun
-- [ ] 12 ta Gemini kalitini `GEMINI_API_KEYS` ga yozish (1.3)
-- [ ] Firma guruhlarini ochib, botni admin qilish va `/ulash` (1.4)
-- [ ] Xodimlarga qo'llanmani yuborish: botda `/qollanma_yubor`
+- [x] Cloudflare hosting + domen (1.1)
+- [x] R2 bucket + 4 ta kalit (1.2)
+- [x] Gemini kalitlari `GEMINI_API_KEYS` da (1.3)
+- [x] Firma guruhlari: bot admin + `/ulash` (1.4)
+- [x] Xodimlarga qo'llanma yuborildi (`/qollanma_yubor`)
+- [ ] Ixtiyoriy: Speed → Smart Shield, AI Labyrinth, kunlik tezlik sinovi
 - [ ] Instagram uchun Meta ilovasini ochish (2.1) — xohlasangiz
 - [ ] `JWT_SECRET` ni **o'zgartirmaslik** (zaxiralar shu kalit bilan shifrlangan)
 

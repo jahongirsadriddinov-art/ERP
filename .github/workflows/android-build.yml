@@ -216,7 +216,13 @@ jobs:
       - name: Upload APK + exe, notify all users via bot
         env:
           DEPLOY_SECRET: ${{ secrets.DEPLOY_BROADCAST_SECRET }}
-          BACKEND_URL: https://erp-firma.uz
+          # MUHIM: yuklash erp-firma.uz orqali EMAS, to'g'ridan-to'g'ri backend'ga ketadi.
+          # Cloudflare'ning bot himoyasi GitHub Actions'dan kelgan so'rovni 403 ("Just a
+          # moment...") bilan to'sib qo'yardi — shuning uchun APK/EXE serverga umuman
+          # yuklanmay, botga ham xabar bormay qolgandi (2026-10-27).
+          # Foydalanuvchiga ko'rinadigan yuklab olish havolasini backend baribir
+          # erp-firma.uz/files/... ko'rinishida qaytaradi (routes/deploy.ts).
+          BACKEND_URL: https://erpfirma-backend.up.railway.app
           VERSION_INPUT: ${{ needs.meta.outputs.version }}
           NOTES: ${{ inputs.notes }}
         run: |

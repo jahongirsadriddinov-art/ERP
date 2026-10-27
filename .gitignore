@@ -58,3 +58,6 @@ Thumbs.db
 
 # CI APK barqaror imzolanishi uchun (debug kalit — sir emas; yangilanishlar o'rnatilgan ilova ustiga tushishi uchun shart)
 !frontend/android/app/debug.keystore
+
+# Wrangler (Cloudflare) mahalliy kesh
+.wrangler/

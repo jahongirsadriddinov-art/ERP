@@ -1364,8 +1364,9 @@ function HeaderTicker() {
           initial={{ y: 15, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -15, opacity: 0 }}
           transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
           className={`absolute inset-0 flex items-center gap-1 ${tone}`}>
-          <MorphIcon icon={ICON[cur.kind] || CalendarIcon} className="w-3 h-3 flex-shrink-0 opacity-80" />
-          <span className="text-[11px] font-semibold leading-none truncate">{cur.text}</span>
+          <MorphIcon icon={ICON[cur.kind] || CalendarIcon} className="w-3.5 h-3.5 flex-shrink-0 opacity-80" />
+          {/* Owner 2026-10-27: belgi ikki marta chiqmasin — matn boshidagi $/emoji olib tashlanadi */}
+          <span className="text-[11.5px] font-semibold leading-none truncate">{cur.text.replace(/^[\s$€₽ \p{Extended_Pictographic}]+/u, "")}</span>
         </motion.span>
       </AnimatePresence>
     </span>
@@ -3144,7 +3145,7 @@ export default function App() {
         </div>
         {/* Owner 2026-10-27: nom na katta, na kichik — belgidan sal yirikroq, satr ostida */}
         <div className="flex flex-col justify-center min-w-0 flex-1 gap-[3px]">
-          <p className="text-[16px] font-bold tracking-tight truncate leading-none">{companyName}</p>
+          <p className="text-[18px] font-bold tracking-tight truncate leading-none">{companyName}</p>
           <HeaderTicker />
         </div>
       </div>
@@ -3670,7 +3671,7 @@ export default function App() {
         )}
         {page==="gps" && isGpsAdmin && hasFeature('gps_tracking') && (
           <Suspense fallback={<SkeletonPage variant="list" />}>
-            <GpsTrackingPage users={users} gpsLocations={gpsLocations} refreshing={gpsRefreshing} onRefresh={fetchGpsLocations} transfers={transfers} expenses={expenses}/>
+            <GpsTrackingPage users={users} gpsLocations={gpsLocations} projects={projects as any} refreshing={gpsRefreshing} onRefresh={fetchGpsLocations} transfers={transfers} expenses={expenses}/>
           </Suspense>
         )}
       </main>

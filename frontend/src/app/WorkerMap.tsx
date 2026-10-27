@@ -64,8 +64,12 @@ export interface TrackPoint { lat: number; lng: number; timestamp: string; accur
 
 // Kuzatuv (owner 2026-10-22): telefonda xarita butun ekran (className bilan balandlik beriladi), markerni bosish —
 // onSelect (ro'yxatdagi xodimni tanlash), tanlangan xodimning bugungi izi — track (chiziq + boshlanish/oxirgi nuqta).
-export default function WorkerMap({ users, gpsLocations, focusUserId, track, onSelect, className }: {
-  users: AppUser[]; gpsLocations: GpsPoint[]; focusUserId?: string | null;
+/** Xaritada ko'rsatiladigan obyekt (owner 2026-10-27: "obyektning qayerdaligi berilgan bo'lsa, o'sha joyni
+ *  xaritada ko'rsatib tursin"). radius — "Ishga keldim" ruxsat etilgan masofa (geozona). */
+export interface MapObject { id: string; name: string; lat: number; lng: number; radius?: number }
+
+export default function WorkerMap({ users, gpsLocations, objects, focusUserId, track, onSelect, className }: {
+  users: AppUser[]; gpsLocations: GpsPoint[]; objects?: MapObject[]; focusUserId?: string | null;
   track?: TrackPoint[] | null; onSelect?: (userId: string) => void; className?: string;
 }) {
   const { t } = useTranslation();
@@ -130,7 +134,11 @@ export default function WorkerMap({ users, gpsLocations, focusUserId, track, onS
 
   const fitAll = () => {
     const map = mapRef.current;
-    const pts = gpsLocations.map(l => [l.lat, l.lng] as [number, number]);
+    // Obyektlar ham hisobga olinadi (owner 2026-10-27) — ishchilar GPS'i bo'lmasa ham obyekt ko'rinadi
+    const pts = [
+      ...gpsLocations.map(l => [l.lat, l.lng] as [number, number]),
+      ...(objects || []).filter(o => Number.isFinite(o.lat) && Number.isFinite(o.lng)).map(o => [o.lat, o.lng] as [number, number]),
+    ];
     if (pts.length) withMap(map, (m) => m.fitBounds(pts, { padding: [48, 48], maxZoom: 16 }));
   };
   const locateMe = () => {
@@ -139,6 +147,37 @@ export default function WorkerMap({ users, gpsLocations, focusUserId, track, onS
     // GPS javobi bir necha soniyadan keyin keladi — shu orada sahifa yopilgan bo'lishi mumkin
     navigator.geolocation.getCurrentPosition((p) => withMap(mapRef.current, (m) => m.flyTo([p.coords.latitude, p.coords.longitude], 16, { duration: 0.6 })), () => {}, { enableHighAccuracy: true, timeout: 8000 });
   };
+
+  // ── Obyektlar: belgisi + geozona doirasi (owner 2026-10-27) ──
+  // Ishchilar nuqtalaridan farqli rangda (sariq), har doim ularning ostida chiziladi.
+  const objLayerRef = useRef<L.LayerGroup | null>(null);
+  useEffect(() => {
+    const list = (objects || []).filter((o) => Number.isFinite(o.lat) && Number.isFinite(o.lng));
+    withMap(mapRef.current, (m) => {
+      if (objLayerRef.current) { m.removeLayer(objLayerRef.current); objLayerRef.current = null; }
+      if (!list.length) return;
+      const g = L.layerGroup();
+      for (const o of list) {
+        const r = Math.max(30, Math.min(5000, Number(o.radius) || 300));
+        L.circle([o.lat, o.lng], {
+          radius: r, color: '#F59E0B', weight: 2, opacity: .75, dashArray: '6 6',
+          fillColor: '#F59E0B', fillOpacity: .08, interactive: false,
+        }).addTo(g);
+        const icon = L.divIcon({
+          className: '',
+          html: '<div class="wm-obj"><span class="wm-obj-pin"></span><span class="wm-obj-name">' +
+            String(o.name).replace(/[<>&]/g, '') + '</span></div>',
+          iconSize: [26, 26], iconAnchor: [13, 13],
+        });
+        L.marker([o.lat, o.lng], { icon, zIndexOffset: -200, keyboard: false })
+          .bindTooltip(`${o.name} · ${r} m`, { direction: 'top', offset: [0, -14] })
+          .addTo(g);
+      }
+      g.addTo(m);
+      objLayerRef.current = g;
+    });
+    return () => { withMap(mapRef.current, (m) => { if (objLayerRef.current) { m.removeLayer(objLayerRef.current); objLayerRef.current = null; } }); };
+  }, [objects]);
 
   // ── "Men shu yerdaman" (owner 2026-10-26: "aynan qayerdaligimni ko'rsatadigan nuqta yo'q") ──
   // Ko'k puls nuqta + aniqlik doirasi; joylashuv o'zgarsa darhol suriladi. Ruxsat berilmasa — hech narsa
@@ -390,6 +429,13 @@ export default function WorkerMap({ users, gpsLocations, focusUserId, track, onS
            rejimda tayanch (surface) bilan mos kelmasdi. Endi CSS
            o'zgaruvchisidan olinadi. */
         .wm-map .leaflet-container { background: var(--muted); font-family: inherit; }
+        /* Obyekt — sariq belgi va nomi */
+        .wm-obj { position: relative; width: 26px; height: 26px; }
+        .wm-obj-pin { position: absolute; inset: 4px; border-radius: 6px; background: #F59E0B;
+          border: 2.5px solid #fff; box-shadow: 0 1px 6px rgba(0,0,0,.4); transform: rotate(45deg); }
+        .wm-obj-name { position: absolute; top: 28px; left: 50%; transform: translateX(-50%);
+          white-space: nowrap; font-size: 11px; font-weight: 700; color: #fff; padding: 1px 6px;
+          border-radius: 999px; background: rgba(180,83,9,.92); box-shadow: 0 1px 4px rgba(0,0,0,.35); }
         /* O'z joylashuvim — ko'k nuqta (Google/Yandex uslubi) */
         .wm-me { position: relative; width: 22px; height: 22px; }
         .wm-me-dot { position: absolute; inset: 5px; border-radius: 999px; background: #2563eb;

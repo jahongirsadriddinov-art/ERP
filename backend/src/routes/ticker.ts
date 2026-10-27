@@ -56,7 +56,7 @@ export async function getTickerItems(companyId?: string): Promise<TickerItem[]> 
 
   try {
     const r = await getRatesForCompany(companyId, 'sell');
-    if (r?.USD) items.push({ kind: 'rate', icon: '💵', text: `$ ${Math.round(r.USD).toLocaleString('ru-RU').replace(/ /g, '.')} so'm` });
+    if (r?.USD) items.push({ kind: 'rate', icon: '💵', text: `${Math.round(r.USD).toLocaleString('ru-RU').replace(/ /g, '.')} so'm` });
   } catch { /* kurs bo'lmasa — qolganlari ko'rinadi */ }
 
   try {

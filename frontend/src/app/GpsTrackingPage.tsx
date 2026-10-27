@@ -10,7 +10,7 @@ import { MorphIcon } from "morphicons/react";
 import { useTranslation } from "react-i18next";
 import { AppUser, Avatar, Transfer, Expense, roleLabel } from "./App";
 import { API_BASE } from "./api";
-import WorkerMap, { NavigateChoiceModal, type TrackPoint } from "./WorkerMap";
+import WorkerMap, { NavigateChoiceModal, type TrackPoint, type MapObject } from "./WorkerMap";
 import WorkerProfileModal from "./WorkerProfileModal";
 
 interface AttendanceEntry {
@@ -48,9 +48,11 @@ function useNarrow() {
 // har qatorda — oxirgi ko'rilgan vaqt, bugungi ish holati (yo'qlama), batareya. Xodimni bosish — xarita unga
 // suziladi va BUGUNGI izi chiziladi (bosib o'tgan yo'l, nuqtalar soni). Kompyuterda — xarita + o'ng ustunda ro'yxat.
 // To'liq profil (davomat tarixi, materiallar, chiqimlar, istalgan kun izi) — "Profil" tugmasi orqali, avvalgidek.
-export default function GpsTrackingPage({ users, gpsLocations, refreshing, onRefresh, transfers, expenses }: {
+export default function GpsTrackingPage({ users, gpsLocations, projects, refreshing, onRefresh, transfers, expenses }: {
   users: AppUser[];
   gpsLocations: Loc[];
+  /** Koordinatasi belgilangan obyektlar — xaritada ko'rsatiladi (owner 2026-10-27) */
+  projects?: { id: string; name: string; lat?: number; lng?: number; geofenceRadius?: number }[];
   refreshing: boolean;
   onRefresh: () => void;
   transfers: Transfer[];
@@ -58,6 +60,29 @@ export default function GpsTrackingPage({ users, gpsLocations, refreshing, onRef
 }) {
   const { t } = useTranslation();
   const narrow = useNarrow();
+  // Xaritaga tushadigan obyektlar va ishchining eng yaqin obyektgacha masofasi
+  const mapObjects: MapObject[] = useMemo(() => (projects || [])
+    .filter((p) => Number.isFinite(Number(p.lat)) && Number.isFinite(Number(p.lng)))
+    .map((p) => ({ id: p.id, name: p.name, lat: Number(p.lat), lng: Number(p.lng), radius: Number(p.geofenceRadius) || 300 })),
+    [projects]);
+  /** Ikki nuqta orasidagi masofa (metr) — haversine. */
+  const distM = (aLat: number, aLng: number, bLat: number, bLng: number) => {
+    const R = 6371000, rad = Math.PI / 180;
+    const dLat = (bLat - aLat) * rad, dLng = (bLng - aLng) * rad;
+    const s = Math.sin(dLat / 2) ** 2 + Math.cos(aLat * rad) * Math.cos(bLat * rad) * Math.sin(dLng / 2) ** 2;
+    return 2 * R * Math.asin(Math.min(1, Math.sqrt(s)));
+  };
+  /** Ishchi qaysi obyektda (geozona ichida) yoki eng yaqini qancha uzoqda. */
+  const nearestObject = (l?: Loc | null) => {
+    if (!l || !mapObjects.length) return null;
+    let best: { o: MapObject; d: number } | null = null;
+    for (const o of mapObjects) {
+      const d = distM(l.lat, l.lng, o.lat, o.lng);
+      if (!best || d < best.d) best = { o, d };
+    }
+    if (!best) return null;
+    return { name: best.o.name, meters: Math.round(best.d), inside: best.d <= (best.o.radius || 300) };
+  };
   const [attendance, setAttendance] = useState<AttendanceEntry[]>([]);
   const [attLoading, setAttLoading] = useState(true);
   const [navTarget, setNavTarget] = useState<{ lat: number; lng: number; name: string } | null>(null);
@@ -201,6 +226,16 @@ export default function GpsTrackingPage({ users, gpsLocations, refreshing, onRef
             <span className={min != null && min <= FRESH_MIN ? 'text-green-700 dark:text-green-400' : 'text-muted-foreground'}>
               {min == null ? t('gps.noGpsData') : agoLabel(min)}
             </span>
+            {(() => {
+              const n = nearestObject(loc);
+              if (!n) return null;
+              return (
+                <span className={n.inside ? 'text-amber-700 dark:text-amber-400 font-semibold' : 'text-muted-foreground'}
+                  title={n.inside ? t('gps.atObject', { defaultValue: 'Obyekt hududida' }) : t('gps.nearObject', { defaultValue: 'Eng yaqin obyekt' })}>
+                  🏗 {n.name}{n.inside ? '' : ` · ${n.meters >= 1000 ? (n.meters / 1000).toFixed(1) + ' km' : n.meters + ' m'}`}
+                </span>
+              );
+            })()}
             {loc?.battery != null && (
               <span className={loc.battery <= 20 && !loc.charging ? 'text-red-600 dark:text-red-400 font-semibold' : 'text-muted-foreground'}>
                 🔋{Math.round(loc.battery)}%{loc.charging ? '⚡' : ''}
@@ -307,7 +342,7 @@ export default function GpsTrackingPage({ users, gpsLocations, refreshing, onRef
   );
 
   const map = (
-    <WorkerMap users={workers} gpsLocations={gpsLocations} focusUserId={selectedId} track={track} onSelect={select}
+    <WorkerMap users={workers} gpsLocations={gpsLocations} objects={mapObjects} focusUserId={selectedId} track={track} onSelect={select}
       className={narrow ? 'absolute inset-0 h-full' : 'h-full rounded-2xl'} />
   );
 

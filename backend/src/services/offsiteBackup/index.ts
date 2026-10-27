@@ -16,7 +16,7 @@ import mongoose, { Schema } from 'mongoose';
 import { S3Client, s3ConfigFromEnv, S3Config } from './sigv4';
 import { buildArchive, primaryKey, allKeys, decryptBuffer, encryptBuffer, ArchiveManifest, ArchiveScope, readManifest, isArchive } from './archive';
 import { restoreFromArchive, RestoreMode, RestoreResult } from './restore';
-import { selectRetention, DEFAULT_RETENTION } from './retention';
+import { selectSimpleRetention, SIMPLE_RETENTION } from './retention';
 import { sendArchiveToTelegram, downloadTelegramParts, TgPart } from './telegram';
 
 export type TargetName = 's3' | 'telegram';
@@ -279,7 +279,7 @@ export async function pruneS3(): Promise<{ pruned: string[] }> {
     const p = parseArchiveKey(o.key);
     return { key: o.key, createdAt: p.createdAt || new Date(o.lastModified || 0), scheduled: p.scope === 'full' && p.reason === 'daily' };
   });
-  const { prune } = selectRetention(archives, deps.now(), DEFAULT_RETENTION);
+  const { prune } = selectSimpleRetention(archives, SIMPLE_RETENTION);
   for (const k of prune) {
     await c.delete(k);
     await c.delete(manifestKeyOf(k)).catch(() => undefined);
@@ -379,7 +379,7 @@ export async function backupStatus() {
       s3: { configured: !!s3, endpoint: s3 ? new URL(s3.endpoint).host : null, bucket: s3?.bucket || null, prefix: prefix(), ...s3Last },
       telegram: { configured: !!tg, chatSource: tg?.chatSource || null, disabled: telegramDisabled(), ...tgLast },
     },
-    schedule: { hourTashkent: BACKUP_HOUR_TASHKENT(), nextRunAt: await nextRunAt(now), retention: DEFAULT_RETENTION },
+    schedule: { hourTashkent: BACKUP_HOUR_TASHKENT(), nextRunAt: await nextRunAt(now), retention: SIMPLE_RETENTION },
     lastSuccessAt: lastOkAt, stale: !lastOkAt || now.getTime() - lastOkAt.getTime() > STALE_AFTER_MS,
     recent: recent.map(runView), failures: failures.map(runView),
     checklist: [

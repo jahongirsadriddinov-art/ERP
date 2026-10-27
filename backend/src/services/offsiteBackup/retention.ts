@@ -3,6 +3,24 @@
 // Faqat sof funksiya: qaysi kalitlar O'CHIRILISHINI qaytaradi (eng yangisi hech qachon o'chmaydi).
 
 export interface RetentionItem { key: string; createdAt: Date; scheduled: boolean }
+
+// Owner 2026-10-27: "muhim narsalarning oxirgi 2 tasi qolsin, muhim bo'lmaganining oxirgisi,
+// eskilarining hammasi o'chirilsin". Rejali (kunlik, to'liq) arxiv — muhim; qolganlari (qo'lda,
+// tiklashdan oldin, firma nusxasi) — muhim emas.
+export interface SimplePolicy { important: number; other: number }
+export const SIMPLE_RETENTION: SimplePolicy = { important: 2, other: 1 };
+
+/** Faqat eng yangilari qoladi: rejalilardan `important` ta, qolganlaridan `other` ta. */
+export function selectSimpleRetention(items: RetentionItem[], policy: SimplePolicy = SIMPLE_RETENTION): { keep: string[]; prune: string[] } {
+  const newestFirst = (a: RetentionItem, b: RetentionItem) => b.createdAt.getTime() - a.createdAt.getTime();
+  const keep = new Set<string>();
+  items.filter((i) => i.scheduled).sort(newestFirst).slice(0, Math.max(0, policy.important)).forEach((i) => keep.add(i.key));
+  items.filter((i) => !i.scheduled).sort(newestFirst).slice(0, Math.max(0, policy.other)).forEach((i) => keep.add(i.key));
+  return {
+    keep: items.filter((i) => keep.has(i.key)).map((i) => i.key),
+    prune: items.filter((i) => !keep.has(i.key)).map((i) => i.key),
+  };
+}
 export interface RetentionPolicy { daily: number; weekly: number; monthly: number; otherDays: number }
 export const DEFAULT_RETENTION: RetentionPolicy = { daily: 14, weekly: 8, monthly: 12, otherDays: 60 };
 

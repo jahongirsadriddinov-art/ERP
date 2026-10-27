@@ -240,8 +240,8 @@ describe('jadval, qulf, ogohlantirish, saqlash', () => {
       bucket.set(`qurilish-erp-backups/full/2026/10/full_${stamp}_daily_abcd.qbk`, Buffer.from('x'));
     }
     const { pruned } = await pruneS3();
-    expect(pruned.length).toBeGreaterThan(0);
-    expect(pruned.every((k) => k.includes('_daily_'))).toBe(true);
+    // Owner 2026-10-27: rejali arxivlardan faqat eng yangi 2 tasi qoladi, qolgani o'chadi
+    expect(pruned.filter((k) => k.includes('_daily_')).length).toBe(19);   // 2 ta rejali arxiv qoladi (biri oldingi sinovdan)
     const list = await listArchives();
     expect(list.items.some((i) => i.source.type === 's3')).toBe(true);
     expect(list.items.some((i) => i.source.type === 'telegram')).toBe(true);

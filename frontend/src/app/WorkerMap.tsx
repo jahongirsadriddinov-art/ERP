@@ -169,7 +169,7 @@ export default function WorkerMap({ users, gpsLocations, objects, focusUserId, t
             String(o.name).replace(/[<>&]/g, '') + '</span></div>',
           iconSize: [26, 26], iconAnchor: [13, 13],
         });
-        L.marker([o.lat, o.lng], { icon, zIndexOffset: -200, keyboard: false })
+        L.marker([o.lat, o.lng], { icon, zIndexOffset: -200, keyboard: false, interactive: false })
           .bindTooltip(`${o.name} · ${r} m`, { direction: 'top', offset: [0, -14] })
           .addTo(g);
       }
@@ -197,7 +197,7 @@ export default function WorkerMap({ users, gpsLocations, objects, focusUserId, t
       withMap(mapRef.current, (m) => {
         if (!dot) {
           ring = L.circle(ll, { radius: acc, color: "#2563eb", weight: 1, opacity: 0.5, fillColor: "#3b82f6", fillOpacity: 0.12, interactive: false }).addTo(m);
-          dot = L.marker(ll, { icon, zIndexOffset: 1000, keyboard: false }).addTo(m);
+          dot = L.marker(ll, { icon, zIndexOffset: 1000, keyboard: false, interactive: false }).addTo(m);
           dot.bindTooltip(t('gps.youAreHere', { defaultValue: "Siz shu yerdasiz" }), { direction: "top", offset: [0, -12] });
         } else {
           dot.setLatLng(ll);
@@ -430,6 +430,9 @@ export default function WorkerMap({ users, gpsLocations, objects, focusUserId, t
            o'zgaruvchisidan olinadi. */
         .wm-map .leaflet-container { background: var(--muted); font-family: inherit; }
         /* Obyekt — sariq belgi va nomi */
+        /* Owner 2026-10-27: obyekt nomi yorlig'i keng bo'lib, o'ngdagi tugmalar ustiga chiqib,
+           bosishni to'sib qo'yardi — belgilar bosishni umuman ushlamaydi. */
+        .wm-obj, .wm-me { pointer-events: none !important; }
         .wm-obj { position: relative; width: 26px; height: 26px; }
         .wm-obj-pin { position: absolute; inset: 4px; border-radius: 6px; background: #F59E0B;
           border: 2.5px solid #fff; box-shadow: 0 1px 6px rgba(0,0,0,.4); transform: rotate(45deg); }

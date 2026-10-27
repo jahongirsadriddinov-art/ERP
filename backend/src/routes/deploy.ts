@@ -107,6 +107,17 @@ router.post('/upload-artifact', requireDeploySecret, upload.single('file'), asyn
     fs.copyFileSync(req.file.path, destPath);
     fs.unlinkSync(req.file.path);
     await persistUploadedFile(destPath);
+    // Owner 2026-10-27: "yangi ilova chiqsa eskisini o'chirsin" — APK/EXE doim bir xil nom bilan
+    // almashtiriladi, vaqt tamg'ali artefaktlardan esa faqat oxirgi 2 tasi qoladi.
+    try {
+      const files = fs.readdirSync(destDir)
+        .filter((f) => /^artifact-\d+\./.test(f))
+        .map((f) => ({ f, t: Number((f.match(/^artifact-(\d+)\./) || [])[1] || 0) }))
+        .sort((a, b) => b.t - a.t);
+      for (const old of files.slice(2)) {
+        fs.unlink(path.join(destDir, old.f), () => {});
+      }
+    } catch { /* tozalash muvaffaqiyatsiz bo'lsa ham yuklash muvaffaqiyatli */ }
     const url = `${getBackendUrl()}/uploads/${stableName}`;
     res.json({ ok: true, url });
   } catch (err) {

@@ -18,8 +18,12 @@
     "logs": { "enabled": true, "head_sampling_rate": 1, "invocation_logs": true, "persist": true },
     "traces": { "enabled": false, "head_sampling_rate": 1, "persist": true }
   },
+  // Fayl ko'prigi: /files/* Render'dan olinadi va Cloudflare chetida keshlanadi (trafikni tejash)
+  "main": "worker/index.ts",
+  "vars": { "BACKEND_URL": "https://qurilisherp-backend.onrender.com" },
   "assets": {
     "directory": "./dist",
+    "binding": "ASSETS",
     "not_found_handling": "single-page-application"
   }
 }

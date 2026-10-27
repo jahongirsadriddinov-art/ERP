@@ -43,7 +43,19 @@ router.get('/latest', async (_req, res) => {
     // qolmasligi uchun URL'ga versiyaga bog'liq so'rov parametri qo'shamiz —
     // versiya o'zgarsa, URL "yangi" bo'lib ko'rinadi, brauzer qayta yuklaydi.
     const v = encodeURIComponent(rel.version || '');
-    const withVersion = (u?: string | null) => (u ? `${u}${u.includes('?') ? '&' : '?'}v=${v}` : null);
+    // Owner 2026-10-27: bazada eski server manzili saqlanib qolgandi (Render o'chgach havola ishlamadi).
+    // Endi fayl nomi olinib, havola DOIM sayt orqali beriladi: erp-firma.uz/files/<nom> — uni Cloudflare
+    // keshlaydi (server trafigi tejaladi) va server ko'chsa ham havola o'zgarmaydi.
+    const siteBase = (process.env.SITE_URL || 'https://erp-firma.uz').replace(/\/+$/, '');
+    const viaSite = (u?: string | null) => {
+      if (!u) return null;
+      const name = u.split('?')[0].split('/').pop();
+      return name ? `${siteBase}/files/${name}` : u;
+    };
+    const withVersion = (u?: string | null) => {
+      const s = viaSite(u);
+      return s ? `${s}${s.includes('?') ? '&' : '?'}v=${v}` : null;
+    };
     res.json({
       available: true,
       version: rel.version,

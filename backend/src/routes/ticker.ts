@@ -30,7 +30,7 @@ export function parseRss(xml: string, limit = 6): TickerItem[] {
     const title = clean((it.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1] || '');
     const url = clean((it.match(/<link[^>]*>([\s\S]*?)<\/link>/i) || [])[1] || '');
     if (title.length < 10) continue;
-    out.push({ kind: 'news', text: title.slice(0, 120), icon: '📰', ...(/^https?:/.test(url) ? { url } : {}) });
+    out.push({ kind: 'news', text: title.length > 80 ? title.slice(0, 78).replace(/[\s,;:—-]+\S*$/, '') + '…' : title, icon: '📰', ...(/^https?:/.test(url) ? { url } : {}) });
     if (out.length >= limit) break;
   }
   return out;

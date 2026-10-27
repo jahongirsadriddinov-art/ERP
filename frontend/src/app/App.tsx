@@ -1368,10 +1368,11 @@ function HeaderTicker() {
     : "text-muted-foreground";
   // Balandlik QAT'IY (h-[15px]) — satr almashganda sarlavha "sakramaydi"; yangi band pastdan ko'tariladi.
   return (
-    <span ref={boxRef} className="relative block h-[16px] overflow-hidden min-w-0" data-testid="header-day-rate" title={cur.text}>
+    <span ref={boxRef} className="relative block h-[18px] overflow-hidden min-w-0"
+      style={{ WebkitMaskImage: "linear-gradient(90deg, #000 0, #000 calc(100% - 14px), transparent 100%)", maskImage: "linear-gradient(90deg, #000 0, #000 calc(100% - 14px), transparent 100%)" }} data-testid="header-day-rate" title={cur.text}>
       <AnimatePresence mode="popLayout" initial={false}>
         <motion.span key={`${i}-${cur.kind}`}
-          initial={{ y: 16, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -16, opacity: 0 }}
+          initial={{ y: 18, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -18, opacity: 0 }}
           transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
           className={`absolute inset-0 flex items-center gap-1 ${tone}`}>
           <MorphIcon icon={ICON[cur.kind] || CalendarIcon} className="w-[15px] h-[15px] flex-shrink-0 opacity-85" />
@@ -3148,10 +3149,10 @@ export default function App() {
   // nusxa yozib, ular vaqt o'tishi bilan bir-biridan farqlanib ketishining
   // (drift) oldini oladi.
   const headerEl = (
-    <header className="nav-blur-top flex items-center gap-3 px-4 flex-shrink-0 z-50 sticky top-0"
+    <header className="nav-blur-top flex items-center gap-2 px-3 flex-shrink-0 z-50 sticky top-0"
       style={{ paddingTop: 'max(0.625rem, env(safe-area-inset-top))', paddingBottom: '0.625rem' }}>
       {/* Owner 2026-10-26: sarlavha yana balandlashib ketgandi — bitta qator: logo + firma nomi, kurs yonida kichik */}
-      <div className="nav-pill-desktop flex items-center gap-2.5 px-2 py-1.5 rounded-full min-w-0 flex-1 lg:flex-none lg:flex-shrink-0">
+      <div className="nav-pill-desktop flex items-center gap-2.5 pl-2 pr-3.5 py-1.5 rounded-full min-w-0 flex-1 lg:flex-none lg:flex-shrink-0">
         <div className="w-9 h-9 rounded-full flex items-center justify-center overflow-hidden bg-gradient-to-br from-accent to-accent/75 shadow-sm flex-shrink-0">
           <CompanyLogo src={companyLogo} imgClass="w-full h-full object-contain" iconClass="w-[18px] h-[18px] text-white" />
         </div>

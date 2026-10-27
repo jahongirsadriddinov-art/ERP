@@ -12,28 +12,29 @@ Kodga tegishli hamma narsa tayyor va ishlayapti.
 
 ## 1. Hozir shart (tizim ishlashi uchun)
 
-### 1.1 Cloudflare — domen va hosting (siz boshladingiz)
+### 1.1 Cloudflare — domen va hosting ✅ BAJARILDI (2026-10-27)
 
-Domen Vercel'dan Cloudflare'ga o'tkazildi. Qolgan qadamlar:
+Sayt endi Cloudflare'da (Workers Assets), backend esa avvalgidek Render'da.
 
-1. **Pages loyihasi:** Cloudflare → *Workers & Pages* → *Create* → *Pages* → *Connect to Git* →
-   `jahongirsadriddinov-art/ERP` reposini tanlang.
-2. **Build sozlamasi:**
-   - Framework preset: `Vite`
-   - Build command: `npm run build`
-   - Build output directory: `dist`
-   - Root directory: `frontend`
-   - Environment variables: `VITE_API_URL = https://qurilisherp-backend.onrender.com`
-     (frontend/.env.production dagi qiymat bilan bir xil bo'lsin)
-3. **Domen:** Pages loyihasi → *Custom domains* → `erp-firma.uz` va `www.erp-firma.uz` qo'shing.
-   DNS yozuvlari avtomatik qo'shiladi (CNAME).
-4. **SSL/TLS:** *Full (strict)* qilib qo'ying.
-5. Men repoga `frontend/public/_headers` va `_redirects` fayllarini qo'shdim — xavfsizlik sarlavhalari,
-   kesh qoidalari va `/qollanma/` sahifasining alohida berilishi Cloudflare'da ham avvalgidek ishlaydi.
-   **`vercel.json` kerak emas, lekin o'chirmang** — Vercel'ga qaytish kerak bo'lsa asqotadi.
+- Worker nomi: `qurilish-erp`, sozlamasi: `frontend/wrangler.jsonc`
+- Domenlar: `erp-firma.uz`, `www.erp-firma.uz`, `cf.erp-firma.uz` (sinov) — hammasi ishlayapti
+- Vercel'ning DNS yozuvlari o'chirildi; CAA, SPF, DMARC, DKIM joyida qoldi
+- Xavfsizlik sarlavhalari va kesh qoidalari: `frontend/public/_headers`
+- `/qollanma/` statik sayt sifatida beriladi, qolgan yo'llar SPA'ga tushadi
+- `.well-known/security.txt` qo'shildi
 
-> Eslatma: **backend Cloudflare'da ishlamaydi** — Telegram bot va Socket.io doimiy jarayon talab qiladi.
-> Backend Render'da qoladi. Cloudflare faqat sayt (frontend) va fayl saqlash uchun.
+**Qo'lda chiqarish:** `cd frontend && npx wrangler deploy` (avval `npm run build`).
+
+**Avtomatik chiqarish — bittasini tanlang:**
+- *Cloudflare Builds:* Workers & Pages → qurilish-erp → Settings → Builds → Connect repository.
+  Build: `cd frontend && npm ci && npm run build`, Deploy: `cd frontend && npx wrangler deploy`
+- *GitHub Actions:* `.github/workflows/cloudflare-deploy.yml` tayyor; GitHub sirlariga
+  `CLOUDFLARE_ACCOUNT_ID` va `CLOUDFLARE_API_TOKEN` qo'shiladi.
+
+> Ikkalasini birdan yoqmang — bitta push ikki marta chiqariladi.
+
+**Qolgan 2 ta xavfsizlik tavsiyasi (dashboard'dan, 2 bosish):** Security → Settings → **Bot Fight Mode**;
+xohlasangiz **AI Labyrinth**.
 
 ### 1.2 Cloudflare R2 — zaxira nusxalar uchun (bepul 10 GB)
 

@@ -1368,16 +1368,16 @@ function HeaderTicker() {
     : "text-muted-foreground";
   // Balandlik QAT'IY (h-[15px]) — satr almashganda sarlavha "sakramaydi"; yangi band pastdan ko'tariladi.
   return (
-    <span ref={boxRef} className="relative block h-[18px] overflow-hidden min-w-0"
+    <span ref={boxRef} className="relative block h-[16px] overflow-hidden min-w-0"
       style={{ WebkitMaskImage: "linear-gradient(90deg, #000 0, #000 calc(100% - 14px), transparent 100%)", maskImage: "linear-gradient(90deg, #000 0, #000 calc(100% - 14px), transparent 100%)" }} data-testid="header-day-rate" title={cur.text}>
       <AnimatePresence mode="popLayout" initial={false}>
         <motion.span key={`${i}-${cur.kind}`}
-          initial={{ y: 18, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -18, opacity: 0 }}
+          initial={{ y: 16, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -16, opacity: 0 }}
           transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
           className={`absolute inset-0 flex items-center gap-1 ${tone}`}>
           <MorphIcon icon={ICON[cur.kind] || CalendarIcon} className="w-[15px] h-[15px] flex-shrink-0 opacity-85" />
           {/* Owner 2026-10-27: belgi ikki marta chiqmasin — matn boshidagi $/emoji olib tashlanadi */}
-          <motion.span ref={textRef} className="text-[12.5px] font-semibold leading-none whitespace-nowrap"
+          <motion.span ref={textRef} className="text-[12px] font-semibold leading-none whitespace-nowrap"
             animate={shift ? { x: [0, -shift, -shift, 0] } : { x: 0 }}
             transition={shift ? { duration: Math.max(4, shift / 16), times: [0, 0.45, 0.72, 1], ease: "linear", repeat: Infinity, repeatDelay: 1.2 } : { duration: 0.2 }}>{cur.text.replace(/^[\s$€₽ \p{Extended_Pictographic}]+/u, "")}</motion.span>
         </motion.span>
@@ -3157,10 +3157,10 @@ export default function App() {
           <CompanyLogo src={companyLogo} imgClass="w-full h-full object-contain" iconClass="w-[18px] h-[18px] text-white" />
         </div>
         {/* Owner 2026-10-27: nom na katta, na kichik — belgidan sal yirikroq, satr ostida */}
-        <div className="flex flex-col justify-center min-w-0 flex-1 gap-[4px] py-0.5">
+        <div className="flex flex-col justify-center min-w-0 flex-1 gap-[2px]">
           {/* Owner 2026-10-27: nom uzunligiga qarab o'lchami o'zgaradi — siqilib yoki kesilib qolmaydi */}
           <p className="font-bold tracking-tight truncate leading-none"
-            style={{ fontSize: companyName.length <= 10 ? 19 : companyName.length <= 14 ? 17 : companyName.length <= 18 ? 15.5 : companyName.length <= 24 ? 14 : 13 }}>
+            style={{ fontSize: companyName.length <= 10 ? 17 : companyName.length <= 14 ? 16 : companyName.length <= 18 ? 15 : companyName.length <= 24 ? 13.5 : 12.5 }}>
             {companyName}
           </p>
           <HeaderTicker />

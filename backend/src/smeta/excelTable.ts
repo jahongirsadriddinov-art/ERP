@@ -227,10 +227,16 @@ export function parseExcelRows(sheets: Array<{ name: string; rows: unknown[][] }
         // Owner 2026-10-27: "hujjatdagi barcha ma'lumot ko'rinsin". Smeta oxiridagi jamlanma blok
         // (ЗАРПЛАТА, ЭКСПЛУАТАЦИЯ МАШИН, ВСЕГО, ПРОЧИЕ 17.27%, НДС 12%, ВСЕГО…) — material emas,
         // alohida ro'yxat sifatida saqlanadi (summalarga ikki marta qo'shilmasin).
-        const amountOf = () => (total !== null ? total : price !== null ? price : null);
         if ((MONEY_UNIT.test(unit) || !unit) && SUMMARY_NAME.test(name)) {
-          const amt = amountOf();
-          if (amt !== null) {
+          // Owner 2026-10-27: summalar noto'g'ri chiqqandi (yonidagi "farq"/koeffitsient ustunlari olingan).
+          // Jamlanma qatorida haqiqiy summa — eng katta (mutlaq qiymat bo'yicha) son.
+          let amt: number | null = null;
+          for (const cell of row) {
+            const v = num(cell);
+            if (v === null) continue;
+            if (amt === null || Math.abs(v) > Math.abs(amt)) amt = v;
+          }
+          if (amt !== null && Math.abs(amt) >= 1) {
             // foiz ustuni: qator ichidagi 0 < v <= 100 bo'lgan va summadan boshqa son
             let percent: number | null = null;
             for (const cell of row) {
@@ -294,7 +300,7 @@ export function parseExcelRows(sheets: Array<{ name: string; rows: unknown[][] }
   lastDiag = diag;
   if (!resources.length && !summary.length) return null;
   applyCategories(resources);
-  const sumOf = (g?: ResourceGroup) => exact(resources.filter((x) => !g || x.group === g).reduce((s, x) => s + (x.total ?? 0), 0));
+  const sumOf = (g?: ResourceGroup) => Math.round(resources.filter((x) => !g || x.group === g).reduce((s, x) => s + (x.total ?? 0), 0) * 100) / 100;
   const grandTotal = sumOf();
   const meta: SmetaMeta = {
     objectName: null, subObject: null, organization: null,

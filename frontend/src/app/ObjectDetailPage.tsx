@@ -641,7 +641,8 @@ export function SmetaResultView({ smeta }: { smeta: SmetaResult }) {
       {!!(smeta as any).summary?.length && (
         <div className="glass-card rounded-xl border border-border overflow-hidden">
           <p className="text-sm font-bold px-4 pt-3 pb-1">СМЕТНАЯ СТОИМОСТЬ <span className="text-muted-foreground font-normal">(hujjatdan)</span></p>
-          <table className="w-full text-left text-xs">
+          <div className="overflow-x-auto" onWheel={hwheel} style={{ WebkitOverflowScrolling: "touch", touchAction: "pan-x pan-y" }}>
+          <table className="w-full min-w-[520px] text-left text-xs">
             <tbody>
               {((smeta as any).summary as { name: string; percent: number | null; amount: number }[]).map((l, i) => {
                 const strong = /^(всего|итог|ндс)/i.test(l.name);
@@ -655,6 +656,7 @@ export function SmetaResultView({ smeta }: { smeta: SmetaResult }) {
               })}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
@@ -688,8 +690,9 @@ export function SmetaResultView({ smeta }: { smeta: SmetaResult }) {
                 ("smeta bo'limida chapga qimirlatib bo'lmayapti"). Talab
                 jadvalidagi bilan bir xil touch-action izolyatsiyasi. */}
             {open && (
-              <div className="overflow-x-auto border-t border-border" onWheel={hwheel}>
-                <table className="w-full text-left text-xs">
+              <div className="overflow-x-auto border-t border-border" onWheel={hwheel}
+                style={{ WebkitOverflowScrolling: "touch", touchAction: "pan-x pan-y" }}>
+                <table className="w-full min-w-[640px] text-left text-xs">
                   <thead className="bg-muted/40 text-muted-foreground"><tr>
                     <th className="px-2 py-1.5">№</th><th className="px-2 py-1.5">Шифр</th><th className="px-2 py-1.5">Наименование</th>
                     <th className="px-2 py-1.5">Ед.</th><th className="px-2 py-1.5 text-right">Кол-во</th><th className="px-2 py-1.5 text-right">Цена</th><th className="px-2 py-1.5 text-right">Сумма</th>

@@ -9,7 +9,7 @@ import SunIcon from "@hugeicons/core-free-icons/Sun03Icon";
 import NewsIcon from "@hugeicons/core-free-icons/News01Icon";
 import { PriceField } from "./components/Money";
 import { CountUp } from "./components/CountUp";
-import { useState, useRef, useEffect, useMemo, Suspense } from "react";
+import { useState, useRef, useEffect, useMemo, Suspense, useLayoutEffect } from "react";
 import { lazyRetry as lazy } from "./lib/lazyRetry";
 import SyncStatusBar from "./SyncStatusBar";
 import { useScrollMemory } from "./lib/persistentState";
@@ -1318,6 +1318,33 @@ export async function fetchLiveCurrencyRates(): Promise<void> {
 // hokazo ham bo'lsin"). Bandlar serverdan keladi (/api/ticker: kurs, Toshkent ob-havosi, yangilik sarlavhalari),
 // birinchi band — bugungi sana. Har 6 soniyada yumshoq almashadi; so'rov muvaffaqiyatsiz bo'lsa sana qoladi.
 let TICKER_CACHE: { at: number; items: { kind: string; text: string; icon?: string }[] } = { at: 0, items: [] };
+
+/** Firma nomi — mavjud kenglikka qarab shrift o'zi kichrayadi, to'liq sig'adi (owner 2026-10-27:
+ *  "nomi to'lib tursin, lekin sal kichraytir, sig'adigan qilib"). Kesilgan "AKFAD…" bo'lmaydi. */
+function CompanyName({ name }: { name: string }) {
+  const ref = useRef<HTMLParagraphElement | null>(null);
+  const fit = () => {
+    const el = ref.current;
+    if (!el) return;
+    let size = 17;
+    el.style.fontSize = size + "px";
+    // sig'magunicha 0.5px dan kichraytiramiz (eng kami 11px)
+    while (size > 11 && el.scrollWidth > el.clientWidth + 1) { size -= 0.5; el.style.fontSize = size + "px"; }
+  };
+  useLayoutEffect(() => { fit(); }, [name]);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => fit());
+    ro.observe(el);
+    return () => ro.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return (
+    <p ref={ref} className="font-bold tracking-tight leading-[1.15] whitespace-nowrap overflow-hidden text-ellipsis block w-full"
+      style={{ fontSize: 17 }} title={name}>{name}</p>
+  );
+}
 
 function HeaderTicker() {
   const { i18n } = useTranslation();
@@ -3157,12 +3184,8 @@ export default function App() {
           <CompanyLogo src={companyLogo} imgClass="w-full h-full object-contain" iconClass="w-[18px] h-[18px] text-white" />
         </div>
         {/* Owner 2026-10-27: nom na katta, na kichik — belgidan sal yirikroq, satr ostida */}
-        <div className="flex flex-col justify-center min-w-0 flex-1 gap-[2px]">
-          {/* Owner 2026-10-27: nom uzunligiga qarab o'lchami o'zgaradi — siqilib yoki kesilib qolmaydi */}
-          <p className="font-bold tracking-tight truncate leading-none"
-            style={{ fontSize: companyName.length <= 10 ? 17 : companyName.length <= 14 ? 16 : companyName.length <= 18 ? 15 : companyName.length <= 24 ? 13.5 : 12.5 }}>
-            {companyName}
-          </p>
+        <div className="flex flex-col justify-center min-w-0 flex-1 gap-[3px] overflow-hidden">
+          <CompanyName name={companyName} />
           <HeaderTicker />
         </div>
       </div>

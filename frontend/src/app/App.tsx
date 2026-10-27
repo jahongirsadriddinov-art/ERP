@@ -58,8 +58,8 @@ import { toast, Toaster } from "sonner";
 import { playSound, sfx } from "./sound";
 import { useTranslation } from "react-i18next";
 import { API_BASE } from "./api";
-import NotificationCenter from "./NotificationCenter";
-import { AnnouncementComposer, AnnouncementContent, AnnouncementPopup, type AnnouncementData } from "./AnnouncementParts";
+// Owner 2026-10-27: birinchi ekranga kerak emas — bosilganda yuklanadi (Speed Index)
+import type { AnnouncementData } from "./AnnouncementParts";
 import { connectSocket, getSocket } from "./socket";
 import { isAiCallActive, decideCallOffer } from "./aiVoice/bus";
 import { motion, AnimatePresence } from "motion/react";
@@ -72,7 +72,7 @@ import { isTelegramMiniApp, getTelegramInitData, markManualLogout, clearManualLo
 import { isChatMuted, useChatPrefs } from "./chat/chatPrefs";
 import { buildEntries as buildChatEntries, navUnreadCount } from "./chat/chatModel";
 import { installAndroidBackHandler, isAndroid, saveOrShareBlob, isNative, isTabletOrLarger, notifyOS, ensureNotifyPermission, appInForeground } from "./platform";
-import QrLoginPanel from "./QrLoginPanel";
+
 import { openMediaViewer } from "./MediaViewer";
 import { VoicePlayer, VideoPlayer } from "./MediaPlayers";
 import LanguageSwitcher from "./i18n/LanguageSwitcher";
@@ -107,6 +107,12 @@ const ChatPage = lazy(() => import("./ChatPage"));
 const ProfilePage = lazy(() => import("./ProfilePage"));
 const QRGenerator = lazy(() => import("./QRGenerator"));
 const GpsTrackingPage = lazy(() => import("./GpsTrackingPage"));
+// Birinchi ekranda ko'rinmaydigan qismlar — ochilganda yuklanadi
+const NotificationCenter = lazy(() => import("./NotificationCenter"));
+const QrLoginPanel = lazy(() => import("./QrLoginPanel"));
+const AnnouncementComposer = lazy(() => import("./AnnouncementParts").then(m => ({ default: m.AnnouncementComposer })));
+const AnnouncementContent = lazy(() => import("./AnnouncementParts").then(m => ({ default: m.AnnouncementContent })));
+const AnnouncementPopup = lazy(() => import("./AnnouncementParts").then(m => ({ default: m.AnnouncementPopup })));
 import type { LandingFocus } from "./LandingPage";
 
 // SEO: har bir marketing bo'limining O'Z (indekslanadigan) manzili —
@@ -1240,7 +1246,7 @@ function AnnouncementsModal({ currentUser, onClose }: { currentUser: AppUser; on
     <ManagementModalShell icon={Megaphone} title={t('announcements.title')} onClose={onClose}>
       {canPost && (
         showForm ? (
-          <AnnouncementComposer endpoint="/api/announcements" onCancel={()=>setShowForm(false)} onPosted={()=>{ setShowForm(false); load(); }} />
+          <Suspense fallback={<BootLoader />}><AnnouncementComposer endpoint="/api/announcements" onCancel={()=>setShowForm(false)} onPosted={()=>{ setShowForm(false); load(); }} /></Suspense>
         ) : (
           <button onClick={()=>setShowForm(true)} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold border-2 border-dashed border-border/60 text-muted-foreground hover:border-primary/40 hover:text-primary liquid-transition mb-4">
             <MorphIcon icon={Plus} className="w-4 h-4" />{t('announcements.newBtn')}
@@ -1269,7 +1275,7 @@ function AnnouncementsModal({ currentUser, onClose }: { currentUser: AppUser; on
                       <button onClick={()=>remove(a.id)} aria-label={t('common.delete')} className="p-1 text-muted-foreground hover:text-destructive flex-shrink-0 rounded-lg hover:bg-destructive/10 liquid-transition"><MorphIcon icon={Trash} className="w-3.5 h-3.5" /></button>
                     )}
                   </div>
-                  <div className="mt-1"><AnnouncementContent a={a} /></div>
+                  <div className="mt-1"><Suspense fallback={null}><AnnouncementContent a={a} /></Suspense></div>
                   <p className="text-[10px] text-muted-foreground mt-1.5">{a.postedBy?.name} · {new Date(a.createdAt).toLocaleDateString('uz-UZ')}</p>
                 </div>
               </div>
@@ -1855,7 +1861,7 @@ function LoginScreen({ onLogin, onRegister, onBack }: { onLogin: (u: any, compan
             )}
           </form>
         ) : step === "qr" ? (
-          <QrLoginPanel onLogin={onLogin} onBack={() => setStep("phone")} />
+          <Suspense fallback={<BootLoader />}><QrLoginPanel onLogin={onLogin} onBack={() => setStep("phone")} /></Suspense>
         ) : step === "blocked" ? (
           <div className="space-y-4 text-center">
             <div className="flex flex-col items-center gap-3">
@@ -3181,8 +3187,8 @@ export default function App() {
           className="btn btn-ghost w-9 h-9 p-0 rounded-full hidden lg:inline-flex">
           <MorphIcon icon={Lock} className="w-[18px] h-[18px]" />
         </button>
-        <NotificationCenter messages={messages} transfers={transfers} expenses={expenses} users={users} currentUser={liveUser}
-          onOpenChat={()=>{setPage("chat");setSelProject(null);}} onOpenDashboard={()=>{setPage("dashboard");setSelProject(null);}}/>
+        <Suspense fallback={null}><NotificationCenter messages={messages} transfers={transfers} expenses={expenses} users={users} currentUser={liveUser}
+          onOpenChat={()=>{setPage("chat");setSelProject(null);}} onOpenDashboard={()=>{setPage("dashboard");setSelProject(null);}}/></Suspense>
         <button onClick={cycleThemeMode} title={themeMode==="light"?"Yorug'":themeMode==="dark"?"Qorong'i":"Tizim bo'yicha"}
           aria-label={themeMode==="light"?"Yorug'":themeMode==="dark"?"Qorong'i":"Tizim bo'yicha"}
           className="btn btn-ghost w-9 h-9 p-0 rounded-full hidden lg:inline-flex">
@@ -3246,7 +3252,7 @@ export default function App() {
             className="text-xs text-muted-foreground hover:text-foreground underline">{tApp('checkinGate.logout')}</button>
         </motion.div>
       </main>
-      <AnnouncementPopup />
+      <Suspense fallback={null}><AnnouncementPopup /></Suspense>
       <AppToaster/>
     </>
   );
@@ -3910,7 +3916,7 @@ export default function App() {
       )}
 
       {/* Yangi/ko'rilmagan e'lonlar — kirganda BIR MARTA avtomatik chiqadi */}
-      <AnnouncementPopup />
+      <Suspense fallback={null}><AnnouncementPopup /></Suspense>
 
       {/* Bildirishnoma toast'lari */}
       <AppToaster/>

@@ -193,9 +193,18 @@ function inferMoneyCols(rows: unknown[][], h: Header): void {
   if (h.cols.price === undefined && prev !== undefined && prev !== h.cols.total) h.cols.price = prev;
 }
 
+/** Varaq bo'yicha tashxis — xatolik bo'lsa dasturchiga aynan nima o'qilmagani ko'rinsin (owner 2026-10-27). */
+export interface SheetDiag {
+  sheet: string; rows: number; parsed: number; header: number | null;
+  cols: Record<string, number | undefined>; noPrice: number; noTotal: number; note: string;
+}
+let lastDiag: SheetDiag[] = [];
+export const takeSmetaDiag = (): SheetDiag[] => lastDiag;
+
 export function parseExcelRows(sheets: Array<{ name: string; rows: unknown[][] }>, filename: string): ParseResult | null {
   const resources: ResourceRow[] = [];
   const summary: SummaryLine[] = [];
+  const diag: SheetDiag[] = [];
   const notes: string[] = [];
   let index = 0;
   for (const sh of sheets) {
@@ -272,8 +281,17 @@ export function parseExcelRows(sheets: Array<{ name: string; rows: unknown[][] }
       index += loose.length;
     }
     const got = resources.length - before;
+    const mine = resources.slice(before);
+    diag.push({
+      sheet: sh.name, rows: sh.rows.length, parsed: got, header: h ? h.row + 1 : null,
+      cols: h ? { ...h.cols } : {},
+      noPrice: mine.filter((r) => r.price === null).length,
+      noTotal: mine.filter((r) => r.total === null).length,
+      note: got ? (h ? 'sarlavha bo\'yicha' : 'sarlavhasiz (birlik katagi bo\'yicha)') : 'jadval topilmadi',
+    });
     notes.push(`${sh.name}: ${got ? `${got} qator${h ? '' : " (sarlavhasiz o'qildi)"}` : 'jadval topilmadi'}`);
   }
+  lastDiag = diag;
   if (!resources.length && !summary.length) return null;
   applyCategories(resources);
   const sumOf = (g?: ResourceGroup) => exact(resources.filter((x) => !g || x.group === g).reduce((s, x) => s + (x.total ?? 0), 0));

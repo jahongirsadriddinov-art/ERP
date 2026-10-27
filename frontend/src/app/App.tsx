@@ -1368,15 +1368,15 @@ function HeaderTicker() {
     : "text-muted-foreground";
   // Balandlik QAT'IY (h-[15px]) — satr almashganda sarlavha "sakramaydi"; yangi band pastdan ko'tariladi.
   return (
-    <span ref={boxRef} className="relative block h-[15px] overflow-hidden min-w-0" data-testid="header-day-rate" title={cur.text}>
+    <span ref={boxRef} className="relative block h-[16px] overflow-hidden min-w-0" data-testid="header-day-rate" title={cur.text}>
       <AnimatePresence mode="popLayout" initial={false}>
         <motion.span key={`${i}-${cur.kind}`}
-          initial={{ y: 15, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -15, opacity: 0 }}
+          initial={{ y: 16, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -16, opacity: 0 }}
           transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
           className={`absolute inset-0 flex items-center gap-1 ${tone}`}>
-          <MorphIcon icon={ICON[cur.kind] || CalendarIcon} className="w-3.5 h-3.5 flex-shrink-0 opacity-80" />
+          <MorphIcon icon={ICON[cur.kind] || CalendarIcon} className="w-[15px] h-[15px] flex-shrink-0 opacity-85" />
           {/* Owner 2026-10-27: belgi ikki marta chiqmasin — matn boshidagi $/emoji olib tashlanadi */}
-          <motion.span ref={textRef} className="text-[11.5px] font-semibold leading-none whitespace-nowrap"
+          <motion.span ref={textRef} className="text-[12.5px] font-semibold leading-none whitespace-nowrap"
             animate={shift ? { x: [0, -shift, -shift, 0] } : { x: 0 }}
             transition={shift ? { duration: Math.max(4, shift / 16), times: [0, 0.45, 0.72, 1], ease: "linear", repeat: Infinity, repeatDelay: 1.2 } : { duration: 0.2 }}>{cur.text.replace(/^[\s$€₽ \p{Extended_Pictographic}]+/u, "")}</motion.span>
         </motion.span>
@@ -3151,13 +3151,17 @@ export default function App() {
     <header className="nav-blur-top flex items-center gap-3 px-4 flex-shrink-0 z-50 sticky top-0"
       style={{ paddingTop: 'max(0.625rem, env(safe-area-inset-top))', paddingBottom: '0.625rem' }}>
       {/* Owner 2026-10-26: sarlavha yana balandlashib ketgandi — bitta qator: logo + firma nomi, kurs yonida kichik */}
-      <div className="nav-pill-desktop flex items-center gap-2 px-1.5 py-1.5 rounded-full min-w-0 flex-1 lg:flex-none lg:flex-shrink-0">
-        <div className="w-8 h-8 rounded-full flex items-center justify-center overflow-hidden bg-gradient-to-br from-accent to-accent/75 shadow-sm flex-shrink-0">
-          <CompanyLogo src={companyLogo} imgClass="w-full h-full object-contain" iconClass="w-4 h-4 text-white" />
+      <div className="nav-pill-desktop flex items-center gap-2.5 px-2 py-1.5 rounded-full min-w-0 flex-1 lg:flex-none lg:flex-shrink-0">
+        <div className="w-9 h-9 rounded-full flex items-center justify-center overflow-hidden bg-gradient-to-br from-accent to-accent/75 shadow-sm flex-shrink-0">
+          <CompanyLogo src={companyLogo} imgClass="w-full h-full object-contain" iconClass="w-[18px] h-[18px] text-white" />
         </div>
         {/* Owner 2026-10-27: nom na katta, na kichik — belgidan sal yirikroq, satr ostida */}
-        <div className="flex flex-col justify-center min-w-0 flex-1 gap-[3px]">
-          <p className="text-[18px] font-bold tracking-tight truncate leading-none">{companyName}</p>
+        <div className="flex flex-col justify-center min-w-0 flex-1 gap-[4px] py-0.5">
+          {/* Owner 2026-10-27: nom uzunligiga qarab o'lchami o'zgaradi — siqilib yoki kesilib qolmaydi */}
+          <p className="font-bold tracking-tight truncate leading-none"
+            style={{ fontSize: companyName.length <= 10 ? 19 : companyName.length <= 14 ? 17 : companyName.length <= 18 ? 15.5 : companyName.length <= 24 ? 14 : 13 }}>
+            {companyName}
+          </p>
           <HeaderTicker />
         </div>
       </div>

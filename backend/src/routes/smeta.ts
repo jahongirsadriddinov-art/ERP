@@ -7,6 +7,8 @@ import { parseSmeta } from '../smeta';
 import ObjectModel from '../models/Object';
 import { aiSmetaFallback } from '../smeta/aiFallback';
 import { scoped } from '../middleware/scope';
+import { captureError } from '../services/errorTracker';
+import { takeSmetaDiag } from '../smeta/excelTable';
 import { getTenant } from '../middleware/tenantContext';
 
 const router = Router();
@@ -59,9 +61,42 @@ router.post('/parse', upload.single('smeta'), async (req: Request, res: Response
         }
       );
     }
+    // Owner 2026-10-27: "smeta o'qiyotganda xatolik bo'lsa yoki nimadir o'qilmay qolsa — dasturchiga
+    // xabar borsin: qayerda, nima xatolik". Faqat haqiqiy muammo bo'lsa yuboriladi.
+    try {
+      const diag = takeSmetaDiag();
+      const rows = result.resources?.length || 0;
+      const noPrice = (result.resources || []).filter((r: any) => r.price === null).length;
+      const emptySheets = diag.filter((d) => !d.parsed).map((d) => d.sheet);
+      const priceShare = rows ? noPrice / rows : 0;
+      if (!rows || emptySheets.length || priceShare > 0.5) {
+        const lines = diag.map((d) =>
+          `${d.sheet}: ${d.parsed}/${d.rows} qator, sarlavha ${d.header ?? '—'}, ustunlar ${JSON.stringify(d.cols)}, narxsiz ${d.noPrice}, summasiz ${d.noTotal} (${d.note})`);
+        await captureError({
+          source: 'server',
+          kind: 'smeta-parse',
+          message: !rows
+            ? `Smeta o'qilmadi: "${file.originalname}" — birorta qator chiqmadi`
+            : `Smeta to'liq o'qilmadi: "${file.originalname}" — ${rows} qator, ${noPrice} tasida narx yo'q${emptySheets.length ? `, o'qilmagan varaqlar: ${emptySheets.join(', ')}` : ''}`,
+          stack: lines.join('\n'),
+          route: '/api/smeta/parse',
+          method: 'POST',
+          action: `fayl ${(file.size / 1024).toFixed(0)} KB, ${ext}`,
+          companyId: String(t?.companyId || ''),
+          userId: String(t?.userId || ''),
+          role: String(t?.role || ''),
+        });
+      }
+    } catch { /* tashxis xabari yuborilmasa ham, javob beriladi */ }
     return res.json(result);
   } catch (err) {
     console.error('[smeta] parse xatosi:', err);
+    void captureError({
+      source: 'server', kind: 'smeta-parse',
+      message: `Smeta o'qishda xato: "${file.originalname}" — ${(err as Error)?.message || err}`,
+      stack: (err as Error)?.stack, route: '/api/smeta/parse', method: 'POST', status: 500,
+      action: `fayl ${(file.size / 1024).toFixed(0)} KB, ${ext}`,
+    }).catch(() => {});
     return res.status(500).json({ error: "Faylni tahlil qilishda xatolik yuz berdi. Fayl formatini tekshirib qayta urining." });
   } finally {
     fs.unlink(file.path, () => {});

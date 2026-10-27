@@ -166,27 +166,56 @@ function parseSheetLoose(rows: unknown[][], startIndex: number): ResourceRow[] {
  *  Smeta jadvallarida odatda eng o'ngdagi son — SUMMA, undan oldingisi — NARX. Faqat ko'pchilik
  *  qatorda son turgan ustunlar hisobga olinadi; nom/birlik/miqdor/shifr ustunlariga tegilmaydi. */
 function inferMoneyCols(rows: unknown[][], h: Header): void {
-  if (h.cols.price !== undefined && h.cols.total !== undefined) return;
-  const taken = new Set([h.cols.name, h.cols.unit, h.cols.qty, h.cols.code].filter((v) => v !== undefined) as number[]);
-  const hits: Record<number, number> = {};
-  let sampled = 0;
-  for (let r = h.row + 1; r < rows.length && sampled < 60; r++) {
+  // Namuna qatorlar — sonlari bor haqiqiy qatorlar (sarlavha ostidan)
+  const sample: number[][] = [];
+  for (let r = h.row + 1; r < rows.length && sample.length < 80; r++) {
     const row = rows[r] || [];
     if (isNumberingRow(row)) continue;
     const name = norm(row[h.cols.name!]);
     if (!name || SUMMARY_ROW.test(name)) continue;
-    const qty = h.cols.qty !== undefined ? num(row[h.cols.qty]) : null;
-    if (!qty) continue;                      // faqat haqiqiy material qatorlari
-    sampled++;
-    for (let c = 0; c < row.length; c++) {
-      if (taken.has(c)) continue;
-      const v = num(row[c]);
-      if (v !== null && v > 0) hits[c] = (hits[c] || 0) + 1;
+    const vals: number[] = [];
+    let width = 0;
+    for (let c = 0; c < row.length; c++) { const v = num(row[c]); vals[c] = v === null ? NaN : v; if (v !== null) width++; }
+    if (width >= 3) sample.push(vals);
+  }
+  if (sample.length < 3) return;   // kichik jadvallar ham tekshiriladi
+  const width = Math.max(...sample.map((v) => v.length));
+  const skip = new Set([h.cols.name, h.cols.unit, h.cols.code].filter((v) => v !== undefined) as number[]);
+
+  // MUHIM (owner 2026-10-27 hujjati): sarlavha bo'yicha topilgan ustunlar noto'g'ri bo'lishi mumkin
+  // (masalan "summa" o'rniga guruh kodi ustuni olingan). Shuning uchun qaysi uchlik (miqdor, narx, summa)
+  // miqdor x narx = summa tenglamasini eng ko'p qatorda bajarishiga qarab tanlanadi — bu hujjatning
+  // o'z raqamlari bilan tekshirish, taxmin emas.
+  let best: { q: number; p: number; t: number; hits: number } | null = null;
+  for (let q = 0; q < width; q++) {
+    if (skip.has(q)) continue;
+    for (let p = 0; p < width; p++) {
+      if (p === q || skip.has(p)) continue;
+      for (let t = 0; t < width; t++) {
+        if (t === q || t === p || skip.has(t)) continue;
+        let hits = 0;
+        for (const v of sample) {
+          const a = v[q], b = v[p], c = v[t];
+          if (!Number.isFinite(a) || !Number.isFinite(b) || !Number.isFinite(c)) continue;
+          if (a <= 0 || b <= 0 || c <= 0) continue;
+          if (Math.abs(a * b - c) <= Math.abs(c) * 0.01) hits++;
+        }
+        if (hits && (!best || hits > best.hits)) best = { q, p, t, hits };
+      }
     }
   }
-  if (sampled < 3) return;
-  // kamida qatorlarning yarmida son turgan ustunlar, chapdan o'ngga
-  const cols = Object.keys(hits).map(Number).filter((c) => hits[c] >= sampled / 2).sort((a2, b2) => a2 - b2);
+  if (best && best.hits >= Math.max(2, sample.length * 0.25)) {
+    h.cols.qty = best.q; h.cols.price = best.p; h.cols.total = best.t;
+    return;
+  }
+
+  // Tenglama bo'yicha topilmadi — eski yo'l: eng o'ngdagi son ustuni summa, undan oldingisi narx
+  if (h.cols.price !== undefined && h.cols.total !== undefined) return;
+  const filled: Record<number, number> = {};
+  for (const v of sample) for (let c = 0; c < width; c++) if (Number.isFinite(v[c]) && v[c] > 0) filled[c] = (filled[c] || 0) + 1;
+  const cols = Object.keys(filled).map(Number)
+    .filter((c) => !skip.has(c) && c !== h.cols.qty && filled[c] >= sample.length / 2)
+    .sort((a2, b2) => a2 - b2);
   if (!cols.length) return;
   const last = cols[cols.length - 1], prev = cols.length >= 2 ? cols[cols.length - 2] : undefined;
   if (h.cols.total === undefined) h.cols.total = last;
@@ -217,17 +246,21 @@ export function parseExcelRows(sheets: Array<{ name: string; rows: unknown[][] }
         const row = sh.rows[r] || [];
         if (isNumberingRow(row)) continue;
         const name = norm(row[h.cols.name!]);
-        if (!name || SUMMARY_ROW.test(name)) continue;
+        if (!name) continue;
         const unit = h.cols.unit !== undefined ? norm(row[h.cols.unit]) : '';
         let qty = h.cols.qty !== undefined ? num(row[h.cols.qty]) : null;
         let price = h.cols.price !== undefined ? num(row[h.cols.price]) : null;
         let total = h.cols.total !== undefined ? num(row[h.cols.total]) : null;
+        // MUHIM (owner 2026-10-27): jamlanma blok (ВСЕГО, ИТОГО, НДС …) shu yerda ushlanadi — avval
+        // SUMMARY_ROW bilan tashlab yuborilardi va hujjatning rasmiy summalari butunlay yo'qolardi.
+        const summaryLike = (MONEY_UNIT.test(unit) || !unit) && (SUMMARY_NAME.test(name) || SUMMARY_ROW.test(name));
+        if (!summaryLike && SUMMARY_ROW.test(name)) continue;   // jadval ichidagi "Итого по …" qatori
         // Raqamsiz qator — bo'lim sarlavhasi ("Материалы", "Оборудование", "Трудовые затраты")
         if (!qty && !price && !total) { section = name.slice(0, 120); continue; }
         // Owner 2026-10-27: "hujjatdagi barcha ma'lumot ko'rinsin". Smeta oxiridagi jamlanma blok
         // (ЗАРПЛАТА, ЭКСПЛУАТАЦИЯ МАШИН, ВСЕГО, ПРОЧИЕ 17.27%, НДС 12%, ВСЕГО…) — material emas,
         // alohida ro'yxat sifatida saqlanadi (summalarga ikki marta qo'shilmasin).
-        if ((MONEY_UNIT.test(unit) || !unit) && SUMMARY_NAME.test(name)) {
+        if (summaryLike) {
           // Owner 2026-10-27: summalar noto'g'ri chiqqandi (yonidagi "farq"/koeffitsient ustunlari olingan).
           // Jamlanma qatorida haqiqiy summa — eng katta (mutlaq qiymat bo'yicha) son.
           let amt: number | null = null;
@@ -302,9 +335,18 @@ export function parseExcelRows(sheets: Array<{ name: string; rows: unknown[][] }
   applyCategories(resources);
   const sumOf = (g?: ResourceGroup) => Math.round(resources.filter((x) => !g || x.group === g).reduce((s, x) => s + (x.total ?? 0), 0) * 100) / 100;
   const grandTotal = sumOf();
+  // Owner 2026-10-27 hujjati: oxirgi jamlanma blokdagi rasmiy raqamlar (ВСЕГО / ИТОГО / НДС).
+  // Qatorlarni qo'shib chiqish noto'g'ri bo'ladi — ОФЕРТА va РЕСУРС bir xil xarajatni ikki marta ko'rsatadi.
+  const lastOf = (re: RegExp) => { const m = summary.filter((x) => re.test(x.name.trim())); return m.length ? m[m.length - 1].amount : null; };
+  const vatAmount = lastOf(/^(ндс|qqs|ққс)/i);
+  const totalWithVat = lastOf(/^всего/i);
+  const itogo = lastOf(/^итого\s*$/i) ?? lastOf(/^итого/i);
+  const withoutVat = itogo ?? (totalWithVat !== null && vatAmount !== null ? Math.round((totalWithVat - vatAmount) * 100) / 100 : null);
   const meta: SmetaMeta = {
     objectName: null, subObject: null, organization: null,
-    totalWithVat: null, totalWithoutVat: grandTotal || null, vatAmount: null,
+    totalWithVat: totalWithVat ?? null,
+    totalWithoutVat: withoutVat ?? (grandTotal || null),
+    vatAmount: vatAmount ?? null,
     currency: 'UZS', sourceFile: filename, parsedAt: new Date().toISOString(),
   };
   const LABEL: Record<ResourceGroup, string> = { labor: 'Mehnat', machinery: 'Mashina va mexanizmlar', material: 'Materiallar', equipment: 'Jihozlar', general: 'Umumiy xarajatlar' };

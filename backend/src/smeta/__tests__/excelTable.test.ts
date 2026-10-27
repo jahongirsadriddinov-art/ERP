@@ -26,7 +26,9 @@ describe('excelTable — ustun sarlavhalari bo\'yicha', () => {
     expect(r.resources[2].total).toBe(14_400_000);   // narx × miqdor (summa bo'sh)
     expect(r.resources[2].category).toBe('beton');
     expect(r.resources[3].category).toBe('metall');
-    expect(r.meta.totalWithoutVat).toBe(3012500 + 3600000 + 14400000 + 31850000);
+    // Owner 2026-10-27: jami endi hujjatning O'Z jamlanmasidan olinadi ("Итого по смете" qatori),
+    // qatorlarni qo'shib chiqishdan emas — ОФЕРТА/РЕСУРС varaqlari bir xil xarajatni takrorlaydi
+    expect(r.meta.totalWithoutVat).toBe(38_862_500);
     expect(r.totals.map((t) => t.group)).toEqual(['Mehnat', 'Mashina va mexanizmlar', 'Materiallar']);
   });
 

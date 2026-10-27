@@ -26,6 +26,8 @@ router.post('/parse', upload.single('smeta'), async (req: Request, res: Response
   const file = req.file;
   if (!file) return res.status(400).json({ error: 'Fayl yuklanmadi (maydon: smeta)' });
 
+  // Owner 2026-10-27: xabarlarda fayl nomi "Ð¯Ð½Ð³Ð¸..." bo'lib chiqardi — multer nomni latin1 deb beradi
+  try { file.originalname = Buffer.from(file.originalname, 'latin1').toString('utf8'); } catch { /* nom o'zgarmaydi */ }
   const ext = extOf(file.originalname);
   if (!ALLOWED_EXTS.has(ext)) {
     fs.unlink(file.path, () => {});

@@ -600,8 +600,11 @@ export function SmetaResultView({ smeta }: { smeta: SmetaResult }) {
   const byGroup: Record<string, SmetaResourceRow[]> = {};
   for (const r of shown) (byGroup[r.group] = byGroup[r.group] || []).push(r);
   const groupSum = (rows: SmetaResourceRow[]) => rows.reduce((s, r) => s + (r.total || 0), 0);
+  // Owner 2026-10-27: byudjet — hujjatning o'z jamlanmasidan (ИТОГО / ВСЕГО), qatorlarni qo'shib chiqishdan emas:
+  // ОФЕРТА va РЕСУРС bir xil xarajatni ikki marta ko'rsatadi.
   const budget = smeta.meta?.totalWithoutVat ?? smeta.resources.reduce((s, r) => s + (r.total || 0), 0);
   const vat = smeta.meta?.totalWithVat;
+  const shownSum = shown.reduce((s, r) => s + (r.total || 0), 0);
 
   const sections: { name: string; works: SmetaWorkRow[] }[] = [];
   for (const w of smeta.works) {
@@ -726,8 +729,8 @@ export function SmetaResultView({ smeta }: { smeta: SmetaResult }) {
         );
       })}
       <div className="glass-card rounded-xl border-2 border-primary/30 px-4 py-3 flex items-center justify-between bg-primary/5">
-        <span className="text-sm font-bold">ИТОГО ПО РЕСУРСНОМУ РАСЧЕТУ</span>
-        <span className="font-mono text-base font-bold text-primary">{fmtNum(budget)}</span>
+        <span className="text-sm font-bold">{selSheet === "all" ? "ИТОГО (ko'rsatilgan qatorlar)" : `ИТОГО — ${selSheet}`}</span>
+        <span className="font-mono text-base font-bold text-primary">{fmtNum(shownSum)}</span>
       </div>
 
       {/* B: РЕСУРСНАЯ ВЕДОМОСТЬ — ishlar (bo'limlarga guruhlangan) */}

@@ -3133,11 +3133,12 @@ export default function App() {
       style={{ paddingTop: 'max(0.625rem, env(safe-area-inset-top))', paddingBottom: '0.625rem' }}>
       {/* Owner 2026-10-26: sarlavha yana balandlashib ketgandi — bitta qator: logo + firma nomi, kurs yonida kichik */}
       <div className="nav-pill-desktop flex items-center gap-2 px-1.5 py-1.5 rounded-full min-w-0 flex-1 lg:flex-none lg:flex-shrink-0">
-        <div className="w-9 h-9 rounded-full flex items-center justify-center overflow-hidden bg-gradient-to-br from-accent to-accent/75 shadow-sm flex-shrink-0">
-          <CompanyLogo src={companyLogo} imgClass="w-full h-full object-contain" iconClass="w-[18px] h-[18px] text-white" />
+        <div className="w-8 h-8 rounded-full flex items-center justify-center overflow-hidden bg-gradient-to-br from-accent to-accent/75 shadow-sm flex-shrink-0">
+          <CompanyLogo src={companyLogo} imgClass="w-full h-full object-contain" iconClass="w-4 h-4 text-white" />
         </div>
-        <div className="flex flex-col justify-center min-w-0 flex-1 gap-[2px]">
-          <p className="text-[15px] font-bold tracking-tight truncate leading-none">{companyName}</p>
+        {/* Owner 2026-10-27: nom na katta, na kichik — belgidan sal yirikroq, satr ostida */}
+        <div className="flex flex-col justify-center min-w-0 flex-1 gap-[3px]">
+          <p className="text-[16px] font-bold tracking-tight truncate leading-none">{companyName}</p>
           <HeaderTicker />
         </div>
       </div>

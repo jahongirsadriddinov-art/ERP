@@ -9,8 +9,12 @@
   "workers_dev": false,
   // Sayt o'z domenidan beriladi (Cloudflare DNS yozuvlarini o'zi qo'yadi)
   "routes": [
+    { "pattern": "erp-firma.uz", "custom_domain": true },
+    { "pattern": "www.erp-firma.uz", "custom_domain": true },
     { "pattern": "cf.erp-firma.uz", "custom_domain": true }
   ],
+  // Worker loglari (Cloudflare panelidagi sozlama bilan mos bo'lishi uchun) — sayt xatolarini ko'rish
+  "observability": { "enabled": true },
   "assets": {
     "directory": "./dist",
     "not_found_handling": "single-page-application"

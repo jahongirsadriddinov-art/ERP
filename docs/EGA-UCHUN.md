@@ -25,13 +25,9 @@ Sayt endi Cloudflare'da (Workers Assets), backend esa avvalgidek Render'da.
 
 **Qo'lda chiqarish:** `cd frontend && npx wrangler deploy` (avval `npm run build`).
 
-**Avtomatik chiqarish — bittasini tanlang:**
-- *Cloudflare Builds:* Workers & Pages → qurilish-erp → Settings → Builds → Connect repository.
-  Build: `cd frontend && npm ci && npm run build`, Deploy: `cd frontend && npx wrangler deploy`
-- *GitHub Actions:* `.github/workflows/cloudflare-deploy.yml` tayyor; GitHub sirlariga
-  `CLOUDFLARE_ACCOUNT_ID` va `CLOUDFLARE_API_TOKEN` qo'shiladi.
-
-> Ikkalasini birdan yoqmang — bitta push ikki marta chiqariladi.
+**Avtomatik chiqarish:** Cloudflare Builds yoqilgan (2026-10-27) — repo Worker'ga ulangan,
+har push'da `cd frontend && npm ci && npm run build` → `cd frontend && npx wrangler deploy` bajariladi.
+GitHub Actions varianti o'chirildi (bitta push ikki marta chiqmasligi uchun).
 
 **Qolgan 2 ta xavfsizlik tavsiyasi (dashboard'dan, 2 bosish):** Security → Settings → **Bot Fight Mode**;
 xohlasangiz **AI Labyrinth**.

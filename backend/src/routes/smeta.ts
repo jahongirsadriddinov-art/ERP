@@ -62,23 +62,26 @@ router.post('/parse', upload.single('smeta'), async (req: Request, res: Response
       );
     }
     // Owner 2026-10-27: "smeta o'qiyotganda xatolik bo'lsa yoki nimadir o'qilmay qolsa — dasturchiga
-    // xabar borsin: qayerda, nima xatolik". Faqat haqiqiy muammo bo'lsa yuboriladi.
+    // xabar borsin: qayerda, nima xatolik" va "bot ga xabar bermayapti" — endi HAR yuklashdan keyin
+    // qisqa hisobot boradi: qaysi varaqdan nechta qator, qaysi ustun nimaga bog'landi, namuna qatorlar.
     try {
       const diag = takeSmetaDiag();
       const rows = result.resources?.length || 0;
       const noPrice = (result.resources || []).filter((r: any) => r.price === null).length;
       const emptySheets = diag.filter((d) => !d.parsed).map((d) => d.sheet);
-      const priceShare = rows ? noPrice / rows : 0;
-      if (!rows || emptySheets.length || priceShare > 0.5) {
+      {
         const lines = diag.map((d) =>
           `${d.sheet}: ${d.parsed}/${d.rows} qator, sarlavha ${d.header ?? '—'}, ustunlar ${JSON.stringify(d.cols)}, narxsiz ${d.noPrice}, summasiz ${d.noTotal} (${d.note})`);
+        const sample = (result.resources || []).slice(0, 3).map((r: any) =>
+          `· ${String(r.rawName).slice(0, 34)} | ${r.unit} | miqdor ${r.qty} | narx ${r.price ?? '—'} | summa ${r.total ?? '—'}`);
+        const sumLines = ((result as any).summary || []).slice(0, 4).map((x: any) => `· ${x.name}: ${x.amount}`);
         await captureError({
           source: 'server',
           kind: 'smeta-parse',
           message: !rows
             ? `Smeta o'qilmadi: "${file.originalname}" — birorta qator chiqmadi`
-            : `Smeta to'liq o'qilmadi: "${file.originalname}" — ${rows} qator, ${noPrice} tasida narx yo'q${emptySheets.length ? `, o'qilmagan varaqlar: ${emptySheets.join(', ')}` : ''}`,
-          stack: lines.join('\n'),
+            : `Smeta o'qildi: "${file.originalname}" — ${rows} qator, ${noPrice} tasida narx yo'q, jami ${result.meta?.totalWithoutVat ?? '—'}${emptySheets.length ? `, o'qilmagan varaqlar: ${emptySheets.join(', ')}` : ''}`,
+          stack: [...lines, ...(sumLines.length ? ['Jamlanma:', ...sumLines] : []), 'Namuna:', ...sample].join('\n'),
           route: '/api/smeta/parse',
           method: 'POST',
           action: `fayl ${(file.size / 1024).toFixed(0)} KB, ${ext}`,

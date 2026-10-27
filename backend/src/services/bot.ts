@@ -793,7 +793,7 @@ async function getAttendanceStatus(userId: string): Promise<{ status: 'NOT_START
 // Tasdiqlangandan (inline "Ha") keyin haqiqiy check-in/check-out — saytdagi
 // /api/attendance/checkin|checkout bilan bir xil mantiq, to'g'ridan-to'g'ri
 // Mongoose orqali (bot HTTP so'rov konteksti ichida emas).
-async function doCheckIn(user: any, lang?: BotLang): Promise<string> {
+async function doCheckIn(user: any, lang?: BotLang, opts: { softGeofence?: boolean } = {}): Promise<string> {
   invalidateShift(String(user._id)); setTimeout(() => invalidateShift(String(user._id)), 1500);
   const today = todayDateStr();
   let record = await Attendance.findOne({ userId: String(user._id), date: today });
@@ -808,9 +808,14 @@ async function doCheckIn(user: any, lang?: BotLang): Promise<string> {
   if (record?.checkIn && !record.checkOut) return tb(lang, 'alreadyCheckedIn');
   // Geozona — oxirgi (jonli) joylashuv obyekt hududida bo'lishi kerak
   const lastLoc: any = await GpsLocation.findOne({ userId: String(user._id) }).sort({ timestamp: -1 }).select('lat lng timestamp').lean();
+  let geoNote = '';
   if (lastLoc && Date.now() - new Date(lastLoc.timestamp).getTime() < 10 * 60 * 1000) {
     const g = await checkGeofence(String(user._id), user.companyId, lastLoc.lat, lastLoc.lng);
-    if (!g.ok) return geofenceMessage(g, lang === 'ru');
+    // softGeofence — bir bosishli yo'l: to'smaydi, faqat yozuvga izoh qo'yadi
+    if (!g.ok) {
+      if (!opts.softGeofence) return geofenceMessage(g, lang === 'ru');
+      geoNote = geofenceMessage(g, false).replace(/\n+/g, ' ').slice(0, 200);
+    }
   }
   const now = new Date();
   const resuming = !!record; // kun uchun yozuv allaqachon bor (avvalgi smena tugagan)
@@ -821,6 +826,7 @@ async function doCheckIn(user: any, lang?: BotLang): Promise<string> {
   // qayta kirishda o'zgarmaydi (kech kelgan-kelmaganligi birinchi marta
   // kelgan vaqtga qarab hal qilingan, keyingi qayta kirishlarga aloqasi yo'q).
   if (!resuming) record.status = tashkentHour(now) >= 9 ? 'late' : 'present';
+  if (geoNote) record.note = geoNote;   // obyektdan uzoqda belgilangan bo'lsa — rahbarga ko'rinadi
   await record.save();
   // MUHIM: bot server (Render) UTC'da ishlaydi — timeZone aniq ko'rsatilmasa
   // foydalanuvchiga UTC vaqti ko'rsatiladi, Toshkent vaqti emas.
@@ -883,8 +889,13 @@ async function saveLocationFromTelegram(chatId: number, lat: number, lng: number
   emitToCompanyBosses(user.companyId, 'gps:update', { userId: String(user._id), companyId: user.companyId, lat, lng, accuracy, timestamp: loc.timestamp, source });
 }
 
+// Owner 2026-10-27: "ishga keldim deganda joylashuvni yuborish kerak — osonroq qil, bitta tugma bo'lsin".
+// Telegram klaviatura tugmasiga request_location qo'yilsa, BIR BOSISHDA joylashuv yuboriladi va
+// shu zahoti davomat belgilanadi (ilovadagi menyudan joylashuv tanlash shart emas).
+const checkInBtn = (lang?: BotLang) => ({ text: tb(lang, 'kb_checkIn'), request_location: true });
+
 const CHECKIN_ONLY_KEYBOARD = (lang?: BotLang) => ({
-  keyboard: [[{ text: tb(lang, 'kb_checkIn') }]],
+  keyboard: [[checkInBtn(lang)]],
   resize_keyboard: true,
 });
 
@@ -1038,7 +1049,7 @@ const USER_KEYBOARD_WITH_CHECKOUT = async (lang?: BotLang) => {
 // ko'rinishi kerak.
 const USER_KEYBOARD_FINISHED = async (lang?: BotLang) => {
   const base = await USER_KEYBOARD(lang);
-  return { ...base, keyboard: [[{ text: tb(lang, 'kb_checkIn') }], ...base.keyboard] };
+  return { ...base, keyboard: [[checkInBtn(lang)], ...base.keyboard] };
 };
 
 // Markaziy klaviatura tanlovchi — HAR BIR joyda (start, kontakt tasdiqlash,
@@ -1961,11 +1972,30 @@ bot.on('message', async (msg: any) => {
       return;
     }
 
-    // Faqat BIR martalik (live_period yo'q) ulashishga qisqa tasdiq — jonli
-    // kuzatuvning har bir yangilanishida xabar bilan bezovta qilmaslik uchun
-    // 'edited_message' branida tasdiq yuborilmaydi.
+    // Owner 2026-10-27: tugma joylashuvni o'zi yuboradi — smena ochiq bo'lmasa shu zahoti davomat
+    // belgilanadi (ikkinchi qadam, "jonli joylashuvni tanlash" shart emas). Xato bosilgan bo'lsa —
+    // xabardagi "Bekor qilish" tugmasi.
+    const u: any = await User.findOne({ telegramChatId: chatId.toString() }).catch(() => null);
+    if (u && isWorker(u.role)) {
+      const ulang = u.language as BotLang | undefined;
+      const today = todayDateStr();
+      const rec: any = await Attendance.findOne({ userId: String(u._id), date: today }).catch(() => null);
+      const openShift = !!rec?.checkIn && !rec?.checkOut;
+      if (!openShift) {
+        const resultText = await doCheckIn(u, ulang, { softGeofence: true });
+        const liveHint = isLive ? '' : (ulang === 'ru'
+          ? '\n\n📍 Чтобы вас было видно весь день, включите «Трансляцию геопозиции» (скрепка → Геопозиция → Транслировать).'
+          : "\n\n📍 Kun davomida ko'rinib turishingiz uchun «Jonli joylashuv»ni yoqing (qisqich → Joylashuv → Jonli).");
+        await bot.sendMessage(chatId, resultText + liveHint, {
+          reply_markup: {
+            inline_keyboard: [[{ text: ulang === 'ru' ? '↩️ Отменить' : '↩️ Bekor qilish', callback_data: 'undo_checkin' }]],
+          },
+        });
+        await bot.sendMessage(chatId, ulang === 'ru' ? 'Меню:' : 'Menyu:', { reply_markup: await keyboardForUser(u, ulang) });
+        return;
+      }
+    }
     if (!isLive) {
-      const u = await User.findOne({ telegramChatId: chatId.toString() }).select('language').catch(() => null);
       bot.sendMessage(chatId, tb(u?.language as BotLang | undefined, 'locationSaved'));
     }
     return;
@@ -2997,6 +3027,23 @@ bot.on('callback_query', async (query: any) => {
     }
     return;
   }
+  // Owner 2026-10-27: bir bosishli davomat xato bosilgan bo'lsa — darhol qaytarish
+  if (data === 'undo_checkin') {
+    await bot.answerCallbackQuery(query.id);
+    if (messageId) await bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: messageId }).catch(() => {});
+    if (user) {
+      const rec: any = await Attendance.findOne({ userId: String(user._id), date: todayDateStr() }).catch(() => null);
+      if (rec?.checkIn && !rec.checkOut) {
+        rec.checkIn = undefined;
+        await rec.save();
+        invalidateShift(String(user._id));
+        emitToUser(String(user._id), 'attendance:update', { ...rec.toObject(), id: rec._id });
+      }
+      await bot.sendMessage(chatId, lang === 'ru' ? 'Отметка отменена.' : 'Davomat bekor qilindi.', { reply_markup: await keyboardForUser(user, lang) });
+    }
+    return;
+  }
+
   if (data === 'cancel_checkin' || data === 'cancel_checkout') {
     await bot.answerCallbackQuery(query.id);
     if (messageId) await bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: messageId }).catch(() => {});

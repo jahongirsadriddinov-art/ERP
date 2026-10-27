@@ -1,0 +1,4 @@
+# SPA — barcha yo'llar index.html ga, LEKIN statik fayllar va qo'llanma sayti o'zi beriladi.
+# (Cloudflare Pages avval mavjud faylni qidiradi, topilmasa shu qoidaga tushadi.)
+/qollanma/*  /qollanma/index.html  200
+/*           /index.html           200

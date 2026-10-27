@@ -14,7 +14,10 @@
     { "pattern": "cf.erp-firma.uz", "custom_domain": true }
   ],
   // Worker loglari (Cloudflare panelidagi sozlama bilan mos bo'lishi uchun) — sayt xatolarini ko'rish
-  "observability": { "enabled": true },
+  "observability": {
+    "logs": { "enabled": true, "head_sampling_rate": 1, "invocation_logs": true, "persist": true },
+    "traces": { "enabled": false, "head_sampling_rate": 1, "persist": true }
+  },
   "assets": {
     "directory": "./dist",
     "not_found_handling": "single-page-application"

@@ -1,0 +1,18 @@
+{
+  // Cloudflare'da sayt (owner 2026-10-27: domen Cloudflare'ga ko'chirildi, hosting ham shu yerda).
+  // Statik fayllar Workers Assets orqali beriladi: public/_headers va public/_redirects o'z-o'zidan
+  // qo'llanadi, topilmagan yo'llar esa SPA uchun index.html ga tushadi (/qollanma/ o'z faylini oladi).
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "qurilish-erp",
+  "compatibility_date": "2026-10-23",
+  // workers.dev subdomeni kerak emas — sayt faqat o'z domenidan beriladi
+  "workers_dev": false,
+  // Sayt o'z domenidan beriladi (Cloudflare DNS yozuvlarini o'zi qo'yadi)
+  "routes": [
+    { "pattern": "cf.erp-firma.uz", "custom_domain": true }
+  ],
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application"
+  }
+}

@@ -1,4 +1,3 @@
-# SPA — barcha yo'llar index.html ga, LEKIN statik fayllar va qo'llanma sayti o'zi beriladi.
-# (Cloudflare Pages avval mavjud faylni qidiradi, topilmasa shu qoidaga tushadi.)
-/qollanma/*  /qollanma/index.html  200
-/*           /index.html           200
+# Cloudflare Workers Assets'da SPA yo'naltirishi wrangler.jsonc dagi
+# "not_found_handling": "single-page-application" bilan beriladi — bu yerda qoida kerak emas
+# (/*  /index.html qoidasi cheksiz halqa deb rad etiladi). Fayl kelgusi yo'naltirishlar uchun qoldirildi.

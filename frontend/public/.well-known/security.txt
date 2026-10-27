@@ -1,0 +1,6 @@
+# QurilishERP — xavfsizlik bo'yicha murojaat (RFC 9116)
+# Xatolik yoki zaiflik topsangiz — quyidagi manzilga yozing.
+Contact: https://t.me/qurilish_erp_bot
+Preferred-Languages: uz, ru, en
+Canonical: https://erp-firma.uz/.well-known/security.txt
+Expires: 2027-10-27T00:00:00.000Z

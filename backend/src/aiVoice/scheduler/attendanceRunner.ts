@@ -379,6 +379,48 @@ export async function sendAfterCallButtons(confId: string, now: Date): Promise<v
   await bot.attempt(ctx, { kind: 'attendance', title: t.attTitle, text: t.attAfterCall, buttons: attendanceButtons(fc.lang, conf.buttonToken), buttonToken: conf.buttonToken });
 }
 
+// Owner 2026-10-27: "hammaniki alohida kelyapti — bitta ro'yxat bo'lib kelsin".
+// Xabarlar firma bo'yicha 90 soniya ichida yig'iladi va BITTA xabar bo'lib yuboriladi
+// (20 ta xodim = 20 ta xabar emas, 1 ta ro'yxat). Yuborilgach, hammasi "xabar berildi" deb belgilanadi.
+const BATCH_MS = 90_000;
+const MAX_BATCH = 60;
+interface BatchItem { confId: string; name: string; reason: ManagerReason; employeeId: string; correlationId?: string; lang: string }
+const mgrBatch = new Map<string, { items: BatchItem[]; timer: NodeJS.Timeout | null }>();
+
+async function flushManagerBatch(companyId: string): Promise<void> {
+  const b = mgrBatch.get(companyId);
+  if (!b || !b.items.length) return;
+  mgrBatch.delete(companyId);
+  if (b.timer) clearTimeout(b.timer);
+  const items = b.items;
+  const adapter = getChannel('notify_manager');
+  if (!adapter) return;
+  const lang = (items[0].lang === 'ru' ? 'ru' : 'uz') as AiLang;
+  const t = tx(lang);
+  const pick = (r: ManagerReason[]) => items.filter((i) => r.includes(i.reason)).map((i) => i.name);
+  const noAnswer = pick(['no_answer', 'timeout'] as ManagerReason[]);
+  const declined = pick(['declined', 'voice_not_coming'] as ManagerReason[]);
+  const failed = pick(['call_failed'] as ManagerReason[]);
+  const parts = [
+    declined.length ? t.mgrBatchDeclined(declined) : '',
+    noAnswer.length ? t.mgrBatchNoAnswer(noAnswer) : '',
+    failed.length ? t.mgrBatchFailed(failed) : '',
+  ].filter(Boolean);
+  if (!parts.length) return;
+  const now = new Date();
+  const ctx: ChannelCtx = {
+    companyId, employeeId: items[0].employeeId, correlationId: items[0].correlationId || '',
+    purpose: 'attendance', lang, now, confirmationId: items[0].confId, attemptNo: 1,
+  };
+  if (!(await adapter.isAvailable(ctx).catch(() => ({ ok: false })))?.ok) return;
+  const r = await adapter.attempt(ctx, { kind: 'manager_alert', title: t.mgrTitle, text: parts.join('\n'), urgency: 'high' });
+  if (r.outcome !== 'delivered' && r.outcome !== 'answered') return;
+  await AiAttendanceConfirmation.updateMany(
+    { _id: { $in: items.map((i) => i.confId) }, managerNotifiedAt: null },
+    { $set: { managerNotifiedAt: now } },
+  );
+}
+
 /** attendance.manager: rahbar(lar)ga BIR marta xabar (faqat shu firma — managerChannel → lib/managers). */
 export async function notifyManagerOnce(confId: string, reason: ManagerReason, now: Date): Promise<boolean> {
   const conf: any = await AiAttendanceConfirmation.findById(confId).lean();
@@ -393,11 +435,17 @@ export async function notifyManagerOnce(confId: string, reason: ManagerReason, n
   const t = tx(lang);
   const text = reason === 'declined' || reason === 'voice_not_coming' ? t.mgrDeclined(name)
     : reason === 'call_failed' ? t.mgrCallFailed(name) : t.mgrNoAnswer(name);
-  const ctx: ChannelCtx = { companyId: conf.companyId, employeeId: conf.employeeId, correlationId: conf.correlationId, purpose: 'attendance', lang, now, confirmationId: confId, attemptNo: 1 };
-  if (!(await adapter.isAvailable(ctx).catch(() => ({ ok: false })))?.ok) return false;
-  const r = await adapter.attempt(ctx, { kind: 'manager_alert', title: t.mgrTitle, text, urgency: 'high' });
-  if (r.outcome !== 'delivered' && r.outcome !== 'answered') return false;
-  await AiAttendanceConfirmation.updateOne({ _id: confId, managerNotifiedAt: null }, { $set: { managerNotifiedAt: now } });
+  void text;   // yakka matn o'rniga — yig'ma ro'yxat (pastda)
+  const cid = String(conf.companyId);
+  let b = mgrBatch.get(cid);
+  if (!b) { b = { items: [], timer: null }; mgrBatch.set(cid, b); }
+  if (!b.items.some((i) => i.confId === String(confId))) {
+    b.items.push({ confId: String(confId), name, reason, employeeId: String(conf.employeeId), correlationId: conf.correlationId, lang });
+  }
+  if (b.items.length >= MAX_BATCH) { void flushManagerBatch(cid); return true; }
+  if (b.timer) clearTimeout(b.timer);
+  b.timer = setTimeout(() => { void flushManagerBatch(cid); }, BATCH_MS);
+  b.timer.unref?.();
   return true;
 }
 

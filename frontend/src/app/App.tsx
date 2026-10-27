@@ -1320,7 +1320,10 @@ function HeaderTicker() {
   useEffect(() => {
     let alive = true;
     if (Date.now() - TICKER_CACHE.at < 15 * 60_000 && TICKER_CACHE.items.length) { setItems(TICKER_CACHE.items); return; }
-    fetch(`${API_BASE}/api/ticker`, { headers: authHeader() })
+    // authHeader() komponent ichidagi mahalliy funksiya — bu yerda ko'rinmaydi (ilova "authHeader is not
+    // defined" bilan qulab tushgandi). Sarlavha shu yerda tuziladi.
+    const tok = (() => { try { return localStorage.getItem('token'); } catch { return null; } })();
+    fetch(`${API_BASE}/api/ticker`, tok ? { headers: { Authorization: `Bearer ${tok}` } } : undefined)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         const list = Array.isArray(d?.items) ? d.items.slice(0, 8) : [];

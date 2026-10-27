@@ -216,7 +216,7 @@ jobs:
       - name: Upload APK + exe, notify all users via bot
         env:
           DEPLOY_SECRET: ${{ secrets.DEPLOY_BROADCAST_SECRET }}
-          BACKEND_URL: https://qurilisherp-backend.onrender.com
+          BACKEND_URL: https://erp-firma.uz
           VERSION_INPUT: ${{ needs.meta.outputs.version }}
           NOTES: ${{ inputs.notes }}
         run: |

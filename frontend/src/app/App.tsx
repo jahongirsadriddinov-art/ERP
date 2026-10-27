@@ -2,6 +2,11 @@ import { confirmDialog, promptDialog } from "./lib/confirmDialog";
 import { startBackground, stopBackground } from "./lib/background";
 import { fmtNumber, parseMoney } from "./lib/money";
 import { MoneyInput } from "./components/MoneyInput";
+// Sarlavha satri ikonalari (owner 2026-10-27: "oddiy emoji emas, premium ikona ishlat")
+import CalendarIcon from "@hugeicons/core-free-icons/Calendar03Icon";
+import DollarIcon from "@hugeicons/core-free-icons/Dollar01Icon";
+import SunIcon from "@hugeicons/core-free-icons/Sun03Icon";
+import NewsIcon from "@hugeicons/core-free-icons/News01Icon";
 import { PriceField } from "./components/Money";
 import { CountUp } from "./components/CountUp";
 import { useState, useRef, useEffect, useMemo, Suspense } from "react";
@@ -1314,14 +1319,12 @@ function HeaderTicker() {
   const now = new Date();
   const MON = ru ? ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"] : ["yan", "fev", "mar", "apr", "may", "iyun", "iyul", "avg", "sen", "okt", "noy", "dek"];
   const day = `${now.getDate()}-${MON[now.getMonth()]}`;
-  const [items, setItems] = useState<{ kind: string; text: string; icon?: string }[]>(() => TICKER_CACHE.items);
+  const [items, setItems] = useState<{ kind: string; text: string }[]>(() => TICKER_CACHE.items);
   const [i, setI] = useState(0);
 
   useEffect(() => {
     let alive = true;
     if (Date.now() - TICKER_CACHE.at < 15 * 60_000 && TICKER_CACHE.items.length) { setItems(TICKER_CACHE.items); return; }
-    // authHeader() komponent ichidagi mahalliy funksiya — bu yerda ko'rinmaydi (ilova "authHeader is not
-    // defined" bilan qulab tushgandi). Sarlavha shu yerda tuziladi.
     const tok = (() => { try { return localStorage.getItem('token'); } catch { return null; } })();
     fetch(`${API_BASE}/api/ticker`, tok ? { headers: { Authorization: `Bearer ${tok}` } } : undefined)
       .then((r) => (r.ok ? r.json() : null))
@@ -1335,25 +1338,28 @@ function HeaderTicker() {
     return () => { alive = false; };
   }, []);
 
-  const all = [{ kind: "day", text: day, icon: "📅" }, ...items];
+  const all = [{ kind: "day", text: day }, ...items];
   useEffect(() => {
     if (all.length < 2) return;
-    const t = setInterval(() => setI((v) => (v + 1) % all.length), 6000);
+    const t = setInterval(() => setI((v) => (v + 1) % all.length), 6500);
     return () => clearInterval(t);
   }, [all.length]);
 
   const cur = all[i % all.length];
+  const ICON: Record<string, typeof CalendarIcon> = { day: CalendarIcon, rate: DollarIcon, weather: SunIcon, news: NewsIcon };
   const tone = cur.kind === "rate" ? "text-emerald-600 dark:text-emerald-400"
     : cur.kind === "weather" ? "text-sky-600 dark:text-sky-400"
-    : cur.kind === "news" ? "text-muted-foreground" : "text-muted-foreground";
+    : "text-muted-foreground";
+  // Balandlik QAT'IY (h-[15px]) — satr almashganda sarlavha "sakramaydi"; yangi band pastdan ko'tariladi.
   return (
-    <span className="hidden sm:flex lg:hidden xl:flex items-center gap-1 min-w-0 max-w-[42%] flex-shrink" data-testid="header-day-rate" title={cur.text}>
-      <AnimatePresence mode="wait" initial={false}>
-        <motion.span key={`${i}-${cur.text}`}
-          initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
-          transition={{ duration: 0.28 }}
-          className={`text-[11px] font-semibold whitespace-nowrap leading-none truncate ${tone}`}>
-          {cur.icon ? `${cur.icon} ` : ""}{cur.text}
+    <span className="relative block h-[15px] overflow-hidden min-w-0" data-testid="header-day-rate" title={cur.text}>
+      <AnimatePresence mode="popLayout" initial={false}>
+        <motion.span key={`${i}-${cur.kind}`}
+          initial={{ y: 15, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -15, opacity: 0 }}
+          transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
+          className={`absolute inset-0 flex items-center gap-1 ${tone}`}>
+          <MorphIcon icon={ICON[cur.kind] || CalendarIcon} className="w-3 h-3 flex-shrink-0 opacity-80" />
+          <span className="text-[11px] font-semibold leading-none truncate">{cur.text}</span>
         </motion.span>
       </AnimatePresence>
     </span>
@@ -3130,8 +3136,10 @@ export default function App() {
         <div className="w-9 h-9 rounded-full flex items-center justify-center overflow-hidden bg-gradient-to-br from-accent to-accent/75 shadow-sm flex-shrink-0">
           <CompanyLogo src={companyLogo} imgClass="w-full h-full object-contain" iconClass="w-[18px] h-[18px] text-white" />
         </div>
-        <p className="text-[15px] font-bold tracking-tight truncate leading-tight min-w-0">{companyName}</p>
-        <HeaderTicker />
+        <div className="flex flex-col justify-center min-w-0 flex-1 gap-[2px]">
+          <p className="text-[15px] font-bold tracking-tight truncate leading-none">{companyName}</p>
+          <HeaderTicker />
+        </div>
       </div>
       <nav className="hidden lg:flex items-center gap-0.5 lg:gap-1 nav-pill-desktop px-1.5 py-1.5 rounded-full w-fit flex-shrink-0">
         {NAV.map(n=>(

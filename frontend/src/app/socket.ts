@@ -27,7 +27,13 @@ export function connectSocket(userId: string, companyId?: string): Socket {
     // ko'rinadi. "polling" birinchi bo'lsa (socket.io'ning standart va eng
     // ishonchli tartibi) — avval oddiy HTTP polling bilan ulanadi, keyin
     // imkon bo'lsa websocket'ga o'zi yangilaydi.
-    transports: ["polling", "websocket"],
+    // 2026-10-28: Railway'da backend bir nechta nusxada (replica) ishlaganda
+    // polling sessiyasi nusxalar orasida sakraydi va server "400 Bad Request"
+    // qaytaradi — ulanish cheksiz qayta urinishga tushib, butun ilovani
+    // sekinlashtiradi. WebSocket esa bitta nusxa bilan ochilgan ulanishda
+    // qoladi, shuning uchun U BIRINCHI; polling faqat zaxira sifatida qoladi
+    // (WS bloklangan tarmoqlar uchun).
+    transports: ["websocket", "polling"],
     reconnection: true,
     reconnectionAttempts: Infinity,
     reconnectionDelay: 1000,

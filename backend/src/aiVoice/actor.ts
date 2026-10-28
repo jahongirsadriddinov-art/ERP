@@ -18,6 +18,8 @@ export interface ActorState {
   firstName?: string;
   companyActive: boolean;
   hasFeature: boolean;
+  /** "Ochiq muloqot" shu odamga yoqilgan (dasturchi panelidan). */
+  openChat: boolean;
 }
 
 export type ActorCheck =
@@ -32,7 +34,7 @@ export async function loadActor(userId: string): Promise<ActorState | null> {
   if (c && Date.now() - c.at < ttlMs) return c.data;
   let data: ActorState | null = null;
   if (isObjectIdString(userId)) {
-    const u: any = await User.findById(userId).select('role isOwner isBlocked companyId firstName lastName').lean();
+    const u: any = await User.findById(userId).select('role isOwner isBlocked companyId firstName lastName aiOpenChat').lean();
     if (u) {
       const companyId = u.companyId ? String(u.companyId) : null;
       const st = companyId ? await getCompanyAiState(companyId) : { exists: false, active: false, hasFeature: false };
@@ -46,6 +48,7 @@ export async function loadActor(userId: string): Promise<ActorState | null> {
         firstName: String(u.firstName || '').trim() || undefined,
         companyActive: st.exists && st.active,
         hasFeature: st.hasFeature,
+        openChat: !!u.aiOpenChat,
       };
     }
   }

@@ -27,6 +27,7 @@ import { openExternalUrl } from "./platform";
 import { AnnouncementComposer, GlobalAnnouncementList } from "./AnnouncementParts";
 const ServerStatusPanel = lazy(() => import("./ServerStatusPanel"));
 const AppBuildsPanel = lazy(() => import("./AppBuildsPanel"));
+const AiOpenChatPanel = lazy(() => import("./AiOpenChatPanel"));
 // Xatolar jurnali (server/sayt/bot/fon ishlari) — alohida chunk
 const ErrorLogPanel = lazy(() => import("./ErrorLogPanel"));
 // Tashqi (off-site) zaxira: holat, "Hozir zaxira olish", arxivlar va tiklash
@@ -731,7 +732,10 @@ export default function DeveloperPanel({ currentUser, onLogout, profileEl }: { c
         ) : tab === "botUi" ? (
           <Suspense fallback={<SkeletonList items={3}/>}><BotUiPanel /></Suspense>
         ) : tab === "aiVoice" ? (
-          <Suspense fallback={<div className="h-40 rounded-2xl bg-muted/40 animate-pulse" />}><AiPlatformPanel /></Suspense>
+          <div className="space-y-3">
+            <Suspense fallback={<div className="h-40 rounded-2xl bg-muted/40 animate-pulse" />}><AiPlatformPanel /></Suspense>
+            <Suspense fallback={<div className="h-28 rounded-2xl bg-muted/40 animate-pulse" />}><AiOpenChatPanel /></Suspense>
+          </div>
         ) : tab === "announcements" ? (
           // ── Global e'lon — BARCHA firmalarning BARCHA xodimlariga (kirganda avtomatik oyna + push + Telegram) ──
           <div className="space-y-3">

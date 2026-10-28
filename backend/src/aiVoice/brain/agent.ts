@@ -180,6 +180,7 @@ export class ErpTextAgent implements TextAgent {
       channel: ctx.channel, today: now.date, weekday: now.isoWeekday, time: now.hhmm,
       objects: objects.names, objectsTotal: objects.total, toolNames: allowed,
       persona: settings.persona, voiceName: settings.voiceName,
+      openChat: actor.openChat,
     });
 
     return this.drive(order, { system, tools, ctx, allowed, input, userText, settings }, st, lang, reply);

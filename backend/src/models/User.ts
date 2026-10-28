@@ -23,6 +23,10 @@ export interface IUser extends Document {
   // v1.2 multi-tenant qo'shimchalari (hammasi nullable — eski yozuvlarni buzmaydi)
   companyId?: string;      // qaysi firmaga tegishli (Company._id string ko'rinishida)
   isOwner?: boolean;       // firma egasimi (self-signup orqali ochgan)
+  /** "Ochiq muloqot": AI shu foydalanuvchi bilan ERP/firma doirasidan TASHQARI ham
+   *  erkin suhbatlashadi va aytilgan ishni bajaradi. Dasturchi panelidan yoqiladi,
+   *  FAQAT tanlangan odamga (owner 2026-10-28). Standart — o'chiq. */
+  aiOpenChat?: boolean;
   telegramUserId?: string; // Telegram foydalanuvchi ID (chatId dan alohida)
   phoneVerifiedAt?: Date;  // telefon tasdiqlangan vaqti
   passwordHash?: string;   // kelajakdagi parol-login uchun (hozircha login telegram-kod bilan)
@@ -71,6 +75,7 @@ const UserSchema: Schema = new Schema({
   // v1.2 multi-tenant (nullable)
   companyId: { type: String, index: true },
   isOwner: { type: Boolean, default: false },
+  aiOpenChat: { type: Boolean, default: false },
   telegramUserId: { type: String },
   phoneVerifiedAt: { type: Date },
   passwordHash: { type: String },

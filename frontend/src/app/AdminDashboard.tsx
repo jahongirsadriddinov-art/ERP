@@ -128,7 +128,8 @@ export function AdminDashboard({ currentUser, users, projects, transfers, setUse
           { label: t('dashboard.totalStaff'), value: Number(stats.totalEmployees) || 0, fmtV: n0, color: "text-blue-600 dark:text-blue-300" },
           { label: t('dashboard.pendingTransfers'), value: Number(stats.pendingTransfers) || 0, fmtV: n0, color: "text-amber-600 dark:text-amber-300" },
           { label: t('dashboard.todayAttendance'), value: Number(stats.todayAttendance) || 0, fmtV: n0, color: "text-primary" },
-          { label: t('dashboard.totalExpenses'), value: Number(stats.totalExpenses) || 0, fmtV: fmt, color: "text-foreground" },
+          // "Jami chiqim" bu yerdan olib tashlandi (owner 2026-10-28: "ikkitasi nimaga kerak") —
+          // u sahifaning pastidagi qatorda doim ko'rinib turadi, ochib tafsilotini ham beradi.
         ].map(s => (
           <div key={s.label} className="surface rounded-lg px-3 py-1.5 flex items-center gap-2 flex-shrink-0 whitespace-nowrap liquid-transition hover:shadow-sm">
             <CountUp value={s.value} format={s.fmtV} className={`text-sm font-bold font-mono ${s.color}`} />

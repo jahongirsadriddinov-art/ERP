@@ -6,6 +6,7 @@ import fs from 'fs';
 import path from 'path';
 import User from '../models/User';
 import AppRelease from '../models/AppRelease';
+import AppBuild from '../models/AppBuild';
 import { bot } from '../services/bot';
 import { getBackendUrl } from '../utils/backendUrl';
 import { checkRate } from '../utils/rateLimit';
@@ -179,18 +180,20 @@ router.post('/broadcast-update', async (req, res) => {
       telegramChatId: { $exists: true, $ne: '' },
     }).select('telegramChatId').lean();
 
-    // Landing page/Profildagi "yuklab olish" bo'limi shu yozuvdan o'qiydi —
-    // botga yuborishdan OLDIN saqlaymiz, shunda broadcast biror sababdan
-    // sekinlashsa/qisman muvaffaqiyatsiz bo'lsa ham sayt allaqachon yangi
-    // versiyani ko'rsatadi (foydalanuvchi kutib o'tirmaydi).
-    await AppRelease.findOneAndUpdate(
-      { key: 'latest' },
-      { $set: { key: 'latest', version, notes: notes || '', apkUrl: apkUrl || undefined, exeUrl: exeUrl || undefined, updatedAt: new Date() } },
-      { upsert: true }
-    ).then(() => console.log(`[broadcast-update] AppRelease saqlandi: v${version}`))
-      .catch(err => console.error('[broadcast-update] AppRelease saqlash xatosi:', err));
+    // O'ZGARDI (owner 2026-10-28): CI qurgan build endi DARHOL chiqarilmaydi —
+    // u "nomzod" sifatida saqlanadi va dasturchi panelidagi ro'yxatda ko'rinadi.
+    // Foydalanuvchilarga faqat dasturchi "Chiqarish" bosgach ketadi
+    // (routes/appBuilds.ts). Shu sababli bu yerda AppRelease('latest')
+    // yangilanmaydi — sayt va ilovalar hamon oxirgi CHIQARILGAN versiyani
+    // ko'rsatib turadi.
+    await AppBuild.findOneAndUpdate(
+      { version },
+      { $set: { version, notes: notes || '', apkUrl: apkUrl || undefined, exeUrl: exeUrl || undefined } },
+      { upsert: true, setDefaultsOnInsert: true }
+    ).then(() => console.log(`[broadcast-update] AppBuild saqlandi (chiqarilmagan): v${version}`))
+      .catch(err => console.error('[broadcast-update] AppBuild saqlash xatosi:', err));
 
-    const introLines = [`🆕 *Yangi versiya tayyor (${version})*`, `CI qurdi — hammaga hali YUBORILMADI. Ko'rib chiqing, xohlasangiz "📢 Xabar yuborish" orqali (yoki fayllarni to'g'ridan-to'g'ri shu botga tashlab) o'zingiz tarqating.`];
+    const introLines = [`🆕 *Yangi versiya tayyor (${version})*`, `CI qurdi — hammaga hali YUBORILMADI va ilovalarga ham chiqarilmadi. Dasturchi panelidagi "Ilova" bo'limidan "Chiqarish" bosilganda foydalanuvchilar yangilanishni ko'radi.`];
     if (notes) introLines.push(String(notes));
     const introText = introLines.join('\n\n');
 

@@ -42,6 +42,7 @@ import deployRoutes from './routes/deploy';
 import paymentsRoutes from './routes/payments';
 import uptimeRoutes from './routes/uptime';
 import turnStatusRoutes from './routes/turnStatus';
+import appBuildRoutes from './routes/appBuilds';
 import botUiRoutes, { stickerImageRouter as botUiStickerRoutes } from './routes/botUi';
 import insightsRoutes from './routes/insights';
 import worklogsRoutes from './routes/worklogs';
@@ -318,6 +319,7 @@ app.use('/api/dev-announcements', requireAuth, requireDeveloper, devAnnouncement
 app.use('/api/dev/backup',      requireAuth, requireDeveloper, devBackupRoutes); // tashqi zaxira (S3/R2 + Telegram), tiklash
 app.use('/api/dev/uptime',      requireAuth, requireDeveloper, uptimeRoutes); // UptimeRobot holati (read-only kalit)
 app.use('/api/dev/turn',        requireAuth, requireDeveloper, turnStatusRoutes); // TURN (qo'ng'iroq relay) holati va trafik sarfi
+app.use('/api/dev/app-builds',  requireAuth, requireDeveloper, appBuildRoutes); // CI qurgan build'lar — qo'lda chiqarish
 app.use('/api/dev/bot-ui',      requireAuth, requireDeveloper, botUiRoutes); // Bot dizayni: tugma matni/premium emoji/rang, buyruqlar
 app.use('/api/bot-ui-sticker',  botUiStickerRoutes); // faqat qo'shilgan emoji paketlari rasmlari (<img> token yubormaydi)
 // publicClientRoutes — mijoz portali, ATAYLAB auth shart emas (mijoz tizim

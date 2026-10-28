@@ -26,6 +26,7 @@ import { SkeletonList, SkeletonMessage } from "./Skeleton";
 import { openExternalUrl } from "./platform";
 import { AnnouncementComposer, GlobalAnnouncementList } from "./AnnouncementParts";
 const ServerStatusPanel = lazy(() => import("./ServerStatusPanel"));
+const AppBuildsPanel = lazy(() => import("./AppBuildsPanel"));
 // Xatolar jurnali (server/sayt/bot/fon ishlari) — alohida chunk
 const ErrorLogPanel = lazy(() => import("./ErrorLogPanel"));
 // Tashqi (off-site) zaxira: holat, "Hozir zaxira olish", arxivlar va tiklash
@@ -387,6 +388,9 @@ export default function DeveloperPanel({ currentUser, onLogout, profileEl }: { c
           <button onClick={() => setTab("server")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "server" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
             {t('devPanel.tabs.server')}
           </button>
+          <button onClick={() => setTab("appBuilds")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "appBuilds" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
+            📲 Ilova
+          </button>
           <button onClick={() => setTab("backup")} data-testid="dev-tab-backup" className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "backup" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
             {t('devPanel.tabs.backup')}
           </button>
@@ -720,6 +724,8 @@ export default function DeveloperPanel({ currentUser, onLogout, profileEl }: { c
           <Suspense fallback={<SkeletonList items={3}/>}><ErrorLogPanel /></Suspense>
         ) : tab === "server" ? (
           <Suspense fallback={<SkeletonList items={3}/>}><ServerStatusPanel /></Suspense>
+        ) : tab === "appBuilds" ? (
+          <Suspense fallback={<SkeletonList items={3}/>}><AppBuildsPanel /></Suspense>
         ) : tab === "backup" ? (
           <Suspense fallback={<SkeletonList items={3}/>}><BackupPanel /></Suspense>
         ) : tab === "botUi" ? (

@@ -9,6 +9,11 @@ import { SkeletonList } from "./Skeleton";
 type Monitor = { id: number; name: string; url: string; status: "up" | "down" | "paused" | "pending"; uptime: { d1: number | null; d7: number | null; d30: number | null }; responseMs: number | null };
 type Res = { configured: boolean; monitors: Monitor[]; error?: string };
 
+// TURN — qo'ng'iroq ovozini router/NAT ortidan o'tkazib beradigan relay server
+// (owner 2026-10-28: "admin paneldan kuzatishni qo'sh"). Qo'ng'iroq uzilsa, sababi
+// odatda shu yerda ko'rinadi: credential muddati tugagan yoki kvota to'lgan.
+type Turn = { configured: boolean; ok?: boolean; usageGB?: number | null; quotaGB?: number; percent?: number | null; problem?: string | null };
+
 const TONE: Record<Monitor["status"], string> = {
   up: "bg-emerald-500", down: "bg-red-500", paused: "bg-muted-foreground", pending: "bg-amber-500",
 };
@@ -17,6 +22,7 @@ const fmt = (v: number | null) => (v === null ? "—" : `${v}%`);
 export default function ServerStatusPanel() {
   const { t } = useTranslation();
   const [data, setData] = useState<Res | null>(null);
+  const [turn, setTurn] = useState<Turn | null>(null);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -25,6 +31,8 @@ export default function ServerStatusPanel() {
       const r = await fetch(`${API_BASE}/api/dev/uptime`, { cache: "no-store" });
       const j = await r.json().catch(() => null);
       setData(j && typeof j === "object" ? j : { configured: true, monitors: [], error: "network" });
+      const tr = await fetch(`${API_BASE}/api/dev/turn`, { cache: "no-store" }).then((x) => x.json()).catch(() => null);
+      if (tr && typeof tr === "object") setTurn(tr);
     } catch {
       setData({ configured: true, monitors: [], error: "network" });
     } finally {
@@ -55,6 +63,28 @@ export default function ServerStatusPanel() {
         </button>
       </div>
       {data.error && <p className="text-xs text-amber-700 dark:text-amber-300">{t("devPanel.server.fetchError")}</p>}
+      {turn?.configured && (
+        <div className="surface rounded-2xl p-4 space-y-2">
+          <div className="flex items-center gap-3">
+            <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${turn.ok ? "bg-emerald-500" : "bg-red-500 animate-pulse"}`} />
+            <p className="text-sm font-semibold flex-1">Qo'ng'iroq serveri (TURN)</p>
+            <p className="text-xs font-mono text-muted-foreground">
+              {turn.usageGB != null ? `${turn.usageGB.toFixed(2)} / ${turn.quotaGB} GB` : `— / ${turn.quotaGB} GB`}
+            </p>
+          </div>
+          {turn.percent != null && (
+            <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+              <div className={`h-full rounded-full ${turn.percent >= 90 ? "bg-red-500" : turn.percent >= 70 ? "bg-amber-500" : "bg-emerald-500"}`}
+                style={{ width: `${Math.max(1, turn.percent)}%` }} />
+            </div>
+          )}
+          <p className="text-[11px] text-muted-foreground">
+            {turn.ok
+              ? `Ishlayapti${turn.percent != null ? ` — oylik kvotaning ${turn.percent}% ishlatilgan` : ""}. Kvota tugasa qo'ng'iroq uziladi.`
+              : "Ishlamayapti — credential muddati tugagan yoki kalit noto'g'ri. Metered panelida yangi credential yarating va uning API Key'ini METERED_API_KEY ga qo'ying."}
+          </p>
+        </div>
+      )}
       {data.monitors.length === 0 ? (
         <p className="text-sm text-muted-foreground py-6 text-center">{t("devPanel.server.empty")}</p>
       ) : data.monitors.map((m) => (

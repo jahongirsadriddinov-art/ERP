@@ -13,7 +13,7 @@ import { telegramCapacity } from '../sessions';
 import { getSettings, isAiActive } from '../settings';
 import { getVoiceSessionManager, resolveVoiceLang } from '../voice/sessionManager';
 import { getCallConsent } from '../consent';
-import { checkUserCallLimit } from '../voice/callLimits';
+import { assistantMaxDurationSec, checkUserCallLimit } from '../voice/callLimits';
 import { reapStaleTelegramSessions, registerBridge, TelegramTransport } from './callBridge';
 import { findEmployeeByTgId } from './tgLink';
 import { accountBusy, getAccount, markSessionAccount } from './companyAccounts';
@@ -151,7 +151,7 @@ export async function decideIncomingCall(req: IncomingCallRequest, now: Date = n
     if (!lim.ok) return { ...base, accept: false, reason: lim.code === 'cooldown' ? `limit_cooldown_${lim.retryAfterSec}s` : `limit_hourly_${lim.retryAfterSec}s` };
 
     const lang = await resolveVoiceLang(companyId, employeeId, settings);
-    const maxDurationSec = Math.min(600, Math.max(30, Math.round(Number(settings.calls.assistantMaxDurationSec) || 300)));
+    const maxDurationSec = assistantMaxDurationSec({ role: ac.actor.role, isOwner: ac.actor.isOwner, settings, hardCapSec: 600 });
     const transport = new TelegramTransport();
     const started = await getVoiceSessionManager().start({
       companyId, employeeId, purpose: 'assistant', channel: 'telegram_call', lang, ptt: false, transport,

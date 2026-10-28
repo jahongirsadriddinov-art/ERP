@@ -7,6 +7,7 @@ import {
   type PendingActionInfo, type ToolChannel, type ToolCtx, type ToolDeclaration, type ToolResult, type ToolStatus,
 } from '../contracts';
 import { checkActor, type ActorState } from '../actor';
+import { assistantMaxDurationSec } from './callLimits';
 import { createTextAgent } from '../brain/textAgent';
 import { geminiConfigured } from '../lib/geminiKeys';
 import { newCorrelationId } from '../lib/ids';
@@ -838,6 +839,7 @@ export class VoiceSessionManager implements VoiceSessionManagerApi {
 
   async start(opts: StartVoiceSessionOpts): Promise<StartVoiceSessionResult> {
     const fail = (reason: FailReason): StartVoiceSessionResult => ({ ok: false, reason });
+    const actorOf = (a: { ok: true; actor: ActorState } | { ok: false }): ActorState => (a as { actor: ActorState }).actor;
     try {
       if (this.draining || !aiConfig.enabled) return fail('disabled');
       if (!opts?.companyId || !opts.employeeId || !opts.transport) return fail('error');
@@ -875,7 +877,12 @@ export class VoiceSessionManager implements VoiceSessionManagerApi {
 
       const limits = {
         ringTimeoutSec: Math.max(0, Math.round(opts.ringTimeoutSec ?? settings.calls.ringTimeoutSec)),
-        maxDurationSec: Math.max(1, Math.round(opts.maxDurationSec ?? (opts.purpose === 'assistant' ? settings.calls.assistantMaxDurationSec : settings.calls.maxDurationSec))),
+        // Rahbarlar (ega, direktor, o'rinbosar) uchun yordamchi suhbat uzunligi cheklanmaydi —
+        // owner 2026-10-28: "«suhbatni tugatamiz» deb o'chirib qo'ymasin". Telegram yo'lida bu
+        // allaqachon hisoblanib, opts.maxDurationSec bilan keladi.
+        maxDurationSec: Math.max(1, Math.round(opts.maxDurationSec ?? (opts.purpose === 'assistant'
+          ? assistantMaxDurationSec({ role: actorOf(ac).role, isOwner: actorOf(ac).isOwner, settings })
+          : settings.calls.maxDurationSec))),
       };
       let doc: any;
       const create = () => AiCallSession.create({

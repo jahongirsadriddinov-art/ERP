@@ -24,6 +24,21 @@ export function isUnlimitedCallRole(role: string | undefined): boolean {
   return UNLIMITED_CALL_ROLES.includes(String(role || ''));
 }
 
+// Owner 2026-10-28: "nimaga «suhbatni tugatamiz» deb o'chirib qo'yadi — firma egasi va
+// o'rinbosarlar limitsiz gaplasha olsin". Rahbarlar uchun suhbat uzunligi cheklovi olib
+// tashlandi. Mutlaqo cheksiz emas: unutilgan yoki osilib qolgan qo'ng'iroq butun kecha
+// ochiq turib pul yemasligi uchun 4 soatlik xavfsizlik shifti qoldirildi.
+export const BOSS_CALL_MAX_SEC = 4 * 3600;
+
+/** Yordamchi qo'ng'iroq uchun ruxsat etilgan uzunlik (sekund). */
+export function assistantMaxDurationSec(p: {
+  role?: string; isOwner?: boolean; settings: Pick<AiSettingsData, 'calls'>; hardCapSec?: number;
+}): number {
+  if (p.isOwner || isUnlimitedCallRole(p.role)) return BOSS_CALL_MAX_SEC;
+  const base = Math.max(30, Math.round(Number(p.settings.calls.assistantMaxDurationSec) || 300));
+  return p.hardCapSec ? Math.min(p.hardCapSec, base) : base;
+}
+
 export async function checkUserCallLimit(p: {
   companyId: string; employeeId: string; role: string; settings: Pick<AiSettingsData, 'limits'>; now?: Date;
 }): Promise<CallLimitCheck> {

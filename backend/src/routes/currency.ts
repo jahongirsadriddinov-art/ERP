@@ -113,8 +113,11 @@ router.get('/rates', async (_req, res) => {
   // Kurslar fonda yangilanadi — so'rov tashqi saytlarni KUTMAYDI (tezlik, 2026-10-28)
   if (Date.now() - lastFetch > 3600_000) void fetchCBURates();
   void ensureKapital();
-  // 5 daqiqa davomida brauzer/Cloudflare keshidan berilsa ham bo'ladi
-  res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=1800');
+  // 5 daqiqa brauzerning O'Z keshidan beriladi. "public" EMAS: firma o'z kursini
+  // belgilagan bo'lsa javob shu firmaga xos bo'ladi — umumiy kesh (CDN, korxona
+  // proksisi) uni boshqa firmaga qaytarib yuborishi mumkin edi (xavfsizlik
+  // tekshiruvi, 2026-10-28). Tezlik yutug'i baribir saqlanadi.
+  res.set('Cache-Control', 'private, max-age=300');
 
   let usd = kapital.USD?.sell || cachedRates.USD;
   let eur = kapital.EUR?.sell || cachedRates.EUR;

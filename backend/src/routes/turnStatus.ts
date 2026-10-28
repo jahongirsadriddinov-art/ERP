@@ -20,6 +20,9 @@ router.get('/', async (_req, res) => {
   const quotaGB = Number(process.env.METERED_QUOTA_GB) > 0 ? Number(process.env.METERED_QUOTA_GB) : 20;
   // ICE ro'yxati olinsa — TURN ishlayapti; olinmasa sabab odatda credential muddati tugagani.
   const ice = await getIceServers().catch(() => null);
+  // Sarf (trafik) raqamini Metered BEPUL tarifda bermaydi — `current_usage_for_user`
+  // 400 "not available with the Free Tier" qaytaradi (2026-10-28 da tekshirildi).
+  // Shuning uchun "—" o'rniga buni ochiq aytamiz, yo'q raqamni kutib o'tirmaslik uchun.
   const usageGB = ice ? await getTurnUsageGB().catch(() => null) : null;
   const body = {
     configured: true,
@@ -28,6 +31,7 @@ router.get('/', async (_req, res) => {
     usageGB,
     quotaGB,
     percent: usageGB != null && quotaGB > 0 ? Math.min(100, Math.round((usageGB / quotaGB) * 1000) / 10) : null,
+    usageAvailable: usageGB != null,
     problem: ice?.length ? null : 'credential',
   };
   cache = { at: Date.now(), body };

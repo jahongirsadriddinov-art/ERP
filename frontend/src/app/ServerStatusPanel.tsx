@@ -12,7 +12,7 @@ type Res = { configured: boolean; monitors: Monitor[]; error?: string };
 // TURN — qo'ng'iroq ovozini router/NAT ortidan o'tkazib beradigan relay server
 // (owner 2026-10-28: "admin paneldan kuzatishni qo'sh"). Qo'ng'iroq uzilsa, sababi
 // odatda shu yerda ko'rinadi: credential muddati tugagan yoki kvota to'lgan.
-type Turn = { configured: boolean; ok?: boolean; usageGB?: number | null; quotaGB?: number; percent?: number | null; problem?: string | null };
+type Turn = { configured: boolean; ok?: boolean; usageGB?: number | null; quotaGB?: number; percent?: number | null; usageAvailable?: boolean; problem?: string | null };
 
 const TONE: Record<Monitor["status"], string> = {
   up: "bg-emerald-500", down: "bg-red-500", paused: "bg-muted-foreground", pending: "bg-amber-500",
@@ -69,7 +69,7 @@ export default function ServerStatusPanel() {
             <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${turn.ok ? "bg-emerald-500" : "bg-red-500 animate-pulse"}`} />
             <p className="text-sm font-semibold flex-1">Qo'ng'iroq serveri (TURN)</p>
             <p className="text-xs font-mono text-muted-foreground">
-              {turn.usageGB != null ? `${turn.usageGB.toFixed(2)} / ${turn.quotaGB} GB` : `— / ${turn.quotaGB} GB`}
+              {turn.usageGB != null ? `${turn.usageGB.toFixed(2)} / ${turn.quotaGB} GB` : `${turn.quotaGB} GB kvota`}
             </p>
           </div>
           {turn.percent != null && (
@@ -80,7 +80,9 @@ export default function ServerStatusPanel() {
           )}
           <p className="text-[11px] text-muted-foreground">
             {turn.ok
-              ? `Ishlayapti${turn.percent != null ? ` — oylik kvotaning ${turn.percent}% ishlatilgan` : ""}. Kvota tugasa qo'ng'iroq uziladi.`
+              ? turn.percent != null
+                ? `Ishlayapti — oylik kvotaning ${turn.percent}% ishlatilgan. Kvota tugasa qo'ng'iroq uziladi.`
+                : "Ishlayapti. Sarflangan trafik raqamini Metered bepul tarifda bermaydi — uni Metered panelidagi \"Quota Usage\" bo'limida ko'rasiz."
               : "Ishlamayapti — credential muddati tugagan yoki kalit noto'g'ri. Metered panelida yangi credential yarating va uning API Key'ini METERED_API_KEY ga qo'ying."}
           </p>
         </div>

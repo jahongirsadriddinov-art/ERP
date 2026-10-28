@@ -104,12 +104,13 @@ export function IncomePanel({ currentUser, users, projects, incomes, onAdded, on
                 <div className="min-w-0 flex-1">
                   <div className="flex items-start justify-between gap-3">
                     <p className="font-semibold text-[15px] leading-snug line-clamp-2 min-w-0">{e.description || k("noNote")}</p>
-                    <div className="text-right flex-shrink-0">
-                      <p className="fin-amount text-[17px] whitespace-nowrap" data-testid="income-amount"><CountUp value={moneyOf(e, inUzs).num} format={moneyOf(e, inUzs).fmt} prefix="+" /></p>
-                      {moneyOf(e, inUzs).sub && <p className="text-[11px] text-muted-foreground whitespace-nowrap tabular-nums">{moneyOf(e, inUzs).sub}</p>}
-                    </div>
+                    <p className="fin-amount text-[17px] whitespace-nowrap flex-shrink-0" data-testid="income-amount"><CountUp value={moneyOf(e, inUzs).num} format={moneyOf(e, inUzs).fmt} prefix="+" /></p>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1 truncate">{[proj?.name, e.date].filter(Boolean).join(" · ")}</p>
+                  {/* "≈ so'm" qatori karta balandligini oshirmasin — sana qatorining o'ng chekkasida */}
+                  <div className="flex items-start justify-between gap-2 mt-1">
+                    <p className="text-xs text-muted-foreground truncate min-w-0">{[proj?.name, e.date].filter(Boolean).join(" · ")}</p>
+                    {moneyOf(e, inUzs).sub && <p className="text-[11px] text-muted-foreground whitespace-nowrap tabular-nums flex-shrink-0">{moneyOf(e, inUzs).sub}</p>}
+                  </div>
                   {isDirector && <p className="text-xs text-muted-foreground mt-0.5 truncate">{k("by")} <span className="font-medium text-foreground">{nameOf(e.createdById)}</span></p>}
                 </div>
               </div>

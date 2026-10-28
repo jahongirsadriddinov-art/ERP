@@ -212,18 +212,21 @@ export function FinancePage({ currentUser, users, projects, expenses, onAddExpen
                     <div className="min-w-0 flex-1">
                       <div className="flex items-start justify-between gap-3">
                         <p className="text-[15px] font-semibold leading-snug text-foreground line-clamp-2 min-w-0">{e.description || expLabel(t, e.type as ExpType)}</p>
-                        <div className="text-right flex-shrink-0">
-                          <p className="fin-amount text-[17px] whitespace-nowrap"><CountUp value={m.num} format={m.fmt} /></p>
-                          {m.sub && <p className="text-[11px] text-muted-foreground whitespace-nowrap tabular-nums">{m.sub}</p>}
-                        </div>
+                        <p className="fin-amount text-[17px] whitespace-nowrap flex-shrink-0"><CountUp value={m.num} format={m.fmt} /></p>
                       </div>
-                      <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                      {/* Owner 2026-10-28: valyutali summa ikki qator bo'lganda butun kartaning
+                          ichi pastga surilardi. Endi "≈ so'm" qatori summaning TAGIDA emas,
+                          chiplar qatorining O'NG chekkasida — karta balandligi o'zgarmaydi. */}
+                      <div className="flex items-start justify-between gap-2 mt-1.5">
+                      <div className="flex items-center gap-1.5 flex-wrap min-w-0">
                         <span className="fin-chip" style={{ ["--chip" as any]: look.acc }}>{expLabel(t, e.type as ExpType) || e.type}</span>
                         {e.status==="confirmed"
                           ?<span className="fin-chip" style={{ ["--chip" as any]: "#10b981" }}><MorphIcon icon={CheckCircle} className="w-3 h-3" />{t('finance.confirmed')}</span>
                           :<span className="fin-chip" style={{ ["--chip" as any]: "#f59e0b" }}><MorphIcon icon={Clock} className="w-3 h-3" />{t('finance.pending')}</span>}
                         {e.anomaly && <span className="fin-chip" style={{ ["--chip" as any]: "#f59e0b" }}>⚠ {t('finance.anomaly', { defaultValue: "G'ayrioddiy" })}</span>}
                         {e.requiresAdminApproval&&e.status==="pending"&&<span className="fin-chip" style={{ ["--chip" as any]: "#e5633a" }}>{t('approvalChain.needsApproval')}</span>}
+                      </div>
+                        {m.sub && <p className="text-[11px] text-muted-foreground whitespace-nowrap tabular-nums flex-shrink-0 leading-5">{m.sub}</p>}
                       </div>
                       <p className="text-[13px] text-muted-foreground mt-1.5 truncate">
                         {[proj?.name || e.objectLabel, e.date].filter(Boolean).join(" · ")}

@@ -128,6 +128,20 @@ describe('CascadeProvider', () => {
     expect(s.speaking).toBe(false);
   });
 
+  // Owner 2026-10-28: "AI gapi uzilib qolyapti" — qurilish shovqini/aks-sado javobni kesardi.
+  it("qisqa tovush AI gapini bo'lmaydi (tasdiqlash oynasi)", async () => {
+    let t = 0;
+    const { s, ev } = await openCascade({ now: () => t });
+    s.sendText('salom');
+    await s.idle();
+    expect(s.speaking).toBe(true);
+    // 250 ms tovush: VAD "gap boshlandi" deydi (minSpeechMs=200), lekin tasdiqlash (400 ms) yetmaydi
+    s.pushAudio(speech(250));
+    s.pushAudio(silence(700, 16_000));   // jimlik — nomzod bekor bo'ladi
+    expect(ev.interrupted).toBe(0);
+    expect(s.speaking).toBe(true);
+  });
+
   it('PTT: faqat activityStart..End orasidagi audio, ≥200 ms', async () => {
     const { s, ag, transcriber } = await openCascade({}, { ptt: true });
     s.pushAudio(speech(500));                         // PTT bosilmagan — e'tiborsiz

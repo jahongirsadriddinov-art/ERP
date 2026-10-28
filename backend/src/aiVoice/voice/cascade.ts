@@ -35,12 +35,27 @@ export interface CascadeDeps {
 const HISTORY_MAX = 12;
 const PTT_MAX_BYTES = 16_000 * 2 * 20; // 20 s
 
+// Owner 2026-10-28: "AI gapi uzilib qolyapti". Sabab — AI gapirayotganda mikrofondagi
+// HAR QANDAY tovush (qurilish shovqini, dinamikdan qaytgan aks-sado, yo'tal) VAD uchun
+// "foydalanuvchi gapira boshladi" edi va javob darhol bekor qilinardi.
+// Endi ikki himoya bor:
+// Endi bo'linish uchun nutq TASDIQLANISHI kerak: VAD "gap boshlandi" degandan keyin ham
+// kamida BARGE_CONFIRM_MS audio davomida nutq davom etishi shart. Qisqa tovush (taqillash,
+// yo'tal, aks-sado) o'tib ketadi; odam rostdan gapirsa — javob deyarli darhol to'xtaydi.
+// Hisob VAQT bo'yicha emas, KELGAN AUDIO miqdori bo'yicha — soatga bog'liq emas va
+// qo'ng'iroq sekinlashsa ham bir xil ishlaydi.
+const BARGE_CONFIRM_MS = 400;
+
 export class CascadeSession extends VoiceEmitter implements VoiceSession {
   private vad: EnergyVad;
   private history: { role: 'user' | 'assistant'; text: string }[] = [];
   private chain: Promise<void> = Promise.resolve();
   private current: AbortController | null = null;
   private speakingUntil = 0;
+  /** Bo'linish nomzodi: VAD nutq boshlandi dedi, lekin hali tasdiqlanmagan. */
+  private bargePending = false;
+  /** Nomzod boshlangandan beri kelgan audio (ms) — BARGE_CONFIRM_MS ga yetganda bo'linadi. */
+  private bargeMs = 0;
   private pttBuf: Buffer[] = [];
   private pttBytes = 0;
   private capturing = false;
@@ -66,8 +81,19 @@ export class CascadeSession extends VoiceEmitter implements VoiceSession {
       return;
     }
     for (const ev of this.vad.push(pcm16k)) {
-      if (ev.type === 'start') { if (this.speaking) this.bargeIn(); }
-      else if (ev.pcm.length) this.enqueue({ audio: ev.pcm });
+      if (ev.type === 'start') {
+        if (this.speaking && !this.bargePending) { this.bargePending = true; this.bargeMs = 0; }
+      } else {
+        // Nutq tugadi — tasdiqlanmagan nomzod bekor (qisqa tovush edi, AI gapini davom ettiradi)
+        this.cancelBarge();
+        if (ev.pcm.length) this.enqueue({ audio: ev.pcm });
+      }
+    }
+    // Nutq hamon davom etyaptimi — yetarli audio to'plangach bo'linamiz
+    if (this.bargePending) {
+      if (!this.vad.isSpeaking) { this.cancelBarge(); return; }
+      this.bargeMs += pcmDurationMs(pcm16k.length, this.vad.o.sampleRate);
+      if (this.bargeMs >= BARGE_CONFIRM_MS && this.speaking) this.bargeIn();
     }
   }
 
@@ -93,11 +119,15 @@ export class CascadeSession extends VoiceEmitter implements VoiceSession {
   async close(reason: string): Promise<void> {
     if (this.closed) return;
     this.closed = true;
+    this.cancelBarge();
     this.current?.abort();
     this.emit('closed', { reason });
   }
 
+  private cancelBarge() { this.bargePending = false; this.bargeMs = 0; }
+
   private bargeIn() {
+    this.cancelBarge();
     this.current?.abort();
     this.current = null;
     this.speakingUntil = 0;

@@ -323,8 +323,13 @@ export class GeminiLiveProvider implements VoiceProvider {
       let lastErr: unknown;
       for (let i = 0; i < plan.length; i++) {
         const [sq, th] = plan[i];
+        const plain = i === plan.length - 1 && i > 0;
         try {
-          const s = await connectOnce(key, sq, th, i === plan.length - 1 && i > 0);
+          const s = await connectOnce(key, sq, th, plain);
+          // Owner 2026-10-28 ("AI gapi uzilib qolyapti"): "plain" zaxira sozlamasida telefon uchun
+          // nutq boshlanishiga PAST sezgirlik (aks-sado himoyasi) tushib qoladi — qo'ng'iroq
+          // shovqinidan AI o'z gapini to'xtatib qo'yishi mumkin. Logda ko'rinib tursin.
+          if (plain && opts.telephony) console.warn(`[aiVoice] ${model}: zaxira ("plain") sozlamada ulandi — telefon aks-sado himoyasi yo'q`);
           if (search && !sq) {
             searchUnsupported.add(model);
             console.warn(`[aiVoice] ${model}: Live Google qidiruvi qabul qilinmadi — o'chirildi (${(lastErr as Error)?.message?.slice(0, 80)})`);

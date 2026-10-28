@@ -39,9 +39,23 @@ let DEVICE_FP = '';
   } catch { /* */ }
 })();
 
-export const API_BASE: string =
-  (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') ||
-  'http://localhost:5000';
+// Brauzerda (sayt) API DOIM sahifaning O'Z manzilidan so'raladi: /api/... Worker uni
+// backendga uzatadi. Shu sabab sayt qaysi nomdan ochilsa (erp-firma.uz, www yoki
+// cf.erp-firma.uz) — API ham, socket ham o'sha nomga boradi.
+//
+// Owner 2026-10-28: provayder `erp-firma.uz` nomini to'sib qo'ygani aniqlandi
+// (`cf.erp-firma.uz` xuddi o'sha serverdan muammosiz ishlaydi). Manzil qotirib
+// yozilgani uchun sahifa cf'dan ochilsa ham socket to'silgan nomga ulanardi.
+// Endi bunday bog'liqlik yo'q — zaxira nom bir zumda ishga tushadi.
+//
+// O'rnatilgan ilovalarda (Tauri/Capacitor) sahifa fayl tizimidan ochiladi, u yerda
+// "o'z manzili" yo'q — shuning uchun ular VITE_API_URL dagi to'liq manzilni ishlatadi.
+const ENV_BASE = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '');
+const isWebPage = typeof location !== 'undefined' && location.protocol.startsWith('http');
+
+export const API_BASE: string = isWebPage
+  ? location.origin
+  : (ENV_BASE || 'http://localhost:5000');
 
 /** Nisbiy yo'lni to'liq API URL ga aylantiradi. Misol: api('/api/objects') */
 export const api = (path: string): string =>

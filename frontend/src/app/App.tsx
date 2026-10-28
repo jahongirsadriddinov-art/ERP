@@ -1326,10 +1326,11 @@ function CompanyName({ name }: { name: string }) {
   const fit = () => {
     const el = ref.current;
     if (!el) return;
-    let size = 17;
+    // Owner 2026-10-28: "bitta o'rtacha default qo'y — nomi kichik bo'lsa ham kichrayib
+    // ketmasin". Shrift DOIM 16px; faqat nom haqiqatan sig'masa 13px gacha kichrayadi.
+    let size = 16;
     el.style.fontSize = size + "px";
-    // sig'magunicha 0.5px dan kichraytiramiz (eng kami 11px)
-    while (size > 11 && el.scrollWidth > el.clientWidth + 1) { size -= 0.5; el.style.fontSize = size + "px"; }
+    while (size > 13 && el.scrollWidth > el.clientWidth + 1) { size -= 0.5; el.style.fontSize = size + "px"; }
   };
   useLayoutEffect(() => { fit(); }, [name]);
   useEffect(() => {
@@ -1342,7 +1343,7 @@ function CompanyName({ name }: { name: string }) {
   }, []);
   return (
     <p ref={ref} className="font-bold tracking-tight leading-[1.15] whitespace-nowrap overflow-hidden text-ellipsis block w-full"
-      style={{ fontSize: 17 }} title={name}>{name}</p>
+      style={{ fontSize: 16 }} title={name}>{name}</p>
   );
 }
 
@@ -1397,7 +1398,10 @@ function HeaderTicker() {
   return (
     <span ref={boxRef} className="relative block h-[16px] overflow-hidden min-w-0"
       style={{ WebkitMaskImage: "linear-gradient(90deg, #000 0, #000 calc(100% - 14px), transparent 100%)", maskImage: "linear-gradient(90deg, #000 0, #000 calc(100% - 14px), transparent 100%)" }} data-testid="header-day-rate" title={cur.text}>
-      <AnimatePresence mode="popLayout" initial={false}>
+      {/* Owner 2026-10-28: "chiqadigan narsalar ikonlar ustiga chiqib ketvotti" — ilgari
+          eski va yangi band bir vaqtning o'zida chizilib, matn ustma-ust tushardi.
+          "wait": avval eskisi chiqib ketadi, keyin yangisi ko'tariladi. */}
+      <AnimatePresence mode="wait" initial={false}>
         <motion.span key={`${i}-${cur.kind}`}
           initial={{ y: 16, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -16, opacity: 0 }}
           transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}

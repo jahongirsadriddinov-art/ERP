@@ -30,16 +30,15 @@ export default {
     // (hammasi bitta manzil), WebSocket (socket.io) ham shu yo'l bilan o'tadi.
     if (PROXY.some((p) => url.pathname === p || url.pathname.startsWith(p))) {
       const target = backend + url.pathname + url.search;
-      const headers = new Headers(request.headers);
-      headers.delete('host');
-      headers.set('x-forwarded-host', url.host);
-      headers.set('x-forwarded-proto', 'https');
-      return fetch(target, {
-        method: request.method,
-        headers,
-        body: request.method === 'GET' || request.method === 'HEAD' ? undefined : request.body,
-        redirect: 'manual',
-      });
+      // MUHIM: so'rovni qismlardan qayta yig'ish MUMKIN EMAS — WebSocket "upgrade"
+      // shunda yo'qoladi va socket.io 400 qaytarib, uzluksiz qayta ulanish
+      // halqasiga tushadi (butun sayt/ilova sekinlashadi, 2026-10-28). Asl
+      // so'rovning o'zidan nusxa olinsa, upgrade ham, oqim ko'rinishidagi tana
+      // ham o'z holicha o'tadi.
+      const proxied = new Request(target, request);
+      proxied.headers.set('x-forwarded-host', url.host);
+      proxied.headers.set('x-forwarded-proto', 'https');
+      return fetch(proxied);
     }
 
     if (url.pathname.startsWith('/files/')) {

@@ -10,6 +10,23 @@ import App, { ClientViewPage } from "./app/App.tsx";
 import UpdateChecker from "./app/UpdateChecker.tsx";
 import MediaViewer from "./app/MediaViewer.tsx";
 import { installErrorReporting } from "./app/lib/monitoring";
+import { API_BASE } from "./app/api";
+
+// Eski yozuvlarda rasm/video havolasi SERVERNING O'SHA PAYTDAGI manzili bilan saqlangan
+// (masalan qurilisherp-backend.onrender.com). Server ko'chgach o'sha havolalar o'lik
+// bo'lib qoldi — rasmlar "yuklanmadi" bo'lib turibdi (owner 2026-10-28). Fayllarning
+// o'zi yo'qolmagan: ular bazada saqlanadi va joriy server o'sha nom bilan beradi.
+// Shu sabab rasm yuklanmay qolgandagina manzil joriy serverga almashtirilib, BIR marta
+// qayta urinib ko'riladi (xatosiz holatda hech qanday qo'shimcha ish bajarilmaydi).
+const LEGACY_MEDIA = /^https?:\/\/[^/]*(onrender\.com|up\.railway\.app)/i;
+document.addEventListener('error', (e) => {
+  const el = e.target as (HTMLImageElement | HTMLVideoElement | HTMLSourceElement) | null;
+  if (!el || !('src' in el) || (el as HTMLElement).dataset?.mediaRetried) return;
+  const src = el.src || '';
+  if (!LEGACY_MEDIA.test(src)) return;
+  (el as HTMLElement).dataset.mediaRetried = '1';
+  el.src = src.replace(LEGACY_MEDIA, API_BASE.replace(/\/+$/, ''));
+}, true);
 import { installNativeContextMenuGuard } from "./app/lib/nativeContextMenu";
 import { installDevtoolsGuard } from "./app/lib/devtoolsGuard";
 import { shouldStartLocked, showPrivacyCover } from "./app/AppLock";

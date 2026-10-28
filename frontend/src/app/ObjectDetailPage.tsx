@@ -587,6 +587,8 @@ export function MaterialDetailsModal({ mat, confT, pendT, objectId, canEdit, onC
 // ─── Smeta natijasi ko'rinishi — barcha bo'limlar, to'liq aniqlik ─────────────
 export function SmetaResultView({ smeta }: { smeta: SmetaResult }) {
   const [openGroup, setOpenGroup] = useState<string | null>("material");
+  // Hujjat jamlanmasi — boshqa bo'limlardek ochib-yopiladi (owner 2026-10-28)
+  const [openSummary, setOpenSummary] = useState(true);
   const [openWork, setOpenWork] = useState<number | null>(null);
   const [openSection, setOpenSection] = useState<Record<string, boolean>>({});
   // Guruhda minglab qator bo'lishi mumkin — avval 150 tasi, keyin "yana" bilan qo'shiladi
@@ -643,23 +645,30 @@ export function SmetaResultView({ smeta }: { smeta: SmetaResult }) {
       {/* Hujjat oxiridagi jamlanma (ЗАРПЛАТА, ВСЕГО, НДС 12% …) — faylda qanday bo'lsa shunday */}
       {!!(smeta as any).summary?.length && (
         <div className="glass-card rounded-xl border border-border overflow-hidden">
-          <p className="text-sm font-bold px-4 pt-3 pb-1">СМЕТНАЯ СТОИМОСТЬ <span className="text-muted-foreground font-normal">(hujjatdan)</span></p>
-          <div className="overflow-x-auto" onWheel={hwheel} style={{ WebkitOverflowScrolling: "touch", touchAction: "pan-x pan-y" }}>
-          <table className="w-full min-w-[520px] text-left text-xs">
+          <button type="button" onClick={() => setOpenSummary((v) => !v)}
+            className="w-full flex items-center justify-between gap-2 px-4 py-3 hover:bg-muted/30">
+            <span className="text-sm font-bold text-left">СМЕТНАЯ СТОИМОСТЬ <span className="text-muted-foreground font-normal">(hujjatdan)</span></span>
+            <MorphIcon icon={openSummary ? ChevronUp : ChevronDown} className="w-4 h-4 shrink-0" />
+          </button>
+          {openSummary && (
+          /* Responsiv: jadval eng tor ekranga ham sig'adi — nomi bir necha qatorga
+             o'tadi, summa esa hech qachon kesilmaydi (owner 2026-10-28: o'ng tarafi
+             ko'rinmay qolgandi). Yonga surish shart emas. */
+          <table className="w-full table-fixed text-left text-xs">
             <tbody>
               {((smeta as any).summary as { name: string; percent: number | null; amount: number }[]).map((l, i) => {
                 const strong = /^(всего|итог|ндс)/i.test(l.name);
                 return (
                   <tr key={i} className={`border-t border-border/40 ${strong ? "bg-muted/25 font-bold" : ""}`}>
-                    <td className="px-4 py-1.5">{l.name}</td>
-                    <td className="px-2 py-1.5 text-muted-foreground whitespace-nowrap">{l.percent != null ? `${l.percent}%` : ""}</td>
-                    <td className="px-4 py-1.5 text-right font-mono whitespace-nowrap">{fmtNum(l.amount)}</td>
+                    <td className="px-3 sm:px-4 py-1.5 break-words">{l.name}</td>
+                    <td className="w-10 px-1 py-1.5 text-muted-foreground text-right whitespace-nowrap">{l.percent != null ? `${l.percent}%` : ""}</td>
+                    <td className="w-[38%] sm:w-[30%] px-3 sm:px-4 py-1.5 text-right font-mono whitespace-nowrap">{fmtNum(l.amount)}</td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
-          </div>
+          )}
         </div>
       )}
 

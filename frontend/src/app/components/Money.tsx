@@ -41,6 +41,9 @@ export function InUzsToggle({ value, onChange }: { value: boolean; onChange: (v:
 }
 
 /** Summa + valyuta tanlash; kiritilganda so'mdagi qiymati darhol ko'rinadi. */
+/** Yorliq uchun valyuta nomi: so'm / сум / $ / €. */
+const curName = (c: Cur) => (c === "UZS" ? (isRu() ? "сум" : "so'm") : SIGN[c]);
+
 export function MoneyField({ amount, currency, onAmount, onCurrency, label, autoFocus, className, side = "sell", testId = "money-amount" }: {
   amount: string; currency: Cur; onAmount: (v: string) => void; onCurrency: (c: Cur) => void; label: string; autoFocus?: boolean; className: string; testId?: string;
   /** kirim — bank sotib olish kursi (buy), chiqim — sotish kursi (sell); server ham shunday hisoblaydi */
@@ -54,14 +57,20 @@ export function MoneyField({ amount, currency, onAmount, onCurrency, label, auto
   const rate = currency === "UZS" ? 1 : (!custom && kb ? kb[side] : currency === "USD" ? LIVE_USD_RATE : LIVE_EUR_RATE);
   return (
     <div>
-      <span className="text-xs font-semibold text-muted-foreground">{label}</span>
+      {/* Yorliqda TANLANGAN valyuta turadi (owner 2026-10-28: "dollarda yozyapman,
+          lekin so'm deb ko'rinyapti") — ilgari matnga "(so'm)" qotirib yozilgandi. */}
+      <span className="text-xs font-semibold text-muted-foreground">
+        {label} <span className="text-foreground">({curName(currency)})</span>
+      </span>
       <div className="flex gap-2 mt-1">
         <MoneyInput autoFocus={autoFocus} value={amount} currency={currency} placeholder="0" data-testid={testId}
           onChange={onAmount} className={`${className} flex-1 min-w-0 tabular-nums`} />
         <div className="flex p-1 rounded-xl bg-muted flex-shrink-0" role="radiogroup" aria-label="Valyuta">
           {(["UZS", "USD"] as Cur[]).map((c) => (
             <button key={c} type="button" role="radio" aria-checked={currency === c} data-testid={`money-cur-${c}`} onClick={() => { onCurrency(c); onAmount(formatMoneyInput(amount, c)); }}
-              className={`h-10 min-w-[2.75rem] px-2 rounded-lg text-sm font-bold liquid-transition ${currency === c ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"}`}>
+              /* Kattaroq va aniq ajralib turadi (owner 2026-10-28: "dollar ikonasi kichkina,
+                 tanlash qiyin; tugma bilinmaydi, ranglari uyushib ketgan") */
+              className={`h-12 min-w-[3.5rem] px-3 rounded-lg text-base font-bold liquid-transition ${currency === c ? "bg-primary text-primary-foreground shadow-md" : "text-muted-foreground hover:text-foreground"}`}>
               {c === "UZS" ? (isRu() ? "сум" : "so'm") : SIGN[c]}
             </button>
           ))}

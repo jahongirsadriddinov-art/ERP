@@ -266,8 +266,18 @@ html, body, #root {
 body {
   background: var(--background);
   -webkit-tap-highlight-color: transparent;
-  -webkit-touch-callout: none;
   touch-action: manipulation;
+  /* Owner 2026-10-28: "belgilab copy qilishni yoqib qo'y hamma joyda" —
+     matnni belgilash sayt va ilovaning HAMMA joyida ishlaydi (ilgari butun
+     body'da o'chirilgan edi: raqam, ism, hisobotni nusxalab bo'lmasdi). */
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+/* Tugma va menyularda belgilash kerak emas — bosganda matn ko'kka bo'yalib
+   qolmasin (nusxa olish ularda baribir ma'nosiz). */
+button, [role="button"], .btn, nav, label, select,
+input[type="checkbox"], input[type="radio"], input[type="range"] {
   -webkit-user-select: none;
   user-select: none;
 }

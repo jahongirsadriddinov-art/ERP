@@ -75,10 +75,20 @@ async function fetchKapitalRates(): Promise<void> {
     console.warn('[currency] Kapitalbank kursi olinmadi:', e?.message);
   } finally { kapitalFetchedAt = Date.now(); }
 }
-async function ensureKapital(): Promise<void> {
+// TEZLIK (owner 2026-10-28: "sayt juda sekin ishlayapti"): ilgari kurs eskirgan bo'lsa
+// foydalanuvchining so'rovi bank.uz javobini KUTIB turardi — /api/currency/rates 5-8
+// soniya ketardi va u ilova ochilishida chaqirilgani uchun butun sayt sekin ko'rinardi.
+// Endi yangilash FONDA ketadi: so'rovga darhol keshdagi kurs beriladi.
+// `block` — hisob-kitob (bot, pul o'girish) uchun: kesh umuman bo'sh bo'lsa qisqa kutish.
+function refreshKapitalInBackground(): void {
   if (Date.now() - kapitalFetchedAt < 30 * 60_000) return;
   kapitalLoading = kapitalLoading || fetchKapitalRates().finally(() => { kapitalLoading = null; });
-  await kapitalLoading;
+}
+async function ensureKapital(block = false): Promise<void> {
+  refreshKapitalInBackground();
+  if (!block || kapital.USD || !kapitalLoading) return;
+  // eng ko'pi 2.5 soniya — bank javob bermasa Markaziy bank kursi ishlatiladi
+  await Promise.race([kapitalLoading, new Promise((r) => setTimeout(r, 2500))]);
 }
 export function getKapitalRates(): BankRates { return kapital; }
 
@@ -86,7 +96,7 @@ export function getKapitalRates(): BankRates { return kapital; }
 // side: 'buy' — kirim (bank dollarni sotib oladi), 'sell' — chiqim (dollar sotib olinadi).
 export async function getRatesForCompany(companyId?: string, side: 'buy' | 'sell' = 'sell'): Promise<{ USD: number; EUR: number }> {
   if (Date.now() - lastFetch > 3600_000) await fetchCBURates();
-  await ensureKapital();
+  await ensureKapital(true);
   let usd = kapital.USD?.[side] || cachedRates.USD, eur = kapital.EUR?.[side] || cachedRates.EUR;
   if (companyId) {
     const company: any = await Company.findById(companyId).select('customUsdRate customEurRate').lean().catch(() => null);
@@ -100,11 +110,11 @@ export async function getRatesForCompany(companyId?: string, side: 'buy' | 'sell
 // holda CBU (yoki standart) kursini qaytaradi. Firma konteksti bo'lmasa
 // (masalan dasturchi yoki auth'siz so'rov) doim CBU/standart qaytadi.
 router.get('/rates', async (_req, res) => {
-  // Refresh rates every hour
-  if (Date.now() - lastFetch > 3600_000) {
-    await fetchCBURates();
-  }
-  await ensureKapital();
+  // Kurslar fonda yangilanadi — so'rov tashqi saytlarni KUTMAYDI (tezlik, 2026-10-28)
+  if (Date.now() - lastFetch > 3600_000) void fetchCBURates();
+  void ensureKapital();
+  // 5 daqiqa davomida brauzer/Cloudflare keshidan berilsa ham bo'ladi
+  res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=1800');
 
   let usd = kapital.USD?.sell || cachedRates.USD;
   let eur = kapital.EUR?.sell || cachedRates.EUR;
@@ -158,3 +168,6 @@ router.put('/custom', requireAuth, requireOwnerOrAdmin, requireFeature('multi_cu
 
 export { cachedRates };
 export default router;
+
+// Server ishga tushganda kurslar oldindan yuklanadi (birinchi foydalanuvchi kutib qolmasin).
+setTimeout(() => { void fetchCBURates(); void fetchKapitalRates(); }, 2000).unref?.();

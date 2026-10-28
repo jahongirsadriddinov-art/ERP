@@ -1,6 +1,6 @@
 import { reportApiFailure } from './lib/apiFailure';
 // ─── API base ────────────────────────────────────────────────────────────────
-// Production (hozir: erp-ebon-seven-91.vercel.app → qurilisherp-backend.onrender.com)
+// Production (hozir: erp-firma.uz — Cloudflare Worker → erpfirma-backend.up.railway.app)
 // va local o'rtasida sozlanadigan baza. .env / .env.production dagi
 // VITE_API_URL orqali boshqariladi — domen hech qayerda qattiq yozilmagan.
 // Qaysi mijoz: Windows ilova (Tauri), Android ilova (Capacitor) yoki sayt

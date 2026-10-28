@@ -6,8 +6,13 @@ const DB_VERSION = 2;
 
 const PRECACHE_URLS = ['/', '/manifest.json', '/favicon.svg'];
 
+// 2026-10-28: eski Render manzili olib tashlandi (server Railway'ga ko'chgan va
+// Cloudflare Worker orqali saytning O'Z manzilidan beriladi). Birinchi o'rinda
+// sahifaning o'z manzili turadi — sayt qaysi nomdan ochilsa, API ham o'shanda.
 const API_ORIGINS = [
-  'https://qurilisherp-backend.onrender.com',
+  self.location.origin,
+  'https://erp-firma.uz',
+  'https://erpfirma-backend.up.railway.app',
   'http://localhost:5000',
 ];
 

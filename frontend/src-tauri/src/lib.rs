@@ -70,11 +70,10 @@ async fn download_update(app: tauri::AppHandle, url: String) -> Result<(), Strin
     // 2026-10-28: server Render'dan ko'chgach yangilanish havolasi erp-firma.uz/files/...
     // bo'ldi, ro'yxatda esa faqat eski Render manzili qolgani uchun ilova ichidagi
     // yangilash "URL ruxsat etilmagan" deb to'xtab qolgandi.
-    const ALLOWED: [&str; 4] = [
+    const ALLOWED: [&str; 3] = [
         "https://erp-firma.uz/files/",
         "https://www.erp-firma.uz/files/",
         "https://erpfirma-backend.up.railway.app/uploads/",
-        "https://qurilisherp-backend.onrender.com/uploads/",
     ];
     if !ALLOWED.iter().any(|p| url.starts_with(p)) {
         return Err("URL ruxsat etilmagan".into());

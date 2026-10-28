@@ -10,8 +10,9 @@ const config: CapacitorConfig = {
     // androidScheme: 'https',
     // url: 'http://192.168.1.X:5173',
     allowNavigation: [
-      'qurilisherp-backend.onrender.com',
       'erp-firma.uz',
+      'www.erp-firma.uz',
+      'erpfirma-backend.up.railway.app',
       'openrelay.metered.ca',
       '*.googleapis.com',
       '*.google.com',

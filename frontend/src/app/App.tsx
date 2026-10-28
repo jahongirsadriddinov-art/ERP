@@ -1373,31 +1373,38 @@ function HeaderTicker() {
   }, []);
 
   const all = [{ kind: "day", text: day }, ...items];
-  useEffect(() => {
-    if (all.length < 2) return;
-    const t = setInterval(() => setI((v) => (v + 1) % all.length), 6500);
-    return () => clearInterval(t);
-  }, [all.length]);
 
   const cur = all[i % all.length];
   // Owner 2026-10-27: "gap sig'mayapti — o'zi ko'rinmagan tarafiga qarab surilsin, qo'lda qilib bo'lmasin"
-  const boxRef = useRef<HTMLSpanElement | null>(null);
+  // Owner 2026-10-28: matn ikonka USTIGA chiqib ketmasligi uchun u endi o'z "oynasi"
+  // (clipRef) ichida suriladi — ikonka o'sha oynadan tashqarida, ustma-ust tushmaydi.
+  const clipRef = useRef<HTMLSpanElement | null>(null);
   const textRef = useRef<HTMLSpanElement | null>(null);
   const [shift, setShift] = useState(0);
   useEffect(() => {
-    const box = boxRef.current, el = textRef.current;
+    const box = clipRef.current, el = textRef.current;
     if (!box || !el) { setShift(0); return; }
     const over = Math.max(0, el.scrollWidth - box.clientWidth);
     setShift(over > 4 ? over + 6 : 0);
   }, [cur.text, cur.kind]);
+
+  // Surilish tezligi — sekinroq (o'qishga qulay bo'lsin). Uzun gap bo'lsa band
+  // shuncha uzoq turadi: gap OXIRIGACHA surilib bo'lmaguncha keyingisi chiqmaydi
+  // (owner 2026-10-28: "gap tugamasdan oxirigacha boshqasi chiqvotti").
+  const scrollSec = shift ? Math.max(5, shift / 11) : 0;
+  const dwellMs = Math.round((shift ? scrollSec + 1.2 : 0) * 1000) || 6500;
+  useEffect(() => {
+    if (all.length < 2) return;
+    const t = setTimeout(() => setI((v) => (v + 1) % all.length), Math.max(6500, dwellMs));
+    return () => clearTimeout(t);
+  }, [all.length, i, dwellMs]);
   const ICON: Record<string, typeof CalendarIcon> = { day: CalendarIcon, rate: DollarIcon, weather: SunIcon, news: NewsIcon };
   const tone = cur.kind === "rate" ? "text-emerald-600 dark:text-emerald-400"
     : cur.kind === "weather" ? "text-sky-600 dark:text-sky-400"
     : "text-muted-foreground";
   // Balandlik QAT'IY (h-[15px]) — satr almashganda sarlavha "sakramaydi"; yangi band pastdan ko'tariladi.
   return (
-    <span ref={boxRef} className="relative block h-[16px] overflow-hidden min-w-0"
-      style={{ WebkitMaskImage: "linear-gradient(90deg, #000 0, #000 calc(100% - 14px), transparent 100%)", maskImage: "linear-gradient(90deg, #000 0, #000 calc(100% - 14px), transparent 100%)" }} data-testid="header-day-rate" title={cur.text}>
+    <span className="relative block h-[16px] overflow-hidden min-w-0" data-testid="header-day-rate" title={cur.text}>
       {/* Owner 2026-10-28: "chiqadigan narsalar ikonlar ustiga chiqib ketvotti" — ilgari
           eski va yangi band bir vaqtning o'zida chizilib, matn ustma-ust tushardi.
           "wait": avval eskisi chiqib ketadi, keyin yangisi ko'tariladi. */}
@@ -1408,9 +1415,12 @@ function HeaderTicker() {
           className={`absolute inset-0 flex items-center gap-1 ${tone}`}>
           <MorphIcon icon={ICON[cur.kind] || CalendarIcon} className="w-[15px] h-[15px] flex-shrink-0 opacity-85" />
           {/* Owner 2026-10-27: belgi ikki marta chiqmasin — matn boshidagi $/emoji olib tashlanadi */}
-          <motion.span ref={textRef} className="text-[12px] font-semibold leading-none whitespace-nowrap"
-            animate={shift ? { x: [0, -shift, -shift, 0] } : { x: 0 }}
-            transition={shift ? { duration: Math.max(4, shift / 16), times: [0, 0.45, 0.72, 1], ease: "linear", repeat: Infinity, repeatDelay: 1.2 } : { duration: 0.2 }}>{cur.text.replace(/^[\s$€₽ \p{Extended_Pictographic}]+/u, "")}</motion.span>
+          <span ref={clipRef} className="relative flex-1 min-w-0 overflow-hidden flex items-center"
+            style={{ WebkitMaskImage: "linear-gradient(90deg, #000 0, #000 calc(100% - 14px), transparent 100%)", maskImage: "linear-gradient(90deg, #000 0, #000 calc(100% - 14px), transparent 100%)" }}>
+            <motion.span ref={textRef} className="text-[12px] font-semibold leading-none whitespace-nowrap"
+              animate={shift ? { x: [0, 0, -shift, -shift] } : { x: 0 }}
+              transition={shift ? { duration: scrollSec, times: [0, 0.18, 0.86, 1], ease: "linear" } : { duration: 0.2 }}>{cur.text.replace(/^[\s$€₽ \p{Extended_Pictographic}]+/u, "")}</motion.span>
+          </span>
         </motion.span>
       </AnimatePresence>
     </span>

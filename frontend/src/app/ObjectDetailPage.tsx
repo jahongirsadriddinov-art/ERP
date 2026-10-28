@@ -56,7 +56,8 @@ export function ObjectDetailPage({ project, currentUser, users, transfers, onBac
   const [mediaItems, setMediaItems] = useState<{ id: string; type: 'image'|'video'; url: string; caption?: string; uploadedBy: { userId: string; name: string; role: string }; createdAt: string; aiAnalysis?: { stage?: string; progressPercent?: number | null; workVisible?: string; safety?: Array<{ issue: string; severity: string }>; quality?: string[] } }[]>([]);
   const [mediaLoading, setMediaLoading] = useState(false);
   const [uploadingMedia, setUploadingMedia] = useState(false);
-  const mediaFileRef = useRef<HTMLInputElement>(null);
+  const mediaFileRef = useRef<HTMLInputElement>(null);   // galereya / fayl
+  const mediaCamRef = useRef<HTMLInputElement>(null);    // kamera
   const loadMedia = async () => {
     setMediaLoading(true);
     try {
@@ -353,11 +354,20 @@ export function ObjectDetailPage({ project, currentUser, users, transfers, onBac
           <div className="flex-1 overflow-y-auto p-3 scrollbar-hide pb-24 sm:pb-4 space-y-3 animate-slide-up-fade">
             {/* Aniq talab: BARCHA xodim (ishchi, brigadir, prorab ham)
                 qo'sha oladi — direktor/o'rinbosarga cheklanmagan. */}
-            <input ref={mediaFileRef} type="file" accept="image/*,video/*" capture="environment" className="hidden" onChange={handleMediaUpload} />
-            <button onClick={() => mediaFileRef.current?.click()} disabled={uploadingMedia}
-              className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-bold border-2 border-dashed border-border/60 text-muted-foreground hover:border-primary/40 hover:text-primary liquid-transition disabled:opacity-50">
-              <MorphIcon icon={Camera} className="w-4 h-4" />{t('objectDetail.mediaAddBtn')}
-            </button>
+            {/* Owner 2026-10-28: galereyadan ham qo'yish kerak. Ilgari capture="environment" bilan
+                telefonda faqat kamera ochilardi — oldin olingan surat/videoni qo'yib bo'lmasdi. */}
+            <input ref={mediaCamRef} type="file" accept="image/*,video/*" capture="environment" className="hidden" onChange={handleMediaUpload} />
+            <input ref={mediaFileRef} type="file" accept="image/*,video/*" className="hidden" onChange={handleMediaUpload} />
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={() => mediaCamRef.current?.click()} disabled={uploadingMedia}
+                className="flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-bold border-2 border-dashed border-border/60 text-muted-foreground hover:border-primary/40 hover:text-primary liquid-transition disabled:opacity-50">
+                <MorphIcon icon={Camera} className="w-4 h-4" />{t('objectDetail.mediaCamera', "Kamera")}
+              </button>
+              <button onClick={() => mediaFileRef.current?.click()} disabled={uploadingMedia}
+                className="flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-bold border-2 border-dashed border-border/60 text-muted-foreground hover:border-primary/40 hover:text-primary liquid-transition disabled:opacity-50">
+                <span aria-hidden>🖼</span>{t('objectDetail.mediaGallery', "Galereya")}
+              </button>
+            </div>
             {pendingMedia && (
               <div className="surface border border-primary/25 rounded-2xl p-3 flex flex-col sm:flex-row gap-3 animate-slide-up-fade">
                 <div className="w-full sm:w-40 h-40 sm:h-32 rounded-xl overflow-hidden bg-black/80 flex-shrink-0">

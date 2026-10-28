@@ -271,7 +271,8 @@ export function AddExpenseModal({ currentUser, projects, allUsers, onClose, onAd
   const [otherLabel, setOtherLabel] = useState("");
   const savedLabels: string[] = (() => { try { return JSON.parse(localStorage.getItem("erp_otherLabels") || "[]"); } catch { return []; } })();
   // Chek/nakladnoy suratidan to'ldirish — AI summa, sana, tavsif va turni o'qiydi; foydalanuvchi tekshirib yuboradi
-  const receiptRef = useRef<HTMLInputElement>(null);
+  const receiptRef = useRef<HTMLInputElement>(null);      // galereya / fayl
+  const receiptCamRef = useRef<HTMLInputElement>(null);   // kamera
   const [scanning, setScanning] = useState(false);
   // Bosqich (siqish / yuklash / o'qish) va oyna yopilsa so'rovni bekor qilish (lib/receiptScan.ts)
   const [scanStage, setScanStage] = useState<ScanStage | null>(null);
@@ -365,12 +366,32 @@ export function AddExpenseModal({ currentUser, projects, allUsers, onClose, onAd
           <button aria-label={t('addExpense.close')} onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted liquid-transition"><MorphIcon icon={X} className="w-4 h-4 text-muted-foreground" /></button>
         </div>
         <form onSubmit={submit} className="p-4 space-y-3">
-          <input ref={receiptRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={scanReceipt} />
-          <button type="button" onClick={() => receiptRef.current?.click()} disabled={scanning}
-            className="w-full h-11 rounded-xl border-2 border-dashed border-primary/40 bg-primary/[0.04] text-primary text-sm font-bold flex items-center justify-center gap-2 hover:bg-primary/10 liquid-transition disabled:opacity-60">
-            {scanning ? <MorphIcon icon={Loader2} className="w-4 h-4 animate-spin" /> : <span aria-hidden>📷</span>}
-            {scanning ? (scanStage === 'compress' ? t('addExpense.receiptCompress', "Surat tayyorlanmoqda...") : scanStage === 'upload' ? t('addExpense.receiptUpload', "Yuklanmoqda...") : t('addExpense.receiptReading', "Chek o'qilmoqda...")) : t('addExpense.receiptBtn', "Chek suratidan to'ldirish")}
-          </button>
+          {/* Owner 2026-10-28: "galereyadan qo'yish yo'q ekan — galereya yoki kamera tanlash bo'lsin".
+              Ilgari bitta tugma edi va u capture="environment" bilan telefonda TO'G'RIDAN-TO'G'RI
+              kamerani ochardi — allaqachon olingan chek suratini qo'yib bo'lmasdi. Endi ikkita
+              manba: kamera (capture bilan) va galereya (capture'siz — rasm/fayl tanlash). */}
+          <input ref={receiptCamRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={scanReceipt} />
+          <input ref={receiptRef} type="file" accept="image/*" className="hidden" onChange={scanReceipt} />
+          {scanning ? (
+            <div className="w-full h-11 rounded-xl border-2 border-dashed border-primary/40 bg-primary/[0.04] text-primary text-sm font-bold flex items-center justify-center gap-2">
+              <MorphIcon icon={Loader2} className="w-4 h-4 animate-spin" />
+              {scanStage === 'compress' ? t('addExpense.receiptCompress', "Surat tayyorlanmoqda...") : scanStage === 'upload' ? t('addExpense.receiptUpload', "Yuklanmoqda...") : t('addExpense.receiptReading', "Chek o'qilmoqda...")}
+            </div>
+          ) : (
+            <div>
+              <p className="text-[10px] font-bold mb-1.5 text-muted-foreground uppercase tracking-wider">{t('addExpense.receiptBtn', "Chek suratidan to'ldirish")}</p>
+              <div className="grid grid-cols-2 gap-2">
+                <button type="button" onClick={() => receiptCamRef.current?.click()}
+                  className="h-11 rounded-xl border-2 border-dashed border-primary/40 bg-primary/[0.04] text-primary text-sm font-bold flex items-center justify-center gap-2 hover:bg-primary/10 liquid-transition">
+                  <span aria-hidden>📷</span>{t('addExpense.receiptCamera', "Kamera")}
+                </button>
+                <button type="button" onClick={() => receiptRef.current?.click()}
+                  className="h-11 rounded-xl border-2 border-dashed border-primary/40 bg-primary/[0.04] text-primary text-sm font-bold flex items-center justify-center gap-2 hover:bg-primary/10 liquid-transition">
+                  <span aria-hidden>🖼</span>{t('addExpense.receiptGallery', "Galereya")}
+                </button>
+              </div>
+            </div>
+          )}
           {err && (
             <div className="bg-red-500/10 border border-red-500/25 rounded-xl px-3 py-2.5 text-xs text-red-700 dark:text-red-400 flex items-center gap-2">
               <MorphIcon icon={AlertCircle} className="w-3.5 h-3.5 flex-shrink-0" />{err}

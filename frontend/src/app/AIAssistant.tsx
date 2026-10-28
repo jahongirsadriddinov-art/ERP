@@ -461,7 +461,13 @@ export default function AIAssistant({ currentUser, users, token, open, onClose, 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
       <div
-        className="ai-glass-panel w-full sm:max-w-md h-[88vh] sm:h-auto sm:max-h-[680px] sm:rounded-3xl rounded-t-3xl shadow-2xl border border-border/40 flex flex-col overflow-hidden animate-slide-up-fade"
+        /* Balandlik: telefonda "dvh" (brauzer paneli hisobga olinadi) — ilgari 88vh
+           edi va brauzer paneli ochiq turganda oyna ekrandan baland bo'lib, TEPASI
+           kesilib qolardi, pastga ham tushmasdi (owner 2026-10-28). Eski brauzerlar
+           uchun vh zaxira bo'lib qoladi. Pastdan telefon "uy" chizig'i joyi ham
+           qo'shiladi, shunda kiritish maydoni berkitilmaydi. */
+        className="ai-glass-panel w-full sm:max-w-md h-[88vh] supports-[height:1dvh]:h-[88dvh] sm:h-auto sm:max-h-[680px] supports-[height:1dvh]:sm:max-h-[680px] sm:rounded-3xl rounded-t-3xl shadow-2xl border border-border/40 flex flex-col overflow-hidden animate-slide-up-fade"
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
         onClick={e => e.stopPropagation()}
       >
         {/* Header — 2-avlod: shisha panel + orb atrofida yumshoq "nafas

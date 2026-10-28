@@ -102,8 +102,10 @@ describe('#2 #5 prompt: kanal, shaxs, umumiy savollar', () => {
 
   it('umumiy savollarga ruxsat, salom bir marta, aytilganni bajarish', () => {
     const p = buildSystemPrompt({ lang: 'uz', role: 'ishchi', channel: 'bot', today: '2026-10-17' });
-    expect(p).toMatch(/UMUMIY SAVOLLAR/);
-    expect(p).toMatch(/"men faqat ERP bo'yicha" DEMANG/);
+    // 2026-10-28: "umumiy savollarga ruxsat" o'rniga aniq MAVZU DOIRASI qoidasi
+    // (ERP bilan cheklanadi; "ochiq muloqot" yoqilgan odamga chegara bekor bo'ladi).
+    expect(p).toMatch(/MAVZU DOIRASI/);
+    expect(p).toMatch(/qila olmayman", "bilmayman"/);
     expect(p).toMatch(/Salomlashish BIR MARTA/);
     expect(p).toMatch(/Aytilgan ishni BAJARING/);
     expect(p).toMatch(/tugmalari SHU chatda/);

@@ -88,10 +88,13 @@ describe('aqlli matn agenti', () => {
 
 describe("prompt o'lchami (Live kechikishi/narxi)", () => {
   // 2026-10-22 oldin: matn (bot, direktor) 9373, ovoz uz 11148, ovoz ru 10118, mehmon 2517 belgi.
+  // 2026-10-28: matn chegarasi 11 600 → 12 000. Sabab — owner shikoyatlari bo'yicha uchta qoida
+  // qo'shildi: mavzu doirasi (ochiq muloqotsiz ERP bilan cheklanish), "qila olmayman" taqiqi va
+  // qayta qo'ng'iroq (requestCallback) tartibi. Ular aynan noto'g'ri bajarilgan ishlarni tuzatadi.
   it('byudjetdan oshmaydi', () => {
-    expect(text().length).toBeLessThan(11_600);
-    expect(voice().length).toBeLessThan(14_100);
-    expect(voice('ru').length).toBeLessThan(12_600);
+    expect(text().length).toBeLessThan(12_000);
+    expect(voice().length).toBeLessThan(14_500);
+    expect(voice('ru').length).toBeLessThan(13_000);
     expect(buildGuestVoicePrompt({ lang: 'uz', today: '2026-10-22' }).length).toBeLessThan(3_600);
   });
 });

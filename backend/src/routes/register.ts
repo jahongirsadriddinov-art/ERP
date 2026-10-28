@@ -234,7 +234,9 @@ router.post('/complete', async (req, res) => {
       for (const prev of owners) {
         const liveCompany = prev.companyId ? await Company.findById(prev.companyId).select('_id name').lean().catch(() => null) : null;
         if (liveCompany) {
-          return res.status(409).json({ error: `Bu Telegram akkaunt allaqachon "${(liveCompany as any).name}" firmasining egasi. Bitta akkaunt bitta firma ocha oladi.` });
+          // Owner 2026-10-28: firma NOMI aytilmaydi — raqam/akkaunt qaysi firmada
+          // ekanini oshkor qilish xavfsizlikka to'g'ri kelmaydi.
+          return res.status(409).json({ error: 'Bu Telegram akkaunt allaqachon bitta firmaning egasi. Bitta akkaunt bitta firma ocha oladi.' });
         }
         // firmasi yo'q (o'chirilgan) — eski bog'lanish olib tashlanadi, yangi firma ochishga yo'l ochiladi
         await User.updateOne({ _id: prev._id }, { $unset: { telegramUserId: 1, telegramChatId: 1 } });

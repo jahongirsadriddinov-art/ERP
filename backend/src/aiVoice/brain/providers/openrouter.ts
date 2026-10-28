@@ -1,4 +1,5 @@
 import { aiConfig } from '../../config';
+import { pickKey, markKeyFailed, markKeyOk } from '../../lib/apiKeyPool';
 import { toProviderSchema } from '../schema';
 import {
   ProviderError, trimHistory, type ProviderSession, type ProviderStartOpts, type ProviderToolResult, type ProviderTurn, type TextProvider,
@@ -106,14 +107,37 @@ class OpenRouterSession implements ProviderSession {
   }
 }
 
+// Kalit limitga urilsa — JIM turib keyingi kalitga o'tiladi (owner 2026-10-28).
+// Sessiya `next()` da xato bersa, shu kalit vaqtincha chetga suriladi; keyingi so'rov
+// avtomatik boshqa kalit bilan ketadi. Bitta kalit bo'lsa — hech narsa o'zgarmaydi.
+function withKeyFailover(session: ProviderSession, envName: string, index: number): ProviderSession {
+  return {
+    ...session,
+    next: async (signal: AbortSignal) => {
+      try {
+        const turn = await session.next(signal);
+        markKeyOk(envName, index);
+        return turn;
+      } catch (err: any) {
+        const status = Number(err?.status) || Number(String(err?.code || '').replace(/^HTTP_/, '')) || 0;
+        if (status === 429 || status === 401 || status === 403 || status >= 500) markKeyFailed(envName, index, status);
+        throw err;
+      }
+    },
+    addToolResults: (r) => session.addToolResults(r),
+  };
+}
+
 export function createOpenRouterProvider(deps: { fetchImpl?: FetchLike; models?: string[]; apiKey?: string; requestTimeoutMs?: number } = {}): TextProvider {
   return {
     name: 'openrouter',
     requestTimeoutMs: deps.requestTimeoutMs ?? 20_000,
     start: (o) => {
       const models = deps.models?.length ? deps.models : aiConfig.brain.openRouterModels.length ? aiConfig.brain.openRouterModels : DEFAULT_OPENROUTER_MODELS;
-      const key = deps.apiKey ?? (process.env.OPENROUTER_API_KEY || '').trim();
-      return new OpenRouterSession(o, deps.fetchImpl || (globalThis.fetch as unknown as FetchLike), models, key);
+      const picked = deps.apiKey ? null : pickKey('OPENROUTER_API_KEY');
+      const key = deps.apiKey ?? picked?.key ?? '';
+      const session = new OpenRouterSession(o, deps.fetchImpl || (globalThis.fetch as unknown as FetchLike), models, key);
+      return picked ? withKeyFailover(session, 'OPENROUTER_API_KEY', picked.index) : session;
     },
   };
 }
@@ -126,9 +150,11 @@ export function createGroqProvider(deps: { fetchImpl?: FetchLike; models?: strin
     requestTimeoutMs: deps.requestTimeoutMs ?? 15_000,
     start: (o) => {
       const models = deps.models?.length ? deps.models : aiConfig.brain.groqModels;
-      const key = deps.apiKey ?? (process.env.GROQ_API_KEY || '').trim();
-      return new OpenRouterSession(o, deps.fetchImpl || (globalThis.fetch as unknown as FetchLike), models, key,
+      const picked = deps.apiKey ? null : pickKey('GROQ_API_KEY');
+      const key = deps.apiKey ?? picked?.key ?? '';
+      const session = new OpenRouterSession(o, deps.fetchImpl || (globalThis.fetch as unknown as FetchLike), models, key,
         { name: 'groq', url: GROQ_URL, headers: {}, multiModel: false });
+      return picked ? withKeyFailover(session, 'GROQ_API_KEY', picked.index) : session;
     },
   };
 }

@@ -1,4 +1,5 @@
-// Kirish kodi xavfsizligi (owner 2026-10-23: "kodni buzib kirib bo'lmasin"): 6 xonali kriptografik kod, bazada faqat
+// Kirish kodi xavfsizligi: kriptografik 4 xonali kod (owner 2026-10-28: "yana 4 xonaga o'zgartir"),
+// himoya kod uzunligida emas — urinishlar cheklovida. Bazada faqat
 // xeshi, 5 ta noto'g'ri urinishdan keyin kod bekor bo'ladi; to'g'ri kod bir marta ishlaydi.
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 
@@ -29,12 +30,12 @@ beforeAll(async () => {
 afterAll(async () => { await mongoose.disconnect(); await mongo?.stop(); });
 
 describe('Telegram kirish kodi', () => {
-  it("6 xonali, bazada ochiq saqlanmaydi; 5 noto'g'ri urinishdan keyin bekor; to'g'ri kod bir marta", async () => {
+  it("4 xonali, bazada ochiq saqlanmaydi; 5 noto'g'ri urinishdan keyin bekor; to'g'ri kod bir marta", async () => {
     const r = await request(app).post('/api/auth/send-code').send({ phone: PHONE });
     expect(r.status).toBe(200);
-    expect(r.body.codeLength).toBe(6);
+    expect(r.body.codeLength).toBe(4);
     const code = codeFromBot();
-    expect(code).toMatch(/^\d{6}$/);
+    expect(code).toMatch(/^\d{4}$/);
     const u: any = await User.findOne({ phone: PHONE }).lean();
     expect(u.telegramVerificationCode).not.toBe(code);
     expect(u.telegramVerificationCode).toMatch(/^[a-f0-9]{64}$/);

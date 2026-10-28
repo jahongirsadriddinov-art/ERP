@@ -145,8 +145,10 @@ router.post('/send-otp', async (req, res) => {
       return res.status(404).json({ success: false, error: 'Bu raqam bilan foydalanuvchi topilmadi' });
     }
 
-    // 6 xonali kriptografik kod; Eskiz shabloni rad etsa — pastda 4 xonali bilan bir marta qayta yuboriladi
-    let code = String(crypto.randomInt(100000, 1000000));
+    // 4 xonali kriptografik kod (owner 2026-10-28: "yana 4 xonaga o'zgartir").
+    // Taxmin qilishdan himoya kod uzunligi bilan emas, urinishlar soni bilan: 5 ta
+    // noto'g'ri urinishdan keyin kod bekor qilinadi va yangisini so'rash kerak.
+    let code = String(crypto.randomInt(1000, 10000));
     let otpHash = await hashPassword(code);
 
     // Eski OTP (agar bo'lsa) shu bilan bir yo'la bekor qilinadi — bitta
@@ -157,13 +159,7 @@ router.post('/send-otp', async (req, res) => {
       { upsert: true, setDefaultsOnInsert: true }
     );
 
-    let sms = await sendOtpSms(phone, code);
-    if (!sms.ok) {
-      code = String(crypto.randomInt(1000, 10000));
-      otpHash = await hashPassword(code);
-      await Otp.findOneAndUpdate({ phone }, { otpHash, attempts: 0, expiresAt: new Date(Date.now() + OTP_TTL_MS) });
-      sms = await sendOtpSms(phone, code);
-    }
+    const sms = await sendOtpSms(phone, code);
     if (!sms.ok) {
       // OTP yozuvini qoldirmaymiz — yuborilmagan kodni keyin "to'g'ri" deb tekshirib bo'lmaydi.
       await Otp.deleteMany({ phone });
@@ -341,9 +337,10 @@ router.post('/send-code', async (req, res) => {
       return res.status(400).json({ error: 'Telegram botga ulanmagan. Iltimos botga kirib /start bosing va raqamingizni yuboring.' });
     }
 
-    // XAVFSIZLIK (owner 2026-10-23: "kodni buzib kirib bo'lmasin"): 6 xonali kriptografik kod (1 000 000 variant,
-    // avval 4 xonali Math.random edi), bazada faqat xeshi, 5 ta noto'g'ri urinishdan keyin bekor qilinadi.
-    const code = String(crypto.randomInt(100000, 1000000));
+    // Kriptografik 4 xonali kod (owner 2026-10-28: "yana 4 xonaga o'zgartir"; 23-oktabrda
+    // 6 xonali qilingan edi). Bazada faqat xeshi saqlanadi, 2 daqiqada eskiradi va 5 ta
+    // noto'g'ri urinishdan keyin bekor qilinadi — himoya asosan shu cheklovlarda.
+    const code = String(crypto.randomInt(1000, 10000));
     user.telegramVerificationCode = loginCodeHash(String(user._id), code);
     user.telegramVerificationCodeExpires = new Date(Date.now() + 2 * 60 * 1000); // 2 minutes expiry
     user.telegramVerificationAttempts = 0;
@@ -351,7 +348,7 @@ router.post('/send-code', async (req, res) => {
 
     await bot.sendMessage(user.telegramChatId, `Sizning tizimga kirish kodingiz: <code>${code}</code>\nKod 2 daqiqa davomida amal qiladi.`, { parse_mode: 'HTML' });
 
-    return res.json({ message: 'Kod yuborildi', codeLength: 6 });
+    return res.json({ message: 'Kod yuborildi', codeLength: 4 });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: 'Server xatoligi' });

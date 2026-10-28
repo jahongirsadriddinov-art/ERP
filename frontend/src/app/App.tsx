@@ -1591,7 +1591,7 @@ function BottomFinanceBar({ expenses, projects }: { expenses: Expense[]; project
   );
 }
 
-// ─── OTP kod qutilar (4 xonali kod uchun) — auto-advance, backspace, paste ──────
+// ─── OTP kod qutilar (kirish kodi 4 xonali; dasturchi 2FA — 6) — auto-advance, backspace, paste ──────
 function OtpBoxes({ value, onChange, length = 4, autoFocus, error }: { value: string; onChange: (v: string) => void; length?: number; autoFocus?: boolean; error?: boolean }) {
   const { t } = useTranslation();
   const realRef = useRef<HTMLInputElement | null>(null);
@@ -1640,7 +1640,7 @@ function LoginScreen({ onLogin, onRegister, onBack }: { onLogin: (u: any, compan
   const { t, i18n } = useTranslation();
   const [phone, setPhone] = useState("+998 ");
   const [code, setCode] = useState("");
-  const [codeLen, setCodeLen] = useState(6); // server aytgan kod uzunligi (6; eski server — 4)
+  const [codeLen, setCodeLen] = useState(4); // server aytgan kod uzunligi (owner 2026-10-28: kirish kodi yana 4 xonali)
   const [password, setPassword] = useState("");
   // Ish jarayonida obuna tugasa (API 402) — kirish ekrani darhol "obuna" holatida ochiladi
   const [initialBlocked] = useState<'pending'|'expired'|'rejected'|null>(() => {

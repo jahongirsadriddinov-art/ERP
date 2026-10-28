@@ -22,6 +22,16 @@ const PROXY = ['/api/', '/socket.io/', '/uploads/', '/health', '/webhook'];
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+
+    // Sayt YAGONA manzildan ishlaydi: www.erp-firma.uz → erp-firma.uz (2026-10-28).
+    // Ikki manzil yonma-yon ishlaganda sahifa www'dan ochilib, API va socket esa
+    // www'siz manzilga ulanardi — bu ortiqcha cross-origin va chalkashlik edi
+    // (brauzer konsolida www manzilidagi so'rovlar uzilib turardi).
+    if (url.hostname.startsWith('www.')) {
+      url.hostname = url.hostname.slice(4);
+      return Response.redirect(url.toString(), 301);
+    }
+
     const backend = (env.BACKEND_URL || DEFAULT_BACKEND).replace(/\/+$/, '');
 
     // Owner 2026-10-27: server Render'dan Railway'ga ko'chdi. Ilova endi doim `erp-firma.uz` ga

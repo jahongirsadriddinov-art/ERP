@@ -82,6 +82,18 @@ export const capturePhoto: AiToolDef<{ caption?: string }> = {
   },
 };
 
+// Bitta qo'ng'iroqda ketma-ket so'ralgan videolar — 25 soniya ichida qayta yozilmaydi.
+const VIDEO_REUSE_MS = 25_000;
+const lastVideo = new Map<string, { id: string; at: number }>();
+function recentVideo(sessionId: string, now = Date.now()): { id: string } | null {
+  for (const [k, v] of lastVideo) if (now - v.at > VIDEO_REUSE_MS) lastVideo.delete(k);
+  const v = lastVideo.get(sessionId);
+  return v && now - v.at <= VIDEO_REUSE_MS ? { id: v.id } : null;
+}
+function noteVideo(sessionId: string | undefined, m: Media, now = Date.now()): void {
+  if (sessionId) lastVideo.set(sessionId, { id: m.id, at: now });
+}
+
 export const recordVideo: AiToolDef<{ seconds?: number; caption?: string }> = {
   name: 'recordVideo',
   description: {
@@ -106,20 +118,33 @@ export const recordVideo: AiToolDef<{ seconds?: number; caption?: string }> = {
   auditAction: 'upload',
   handler: async (ctx, args) => {
     if (!ctx.sessionId || !latestFrame(ctx.sessionId)) return NO_CAMERA(ctx);
+    // Takroriy yozishning oldi olinadi (owner 2026-10-28: "qayta-qayta olib yotibdi").
+    // Model javobni kutmasdan tool'ni yana chaqirsa — yangi video yozilmaydi, oxirgisi qaytariladi.
+    const fresh = recentVideo(ctx.sessionId);
+    if (fresh) {
+      return ok(L(ctx, `Video allaqachon olindi (id ${fresh.id}) va sizga yuborildi — qayta yozilmadi.`,
+        `Видео уже записано (id ${fresh.id}) и отправлено вам — повторно не записывалось.`),
+        { mediaId: fresh.id, kind: 'video', sentToMe: true, reused: true });
+    }
     const sec = Math.max(3, Math.min(20, Math.round(Number(args.seconds) || 8)));
-    const fps = 6;
+    const fps = 10;
     // Yozish paytida worker ko'proq kadr yuborsin (keyin 1 kadr/s ga qaytadi)
     await callWorker('call.video_rate', { sessionId: ctx.sessionId, fps, forSec: sec + 2 }).catch(() => undefined);
     const frames = await collectFrames(ctx.sessionId, sec * 1000);
     if (frames.length < 3) return NO_CAMERA(ctx);
+    // HAQIQIY tezlik — kadrlar qanday oraliqda kelgan bo'lsa shunday (taxmin emas).
+    // Noto'g'ri tezlik videoni sekin/tez va "qotgan" qilib ko'rsatardi.
+    const spanMs = Math.max(1, frames[frames.length - 1].at - frames[0].at);
+    const realFps = Math.max(0.5, Math.min(30, ((frames.length - 1) * 1000) / spanMs));
     let data: Buffer;
     try {
-      data = await encodeMp4(frames, Math.max(1, Math.min(fps, frames.length / sec)));
+      data = await encodeMp4(frames, realFps);
     } catch (e) {
       console.warn('[aiVoice/camera] video kodlanmadi:', (e as Error).message?.slice(0, 120));
       return { status: 'error', retryable: true, message: L(ctx, "Videoni tayyorlab bo'lmadi, qayta urinib ko'ring.", 'Не удалось собрать видео.') };
     }
     const m = saveMedia({ kind: 'video', data, companyId: ctx.companyId, ownerId: ctx.userId, caption: args.caption });
+    noteVideo(ctx.sessionId, m);
     const [sent] = await Promise.all([
       sendMediaTo(ctx.userId, ctx.companyId, m, args.caption || L(ctx, "🎥 AI qo'ng'iroqdan video", '🎥 Видео из звонка AI')),
       keepInAiChat(ctx, m, args.caption),

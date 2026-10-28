@@ -91,9 +91,18 @@ export function encodeMp4(frames: Frame[], fps: number, timeoutMs = 30_000): Pro
   return new Promise((resolve, reject) => {
     if (!ffmpegPath) { reject(new Error('NO_FFMPEG')); return; }
     if (!frames.length) { reject(new Error('NO_FRAMES')); return; }
+    // Kirish tezligi — kadrlar HAQIQATDA qanday kelgan bo'lsa (chaqiruvchi hisoblab beradi),
+    // chiqish esa DOIM 24 kadr/s. Ilgari mp4 ichida 2-6 kadr/s turardi: Telegram va ko'p
+    // pleyerlar bunday videoni "qotib qolgan" qilib ko'rsatardi, surib ko'rish ham ishlamasdi
+    // (owner 2026-10-28: "video sifati yomon va qotib qolgan"). Kadrlar takrorlanib,
+    // tasvir o'sha-o'sha qoladi, lekin ijro silliq bo'ladi.
+    const inFps = Math.max(0.5, Math.min(30, fps));
     const p = spawn(ffmpegPath as unknown as string, [
-      '-loglevel', 'error', '-f', 'image2pipe', '-framerate', String(Math.max(1, Math.min(15, Math.round(fps)))), '-i', '-',
-      '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2', '-c:v', 'libx264', '-preset', 'veryfast', '-pix_fmt', 'yuv420p',
+      '-loglevel', 'error', '-f', 'image2pipe', '-framerate', String(inFps), '-i', '-',
+      '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2',
+      '-r', '24',
+      '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-pix_fmt', 'yuv420p',
+      '-profile:v', 'baseline', '-level', '3.1',
       '-movflags', 'frag_keyframe+empty_moov', '-f', 'mp4', '-',
     ], { stdio: ['pipe', 'pipe', 'pipe'] });
     const out: Buffer[] = [];

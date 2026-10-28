@@ -51,7 +51,14 @@ let DEVICE_FP = '';
 // O'rnatilgan ilovalarda (Tauri/Capacitor) sahifa fayl tizimidan ochiladi, u yerda
 // "o'z manzili" yo'q — shuning uchun ular VITE_API_URL dagi to'liq manzilni ishlatadi.
 const ENV_BASE = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '');
-const isWebPage = typeof location !== 'undefined' && location.protocol.startsWith('http');
+//
+// MUHIM (2026-10-28): o'rnatilgan ilovada sahifa HAM http(s) orqali ochiladi —
+// Tauri `http://tauri.localhost/`, Capacitor esa `https://localhost/` manzilini beradi.
+// Shuning uchun "protokol http bo'lsa — demak sayt" degan tekshiruv noto'g'ri edi:
+// ilova API'ni O'ZIDAN so'rab, hech qanday ma'lumot yuklay olmay qolgandi (hamma
+// raqam 0 ko'rinardi). Endi mijoz turiga qarab ajratiladi: ilova — VITE_API_URL,
+// sayt — o'z manzili (qaysi nomdan ochilsa, API ham o'shanga boradi).
+const isWebPage = CLIENT_KIND === 'web' && typeof location !== 'undefined' && location.protocol.startsWith('http');
 
 export const API_BASE: string = isWebPage
   ? location.origin

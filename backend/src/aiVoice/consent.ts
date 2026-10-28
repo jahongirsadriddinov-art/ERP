@@ -32,7 +32,11 @@ export function companyConsentOf(settings: { calls?: { companyConsent?: unknown 
  */
 export function evaluateCallConsent(companyConsent: boolean, ct: any, opts: { incoming?: boolean } = {}): CallConsentState {
   const personal = ct?.telegram?.callConsent === 'granted';
-  if (!companyConsent && !personal) return { allowed: false, reason: 'no_consent' };
+  // Owner 2026-10-28: xodim O'ZI qo'ng'iroq qilganda firma roziligi SHART EMAS — nomer terishning
+  // o'zi rozilik. Sozlama ("Xodimlarga AI qo'ng'iroq qilishiga ruxsat") faqat AI'ning O'ZI qo'ng'iroq
+  // qilishiga tegishli; ilgari u kiruvchi qo'ng'iroqni ham to'sib, xodim AI'ga qo'ng'iroq qilganda
+  // worker "no_consent" bilan rad etardi (hech qanday tushuntirishsiz). optOut.all baribir to'sadi.
+  if (!opts.incoming && !companyConsent && !personal) return { allowed: false, reason: 'no_consent' };
   const out = ct?.optOut;
   if (out?.all || (!opts.incoming && out?.calls)) return { allowed: false, reason: 'opt_out' };
   return { allowed: true, source: companyConsent ? 'company' : 'personal' };

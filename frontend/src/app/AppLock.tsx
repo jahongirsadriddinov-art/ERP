@@ -36,7 +36,10 @@ const FAILED_ATTEMPTS_KEY = "erp_pinFailedAttempts";
 // vaqt o'tib qaytsa qulflanadi, tezkor ilova almashtirishda (masalan boshqa
 // ilovaga bir soniyaga o'tib qaytish) bezovta qilmaydi. Profilda o'zgartirish
 // mumkin (getLockTimeoutMs/setLockTimeoutMin).
-const DEFAULT_LOCK_TIMEOUT_MIN = 1;
+// Owner 2026-10-28: "PIN har safar bo'ladi". Sabab — standart 1 daqiqa edi: ilovani bir
+// daqiqaga qo'yib tursangiz ham qaytganda PIN so'rardi. Endi 15 daqiqa (ro'yxatdagi variantlar
+// o'zgarmagan: 1/5/15/30/60 — xohlagan odam Profil > Xavfsizlikdan qattiqroq qilib qo'yishi mumkin).
+const DEFAULT_LOCK_TIMEOUT_MIN = 15;
 export const LOCK_TIMEOUT_OPTIONS = [1, 5, 15, 30, 60];
 
 export function getLockTimeoutMin(): number {
@@ -339,8 +342,24 @@ export function useAppLock(pinIsSet: boolean) {
       else markActiveNow();
       hidePrivacyCover(); // qulf kerak bo'lsa — qulf ekrani chizilgandan keyin olinadi
     };
+    // Owner 2026-10-28: ilovani FAOL ishlatib turganda ham "oxirgi faollik" yangilanmas edi —
+    // 15 daqiqa ishlab, so'ng sahifani yangilasangiz PIN so'ralardi. Endi haqiqiy harakat
+    // (bosish, yozish, aylantirish) belgini yangilaydi; yozish tez-tez bo'lmasligi uchun
+    // 30 soniyada bir marta. Qulf ekrani ochiq turganda (locked) bu effekt umuman ishlamaydi.
+    let lastTouch = 0;
+    const onActivity = () => {
+      const now = Date.now();
+      if (now - lastTouch < 30_000) return;
+      lastTouch = now;
+      markActiveNow();
+    };
+    const ACTIVITY = ['pointerdown', 'keydown', 'wheel', 'touchstart'] as const;
+    for (const e of ACTIVITY) document.addEventListener(e, onActivity, { passive: true });
     document.addEventListener('visibilitychange', onChange);
-    return () => document.removeEventListener('visibilitychange', onChange);
+    return () => {
+      for (const e of ACTIVITY) document.removeEventListener(e, onActivity);
+      document.removeEventListener('visibilitychange', onChange);
+    };
   }, [pinIsSet, locked]);
 
   // "lock" — qo'lda darhol bloklash tugmasi uchun (Profil'da). GPS kuzatuv

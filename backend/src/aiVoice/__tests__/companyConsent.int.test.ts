@@ -40,6 +40,10 @@ describe('samarali rozilik (sof qaror)', () => {
     expect(evaluateCallConsent(true, { optOut: { all: true } }).reason).toBe('opt_out');
     expect(evaluateCallConsent(true, { optOut: { calls: true } }, { incoming: true }).allowed).toBe(true);
     expect(evaluateCallConsent(true, { optOut: { all: true } }, { incoming: true }).allowed).toBe(false);
+    // Xodim o'zi qo'ng'iroq qilsa — firma roziligi shart emas (nomer terish = rozilik)
+    expect(evaluateCallConsent(false, null, { incoming: true }).allowed).toBe(true);
+    expect(evaluateCallConsent(false, { optOut: { calls: true } }, { incoming: true }).allowed).toBe(true);
+    expect(evaluateCallConsent(false, { optOut: { all: true } }, { incoming: true }).reason).toBe('opt_out');
   });
 
   it('sozlama: standart true, eski hujjatda maydon yo\'q — true; faqat boolean', () => {

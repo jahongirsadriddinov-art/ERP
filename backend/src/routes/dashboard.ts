@@ -35,7 +35,11 @@ router.get('/stats', async (req, res) => {
       ObjectModel.countDocuments(filter),
       User.countDocuments({ ...filter, role: { $in: ['prorab', 'brigadir', 'ishchi'] } }),
       Transaction.aggregate([
-        { $match: { ...filter, status: 'confirmed', amount: { $exists: true } } },
+        // Faqat HAQIQIY chiqimlar: ko'chirma (transfer) va kirim (income) chiqim emas.
+        // Ilovaning o'zi ham shu ikkisini chiqim ro'yxatidan chiqarib tashlaydi
+        // (App.tsx), backend esa hammasini qo'shib yuborardi — shuning sababli
+        // yuqoridagi "Jami chiqim" pastdagi qatordan katta chiqardi (2026-10-28).
+        { $match: { ...filter, status: 'confirmed', amount: { $exists: true }, type: { $nin: ['transfer', 'income'] } } },
         { $group: { _id: null, total: { $sum: '$amount' } } },
       ]),
       Transaction.countDocuments({ ...filter, status: 'pending', type: 'transfer' }),

@@ -66,9 +66,17 @@ async fn try_download(app: &tauri::AppHandle, url: &str) -> Result<std::path::Pa
 // yuklab oladi. Server qayta ishga tushayotgan (deploy) paytga to'g'ri kelsa — 4 marta qayta uriniladi.
 #[tauri::command]
 async fn download_update(app: tauri::AppHandle, url: String) -> Result<(), String> {
-    // Faqat o'zimizning backend'dan (HTTPS) — boshqa manzildan fayl yuklab ishga tushirmaydi.
-    const ALLOWED: &str = "https://qurilisherp-backend.onrender.com/uploads/";
-    if !url.starts_with(ALLOWED) {
+    // Faqat O'ZIMIZNING manzillardan (HTTPS) — boshqa joydan fayl yuklab ishga tushirmaydi.
+    // 2026-10-28: server Render'dan ko'chgach yangilanish havolasi erp-firma.uz/files/...
+    // bo'ldi, ro'yxatda esa faqat eski Render manzili qolgani uchun ilova ichidagi
+    // yangilash "URL ruxsat etilmagan" deb to'xtab qolgandi.
+    const ALLOWED: [&str; 4] = [
+        "https://erp-firma.uz/files/",
+        "https://www.erp-firma.uz/files/",
+        "https://erpfirma-backend.up.railway.app/uploads/",
+        "https://qurilisherp-backend.onrender.com/uploads/",
+    ];
+    if !ALLOWED.iter().any(|p| url.starts_with(p)) {
         return Err("URL ruxsat etilmagan".into());
     }
     let mut last_err = String::new();

@@ -175,7 +175,7 @@ export default function UpdateChecker() {
           </motion.div>
         </motion.div>
       ) : (
-        <UpdateBubble key="badge" phase={phase} percent={percent} label={phase === "downloading" ? t('update.downloading', { percent }) : t('update.badge')}
+        <UpdateBubble key="badge" phase={phase} percent={percent} label={phase === "downloading" ? t('update.downloadingShort', { defaultValue: "Yuklab olinmoqda" }) : t('update.badge')}
           onOpen={() => { if (phase !== "downloading") setOpen(true); }} btnStyle={btnStyle} />
       )}
     </AnimatePresence>
@@ -199,7 +199,6 @@ function UpdateBubble({ phase, percent, label, onOpen, btnStyle }: { phase: Phas
   const R = 22; // dumaloq radiusi (px)
   const cx = Math.min(vw - R - 6, Math.max(R + 6, pos.x * vw)), cy = Math.min(vh - R - 6, Math.max(R + 6, pos.y * vh));
   const side = cx < vw / 3 ? "left" : cx > (vw * 2) / 3 ? "right" : "center";
-  const tx = side === "left" ? `-${R}px` : side === "right" ? `calc(-100% + ${R}px)` : "-50%";
   const pct = phase === "downloading" ? Math.max(0, Math.min(100, percent)) : 100;
   const C = 2 * Math.PI * 17;
   const expand = (ms = 2500) => { setExpanded(true); if (collapseT.current) clearTimeout(collapseT.current); collapseT.current = setTimeout(() => setExpanded(false), ms); };
@@ -225,11 +224,14 @@ function UpdateBubble({ phase, percent, label, onOpen, btnStyle }: { phase: Phas
       onFocus={() => expand(4000)} onBlur={() => setExpanded(false)}
       onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); if (phase !== "downloading") onOpen(); } }}
       className="fixed z-[90] touch-none select-none cursor-grab active:cursor-grabbing"
-      style={{ left: cx, top: cy, transform: `translate(${tx}, -50%)` }}>
-      <motion.div layout initial={{ opacity: 0, scale: 0.6 }} animate={{ opacity: 1, scale: 1 }} transition={{ type: "spring", stiffness: 420, damping: 32 }}
-        className={`flex items-center text-white shadow-xl shadow-black/30 ring-1 ring-white/20 ${expanded ? "rounded-full pl-1 pr-4 gap-2" : "rounded-full"} ${side === "right" && expanded ? "flex-row-reverse pl-4 pr-1" : ""}`}
-        style={btnStyle}>
-        <span className="relative w-11 h-11 flex items-center justify-center flex-shrink-0">
+      /* Doira MARKAZI shu nuqtada turadi va kengayganda joyidan qimirlamaydi
+         (owner 2026-10-28: "ochilishi g'alati, joyini o'zgartirganda siqilib
+         qolyapti"). Ilgari yozuv doira bilan bitta qatorda edi — kengayganda
+         doira siljirdi, ekran chetida esa butun tugma siqilardi. */
+      style={{ left: cx, top: cy, transform: "translate(-50%, -50%)" }}>
+      <motion.div initial={{ opacity: 0, scale: 0.6 }} animate={{ opacity: 1, scale: 1 }} transition={{ type: "spring", stiffness: 420, damping: 32 }}
+        className="relative">
+        <span className="relative w-11 h-11 flex items-center justify-center rounded-full text-white shadow-xl shadow-black/30 ring-1 ring-white/20" style={btnStyle}>
           <svg viewBox="0 0 40 40" className="absolute inset-0 w-11 h-11 -rotate-90">
             <circle cx="20" cy="20" r="17" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="3" />
             <circle cx="20" cy="20" r="17" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round"
@@ -239,11 +241,19 @@ function UpdateBubble({ phase, percent, label, onOpen, btnStyle }: { phase: Phas
             ? <span className="relative text-[10px] font-extrabold tabular-nums">{pct}%</span>
             : <MorphIcon icon={Sparkles} className="relative w-4 h-4" />}
         </span>
-        {expanded && (
-          <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-xs font-bold whitespace-nowrap py-2">
-            {label}
-          </motion.span>
-        )}
+        {/* Yozuv — doiradan tashqarida suzadi: ekranning qaysi chetida bo'lsa,
+            ichkariga qarab ochiladi, shuning uchun hech qachon kesilmaydi. */}
+        <AnimatePresence>
+          {expanded && (
+            <motion.span key="lbl" initial={{ opacity: 0, x: side === "right" ? 10 : -10, scale: 0.94 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }} exit={{ opacity: 0, x: side === "right" ? 10 : -10, scale: 0.94 }}
+              transition={{ type: "spring", stiffness: 420, damping: 34 }}
+              className={`absolute top-1/2 -translate-y-1/2 rounded-full px-3.5 py-2 text-xs font-bold text-white whitespace-nowrap shadow-xl shadow-black/30 ring-1 ring-white/20 pointer-events-none ${side === "right" ? "right-[calc(100%+8px)]" : "left-[calc(100%+8px)]"}`}
+              style={btnStyle}>
+              {label}
+            </motion.span>
+          )}
+        </AnimatePresence>
       </motion.div>
     </div>
   );

@@ -106,4 +106,16 @@ router.post('/collect', async (req, res) => {
   }
 });
 
+/** Ob-havo ogohlantirishini HOZIR sinab ko'rish (odatda har kuni 18:00 da). Faqat dasturchi. */
+router.post('/weather-test', async (req, res) => {
+  if (!req.user?.isDeveloper) return res.status(403).json({ error: "Ruxsat yo'q" });
+  try {
+    const { runWeatherAlerts } = await import('../aiVoice/scheduler/weatherJob');
+    res.json(await runWeatherAlerts(new Date(), { force: true }));
+  } catch (err) {
+    console.error('[ob-havo] sinov xatosi:', err);
+    res.status(500).json({ error: "Sinab bo'lmadi" });
+  }
+});
+
 export default router;

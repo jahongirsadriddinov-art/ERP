@@ -14,6 +14,7 @@
 const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const net = require('net');
 
 const NL = String.fromCharCode(10);
 
@@ -53,8 +54,33 @@ function needTestBot() {
   process.exit(1);
 }
 
+/** Port bandmi — band bo'lsa tushunarli xabar berib to'xtaymiz (EADDRINUSE stack emas). */
+function portBusy(port) {
+  return new Promise((resolve) => {
+    const srv = net.createServer();
+    srv.once('error', (e) => resolve(e && e.code === 'EADDRINUSE'));
+    srv.once('listening', () => srv.close(() => resolve(false)));
+    srv.listen(port, '0.0.0.0');
+  });
+}
+
 async function main() {
   const local = readEnvLocal();
+
+  const port = Number(local.PORT || process.env.PORT || 5000);
+  if (await portBusy(port)) {
+    process.stderr.write([
+      '',
+      '  ' + port + '-port band - backend ishga tusha olmaydi.',
+      '',
+      '  Sabab: oldingi sinov serveri hali ishlayapti.',
+      '  Yechim: oldingi oynada Ctrl+C bosing, yoki:',
+      '',
+      '      npx kill-port ' + port,
+      '',
+    ].join(NL));
+    process.exit(1);
+  }
 
   const token = local.TELEGRAM_BOT_TOKEN;
   if (!token || token === process.env.TELEGRAM_BOT_TOKEN) needTestBot();
@@ -69,7 +95,8 @@ async function main() {
     uri = mem.getUri('erp_firma_local');
     process.stdout.write("Baza tayyor (xotirada, server to'xtasa o'chadi)." + NL);
   }
-  process.stdout.write('Sinov boti: @' + (local.BOT_USERNAME || '?') + ' (jonli botga tegilmaydi).' + NL);
+  const uname = String(local.BOT_USERNAME || '?').replace(/^@+/, '');
+  process.stdout.write('Sinov boti: @' + uname + ' (jonli botga tegilmaydi).' + NL);
 
   // Windows'da .cmd ni to'g'ridan-to'g'ri spawn qilish EINVAL beradi (Node 20+ xavfsizlik
   // o'zgarishi) - shuning uchun ts-node'ni Node orqali bevosita ishga tushiramiz.

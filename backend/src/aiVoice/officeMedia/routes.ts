@@ -95,6 +95,20 @@ officeMediaRoutes.put('/office/media', wrap(async (req, res) => {
   res.json({ ok: true, media: mediaDto(doc) });
 }));
 
+/** Butun so'rov uchun byudjet — Cloudflare 100 s dan OLDIN tugashi shart (524 bo'lmasin). */
+const TOTAL_BUDGET_MS = 70_000;
+const FIRST_TRY_MS = 40_000;
+
+/** Va'dani belgilangan vaqtda to'xtatadi (model osilib qolsa so'rov cheksiz kutmasin). */
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  if (!(ms > 0)) return Promise.reject(new Error('timeout'));
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error('timeout')), ms);
+    t.unref?.();
+    p.then((v) => { clearTimeout(t); resolve(v); }, (e) => { clearTimeout(t); reject(e); });
+  });
+}
+
 /** Ovoz → matn. Tana: { audio: base64 WAV (16 kHz mono, ≤ 60 s), lang?: 'uz' | 'ru' }. */
 officeMediaRoutes.post('/office/transcribe', wrap(async (req, res) => {
   const b = isObj(req.body) ? req.body : {};
@@ -105,16 +119,23 @@ officeMediaRoutes.post('/office/transcribe', wrap(async (req, res) => {
   if (!wav || wav.pcm.length < 1600) return res.status(400).json({ error: 'invalid_audio' });
   const pcm = wav.rate === 16_000 ? wav.pcm : resamplePcm16(wav.pcm, wav.rate, 16_000);
   const lang = b.lang === 'ru' ? 'ru' : 'uz';
+  // Owner 2026-10-28 xato jurnali: "API 524: POST .../office/transcribe". 524 — Cloudflare
+  // 100 soniyadan ko'p kutib, ulanishni uzgan. Bu yerda ikkita urinish KETMA-KET va HECH
+  // QANDAY taymautsiz ketardi: model osilsa so'rov cheksiz osilib, foydalanuvchi 524 olardi.
+  // Endi umumiy byudjet 70 s (Cloudflare chegarasidan past) — ortiq ketsa aniq xato qaytadi.
+  const deadline = Date.now() + TOTAL_BUDGET_MS;
+  const left = () => deadline - Date.now();
   try {
-    const r = await transcriber.transcribe(pcm, { lang, model: aiConfig.models.transcribe });
+    const r = await withTimeout(transcriber.transcribe(pcm, { lang, model: aiConfig.models.transcribe }), Math.min(FIRST_TRY_MS, left()));
     return res.json({ text: (r.text || '').slice(0, 2000) });
   } catch (e: any) {
     console.warn('[office/transcribe] transcriber failed, Gemini audio fallback:', String(e?.message || e).slice(0, 200));
   }
+  if (left() < 5_000) return res.status(503).json({ error: 'stt_timeout' });
   // Zaxira (owner 2026-10-23: "stt_failed" chiqardi) — ovozli chiqimda ishlab turgan Gemini audio yo'li
   try {
-    const out = await geminiAudioToJson(Buffer.from(b.audio, 'base64'), 'audio/wav',
-      `Transcribe this ${lang === 'ru' ? 'Russian' : 'Uzbek (Latin script)'} speech exactly as spoken. Answer ONLY JSON: {"text":"..."}. If there is no speech, {"text":""}.`);
+    const out = await withTimeout(geminiAudioToJson(Buffer.from(b.audio, 'base64'), 'audio/wav',
+      `Transcribe this ${lang === 'ru' ? 'Russian' : 'Uzbek (Latin script)'} speech exactly as spoken. Answer ONLY JSON: {"text":"..."}. If there is no speech, {"text":""}.`), left());
     res.json({ text: String(out?.text || '').slice(0, 2000) });
   } catch (e: any) {
     console.error('[office/transcribe] failed:', String(e?.message || e).slice(0, 200));

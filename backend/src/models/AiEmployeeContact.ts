@@ -23,6 +23,8 @@ export interface IAiEmployeeContact extends Document {
     bindingCodeExpiresAt?: Date;
   };
   optOut: { calls: boolean; reminders: boolean; all: boolean; at?: Date; via?: string };
+  /** AI tanishtiruv xabarini yuborgan vaqti (ikkinchi marta yozilmaydi). */
+  introducedAt?: Date;
   botAiModeUntil?: Date;
   /** Owner 2026-10-22: AI oxirgi salomi (bir xil salom ketma-ket takrorlanmasin) — matn va ovoz uchun umumiy. */
   lastGreeting?: string;
@@ -66,6 +68,8 @@ const AiEmployeeContactSchema = new Schema<IAiEmployeeContact>({
     at: Date,
     via: String,
   },
+  /** AI o'zini tanishtirib xabar yozgan vaqti (telegram/introduce.ts) — bir marta. */
+  introducedAt: Date,
   botAiModeUntil: Date,
   lastGreeting: { type: String, maxlength: 300 },
   lastGreetingAt: Date,

@@ -13,6 +13,7 @@ import { checkRate } from '../utils/rateLimit';
 import { issueTokenWithSession } from '../services/sessions';
 import { GuardCaller, checkRoleAssign, checkTargetAccess, formatPhone, phoneTaken, auditUserAction } from '../utils/userGuards';
 import { onPhoneChanged } from '../services/telegramIdentity';
+import { enqueueIntroduce } from '../aiVoice/telegram/introduce';
 
 const router = Router();
 
@@ -674,6 +675,9 @@ router.post('/users', requireAuth, requireOwnerOrAdmin, async (req, res) => {
     }));
 
     await newUser.save();
+    // AI yangi xodimni kontaktiga saqlab, o'zini tanishtiradi (navbat orqali, sekin —
+    // Telegram spam cheklovига urilmaslik uchun). Xato bo'lsa xodim qo'shish buzilmaydi.
+    if (newUser.companyId) void enqueueIntroduce(String(newUser.companyId), String(newUser._id));
     return res.status(201).json({
       _id: newUser._id,
       id: newUser._id,

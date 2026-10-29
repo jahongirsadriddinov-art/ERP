@@ -45,15 +45,15 @@
       "timestampUrl": "",
       "nsis": {
         "installMode": "currentUser",
-        "displayLanguageSelector": true,
+        "displayLanguageSelector": false,
         "languages": [
-          "English",
-          "Russian"
+          "English"
         ],
         "installerIcon": "icons/icon.ico",
         "headerImage": "installer/header.bmp",
         "sidebarImage": "installer/sidebar.bmp",
-        "startMenuFolder": "QurilishERP"
+        "startMenuFolder": "QurilishERP",
+        "template": "installer/installer.nsi"
       }
     },
     "resources": [],

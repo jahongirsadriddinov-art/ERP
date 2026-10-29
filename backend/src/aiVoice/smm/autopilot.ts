@@ -191,15 +191,30 @@ export async function serverMedia(it: any, format: SmmFormat): Promise<{ files: 
   const aspect = ASPECT[format];
   const badge = BADGE[it.category] || 'QurilishERP';
   const scenes: { title: string; text: string }[] = (it.scenes || []).slice(0, 5);
-  const cover = async (asp: Aspect): Promise<{ data: Buffer; source: string }> => {
+  // Owner 2026-10-29: "rasmlari g'alati, mazmunsiz chiqyapti". Ikki sabab bor edi:
+  //  1) AI rasm olinmasa, jimgina gradientli shablonga tushib ketardi va NEGA ekani
+  //     hech qayerda yozilmasdi (ImageUnavailable butunlay yutilardi);
+  //  2) karusel slaydlari UMUMAN AI rasm ishlatmasdi — faqat muqova urinib ko'rilardi,
+  //     qolgan 4 tasi doim shablon edi. Natijada albomdagi 5 rasmning 4 tasi mazmunsiz.
+  // Endi har bir slayd ham o'z mazmuniga mos AI rasm oladi; faqat o'sha slayd
+  // muvaffaqiyatsiz bo'lsa — o'zi shablonga tushadi.
+  const aiImage = async (src: { title?: string; text?: string }, asp: Aspect, what: string): Promise<Buffer | null> => {
     try {
-      const img = await smmRender.generateAiImage(imagePromptFor(it), asp);
+      const img = await smmRender.generateAiImage(imagePromptFor({ ...it, ...src, imagePrompt: '' }), asp);
       const [w, h] = asp === '9:16' ? [1080, 1920] : asp === '1:1' ? [1080, 1080] : [1080, 1350];
-      return { data: await smmRender.toJpeg(img.data, w, h), source: 'ai' };
+      return await smmRender.toJpeg(img.data, w, h);
     } catch (e) {
-      if (!(e instanceof ImageUnavailable)) console.warn('[smm] AI rasm xatosi:', (e as Error)?.message?.slice(0, 120));
-      return { data: await smmRender.renderTemplate({ title: it.title || it.topic || 'QurilishERP', subtitle: scenes[0]?.text || String(it.text || '').slice(0, 160), badge, aspect: asp }), source: 'template' };
+      // Sabab DOIM yozilsin: no_key / quota / model_unavailable — shusiz nega
+      // gradient chiqayotganini bilib bo'lmaydi.
+      const why = e instanceof ImageUnavailable ? e.message : String((e as Error)?.message || e).slice(0, 120);
+      console.warn(`[smm] AI rasm olinmadi (${what}): ${why}`);
+      return null;
     }
+  };
+  const cover = async (asp: Aspect): Promise<{ data: Buffer; source: string }> => {
+    const ai = await aiImage(it, asp, 'muqova');
+    if (ai) return { data: ai, source: 'ai' };
+    return { data: await smmRender.renderTemplate({ title: it.title || it.topic || 'QurilishERP', subtitle: scenes[0]?.text || String(it.text || '').slice(0, 160), badge, aspect: asp }), source: 'template' };
   };
   if (format === 'post' || format === 'story') {
     const c = await cover(aspect);
@@ -209,8 +224,11 @@ export async function serverMedia(it: any, format: SmmFormat): Promise<{ files: 
   const c = await cover(aspect);
   slides.push(c.data);
   const list = scenes.length ? scenes : [{ title: it.title, text: String(it.text || '').slice(0, 110) }];
-  for (let i = 0; i < Math.min(list.length, 4); i++) {
-    slides.push(await smmRender.renderTemplate({ title: list[i].title || it.title, subtitle: list[i].text, badge: `${i + 1}/${Math.min(list.length, 4)}`, aspect, variant: i + 1 }));
+  const n = Math.min(list.length, 4);
+  // Barchasi BARAVARIGA so'raladi — ketma-ket bo'lsa 5 ta rasm bir necha daqiqa olardi
+  const made = await Promise.all(Array.from({ length: n }, (_, i) => aiImage(list[i], aspect, `slayd ${i + 1}`)));
+  for (let i = 0; i < n; i++) {
+    slides.push(made[i] || await smmRender.renderTemplate({ title: list[i].title || it.title, subtitle: list[i].text, badge: `${i + 1}/${n}`, aspect, variant: i + 1 }));
   }
   if (format === 'carousel') return { files: slides.map((d) => ({ data: d, mime: 'image/jpeg' })), format, source: c.source };
   try {

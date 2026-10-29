@@ -11,7 +11,19 @@ import { geminiApiKeys } from '../../services/gemini';
 // ffmpeg-static (allaqachon dependency — chat ovozlari uchun) bilan: shablon rasm (gradient + matn), PNG → JPEG
 // (Instagram faqat JPEG qabul qiladi), WebM → MP4 (Reels H.264), shablon slaydlardan oddiy Reels videosi.
 
-export const GEMINI_IMAGE_MODEL = () => (process.env.GEMINI_IMAGE_MODEL || 'gemini-2.5-flash-image').trim();
+// Rasm modeli. Owner 2026-10-29: "gemini nano bananadan foydalansin". Standart
+// 'gemini-2.5-flash-image' edi — bu nano banana'ning ENG ESKI, 2025-yilgi versiyasi.
+// Endi yangisidan boshlab, eskisiga tushib boradigan RO'YXAT: akkauntda qaysi biri
+// mavjud bo'lsa o'shanisi ishlatiladi (modeli yo'qligi 404/400 bilan bilinadi).
+// GEMINI_IMAGE_MODEL bilan bitta modelni majburlash ham mumkin (vergul bilan bir nechta).
+const DEFAULT_IMAGE_MODELS = ['gemini-3.1-flash-image', 'gemini-2.5-flash-image'];
+export const imageModels = (): string[] => {
+  const raw = (process.env.GEMINI_IMAGE_MODEL || '').trim();
+  const list = raw ? raw.split(',').map((m) => m.trim()).filter(Boolean) : [];
+  return list.length ? list : DEFAULT_IMAGE_MODELS;
+};
+/** Eski nom — holat ko'rsatkichlarida ishlatiladi. */
+export const GEMINI_IMAGE_MODEL = () => imageModels()[0];
 export class ImageUnavailable extends Error { constructor(public reason: string) { super(reason); } }
 
 export type Aspect = '1:1' | '4:5' | '9:16';
@@ -33,7 +45,19 @@ export function imagePromptFor(item: { title?: string; text?: string; imagePromp
 export async function generateAiImage(prompt: string, aspect: Aspect = '4:5'): Promise<{ data: Buffer; mime: string }> {
   const keys = geminiApiKeys();
   if (!keys.length) throw new ImageUnavailable('no_key');
-  const model = GEMINI_IMAGE_MODEL();
+  let last = 'failed';
+  for (const model of imageModels()) {
+    const r = await tryModel(model, keys, prompt, aspect);
+    if (r.img) return r.img;
+    last = r.reason;
+    // Kalit/kvota muammosi bo'lsa boshqa model ham yordam bermaydi — to'xtaymiz
+    if (r.reason === 'quota' || r.reason === 'unreachable') break;
+  }
+  throw new ImageUnavailable(last);
+}
+
+/** Bitta model uchun barcha kalitlarni sinab ko'radi. */
+async function tryModel(model: string, keys: string[], prompt: string, aspect: Aspect): Promise<{ img?: { data: Buffer; mime: string }; reason: string }> {
   let last = 'failed';
   for (const key of keys) {
     let res: Response;
@@ -51,17 +75,18 @@ export async function generateAiImage(prompt: string, aspect: Aspect = '4:5'): P
     const json: any = await res.json().catch(() => ({}));
     if (!res.ok) {
       // 429 (kvota), 403 (ruxsat) — keyingi kalit; 404/400 (model yo'q / tarifda yo'q) — umuman yo'q
-      last = res.status === 429 ? 'quota' : res.status === 404 ? 'model_unavailable' : `http_${res.status}`;
+      last = res.status === 429 ? 'quota' : (res.status === 404 || res.status === 400) ? 'model_unavailable' : `http_${res.status}`;
+      // Model yo'q/tarifda emas — qolgan kalitlarda ham bir xil, keyingi MODELGA o'tamiz
       if (res.status === 404 || res.status === 400) break;
       continue;
     }
     const parts: any[] = json?.candidates?.[0]?.content?.parts || [];
     const img = parts.find((p) => p?.inlineData?.data || p?.inline_data?.data);
     const d = img?.inlineData || img?.inline_data;
-    if (d?.data) return { data: Buffer.from(String(d.data), 'base64'), mime: String(d.mimeType || d.mime_type || 'image/png') };
+    if (d?.data) return { img: { data: Buffer.from(String(d.data), 'base64'), mime: String(d.mimeType || d.mime_type || 'image/png') }, reason: 'ok' };
     last = 'no_image';
   }
-  throw new ImageUnavailable(last);
+  return { reason: last };
 }
 
 // ───────────── ffmpeg ─────────────

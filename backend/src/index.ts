@@ -45,6 +45,7 @@ import turnStatusRoutes from './routes/turnStatus';
 import appBuildRoutes from './routes/appBuilds';
 import aiOpenChatRoutes from './routes/aiOpenChat';
 import aiHealthRoutes from './routes/aiHealth';
+import marketPriceRoutes from './routes/marketPrice';
 import botUiRoutes, { stickerImageRouter as botUiStickerRoutes } from './routes/botUi';
 import insightsRoutes from './routes/insights';
 import worklogsRoutes from './routes/worklogs';
@@ -325,6 +326,7 @@ app.use('/api/dev/app-builds',  requireAuth, requireDeveloper, appBuildRoutes); 
 app.use('/api/dev/bot-ui',      requireAuth, requireDeveloper, botUiRoutes); // Bot dizayni: tugma matni/premium emoji/rang, buyruqlar
 app.use('/api/dev/ai-open-chat', requireAuth, requireDeveloper, aiOpenChatRoutes); // "Ochiq muloqot" — tanlangan odamga AI mavzu chegarasisiz
 app.use('/api/dev/ai-health',   requireAuth, requireDeveloper, aiHealthRoutes); // AI nega javob bermayapti: kalitlar, tgcall-worker, jonli sinov
+app.use('/api/market-price',    requireAuth, marketPriceRoutes); // Narx razvedkasi: O'zbekiston bo'yicha o'rtacha bozor narxi
 app.use('/api/bot-ui-sticker',  botUiStickerRoutes); // faqat qo'shilgan emoji paketlari rasmlari (<img> token yubormaydi)
 // publicClientRoutes — mijoz portali, ATAYLAB auth shart emas (mijoz tizim
 // foydalanuvchisi emas) — o'zining ichida taxmin qilib bo'lmaydigan token bilan himoyalangan.

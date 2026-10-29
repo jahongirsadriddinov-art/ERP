@@ -1,5 +1,6 @@
 import { GoogleGenAI } from '@google/genai';
 import { geminiConfigured, withGeminiKey } from '../../lib/geminiKeys';
+import { lookupPrice, compare } from '../../../services/marketPrice';
 import { sanitizeForPrompt } from '../../lib/untrusted';
 import type { AiToolDef } from '../types';
 import { ALL_CHANNELS, ALL_ROLES, L, ok } from '../erp/common';
@@ -160,4 +161,69 @@ export const searchWeb: AiToolDef<{ query: string }> = {
   },
 };
 
-export const KNOWLEDGE_TOOLS: AiToolDef[] = [getExchangeRate, searchWeb, setTranslatorMode];
+// ── getMarketPrice ──
+// Owner 2026-10-29: "prorab qimmatga olib qo'ysa ogohlantirsin; qimmatligini
+// O'zbekiston bo'yicha o'rtacha narxdan biladi. AI ham hohlagan vaqti qidira olsin."
+export const getMarketPrice: AiToolDef<{ item: string; unit?: string; price?: number }> = {
+  name: 'getMarketPrice',
+  description: {
+    uz: "Material/mahsulotning O'ZBEKISTON BO'YICHA o'rtacha bozor narxi (firmalarning haqiqiy xaridlaridan yig'ilgan, anonim). price berilsa — qimmat yoki arzon olingani ham aytiladi. \"Sement qancha turadi?\", \"Men 61 ming ga oldim, qimmatmi?\" kabi savollar uchun.",
+    ru: 'Средняя рыночная цена материала ПО УЗБЕКИСТАНУ (собрана из реальных покупок компаний, анонимно). С price — скажет, дорого или дёшево куплено.',
+  },
+  parameters: {
+    type: 'object',
+    properties: {
+      item: { type: 'string', minLength: 2, maxLength: 80, description: "Material nomi: sement M400, g'isht, armatura 12" },
+      unit: { type: 'string', maxLength: 20, description: "O'lchov birligi: qop, kg, tonna, dona, m3 (bilinsa — aniqroq)" },
+      price: { type: 'number', minimum: 0, maximum: 1e10, description: "Foydalanuvchi to'lagan birlik narxi (so'm) - qimmat/arzonligini aytish uchun" },
+    },
+    required: ['item'],
+  },
+  kind: 'read',
+  confirm: 'never',
+  general: true,
+  maxRoles: ALL_ROLES,
+  defaultRoles: ALL_ROLES,
+  purposes: ['assistant'],
+  channels: ALL_CHANNELS,
+  behavior: 'BLOCKING',
+  handler: async (ctx, args) => {
+    const item = String(args.item || '').trim();
+    if (item.length < 2) return { status: 'error', message: L(ctx, 'Qaysi material?', 'Какой материал?'), retryable: false };
+    let stats;
+    try {
+      stats = await lookupPrice(item, args.unit);
+    } catch (e) {
+      console.warn('[aiVoice/getMarketPrice] xato:', String((e as Error)?.message || e).slice(0, 160));
+      return { status: 'error', message: L(ctx, "Narxni hozir olib bo'lmadi.", 'Сейчас не удалось получить цену.'), retryable: true };
+    }
+    if (!stats) {
+      // Halol javob: yetarli kuzatuv yo'q. Taxminiy raqam aytish — zarar.
+      return {
+        status: 'not_found',
+        message: L(ctx, `"${item}" bo'yicha hali yetarli ma'lumot yo'q — bu material kam xarid qilingan.`,
+          `По "${item}" пока недостаточно данных.`),
+        retryable: false,
+      };
+    }
+    const price = Number(args.price);
+    const cmp = Number.isFinite(price) && price > 0 ? compare(price, stats) : null;
+    let msg = L(ctx,
+      `${stats.name}: o'rtacha ${fmt(stats.median)} so'm/${stats.unit} (odatda ${fmt(stats.low)}–${fmt(stats.high)}).`,
+      `${stats.name}: в среднем ${fmt(stats.median)} сум/${stats.unit} (обычно ${fmt(stats.low)}–${fmt(stats.high)}).`);
+    if (cmp) {
+      msg += cmp.expensive
+        ? L(ctx, ` Siz ${fmt(price)} to'lagansiz — bu ${cmp.pct}% qimmat.`, ` Вы заплатили ${fmt(price)} — это на ${cmp.pct}% дороже.`)
+        : cmp.pct <= -10
+          ? L(ctx, ` Siz ${fmt(price)} to'lagansiz — bozordan ${Math.abs(cmp.pct)}% arzon.`, ` Вы заплатили ${fmt(price)} — на ${Math.abs(cmp.pct)}% дешевле рынка.`)
+          : L(ctx, ` Sizning ${fmt(price)} — bozor darajasida.`, ` Ваши ${fmt(price)} — на уровне рынка.`);
+    }
+    return ok(msg, {
+      median: stats.median, low: stats.low, high: stats.high, unit: stats.unit,
+      points: stats.points, companies: stats.companies,
+      ...(cmp ? { diffPct: cmp.pct, expensive: cmp.expensive } : {}),
+    });
+  },
+};
+
+export const KNOWLEDGE_TOOLS: AiToolDef[] = [getExchangeRate, getMarketPrice, searchWeb, setTranslatorMode];

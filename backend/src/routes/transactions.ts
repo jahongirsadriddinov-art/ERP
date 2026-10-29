@@ -5,6 +5,7 @@ import { checkRate } from '../utils/rateLimit';
 import ObjectForHints from '../models/Object';
 import { Router } from 'express';
 import Transaction from '../models/Transaction';
+import { recordPoint } from '../services/marketPrice';
 import { bot, notifyAdmins } from '../services/bot';
 import User from '../models/User';
 import { scoped, stamped } from '../middleware/scope';
@@ -218,6 +219,18 @@ router.post('/', async (req, res) => {
 
     const tx = new Transaction(stamped(txData));
     await tx.save();
+
+    // Narx razvedkasi (owner 2026-10-29): har bir material xaridining BIRLIK narxi
+    // O'zbekiston bo'yicha umumiy indeksga qo'shiladi. Indeks anonim — kim qayerdan
+    // olgani hech qachon ko'rinmaydi, faqat yig'ma o'rtacha. Shu indeks tufayli
+    // keyingi xaridda "bozor narxidan 17% qimmat" deb ogohlantira olamiz.
+    if (tx.materialName && tx.unit && Number(tx.price) > 0) {
+      void recordPoint({
+        name: String(tx.materialName), unit: String(tx.unit), price: Number(tx.price),
+        at: new Date(),
+        source: 'receipt', companyId: String(tx.companyId || ''), refId: String(tx._id),
+      });
+    }
 
     // Send telegram notification
     if (tx.status === 'pending') {

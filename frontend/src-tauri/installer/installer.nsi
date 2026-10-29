@@ -168,6 +168,18 @@ VIAddVersionKey "ProductVersion" "${VERSION}"
 ;   * kutib olish va yakun sahifalari matni o'zbekcha va ilovaning tilida;
 ;   * "qayerga o'rnatay?" sahifasi YO'Q - ortiqcha savol bermaymiz (Chrome/Telegram
 ;     kabi): ilova standart joyga, foydalanuvchi uchun o'rnatiladi.
+; --- To'liq brend ko'rinishi (owner 2026-10-29: "ranglar, ko'rinish butunlay
+; o'zgartir, eskisi qolmasin"). MUI oq-kulrang standart ko'rinish o'rniga
+; ilovaning to'q ko'k mavzusi. MUI_BGCOLOR ham sarlavha yo'lagiga, ham kutib
+; olish/yakun sahifalariga tegishli - shuning uchun header.bmp va sidebar.bmp
+; foni ham AYNAN shu rangda (make-images.py dagi BG).
+!define MUI_BGCOLOR "0A162B"
+!define MUI_TEXTCOLOR "E8ECF3"
+!define MUI_FONT "Segoe UI"
+!define MUI_FONTSIZE 9
+; O'rnatish jarayoni ro'yxati: matn ochiq, fon to'q; progress chizig'i brend rangida
+!define MUI_INSTFILESPAGE_COLORS "C3D1E8 0A162B"
+!define MUI_INSTFILESPAGE_PROGRESSBAR "colored"
 !define MUI_HEADERIMAGE_RIGHT
 !define MUI_WELCOMEFINISHPAGE_BITMAP_NOSTRETCH
 

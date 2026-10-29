@@ -61,7 +61,6 @@
     "copyright": "Copyright (c) 2026 QurilishERP",
     "category": "Business",
     "shortDescription": "Qurilish firmalari uchun boshqaruv tizimi",
-    "longDescription": "QurilishERP - obyektlar va smeta, materiallar, moliya, xodimlar davomati, GPS nazorati, chat va qo'ng'iroqlar hamda Telegram bot integratsiyasi bitta tizimda.",
-    "licenseFile": "installer/LICENSE.txt"
+    "longDescription": "QurilishERP - obyektlar va smeta, materiallar, moliya, xodimlar davomati, GPS nazorati, chat va qo'ng'iroqlar hamda Telegram bot integratsiyasi bitta tizimda."
   }
 }

@@ -28,6 +28,7 @@ import { reportUnmet, soundsLikeCant, type UnmetIssue } from './unmet';
 import { createClaudeProvider } from './providers/claude';
 import { createGeminiProvider } from './providers/gemini';
 import { createOpenRouterProvider, createGroqProvider } from './providers/openrouter';
+import { captureError } from '../../services/errorTracker';
 import { errorCode, type ProviderCall, type ProviderSession, type ProviderToolResult, type TextProvider } from './providers/types';
 
 // ErpTextAgent — TextAgent'ning haqiqiy amalga oshirilishi (llm-provider.md):
@@ -221,6 +222,7 @@ export class ErpTextAgent implements TextAgent {
     const deadline = AbortSignal.timeout(this.deps.totalTimeoutMs ?? 90_000);
     const outer = input.signal ? AbortSignal.any([input.signal, deadline]) : deadline;
 
+    const providerErrors: string[] = [];
     for (const name of order) {
       const provider = this.providers[name];
       if (!provider) continue;
@@ -234,12 +236,24 @@ export class ErpTextAgent implements TextAgent {
         if (input.signal?.aborted) break;
         const qk = quotaKindOf(e);
         if (qk && st.quota !== 'daily') st.quota = qk;
+        providerErrors.push(`${name}: ${errorCode(e)}`);
         console.warn(`[aiVoice] matn provayderi ${name} xatosi: ${errorCode(e)} — keyingisiga o'tiladi`);
       }
     }
     const base = st.quota ? quotaMessage(st.quota, lang) : m('failed', lang);
     const text = st.writeStatuses.length ? `${base}\n${this.factual(st, lang)}` : base;
-    if (!st.quota && !input.signal?.aborted) st.issues.push({ reason: 'provider_failed' });
+    if (!st.quota && !input.signal?.aborted) {
+      st.issues.push({ reason: 'provider_failed' });
+      // Owner 2026-10-29: "AI javob bera olmayapti" - foydalanuvchi faqat kechirim
+      // so'rovini ko'rardi, SABAB esa Railway logida qolib ketardi. Endi xato
+      // Dasturchi paneli -> Xatolar bo'limiga tushadi.
+      void captureError({
+        source: 'server', kind: 'ai-provider',
+        message: `AI javob bera olmadi: matn provayderlari xato berdi (${providerErrors.join(', ') || 'sabab yoq'})`,
+        route: '/ai/text', method: 'POST',
+        companyId: String(ctx.companyId || ''), userId: String(ctx.userId || ''),
+      });
+    }
     this.reportIfUnmet(ctx, st, text);
     return reply(text);
   }

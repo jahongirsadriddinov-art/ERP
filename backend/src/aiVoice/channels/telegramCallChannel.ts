@@ -49,7 +49,13 @@ async function check(c: ChannelCtx, now: Date): Promise<Avail & { peer?: Peer; o
     if (!conn || conn.status !== 'connected') return { ok: false, reason: 'account_not_connected' };
     if (floodWaitActive(conn, now)) return { ok: false, reason: 'flood_wait' };
     // Anti-freeze: Telegram platforma akkauntini muzlatgan/cheklagan — undan qo'ng'iroq qilinmaydi
-    if (healthBlocked(conn.health, now)) return { ok: false, reason: 'account_restricted' };
+    if (healthBlocked(conn.health, now)) {
+      // Owner 2026-10-29: "qilolmasa nimaga ligini ANIQ aytsin". Faqat "cheklov bor"
+      // demasdan, qanday cheklov va qachongacha ekanini ham olib o'tamiz.
+      const h: any = conn.health || {};
+      const parts = ['account_restricted', String(h.state || ''), h.until ? String(new Date(h.until).getTime()) : ''];
+      return { ok: false, reason: parts.filter(Boolean).join(':') };
+    }
     if (dailyCount(conn, now) >= aiConfig.tgDailyCap) return { ok: false, reason: 'daily_cap' };
   }
   // Owner 2026-10-16: tgUserId ERP bot bog'lanishidan (kod shart emas)

@@ -75,6 +75,22 @@ type Lg = { lang?: string };
 /** Kanal nima uchun mavjud emasligini foydalanuvchiga tushunarli qilib (nima qilish kerak). */
 export function missingText(ch: ChannelName, reason: string, c: Lg): string {
   const l = (uz: string, ru: string) => L(c as any, uz, ru);
+  // Sabab qo'shimcha tafsilot bilan kelishi mumkin: "account_restricted:spam_limited:<ms>"
+  // (owner 2026-10-29: "qilolmasa nimaga ligini aniq aytsin").
+  const [head, detail, untilMs] = String(reason || '').split(':');
+  if (head === 'account_restricted') {
+    const kind = detail === 'spam_limited'
+      ? l('spam cheklovi', 'спам-ограничение')
+      : detail === 'frozen' ? l('muzlatilgan', 'заморожен')
+      : detail === 'banned' ? l('bloklangan', 'заблокирован')
+      : detail === 'unauthorized' ? l('tizimdan chiqib ketgan', 'разлогинен')
+      : l('cheklov', 'ограничение');
+    const when = Number(untilMs) > Date.now()
+      ? ` (${new Date(Number(untilMs)).toLocaleString(c.lang === 'ru' ? 'ru-RU' : 'uz-UZ', { timeZone: 'Asia/Tashkent', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} ${l('gacha', 'до')})`
+      : '';
+    return l(`AI Telegram akkauntiga ${kind} qo'yilgan${when} — shu sababli qo'ng'iroq qila olmayapti`,
+      `На Telegram-аккаунте AI ${kind}${when} — поэтому звонок невозможен`);
+  }
   if (ch === 'telegram_call') {
     switch (reason) {
       case 'no_consent': return l("AI qo'ng'iroqlari rahbariyat tomonidan o'chirilgan", 'звонки AI отключены руководством');

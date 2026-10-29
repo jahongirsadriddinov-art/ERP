@@ -90,6 +90,11 @@ router.post('/parse', upload.single('smeta'), async (req: Request, res: Response
           companyId: String(t?.companyId || ''),
           userId: String(t?.userId || ''),
           role: String(t?.role || ''),
+          // Owner 2026-10-29: muvaffaqiyatli o'qilgan smeta ham "yangi xato" bo'lib
+          // Telegramga kelardi. Bu xato emas — tashxis. Panelda qoladi (nima qanday
+          // o'qilganini ko'rish uchun kerak), lekin xabar YUBORILMAYDI. O'qilmagan
+          // holat (rows yo'q) — haqiqiy muammo, u avvalgidek darhol xabar qiladi.
+          silent: rows > 0,
         });
       }
     } catch { /* tashxis xabari yuborilmasa ham, javob beriladi */ }

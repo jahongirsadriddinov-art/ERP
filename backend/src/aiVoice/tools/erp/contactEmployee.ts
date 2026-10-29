@@ -1,3 +1,4 @@
+import { pickCandidate } from '../../../services/nameMatch';
 import User from '../../../models/User';
 import type { ChannelCtx, ChannelName } from '../../contracts';
 import { getChannel } from '../../channels/registry';
@@ -42,7 +43,24 @@ export async function findEmployee(ctx: ToolCtx, args: { employeeId?: string; em
   // Aniq to'liq moslik bo'lsa — o'sha
   const exact = rows.filter((r) => r.name.toLowerCase() === q.toLowerCase() || r.name.toLowerCase().split(' ')[0] === q.toLowerCase());
   if (exact.length === 1) return { one: exact[0] };
-  return { many: rows };
+  if (rows.length) return { many: rows };
+
+  // Owner 2026-10-29 (AI jurnali): "Bunday xodim topilmadi" xatosi. Yuqoridagi qidiruv —
+  // oddiy regex: nom AYNAN shunday yozilgan bo'lsagina topadi. Ovozli qo'ng'iroqda esa ism
+  // kirillda, qo'shimcha bilan ("Ruslanga"), qisqartirilgan ("Aziz" ← "Abdulaziz") yoki xato
+  // eshitilgan bo'lishi mumkin. Shu sabab hech nima topilmasa — nameMatch orqali fonetik
+  // moslik (transliteratsiya + qo'shimchalarni olib tashlash + Levenshtein) bilan qayta qidiramiz.
+  const all: any[] = await User.find(inCompany(ctx, { isBlocked: { $ne: true } })).select(pick).limit(300).lean();
+  const cands = all
+    .filter((u) => String(u._id) !== String(ctx.userId))
+    .map((u) => ({ id: String(u._id), name: fullName(u), role: String(u.role || '') }));
+  if (!cands.length) return {};
+  const guess = pickCandidate(q, cands);
+  if (guess.match) return { one: { id: guess.match.id, name: guess.match.name, role: guess.match.role || '' } };
+  if (guess.ambiguous?.length) {
+    return { many: guess.ambiguous.map((c) => ({ id: c.id, name: c.name, role: c.role || '' })) };
+  }
+  return {};
 }
 
 function whoMissing(ctx: ToolCtx, r: { many?: Who[] }): ToolResult {

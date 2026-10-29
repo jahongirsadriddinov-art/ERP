@@ -14,14 +14,20 @@ import {
 // Rahbar — butun firma; boshqalar — faqat O'ZI kiritgan chiqimlar. Maosh (oylik) yozuvlari KIRMAYDI —
 // shaxsiy maosh hech kimga aytilmaydi (jami — getAllowedFinancialReport'da). Tavsif/ism — untrusted.
 
-type Period = 'today' | 'this_week' | 'this_month' | 'last_month' | 'last_30_days';
-const PERIODS: Period[] = ['today', 'this_week', 'this_month', 'last_month', 'last_30_days'];
+// Owner 2026-10-29 (AI jurnali): "args.period: ruxsat etilmagan qiymat" xatosi chiqqan —
+// model "kecha", "bu yil", "oxirgi 3 oy" kabi so'rovlarda moliyaviy hisobotdagi davrlarni
+// yuborardi, bu yerda esa ular ro'yxatda yo'q edi. Endi ikkala tool bir xil davrlarni
+// tushunadi (+ "yesterday"), shuning uchun savol xatosiz bajariladi.
+type ReportPeriod = 'this_month' | 'last_month' | 'last_30_days' | 'last_90_days' | 'this_year';
+type Period = 'today' | 'yesterday' | 'this_week' | ReportPeriod;
+const PERIODS: Period[] = ['today', 'yesterday', 'this_week', 'this_month', 'last_month', 'last_30_days', 'last_90_days', 'this_year'];
 const TYPES = ['expense', 'material', 'jihozlar', 'transport', 'boshqa'] as const;
 const STATUSES = ['pending', 'confirmed', 'rejected'] as const;
 const LIMIT = 15;
 
 function range(p: Period, now: string): { from: string; to: string } {
   if (p === 'today') return { from: now, to: now };
+  if (p === 'yesterday') { const y = addDays(now, -1); return { from: y, to: y }; }
   if (p === 'this_week') return { from: addDays(now, -6), to: now };
   return periodRange(p, now);
 }

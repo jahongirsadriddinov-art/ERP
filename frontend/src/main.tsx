@@ -34,6 +34,7 @@ import { installScrollEdgeFade } from "./app/lib/scrollFade";
 import { installExternalLinkGuard } from "./app/lib/externalLinks";
 import { installLegacyColorFallback, installDvhFallback } from "./app/lib/legacyCss";
 import { installKeyboardAvoid } from "./app/lib/keyboardAvoid";
+import { installEnterSubmit } from "./app/lib/enterSubmit";
 import { applyAppFont, applyFontScale, applyFontWeight } from "./app/lib/fonts";
 
 installErrorReporting();
@@ -52,6 +53,7 @@ installDvhFallback();
 installLegacyColorFallback();
 // iPhone / Telegram: klaviatura fokusdagi maydonni yopmasin (modal va varaqlar ko'rinadigan qismga sig'adi)
 installKeyboardAvoid();
+installEnterSubmit();
 // Profilda tanlangan shrift (qurilmada saqlanadi) — birinchi chizishdan oldin
 applyAppFont();
 applyFontScale();

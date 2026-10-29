@@ -28,6 +28,7 @@ import { AnnouncementComposer, GlobalAnnouncementList } from "./AnnouncementPart
 const ServerStatusPanel = lazy(() => import("./ServerStatusPanel"));
 const AppBuildsPanel = lazy(() => import("./AppBuildsPanel"));
 const AiOpenChatPanel = lazy(() => import("./AiOpenChatPanel"));
+const AiHealthPanel = lazy(() => import("./AiHealthPanel"));
 // Xatolar jurnali (server/sayt/bot/fon ishlari) — alohida chunk
 const ErrorLogPanel = lazy(() => import("./ErrorLogPanel"));
 // Tashqi (off-site) zaxira: holat, "Hozir zaxira olish", arxivlar va tiklash
@@ -733,6 +734,7 @@ export default function DeveloperPanel({ currentUser, onLogout, profileEl }: { c
           <Suspense fallback={<SkeletonList items={3}/>}><BotUiPanel /></Suspense>
         ) : tab === "aiVoice" ? (
           <div className="space-y-3">
+            <Suspense fallback={<div className="h-28 rounded-2xl bg-muted/40 animate-pulse" />}><AiHealthPanel /></Suspense>
             <Suspense fallback={<div className="h-40 rounded-2xl bg-muted/40 animate-pulse" />}><AiPlatformPanel /></Suspense>
             <Suspense fallback={<div className="h-28 rounded-2xl bg-muted/40 animate-pulse" />}><AiOpenChatPanel /></Suspense>
           </div>

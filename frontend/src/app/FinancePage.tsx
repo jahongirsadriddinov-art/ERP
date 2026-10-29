@@ -17,7 +17,10 @@ import { MorphIcon } from "morphicons/react";
 import { IconTile } from "./components/IconTile";
 import { SwipeRow } from "./components/SwipeRow";
 import { IncomePanel } from "./IncomePanel";
-import { MoneyField, moneyOf, useShowInUzs, InUzsToggle, parseAmount, type Cur } from "./components/Money";
+// PriceField — material narxi uchun (satr 430). 2026-10-28: import ro'yxatidan tushib
+// qolgani uchun "Chiqim qo'shish" oynasida material qatori ochilganda sahifa qulardi
+// ("Can't find variable: PriceField").
+import { MoneyField, PriceField, moneyOf, useShowInUzs, InUzsToggle, parseAmount, type Cur } from "./components/Money";
 import { MoneyInput } from "./components/MoneyInput";
 import { CountUp } from "./components/CountUp";
 import { amountToInput, fmtNumber, parseMoney } from "./lib/money";

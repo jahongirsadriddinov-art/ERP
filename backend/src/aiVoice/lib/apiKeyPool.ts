@@ -27,6 +27,15 @@ function pool(envName: string) {
 /** Ro'yxatdagi kalitlar soni (0 — sozlanmagan). */
 export function keyCount(envName: string): number { return pool(envName).keys.length; }
 
+/** Dasturchi paneli uchun holat: nechta kalit bor va nechtasi hozir sovushda.
+ *  Kalit QIYMATLARI hech qachon qaytarilmaydi — faqat sanoq. */
+export function poolStatus(envName: string, now = Date.now()): { keys: number; cooling: number } {
+  const p = pool(envName);
+  let cooling = 0;
+  for (const [, until] of p.cooldown) if (until > now) cooling++;
+  return { keys: p.keys.length, cooling: Math.min(cooling, p.keys.length) };
+}
+
 /** Sovushda bo'lmagan keyingi kalit; hammasi sovushda bo'lsa — eng tez tiklanadigani. */
 export function pickKey(envName: string, now = Date.now()): PooledKey | null {
   const p = pool(envName);

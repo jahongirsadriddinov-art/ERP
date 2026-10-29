@@ -199,7 +199,19 @@ export async function runStep(q: JobQueue | null, confId: string, payload: StepP
   if (!(await pushAttempt(confId, M, { channel, attemptNo, at: now, outcome: 'dispatching' }))) return;
 
   let res: ChannelAttemptResult;
-  try { res = await adapter.attempt(ctx, buildRequest(channel, conf, fc)); }
+  try {
+    // Owner 2026-10-29: "davomatni bitta qilib emas, alohida qilib tashlayapti".
+    // Rahbarga xabar shu yerda har bir xodim uchun ALOHIDA yuborilardi — botda
+    // ketma-ket 5-10 ta bir xil xabar. Yig'ish mexanizmi (mgrBatch, 90 s oyna)
+    // allaqachon bor edi, lekin eskalatsiya shu yo'ldan o'tmasdi. Endi o'tadi:
+    // bir oynadagi barcha xodimlar BITTA ro'yxatli xabarda boradi.
+    if (channel === 'notify_manager') {
+      const queued = await notifyManagerOnce(confId, 'no_answer', now);
+      res = queued ? { outcome: 'delivered', retryable: false } : { outcome: 'skipped', retryable: false };
+    } else {
+      res = await adapter.attempt(ctx, buildRequest(channel, conf, fc));
+    }
+  }
   catch (e) { res = { outcome: 'failed', retryable: true, errorCode: 'exception' }; console.error('[aiVoice/attendance] kanal xatosi:', (e as Error).message); }
 
   if (res.awaitResponseUntil) {

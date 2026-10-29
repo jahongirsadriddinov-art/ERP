@@ -70,7 +70,9 @@ export const getExchangeRate: AiToolDef<{ currency?: string; amount?: number }> 
   handler: async (ctx, args) => {
     const code = currencyCode(args.currency);
     let rows: any[];
-    try { rows = await cbuRates(); } catch {
+    try { rows = await cbuRates(); } catch (e) {
+      // Sabab jim yutilmasin (owner 2026-10-29 jurnali: kurs ham takror xato bergan)
+      console.warn('[aiVoice/getExchangeRate] CBU xatosi:', String((e as Error)?.message || e).slice(0, 200));
       return { status: 'error', message: L(ctx, "Markaziy bank kursini hozir olib bo'lmadi, birozdan keyin so'rang.", 'Не удалось получить курс ЦБ, попробуйте чуть позже.'), retryable: true };
     }
     const row = rows.find((x) => String(x?.Ccy).toUpperCase() === code);
@@ -148,7 +150,11 @@ export const searchWeb: AiToolDef<{ query: string }> = {
       const r = await searchFn(String(args.query || '').slice(0, 200), lang);
       const answer = sanitizeForPrompt(r.text, 900);
       return ok(L(ctx, 'Internetdan topildi.', 'Найдено в интернете.'), { answer, sources: r.sources });
-    } catch {
+    } catch (e) {
+      // Owner 2026-10-29: jurnalda searchWeb HAR SAFAR "Xato" bergan, lekin sababi
+      // hech qayerda yozilmasdi — xato jim yutilardi. Endi aniq sabab logga tushadi
+      // (model nomi eskirganmi, kvota tugaganmi, grounding ruxsat berilmaganmi).
+      console.warn('[aiVoice/searchWeb] xato:', String((e as Error)?.message || e).slice(0, 200));
       return { status: 'error', message: L(ctx, "Internetdan hozir topib bo'lmadi, birozdan keyin so'rang.", 'Сейчас не удалось найти в интернете, попробуйте позже.'), retryable: true };
     }
   },

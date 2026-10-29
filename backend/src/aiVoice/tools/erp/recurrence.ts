@@ -1,5 +1,5 @@
 import type { IsoDate, IsoWeekday } from '../../contracts';
-import { addDays, isoWeekdayOf, zonedToUtc } from '../../lib/zonedTime';
+import { addDays, isoWeekdayOf, localDate, zonedToUtc } from '../../lib/zonedTime';
 
 // Eslatma takrorlanishi uchun MAHALLIY yordamchi (P2). Keyingi yonishlarni (nextFireAt'ni oldinga
 // surish) P3 scheduler/recurrence.ts hisoblaydi; bu yerda faqat birinchi yonish vaqti va
@@ -50,7 +50,16 @@ export function firstFutureOccurrence(startDate: IsoDate, time: string, rec: Rec
     if (at.getTime() >= now.getTime() - 60_000) {
       return rec.until && at > rec.until ? null : at;
     }
-    if (rec.freq === 'none') return null;
+    if (rec.freq === 'none') {
+      // Owner 2026-10-29 (AI jurnali): "Bu vaqt allaqachon o'tgan" xatosi takror-takror
+      // chiqqan — 10-15, 10-16, 10-18, 10-23. Sabab: kechqurun "soat 7 da eslat" deyilsa,
+      // model BUGUNGI sanani yuboradi, 07:00 esa allaqachon o'tgan. Odam buni "ertaga 7 da"
+      // deb tushunadi — endi tizim ham shunday tushunadi: sana AYNAN BUGUN bo'lsa va vaqt
+      // o'tgan bo'lsa, ertangi kunga suriladi. Aniq o'tgan SANA berilsa (masalan kecha) —
+      // avvalgidek xato qaytadi, chunki u yerda niyat noaniq emas.
+      if (i === 0 && d === localDate(now)) { d = addDays(d, 1); continue; }
+      return null;
+    }
     d = rec.freq === 'monthly' ? addMonth(d) : addDays(d, 1);
   }
   return null;

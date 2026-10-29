@@ -134,12 +134,22 @@ describe('updateReminder / cancelReminder / listReminders', () => {
 });
 
 describe('recurrence (mahalliy yordamchi)', () => {
-  it("weekdays = Du–Sha; takroriy o'tgan vaqt keyingi kunga suriladi; bir martalik — null", () => {
+  it("weekdays = Du–Sha; o'tgan vaqt keyingi kunga suriladi (takroriy ham, bir martalik ham)", () => {
     const today = localDate();
     expect(normalizeRecurrence('weekdays', undefined, today).byWeekday).toEqual([1, 2, 3, 4, 5, 6]);
     const now = zonedToUtc(today, '12:00');
     const daily = firstFutureOccurrence(today, '08:00', normalizeRecurrence('daily', undefined, today), now);
     expect(zonedParts(daily!).date).toBe(addDays(today, 1));
-    expect(firstFutureOccurrence(today, '08:00', normalizeRecurrence('none', undefined, today), now)).toBeNull();
+    // Owner 2026-10-29: kechqurun "soat 8 da eslat" deyilsa model BUGUNGI sanani yuboradi va
+    // eslatma "vaqt o'tgan" deb rad etilardi. Odam buni "ertaga 8 da" deb tushunadi.
+    const once = firstFutureOccurrence(today, '08:00', normalizeRecurrence('none', undefined, today), now);
+    expect(zonedParts(once!).date).toBe(addDays(today, 1));
+  });
+
+  it("aniq O'TGAN sana berilsa — baribir null (niyat noaniq emas)", () => {
+    const today = localDate();
+    const now = zonedToUtc(today, '12:00');
+    const yesterday = addDays(today, -1);
+    expect(firstFutureOccurrence(yesterday, '08:00', normalizeRecurrence('none', undefined, yesterday), now)).toBeNull();
   });
 });

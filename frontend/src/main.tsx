@@ -10,7 +10,9 @@ import App, { ClientViewPage } from "./app/App.tsx";
 import UpdateChecker from "./app/UpdateChecker.tsx";
 import MediaViewer from "./app/MediaViewer.tsx";
 import { installErrorReporting } from "./app/lib/monitoring";
-import { API_BASE } from "./app/api";
+// API_BASE pastda import qilinadi (./app/api.ts) - import hoisting tufayli quyidagi
+// LEGACY_MEDIA tuzatuvchisida ham ishlaydi. Takror import qilinsa, dev rejimda
+// Babel "Duplicate declaration API_BASE" xatosini beradi (prod build sezmaydi).
 
 // Eski yozuvlarda rasm/video havolasi SERVERNING O'SHA PAYTDAGI manzili bilan saqlangan
 // (masalan qurilisherp-backend.onrender.com). Server ko'chgach o'sha havolalar o'lik

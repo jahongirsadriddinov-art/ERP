@@ -1,4 +1,5 @@
 import { NonRetryableJobError, type JobQueue } from '../queue/jobQueue';
+import { registerWeatherJob } from './weatherJob';
 import type { ManagerReason } from './attendanceFlow';
 import {
   handleCallOutcome, handleCallTimeout, installSessionListener, notifyManagerOnce, runStep, sendAfterCallButtons, type StepPayload,
@@ -17,6 +18,9 @@ import { enqueueJob, JOBS, keys } from './jobTypes';
 const MIN = 60_000;
 
 export function registerHandlers(q: JobQueue): void {
+  // Ertangi ob-havo ogohlantirishi (owner 2026-10-29)
+  registerWeatherJob(q);
+
   const need = (v: unknown, what: string): string => {
     if (typeof v !== 'string' || !v) throw new NonRetryableJobError(`${what} yo'q`);
     return v;

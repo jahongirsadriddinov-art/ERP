@@ -146,5 +146,16 @@ export default defineConfig(({ mode }) => ({
   server: {
     port: 5173,
     host: true,
+    // Lokal ishlab chiqishda API va socket SHU manzildan so'raladi va bu yerda
+    // backendga uzatiladi. Sabab: ilova endi API'ni sahifaning O'Z manzilidan
+    // so'raydi (prodda buni Cloudflare Worker uzatadi) — dev'da ham xuddi
+    // shunday bo'lmasa, so'rovlar 5173 ga borib yo'qolardi. Shu proksi tufayli
+    // dev va prod bir xil yo'ldan yuradi, demak dev'da ishlagan narsa prodda ham ishlaydi.
+    proxy: Object.fromEntries(
+      ['/api', '/socket.io', '/uploads', '/files', '/health', '/webhook'].map((p) => [
+        p,
+        { target: process.env.VITE_DEV_BACKEND || 'http://localhost:5000', changeOrigin: true, ws: p === '/socket.io' },
+      ]),
+    ),
   },
 }))

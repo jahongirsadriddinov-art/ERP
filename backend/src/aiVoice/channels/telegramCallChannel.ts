@@ -56,7 +56,7 @@ async function check(c: ChannelCtx, now: Date): Promise<Avail & { peer?: Peer; o
   const tgUserId = await ensureContactTgUserId(c.companyId, c.employeeId);
   const ct: any = await AiEmployeeContact.findOne({ companyId: c.companyId, employeeId: c.employeeId })
     .select('telegram.tgUserId telegram.username telegram.resolveStatus telegram.checkedAt telegram.callConsent optOut').lean();
-  const consent = await getCallConsent(c.companyId, c.employeeId, { contact: ct });
+  const consent = await getCallConsent(c.companyId, c.employeeId, { contact: ct, incoming: !!c.userRequested });
   if (!consent.allowed) return { ok: false, reason: consent.reason || 'no_consent' };
   const tg = ct?.telegram;
   if (!tgUserId || tg?.tgUserId !== tgUserId) return { ok: false, reason: 'not_bound' };

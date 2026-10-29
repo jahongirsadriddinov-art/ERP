@@ -129,12 +129,15 @@ export function ensureCallbackJob(q: JobQueue | null): void {
   registeredOn.add(q);
   if (q.registeredTypes().includes(CALLBACK_JOB)) return;
   q.register(CALLBACK_JOB, async ({ job, queue }) => {
-    const p = (job.payload || {}) as { order?: ChannelName[]; lang?: 'uz' | 'ru'; reason?: string };
+    const p = (job.payload || {}) as { order?: ChannelName[]; lang?: 'uz' | 'ru'; reason?: string; userRequested?: boolean };
     await runCallback({
       companyId: String(job.companyId || ''), employeeId: String(job.employeeId || ''), correlationId: job.correlationId || newCorrelationId(),
       order: (p.order || []).filter((c) => CALL_CHANNELS.includes(c)), lang: p.lang === 'ru' ? 'ru' : 'uz',
       attemptNo: Number(job.attempts) || 1, maxAttempts: Number(job.maxAttempts) || 2,
       reason: typeof p.reason === 'string' ? p.reason.slice(0, 300) : undefined,
+      // Foydalanuvchi o'zi so'raganmi (requestCallback) yoki AI o'zi chaqiryaptimi
+      // (companyAlerts) — rozilik tekshiruvi shunga qarab farq qiladi.
+      userRequested: !!p.userRequested,
     }, queue.now());
   }, { concurrency: 2, maxAttempts: 6, backoffBaseMs: 15_000 });
 }
@@ -163,11 +166,13 @@ export async function runCallback(p: {
   companyId: string; employeeId: string; correlationId: string; order: ChannelName[]; lang: 'uz' | 'ru'; attemptNo: number; maxAttempts: number;
   /** Nima uchun qayta qo'ng'iroq (owner 2026-10-19: AI qo'ng'iroq boshida sababini aytsin). */
   reason?: string;
+  /** Foydalanuvchining o'zi so'ragan qo'ng'iroq — firma roziligi sozlamasi to'smaydi. */
+  userRequested?: boolean;
 }, now: Date): Promise<CallbackOutcome> {
   if (!p.companyId || !(await isAiActive(p.companyId))) return 'skipped';
   const u = await User.findOne({ _id: p.employeeId, companyId: p.companyId, isBlocked: { $ne: true } }).select('_id').lean().catch(() => null);
   if (!u) return 'skipped';
-  const ctx: ChannelCtx = { companyId: p.companyId, employeeId: p.employeeId, correlationId: p.correlationId, purpose: 'assistant', lang: p.lang, now, attemptNo: p.attemptNo };
+  const ctx: ChannelCtx = { companyId: p.companyId, employeeId: p.employeeId, correlationId: p.correlationId, purpose: 'assistant', lang: p.lang, now, attemptNo: p.attemptNo, userRequested: !!p.userRequested };
   await reapStaleSessionOf(p.companyId, p.employeeId, now).catch(() => false);
   let retry = false;
   const reasons: Partial<Record<ChannelName, string>> = {};
@@ -255,7 +260,9 @@ export const requestCallback: AiToolDef<{ channel?: 'inapp' | 'telegram'; delayM
     let order = callbackOrder(args.channel, ctx.channel);
     const lang = ctx.lang === 'ru' ? 'ru' : 'uz';
     const soon = runAt.getTime() - now.getTime() <= SOON_MS;
-    const chCtx: ChannelCtx = { companyId: ctx.companyId, employeeId: ctx.userId, correlationId: ctx.correlationId, purpose: 'assistant', lang, now, attemptNo: 1 };
+    // Foydalanuvchining O'ZI so'ragan qo'ng'iroq — firma roziligi sozlamasi ("AI xodimlarga
+    // qo'ng'iroq qilsinmi") buni to'smaydi: so'rashning o'zi rozilik (owner 2026-10-28).
+    const chCtx: ChannelCtx = { companyId: ctx.companyId, employeeId: ctx.userId, correlationId: ctx.correlationId, purpose: 'assistant', lang, now, attemptNo: 1, userRequested: true };
     const pre = await precheckChannels(chCtx, order);
     const first = order[0];
     const firstReason = pre.reasons[first];
@@ -277,7 +284,7 @@ export const requestCallback: AiToolDef<{ channel?: 'inapp' | 'telegram'; delayM
     const r = await q.enqueue({
       type: CALLBACK_JOB, companyId: ctx.companyId, employeeId: ctx.userId, refId: ctx.userId,
       payload: {
-        order, lang,
+        order, lang, userRequested: true,
         // Sabab bo'lmasa ham AI qo'ng'iroqda nega qo'ng'iroq qilayotganini aytadi
         reason: (args.reason && String(args.reason).trim().slice(0, 300))
           || L(ctx, `foydalanuvchi ${args.when ? `soat ${args.when} da` : args.delayMinutes ? `${args.delayMinutes} daqiqadan keyin` : 'keyinroq'} qayta qo'ng'iroq qilishni so'ragan`, `пользователь попросил перезвонить ${args.when ? `в ${args.when}` : args.delayMinutes ? `через ${args.delayMinutes} мин` : 'позже'}`),

@@ -174,6 +174,11 @@ export interface ChannelCtx {
   reminderId?: string;
   stepIndex?: number;
   attemptNo: number;
+  /** Qo'ng'iroqni foydalanuvchining O'ZI so'ragan ("menga qo'ng'iroq qil" → requestCallback).
+   *  Bunda firma roziligi va "AI meni chaqirmasin" (optOut.calls) tekshiruvi qo'llanmaydi:
+   *  ikkalasi ham AI'ning CHAQIRILMAGAN qo'ng'irog'i haqida (owner 2026-10-28). optOut.all
+   *  (AI butunlay kerak emas) baribir to'sadi. */
+  userRequested?: boolean;
   /** `${confirmationId}:${stepIndex}:${attemptNo}` — qo'ng'iroq kanallari AiCallSession.attemptKey sifatida yozadi. */
   attemptKey?: string;
 }

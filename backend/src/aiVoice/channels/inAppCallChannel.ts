@@ -28,7 +28,8 @@ async function check(c: ChannelCtx, now: Date): Promise<Avail> {
   if (!aiConfig.enabled) return { ok: false, reason: 'disabled' };
   if (!c || typeof c.companyId !== 'string' || !c.companyId || !isObjectIdString(c.employeeId)) return { ok: false, reason: 'bad_ctx' };
   const ct: any = await AiEmployeeContact.findOne({ companyId: c.companyId, employeeId: c.employeeId }).select('optOut').lean();
-  if (ct?.optOut?.all || ct?.optOut?.calls) return { ok: false, reason: 'opt_out' };
+  // userRequested — foydalanuvchi o'zi so'ragan qo'ng'iroq: optOut.calls ("AI meni chaqirmasin") to'smaydi
+  if (ct?.optOut?.all || (!c.userRequested && ct?.optOut?.calls)) return { ok: false, reason: 'opt_out' };
   if (!userHasSocketHere(c.employeeId, c.companyId)) {
     if (await otherInstanceAlive(now)) return { ok: false, reason: 'not_on_this_instance', retryAt: new Date(now.getTime() + DEFER_MS) };
     return { ok: false, reason: 'offline' };

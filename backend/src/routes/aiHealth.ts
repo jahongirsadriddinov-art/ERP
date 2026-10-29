@@ -6,7 +6,7 @@ import { createTextAgent } from '../aiVoice/brain/textAgent';
 import { newCorrelationId } from '../aiVoice/lib/ids';
 import { PLATFORM_SCOPE } from '../aiVoice/platform';
 import { workerConnectedHere } from '../aiVoice/telegram/workerNamespace';
-import { getConnection } from '../aiVoice/telegram/accountService';
+import { getConnection, workerRecentlySeen } from '../aiVoice/telegram/accountService';
 import type { ToolCtx } from '../aiVoice/contracts';
 
 // "AI nega javob bermayapti?" — logsiz aniqlash uchun (owner 2026-10-29: AI na matnga
@@ -29,10 +29,14 @@ router.get('/', async (req, res) => {
       { name: 'Anthropic', env: 'ANTHROPIC_API_KEY', keys: process.env.ANTHROPIC_API_KEY ? 1 : 0, cooling: 0 },
     ];
 
+    // Worker SHU jarayonga ulangan bo'lmasligi mumkin, lekin yaqinda "tirik" signal
+    // bergan bo'lsa — qo'ng'iroq baribir ketadi. Qo'ng'iroq kanali aynan shu ikkisini
+    // birga tekshiradi (telegramCallChannel), shuning uchun panel ham xuddi shunday
+    // hisoblashi kerak — aks holda panel "ulanmagan" deb yolg'on ko'rsatardi.
     const conn = await getConnection().catch(() => null);
     const tgWorker = {
-      connected: workerConnectedHere(),
-      lastSeenAt: conn?.lastSeenAt || conn?.updatedAt || null,
+      connected: workerConnectedHere() || workerRecentlySeen(conn, new Date()),
+      lastSeenAt: conn?.lastHealthAt || conn?.leaseUntil || null,
       status: conn?.status || null,
       health: conn?.health?.state || null,
     };

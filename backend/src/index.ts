@@ -77,6 +77,7 @@ import pinRoutes from './routes/pin';
 import { startMonthlySummaryLoop } from './services/expenseInsights';
 import signDocsRoutes, { publicSignRouter } from './routes/signDocs';
 import { startAiVoice, mountAiVoiceRoutes } from './aiVoice/bootstrap';
+import { startPriceCollector } from './services/priceChannels';
 
 dotenv.config();
 
@@ -414,6 +415,9 @@ mongoose.connect(MONGODB_URI)
     startOffsiteBackupScheduler();
     // AI ovozli yordamchi (AI_VOICE_ENABLED o'chiq bo'lsa hech narsa qilmaydi)
     startAiVoice();
+    // Narx razvedkasi (BETA): ochiq Telegram kanallaridan narx yig'ish.
+    // Telegram akkaunti ISHLATILMAYDI (t.me/s/ ochiq sahifasi) — AI akkauntlariga xavf yo'q.
+    startPriceCollector();
     // Jiddiy ogohlantirish o'qilmasa AI qo'ng'iroq qiladi — navbat ishlovchisi (services/companyAlerts.ts)
     void import('./services/companyAlerts').then((m) => m.ensureEscalationJob()).catch(() => undefined);
     // Biznes nazoratchilari: o'g'irlik/anomaliya, narx, hujjat muddatlari, texnika, kunlik brifing (services/insights)

@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import Transaction from '../models/Transaction';
+import AppSettings from '../models/AppSettings';
 import { lookupPrice, compare, recordPoint } from '../services/marketPrice';
+import { collectFromChannels, getChannels } from '../services/priceChannels';
 
 // Narx razvedkasi (owner 2026-10-29: "hohlagan narsasini yozadi, uni global O'zbekiston
 // bo'yicha qidiradi va o'rtacha narxini ko'rsatadi").
@@ -69,6 +71,38 @@ router.post('/backfill', async (req, res) => {
   } catch (err) {
     console.error('[marketPrice] backfill xatosi:', err);
     res.status(500).json({ error: 'Bajarib bo\'lmadi' });
+  }
+});
+
+// ── Narx manbalari: Telegram ochiq kanallari (BETA, faqat dasturchi) ──
+// Hech qanday Telegram akkaunti ishlatilmaydi — t.me/s/<kanal> ochiq sahifasi
+// o'qiladi, shuning uchun AI akkauntlariga mutlaqo xavf yo'q.
+
+router.get('/channels', async (req, res) => {
+  if (!req.user?.isDeveloper) return res.status(403).json({ error: "Ruxsat yo'q" });
+  res.set('Cache-Control', 'no-store');
+  res.json({ channels: await getChannels() });
+});
+
+router.put('/channels', async (req, res) => {
+  if (!req.user?.isDeveloper) return res.status(403).json({ error: "Ruxsat yo'q" });
+  const list = Array.isArray(req.body?.channels) ? req.body.channels : null;
+  if (!list) return res.status(400).json({ error: "channels ro'yxati kerak" });
+  const clean = [...new Set(list
+    .map((c: unknown) => String(c).replace(/^@/, '').trim())
+    .filter((c: string) => /^[A-Za-z0-9_]{4,32}$/.test(c)))].slice(0, 30);
+  await AppSettings.updateOne({ key: 'global' }, { $set: { priceChannels: clean } }, { upsert: true });
+  res.json({ ok: true, channels: clean });
+});
+
+/** Hoziroq yig'ish (odatda o'zi 6 soatda bir ishlaydi). */
+router.post('/collect', async (req, res) => {
+  if (!req.user?.isDeveloper) return res.status(403).json({ error: "Ruxsat yo'q" });
+  try {
+    res.json(await collectFromChannels());
+  } catch (err) {
+    console.error("[marketPrice] yig'ish xatosi:", err);
+    res.status(500).json({ error: "Yig'ib bo'lmadi" });
   }
 });
 

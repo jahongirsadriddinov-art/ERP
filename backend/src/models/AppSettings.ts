@@ -9,6 +9,8 @@ export interface IAppSettings extends Document {
   // Ilovalar (Windows exe / Android APK) — saytdan ALOHIDA yoqiladi/o'chiriladi
   appEnabled: boolean;
   botEnabled: boolean;
+  /** Narx razvedkasi (BETA): narx e'lon qiladigan OCHIQ Telegram kanallari (@siz). */
+  priceChannels: string[];
   // Dasturchi bot-menyusidagi tugma matnlarini o'zi o'zgartirishi uchun —
   // { 'kb_broadcast': '📣 Elon yuborish', ... }. Bo'sh/mavjud bo'lmagan
   // kalit uchun standart (i18n/bot.ts'dagi) matn ishlatiladi.
@@ -64,6 +66,7 @@ const AppSettingsSchema = new Schema<IAppSettings>({
   siteEnabled: { type: Boolean, default: true },
   appEnabled: { type: Boolean, default: true },
   botEnabled: { type: Boolean, default: true },
+  priceChannels: { type: [String], default: [] },
   devButtonLabels: { type: Schema.Types.Mixed, default: {} },
   devButtonOrder: { type: [String], default: [] },
   adminButtonLabels: { type: Schema.Types.Mixed, default: {} },

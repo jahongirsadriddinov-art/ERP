@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { MorphIcon } from "morphicons/react";
 import Search from "@hugeicons/core-free-icons/Search01Icon";
+import ChevronDown from "@hugeicons/core-free-icons/ArrowDown01Icon";
 import { API_BASE } from "./api";
 import { SkeletonList } from "./Skeleton";
+import { usePersistentState } from "./lib/persistentState";
 
 // "Ochiq muloqot" (owner 2026-10-28: "admin panelda ochiq muloqotni yoqishni qo'sh —
 // firmadan, ERP dan tashqari ham hamma aytganni qilsin, lekin FAQAT tanlangan
@@ -12,6 +14,9 @@ type Person = { id: string; name: string; phone: string; role: string; company: 
 type Res = { users: Person[]; enabled: Person[] };
 
 export default function AiOpenChatPanel() {
+  // Owner 2026-10-29: "buni ochip yopiladigan qil" — bo'lim uzun, boshqa
+  // sozlamalarni pastga surib yuborardi. Tanlov qurilmada eslab qolinadi.
+  const [open, setOpen] = usePersistentState<boolean>("devPanel.openChat.open", false, (v) => typeof v === "boolean");
   const [q, setQ] = useState("");
   const [data, setData] = useState<Res | null>(null);
   const [busy, setBusy] = useState(false);
@@ -28,9 +33,10 @@ export default function AiOpenChatPanel() {
 
   // Yozilayotganda har harfga so'rov ketmasin — 350 ms kutiladi
   useEffect(() => {
+    if (!open) return;                      // yopiq turganda serverga so'rov yo'q
     const t = setTimeout(() => { void load(q.trim()); }, q ? 350 : 0);
     return () => clearTimeout(t);
-  }, [q, load]);
+  }, [q, load, open]);
 
   const toggle = async (p: Person, on: boolean) => {
     setSaving(p.id); setMsg("");
@@ -67,14 +73,27 @@ export default function AiOpenChatPanel() {
 
   return (
     <div className="surface rounded-2xl p-4 space-y-3">
-      <div>
-        <p className="text-[13px] font-bold">Ochiq muloqot</p>
-        <p className="text-[11px] text-muted-foreground mt-0.5">
-          Yoqilgan odam bilan AI ERP va firma mavzusidan tashqari ham erkin suhbatlashadi va
-          aytilgan ishni bajaradi. Boshqa xodimlarning shaxsiy ma'lumoti va ruxsatsiz amallar
-          baribir taqiqlangan.
-        </p>
-      </div>
+      <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open}
+        className="w-full flex items-center gap-3 text-left">
+        <div className="min-w-0 flex-1">
+          <p className="text-[13px] font-bold flex items-center gap-2">
+            Ochiq muloqot
+            {data?.enabled?.length ? (
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-400">
+                {data.enabled.length}
+              </span>
+            ) : null}
+          </p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">
+            Yoqilgan odam bilan AI ERP va firma mavzusidan tashqari ham erkin suhbatlashadi va
+            aytilgan ishni bajaradi. Boshqa xodimlarning shaxsiy ma'lumoti va ruxsatsiz amallar
+            baribir taqiqlangan.
+          </p>
+        </div>
+        <MorphIcon icon={ChevronDown} className={`w-5 h-5 flex-shrink-0 text-muted-foreground transition-transform duration-300 ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && (<>
 
       {data?.enabled?.length ? (
         <div className="rounded-xl bg-emerald-500/10 px-3 py-1">
@@ -104,6 +123,7 @@ export default function AiOpenChatPanel() {
       )}
 
       {msg ? <p className="text-[12px] text-muted-foreground">{msg}</p> : null}
+      </>)}
     </div>
   );
 }

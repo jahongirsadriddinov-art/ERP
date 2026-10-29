@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo, useEffect } from "react";
+import { useState, useRef, useMemo, useEffect, lazy, Suspense } from "react";
 import Plus from "@hugeicons/core-free-icons/PlusSignIcon";
 import CheckCircle from "@hugeicons/core-free-icons/CheckmarkCircle01Icon";
 import Clock from "@hugeicons/core-free-icons/Clock01Icon";
@@ -14,12 +14,14 @@ import Copy from "@hugeicons/core-free-icons/Copy01Icon";
 import Edit from "@hugeicons/core-free-icons/Edit02Icon";
 import Trash from "@hugeicons/core-free-icons/Delete02Icon";
 import { MorphIcon } from "morphicons/react";
+import Search from "@hugeicons/core-free-icons/Search01Icon";
 import { IconTile } from "./components/IconTile";
 import { SwipeRow } from "./components/SwipeRow";
 import { IncomePanel } from "./IncomePanel";
 // PriceField — material narxi uchun (satr 430). 2026-10-28: import ro'yxatidan tushib
 // qolgani uchun "Chiqim qo'shish" oynasida material qatori ochilganda sahifa qulardi
 // ("Can't find variable: PriceField").
+const MarketPricePanel = lazy(() => import("./MarketPricePanel"));
 import { MoneyField, PriceField, moneyOf, useShowInUzs, InUzsToggle, parseAmount, type Cur } from "./components/Money";
 import { MoneyInput } from "./components/MoneyInput";
 import { CountUp } from "./components/CountUp";
@@ -76,6 +78,8 @@ export function FinancePage({ currentUser, users, projects, expenses, onAddExpen
   const [projFilter, setProjFilter] = useState("all");
   const [detailExp, setDetailExp] = useState<Expense|null>(null);
   const [showCurrency, setShowCurrency] = useState(false);
+  // Bozor narxi qidiruvi (owner 2026-10-29)
+  const [showMarket, setShowMarket] = useState(false);
   const [currencyAmount, setCurrencyAmount] = useState("");
   const [currencyMode, setCurrencyMode] = useState<"uzs2usd"|"usd2uzs"|"uzs2eur"|"eur2uzs">("uzs2usd");
 
@@ -125,10 +129,13 @@ export function FinancePage({ currentUser, users, projects, expenses, onAddExpen
         </div>
         <div className="flex items-center gap-1.5">
           {pendingMe>0&&<span className="text-sm bg-amber-500/15 text-amber-800 dark:text-amber-300 px-2 py-1 rounded-full font-semibold flex items-center gap-1 badge-pulse"><MorphIcon icon={Clock} className="w-3 h-3" />{t('finance.pendingCount', { count: pendingMe })}</span>}
+          <button onClick={()=>setShowMarket(true)} title="Bozor narxi" aria-label="Bozor narxi" data-testid="open-market-price"
+            className="btn btn-outline flex items-center gap-1 text-sm px-2.5 py-1.5 rounded-full"><MorphIcon icon={Search} className="w-3 h-3" /></button>
           <button onClick={()=>setShowCurrency(v=>!v)} title={t('currency.title')} aria-label={t('currency.title')} className="btn btn-outline flex items-center gap-1 text-sm px-2.5 py-1.5 rounded-full"><MorphIcon icon={DollarSign} className="w-3 h-3" /></button>
           <button onClick={()=>setShowAdd(true)} className="btn btn-accent flex items-center gap-1 text-sm px-3 py-1.5 rounded-full"><MorphIcon icon={Plus} className="w-3 h-3" />{t('finance.addExpense')}</button>
         </div>
       </div>
+      {showMarket && <Suspense fallback={null}><MarketPricePanel onClose={()=>setShowMarket(false)} /></Suspense>}
       {/* Currency converter mini widget */}
       {showCurrency && (
         <div className="surface px-4 py-3 flex-shrink-0 animate-slide-up-fade">

@@ -8,6 +8,7 @@ import DollarIcon from "@hugeicons/core-free-icons/Dollar01Icon";
 import SunIcon from "@hugeicons/core-free-icons/Sun03Icon";
 import NewsIcon from "@hugeicons/core-free-icons/News01Icon";
 import { PriceField } from "./components/Money";
+import { MarketPriceHint } from "./components/MarketPriceHint";
 import { CountUp } from "./components/CountUp";
 import { useState, useRef, useEffect, useMemo, Suspense, useLayoutEffect } from "react";
 import { lazyRetry as lazy } from "./lib/lazyRetry";
@@ -966,6 +967,9 @@ export function SendTransferModal({ currentUser, projects, allUsers, onClose, on
                               }}
                             />
                           </div>
+                          {/* Narx razvedkasi: birlik narxi bozordan baland bo'lsa ogohlantiradi
+                              (owner 2026-10-29). Birlik kiritilmagan bo'lsa jim turadi. */}
+                          <MarketPriceHint name={cm.name} unit={cm.unit} price={parseMoney(cm.price)} />
                           {customMats.length > 1 && (
                             <button type="button" onClick={() => setCustomMats(customMats.filter((_, idx) => idx !== i))}
                               className="absolute top-1/2 right-1 -translate-y-1/2 p-1.5 text-red-500 hover:bg-red-500/100/10 rounded-lg liquid-transition">

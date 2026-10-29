@@ -177,6 +177,9 @@ export async function reapStaleSessionOf(companyId: string, employeeId: string, 
   return !!ok;
 }
 
+/** Qayta urinish yordam bermaydigan sabablar: holat soatlab yoki rahbar aralashmaguncha o'zgarmaydi. */
+const HOPELESS = /^(account_restricted|not_bound|not_resolved|no_consent|opt_out|privacy_restricted|blocked|account_not_connected|not_registered|daily_cap|company_quota|developer_unsupported)/;
+
 /** Ish bajarilishi: birinchi mavjud qo'ng'iroq kanali; hech biri bo'lmasa — bot xabari bilan aniq sababi. */
 export async function runCallback(p: {
   companyId: string; employeeId: string; correlationId: string; order: ChannelName[]; lang: 'uz' | 'ru'; attemptNo: number; maxAttempts: number;
@@ -217,6 +220,13 @@ export async function runCallback(p: {
     }
   }
   console.warn(`[aiVoice/callback] urinish ${p.attemptNo}/${p.maxAttempts}: ${JSON.stringify(reasons)}`);
+  // Owner 2026-10-29: AI "hozir Telegram orqali telefon qilaman" dedi, lekin na qo'ng'iroq
+  // keldi, na biror xabar. Sabab: akkauntga spam cheklovi qo'yilgan edi — bu bir necha
+  // soatlik holat, lekin tizim shunga qaramay 6 marta qayta urinardi va foydalanuvchi
+  // shuncha vaqt javobsiz kutardi. Qayta urinish FOYDA BERMAYDIGAN sabablarda darhol
+  // to'xtab, sababini aytamiz (kutib qolishdan ko'ra, bilib turish yaxshi).
+  const allHopeless = p.order.length > 0 && p.order.every((c) => reasons[c] && HOPELESS.test(String(reasons[c])));
+  if (allHopeless) retry = false;
   if (retry && p.attemptNo < p.maxAttempts) throw new Error('callback_retry');
   // Qo'ng'iroq bo'lmadi — botda aniq sababini qisqa aytamiz (foydalanuvchi kutib qolmasin)
   const why = p.order.filter((c) => reasons[c]).map((c) => missingText(c, String(reasons[c]), p)).slice(0, 2).join('; ');

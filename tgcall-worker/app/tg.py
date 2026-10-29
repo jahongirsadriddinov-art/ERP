@@ -369,6 +369,14 @@ class TelegramRuntime:
                 if getattr(sender, "bot", False):
                     return
                 self.note_inbound(int(event.sender_id))
+                # Owner 2026-10-29: "yozyapdi, lekin ko'rildi deb belgilamayapdi — spam
+                # yeyishiga bitta sabab shu". To'g'ri kuzatuv: javob yozadigan, lekin hech
+                # qachon o'qimaydigan akkaunt Telegram uchun aniq bot belgisi. Odam esa
+                # avval O'QIYDI, keyin javob beradi — endi biz ham shunday qilamiz.
+                try:
+                    await self.client.send_read_acknowledge(await event.get_input_chat(), max_id=event.id)
+                except Exception as e:
+                    log.debug("read ack: %s", type(e).__name__)
                 await handle_private_message(self, int(event.sender_id), event.raw_text or "", getattr(sender, "username", None))
             except Exception as e:
                 log.debug("dm: %s", type(e).__name__)
@@ -513,6 +521,12 @@ class TelegramRuntime:
             from .errors import RpcError
             raise RpcError("not_authorized")
         try:
+            # Javobdan oldin suhbatni o'qilgan deb belgilaymiz — javob yozib, xabarni
+            # o'qilmagan qoldirish g'ayritabiiy (yuqoridagi izohga qarang).
+            try:
+                await self.client.send_read_acknowledge(int(user_id))
+            except Exception as e:
+                log.debug("read ack (dm): %s", type(e).__name__)
             await self.client.send_message(int(user_id), str(text)[:4000])
         except Exception as e:
             self.note_error(e)

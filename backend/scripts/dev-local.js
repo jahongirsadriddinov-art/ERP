@@ -54,13 +54,17 @@ function needTestBot() {
   process.exit(1);
 }
 
-/** Port bandmi — band bo'lsa tushunarli xabar berib to'xtaymiz (EADDRINUSE stack emas). */
+/** Port bandmi — band bo'lsa tushunarli xabar berib to'xtaymiz (EADDRINUSE stack emas).
+ *  ULANIB ko'riladi, bog'lanib emas: server IPv6 (:::5000) da tursa, 0.0.0.0 ga bog'lanish
+ *  Windows'da muvaffaqiyatli bo'lib, bandlikni SEZMAY qolardi (owner sinovida shunday bo'ldi). */
 function portBusy(port) {
   return new Promise((resolve) => {
-    const srv = net.createServer();
-    srv.once('error', (e) => resolve(e && e.code === 'EADDRINUSE'));
-    srv.once('listening', () => srv.close(() => resolve(false)));
-    srv.listen(port, '0.0.0.0');
+    const sock = net.connect({ port, host: '127.0.0.1' });
+    const done = (busy) => { sock.destroy(); resolve(busy); };
+    sock.setTimeout(700);
+    sock.once('connect', () => done(true));
+    sock.once('timeout', () => done(false));
+    sock.once('error', () => done(false));
   });
 }
 

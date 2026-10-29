@@ -188,10 +188,28 @@ export async function runCallback(p: {
   /** Foydalanuvchining o'zi so'ragan qo'ng'iroq — firma roziligi sozlamasi to'smaydi. */
   userRequested?: boolean;
 }, now: Date): Promise<CallbackOutcome> {
-  if (!p.companyId || !(await isAiActive(p.companyId))) return 'skipped';
-  const u = await User.findOne({ _id: p.employeeId, companyId: p.companyId, isBlocked: { $ne: true } }).select('_id').lean().catch(() => null);
-  if (!u) return 'skipped';
   const ctx: ChannelCtx = { companyId: p.companyId, employeeId: p.employeeId, correlationId: p.correlationId, purpose: 'assistant', lang: p.lang, now, attemptNo: p.attemptNo, userRequested: !!p.userRequested };
+  // Owner 2026-10-29: "AI baribir telefon qilmayapti, botga ham kelmayapti — xato nima,
+  // nega qo'ng'iroq qilmagani?". Sabab shu yerda edi: quyidagi ikki tekshiruv JIM
+  // 'skipped' qaytarardi — na qo'ng'iroq bo'lardi, na biror xabar. Foydalanuvchi esa
+  // "hozir qo'ng'iroq qilaman" degan va'dani olib, abadiy kutib qolardi.
+  // Endi HAR QANDAY to'xtash sababi botda aytiladi.
+  const tell = async (text: string) => {
+    const ok = await getChannel('bot_message')?.attempt(ctx, { kind: 'test', text })
+      .then((r) => r?.outcome === 'delivered' || r?.outcome === 'answered')
+      .catch(() => false);
+    if (!ok) console.warn('[aiVoice/callback] sababni botda ayta olmadik:', text.slice(0, 120));
+  };
+
+  if (!p.companyId || !(await isAiActive(p.companyId))) {
+    await tell(p.lang === 'ru' ? 'AI-звонки сейчас отключены для компании.' : "Qo'ng'iroq bo'lmadi: firmada AI hozir o'chiq.");
+    return 'skipped';
+  }
+  const u = await User.findOne({ _id: p.employeeId, companyId: p.companyId, isBlocked: { $ne: true } }).select('_id').lean().catch(() => null);
+  if (!u) {
+    await tell(p.lang === 'ru' ? 'Звонок не выполнен: сотрудник не найден или заблокирован.' : "Qo'ng'iroq bo'lmadi: xodim topilmadi yoki bloklangan.");
+    return 'skipped';
+  }
   await reapStaleSessionOf(p.companyId, p.employeeId, now).catch(() => false);
   let retry = false;
   const reasons: Partial<Record<ChannelName, string>> = {};
@@ -230,10 +248,7 @@ export async function runCallback(p: {
   if (retry && p.attemptNo < p.maxAttempts) throw new Error('callback_retry');
   // Qo'ng'iroq bo'lmadi — botda aniq sababini qisqa aytamiz (foydalanuvchi kutib qolmasin)
   const why = p.order.filter((c) => reasons[c]).map((c) => missingText(c, String(reasons[c]), p)).slice(0, 2).join('; ');
-  await getChannel('bot_message')?.attempt(ctx, {
-    kind: 'test',
-    text: p.lang === 'ru' ? `AI не смог позвонить. Что нужно: ${why || 'попробуйте позже'}.` : `AI qo'ng'iroq qila olmadi. Nima kerak: ${why || "keyinroq urinib ko'ring"}.`,
-  }).catch(() => undefined);
+  await tell(p.lang === 'ru' ? `AI не смог позвонить. Что нужно: ${why || 'попробуйте позже'}.` : `AI qo'ng'iroq qila olmadi. Nima kerak: ${why || "keyinroq urinib ko'ring"}.`);
   return 'unreachable';
 }
 
@@ -319,6 +334,13 @@ export const requestCallback: AiToolDef<{ channel?: 'inapp' | 'telegram'; delayM
       // Bir foydalanuvchiga 2 daqiqalik oynada bitta qo'ng'iroq (takror bosish / model takrori)
       dedupeKey: `aicb:${ctx.userId}:${Math.floor(runAt.getTime() / 120_000)}`,
     });
+    // Navbatga tushganini logda ko'rsatamiz: "qo'ng'iroq qilaman" deyilgan, lekin ish
+    // umuman yaratilmagan holatni (takror/dedupe) shusiz aniqlab bo'lmaydi.
+    console.log(`[aiVoice/callback] navbatga qo'yildi id=${r.id} takror=${r.duplicate} kanal=${order.join('>')} vaqt=${runAt.toISOString()}`);
+    if (r.duplicate) {
+      return ok(L(ctx, "Qo'ng'iroq allaqachon navbatda — bir necha soniyada bo'ladi.",
+        'Звонок уже в очереди — будет через несколько секунд.'));
+    }
     const at = zonedParts(runAt);
     const via = order[0] === 'telegram_call' ? L(ctx, 'Telegram orqali', 'через Telegram') : L(ctx, 'ilova ichida', 'в приложении');
     let msg = soon

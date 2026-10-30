@@ -94,10 +94,16 @@ describe("prompt o'lchami (Live kechikishi/narxi)", () => {
   // 2026-10-28: matn chegarasi 11 600 → 12 000. Sabab — owner shikoyatlari bo'yicha uchta qoida
   // qo'shildi: mavzu doirasi (ochiq muloqotsiz ERP bilan cheklanish), "qila olmayman" taqiqi va
   // qayta qo'ng'iroq (requestCallback) tartibi. Ular aynan noto'g'ri bajarilgan ishlarni tuzatadi.
+  // 2026-10-30: matn 12 300 -> 13 000, ovoz 14 800 -> 15 500, ru 13 300 -> 14 000.
+  // Sabab: owner "AI odamga juda yaqin o'xshasin — gapirishi, emotsiyasi, hazillar"
+  // dedi va GAPIRISH USLUBI bloki qo'shildi (~600 belgi). Bu ONGLI kelishuv:
+  // prompt biroz uzunroq, javob biroz sekinroq — lekin AI quruq idora tilida
+  // emas, odamdek gapiradi. Blok ataylab qisqa: mavhum "iliq bo'l" o'rniga
+  // qarama-qarshi misollar (model uchun shu kuchliroq va kamroq joy oladi).
   it('byudjetdan oshmaydi', () => {
-    expect(text().length).toBeLessThan(12_300);
-    expect(voice().length).toBeLessThan(14_800);
-    expect(voice('ru').length).toBeLessThan(13_300);
+    expect(text().length).toBeLessThan(13_000);
+    expect(voice().length).toBeLessThan(15_500);
+    expect(voice('ru').length).toBeLessThan(14_000);
     expect(buildGuestVoicePrompt({ lang: 'uz', today: '2026-10-22' }).length).toBeLessThan(3_600);
   });
 });

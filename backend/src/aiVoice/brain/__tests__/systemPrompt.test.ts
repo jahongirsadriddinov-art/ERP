@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildSystemPrompt, capabilitiesLine, INTENT_GUIDE, roleGuideFor, STATIC_RULES } from '../systemPrompt';
+import { buildSystemPrompt, capabilitiesLine, INTENT_GUIDE, roleGuideFor, STATIC_RULES, HUMAN_TONE } from '../systemPrompt';
 import { buildVoiceSystemPrompt } from '../../voice/prompts';
 
 // Owner 2026-10-15: AI o'zbekcha buyruqlarni noto'g'ri tushunardi — prompt niyat yo'riqnomasi, ishchi lug'ati,
@@ -85,5 +85,43 @@ describe('rolga mos prompt va imkoniyatlar (owner 2026-10-16)', () => {
     expect(p).toMatch(/hozir 14:05/);
     expect(p).toMatch(/ROL: prorab/);
     expect(p.indexOf('Obyektlari')).toBeGreaterThan(p.indexOf('KONTEKST:'));
+  });
+});
+
+describe("gapirish uslubi (owner 2026-10-30: odamga o'xshasin)", () => {
+  const CHANNELS = ['bot', 'web', 'inapp_call', 'telegram_call'] as const;
+
+  it('har bir kanalda uslub yo‘riqnomasi bor — bot ham, qo‘ng‘iroq ham', () => {
+    for (const channel of CHANNELS) {
+      const p = buildSystemPrompt({ lang: 'uz', role: 'ishchi', channel, today: '2026-10-30', weekday: 5 });
+      expect(p, channel).toContain('GAPIRISH USLUBI');
+    }
+  });
+
+  it('quruq idora tilining o‘rniga nima deyishni aniq ko‘rsatadi', () => {
+    // Mavhum "iliq bo'l" emas, qarama-qarshi misol — model uchun shu kuchliroq
+    expect(HUMAN_TONE).toContain("Ma'lumot mavjud emas");
+    expect(HUMAN_TONE).toMatch(/hazil|HAZIL/i);
+    expect(HUMAN_TONE).toMatch(/his-tuyg|quvon|achin/i);
+  });
+
+  it('jiddiy vaziyatda hazil taqiqlanadi', () => {
+    expect(HUMAN_TONE).toMatch(/Jiddiy paytda[^.]*hazil YO'Q/i);
+  });
+
+  it("o'zini inson deb ko'rsatish qoidasi kuchida qoladi", () => {
+    // Iliqlik — muomala uslubi, yolg'on emas
+    expect(STATIC_RULES).toContain("O'zingizni inson deb ko'rsatmang");
+    expect(HUMAN_TONE).not.toMatch(/odamman|inson ekanligingizni ayting/i);
+  });
+
+  it('ochiq muloqotda suhbat uslubi yanada jonli — faqat yoqilganda', () => {
+    const base = { lang: 'uz' as const, role: 'direktor', channel: 'bot' as const, today: '2026-10-30', weekday: 5 };
+    const off = buildSystemPrompt(base);
+    const on = buildSystemPrompt({ ...base, openChat: true });
+    expect(on).toContain('AYNIQSA ODAMDEK');
+    expect(off).not.toContain('AYNIQSA ODAMDEK');
+    // Maxfiylik chegarasi ochiq muloqotda ham o'z kuchida
+    expect(on).toContain("QUYIDAGILAR BARIBIR O'ZGARMAYDI");
   });
 });

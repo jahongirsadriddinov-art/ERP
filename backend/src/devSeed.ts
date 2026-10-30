@@ -17,7 +17,11 @@ import { recordPoint } from './services/marketPrice';
 // va bir nechta material xaridi (narx razvedkasi ishlashi uchun — bo'sh indeksda
 // "ma'lumot yetarli emas" chiqadi va funksiyani sinab bo'lmaydi).
 
-const PHONE = (process.env.DEV_SEED_PHONE || '+998901112233').trim();
+// Egasining O'Z raqami (owner 2026-10-30: "+998 50 101 77 69 shu nomerni qil default") —
+// "manda bu raqam yo'q" degan chalkashlik bo'lmasin. Kod baribir DEVELOPER_CHAT_ID ga,
+// ya'ni egasining Telegramiga keladi; raqam esa bazadagi belgi.
+// Boshqa raqam kerak bo'lsa: .env.local ga DEV_SEED_PHONE=+998...
+const PHONE = (process.env.DEV_SEED_PHONE || '+998501017769').trim();
 const CODE = '1111';
 
 /** Bir xil material uchun turli firmalardan kelgan narxlar — mediana shundan chiqadi. */

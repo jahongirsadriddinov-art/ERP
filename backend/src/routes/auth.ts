@@ -160,6 +160,16 @@ router.post('/send-otp', async (req, res) => {
       { upsert: true, setDefaultsOnInsert: true }
     );
 
+    // Lokal sinovda kodni serverning O'Z oynasida ham ko'rsatamiz. Sabab (owner
+    // 2026-10-30): bir vaqtda bir nechta lokal server ishlasa, Telegramga bir nechta
+    // kod keladi va qaysi biri shu serverniki ekanini bilib bo'lmaydi — "Kod noto'g'ri"
+    // chiqadi. Faqat NODE_ENV=development VA DEV_SEED=1 da (ikkalasini ham dev-local.js
+    // qo'yadi); prodda bu qiymatlar yo'q, shuning uchun kod hech qachon logga tushmaydi.
+    if (process.env.NODE_ENV === 'development' && process.env.DEV_SEED === '1') {
+      console.log(`
+  >>> LOKAL SINOV KODI: ${code}   (${phone})
+`);
+    }
     const sms = await sendOtpSms(phone, code);
     if (!sms.ok) {
       // OTP yozuvini qoldirmaymiz — yuborilmagan kodni keyin "to'g'ri" deb tekshirib bo'lmaydi.

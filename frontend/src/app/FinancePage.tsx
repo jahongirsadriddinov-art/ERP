@@ -23,7 +23,6 @@ import { IncomePanel } from "./IncomePanel";
 // ("Can't find variable: PriceField").
 const MarketPricePanel = lazy(() => import("./MarketPricePanel"));
 import { MoneyField, PriceField, moneyOf, useShowInUzs, InUzsToggle, parseAmount, type Cur } from "./components/Money";
-import { MoneyInput } from "./components/MoneyInput";
 import { CountUp } from "./components/CountUp";
 import { amountToInput, fmtNumber, parseMoney } from "./lib/money";
 import UserIc from "@hugeicons/core-free-icons/UserIcon";
@@ -39,7 +38,7 @@ import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import { API_BASE } from "./api";
 import { guessExpType } from "./lib/expense";
-import { EXP_LABELS, EscClose, LIVE_EUR_RATE, LIVE_RATE_DATE, LIVE_USD_RATE, expLabel, exportExpensesToCsv, fmt, fmtUsd, isAdmin, resizeImageFile, roleLabel, type AppUser, type ExpType, type Expense, type Project } from "./App";
+import { EXP_LABELS, EscClose, expLabel, exportExpensesToCsv, fmt, fmtUsd, isAdmin, resizeImageFile, roleLabel, type AppUser, type ExpType, type Expense, type Project } from "./App";
 import { scanReceiptFile, type ScanStage } from "./lib/receiptScan";
 
 // ─── Finance Page ──────────────────────────────────────────────────────────────
@@ -77,11 +76,8 @@ export function FinancePage({ currentUser, users, projects, expenses, onAddExpen
   const [filter, setFilter] = useState<"all"|ExpType>("all");
   const [projFilter, setProjFilter] = useState("all");
   const [detailExp, setDetailExp] = useState<Expense|null>(null);
-  const [showCurrency, setShowCurrency] = useState(false);
   // Bozor narxi qidiruvi (owner 2026-10-29)
   const [showMarket, setShowMarket] = useState(false);
-  const [currencyAmount, setCurrencyAmount] = useState("");
-  const [currencyMode, setCurrencyMode] = useState<"uzs2usd"|"usd2uzs"|"uzs2eur"|"eur2uzs">("uzs2usd");
 
   const filteredExpenses = expenses.filter(e => (filter==="all"||e.type===filter) && (projFilter==="all"||e.projectId===projFilter));
   // Har qator uchun users/projects.find (qatorlar × xodimlar) o'rniga — bir marta tuziladigan id → yozuv xaritasi
@@ -131,45 +127,12 @@ export function FinancePage({ currentUser, users, projects, expenses, onAddExpen
           {pendingMe>0&&<span className="text-sm bg-amber-500/15 text-amber-800 dark:text-amber-300 px-2 py-1 rounded-full font-semibold flex items-center gap-1 badge-pulse"><MorphIcon icon={Clock} className="w-3 h-3" />{t('finance.pendingCount', { count: pendingMe })}</span>}
           <button onClick={()=>setShowMarket(true)} title="Bozor narxi" aria-label="Bozor narxi" data-testid="open-market-price"
             className="btn btn-outline flex items-center gap-1 text-sm px-2.5 py-1.5 rounded-full"><MorphIcon icon={Search} className="w-3 h-3" /></button>
-          <button onClick={()=>setShowCurrency(v=>!v)} title={t('currency.title')} aria-label={t('currency.title')} className="btn btn-outline flex items-center gap-1 text-sm px-2.5 py-1.5 rounded-full"><MorphIcon icon={DollarSign} className="w-3 h-3" /></button>
+          {/* Owner 2026-10-30: valyuta kursi hisoblagichi olib tashlandi */}
           <button onClick={()=>setShowAdd(true)} className="btn btn-accent flex items-center gap-1 text-sm px-3 py-1.5 rounded-full"><MorphIcon icon={Plus} className="w-3 h-3" />{t('finance.addExpense')}</button>
         </div>
       </div>
       {showMarket && <Suspense fallback={null}><MarketPricePanel onClose={()=>setShowMarket(false)} /></Suspense>}
-      {/* Currency converter mini widget */}
-      {showCurrency && (
-        <div className="surface px-4 py-3 flex-shrink-0 animate-slide-up-fade">
-          <p className="text-[10px] font-semibold text-muted-foreground mb-2">{t('currency.title')} — 1 USD = {LIVE_USD_RATE.toLocaleString()} UZS &nbsp;|&nbsp; 1 EUR = {LIVE_EUR_RATE.toLocaleString()} UZS{LIVE_RATE_DATE ? ` (${LIVE_RATE_DATE})` : ""}</p>
-          <div className="flex flex-wrap items-center gap-2">
-            <select value={currencyMode} onChange={e=>setCurrencyMode(e.target.value as any)} className="text-[10px] bg-muted text-muted-foreground px-2 py-1 rounded-full font-semibold border-0 focus:outline-none cursor-pointer flex-shrink-0">
-              <option value="uzs2usd">UZS → USD</option>
-              <option value="usd2uzs">USD → UZS</option>
-              <option value="uzs2eur">UZS → EUR</option>
-              <option value="eur2uzs">EUR → UZS</option>
-            </select>
-            <MoneyInput value={currencyAmount} onChange={setCurrencyAmount} currency={currencyMode.startsWith("uzs") ? "UZS" : "USD"}
-              placeholder={currencyMode.startsWith("uzs")?"UZS":currencyMode.startsWith("usd")?"USD":"EUR"}
-              className="flex-1 min-w-[80px] text-sm border border-border rounded-xl px-3 py-1.5 bg-input-background focus:outline-none"/>
-            {(() => {
-              const n = parseMoney(currencyAmount);
-              const result = currencyAmount && n > 0 ? (
-                currencyMode==="uzs2usd" ? "$" + fmtNumber(n/LIVE_USD_RATE) :
-                currencyMode==="usd2uzs" ? fmtNumber(Math.round(n*LIVE_USD_RATE)) + " UZS" :
-                currencyMode==="uzs2eur" ? "€" + fmtNumber(n/LIVE_EUR_RATE) :
-                currencyMode==="eur2uzs" ? fmtNumber(Math.round(n*LIVE_EUR_RATE)) + " UZS" : null
-              ) : null;
-              return (
-                <button type="button" disabled={!result} title={result ? t('currency.copyHint') : undefined}
-                  onClick={() => { if (!result) return; navigator.clipboard?.writeText(result).then(() => toast.success(t('currency.copied'))).catch(() => {}); }}
-                  className="ml-auto flex items-center gap-1.5 text-sm font-bold text-accent font-mono text-right liquid-transition rounded-lg px-1.5 py-0.5 -mr-1.5 hover:bg-accent/10 active:scale-95 disabled:cursor-default disabled:hover:bg-transparent">
-                  {result || "—"}
-                  {result && <MorphIcon icon={Copy} className="w-3 h-3 opacity-50 flex-shrink-0" />}
-                </button>
-              );
-            })()}
-          </div>
-        </div>
-      )}
+      {/* Owner 2026-10-30: valyuta hisoblagichi butunlay olib tashlandi */}
 
       {/* Filters */}
       {/* Filtr: yig'ilgan holatda bitta qator (tanlangan obyekt/tur), bosilsa ochiladi */}

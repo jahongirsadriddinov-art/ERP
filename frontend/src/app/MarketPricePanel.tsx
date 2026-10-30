@@ -58,16 +58,19 @@ export default function MarketPricePanel({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="p-4 space-y-3">
-          <label className="flex items-center gap-2 rounded-xl bg-muted/50 px-3 h-11">
-            <MorphIcon icon={Search} className="w-4 h-4 flex-shrink-0 opacity-60" />
+          {/* Owner 2026-10-30: "inputda yozadigan juda kichkina, o'qishga qiyin" —
+              maydon ham, matn ham kattalashtirildi (telefonda 16px dan kichik matn
+              iOS'da sahifani o'zi kattalashtirib yuboradi, shuning uchun ham foydali). */}
+          <label className="flex items-center gap-2.5 rounded-xl bg-muted/50 px-3.5 h-14">
+            <MorphIcon icon={Search} className="w-5 h-5 flex-shrink-0 opacity-60" />
             <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} data-testid="market-price-query"
-              placeholder="Masalan: sement M400" className="bg-transparent outline-none text-sm w-full" />
+              placeholder="Masalan: sement M400" className="bg-transparent outline-none text-base w-full placeholder:text-muted-foreground/70" />
           </label>
 
           <div className="flex gap-1.5 flex-wrap">
             {UNITS.map((u) => (
               <button key={u || "all"} type="button" onClick={() => setUnit(u)}
-                className={`text-[11px] px-2.5 py-1 rounded-full border liquid-transition ${unit === u ? "bg-primary text-white border-primary" : "border-border text-muted-foreground hover:text-foreground"}`}>
+                className={`text-[13px] px-3 py-1.5 rounded-full border liquid-transition ${unit === u ? "bg-primary text-white border-primary" : "border-border text-muted-foreground hover:text-foreground"}`}>
                 {u || "hammasi"}
               </button>
             ))}

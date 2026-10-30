@@ -189,7 +189,23 @@ export async function backfillIfEmpty(): Promise<number> {
       });
       n++;
     }
-    if (n) console.log(`[narx] indeks to'ldirildi: ${n} ta eski xarid`);
+
+    // Firmalarning material katalogi — eng boy manba: har firma o'z ro'yxatida
+    // nom, birlik va narxni saqlaydi. Xarid kiritilmagan materiallar ham shu
+    // yerda bor, shuning uchun qidiruv sezilarli kengayadi.
+    const Material = (await import('../models/Material')).default;
+    const mats: any[] = await Material.find({
+      name: { $nin: [null, ''] }, unit: { $nin: [null, ''] }, price: { $gt: 0 },
+    }).select('name unit price companyId updatedAt').limit(20_000).lean();
+    for (const m of mats) {
+      await recordPoint({
+        name: String(m.name), unit: String(m.unit), price: Number(m.price),
+        at: m.updatedAt ? new Date(m.updatedAt) : new Date(),
+        source: 'manual', companyId: String(m.companyId || ''), refId: `mat:${m._id}`,
+      });
+      n++;
+    }
+    if (n) console.log(`[narx] indeks to'ldirildi: ${n} ta eski narx`);
     return n;
   } catch (e) {
     console.warn("[narx] indeksni to'ldirib bo'lmadi:", String((e as Error)?.message || e).slice(0, 160));

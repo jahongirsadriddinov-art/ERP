@@ -12,6 +12,7 @@ import { MarketPriceHint } from "./components/MarketPriceHint";
 import { CountUp } from "./components/CountUp";
 import { useState, useRef, useEffect, useMemo, Suspense, useLayoutEffect } from "react";
 import { lazyRetry as lazy } from "./lib/lazyRetry";
+import type { BlockedInfo } from "./SubscriptionBlocked";
 import SyncStatusBar from "./SyncStatusBar";
 import { useScrollMemory } from "./lib/persistentState";
 import Building2 from "@hugeicons/core-free-icons/Building02Icon";
@@ -65,6 +66,7 @@ import { connectSocket, getSocket } from "./socket";
 import { isAiCallActive, decideCallOffer } from "./aiVoice/bus";
 import { motion, AnimatePresence } from "motion/react";
 // Katta sahifalar alohida fayllarda va kerak bo'lganda yuklanadi (owner 2026-10-19: App.tsx'ni bo'lish)
+const SubscriptionBlocked = lazy(() => import("./SubscriptionBlocked"));
 const AdminDashboard = lazy(() => import("./AdminDashboard").then((m) => ({ default: m.AdminDashboard })));
 const ObjectDetailPage = lazy(() => import("./ObjectDetailPage").then((m) => ({ default: m.ObjectDetailPage })));
 const FinancePage = lazy(() => import("./FinancePage").then((m) => ({ default: m.FinancePage })));
@@ -1657,12 +1659,36 @@ function LoginScreen({ onLogin, onRegister, onBack }: { onLogin: (u: any, compan
   const [codeLen, setCodeLen] = useState(4); // server aytgan kod uzunligi (owner 2026-10-28: kirish kodi yana 4 xonali)
   const [password, setPassword] = useState("");
   // Ish jarayonida obuna tugasa (API 402) — kirish ekrani darhol "obuna" holatida ochiladi
-  const [initialBlocked] = useState<'pending'|'expired'|'rejected'|null>(() => {
-    try { const v = sessionStorage.getItem('erp_subBlocked'); sessionStorage.removeItem('erp_subBlocked');
-      return v === 'pending' || v === 'expired' || v === 'rejected' ? v : null; } catch { return null; }
+  // Owner 2026-10-30: "refreshdan keyin chiqib ketyapti — chiqib ketmasin".
+  // Avval bu qiymat O'QILISHI BILAN o'chirilardi, shuning uchun sahifa
+  // yangilansa obuna ekrani yo'qolib, telefon qadamiga qaytarardi. Endi
+  // saqlanib turadi va faqat ikki holatda o'chadi: foydalanuvchi "Orqaga"
+  // bossa yoki muvaffaqiyatli kirsa.
+  // sessionStorage (localStorage emas): ichida to'lov tokeni bor, oyna
+  // yopilishi bilan o'chib ketgani to'g'ri.
+  const [initialBlockedInfo] = useState<BlockedInfo|null>(() => {
+    try {
+      const raw = sessionStorage.getItem('erp_subBlockedInfo');
+      if (raw) {
+        const v = JSON.parse(raw);
+        if (v && (v.reason === 'pending' || v.reason === 'expired' || v.reason === 'rejected')) return v as BlockedInfo;
+      }
+      // Eski kalit (faqat sabab) — orqaga moslik uchun
+      const old = sessionStorage.getItem('erp_subBlocked');
+      if (old === 'pending' || old === 'expired' || old === 'rejected') return { reason: old };
+    } catch { /* shaxsiy rejimda o'qib bo'lmaydi */ }
+    return null;
   });
+  const initialBlocked = initialBlockedInfo?.reason ?? null;
   const [step, setStep] = useState<"phone" | "code" | "devpass" | "blocked" | "qr">(initialBlocked ? "blocked" : "phone");
   const [blockedReason, setBlockedReason] = useState<'pending'|'expired'|'rejected'|null>(initialBlocked);
+  // Obuna tugaganda server to'lov uchun token va tarif ma'lumotini ham beradi
+  // (owner 2026-10-30) — shu ekranning o'zida to'lash uchun.
+  const [blockedInfo, setBlockedInfo] = useState<BlockedInfo|null>(initialBlockedInfo);
+  const clearBlocked = () => {
+    setBlockedReason(null); setBlockedInfo(null);
+    try { sessionStorage.removeItem('erp_subBlockedInfo'); sessionStorage.removeItem('erp_subBlocked'); } catch { /* ignore */ }
+  };
   const [error, setError] = useState("");
   // Dasturchi paroli "unutdim" oqimi — devpass qadamida qo'shimcha holat.
   const [devResetStage, setDevResetStage] = useState<"none" | "requested" | "done">("none");
@@ -1745,6 +1771,16 @@ function LoginScreen({ onLogin, onRegister, onBack }: { onLogin: (u: any, compan
       if (!res.ok) {
         if (data.subscriptionStatus) {
           setBlockedReason(data.subscriptionStatus);
+          const info: BlockedInfo = {
+            reason: data.subscriptionStatus,
+            token: data.billingToken,
+            selectedPlan: data.selectedPlan ?? null,
+            periodEnd: data.periodEnd ?? null,
+            canPay: data.canPay,
+          };
+          setBlockedInfo(info);
+          // Sahifa yangilansa shu ekran joyida qolsin
+          try { sessionStorage.setItem('erp_subBlockedInfo', JSON.stringify(info)); } catch { /* ignore */ }
           setStep("blocked");
           return;
         }
@@ -1762,6 +1798,7 @@ function LoginScreen({ onLogin, onRegister, onBack }: { onLogin: (u: any, compan
         language: data.user.language,
       };
       localStorage.setItem("token", data.token);
+      try { sessionStorage.removeItem('erp_subBlockedInfo'); sessionStorage.removeItem('erp_subBlocked'); } catch { /* ignore */ }
       localStorage.setItem("currentUser", JSON.stringify(u));
       if (data.user.language) setSiteLanguage(data.user.language);
       onLogin(u, data.company);
@@ -1921,6 +1958,15 @@ function LoginScreen({ onLogin, onRegister, onBack }: { onLogin: (u: any, compan
           </form>
         ) : step === "qr" ? (
           <Suspense fallback={<BootLoader />}><QrLoginPanel onLogin={onLogin} onBack={() => setStep("phone")} /></Suspense>
+        ) : step === "blocked" && blockedReason !== 'pending' ? (
+          // Owner 2026-10-30: muddat tugaganda boshi berk ekran emas — tarif
+          // tanlash, onlayn to'lov va "admin orqali" (bitta tugma) shu yerda.
+          <Suspense fallback={null}>
+            <SubscriptionBlocked
+              info={blockedInfo || { reason: (blockedReason as 'expired' | 'rejected') || 'expired' }}
+              adminHandle="@Sadriddinov_Jahongir"
+              onBack={() => { clearBlocked(); setStep("phone"); setError(""); }} />
+          </Suspense>
         ) : step === "blocked" ? (
           <div className="space-y-4 text-center">
             <div className="flex flex-col items-center gap-3">
@@ -1939,18 +1985,12 @@ function LoginScreen({ onLogin, onRegister, onBack }: { onLogin: (u: any, compan
                   <p className="text-xs text-muted-foreground leading-relaxed">{t('login.subPendingDesc')}</p>
                 </>
               )}
-              {(blockedReason === 'expired' || blockedReason === 'rejected') && (
-                <>
-                  <p className="text-sm font-semibold">{blockedReason === 'expired' ? t('login.subExpiredTitle') : t('login.subRejectedTitle')}</p>
-                  <p className="text-xs text-muted-foreground leading-relaxed">{t('login.subBlockedDesc')}</p>
-                </>
-              )}
             </div>
             <a href="https://t.me/Sadriddinov_Jahongir" target="_blank" rel="noopener noreferrer"
               className="w-full inline-flex items-center justify-center gap-2 bg-blue-500 text-white text-sm font-semibold py-3.5 rounded-full min-h-[44px] active:scale-[0.98] transition-transform">
               <MorphIcon icon={Send} className="w-4 h-4" /> {t('login.contactAdmin', { handle: '@Sadriddinov_Jahongir' })}
             </a>
-            <button type="button" onClick={() => { setStep("phone"); setBlockedReason(null); setError(""); }}
+            <button type="button" onClick={() => { clearBlocked(); setStep("phone"); setError(""); }}
               className="w-full text-sm text-muted-foreground hover:text-foreground py-2">
               {t('login.back')}
             </button>

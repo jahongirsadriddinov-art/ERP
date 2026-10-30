@@ -60,9 +60,31 @@ export async function issueSession(user: IUser, res: any, req: any, loginMethod:
         });
       }
       if (sub.status === 'expired' || sub.status === 'rejected') {
+        // Owner 2026-10-30: "muddat tugasa bunaqa chiqmasin — to'lovni tanlasin".
+        // Oldin bu yerda boshi berk ekran chiqardi: faqat "admin bilan bog'laning".
+        // Endi foydalanuvchi o'sha ekranda tarif tanlab onlayn to'laydi yoki
+        // bitta tugma bilan adminga tayyor so'rov yuboradi.
+        //
+        // Buning uchun token kerak — lekin bu YANGI RUXSAT BERMAYDI:
+        // middleware/subscriptionGate obuna tugaganda faqat to'lov va tarif
+        // yo'llarini ochiq qoldiradi, qolgan hamma so'rovga 402 qaytaradi.
+        // Ya'ni sessiyasi ochiq turib muddati tugagan foydalanuvchi bilan
+        // aynan bir xil holat — bu yo'l allaqachon mavjud va tekshirilgan.
+        const billingToken = await issueTokenWithSession({
+          userId: String(user._id),
+          role: user.role,
+          companyId: user.companyId,
+          branchId: company?.branchId,
+          isOwner: user.isOwner || false,
+        }, req, loginMethod);
         return res.status(403).json({
           subscriptionStatus: sub.status,
-          error: 'Obunangiz muddati tugagan yoki rad etilgan. To\'lovni yangilash uchun @Sadriddinov_Jahongir bilan bog\'laning.',
+          billingToken,
+          selectedPlan: (sub as any).selectedPlan || null,
+          periodEnd: (sub as any).currentPeriodEnd || null,
+          // To'lovni faqat rahbar boshlaydi (POST /pay ham shu qoida bilan)
+          canPay: user.role === 'direktor' || user.role === 'orinbosar' || !!user.isOwner,
+          error: 'Obunangiz muddati tugagan. To\'lovni shu yerda yangilashingiz mumkin.',
         });
       }
     }

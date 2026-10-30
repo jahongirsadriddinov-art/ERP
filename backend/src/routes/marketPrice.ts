@@ -118,6 +118,66 @@ router.put('/channels', async (req, res) => {
   res.json({ ok: true, channels: clean });
 });
 
+/**
+ * Indeks holati (dasturchi) — "nega qidiruvda hech nima chiqmayapti?" degan
+ * savolga ANIQ javob: indeksda nechta narx bor, qaysi manbadan, oxirgisi
+ * qachon kelgan, nechta kanal ulangan. Taxmin qilish shart emas.
+ */
+router.get('/status', async (req, res) => {
+  if (!req.user?.isDeveloper) return res.status(403).json({ error: "Ruxsat yo'q" });
+  res.set('Cache-Control', 'no-store');
+  try {
+    const MarketPrice = (await import('../models/MarketPrice')).default;
+    const [total, bySource, newest, channels] = await Promise.all([
+      MarketPrice.estimatedDocumentCount(),
+      MarketPrice.aggregate([{ $group: { _id: '$source', n: { $sum: 1 } } }]).catch(() => []),
+      MarketPrice.findOne().sort({ at: -1 }).select('at name').lean().catch(() => null),
+      getChannels(),
+    ]) as any[];
+    const fresh = await MarketPrice.countDocuments({ at: { $gte: new Date(Date.now() - 7 * 86400_000) } }).catch(() => 0);
+    res.json({
+      total,
+      last7days: fresh,
+      bySource: Object.fromEntries((bySource || []).map((r: any) => [String(r._id || 'nomalum'), r.n])),
+      newestAt: newest?.at || null,
+      channels,
+      // Qidiruv xulosa berishi uchun kerak bo'lgan eng kam shart — panelda ko'rsatiladi
+      needs: { minPoints: 4, minCompanies: 2, windowDays: 45 },
+    });
+  } catch (err) {
+    console.error('[marketPrice] holat xatosi:', err);
+    res.status(500).json({ error: 'Server xatoligi' });
+  }
+});
+
+/**
+ * Kanal nomzodlarini topish: AI Google orqali qidiradi, keyin HAR BIRI shu
+ * yerda sinab ko'riladi (sahifasi o'qiladi, narx chiqadimi sanaladi).
+ * Ro'yxatga qo'shish — alohida qadam (PUT /channels), ya'ni qaror adminniki.
+ */
+router.post('/channels/suggest', async (req, res) => {
+  if (!req.user?.isDeveloper) return res.status(403).json({ error: "Ruxsat yo'q" });
+  try {
+    const { suggestChannels, workingOnes } = await import('../services/priceSourceFinder');
+    const r = await suggestChannels({ query: typeof req.body?.query === 'string' ? req.body.query : undefined });
+    res.json({ ...r, working: workingOnes(r) });
+  } catch (err) {
+    console.error('[marketPrice] nomzod qidirish xatosi:', err);
+    res.status(500).json({ error: "Qidirib bo'lmadi" });
+  }
+});
+
+/** Bitta kanalni qo'lda sinab ko'rish — qo'shishdan oldin "ishlaydimi?" degan savolga javob. */
+router.post('/channels/probe', async (req, res) => {
+  if (!req.user?.isDeveloper) return res.status(403).json({ error: "Ruxsat yo'q" });
+  try {
+    const { probeChannel } = await import('../services/priceSourceFinder');
+    res.json(await probeChannel(String(req.body?.channel || '')));
+  } catch (err) {
+    res.status(500).json({ error: "Sinab bo'lmadi" });
+  }
+});
+
 /** Hoziroq yig'ish (odatda o'zi 6 soatda bir ishlaydi) — kanallar va OLX. */
 router.post('/collect', async (req, res) => {
   if (!req.user?.isDeveloper) return res.status(403).json({ error: "Ruxsat yo'q" });

@@ -31,6 +31,8 @@ const AiOpenChatPanel = lazy(() => import("./AiOpenChatPanel"));
 const AiHealthPanel = lazy(() => import("./AiHealthPanel"));
 // Xatolar jurnali (server/sayt/bot/fon ishlari) — alohida chunk
 const ErrorLogPanel = lazy(() => import("./ErrorLogPanel"));
+// Narx manbalari (owner 2026-10-30): indeks holati + kanallarni qo'lda/AI bilan topish
+const PriceSourcesPanel = lazy(() => import("./PriceSourcesPanel"));
 // Tashqi (off-site) zaxira: holat, "Hozir zaxira olish", arxivlar va tiklash
 const BackupPanel = lazy(() => import("./BackupPanel"));
 // AI platforma boshqaruvi (firmalar, AI miyasi, limitlar, xarajat, Telegram hisobi, arxiv, audit) — alohida chunk
@@ -45,8 +47,8 @@ const OfficeMediaHost = lazy(() => import("./aiVoice/settings/platform/office/Me
 // ─── Developer Panel ────────────────────────────────────────────────────────────
 export default function DeveloperPanel({ currentUser, onLogout, profileEl }: { currentUser: AppUser; onLogout: () => void; /** Profil tabi — sayt ko'rinishi (App.tsx beradi) */ profileEl?: ReactNode }) {
   const { t } = useTranslation();
-  const [tab, setTab] = usePersistentState<"firms" | "users" | "subscriptions" | "messages" | "plans" | "promocodes" | "announcements" | "aiVoice" | "botUi" | "server" | "backup" | "errors" | "office" | "profile">(
-    "dev.tab", "subscriptions", oneOf(["firms", "users", "subscriptions", "messages", "plans", "promocodes", "announcements", "aiVoice", "botUi", "server", "backup", "errors", "office", "profile"]));
+  const [tab, setTab] = usePersistentState<"firms" | "users" | "subscriptions" | "messages" | "plans" | "promocodes" | "announcements" | "aiVoice" | "botUi" | "server" | "backup" | "errors" | "prices" | "office" | "profile">(
+    "dev.tab", "subscriptions", oneOf(["firms", "users", "subscriptions", "messages", "plans", "promocodes", "announcements", "aiVoice", "botUi", "server", "backup", "errors", "prices", "office", "profile"]));
   const [annReload, setAnnReload] = useState(0);
   const [companies, setCompanies] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
@@ -399,6 +401,9 @@ export default function DeveloperPanel({ currentUser, onLogout, profileEl }: { c
           <button onClick={() => setTab("profile")} data-testid="dev-tab-profile" className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "profile" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
             👤 {t('devPanel.tabs.profile', { defaultValue: 'Profil' })}
           </button>
+          <button onClick={() => setTab("prices")} data-testid="dev-tab-prices" className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "prices" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
+            💰 {t('devPanel.tabs.prices', { defaultValue: 'Narx manbalari' })}
+          </button>
           <button onClick={() => setTab("errors")} data-testid="dev-tab-errors" className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "errors" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
             {t('devPanel.tabs.errors')}
           </button>
@@ -722,6 +727,8 @@ export default function DeveloperPanel({ currentUser, onLogout, profileEl }: { c
             { key: "aiVoice", label: t('aiVoice.platform.title') }, { key: "server", label: t('devPanel.tabs.server') },
             { key: "backup", label: t('devPanel.tabs.backup') }, { key: "errors", label: t('devPanel.tabs.errors') },
           ]} /></Suspense>
+        ) : tab === "prices" ? (
+          <Suspense fallback={<SkeletonList items={3}/>}><PriceSourcesPanel /></Suspense>
         ) : tab === "errors" ? (
           <Suspense fallback={<SkeletonList items={3}/>}><ErrorLogPanel /></Suspense>
         ) : tab === "server" ? (

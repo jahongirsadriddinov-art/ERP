@@ -2622,10 +2622,15 @@ bot.on('message', async (msg: any) => {
         if ((sub.status === 'pending' || sub.status === 'expired') && user.companyId) {
           await bot.sendMessage(chatId, tb(user.language, 'subPayPrompt'), {
             reply_markup: {
-              inline_keyboard: getPayablePlanKeys().map(key => ([{
-                text: tb(user.language, 'subPayBtnLabel', { label: PLAN_CONFIG[key].label, amount: PLAN_CONFIG[key].amount.toLocaleString('uz-UZ') }),
-                callback_data: `roxiypay:${key}`,
-              }])),
+              inline_keyboard: [
+                ...getPayablePlanKeys().map(key => ([{
+                  text: tb(user.language, 'subPayBtnLabel', { label: PLAN_CONFIG[key].label, amount: PLAN_CONFIG[key].amount.toLocaleString('uz-UZ') }),
+                  callback_data: `roxiypay:${key}`,
+                }])),
+                // Owner 2026-10-30: ikkinchi yo'l — admin orqali. Bitta tugma,
+                // dasturchiga hamma ma'lumot bilan tayyor xabar ketadi.
+                [{ text: tb(user.language, 'subPayViaAdmin'), callback_data: 'subadmin' }],
+              ],
             },
           });
         }
@@ -3167,6 +3172,26 @@ bot.on('callback_query', async (query: any) => {
   // firmaga biriktirilgan xodim (ishchi/prorab/brigadir ham) to'lov
   // yarata olardi, garchi izohda "ikkalasida ham bir xil tekshiruv"
   // deyilgan bo'lsa-da amalda rol tekshiruvi yo'q edi.
+  // "Admin orqali to'lash" — dasturchiga tayyor xabar (services/adminHelpRequest.ts)
+  if (data === 'subadmin') {
+    await bot.answerCallbackQuery(query.id).catch(() => {});
+    if (!user?.companyId || !isAdmin(user.role)) return;
+    try {
+      const { requestAdminHelp, ADMIN_HANDLE } = await import('./adminHelpRequest');
+      const r = await requestAdminHelp({ companyId: String(user.companyId), userId: String(user._id), source: 'bot' });
+      const msg = r.throttled
+        ? tb(user.language, 'subAdminAlreadySent', { handle: ADMIN_HANDLE })
+        : r.ok
+          ? tb(user.language, 'subAdminSent', { handle: ADMIN_HANDLE })
+          : tb(user.language, 'subAdminFailed', { handle: ADMIN_HANDLE });
+      await bot.sendMessage(chatId, msg, { parse_mode: 'HTML', reply_markup: await keyboardForUser(user, user.language) });
+    } catch (err) {
+      console.error('Bot subadmin callback error:', err);
+      await bot.sendMessage(chatId, tb(user.language, 'genericError'), { reply_markup: await keyboardForUser(user, user.language) });
+    }
+    return;
+  }
+
   if (data.startsWith('roxiypay:')) {
     await bot.answerCallbackQuery(query.id).catch(() => {});
     const planKey = data.slice('roxiypay:'.length);

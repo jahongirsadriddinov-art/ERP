@@ -191,7 +191,8 @@ describe("firma Telegram akkauntlari (owner 2026-10-19)", () => {
     const w = await worker();
     await contact(A.workerId); await contact(A.worker2Id); await contact(A.prorabId);
     // Platforma akkaunti ULANMAGAN — firma akkaunti bilan baribir mavjud
-    const fresh = { status: 'connected', lastHealthAt: new Date() };
+    // `as const`: busiz 'connected' oddiy string bo'lib ketadi va model turiga to'g'ri kelmaydi
+    const fresh = { status: 'connected' as const, lastHealthAt: new Date() };
     const a1 = await AiTgAccount.create({ label: 'Jasur', ...fresh });
     const a2 = await AiTgAccount.create({ label: 'Sarvar', ...fresh });
     expect(await reason(A.workerId)).toBe('ok');
@@ -220,7 +221,7 @@ describe("firma Telegram akkauntlari (owner 2026-10-19)", () => {
   it("anti-freeze: worker akkauntni muzlatilgan/chegarada deb rad etsa — u chetga olinadi va qo'ng'iroq boshqa akkauntdan; shu odamga tez-tez — keyinroq", async () => {
     const w = await worker();
     await contact(A.workerId);
-    const fresh = { status: 'connected', lastHealthAt: new Date() };
+    const fresh = { status: 'connected' as const, lastHealthAt: new Date() };
     const a1 = await AiTgAccount.create({ label: 'Jasur', ...fresh });
     const a2 = await AiTgAccount.create({ label: 'Sarvar', ...fresh });
     w.handlers['call.place'] = (p: any) => (p.account === String(a1._id) ? { accepted: false, reason: 'account_frozen' } : { accepted: false, reason: 'peer_limited', retryAfterSec: 400 });
@@ -240,7 +241,11 @@ describe("firma Telegram akkauntlari (owner 2026-10-19)", () => {
   it("anti-freeze: muzlatilgan platforma akkaunti mavjud emas", async () => {
     await contact(A.workerId);
     await account({ health: { state: 'frozen', until: new Date(Date.now() + 3600_000) } });
-    expect(await reason(A.workerId)).toBe('account_restricted');
+    // Sabab endi batafsil qaytadi: "account_restricted:frozen:<qachongacha>".
+    // Qayta urinishni to'xtatuvchi HOPELESS qoidasi boshidan solishtiradi,
+    // shuning uchun boshlanishini tekshirish yetarli (va qo'shimcha ma'lumot
+    // yo'qolmaydi — aynan shu batafsillik xatoni tushunish uchun kerak).
+    expect(await reason(A.workerId)).toMatch(/^account_restricted:frozen:\d+$/);
     await account({ health: { state: 'frozen', until: new Date(Date.now() - 1000) } });
     expect(await reason(A.workerId)).toBe('ok');
   });

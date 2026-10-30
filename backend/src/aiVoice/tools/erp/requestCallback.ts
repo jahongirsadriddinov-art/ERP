@@ -21,6 +21,10 @@ import { ALL_ROLES, ASSIST, L, ok } from './common';
 // Ish turi 'ai.callback' — navbatga birinchi chaqiruvda va registerErpTools'dan keyin ro'yxatga olinadi.
 
 export const CALLBACK_JOB = 'ai.callback';
+/** Qorovul: qo'ng'iroq ishi navbatga tushdi-yu, hech narsa bo'lmasa — shu ish xabar beradi. */
+export const CALLBACK_WATCH_JOB = 'ai.callback.watch';
+/** Shuncha vaqtdan keyin tekshiriladi (qayta urinishlarga ham vaqt qolsin). */
+const WATCH_AFTER_MS = 180_000;
 const MAX_AHEAD_MS = 7 * 24 * 3600_000;
 const START_DELAY_MS = 5_000;          // AI javobi foydalanuvchiga yetib borsin
 const IN_CALL_MIN_DELAY_MS = 45_000;    // qo'ng'iroq ichidan: avval joriy qo'ng'iroq tugasin
@@ -144,7 +148,10 @@ const registeredOn = new WeakSet<JobQueue>();
 export function ensureCallbackJob(q: JobQueue | null): void {
   if (!q || registeredOn.has(q)) return;
   registeredOn.add(q);
-  if (q.registeredTypes().includes(CALLBACK_JOB)) return;
+  // DIQQAT: bu yerda "allaqachon ro'yxatda" deb butun funksiyadan chiqib ketib
+  // bo'lmaydi — pastdagi qorovul ishlovchisi ham ro'yxatga olinmay qolardi.
+  // Shuning uchun har bir tur ALOHIDA tekshiriladi.
+  if (!q.registeredTypes().includes(CALLBACK_JOB)) {
   q.register(CALLBACK_JOB, async ({ job, queue }) => {
     // Kutilmagan xato (baza uzilishi, kod xatosi) runCallback ichidagi xabarlarga
     // yetib bormasdan tashlanardi — foydalanuvchi esa jim qolardi. Oxirgi urinishda
@@ -167,6 +174,67 @@ export function ensureCallbackJob(q: JobQueue | null): void {
       throw e;
     });
   }, { concurrency: 2, maxAttempts: 6, backoffBaseMs: 15_000 });
+  }
+
+  // ── QOROVUL ──────────────────────────────────────────────────────────────
+  // Owner 2026-10-30: AI "hozir Telegram orqali qo'ng'iroq qilaman" dedi (bu
+  // vositaning O'Z xabari, ya'ni ish navbatga ROSTDAN tushgan), lekin na
+  // qo'ng'iroq keldi, na xato xabari. runCallback ichidagi har bir yo'l xabar
+  // beradi — demak ish UMUMAN BAJARILMAGAN (navbat turib qolgan, server qayta
+  // ishga tushgan, ishlovchi ro'yxatga olinmagan va h.k.). Bunday holatda
+  // hech kim hech narsa aytmaydi va foydalanuvchi abadiy kutadi.
+  //
+  // Endi har bir qo'ng'iroq ishi bilan birga shu qorovul qo'yiladi: 3 daqiqadan
+  // keyin ishning HOLATINI o'qiydi va bajarilmagan bo'lsa — holati bilan birga
+  // aytadi. Shu tariqa "jim qolish" holati butunlay yo'qoladi.
+  if (!q.registeredTypes().includes(CALLBACK_WATCH_JOB)) {
+    q.register(CALLBACK_WATCH_JOB, async ({ job }) => {
+      const p = (job.payload || {}) as { jobId?: string; lang?: 'uz' | 'ru' };
+      const lang = p.lang === 'ru' ? 'ru' : 'uz';
+      const companyId = String(job.companyId || '');
+      const employeeId = String(job.employeeId || '');
+      if (!p.jobId || !companyId || !employeeId) return;
+
+      const AiJob = (await import('../../../models/AiJob')).default;
+      const target: any = await AiJob.findById(p.jobId).select('status attempts maxAttempts lastError runAt').lean().catch(() => null);
+
+      // 'done' — runCallback oxirigacha ishladi: yo qo'ng'iroq qildi, yo sababini aytdi
+      if (target?.status === 'done') return;
+
+      const state = !target ? "yozuv yo'q"
+        : `${target.status}, urinish ${target.attempts || 0}/${target.maxAttempts || 0}${target.lastError ? `, oxirgi xato: ${String(target.lastError).slice(0, 120)}` : ''}`;
+      console.warn(`[aiVoice/callback] QOROVUL: ish ${p.jobId} bajarilmadi — ${state}`);
+
+      const text = lang === 'ru'
+        ? `Звонок так и не состоялся из-за технической причины. Мы уже знаем об этом (${state}).`
+        : `Qo'ng'iroq texnik sabab tufayli amalga oshmadi. Xato qayd etildi (${state}).`;
+      await getChannel('bot_message')?.attempt({
+        companyId, employeeId, correlationId: job.correlationId || newCorrelationId(),
+        purpose: 'assistant', lang, now: new Date(), attemptNo: 1,
+      }, { kind: 'test', text }).catch(() => undefined);
+
+      void captureError({
+        source: 'server', kind: 'ai-callback',
+        message: `Qo'ng'iroq ishi bajarilmadi (qorovul): ${state}`.slice(0, 300),
+        route: '/ai/callback', method: 'POST', companyId, userId: employeeId, silent: true,
+      });
+    }, { concurrency: 1, maxAttempts: 2 });
+  }
+}
+
+/** Qo'ng'iroq ishiga qorovul qo'yadi. Xatosi asosiy oqimni hech qachon buzmaydi. */
+async function armWatchdog(q: JobQueue, p: { jobId: string; companyId: string; employeeId: string; lang: 'uz' | 'ru'; runAt: Date; correlationId?: string }): Promise<void> {
+  try {
+    await q.enqueue({
+      type: CALLBACK_WATCH_JOB, companyId: p.companyId, employeeId: p.employeeId, refId: p.jobId,
+      payload: { jobId: p.jobId, lang: p.lang },
+      runAt: new Date(p.runAt.getTime() + WATCH_AFTER_MS),
+      maxAttempts: 2, correlationId: p.correlationId,
+      dedupeKey: `aicbw:${p.jobId}`,
+    });
+  } catch (e) {
+    console.warn("[aiVoice/callback] qorovul qo'yilmadi:", String((e as Error)?.message || e).slice(0, 120));
+  }
 }
 
 export type CallbackOutcome = 'calling' | 'retry' | 'unreachable' | 'skipped';
@@ -378,6 +446,8 @@ export const requestCallback: AiToolDef<{ channel?: 'inapp' | 'telegram'; delayM
     // Navbatga tushganini logda ko'rsatamiz: "qo'ng'iroq qilaman" deyilgan, lekin ish
     // umuman yaratilmagan holatni (takror/dedupe) shusiz aniqlab bo'lmaydi.
     console.log(`[aiVoice/callback] navbatga qo'yildi id=${r.id} takror=${r.duplicate} kanal=${order.join('>')} vaqt=${runAt.toISOString()}`);
+    // Ish bajarilmay qolsa — qorovul xabar beradi (yuqoridagi izohga qarang)
+    if (!r.duplicate) await armWatchdog(q, { jobId: r.id, companyId: ctx.companyId, employeeId: ctx.userId, lang, runAt, correlationId: ctx.correlationId });
     if (r.duplicate) {
       return ok(L(ctx, "Qo'ng'iroq allaqachon navbatda — bir necha soniyada bo'ladi.",
         'Звонок уже в очереди — будет через несколько секунд.'));

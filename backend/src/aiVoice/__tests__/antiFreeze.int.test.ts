@@ -19,7 +19,9 @@ import { ensurePlatformConnection } from '../lib/workerLease';
 import { startMongo, stopMongo } from './helpers';
 
 let mongo: MongoMemoryServer;
-const fresh = () => ({ status: 'connected', lastHealthAt: new Date() });
+// `as const` SHART: busiz TS 'connected' ni oddiy string deb kengaytiradi va
+// mongoose'ning literal turiga to'g'ri kelmay, tsconfig.test.json yiqiladi.
+const fresh = () => ({ status: 'connected' as const, lastHealthAt: new Date() });
 const DAY = 24 * 3600_000;
 
 beforeAll(async () => { mongo = await startMongo(); }, 120_000);

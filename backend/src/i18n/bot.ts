@@ -133,6 +133,10 @@ interface BotDict {
   subApprovedShort: (p: { planLabel: string }) => string;
   subRejectedShort: string;
   subPayPrompt: string;
+  subPayViaAdmin: string;
+  subAdminSent: (p: { handle: string }) => string;
+  subAdminAlreadySent: (p: { handle: string }) => string;
+  subAdminFailed: (p: { handle: string }) => string;
   subPayBtnLabel: (p: { label: string; amount: string }) => string;
   subPayLinkMsg: (p: { label: string; amount: string }) => string;
   subPayLinkBtn: string;
@@ -338,6 +342,10 @@ const uz: BotDict = {
   subApprovedShort: (p: { planLabel: string }) => `✅ Obuna tasdiqlandi (${p.planLabel})`,
   subRejectedShort: '❌ Obuna rad etildi',
   subPayPrompt: "💳 Qaysi tarifni to'lamoqchisiz? Click, Payme yoki Paynet orqali to'lashingiz mumkin — to'lov tasdiqlangach obuna avtomatik faollashadi.",
+  subPayViaAdmin: "👤 Admin orqali to'lash",
+  subAdminSent: (p: { handle: string }) => `✅ So'rov adminga yuborildi — firma va tarif ma'lumotlari bilan. Tez orada ${p.handle} bog'lanadi.`,
+  subAdminAlreadySent: (p: { handle: string }) => `ℹ️ So'rov yaqinda yuborilgan, admin ko'rib chiqmoqda. Shoshilinch bo'lsa: ${p.handle}`,
+  subAdminFailed: (p: { handle: string }) => `⚠️ Xabarni yuborib bo'lmadi. Iltimos to'g'ridan-to'g'ri yozing: ${p.handle}`,
   subPayBtnLabel: (p: { label: string; amount: string }) => `${p.label} — ${p.amount} so'm`,
   subPayLinkMsg: (p: { label: string; amount: string }) => `💳 <b>${p.label}</b> — <b>${p.amount} so'm</b>\n\nTo'lash uchun quyidagi tugmani bosing. To'lov tasdiqlangach, obuna avtomatik faollashadi.`,
   subPayLinkBtn: "💳 To'lash",
@@ -551,6 +559,10 @@ const ru: BotDict = {
   subApprovedShort: (p) => `✅ Подписка подтверждена (${p.planLabel})`,
   subRejectedShort: '❌ Подписка отклонена',
   subPayPrompt: '💳 Какой тариф хотите оплатить? Можно оплатить через Click, Payme или Paynet — подписка активируется автоматически после оплаты.',
+  subPayViaAdmin: '👤 Оплатить через админа',
+  subAdminSent: (p) => `✅ Запрос отправлен админу — с данными компании и тарифа. Скоро свяжется ${p.handle}.`,
+  subAdminAlreadySent: (p) => `ℹ️ Запрос уже отправлен, админ его рассматривает. Срочно: ${p.handle}`,
+  subAdminFailed: (p) => `⚠️ Не удалось отправить. Напишите напрямую: ${p.handle}`,
   subPayBtnLabel: (p) => `${p.label} — ${p.amount} сум`,
   subPayLinkMsg: (p) => `💳 <b>${p.label}</b> — <b>${p.amount} сум</b>\n\nНажмите кнопку ниже, чтобы оплатить. После подтверждения оплаты подписка активируется автоматически.`,
   subPayLinkBtn: '💳 Оплатить',

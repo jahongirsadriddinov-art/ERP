@@ -11,7 +11,7 @@ import request from 'supertest';
 import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
-import User from '../models/User';
+import User, { type IUser } from '../models/User';
 import Company from '../models/Company';
 import Attendance from '../models/Attendance';
 import { requireAuth, JWT_SECRET } from '../middleware/auth';
@@ -29,7 +29,7 @@ beforeAll(async () => {
   await mongoose.connect(mongo.getUri());
   const a = await Company.create({ branchId: 'BR-AR-1', name: 'Alfa', phone: '+998900000011' });
   const b = await Company.create({ branchId: 'BR-AR-2', name: 'Beta', phone: '+998900000012' });
-  const mk = async (k: string, role: string, companyId: string) => {
+  const mk = async (k: string, role: IUser['role'], companyId: string) => {
     const u = await User.create({ firstName: k, phone: `+99890${Math.floor(1e6 + Math.random() * 8e6)}`, role, companyId });
     ids[k] = String(u._id);
   };

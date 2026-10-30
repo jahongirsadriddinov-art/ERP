@@ -10,6 +10,7 @@ import { requireDeveloper, requireAuth, requireOwnerOrAdmin } from '../middlewar
 import { getTenant } from '../middleware/tenantContext';
 import { bot } from '../services/bot';
 import { createSubscriptionPaymentOrder } from '../services/subscriptionPayments';
+import { ADMIN_HANDLE, requestAdminHelp } from '../services/adminHelpRequest';
 import { extendPeriodEnd } from '../utils/subscriptionPeriod';
 import { PLAN_CONFIG, SelectedPlan } from '../config/plans';
 
@@ -99,6 +100,29 @@ router.post('/pay', requireAuth, requireOwnerOrAdmin, async (req, res) => {
     res.json({ ok: true, payUrl: result.order.pay_url, providers: result.order.providers, amount: result.amount });
   } catch (err: any) {
     console.error('subscriptions/pay error:', err);
+    res.status(500).json({ error: 'Server xatoligi' });
+  }
+});
+
+// POST /api/admin/subscriptions/contact-admin — "Admin orqali to'lash" (owner 2026-10-30).
+// Bitta tugma: dasturchiga firma, tarif va bog'lanish ma'lumotlari bilan tayyor
+// xabar boradi. Foydalanuvchi hech narsa yozmaydi, admin hech narsa so'ramaydi.
+// Bu yo'l obuna tugaganda ham ochiq (middleware/subscriptionGate ALLOW ro'yxati).
+router.post('/contact-admin', requireAuth, requireOwnerOrAdmin, async (req, res) => {
+  try {
+    const t = getTenant();
+    if (!t?.companyId) return res.status(400).json({ error: 'Firma topilmadi' });
+    const r = await requestAdminHelp({
+      companyId: String(t.companyId), userId: String((req as any).user?.userId || ''),
+      source: 'web', planKey: typeof req.body?.selectedPlan === 'string' ? req.body.selectedPlan : undefined,
+    });
+    if (r.throttled) {
+      return res.status(429).json({ error: "So'rov yaqinda yuborilgan — admin ko'rib chiqmoqda.", retryAfterSec: r.retryAfterSec, adminHandle: ADMIN_HANDLE });
+    }
+    if (!r.ok) return res.status(502).json({ error: r.error || "Xabar yuborib bo'lmadi", adminHandle: ADMIN_HANDLE });
+    res.json({ ok: true, adminHandle: ADMIN_HANDLE });
+  } catch (err) {
+    console.error('subscriptions/contact-admin error:', err);
     res.status(500).json({ error: 'Server xatoligi' });
   }
 });

@@ -23,8 +23,10 @@ afterAll(async () => { await mongoose.disconnect(); await mongo?.stop(); });
 beforeEach(async () => { await User.deleteMany({}); await Company.deleteMany({}); });
 
 /** routes/register.ts dagi tekshiruvning aynan o'zi (shu yerda yagona manba sifatida sinaladi). */
-async function ownerGuard(telegramUserId: number): Promise<{ blocked: boolean; name?: string }> {
-  const owners = await User.find({ telegramUserId, isOwner: true });
+async function ownerGuard(telegramUserId: number | string): Promise<{ blocked: boolean; name?: string }> {
+  // Modelda telegramUserId — STRING (Telegram son beradi, biz satr saqlaymiz).
+  // Sonni to'g'ridan-to'g'ri so'rovga qo'yish turni buzardi.
+  const owners = await User.find({ telegramUserId: String(telegramUserId), isOwner: true });
   for (const prev of owners) {
     const live = prev.companyId ? await Company.findById(prev.companyId).select('_id name').lean().catch(() => null) : null;
     if (live) return { blocked: true, name: (live as any).name };

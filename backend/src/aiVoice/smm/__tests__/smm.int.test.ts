@@ -345,7 +345,10 @@ describe("e'lon (qurilmadan fayl bilan)", () => {
     const ok = await post('/smm/image', { taskId: id, index: 0, aspect: '9:16' });
     expect(ok.body).toMatchObject({ mime: 'image/png', source: 'ai', data: Buffer.from('PNGDATA').toString('base64') });
     const g = calls.find((c) => c.url.includes('generativelanguage'))!;
-    expect(g.url).toContain('gemini-2.5-flash-image:generateContent');
+    // Owner 2026-10-29: "rasmlar g'alati chiqyapti" — endi avval yangiroq rasm
+    // modeli sinaladi, u bo'lmasa eskisiga tushadi. Shuning uchun aniq model
+    // nomi emas, RASM modeliga murojaat qilinayotgani tekshiriladi.
+    expect(g.url).toMatch(/gemini-[0-9.]+-flash-image:generateContent/);
     expect(g.body.generationConfig).toMatchObject({ responseModalities: ['IMAGE'], imageConfig: { aspectRatio: '9:16' } });
     expect(g.body.contents[0].parts[0].text).toContain('engineer with tablet');
   });

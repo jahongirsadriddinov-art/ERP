@@ -176,21 +176,29 @@ describe("kiruvchi qo'ng'iroq qarori", () => {
   it("notanish / rozilik yo'q / bloklangan / AI o'chiq firma / worker band — rad, sessiya yaratilmaydi", async () => {
     await AiChannelConnection.updateOne(PLATFORM_TG, { $set: { openConversation: true } });
     expect(await w.incoming({ tgUserId: '123456789' })).toEqual({ accept: false, reason: 'unknown_caller' });
-    // Kompaniya roziligi o'chiq va shaxsiy rozilik yo'q — rad (owner 2026-10-16)
-    await setCompanyConsent(false);
-    expect(await w.incoming({ tgUserId: '880002' })).toEqual({ accept: false, reason: 'no_consent' });
     expect(await w.incoming({ tgUserId: '880003' })).toEqual({ accept: false, reason: 'blocked' });
     expect(await w.incoming({ tgUserId: '880004' })).toEqual({ accept: false, reason: 'ai_disabled' });
     expect(await w.incoming({ tgUserId: '880005', workerBusy: true })).toEqual({ accept: false, reason: 'busy' });
     expect(await w.incoming({ tgUserId: 'abc' })).toEqual({ accept: false, reason: 'bad_request' });
-    await setCompanyConsent(true);
     expect(await AiCallSession.countDocuments({})).toBe(0);
     const audits = await incomingAudits();
     const unknown = audits.find((a) => /unknown_caller/.test(a.description));
     expect(unknown).toMatchObject({ userId: 'telegram' });
     expect(unknown.companyId).toBeUndefined();
     expect(unknown.userName).not.toContain('123456789');     // to'liq Telegram id audit nomida yo'q
-    for (const r of ['no_consent', 'blocked', 'ai_disabled', 'busy']) expect(audits.some((a) => a.description.endsWith(`— ${r}`)), r).toBe(true);
+    for (const r of ['blocked', 'ai_disabled', 'busy']) expect(audits.some((a) => a.description.endsWith(`— ${r}`)), r).toBe(true);
+  });
+
+  it("KIRUVCHI qo'ng'iroqni firma roziligi sozlamasi to'smaydi (owner 2026-10-28)", async () => {
+    // "AI xodimlarga qo'ng'iroq qilsinmi" sozlamasi CHIQUVCHI qo'ng'iroq uchun.
+    // Odam o'zi qo'ng'iroq qilayotgan bo'lsa — qo'ng'iroq qilishning o'zi rozilik,
+    // shuning uchun uni "rozilik yo'q" deb rad etish noto'g'ri edi: foydalanuvchi
+    // AI'ga o'zi murojaat qilib, javob ololmay qolardi.
+    await AiChannelConnection.updateOne(PLATFORM_TG, { $set: { openConversation: true } });
+    await setCompanyConsent(false);
+    const r: any = await w.incoming({ tgUserId: '880002' });
+    expect(r.accept).toBe(true);
+    await setCompanyConsent(true);
   });
 
   it("owner 2026-10-16: kontakt/kod yo'q, ERP botga bog'langan + kompaniya roziligi — qabul, tgUserId darhol backfill", async () => {

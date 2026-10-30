@@ -356,7 +356,8 @@ describe('VoiceSessionManager', () => {
     expect(first.transport.audioBytes).toBe(0);
     expect(fs1.texts[0]).toMatch(/BIRINCHI suhbat/);
     expect(fs1.texts[0]).toMatch(/P5A-ishchi2/);
-    await first.r.handle.end('completed_remote');
+    // 'completed_remote' AivEndReason ro'yxatida yo'q — oddiy tugash kifoya
+    await first.r.handle.end('completed');
     await AiCallSession.updateOne({ _id: first.r.handle.sessionId }, { $set: { answeredAt: new Date() } });
     const second = await startCall(mgr, { employeeId: A.worker2Id });
     if (!second.r.ok) throw new Error('start2');

@@ -14,6 +14,22 @@ import { ffmpegAvailable, GEMINI_IMAGE_MODEL, ImageUnavailable, imagePromptFor, 
 import { publicUrlOk, purgeExpiredTemp } from './tempMedia';
 import { botInfo, channelConfig, invalidateChannelCache } from './channel';
 
+/** Rasm chiqmagani sababini Xatolar paneliga yozadi — soatiga bir marta. */
+let lastImageReport = 0;
+async function reportImageFailure(why: string, what: string): Promise<void> {
+  if (Date.now() - lastImageReport < 3600_000) return;
+  lastImageReport = Date.now();
+  try {
+    const { captureError } = await import('../../services/errorTracker');
+    await captureError({
+      source: 'server', kind: 'smm-image',
+      message: `AI rasm chiqmadi (${what}): ${why}. Post gradientli shablon bilan ketdi.`.slice(0, 300),
+      route: '/smm/image', method: 'POST',
+    });
+  } catch { /* xabar yetmasa ham post chiqishi to'xtamasin */ }
+}
+
+
 // SMM avtopilot (owner 2026-10-23: "agent o'zi boshqarsin — yangiliklar, postlar, reels").
 // Rejimlar: off | approve ("tasdiq bilan" — jadval bo'yicha tayyorlaydi, egasi bir tugma bilan tasdiqlaydi; rasm/video
 // egasining QURILMASIDA yaratiladi va o'sha yerdan e'lon qilinadi) | auto ("to'liq avto" — server o'zi: rasm Gemini yoki
@@ -208,6 +224,12 @@ export async function serverMedia(it: any, format: SmmFormat): Promise<{ files: 
       // gradient chiqayotganini bilib bo'lmaydi.
       const why = e instanceof ImageUnavailable ? e.message : String((e as Error)?.message || e).slice(0, 120);
       console.warn(`[smm] AI rasm olinmadi (${what}): ${why}`);
+      // Owner 2026-10-30: "AI yana rasmlarni tushunarsiz qilib chiqaryapti".
+      // Sabab jurnalga yozilardi, lekin jurnalni hech kim o'qimaydi — ekranda
+      // esa shunchaki gradient ko'rinardi. Endi sabab Xatolar paneliga tushadi
+      // (soatiga bir marta, jurnal to'lib ketmasin) va u yerda aniq ko'rinadi:
+      // no_key / quota / model_unavailable / http_xxx.
+      void reportImageFailure(why, what);
       return null;
     }
   };

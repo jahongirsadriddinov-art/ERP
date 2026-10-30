@@ -1,7 +1,7 @@
 import Subscription from '../models/Subscription';
 import Company from '../models/Company';
 import User from '../models/User';
-import { PLAN_CONFIG, type SelectedPlan } from '../config/plans';
+import { getPlanInfo, type SelectedPlan } from '../config/plans';
 import { extendPeriodEnd } from '../utils/subscriptionPeriod';
 import { invalidateSubscription } from '../middleware/subscriptionGate';
 
@@ -36,9 +36,11 @@ export async function activateSubscriptionByAdmin(
   const sub: any = await Subscription.findById(subscriptionId).catch(() => null);
   if (!sub) return { ok: false, error: 'Obuna topilmadi' };
 
-  const key = (PLAN_CONFIG[planKey] ? planKey : sub.selectedPlan || 'bepul') as SelectedPlan;
-  const plan = PLAN_CONFIG[key];
-  if (!plan) return { ok: false, error: "Tarif topilmadi" };
+  // Tarif FAOL ro'yxatdan topilmasa — aniq xato (PLAN_CONFIG bazadan quriladi,
+  // o'chirilgan tarif kaliti undefined bo'lib qolishi mumkin).
+  const key = (getPlanInfo(planKey) ? planKey : sub.selectedPlan || 'bepul') as SelectedPlan;
+  const plan = getPlanInfo(key);
+  if (!plan) return { ok: false, error: `Tarif topilmadi: "${planKey}"` };
 
   const until = extendPeriodEnd(sub.currentPeriodEnd, plan.days);
   sub.status = 'active';

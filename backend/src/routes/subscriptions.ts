@@ -1,6 +1,6 @@
 import { subscriptionFeatures } from '../middleware/requireFeature';
-import { DEFAULT_FEATURE_KEYS } from '../config/plans';
-import { Router } from 'express';
+import { DEFAULT_FEATURE_KEYS, getPlanInfo, type PlanInfo } from '../config/plans';
+import { Router, type Response } from 'express';
 import mongoose from 'mongoose';
 import Subscription from '../models/Subscription';
 import User from '../models/User';
@@ -15,6 +15,26 @@ import { extendPeriodEnd } from '../utils/subscriptionPeriod';
 import { PLAN_CONFIG, SelectedPlan } from '../config/plans';
 
 const router = Router();
+
+/**
+ * Tarifni XAVFSIZ topish (owner 2026-10-30, HTTP 500 xatosi).
+ *
+ * Avval shunday yozilgandi: `PLAN_CONFIG[planKey] || PLAN_CONFIG['bepul']`.
+ * Lekin PLAN_CONFIG bazadagi FAOL tariflardan qayta quriladi — 'bepul' kaliti
+ * o'chirilgan yoki nomi o'zgargan bo'lsa, ikkala tomon ham undefined bo'lib,
+ * keyingi qator (`planInfo.days`) TypeError bergan va butun so'rov 500 bilan
+ * yiqilgan. Ustiga catch xatoni log ham qilmasdi — shuning uchun sababi hech
+ * qayerda ko'rinmasdi. Endi aniq 400 va tushunarli matn qaytadi.
+ */
+function planOr400(res: Response, planKey: string): PlanInfo | null {
+  const info = getPlanInfo(planKey) || getPlanInfo('bepul');
+  if (!info) {
+    res.status(400).json({ error: `Tarif topilmadi: "${planKey}". Tariflar bo'limida faolligini tekshiring.` });
+    return null;
+  }
+  return info;
+}
+
 
 // PLAN_CONFIG/SelectedPlan endi config/plans.ts'da yashaydi (bot.ts ham
 // shu tariflardan Roxiy to'lov tugmalarini yasay olishi uchun) — bu
@@ -235,7 +255,8 @@ router.post('/:id/approve', requireDeveloper, async (req, res) => {
 
     // Developer can override plan, days, amount from request body
     const planKey = (req.body.selectedPlan || sub.selectedPlan || 'bepul') as SelectedPlan;
-    const planInfo = PLAN_CONFIG[planKey] || PLAN_CONFIG['bepul'];
+    const planInfo = planOr400(res, planKey);
+    if (!planInfo) return;
     const days = req.body.days ?? planInfo.days;
     const amount = req.body.amount ?? planInfo.amount;
 
@@ -315,7 +336,8 @@ router.post('/:id/renew', requireDeveloper, async (req, res) => {
     if (!sub) return res.status(404).json({ error: 'Obuna topilmadi' });
 
     const planKey = ((selectedPlan || sub.selectedPlan || 'bepul') as SelectedPlan);
-    const planInfo = PLAN_CONFIG[planKey] || PLAN_CONFIG['bepul'];
+    const planInfo = planOr400(res, planKey);
+    if (!planInfo) return;
 
     const expiresAt = extendPeriodEnd(sub.currentPeriodEnd, planInfo.days);
 
@@ -330,6 +352,8 @@ router.post('/:id/renew', requireDeveloper, async (req, res) => {
 
     res.json({ ok: true, expiresAt });
   } catch (err) {
+    // Avval bu catch JIM edi — 500 chiqardi, lekin sababi hech qayerda yozilmasdi
+    console.error('subscriptions renew error:', err);
     res.status(500).json({ error: 'Server xatoligi' });
   }
 });

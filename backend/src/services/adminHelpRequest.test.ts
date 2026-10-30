@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const notifyDeveloper = vi.fn(async (_message: string) => undefined);
-vi.mock('./bot', () => ({ notifyDeveloper, bot: { sendMessage: vi.fn(async () => undefined) } }));
+const notifyDeveloper = vi.fn(async (_message: string, _rows?: unknown) => undefined);
+vi.mock('./bot', () => ({ notifyDeveloper, notifyDeveloperWithButtons: notifyDeveloper, bot: { sendMessage: vi.fn(async () => undefined) } }));
 vi.mock('../models/Company', () => ({ default: { findById: () => ({ select: () => ({ lean: () => ({ catch: async () => ({ name: 'Alfa Qurilish', branchId: 'BR-0001', phone: '+998901112233', region: 'Toshkent' }) }) }) }) } }));
-vi.mock('../models/Subscription', () => ({ default: { findOne: () => ({ sort: () => ({ select: () => ({ lean: () => ({ catch: async () => ({ status: 'expired', selectedPlan: 'pro', currentPeriodEnd: new Date('2026-10-01') }) }) }) }) }) } }));
+vi.mock('../models/Subscription', () => ({ default: { findOne: () => ({ sort: () => ({ select: () => ({ lean: () => ({ catch: async () => ({ _id: 'sub-1', status: 'expired', selectedPlan: 'pro', currentPeriodEnd: new Date('2026-10-01') }) }) }) }) }) } }));
 vi.mock('../models/User', () => ({ default: { findById: () => ({ select: () => ({ lean: () => ({ catch: async () => ({ firstName: 'Jahongir', lastName: 'S', phone: '+998901112233', role: 'direktor' }) }) }) }) } }));
 vi.mock('../config/plans', () => ({ PLAN_CONFIG: { pro: { label: 'Pro', amount: 1_200_000 } } }));
 
@@ -37,6 +37,14 @@ describe('requestAdminHelp', () => {
     expect(again.throttled).toBe(true);
     expect(again.retryAfterSec).toBeGreaterThan(0);
     expect(notifyDeveloper).toHaveBeenCalledTimes(1);
+  });
+
+  it("xabarga 'Faollashtirish' tugmasi qo'shiladi — admin panelga kirmasdan ochadi", async () => {
+    await requestAdminHelp({ companyId: company(), userId: 'u1', source: 'web' });
+    const rows: any = notifyDeveloper.mock.calls[0][1];
+    expect(Array.isArray(rows)).toBe(true);
+    expect(String(rows[0][0].text)).toContain('Faollashtirish');
+    expect(String(rows[0][0].callback_data)).toMatch(/^subact:[^:]+:pro$/);
   });
 
   it("firma aniqlanmasa xabar yubormaydi", async () => {

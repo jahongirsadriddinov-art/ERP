@@ -58,6 +58,10 @@ export default function SubscriptionBlocked({ info, adminHandle, onBack }: {
   // Yopiq holatda ro'yxat ekranni to'ldirib, pastki tugmalarga yetib
   // bo'lmasdi; endi bitta qator ko'rinadi, ochish ixtiyoriy.
   const [open, setOpen] = useState(false);
+  // Owner 2026-10-30: provayder sahifasida "Проверяем платёж…" da qotib qolardi
+  // va usul tanlash menyusi ochilmasdi. Bizda har bir usulning TO'G'RIDAN-TO'G'RI
+  // havolasi bor (order.providers) — shuning uchun usulni shu yerda tanlaymiz.
+  const [providers, setProviders] = useState<{ code: string; name: string; url: string }[]>([]);
   const [sent, setSent] = useState(false);
   const [err, setErr] = useState("");
 
@@ -97,8 +101,13 @@ export default function SubscriptionBlocked({ info, adminHandle, onBack }: {
     setErr(""); setBusy("pay");
     try {
       const { ok, d } = await call("/pay", { selectedPlan: chosen, renew: true });
-      if (ok && d?.payUrl) window.location.href = d.payUrl;
-      else setErr(d?.error || "To'lov havolasini olib bo'lmadi");
+      if (!ok) { setErr(d?.error || "To'lov havolasini olib bo'lmadi"); return; }
+      const list = Array.isArray(d?.providers) ? d.providers.filter((p: any) => p?.url) : [];
+      // Usullar kelgan bo'lsa — shu yerda tanlanadi (bitta bosishda to'g'ri
+      // ilovaga o'tadi). Kelmasa — eski yo'l: umumiy to'lov sahifasi.
+      if (list.length) setProviders(list);
+      else if (d?.payUrl) window.location.href = d.payUrl;
+      else setErr("To'lov usullari kelmadi");
     } catch {
       setErr("Server bilan ulanishda xatolik");
     } finally {
@@ -199,7 +208,24 @@ export default function SubscriptionBlocked({ info, adminHandle, onBack }: {
 
           {!!err && <p className="text-xs text-red-500 text-center">{err}</p>}
 
-          {canPay && (
+          {!!providers.length && (
+            <div className="rounded-xl border border-primary/30 bg-primary/5 px-3 py-3 space-y-2">
+              <p className="text-[12px] font-semibold text-center">To'lov usulini tanlang</p>
+              {providers.map((p) => (
+                <a key={p.code} href={p.url} rel="noopener noreferrer"
+                  data-testid={`sub-pay-${p.code}`}
+                  className="w-full block text-center bg-primary text-white text-sm font-semibold py-3 rounded-full min-h-[44px] active:scale-[0.98] transition-transform">
+                  {p.name || p.code}
+                </a>
+              ))}
+              <button type="button" onClick={() => setProviders([])}
+                className="w-full text-[12px] text-muted-foreground hover:text-foreground py-1">
+                Bekor qilish
+              </button>
+            </div>
+          )}
+
+          {canPay && !providers.length && (
             <button type="button" onClick={payOnline} disabled={!chosen || busy !== ""}
               data-testid="sub-pay-online"
               className="w-full bg-primary text-white text-sm font-semibold py-3.5 rounded-full min-h-[44px] active:scale-[0.98] transition-transform disabled:opacity-60">

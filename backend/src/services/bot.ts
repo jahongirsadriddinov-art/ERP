@@ -3172,6 +3172,26 @@ bot.on('callback_query', async (query: any) => {
   // firmaga biriktirilgan xodim (ishchi/prorab/brigadir ham) to'lov
   // yarata olardi, garchi izohda "ikkalasida ham bir xil tekshiruv"
   // deyilgan bo'lsa-da amalda rol tekshiruvi yo'q edi.
+  // Dasturchi "Faollashtirish" tugmasini bosdi (adminHelpRequest xabaridan).
+  // Naqd/o'tkazma bilan to'laganlar uchun: pul olingach bitta bosishda ochiladi.
+  if (data.startsWith('subact:')) {
+    await bot.answerCallbackQuery(query.id).catch(() => {});
+    if (!(user?.role === 'dasturchi')) return;
+    const [, subId, planKey] = data.split(':');
+    try {
+      const { activateSubscriptionByAdmin } = await import('./subscriptionAdmin');
+      const r = await activateSubscriptionByAdmin(String(subId), String(planKey), String(user._id));
+      if (messageId) await bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: messageId }).catch(() => {});
+      await bot.sendMessage(chatId, r.ok
+        ? `✅ Faollashtirildi: ${r.company} — ${r.plan}, ${r.until} gacha.`
+        : `⚠️ Bo'lmadi: ${r.error}`);
+    } catch (err) {
+      console.error('Bot subact callback error:', err);
+      await bot.sendMessage(chatId, tb(user.language, 'genericError'));
+    }
+    return;
+  }
+
   // "Admin orqali to'lash" — dasturchiga tayyor xabar (services/adminHelpRequest.ts)
   if (data === 'subadmin') {
     await bot.answerCallbackQuery(query.id).catch(() => {});
@@ -3360,6 +3380,22 @@ export async function notifyUser(userId: string, message: string) {
 // firma admin emas) ogohlantirish — avval bunday mexanizm YO'Q edi, xato
 // haqida FAQAT Render loglarini qo'lda tekshirsangiz yoki foydalanuvchi
 // shikoyat qilsa bilib olardingiz.
+/** Dasturchiga tugmali xabar (masalan "Faollashtirish") — notifyDeveloper bilan bir xil, faqat klaviatura bilan. */
+export async function notifyDeveloperWithButtons(message: string, rows: { text: string; callback_data: string }[][]) {
+  try {
+    const devs = await User.find({ role: 'dasturchi', telegramChatId: { $exists: true, $ne: '' } }).select('telegramChatId').lean();
+    for (const dev of devs) {
+      if (!dev.telegramChatId) continue;
+      await bot.sendMessage(dev.telegramChatId, message, {
+        parse_mode: 'Markdown',
+        ...(rows.length ? { reply_markup: { inline_keyboard: rows } } : {}),
+      }).catch(() => {});
+    }
+  } catch (e) {
+    console.error('notifyDeveloperWithButtons error:', e);
+  }
+}
+
 export async function notifyDeveloper(message: string, opts: { plain?: boolean } = {}) {
   try {
     const devs = await User.find({ role: 'dasturchi', telegramChatId: { $exists: true, $ne: '' } }).select('telegramChatId').lean();

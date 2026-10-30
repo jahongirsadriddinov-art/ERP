@@ -53,7 +53,7 @@ export async function requestAdminHelp(p: {
 
   const [company, sub, user] = await Promise.all([
     Company.findById(companyId).select('name branchId phone region').lean().catch(() => null),
-    Subscription.findOne({ companyId }).sort({ createdAt: -1 }).select('status selectedPlan amount currentPeriodEnd').lean().catch(() => null),
+    Subscription.findOne({ companyId }).sort({ createdAt: -1 }).select('_id status selectedPlan amount currentPeriodEnd').lean().catch(() => null),
     User.findById(String(p.userId || '')).select('firstName lastName phone role telegramChatId').lean().catch(() => null),
   ]) as any[];
 
@@ -76,11 +76,22 @@ export async function requestAdminHelp(p: {
     `*Holat:* ${sub?.status || '—'}, muddati: ${ended}`,
     '',
     `_${p.source === 'bot' ? 'Telegram bot' : 'Sayt'} orqali, bitta tugma bilan yuborildi._`,
+    '',
+    "_To'lovni naqd yoki o'tkazma bilan olganingizdan keyin pastdagi tugmani bosing — obuna o'sha zahoti ochiladi._",
   ].filter(Boolean);
 
   try {
-    const { notifyDeveloper } = await import('./bot');
-    await notifyDeveloper(lines.join('\n'));
+    // Owner savoli (2026-10-30): "so'rov keldi, lekin to'lov qilishi kerak-ku —
+    // admin nima qiladi?". Bu yo'l naqd/o'tkazma bilan to'laydiganlar uchun:
+    // admin pulni oladi va SHU XABARDAGI tugma bilan obunani ochadi. Oldin
+    // xabar keluvchi edi, amal qiladigan tugma yo'q edi — admin panelga kirib
+    // firmani qidirishi kerak bo'lardi.
+    const { notifyDeveloperWithButtons } = await import('./bot');
+    const subId = sub?._id ? String(sub._id) : '';
+    const rows = subId && planKey
+      ? [[{ text: `✅ Faollashtirish — ${plan?.label || planKey}`, callback_data: `subact:${subId}:${planKey}` }]]
+      : [];
+    await notifyDeveloperWithButtons(lines.join('\n'), rows);
     return { ok: true };
   } catch (e) {
     return { ok: false, error: String((e as Error)?.message || e).slice(0, 160) };

@@ -425,5 +425,7 @@ mongoose.connect(MONGODB_URI)
     // SMM avtopilot (jadval, Instagram statistikasi, token yangilash, vaqtinchalik fayllarni tozalash) — aiVoice/smm/autopilot.ts
     void import('./aiVoice/smm/autopilot').then((m) => m.startSmm()).catch((e) => console.error('[smm] ishga tushmadi:', e?.message));
     console.log('✅ Tarif keshi yuklandi');
+    // Lokal sinov ma'lumoti (faqat NODE_ENV=development va DEV_SEED=1 bo'lganda)
+    void import('./devSeed').then((m) => m.seedDevData()).catch((e) => console.error('[devSeed]', e?.message));
   })
   .catch((err) => console.error('MongoDB connection error:', err?.message || err));

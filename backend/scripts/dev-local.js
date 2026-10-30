@@ -113,6 +113,7 @@ async function main() {
       ...local,                 // .env.local jonli .env ustidan yozadi (sinov boti shu yerda)
       MONGODB_URI: uri,
       NODE_ENV: 'development',
+      DEV_SEED: '1',            // bo'sh bazaga sinov firmasi va narxlar qo'yiladi
       AIV_WORKER_PUBKEY: '',    // AI qo'ng'iroq worker'i lokalda kerak emas
     },
   });

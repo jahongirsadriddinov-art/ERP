@@ -3,6 +3,7 @@ import User from '../../../models/User';
 import { finishSession } from '../../sessions';
 import type { ChannelCtx, ChannelName } from '../../contracts';
 import { getChannel } from '../../channels/registry';
+import { captureError } from '../../../services/errorTracker';
 import { newCorrelationId } from '../../lib/ids';
 import { addDays, zonedParts, zonedToUtc } from '../../lib/zonedTime';
 import { getSharedQueue, type JobQueue } from '../../queue/jobQueue';
@@ -145,6 +146,10 @@ export function ensureCallbackJob(q: JobQueue | null): void {
   registeredOn.add(q);
   if (q.registeredTypes().includes(CALLBACK_JOB)) return;
   q.register(CALLBACK_JOB, async ({ job, queue }) => {
+    // Kutilmagan xato (baza uzilishi, kod xatosi) runCallback ichidagi xabarlarga
+    // yetib bormasdan tashlanardi — foydalanuvchi esa jim qolardi. Oxirgi urinishda
+    // bu ham aytiladi (owner 2026-10-30: "xatolikni ham aytmayapti").
+    const lastTry = (Number(job.attempts) || 1) >= (Number(job.maxAttempts) || 2);
     const p = (job.payload || {}) as { order?: ChannelName[]; lang?: 'uz' | 'ru'; reason?: string; userRequested?: boolean };
     await runCallback({
       companyId: String(job.companyId || ''), employeeId: String(job.employeeId || ''), correlationId: job.correlationId || newCorrelationId(),
@@ -154,11 +159,35 @@ export function ensureCallbackJob(q: JobQueue | null): void {
       // Foydalanuvchi o'zi so'raganmi (requestCallback) yoki AI o'zi chaqiryaptimi
       // (companyAlerts) — rozilik tekshiruvi shunga qarab farq qiladi.
       userRequested: !!p.userRequested,
-    }, queue.now());
+    }, queue.now()).catch(async (e) => {
+      const msg = String((e as Error)?.message || e);
+      if (msg === 'callback_retry' || !lastTry) throw e;
+      console.error('[aiVoice/callback] kutilmagan xato:', msg.slice(0, 200));
+      await notifyCallbackFailure(String(job.companyId || ''), String(job.employeeId || ''), p.lang === 'ru' ? 'ru' : 'uz', msg);
+      throw e;
+    });
   }, { concurrency: 2, maxAttempts: 6, backoffBaseMs: 15_000 });
 }
 
 export type CallbackOutcome = 'calling' | 'retry' | 'unreachable' | 'skipped';
+
+/** Kutilmagan xatoda foydalanuvchiga xabar + Xatolar paneliga yozuv. */
+async function notifyCallbackFailure(companyId: string, employeeId: string, lang: 'uz' | 'ru', why: string): Promise<void> {
+  const ctx: ChannelCtx = {
+    companyId, employeeId, correlationId: newCorrelationId(),
+    purpose: 'assistant', lang, now: new Date(), attemptNo: 1,
+  };
+  await getChannel('bot_message')?.attempt(ctx, {
+    kind: 'test',
+    text: lang === 'ru' ? 'AI не смог позвонить из-за технической ошибки. Мы уже знаем об этом.'
+      : "AI texnik xato tufayli qo'ng'iroq qila olmadi. Xato qayd etildi.",
+  }).catch(() => undefined);
+  void captureError({
+    source: 'server', kind: 'ai-callback',
+    message: `Qo'ng'iroq ishi xato bilan tugadi: ${why}`.slice(0, 300),
+    route: '/ai/callback', method: 'POST', companyId, userId: employeeId, silent: true,
+  });
+}
 
 /**
  * Xodimning bazada "faol" qolgan, lekin hech qayerda tirik bo'lmagan qo'ng'iroq sessiyasi — yopiladi
@@ -199,6 +228,17 @@ export async function runCallback(p: {
       .then((r) => r?.outcome === 'delivered' || r?.outcome === 'answered')
       .catch(() => false);
     if (!ok) console.warn('[aiVoice/callback] sababni botda ayta olmadik:', text.slice(0, 120));
+    // Owner 2026-10-30: "haliyam qaytib telefon qilmayapti, xatolikni ham aytmayapti".
+    // Bot xabari yetib bormasligi mumkin (bloklangan, chat yo'q, Telegram xatosi) —
+    // shunda sabab BUTUNLAY yo'qolardi. Endi u Dasturchi paneli → Xatolar bo'limiga
+    // ham tushadi, ya'ni hech qachon izsiz qolmaydi.
+    void captureError({
+      source: 'server', kind: 'ai-callback',
+      message: `Qo'ng'iroq bajarilmadi: ${text}`.slice(0, 300),
+      route: '/ai/callback', method: 'POST',
+      companyId: String(p.companyId || ''), userId: String(p.employeeId || ''),
+      silent: true,     // Telegramga yana xabar ketmasin — foydalanuvchiga allaqachon aytilgan
+    });
   };
 
   if (!p.companyId || !(await isAiActive(p.companyId))) {
@@ -210,6 +250,7 @@ export async function runCallback(p: {
     await tell(p.lang === 'ru' ? 'Звонок не выполнен: сотрудник не найден или заблокирован.' : "Qo'ng'iroq bo'lmadi: xodim topilmadi yoki bloklangan.");
     return 'skipped';
   }
+  console.log(`[aiVoice/callback] ish boshlandi urinish=${p.attemptNo}/${p.maxAttempts} kanal=${p.order.join('>')}`);
   await reapStaleSessionOf(p.companyId, p.employeeId, now).catch(() => false);
   let retry = false;
   const reasons: Partial<Record<ChannelName, string>> = {};

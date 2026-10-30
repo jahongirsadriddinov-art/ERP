@@ -36,6 +36,9 @@ const UNIT_FLOOR: Record<string, number> = {
   m2: 5_000, m3: 30_000, m: 2_000, l: 3_000, rulon: 20_000,
 };
 
+/** Blok haqida soatda bir martadan ko'p yozmaymiz (jurnal to'lib ketmasin). */
+let lastBlockLog = 0;
+
 export interface OlxPoint { name: string; price: number; unit: string; refId: string; region?: string }
 
 interface OlxOffer {
@@ -136,7 +139,18 @@ export async function fetchOlxOffers(query: string, fetchImpl: typeof fetch = fe
       signal: ctl.signal,
       headers: { 'User-Agent': 'Mozilla/5.0 (compatible; QurilishERP narx indeksi)', Accept: 'application/json' },
     });
-    if (!r.ok) return [];
+    if (!r.ok) {
+      // 403/429 — OLX avtomatik so'rovlarni bloklagan. Niqoblanib o'tilmaydi
+      // (bu saytning qoidasini chetlab o'tish bo'ladi), lekin JIM ham qolmaydi:
+      // aks holda "narx yig'ilmayapti" sababi topilmay yuradi.
+      if (r.status === 403 || r.status === 429) {
+        if (Date.now() - lastBlockLog > 3600_000) {
+          lastBlockLog = Date.now();
+          console.warn(`[narx/olx] OLX so'rovni rad etdi (HTTP ${r.status}) — bu manba vaqtincha yopiq`);
+        }
+      }
+      return [];
+    }
     const body: any = await r.json();
     return Array.isArray(body?.data) ? (body.data as OlxOffer[]) : [];
   } catch {

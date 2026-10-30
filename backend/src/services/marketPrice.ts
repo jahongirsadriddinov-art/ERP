@@ -106,7 +106,32 @@ export async function lookupPrice(
   const q: Record<string, unknown> = { key, at: { $gte: since } };
   if (u) q.unit = u;
   if (opts.region) q.region = opts.region;
-  const rows: any[] = await MarketPrice.find(q).select('price unit companyId name at').limit(500).lean();
+  let rows: any[] = await MarketPrice.find(q).select('price unit companyId name at').limit(500).lean();
+
+  // Owner 2026-10-30: "sement" deb qidirdi — hech nima chiqmadi, holbuki
+  // indeksda "Sement M400" bor edi. Sabab: kalit ANIQ moslik talab qilardi
+  // ("sement" ≠ "m400 sement"), ya'ni umumiy so'z bilan aniqroq mahsulotni
+  // topib bo'lmasdi. Endi aniq moslik kam bo'lsa, so'rovdagi HAR BIR so'z
+  // kalit ichida bor yozuvlar ham olinadi ("sement" → "m400 sement",
+  // "sement sotiladi"). Birlik va mediana qoidalari o'zgarmaydi.
+  if (rows.length < MIN_POINTS) {
+    const toks = key.split(' ').filter(Boolean).slice(0, 3);
+    if (toks.length) {
+      // Kalit allaqachon tozalangan (faqat harf/raqam/bo'shliq), lekin regexga
+      // qo'yishdan oldin baribir xavfsizlantiramiz.
+      const esc = (t: string) => t.replace(/[^a-z0-9]/g, '');
+      const wide: Record<string, unknown> = {
+        at: { $gte: since },
+        $and: toks.map((t) => ({ key: new RegExp(`(^| )${esc(t)}( |$)`) })),
+      };
+      if (u) wide.unit = u;
+      if (opts.region) wide.region = opts.region;
+      const more: any[] = await MarketPrice.find(wide).select('price unit companyId name at').limit(500).lean();
+      // Takrorlanmasin (aniq moslik allaqachon olingan)
+      const seen = new Set(rows.map((r) => String(r._id)));
+      rows = rows.concat(more.filter((r) => !seen.has(String(r._id))));
+    }
+  }
   let out: PriceStats | null = null;
 
   if (rows.length >= MIN_POINTS) {

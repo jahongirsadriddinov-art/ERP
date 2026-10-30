@@ -25,6 +25,9 @@ async function reportImageFailure(why: string, what: string): Promise<void> {
       source: 'server', kind: 'smm-image',
       message: `AI rasm chiqmadi (${what}): ${why}. Post gradientli shablon bilan ketdi.`.slice(0, 300),
       route: '/smm/image', method: 'POST',
+      // Telegramga alohida xabar ketmaydi — post baribir chiqqan, bu shoshilinch
+      // emas. Xatolar panelida turadi va sababi o'sha yerdan ko'rinadi.
+      silent: true,
     });
   } catch { /* xabar yetmasa ham post chiqishi to'xtamasin */ }
 }

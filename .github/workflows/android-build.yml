@@ -289,3 +289,15 @@ jobs:
             -H "Content-Type: application/json" \
             -d "$BODY")
           echo "Broadcast natijasi: $RESULT"
+
+          # TEKSHIRUV (owner 2026-10-30): build YASHIL tugadi, lekin serverdagi
+          # reliz 3 kun eski qoldi — ilova ichidagi yangilanish eski versiyani
+          # ko'rsatib turardi va buni hech kim sezmadi. Endi oxirida server
+          # ROSTDAN yangi versiyani qaytarayotgani tekshiriladi; mos kelmasa
+          # ish QIZIL bo'ladi.
+          LIVE=$(curl -s --max-time 60 "$BACKEND_URL/api/deploy/latest" | jq -r '.version // ""')
+          echo "Serverdagi versiya: $LIVE (kutilgan: $VERSION)"
+          if [ "$LIVE" != "$VERSION" ]; then
+            echo "::error::Server hali ham '$LIVE' versiyasini ko'rsatyapti — reliz yozilmadi."
+            exit 1
+          fi

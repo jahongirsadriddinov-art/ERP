@@ -1,4 +1,14 @@
 import User from '../../models/User';
+import AiTgDialog from '../../models/AiTgDialog';
+
+/** Xodim–akkaunt yozishmasini belgilab qo'yadi. Xatosi hech qachon javobni to'xtatmaydi. */
+async function rememberDialog(employeeId: string, accountId: string | null): Promise<void> {
+  await AiTgDialog.updateOne(
+    { employeeId: String(employeeId), accountId },
+    { $set: { lastAt: new Date() } },
+    { upsert: true },
+  ).catch(() => undefined);
+}
 import type { WorkerEvent } from '../contracts';
 import { checkActor } from '../actor';
 import { createTextAgent } from '../brain/textAgent';
@@ -57,6 +67,10 @@ export async function handleDm(ev: { account?: string; tgUserId: string; text: s
   if (!TG_ID_RE.test(tgUserId) || !text) return;
 
   const who = await findEmployeeByTgId(tgUserId);
+  // Kim qaysi akkaunt bilan yozishganini eslab qolamiz: qo'ng'iroq aynan SHU
+  // akkauntdan qilinsa, Telegram uni "tanish" deb biladi va spam cheklovi
+  // (PeerFloodError) tegmaydi — models/AiTgDialog.ts izohiga qarang.
+  if (who?.employeeId) void rememberDialog(who.employeeId, account || null);
   if (!who) {
     // Notanish — kuniga bir marta tushuntirish
     const once = await hitRate(`aiv:dm:unknown:${tgUserId}`, 1, 24 * 3600_000);

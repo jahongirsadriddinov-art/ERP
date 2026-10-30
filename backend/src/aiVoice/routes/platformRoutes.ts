@@ -187,6 +187,31 @@ router.get('/unmet', wrap(async (req, res) => {
 }));
 
 // ───────────── Holat ─────────────
+// ── Kontaktlarni qo'lda qo'shish (owner 2026-10-30) — telegram/contactImport.ts ──
+router.get('/contacts/candidates', wrap(async (req, res) => {
+  const { listCandidates, limits } = await import('../telegram/contactImport');
+  const companyId = typeof req.query.companyId === 'string' ? req.query.companyId : undefined;
+  res.json({ users: await listCandidates(companyId ? { companyId } : {}), limits });
+}));
+
+router.post('/contacts/import', wrap(async (req, res) => {
+  const { startImport } = await import('../telegram/contactImport');
+  const r = await startImport(Array.isArray(req.body?.userIds) ? req.body.userIds : []);
+  if (!r.started) return res.status(400).json(r);
+  res.json(r);
+}));
+
+router.get('/contacts/import/status', wrap(async (_req, res) => {
+  const { importProgress } = await import('../telegram/contactImport');
+  res.json(importProgress());
+}));
+
+router.post('/contacts/import/stop', wrap(async (_req, res) => {
+  const { requestStop, importProgress } = await import('../telegram/contactImport');
+  requestStop();
+  res.json(importProgress());
+}));
+
 router.get('/telegram-account', wrap(async (_req, res) => {
   res.json(await platformStatusView());
 }));

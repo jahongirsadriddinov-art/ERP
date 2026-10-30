@@ -1,4 +1,5 @@
 import AiCallSession from '../../models/AiCallSession';
+import AiTgDialog from '../../models/AiTgDialog';
 import AiTgAccount from '../../models/AiTgAccount';
 import AiChannelConnection from '../../models/AiChannelConnection';
 import type { WorkerEvent, WorkerStatus } from '../contracts';
@@ -171,9 +172,11 @@ export async function poolHasLiveAccount(now: Date = new Date()): Promise<boolea
 }
 
 /**
- * Hovuzdagi BO'SH akkaunt va uning AI ismi. Yo'q bo'lsa null. Anti-freeze tartibi (owner 2026-10-23):
- *  1) shu xodim bilan oxirgi gaplashgan akkaunt (u bilan dialog bor — Telegram uchun "tanish", sovuq qo'ng'iroq emas);
- *  2) qolganlari — eng uzoq ishlatilmagan (LRU), yuk akkauntlar orasida tekis taqsimlanadi;
+ * Hovuzdagi BO'SH akkaunt va uning AI ismi. Yo'q bo'lsa null. Tartib:
+ *  1) xodim YOZISHGAN akkaunt (AiTgDialog) — platforma akkaunti bo'lsa null qaytadi
+ *     va chaqiruvchi platforma akkauntiga tushadi (owner 2026-10-30);
+ *  2) shu xodimga oxirgi qo'ng'iroq qilgan akkaunt;
+ *  3) qolganlari — eng uzoq ishlatilmagan (LRU), yuk akkauntlar orasida tekis taqsimlanadi;
  *  cheklangan (muzlatilgan/spam/ban), chegarasi to'lgan yoki FloodWait'dagi akkauntlar tanlanmaydi.
  */
 export async function pickPoolAccount(now: Date = new Date(), opts: { employeeId?: string } = {}): Promise<{ id: string; name?: string } | null> {
@@ -184,7 +187,18 @@ export async function pickPoolAccount(now: Date = new Date(), opts: { employeeId
   const free = rows.filter((r) => !busy.has(String(r._id)));
   if (!free.length) return null;
   let pick: any = null;
-  if (opts.employeeId && isObjectIdString(opts.employeeId) && free.length > 1) {
+  if (opts.employeeId && isObjectIdString(opts.employeeId)) {
+    // 1-ustuvorlik: xodim YOZISHGAN akkaunt. Bu qo'ng'iroq tarixidan kuchliroq
+    // belgi — Telegram yozishgan odamni "tanish" deb biladi va spam cheklovi
+    // (PeerFloodError) tegmaydi. Owner 2026-10-30 holati aynan shu edi: u
+    // @erpfirma ga yozardi, qo'ng'iroq esa boshqa akkauntdan urinilib yiqilardi.
+    const dlg: any = await AiTgDialog.findOne({ employeeId: String(opts.employeeId) })
+      .sort({ lastAt: -1 }).select('accountId').lean().catch(() => null);
+    if (dlg && dlg.accountId === null) return null;   // platforma akkaunti bilan yozishgan — chaqiruvchi shunga tushadi
+    if (dlg?.accountId) pick = free.find((r) => String(r._id) === String(dlg.accountId)) || null;
+  }
+  if (!pick && opts.employeeId && isObjectIdString(opts.employeeId) && free.length > 1) {
+    // 2-ustuvorlik: oxirgi marta shu xodimga qo'ng'iroq qilgan akkaunt
     const last: any = await AiCallSession.findOne({ channel: 'telegram_call', employeeId: opts.employeeId, tgAccountId: { $in: free.map((r) => String(r._id)) } })
       .sort({ createdAt: -1 }).select('tgAccountId').lean().catch(() => null);
     if (last?.tgAccountId) pick = free.find((r) => String(r._id) === String(last.tgAccountId)) || null;

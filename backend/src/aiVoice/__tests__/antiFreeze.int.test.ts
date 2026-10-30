@@ -11,6 +11,7 @@ vi.mock('../../services/bot', () => ({ notifyDeveloper }));
 import AiCallSession from '../../models/AiCallSession';
 import AiChannelConnection from '../../models/AiChannelConnection';
 import AiTgAccount from '../../models/AiTgAccount';
+import AiTgDialog from '../../models/AiTgDialog';
 import {
   applyAccountHealth, applyPlatformHealth, healthBlocked, healthMessage, profileCooldownSec, sanitizeHealth, sanitizeUsage,
 } from '../telegram/antiFreeze';
@@ -28,6 +29,7 @@ beforeAll(async () => { mongo = await startMongo(); }, 120_000);
 afterEach(async () => {
   notifyDeveloper.mockClear();
   await AiTgAccount.deleteMany({});
+  await AiTgDialog.deleteMany({});
   await AiCallSession.deleteMany({});
   await AiChannelConnection.deleteMany({});
 });
@@ -139,7 +141,29 @@ describe("akkaunt tanlash: cheklanganlar chetda, chegaralar, LRU va 'tanish' akk
     void banned; void capped;
   });
 
-  it("yuk taqsimoti: eng uzoq ishlatilmagan (LRU); shu xodim bilan gaplashgan akkaunt afzal", async () => {
+it("xodim YOZISHGAN akkaunt afzal — spam cheklovi tegmasligi uchun (owner 2026-10-30)", async () => {
+    const now = new Date();
+    const emp = new Types.ObjectId().toString();
+    const a = await AiTgAccount.create({ label: 'A', ...fresh(), lastUsedAt: new Date(now.getTime() - 1000) });
+    const b = await AiTgAccount.create({ label: 'B', ...fresh(), lastUsedAt: new Date(now.getTime() - 99_000) });
+    // LRU bo'yicha B tanlanardi...
+    expect((await pickPoolAccount(now, { employeeId: emp }))?.id).toBe(String(b._id));
+    // ...lekin xodim A bilan yozishgan bo'lsa — A tanlanadi (Telegram uni "tanish" deb biladi)
+    await AiTgDialog.create({ employeeId: emp, accountId: String(a._id), lastAt: now });
+    expect((await pickPoolAccount(now, { employeeId: emp }))?.id).toBe(String(a._id));
+  });
+
+  it("platforma akkauntiga yozgan bo'lsa — hovuzdan akkaunt tanlanmaydi (qo'ng'iroq o'sha akkauntdan ketsin)", async () => {
+    const now = new Date();
+    const emp = new Types.ObjectId().toString();
+    await AiTgAccount.create({ label: 'A', ...fresh() });
+    await AiTgDialog.create({ employeeId: emp, accountId: null, lastAt: now });
+    expect(await pickPoolAccount(now, { employeeId: emp })).toBeNull();
+    // Boshqa xodimga bu ta'sir qilmaydi
+    expect(await pickPoolAccount(now, { employeeId: new Types.ObjectId().toString() })).not.toBeNull();
+  });
+
+    it("yuk taqsimoti: eng uzoq ishlatilmagan (LRU); shu xodim bilan gaplashgan akkaunt afzal", async () => {
     const a1 = await AiTgAccount.create({ label: 'A1', ...fresh() });
     const a2 = await AiTgAccount.create({ label: 'A2', ...fresh() });
     const a3 = await AiTgAccount.create({ label: 'A3', ...fresh() });

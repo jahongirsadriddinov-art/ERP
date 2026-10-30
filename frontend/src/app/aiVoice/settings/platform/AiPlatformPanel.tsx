@@ -37,11 +37,12 @@ import { oneOf, usePersistentState } from "../../../lib/persistentState";
 const TelegramAccountPanel = lazy(() => import("../TelegramAccountPanel"));
 // Firma Telegram akkauntlari — alohida bo'lim (owner 2026-10-19)
 const CompanyTgAccounts = lazy(() => import("../CompanyTgAccounts"));
+const ContactImportPanel = lazy(() => import("./ContactImportPanel"));
 
-type Tab = "overview" | "companies" | "usage" | "telegram" | "tgAccounts" | "archives" | "audit" | "unmet";
+type Tab = "overview" | "companies" | "usage" | "telegram" | "tgAccounts" | "contacts" | "archives" | "audit" | "unmet";
 const TABS: { key: Tab; icon: any }[] = [
   { key: "overview", icon: Pulse }, { key: "companies", icon: Building }, { key: "usage", icon: Chart },
-  { key: "telegram", icon: Telegram }, { key: "tgAccounts", icon: Users }, { key: "archives", icon: Archive }, { key: "audit", icon: History },
+  { key: "telegram", icon: Telegram }, { key: "tgAccounts", icon: Users }, { key: "contacts", icon: Users }, { key: "archives", icon: Archive }, { key: "audit", icon: History },
   { key: "unmet", icon: Alert },
 ];
 const fetchArchives = () => platformApi.getArchives();
@@ -65,7 +66,7 @@ export default function AiPlatformPanel() {
         {TABS.map(({ key, icon }) => (
           <button key={key} type="button" role="tab" aria-selected={tab === key} onClick={() => setTab(key)} data-testid={`ai-pf-tab-${key}`}
             className={`h-9 px-3.5 rounded-full border text-[13px] font-semibold whitespace-nowrap inline-flex items-center gap-1.5 flex-shrink-0 liquid-transition ${tab === key ? "bg-primary text-primary-foreground border-primary" : "border-border bg-card/60 text-muted-foreground hover:text-foreground"}`}>
-            <MorphIcon icon={icon} className="w-4 h-4" />{key === "overview" ? t("aiVoice.platform.ov.tab") : t(`aiVoice.platform.tabs.${key}`)}
+            <MorphIcon icon={icon} className="w-4 h-4" />{key === "overview" ? t("aiVoice.platform.ov.tab") : key === "contacts" ? t("aiVoice.platform.tabs.contacts", { defaultValue: "Kontaktlar" }) : t(`aiVoice.platform.tabs.${key}`)}
           </button>
         ))}
       </div>
@@ -74,6 +75,8 @@ export default function AiPlatformPanel() {
       {tab === "usage" && <Usage />}
       {tab === "telegram" && <Suspense fallback={<Skeleton />}><TelegramAccountPanel /></Suspense>}
       {tab === "tgAccounts" && <Suspense fallback={<Skeleton />}><CompanyTgAccounts /></Suspense>}
+      {/* Kontaktga qo'shish (owner 2026-10-30) — spam cheklovidan qochish uchun */}
+      {tab === "contacts" && <Suspense fallback={<Skeleton />}><ContactImportPanel /></Suspense>}
       {tab === "archives" && <ArchivesTab />}
       {tab === "unmet" && <UnmetTab />}
       {tab === "audit" && <AuditLog fetcher={fetchAudit} title={t("aiVoice.platform.tabs.audit")} testId="ai-pf-audit" />}

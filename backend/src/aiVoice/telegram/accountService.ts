@@ -237,6 +237,46 @@ export async function resolveContact(companyId: string, employeeId: string, now:
   }
 }
 
+/**
+ * QO'LDA kontakt qo'shish (owner 2026-10-30: "kontakt qo'shishni qo'lda ham
+ * qiladigan bo'lsin — hohlasam bittalab, hohlasam hammasini").
+ *
+ * resolveContact'dan farqi: avtomatik "soatiga 3 ta" oynasi QO'LLANMAYDI —
+ * bu yerda qaror odamniki. Lekin xavfsizlik butunlay olib tashlanmaydi:
+ * chaqiruvchi (contactImport xizmati) importlar orasida tanaffus qo'yadi va
+ * bitta yurishda nechtasi borishini cheklaydi, aks holda akkaunt PeerFlood
+ * yoki ban olishi mumkin — aynan shundan qochyapmiz.
+ */
+export async function importContactNow(companyId: string, employeeId: string, now: Date = new Date()): Promise<string> {
+  await ensureContactTgUserId(companyId, employeeId);
+  const ct: any = await AiEmployeeContact.findOne({ companyId, employeeId }).lean();
+  const tg = ct?.telegram;
+  if (!tg?.tgUserId) return 'no_telegram';
+  if (!(await getCallConsent(companyId, employeeId, { contact: ct })).allowed) return 'no_consent';
+  const u: any = await User.findOne({ _id: employeeId, companyId }).select('phone').lean();
+  if (!u?.phone) return 'no_phone';
+  try {
+    const r = await callWorker('contact.resolve', {
+      employeeId, expectedTgUserId: String(tg.tgUserId), username: cleanUsername(tg.username),
+      phone: String(u.phone), allowImport: true,
+    });
+    const set: Record<string, unknown> = {};
+    switch (r.status) {
+      case 'resolved': set['telegram.resolveStatus'] = 'resolved'; set['telegram.resolvedAt'] = now; set['telegram.checkedAt'] = now; break;
+      case 'privacy_restricted': set['telegram.resolveStatus'] = 'privacy_restricted'; break;
+      case 'not_found': case 'mismatch': set['telegram.resolveStatus'] = 'not_found'; break;
+      case 'flood_wait': if (r.retryAfterSec) await setFloodWait(now.getTime() + r.retryAfterSec * 1000); break;
+    }
+    if (Object.keys(set).length) {
+      await AiEmployeeContact.updateOne({ _id: ct._id, 'telegram.tgUserId': String(tg.tgUserId) }, { $set: set });
+    }
+    return r.status;
+  } catch (e) {
+    if (e instanceof WorkerRpcFailure && e.code === 'flood_wait' && e.retryAfterSec) await setFloodWait(now.getTime() + e.retryAfterSec * 1000);
+    return e instanceof WorkerRpcFailure ? e.code : 'error';
+  }
+}
+
 /** Kutilayotgan bog'lash kodlari (xeshlari) workerga yuboriladi — worker DM'dagi kodni bot bilgan tgUserId bilan solishtiradi. */
 export async function syncBindings(now: Date = new Date()): Promise<number> {
   if (!workerConnectedHere()) return 0;

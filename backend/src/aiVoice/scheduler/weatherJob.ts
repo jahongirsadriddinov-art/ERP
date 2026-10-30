@@ -1,11 +1,9 @@
 import Company from '../../models/Company';
 import ObjectModel from '../../models/Object';
 import { isAiActive } from '../settings';
-import { getChannel } from '../channels/registry';
+import { alertBosses } from '../../services/companyAlerts';
 import { alertText, risksFor, severe, tomorrowForecast } from '../../services/weatherAlerts';
-import { newCorrelationId } from '../lib/ids';
 import { localDate } from '../lib/zonedTime';
-import type { ChannelCtx } from '../contracts';
 import type { JobQueue } from '../queue/jobQueue';
 
 // Ob-havo ogohlantirishi (owner 2026-10-29: "ob-havoni ogohlantirishini qo'shish kerak").
@@ -15,6 +13,12 @@ import type { JobQueue } from '../queue/jobQueue';
 // yaxshi" deb yozish — spam, va bir hafta ichida odam bunday xabarlarni o'qimay qo'yadi.
 //
 // Joy: firmaning faol obyekti koordinatasi (bir nechta bo'lsa — birinchisi). Yo'q bo'lsa Toshkent.
+//
+// YETKAZISH (owner 2026-10-29: "AI telefon qilib va profilidan yozadi"): ogohlantirish
+// rahbarlarga alertBosses orqali boradi — ilova bildirishnomasi + Telegram xabari.
+// Xavf JIDDIY bo'lsa severity='critical' qo'yiladi: shunda 30 daqiqada o'qilmasa
+// AI o'zi qo'ng'iroq qiladi. Yengil xavfda qo'ng'iroq qilinmaydi — har kuni
+// "ertaga shamol" deb telefon qilish foydadan ko'ra ko'proq bezor qiladi.
 
 export const WEATHER_JOB = 'aiv.weather.daily';
 
@@ -27,7 +31,9 @@ function hourInTashkent(now: Date): number {
 
 export async function runWeatherAlerts(now: Date, opts: { force?: boolean } = {}): Promise<{ companies: number; sent: number }> {
   if (!opts.force && hourInTashkent(now) !== SEND_HOUR) return { companies: 0, sent: 0 };
-  const companies: any[] = await Company.find({ isActive: { $ne: false } }).select('_id name region').limit(500).lean().catch(() => []);
+  // Faqat FAOL firmalar: Company'da 'isActive' maydoni yo'q, 'status' bor —
+  // eski shart to'xtatilgan firmalarni ham qamrab olardi.
+  const companies: any[] = await Company.find({ status: 'ACTIVE' }).select('_id name region').limit(500).lean().catch(() => []);
   let sent = 0;
   for (const c of companies) {
     const companyId = String(c._id);
@@ -42,17 +48,18 @@ export async function runWeatherAlerts(now: Date, opts: { force?: boolean } = {}
       const text = alertText(f, place);
       if (!text) continue;
 
-      const ctx: ChannelCtx = {
-        companyId, employeeId: '', correlationId: newCorrelationId(),
-        purpose: 'assistant', lang: 'uz', now, attemptNo: 1,
-      };
-      const r = await getChannel('notify_manager')?.attempt(ctx, {
-        kind: 'manager_alert',
-        title: 'Ertangi ob-havo',
-        text,
-        urgency: severe(risks) ? 'high' : 'normal',
+      const bad = severe(risks);
+      const r = await alertBosses({
+        companyId,
+        // Kalitda sana bor — bir kunda bitta ogohlantirish, lekin ertasiga yangisi keladi
+        key: `weather:${localDate(now)}`,
+        title: bad ? 'Ertaga ob-havo xavfli' : 'Ertangi ob-havo',
+        body: text,
+        severity: bad ? 'critical' : 'warning',
+        entity: 'weather', entityId: localDate(now),
+        dedupeHours: 20,
       });
-      if (r && (r.outcome === 'delivered' || r.outcome === 'answered')) sent++;
+      if (r.sent) sent++;
     } catch (e) {
       console.warn('[ob-havo] firma uchun xato:', companyId, String((e as Error)?.message || e).slice(0, 120));
     }

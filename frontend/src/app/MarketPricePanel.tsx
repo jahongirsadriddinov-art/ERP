@@ -16,7 +16,7 @@ import { fmtNumber } from "./lib/money";
 const UNITS = ["", "qop", "kg", "t", "dona", "m2", "m3", "m", "l", "rulon"];
 
 type Res = {
-  found: boolean; query: string;
+  found: boolean; query: string; searching?: boolean;
   name?: string; unit?: string;
   median?: number; low?: number; high?: number;
   points?: number; companies?: number; updatedAt?: string;
@@ -32,15 +32,22 @@ export default function MarketPricePanel({ onClose }: { onClose: () => void }) {
     const s = q.trim();
     if (s.length < 2) { setRes(null); return; }
     let alive = true;
+    let again: ReturnType<typeof setTimeout> | null = null;
     setBusy(true);
-    const t = setTimeout(() => {
+    const ask = () =>
       fetch(`${API_BASE}/api/market-price?q=${encodeURIComponent(s)}${unit ? `&unit=${encodeURIComponent(unit)}` : ""}`)
         .then((r) => (r.ok ? r.json() : null))
-        .then((d) => { if (alive) setRes(d); })
+        .then((d: Res | null) => {
+          if (!alive) return;
+          setRes(d);
+          // Server shu so'z bo'yicha ochiq e'lonlardan izlashni boshlagan bo'lsa —
+          // bir marta qayta so'raymiz (odatda shuncha vaqtda ma'lumot tushadi).
+          if (d && !d.found && d.searching) again = setTimeout(ask, 9000);
+        })
         .catch(() => { if (alive) setRes(null); })
         .finally(() => { if (alive) setBusy(false); });
-    }, 450);
-    return () => { alive = false; clearTimeout(t); };
+    const t = setTimeout(ask, 450);
+    return () => { alive = false; clearTimeout(t); if (again) clearTimeout(again); };
   }, [q, unit]);
 
   return (
@@ -94,10 +101,14 @@ export default function MarketPricePanel({ onClose }: { onClose: () => void }) {
             ) : (
               <div className="rounded-xl bg-muted/40 px-3 py-3">
                 <p className="text-[12px] text-muted-foreground">
-                  Bu material bo'yicha hali yetarli ma'lumot yo'q.
+                  {res?.searching
+                    ? "Bu material bo'yicha ma'lumot yo'q edi — hozir ochiq e'lonlardan izlanmoqda."
+                    : "Bu material bo'yicha hali yetarli ma'lumot yo'q."}
                 </p>
                 <p className="text-[11px] text-muted-foreground mt-1">
-                  Narxlar xaridlar va ochiq e'lonlardan to'planadi — ko'proq xarid kiritilgani sari aniqroq bo'ladi.
+                  {res?.searching
+                    ? "Bir necha soniyadan keyin o'zi yangilanadi. Topilmasa — keyinroq qayta urinib ko'ring."
+                    : "Narxlar xaridlar va ochiq e'lonlardan to'planadi — ko'proq xarid kiritilgani sari aniqroq bo'ladi."}
                 </p>
               </div>
             )

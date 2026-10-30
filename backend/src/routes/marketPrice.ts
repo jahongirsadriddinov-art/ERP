@@ -13,7 +13,30 @@ import { collectFromChannels, getChannels } from '../services/priceChannels';
 //  POST /api/market-price/backfill   (dasturchi) — eski xaridlardan indeksni to'ldirish.
 //
 // Javob DOIM indeksdan keladi — so'rov paytida hech qayerga chiqilmaydi, shuning uchun tez.
+//
+// TOPILMASA (owner 2026-10-29: "AI hohlagan narsani hohlagan vaqtda qidirsin"): javob
+// darhol "topilmadi" deb qaytadi, lekin FONDA shu so'z bo'yicha OLX'dan izlash
+// boshlanadi. Shunda ikkinchi marta qidirilganda ma'lumot bo'ladi. Foydalanuvchi
+// kutib turmaydi — javob tezligi o'zgarmaydi.
 const router = Router();
+
+/** Bir so'z bo'yicha fonda izlash shu muddatda bir martadan ko'p boshlanmaydi. */
+const LOOKUP_COOLDOWN_MS = 6 * 3600_000;
+const lookedUp = new Map<string, number>();
+
+function startBackgroundLookup(q: string): boolean {
+  const key = q.toLowerCase();
+  const last = lookedUp.get(key) || 0;
+  if (Date.now() - last < LOOKUP_COOLDOWN_MS) return false;
+  lookedUp.set(key, Date.now());
+  // Xotira cheklanadi — eng eski yozuvlar tashlab ketiladi
+  if (lookedUp.size > 500) for (const k of [...lookedUp.keys()].slice(0, 200)) lookedUp.delete(k);
+  void import('../services/priceOlx')
+    .then((m) => m.collectOlxQuery(q))
+    .then((n) => { if (n) console.log(`[narx/olx] "${q}" bo'yicha ${n} ta narx qo'shildi`); })
+    .catch(() => undefined);
+  return true;
+}
 
 router.get('/', async (req, res) => {
   res.set('Cache-Control', 'private, max-age=120');
@@ -23,7 +46,7 @@ router.get('/', async (req, res) => {
     const unit = typeof req.query.unit === 'string' ? req.query.unit : undefined;
     const region = typeof req.query.region === 'string' ? req.query.region.slice(0, 60) : undefined;
     const stats = await lookupPrice(q, unit, region ? { region } : {});
-    if (!stats) return res.json({ found: false, query: q });
+    if (!stats) return res.json({ found: false, query: q, searching: startBackgroundLookup(q) });
 
     const price = Number(req.query.price);
     const cmp = Number.isFinite(price) && price > 0 ? compare(price, stats) : null;
@@ -95,11 +118,13 @@ router.put('/channels', async (req, res) => {
   res.json({ ok: true, channels: clean });
 });
 
-/** Hoziroq yig'ish (odatda o'zi 6 soatda bir ishlaydi). */
+/** Hoziroq yig'ish (odatda o'zi 6 soatda bir ishlaydi) — kanallar va OLX. */
 router.post('/collect', async (req, res) => {
   if (!req.user?.isDeveloper) return res.status(403).json({ error: "Ruxsat yo'q" });
   try {
-    res.json(await collectFromChannels());
+    const { collectFromOlx } = await import('../services/priceOlx');
+    const [tg, olx] = await Promise.all([collectFromChannels(), collectFromOlx()]);
+    res.json({ ...tg, olx });
   } catch (err) {
     console.error("[marketPrice] yig'ish xatosi:", err);
     res.status(500).json({ error: "Yig'ib bo'lmadi" });

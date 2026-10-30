@@ -24,9 +24,11 @@ const MAX_POSTS = 40;
 /** Aqlga sig'adigan birlik narxi oralig'i (so'm) — telefon raqami yoki yil tushib qolmasin. */
 const MIN_PRICE = 100;
 const MAX_PRICE = 200_000_000;
+/** Shu oraliq OLX yig'uvchisida ham ishlatiladi (bir xil chegara — bir xil sifat). */
+export const PRICE_BAND = { min: MIN_PRICE, max: MAX_PRICE };
 
 const CUR_RE = "(?:so[''`’]?m|sum|сум|сўм|uzs)";
-const UNIT_WORDS: Record<string, string> = {
+export const UNIT_WORDS: Record<string, string> = {
   qop: 'qop', коп: 'qop', мешок: 'qop', meshok: 'qop',
   kg: 'kg', кг: 'kg', kilogramm: 'kg',
   tonna: 't', тонна: 't', tn: 't',
@@ -150,7 +152,7 @@ export async function collectFromChannels(opts: { fetchImpl?: typeof fetch } = {
   return out;
 }
 
-/** Har 6 soatda avtomatik yig'ish. Kanal ro'yxati bo'sh bo'lsa — hech nima qilmaydi. */
+/** Har 6 soatda avtomatik yig'ish (Telegram kanallari + OLX). Kanal ro'yxati bo'sh bo'lsa — faqat OLX. */
 const EVERY_MS = 6 * 3600_000;
 const FIRST_DELAY_MS = 2 * 60_000;   // serverni ishga tushishiga xalaqit qilmasin
 let timer: NodeJS.Timeout | null = null;
@@ -161,6 +163,11 @@ export function startPriceCollector(): void {
   // qidiruv birinchi kunlarda doim bo'sh qaytadi (owner 2026-10-30).
   void import('./marketPrice').then((m) => m.backfillIfEmpty()).catch(() => undefined);
   const run = () => {
+    // OLX ham shu bilan birga yurib chiqadi (ochiq e'lonlar — kalit kerak emas).
+    // Xatosi kanal yig'ishini to'xtatmasligi uchun alohida zanjirda.
+    void import('./priceOlx')
+      .then((m) => m.collectFromOlx())
+      .catch((e) => console.warn("[narx/olx] yig'ish xatosi:", String((e as Error)?.message || e).slice(0, 160)));
     collectFromChannels()
       .then((r) => {
         if (r.channels) {

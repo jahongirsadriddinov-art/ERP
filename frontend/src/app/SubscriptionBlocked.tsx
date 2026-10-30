@@ -3,6 +3,7 @@ import { MorphIcon } from "morphicons/react";
 import AlertCircle from "@hugeicons/core-free-icons/AlertCircleIcon";
 import Send from "@hugeicons/core-free-icons/SendIcon";
 import Check from "@hugeicons/core-free-icons/Tick01Icon";
+import ChevronDown from "@hugeicons/core-free-icons/ArrowDown01Icon";
 import { API_BASE } from "./api";
 
 // Obuna muddati tugaganda chiqadigan ekran (owner 2026-10-30).
@@ -33,12 +34,30 @@ export type BlockedInfo = {
 
 const fmt = (n: number) => n.toLocaleString("uz-UZ");
 
+/**
+ * Standart tanlov: eng QISQA muddatli (1 oylik) tariflar ichidan eng QIMMATI.
+ * Owner qarori — odam hech narsa tanlamasa, to'liq imkoniyatli oylik tarif
+ * tanlangan bo'lib tursin; uzoq muddatga bog'lab qo'ymaydi.
+ */
+export function defaultPlanKey(plans: Plan[]): string {
+  if (!plans.length) return "";
+  const minDays = Math.min(...plans.map((p) => p.days || 0).filter((d) => d > 0));
+  const shortest = plans.filter((p) => p.days === minDays);
+  const pool = shortest.length ? shortest : plans;
+  return pool.reduce((best, p) => (p.amount > best.amount ? p : best), pool[0]).key;
+}
+
 export default function SubscriptionBlocked({ info, adminHandle, onBack }: {
   info: BlockedInfo; adminHandle: string; onBack: () => void;
 }) {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [chosen, setChosen] = useState<string>(info.selectedPlan || "");
   const [busy, setBusy] = useState<"" | "pay" | "admin">("");
+  // Owner 2026-10-30: "buni ochib-yopiladigan bo'lim qil — hohlasa o'zgartiradi,
+  // hohlamasa o'zi default 1 oylik eng qimmat versiyasiga o'tadi".
+  // Yopiq holatda ro'yxat ekranni to'ldirib, pastki tugmalarga yetib
+  // bo'lmasdi; endi bitta qator ko'rinadi, ochish ixtiyoriy.
+  const [open, setOpen] = useState(false);
   const [sent, setSent] = useState(false);
   const [err, setErr] = useState("");
 
@@ -48,7 +67,7 @@ export default function SubscriptionBlocked({ info, adminHandle, onBack }: {
       .then((list: Plan[]) => {
         const payable = (Array.isArray(list) ? list : []).filter((p) => p.amount > 0);
         setPlans(payable);
-        setChosen((c) => c || info.selectedPlan || payable[0]?.key || "");
+        setChosen((c) => c || defaultPlanKey(payable));
       })
       .catch(() => setPlans([]));
   }, [info.selectedPlan]);
@@ -102,6 +121,7 @@ export default function SubscriptionBlocked({ info, adminHandle, onBack }: {
     }
   };
 
+  const current = plans.find((p) => p.key === chosen) || null;
   const ended = info.periodEnd ? new Date(info.periodEnd).toLocaleDateString("uz-UZ") : "";
   const canPay = info.canPay !== false && !!token;
 
@@ -136,26 +156,44 @@ export default function SubscriptionBlocked({ info, adminHandle, onBack }: {
       ) : (
         <>
           {canPay && !!plans.length && (
-            <div className="space-y-2">
-              <p className="text-xs text-muted-foreground text-center">Tarifni tanlang — boshqasiga ham o'tishingiz mumkin</p>
-              <div className="space-y-1.5">
-                {plans.map((p) => (
-                  <button key={p.key} type="button" onClick={() => setChosen(p.key)}
-                    data-testid={`sub-plan-${p.key}`}
-                    className={`w-full flex items-center justify-between gap-2 px-4 py-3 rounded-xl border text-left liquid-transition ${
-                      chosen === p.key ? "border-primary bg-primary/10" : "border-border hover:bg-muted/50"
-                    }`}>
-                    <span className="min-w-0">
-                      <span className="text-sm font-semibold block truncate">{p.label}</span>
-                      <span className="text-[11px] text-muted-foreground">{p.days} kun</span>
-                      {p.key === info.selectedPlan && (
-                        <span className="text-[11px] text-muted-foreground"> · hozirgi tarifingiz</span>
-                      )}
-                    </span>
-                    <span className="text-sm font-bold whitespace-nowrap">{fmt(p.amount)} so'm</span>
-                  </button>
-                ))}
-              </div>
+            <div className="space-y-1.5">
+              {/* Yig'ilgan holat: faqat tanlangan tarif. Ro'yxat ochilsa ham
+                  ichida skroll qiladi — kartochka ekrandan oshmaydi va pastki
+                  tugmalar doim ko'rinib turadi. */}
+              <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open}
+                data-testid="sub-plan-toggle"
+                className="w-full flex items-center justify-between gap-2 px-4 py-3 rounded-xl border border-primary bg-primary/10 text-left">
+                <span className="min-w-0">
+                  <span className="text-sm font-semibold block truncate">{current?.label || "Tarifni tanlang"}</span>
+                  <span className="text-[11px] text-muted-foreground">
+                    {current ? `${current.days} kun · ${open ? "boshqasini tanlang" : "o'zgartirish uchun bosing"}` : "ro'yxatni oching"}
+                  </span>
+                </span>
+                <span className="flex items-center gap-2 flex-shrink-0">
+                  {current && <span className="text-sm font-bold whitespace-nowrap">{fmt(current.amount)} so'm</span>}
+                  <MorphIcon icon={ChevronDown} className={`w-4 h-4 text-muted-foreground transition-transform duration-300 ${open ? "rotate-180" : ""}`} />
+                </span>
+              </button>
+
+              {open && (
+                <div className="space-y-1.5 max-h-[38vh] overflow-y-auto scrollbar-hide pt-0.5">
+                  {plans.map((p) => (
+                    <button key={p.key} type="button" onClick={() => { setChosen(p.key); setOpen(false); }}
+                      data-testid={`sub-plan-${p.key}`}
+                      className={`w-full flex items-center justify-between gap-2 px-4 py-3 rounded-xl border text-left liquid-transition ${
+                        chosen === p.key ? "border-primary bg-primary/10" : "border-border hover:bg-muted/50"
+                      }`}>
+                      <span className="min-w-0">
+                        <span className="text-sm font-semibold block truncate">{p.label}</span>
+                        <span className="text-[11px] text-muted-foreground">
+                          {p.days} kun{p.key === info.selectedPlan ? " · hozirgi tarifingiz" : ""}
+                        </span>
+                      </span>
+                      <span className="text-sm font-bold whitespace-nowrap">{fmt(p.amount)} so'm</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 

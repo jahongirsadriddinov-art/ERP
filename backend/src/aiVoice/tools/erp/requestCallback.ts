@@ -31,7 +31,7 @@ const IN_CALL_MIN_DELAY_MS = 45_000;    // qo'ng'iroq ichidan: avval joriy qo'ng
 const SOON_MS = 90_000;                 // shundan yaqin — "hozir" (kanal hozir mavjud bo'lishi kerak)
 const CALL_CHANNELS: ChannelName[] = ['inapp_call', 'telegram_call'];
 /** Bir oz kutib o'tib ketadigan sabablar — qo'ng'iroq baribir navbatga qo'yiladi. */
-const TRANSIENT = new Set(['not_on_this_instance', 'flood_wait', 'account_busy', 'worker_not_here']);
+const TRANSIENT = new Set(['not_on_this_instance', 'flood_wait', 'account_busy', 'worker_not_here', 'peer_limited', 'import_limited', 'rate_limited']);
 /** Ilova yopiq/fonda (owner 2026-10-19: "Telegram'dan ilovaga qil" ishlamasdi) — push yuborib, ochilishini kutamiz. */
 const APP_WAKE = new Set(['offline', 'not_visible']);
 
@@ -100,6 +100,13 @@ export function missingText(ch: ChannelName, reason: string, c: Lg): string {
     switch (reason) {
       case 'no_consent': return l("AI qo'ng'iroqlari rahbariyat tomonidan o'chirilgan", 'звонки AI отключены руководством');
       case 'not_bound': return l("ERP botiga telefon raqamingizni ulashing (shunda Telegram'ingiz ulanadi)", 'поделитесь номером телефона в ERP-боте (так подключится ваш Telegram)');
+      case 'peer_limited':
+      case 'import_limited':
+        // Worker raqamni Telegram akkauntiga kontakt sifatida kiritishi kerak;
+        // bu ataylab soatiga bir necha marta bilan cheklangan (akkaunt bloklanmasin).
+        return l("raqamingiz AI Telegram akkauntiga hali kiritilmagan — bu soatlik cheklov bilan navbatda turibdi, tez orada o'zi bo'ladi",
+          'ваш номер ещё не добавлен в Telegram-аккаунт AI — стоит в очереди из-за часового лимита, скоро будет');
+      case 'flood_wait': return l("Telegram vaqtinchalik cheklov qo'ygan — biroz kutish kerak", 'Telegram временно ограничил — нужно немного подождать');
       case 'not_resolved': return l("AI Telegram'ingizni hali topa olmadi — ERP botidagi telefon raqamingiz Telegram raqamingiz bilan bir xil bo'lsin", 'AI пока не нашёл ваш Telegram — номер в ERP-боте должен совпадать с номером Telegram');
       case 'blocked': return l("Telegram'da AI akkauntini blokdan chiqaring", 'разблокируйте AI-аккаунт в Telegram');
       case 'privacy_restricted': return l("Telegram maxfiylik sozlamasida qo'ng'iroqlarga ruxsat bering", 'разрешите звонки в настройках конфиденциальности Telegram');
@@ -354,7 +361,21 @@ export async function runCallback(p: {
   // to'xtab, sababini aytamiz (kutib qolishdan ko'ra, bilib turish yaxshi).
   const allHopeless = p.order.length > 0 && p.order.every((c) => reasons[c] && HOPELESS.test(String(reasons[c])));
   if (allHopeless) retry = false;
-  if (retry && p.attemptNo < p.maxAttempts) throw new Error('callback_retry');
+  if (retry && p.attemptNo < p.maxAttempts) {
+    // Owner 2026-10-30: AI "hozir qo'ng'iroq qilaman" dedi va JIM qoldi.
+    // Sabab: kechiktiriladigan holatda (masalan worker jurnalidagi
+    // "tgw.peers: import chegarasi (soatiga 3) — ...0710 keyinroq") tizim
+    // jimgina qayta urinardi — 6 urinish, orada kutish, foydalanuvchi esa
+    // hech narsa bilmasdi. Endi BIRINCHI urinishdayoq sababi aytiladi,
+    // qayta urinish esa baribir davom etadi.
+    if (p.attemptNo === 1) {
+      const why = p.order.filter((c) => reasons[c]).map((c) => missingText(c, String(reasons[c]), p)).slice(0, 2).join('; ');
+      await tell(p.lang === 'ru'
+        ? `Звонок пока не прошёл: ${why || 'временное ограничение'}. Продолжаю пробовать и позвоню, как только получится.`
+        : `Qo'ng'iroq hozircha bo'lmadi: ${why || "vaqtinchalik cheklov"}. Urinishda davom etaman — imkon bo'lishi bilan qo'ng'iroq qilaman.`);
+    }
+    throw new Error('callback_retry');
+  }
   // Qo'ng'iroq bo'lmadi — botda aniq sababini qisqa aytamiz (foydalanuvchi kutib qolmasin)
   const why = p.order.filter((c) => reasons[c]).map((c) => missingText(c, String(reasons[c]), p)).slice(0, 2).join('; ');
   await tell(p.lang === 'ru' ? `AI не смог позвонить. Что нужно: ${why || 'попробуйте позже'}.` : `AI qo'ng'iroq qila olmadi. Nima kerak: ${why || "keyinroq urinib ko'ring"}.`);

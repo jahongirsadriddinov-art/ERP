@@ -18,7 +18,11 @@ import { fetchChannelPosts, parsePost, getChannels } from './priceChannels';
 const MODELS = ['gemini-3.8-flash', 'gemini-3.5-flash-lite'];
 const TIMEOUT_MS = 20_000;
 /** Shuncha nomzoddan ko'pi tekshirilmaydi (har biri tashqi so'rov). */
-const MAX_CANDIDATES = 14;
+const MAX_CANDIDATES = 10;
+/** Bir vaqtda shuncha kanal tekshiriladi (ketma-ket tekshirish so'rov vaqtini tugatardi). */
+const CONCURRENCY = 5;
+/** Butun amal uchun umumiy muddat — so'rov tarmoq darajasida uzilib ketmasin. */
+const DEADLINE_MS = 40_000;
 /** Kanal "ishlaydi" deyilishi uchun kamida shuncha narx chiqishi kerak. */
 const MIN_PRICES = 2;
 
@@ -116,14 +120,24 @@ export async function suggestChannels(opts: { query?: string; fetchImpl?: typeof
     if (names.length >= MAX_CANDIDATES) break;
   }
 
+  // Owner 2026-10-30 xatosi: "API javob bermadi (tarmoq)". Sabab — kanallar
+  // KETMA-KET tekshirilardi (har biri 12 s gacha + tanaffus), 10 tasi uchun
+  // bir daqiqadan oshib ketardi va so'rov tarmoqda uzilardi. Endi bir nechtasi
+  // BARAVARIGA tekshiriladi va umumiy muddat qo'yilgan: muddat tugasa,
+  // tekshirib ulgurilganlari qaytadi — bo'sh xato emas.
+  const deadline = Date.now() + DEADLINE_MS;
+  const queue = [...names];
   const candidates: ChannelCandidate[] = [];
-  for (const name of names) {
-    const r = await probeChannel(name, fetchImpl);
-    r.already = existing.has(name.toLowerCase());
-    candidates.push(r);
-    // Tashqi sahifaga ketma-ket urilmaslik uchun kichik tanaffus
-    await new Promise((res) => setTimeout(res, 400));
-  }
+  const worker = async () => {
+    for (;;) {
+      const name = queue.shift();
+      if (!name || Date.now() > deadline) return;
+      const r = await probeChannel(name, fetchImpl);
+      r.already = existing.has(name.toLowerCase());
+      candidates.push(r);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, names.length) }, worker));
   candidates.sort((a, b) => b.prices - a.prices || b.posts - a.posts);
   return { candidates, checked: candidates.length, aiUsed };
 }

@@ -11,6 +11,8 @@ export interface IAppSettings extends Document {
   botEnabled: boolean;
   /** Narx razvedkasi (BETA): narx e'lon qiladigan OCHIQ Telegram kanallari (@siz). */
   priceChannels: string[];
+  /** Narx yig'iladigan saytlar (owner 2026-10-30) */
+  priceSites?: string[];
   // Dasturchi bot-menyusidagi tugma matnlarini o'zi o'zgartirishi uchun —
   // { 'kb_broadcast': '📣 Elon yuborish', ... }. Bo'sh/mavjud bo'lmagan
   // kalit uchun standart (i18n/bot.ts'dagi) matn ishlatiladi.
@@ -67,6 +69,7 @@ const AppSettingsSchema = new Schema<IAppSettings>({
   appEnabled: { type: Boolean, default: true },
   botEnabled: { type: Boolean, default: true },
   priceChannels: { type: [String], default: [] },
+  priceSites: { type: [String], default: [] },
   devButtonLabels: { type: Schema.Types.Mixed, default: {} },
   devButtonOrder: { type: [String], default: [] },
   adminButtonLabels: { type: Schema.Types.Mixed, default: {} },

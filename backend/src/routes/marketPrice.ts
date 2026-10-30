@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { currentCompanyId } from '../middleware/tenantContext';
 import Transaction from '../models/Transaction';
 import AppSettings from '../models/AppSettings';
 import { lookupPrice, compare, recordPoint } from '../services/marketPrice';
@@ -45,7 +46,8 @@ router.get('/', async (req, res) => {
     if (q.length < 2) return res.status(400).json({ error: 'Qidiruv so\'zi kaltaroq' });
     const unit = typeof req.query.unit === 'string' ? req.query.unit : undefined;
     const region = typeof req.query.region === 'string' ? req.query.region.slice(0, 60) : undefined;
-    const stats = await lookupPrice(q, unit, region ? { region } : {});
+    const companyId = String(currentCompanyId() || '');
+    const stats = await lookupPrice(q, unit, { ...(region ? { region } : {}), ...(companyId ? { companyId } : {}) });
     if (!stats) return res.json({ found: false, query: q, searching: startBackgroundLookup(q) });
 
     const price = Number(req.query.price);
@@ -60,6 +62,7 @@ router.get('/', async (req, res) => {
       high: stats.high,
       points: stats.points,
       companies: stats.companies,
+      ownOnly: !!stats.ownOnly,
       updatedAt: stats.updatedAt,
       ...(cmp ? { yourPrice: Math.round(price), diffPct: cmp.pct, expensive: cmp.expensive } : {}),
     });
@@ -141,6 +144,7 @@ router.get('/status', async (req, res) => {
       bySource: Object.fromEntries((bySource || []).map((r: any) => [String(r._id || 'nomalum'), r.n])),
       newestAt: newest?.at || null,
       channels,
+      sites: await (await import('../services/priceSites')).getSites().catch(() => []),
       // Qidiruv xulosa berishi uchun kerak bo'lgan eng kam shart — panelda ko'rsatiladi
       needs: { minPoints: 4, minCompanies: 2, windowDays: 45 },
     });
@@ -178,13 +182,37 @@ router.post('/channels/probe', async (req, res) => {
   }
 });
 
+// ── Narx manbalari: SAYTLAR (owner 2026-10-30: "faqat tg kanal emas, saytlar ham") ──
+
+router.get('/sites', async (req, res) => {
+  if (!req.user?.isDeveloper) return res.status(403).json({ error: "Ruxsat yo'q" });
+  res.set('Cache-Control', 'no-store');
+  const { getSites } = await import('../services/priceSites');
+  res.json({ sites: await getSites() });
+});
+
+router.put('/sites', async (req, res) => {
+  if (!req.user?.isDeveloper) return res.status(403).json({ error: "Ruxsat yo'q" });
+  if (!Array.isArray(req.body?.sites)) return res.status(400).json({ error: "sites ro'yxati kerak" });
+  const { setSites } = await import('../services/priceSites');
+  res.json({ ok: true, sites: await setSites(req.body.sites) });
+});
+
+/** Saytni qo'shishdan OLDIN sinab ko'rish: ochiladimi va nechta narx chiqadi. */
+router.post('/sites/probe', async (req, res) => {
+  if (!req.user?.isDeveloper) return res.status(403).json({ error: "Ruxsat yo'q" });
+  const { probeSite } = await import('../services/priceSites');
+  res.json(await probeSite(String(req.body?.url || '')));
+});
+
 /** Hoziroq yig'ish (odatda o'zi 6 soatda bir ishlaydi) — kanallar va OLX. */
 router.post('/collect', async (req, res) => {
   if (!req.user?.isDeveloper) return res.status(403).json({ error: "Ruxsat yo'q" });
   try {
     const { collectFromOlx } = await import('../services/priceOlx');
-    const [tg, olx] = await Promise.all([collectFromChannels(), collectFromOlx()]);
-    res.json({ ...tg, olx });
+    const { collectFromSites } = await import('../services/priceSites');
+    const [tg, olx, sites] = await Promise.all([collectFromChannels(), collectFromOlx(), collectFromSites()]);
+    res.json({ ...tg, olx, sites });
   } catch (err) {
     console.error("[marketPrice] yig'ish xatosi:", err);
     res.status(500).json({ error: "Yig'ib bo'lmadi" });

@@ -168,6 +168,10 @@ export function startPriceCollector(): void {
     void import('./priceOlx')
       .then((m) => m.collectFromOlx())
       .catch((e) => console.warn("[narx/olx] yig'ish xatosi:", String((e as Error)?.message || e).slice(0, 160)));
+    // Saytlar ham shu davrda aylanadi (owner 2026-10-30)
+    void import('./priceSites')
+      .then((m) => m.collectFromSites())
+      .catch((e) => console.warn("[narx/sayt] yig'ish xatosi:", String((e as Error)?.message || e).slice(0, 160)));
     collectFromChannels()
       .then((r) => {
         if (r.channels) {

@@ -68,6 +68,8 @@ export interface PriceStats {
   high: number;
   points: number;
   companies: number;
+  /** Faqat so'rayotgan firmaning o'z ma'lumotidan (boshqa manba yo'q). */
+  ownOnly?: boolean;
   region?: string;
   updatedAt: Date;
 }
@@ -88,11 +90,15 @@ function quantile(sorted: number[], q: number): number {
  * O'zbekiston bo'yicha narx xulosasi. Ma'lumot yetarli bo'lmasa — null
  * (noaniq raqam ko'rsatgandan ko'ra "ma'lumot yo'q" degan halol).
  */
-export async function lookupPrice(name: string, unit?: string, opts: { region?: string } = {}): Promise<PriceStats | null> {
+export async function lookupPrice(
+  name: string,
+  unit?: string,
+  opts: { region?: string; /** So'rayotgan firma — o'z ma'lumotini ko'rish uchun */ companyId?: string } = {},
+): Promise<PriceStats | null> {
   const key = itemKey(name);
   if (!key) return null;
   const u = normUnit(unit);
-  const ck = `${key}|${u}|${opts.region || ''}`;
+  const ck = `${key}|${u}|${opts.region || ''}|${opts.companyId || ''}`;
   const hit = cache.get(ck);
   if (hit && Date.now() - hit.at < CACHE_MS) return hit.v;
 
@@ -110,13 +116,23 @@ export async function lookupPrice(name: string, unit?: string, opts: { region?: 
     const [bestUnit, list] = [...byUnit.entries()].sort((a, b) => b[1].length - a[1].length)[0];
 
     const companies = new Set(list.map((r: any) => String(r.companyId || r._id)));
-    if (list.length >= MIN_POINTS && companies.size >= MIN_COMPANIES) {
+    // MIN_COMPANIES — MAXFIYLIK qoidasi: bitta firmaning narxi BOSHQA firmaga
+    // oshkor bo'lmasin. Lekin so'rayotgan firmaning O'ZIGA o'z ma'lumotini
+    // ko'rsatishda hech qanday maxfiylik muammosi yo'q.
+    //
+    // Owner 2026-10-30 sinovida aynan shu to'sib qo'ygandi: indeksda 418 ta
+    // narx bor edi, lekin hammasi BITTA firmaning katalogidan — shuning uchun
+    // qidiruv har doim bo'sh qaytardi va sabab ko'rinmasdi.
+    const own = opts.companyId ? String(opts.companyId) : '';
+    const onlyOwn = !!own && companies.size === 1 && companies.has(own);
+    if (list.length >= MIN_POINTS && (companies.size >= MIN_COMPANIES || onlyOwn)) {
       const prices = list.map((r: any) => Number(r.price)).filter((p) => Number.isFinite(p) && p > 0).sort((a, b) => a - b);
       if (prices.length >= MIN_POINTS) {
         out = {
           key, name: String(list[0].name || name), unit: bestUnit,
           median: median(prices), low: quantile(prices, 0.25), high: quantile(prices, 0.75),
           points: prices.length, companies: companies.size,
+          ...(onlyOwn ? { ownOnly: true } : {}),
           ...(opts.region ? { region: opts.region } : {}),
           updatedAt: new Date(Math.max(...list.map((r: any) => new Date(r.at).getTime()))),
         };

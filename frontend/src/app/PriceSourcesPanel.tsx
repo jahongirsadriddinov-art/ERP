@@ -25,10 +25,22 @@ type Status = {
   bySource: Record<string, number>;
   newestAt: string | null;
   channels: string[];
+  sites?: string[];
   needs: { minPoints: number; minCompanies: number; windowDays: number };
 };
 
 type Candidate = { channel: string; prices: number; posts: number; sample?: string; already: boolean };
+type SiteProbe = { url: string; ok: boolean; prices: number; sample?: string; error?: string };
+
+/** Kiritilgan matn sayt manzilimi yoki Telegram kanalimi — o'zi ajratadi. */
+export function looksLikeSite(v: string): boolean {
+  const s = String(v || '').trim().toLowerCase();
+  if (!s) return false;
+  // Protokolli yoki protokolsiz t.me havolasi — kanal, sayt emas
+  if (/^(https?:\/\/)?t\.me\//.test(s)) return false;
+  if (/^https?:\/\//.test(s)) return true;
+  return s.includes('.') && !s.startsWith('@');
+}
 
 const SOURCE_LABEL: Record<string, string> = {
   receipt: "Xaridlar va kataloglar",
@@ -47,6 +59,8 @@ async function api(path: string, init?: RequestInit): Promise<any> {
 export default function PriceSourcesPanel() {
   const [status, setStatus] = useState<Status | null>(null);
   const [channels, setChannels] = useState<string[]>([]);
+  const [sites, setSites] = useState<string[]>([]);
+  const [siteProbe, setSiteProbe] = useState<SiteProbe | null>(null);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState<"" | "save" | "suggest" | "collect" | "probe">("");
   const [cands, setCands] = useState<Candidate[] | null>(null);
@@ -54,7 +68,7 @@ export default function PriceSourcesPanel() {
 
   const load = useCallback(() => {
     api("/status")
-      .then((d: Status) => { setStatus(d); setChannels(d.channels || []); })
+      .then((d: Status) => { setStatus(d); setChannels(d.channels || []); setSites(d.sites || []); })
       .catch((e) => toast.error(String(e.message)));
   }, []);
 
@@ -77,7 +91,33 @@ export default function PriceSourcesPanel() {
     }
   };
 
+  const saveSites = async (next: string[]) => {
+    setBusy("save");
+    try {
+      const d = await api("/sites", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sites: next }),
+      });
+      setSites(d.sites || next);
+      toast.success("Saqlandi");
+    } catch (e: any) {
+      toast.error(String(e.message));
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const addSite = async (url: string) => {
+    const u = url.trim();
+    if (sites.some((x) => x.replace(/\/$/, "") === u.replace(/\/$/, ""))) { toast.error("Bu sayt allaqachon bor"); return; }
+    await saveSites([...sites, u]);
+    setInput("");
+  };
+
   const add = async (name: string) => {
+    // Bitta maydon ikkalasini ham qabul qiladi: @kanal yoki sayt manzili
+    if (looksLikeSite(name)) return addSite(name);
     const c = name.trim().replace(/^@/, "").replace(/^https?:\/\/t\.me\//i, "").split(/[/?#]/)[0];
     if (!/^[A-Za-z0-9_]{4,32}$/.test(c)) { toast.error("Kanal nomi noto'g'ri"); return; }
     if (channels.some((x) => x.toLowerCase() === c.toLowerCase())) { toast.error("Bu kanal allaqachon bor"); return; }
@@ -113,7 +153,20 @@ export default function PriceSourcesPanel() {
     const c = input.trim();
     if (!c) return;
     setBusy("probe");
+    setSiteProbe(null);
     try {
+      if (looksLikeSite(c)) {
+        const r: SiteProbe = await api("/sites/probe", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: c }),
+        });
+        setSiteProbe(r); setCands(null);
+        toast[r.ok && r.prices > 0 ? "success" : "error"](
+          !r.ok ? (r.error || "Sayt ochilmadi") : r.prices > 0 ? `${r.prices} ta narx topildi` : "Bu saytdan narx chiqmadi",
+        );
+        return;
+      }
       const r: Candidate = await api("/channels/probe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -134,7 +187,7 @@ export default function PriceSourcesPanel() {
     setBusy("collect");
     try {
       const d = await api("/collect", { method: "POST" });
-      toast.success(`Telegram: ${d.prices || 0} narx · OLX: ${d.olx?.prices ?? 0}`);
+      toast.success(`Telegram: ${d.prices || 0} · Saytlar: ${d.sites?.prices ?? 0} · OLX: ${d.olx?.prices ?? 0}`);
       load();
     } catch (e: any) {
       toast.error(String(e.message));
@@ -195,8 +248,10 @@ export default function PriceSourcesPanel() {
       <div className="surface rounded-xl p-4 space-y-3">
         <h3 className="text-sm font-bold">Qayerdan qidiriladi</h3>
         <p className="text-[12px] text-muted-foreground leading-relaxed">
-          Ochiq Telegram kanallari o'qiladi (t.me sahifasi orqali — akkaunt ham, kanalga a'zo bo'lish
-          ham shart emas, shuning uchun AI akkauntlariga xavf yo'q).
+          Ikki xil manba qo'shish mumkin: <b>ochiq Telegram kanali</b> (@nomi yoki t.me havolasi —
+          akkaunt ham, kanalga a'zo bo'lish ham shart emas, shuning uchun AI akkauntlariga xavf yo'q)
+          va <b>sayt manzili</b> (narxlar ro'yxati turgan sahifa). Qaysi biri ekanini maydon o'zi ajratadi.
+          Qo'shishdan oldin "Sinab ko'rish" — nechta narx chiqishi darhol ko'rinadi.
         </p>
 
         <div className="flex gap-2">
@@ -204,7 +259,7 @@ export default function PriceSourcesPanel() {
             <span className="text-muted-foreground text-sm">@</span>
             <input value={input} onChange={(e) => setInput(e.target.value)}
               data-testid="price-channel-input"
-              placeholder="kanal nomi yoki qidiruv so'zi"
+              placeholder="@kanal, sayt manzili yoki qidiruv so'zi"
               className="bg-transparent outline-none text-base w-full min-w-0" />
           </label>
           <button type="button" onClick={() => add(input)} disabled={busy !== "" || !input.trim()}
@@ -250,6 +305,37 @@ export default function PriceSourcesPanel() {
             </div>
           ))}
         </div>
+
+        <div className="space-y-1.5">
+          <p className="text-[11px] font-semibold text-muted-foreground">Ulangan saytlar ({sites.length})</p>
+          {!sites.length && <p className="text-[12px] text-muted-foreground">Hali sayt ulanmagan.</p>}
+          {sites.map((u) => (
+            <div key={u} className="flex items-center justify-between gap-2 rounded-xl border border-border px-3 py-2">
+              <a href={u} target="_blank" rel="noopener noreferrer"
+                className="text-sm font-medium truncate hover:underline min-w-0">{u.replace(/^https?:\/\//, "")}</a>
+              <button type="button" onClick={async () => {
+                if (await confirmDialog(`"${u}" olib tashlansinmi?`)) await saveSites(sites.filter((x) => x !== u));
+              }} disabled={busy !== ""} aria-label="Saytni olib tashlash"
+                className="p-1.5 rounded-lg text-destructive hover:bg-destructive/10 disabled:opacity-60 flex-shrink-0">
+                <MorphIcon icon={Trash} className="w-4 h-4" />
+              </button>
+            </div>
+          ))}
+        </div>
+
+        {siteProbe && (
+          <div className={`rounded-xl border px-3 py-2.5 ${siteProbe.ok && siteProbe.prices > 0 ? "border-green-500/30 bg-green-500/10" : "border-border bg-muted/40"}`}>
+            <p className="text-[12px] font-semibold truncate">{siteProbe.url.replace(/^https?:\/\//, "")}</p>
+            <p className="text-[11px] text-muted-foreground">
+              {!siteProbe.ok ? siteProbe.error : `${siteProbe.prices} ta narx topildi`}
+            </p>
+            {siteProbe.sample && <p className="text-[11px] text-muted-foreground truncate">Masalan: {siteProbe.sample}</p>}
+            {siteProbe.ok && siteProbe.prices > 0 && !sites.includes(siteProbe.url) && (
+              <button type="button" onClick={() => addSite(siteProbe.url)} disabled={busy !== ""}
+                className="btn btn-primary text-xs px-3 py-1 rounded-full mt-1.5">Qo'shish</button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Nomzodlar — har biri serverda sinab ko'rilgan */}

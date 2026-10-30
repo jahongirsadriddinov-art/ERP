@@ -33,13 +33,19 @@ export async function seedDevData(): Promise<void> {
   if (await Company.countDocuments()) return;   // allaqachon bor — takror yaratmaymiz
 
   const company: any = await Company.create({
-    name: 'Sinov Qurilish MChJ', region: 'Toshkent', phone: PHONE, status: 'ACTIVE',
+    name: 'Sinov Qurilish MChJ', branchId: 'BR-LOCAL-0001', region: 'Toshkent', phone: PHONE, status: 'ACTIVE',
   });
   const companyId = String(company._id);
 
+  // telegramChatId SHART: "Kodni olish" tugmasi Telegramga bog'lanmagan foydalanuvchini
+  // rad etadi. Lokal sinovda kod baribir bazadan olinadi (pastda), lekin shu maydon
+  // bo'lmasa UI birinchi qadamdayoq to'xtab qoladi. Dasturchi chat id'si bor bo'lsa
+  // o'shani qo'yamiz — shunda kod sinov botidan haqiqatan ham keladi.
   const director: any = await User.create({
     firstName: 'Sinov', lastName: 'Direktor', phone: PHONE, role: 'direktor',
     companyId, isOwner: true, language: 'uz',
+    telegramChatId: String(process.env.DEVELOPER_CHAT_ID || '1'),
+    phoneVerifiedAt: new Date(),
   });
 
   // Toshkent koordinatalari — ob-havo ogohlantirishi shu nuqtadan prognoz oladi

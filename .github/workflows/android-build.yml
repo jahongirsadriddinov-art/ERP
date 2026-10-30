@@ -301,3 +301,27 @@ jobs:
             echo "::error::Server hali ham '$LIVE' versiyasini ko'rsatyapti — reliz yozilmadi."
             exit 1
           fi
+
+  # QOROVUL (owner 2026-10-30): reliz qadami O'TKAZIB YUBORILSA, ish baribir
+  # YASHIL ko'rinardi — chunki GitHub'da "skipped" job natijani buzmaydi.
+  # Aynan shu sabab ilova uch kun eski qolib ketdi va hech kim sezmadi:
+  # tez ketma-ket push qilinganda yangi push eskisini bekor qiladi, bekor
+  # bo'lgan build'dan keyin broadcast ishlamaydi, lekin ro'yxatda ✓ turadi.
+  #
+  # Endi shunday hol QIZIL bo'ladi — ya'ni ko'rinadi va qayta ishga tushiriladi.
+  # (Bekor qilingan ishda bu job ham bekor bo'ladi; ogohlantirish kerak bo'lgan
+  # holat — build'lar o'tgan, lekin reliz chiqmagan holat.)
+  release-check:
+    needs: [build-android, build-windows, broadcast]
+    runs-on: ubuntu-latest
+    if: always() && !cancelled()
+    steps:
+      - name: Reliz chiqqanini tekshirish
+        run: |
+          echo "android=${{ needs.build-android.result }} windows=${{ needs.build-windows.result }} broadcast=${{ needs.broadcast.result }}"
+          if [ "${{ needs.broadcast.result }}" = "success" ]; then
+            echo "Reliz chiqdi."
+            exit 0
+          fi
+          echo "::error::Reliz CHIQMADI (broadcast: ${{ needs.broadcast.result }}). Ilova eski qoladi — ishni qayta ishga tushiring (Re-run jobs)."
+          exit 1

@@ -297,6 +297,12 @@ router.get('/me', async (req, res) => {
         lastName: user.lastName,
         role: user.role,
         companyId: user.companyId,
+        // Obuna faollashgandan keyin qayta kod so'ramasdan kirish uchun kerak
+        // (frontend SubscriptionBlocked → /auth/me): ilova foydalanuvchi
+        // obyektida shu maydonlarni kutadi.
+        projectIds: (user as any).projectIds || [],
+        isOwner: (user as any).isOwner || false,
+        language: (user as any).language,
       },
     });
   } catch (err) {

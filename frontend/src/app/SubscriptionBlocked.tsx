@@ -62,6 +62,11 @@ export default function SubscriptionBlocked({ info, adminHandle, onBack }: {
   // va usul tanlash menyusi ochilmasdi. Bizda har bir usulning TO'G'RIDAN-TO'G'RI
   // havolasi bor (order.providers) — shuning uchun usulni shu yerda tanlaymiz.
   const [providers, setProviders] = useState<{ code: string; name: string; url: string }[]>([]);
+  // Owner 2026-10-30: "muddat qo'shdim, lekin ko'rinmayapti — o'sha zahoti
+  // qayta login qilishga to'g'ri kelyapti". Endi ekran o'zi kuzatib turadi:
+  // obuna faollashishi bilan qayta kod so'ramasdan ichkariga kiritadi.
+  const [checking, setChecking] = useState(false);
+  const [activated, setActivated] = useState(false);
   const [sent, setSent] = useState(false);
   const [err, setErr] = useState("");
 
@@ -131,6 +136,59 @@ export default function SubscriptionBlocked({ info, adminHandle, onBack }: {
   };
 
   const current = plans.find((p) => p.key === chosen) || null;
+  /**
+   * Obuna faollashdimi? Faollashgan bo'lsa — tokenni va foydalanuvchini
+   * saqlab, sahifani yangilaymiz: ilova o'zi ichkariga kiradi, qayta kod
+   * so'ralmaydi. Bu yo'llar obuna tugaganda ham ochiq (subscriptionGate).
+   */
+  const checkActivated = useCallback(async (manual = false): Promise<boolean> => {
+    if (!token || activated) return false;
+    if (manual) setChecking(true);
+    try {
+      const auth = { Authorization: `Bearer ${token}` };
+      const s = await fetch(`${API_BASE}/api/admin/subscriptions/my`, { headers: auth }).then((r) => (r.ok ? r.json() : null));
+      if (s?.status !== "active") { if (manual) toast.error("Hali faollashmadi"); return false; }
+      const me = await fetch(`${API_BASE}/api/auth/me`, { headers: auth }).then((r) => (r.ok ? r.json() : null));
+      if (!me?.user) return false;
+      const u = {
+        id: me.user.id || me.user._id,
+        name: `${me.user.firstName || ""}${me.user.lastName ? ` ${me.user.lastName}` : ""}`.trim(),
+        phone: me.user.phone,
+        role: me.user.role,
+        projectIds: me.user.projectIds || [],
+        isOwner: me.user.isOwner || false,
+        companyId: me.user.companyId,
+        language: me.user.language,
+      };
+      try {
+        localStorage.setItem("token", token);
+        localStorage.setItem("currentUser", JSON.stringify(u));
+        sessionStorage.removeItem("erp_subBlockedInfo");
+        sessionStorage.removeItem("erp_subBlocked");
+      } catch { /* shaxsiy rejim */ }
+      setActivated(true);
+      toast.success("Obuna faollashdi — kirmoqdamiz…");
+      setTimeout(() => window.location.reload(), 900);
+      return true;
+    } catch {
+      if (manual) toast.error("Tekshirib bo'lmadi");
+      return false;
+    } finally {
+      if (manual) setChecking(false);
+    }
+  }, [token, activated]);
+
+  // Har 10 soniyada va oyna yana faollashganda tekshiriladi (admin to'lovni
+  // qabul qilib muddat qo'shishi bir necha daqiqa olishi mumkin).
+  useEffect(() => {
+    if (!token) return;
+    void checkActivated();
+    const t = setInterval(() => { void checkActivated(); }, 10_000);
+    const onFocus = () => { void checkActivated(); };
+    window.addEventListener("focus", onFocus);
+    return () => { clearInterval(t); window.removeEventListener("focus", onFocus); };
+  }, [token, checkActivated]);
+
   const ended = info.periodEnd ? new Date(info.periodEnd).toLocaleDateString("uz-UZ") : "";
   const canPay = info.canPay !== false && !!token;
 
@@ -253,6 +311,14 @@ export default function SubscriptionBlocked({ info, adminHandle, onBack }: {
             o'zingiz hech narsa yozmaysiz.
           </p>
         </>
+      )}
+
+      {!!token && !activated && (
+        <button type="button" onClick={() => { void checkActivated(true); }} disabled={checking}
+          data-testid="sub-check-now"
+          className="w-full text-sm font-semibold text-primary hover:underline py-2 disabled:opacity-60">
+          {checking ? "Tekshirilmoqda…" : "To'ladim — holatni tekshirish"}
+        </button>
       )}
 
       <button type="button" onClick={onBack} className="w-full text-sm text-muted-foreground hover:text-foreground py-2">

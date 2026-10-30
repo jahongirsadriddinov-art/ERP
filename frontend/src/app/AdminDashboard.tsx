@@ -6,7 +6,9 @@ import { CountUp } from "./components/CountUp";
 const n0 = (n: number) => String(Math.round(n));
 import { parseMoney } from "./lib/money";
 import { confirmDialog } from "./lib/confirmDialog";
-import { useState, useRef, useEffect, Suspense } from "react";
+import { useState, useRef, useEffect, Suspense, lazy } from "react";
+// Brigada reytingi — alohida bo'lak, faqat ochilganda yuklanadi
+const BrigadePanel = lazy(() => import("./BrigadePanel"));
 import Building2 from "@hugeicons/core-free-icons/Building02Icon";
 import Users from "@hugeicons/core-free-icons/UserMultipleIcon";
 import HardHat from "@hugeicons/core-free-icons/HardHatIcon";
@@ -77,6 +79,7 @@ export function AdminDashboard({ currentUser, users, projects, transfers, setUse
   const [showDocuments, setShowDocuments] = useState(false);
   const [showESign, setShowESign] = useState(false);
   const [showPayroll, setShowPayroll] = useState(false);
+  const [showBrigades, setShowBrigades] = useState(false);
   const [export1cLoading, setExport1cLoading] = useState(false);
   const handleExport1c = async () => {
     const token = localStorage.getItem("token");
@@ -198,6 +201,12 @@ export function AdminDashboard({ currentUser, users, projects, transfers, setUse
       </button>
       <button onClick={() => setShowPayroll(true)} className="flex items-center gap-1.5 text-xs border border-border rounded-lg px-3 py-1.5 hover:bg-muted active:scale-95 liquid-transition flex-shrink-0 whitespace-nowrap">
         <MorphIcon icon={Wallet} className="w-3.5 h-3.5 text-green-600" />{t('management.payroll')}
+      </button>
+      {/* Owner 2026-10-29: "brigader reytingini qo'sh" — ma'lumotnoma barcha
+          firmalar tajribasidan yig'iladi, baho rahbar tasdig'idan o'tadi. */}
+      <button onClick={() => setShowBrigades(true)} data-testid="open-brigades"
+        className="flex items-center gap-1.5 text-xs border border-border rounded-lg px-3 py-1.5 hover:bg-muted active:scale-95 liquid-transition flex-shrink-0 whitespace-nowrap">
+        <MorphIcon icon={Users} className="w-3.5 h-3.5 text-amber-500" />{t('management.brigades', { defaultValue: 'Brigadalar' })}
       </button>
     </div>
     </>)}
@@ -535,6 +544,12 @@ export function AdminDashboard({ currentUser, users, projects, transfers, setUse
         </Suspense>
       )}
       {showPayroll && <PayrollModal users={users} onClose={()=>setShowPayroll(false)}/>}
+      {showBrigades && (
+        <Suspense fallback={null}>
+          <BrigadePanel onClose={() => setShowBrigades(false)}
+            canApprove={currentUser.role === 'direktor' || currentUser.role === 'orinbosar' || !!currentUser.isOwner} />
+        </Suspense>
+      )}
     </>
   );
 }

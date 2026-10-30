@@ -280,6 +280,20 @@ async function liveChecks() {
     for (const k of ['apkUrl', 'exeUrl']) if (!d[k]) return { ok: false, note: `${k} yo'q` };
     return { note: `versiya ${d.version}` };
   }, { soft: true });
+
+  // Sayt yangilansa ham ILOVA eski qolib ketishi mumkin (APK/EXE alohida
+  // yig'iladi). Shuni aniq ko'rsatamiz: reliz versiyasidagi commit HEAD'dan
+  // necha commit orqada.
+  await check('jonli', 'ilova relizi oxirgi kod bilan', async () => {
+    const d = await getJson(`${API}/api/deploy/latest`).catch(() => null);
+    const sha = /-([0-9a-f]{7,40})$/.exec(String(d?.version || ''))?.[1];
+    if (!sha) return { skip: true, note: 'reliz versiyasida commit yo‘q' };
+    const r = await run('git', ['rev-list', '--count', `${sha}..HEAD`], ROOT, 30_000);
+    const behind = Number(String(r.out).trim());
+    if (r.code !== 0 || !Number.isFinite(behind)) return { skip: true, note: 'commit topilmadi (reliz boshqa tarmoqdanmi?)' };
+    if (behind > 0) return { ok: false, note: `ilova ${behind} commit orqada (reliz ${sha}) — APK/EXE qayta yig'ilishi kerak` };
+    return { note: `reliz HEAD bilan bir xil (${sha})` };
+  }, { soft: true });
 }
 
 // ═══════════════════════ 4. TASHQI MANBALAR ═══════════════════════

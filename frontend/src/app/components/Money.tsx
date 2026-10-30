@@ -126,7 +126,7 @@ export function PriceField({ value, onChange, className, placeholder, side = "se
           {(["UZS", "USD"] as Cur[]).map((c) => (
             <button key={c} type="button" role="radio" aria-checked={cur === c} disabled={disabled} data-testid={`cur-${c}`}
               onClick={() => { const t = formatMoneyInput(text, c); setCur(c); put(t, c); }}
-              className={`px-2 rounded-md text-xs font-bold liquid-transition ${cur === c ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"}`}>
+              className={`px-3 min-w-[44px] min-h-[40px] rounded-md text-sm font-bold liquid-transition ${cur === c ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"}`}>
               {c === "UZS" ? (isRu() ? "сум" : "so'm") : SIGN[c]}
             </button>
           ))}

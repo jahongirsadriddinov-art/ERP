@@ -162,3 +162,37 @@ export async function recordPoint(p: {
 }
 
 export type IMarketSource = 'receipt' | 'telegram' | 'olx' | 'manual';
+
+/**
+ * Indeks bo'sh bo'lsa — eski xaridlardan bir marta to'ldiradi (owner 2026-10-30:
+ * "qidiradigan umuman hech nima topolmayapti"). Sabab oddiy edi: indeks faqat YANGI
+ * xaridlardan to'lardi, bazadagi minglab eski xarid esa tegilmay yotardi va qidiruv
+ * doim bo'sh qaytardi. Endi server ishga tushganda o'zi to'ldiradi — qo'lda hech
+ * narsa qilish shart emas.
+ */
+export async function backfillIfEmpty(): Promise<number> {
+  try {
+    const MarketPriceModel = (await import('../models/MarketPrice')).default;
+    if (await MarketPriceModel.estimatedDocumentCount()) return 0;
+    const Transaction = (await import('../models/Transaction')).default;
+    const since = new Date(Date.now() - 180 * 24 * 3600_000);
+    const rows: any[] = await Transaction.find({
+      materialName: { $nin: [null, ''] }, unit: { $nin: [null, ''] }, price: { $gt: 0 },
+      createdAt: { $gte: since },
+    }).select('materialName unit price companyId createdAt').limit(20_000).lean();
+    let n = 0;
+    for (const t of rows) {
+      await recordPoint({
+        name: String(t.materialName), unit: String(t.unit), price: Number(t.price),
+        at: t.createdAt ? new Date(t.createdAt) : new Date(),
+        source: 'receipt', companyId: String(t.companyId || ''), refId: String(t._id),
+      });
+      n++;
+    }
+    if (n) console.log(`[narx] indeks to'ldirildi: ${n} ta eski xarid`);
+    return n;
+  } catch (e) {
+    console.warn("[narx] indeksni to'ldirib bo'lmadi:", String((e as Error)?.message || e).slice(0, 160));
+    return 0;
+  }
+}

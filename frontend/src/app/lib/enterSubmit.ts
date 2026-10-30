@@ -54,6 +54,9 @@ function findAction(input: HTMLElement): HTMLButtonElement | null {
   return null;
 }
 
+/** Oxirgi bosilgan tugma va vaqti — bitta Enter ikki marta ishlamasin. */
+let lastClick = { el: null as HTMLElement | null, at: 0 };
+
 export function installEnterSubmit(): void {
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter' || e.shiftKey || e.ctrlKey || e.altKey || e.metaKey) return;
@@ -67,6 +70,13 @@ export function installEnterSubmit(): void {
     if (input.closest('form')) return;          // brauzerning o'zi yuboradi
     const btn = findAction(input);
     if (!btn) return;
+    // Owner 2026-10-30: "bitta tugma ikki marta bosilib ketyapti". Enter bosib
+    // turilganda (takror hodisa) yoki hodisa ikki marta yetib kelganda ayni tugma
+    // qayta bosilib ketardi. Endi 600 ms ichida ayni tugma ikkinchi marta bosilmaydi.
+    if (e.repeat) return;
+    const now = Date.now();
+    if (lastClick.el === btn && now - lastClick.at < 600) return;
+    lastClick = { el: btn, at: now };
     e.preventDefault();
     input.blur();                               // telefonda klaviatura yopilsin
     btn.click();

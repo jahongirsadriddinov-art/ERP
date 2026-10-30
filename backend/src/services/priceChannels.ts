@@ -157,6 +157,9 @@ let timer: NodeJS.Timeout | null = null;
 
 export function startPriceCollector(): void {
   if (timer) return;
+  // Indeks bo'sh bo'lsa — avval bazadagi eski xaridlardan to'ldiriladi, aks holda
+  // qidiruv birinchi kunlarda doim bo'sh qaytadi (owner 2026-10-30).
+  void import('./marketPrice').then((m) => m.backfillIfEmpty()).catch(() => undefined);
   const run = () => {
     collectFromChannels()
       .then((r) => {

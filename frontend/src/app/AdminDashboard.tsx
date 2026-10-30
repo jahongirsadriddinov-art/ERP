@@ -65,6 +65,14 @@ export function AdminDashboard({ currentUser, users, projects, transfers, setUse
     totalExpenses: number; pendingTransfers: number; todayAttendance: number;
   } | null>(null);
   const [showEquipment, setShowEquipment] = useState(false);
+  // Owner 2026-10-30: ko'rsatkichlar va boshqaruv qatori yig'iladigan bo'ldi.
+  // Tanlov saqlanadi — har kirganda qayta yopib/ochib o'tirish kerak emas.
+  const [toolsOpen, setToolsOpen] = useState<boolean>(() => {
+    try { return localStorage.getItem('dashToolsOpen') !== '0'; } catch { return true; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem('dashToolsOpen', toolsOpen ? '1' : '0'); } catch { /* shaxsiy rejimda saqlash mumkin emas */ }
+  }, [toolsOpen]);
   const [showSafety, setShowSafety] = useState(false);
   const [showDocuments, setShowDocuments] = useState(false);
   const [showESign, setShowESign] = useState(false);
@@ -121,6 +129,17 @@ export function AdminDashboard({ currentUser, users, projects, transfers, setUse
         o'rniga GORIZONTAL SKROLL (mobil ilovalardagi filter-chip qatori
         naqshi) ishlatiladi — hech qaysi chip HECH QACHON kesilmaydi yoki
         siqilmaydi, shunchaki kerak bo'lsa yon tomonga suriladi. */}
+    {/* Owner 2026-10-30: "bu joyini ham ochib-yopiladigan qil, bitta uzun
+        jami chiqim menusiga o'xshagan menu chiqadi, ustiga bosganda ochiladi".
+        Ikkala qator (ko'rsatkichlar + boshqaruv tugmalari) bitta yig'iladigan
+        panelga olindi — asosiy ekran tozaroq bo'ladi. Tanlov eslab qolinadi. */}
+    <button type="button" onClick={() => setToolsOpen(v => !v)} aria-expanded={toolsOpen}
+      data-testid="dash-tools-toggle"
+      className="flex-shrink-0 mx-3 mt-2 mb-1 flex items-center justify-between gap-3 surface rounded-xl px-4 py-2.5 hover:bg-muted/50 liquid-transition">
+      <span className="text-sm font-semibold">{t("dashboard.toolsBar", { defaultValue: "Ko'rsatkichlar va boshqaruv" })}</span>
+      <MorphIcon icon={ChevronDown} className={`w-5 h-5 text-muted-foreground transition-transform duration-300 ${toolsOpen ? 'rotate-180' : ''}`} />
+    </button>
+    {toolsOpen && (<>
     {stats && (
       <div className="flex-shrink-0 hidden lg:flex items-center gap-2 pl-3 pr-6 pt-3 pb-1 overflow-x-auto scrollbar-hide scroll-smooth">
         {[
@@ -181,6 +200,7 @@ export function AdminDashboard({ currentUser, users, projects, transfers, setUse
         <MorphIcon icon={Wallet} className="w-3.5 h-3.5 text-green-600" />{t('management.payroll')}
       </button>
     </div>
+    </>)}
     {/* Desktop: 4-column grid */}
     <div className="hidden lg:grid lg:grid-cols-2 xl:grid-cols-4 gap-3 overflow-hidden bg-background p-3 flex-1 min-h-0">
       {/* Col 1 */}

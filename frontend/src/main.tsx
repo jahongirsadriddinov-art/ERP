@@ -65,7 +65,7 @@ import { API_BASE } from "./app/api.ts";
 import "./app/i18n";
 import "./styles/index.css";
 import { attachSoundUnlock } from "./app/sound.ts";
-import { attachAppleHaptics } from "./app/lib/haptics";
+import { attachHaptics } from "./app/lib/haptics";
 import { installTapGuard } from "./app/lib/tapGuard";
 import { isChunkError } from "./app/lib/chunkReload";
 
@@ -73,7 +73,7 @@ import { isChunkError } from "./app/lib/chunkReload";
 // kontekstni ochadi va butun sayt bo'ylab tugma/havola bosishlariga
 // markazlashtirilgan tovush qo'shadi.
 attachSoundUnlock();
-attachAppleHaptics(); // tugma ovozlari o'rniga — faqat Apple qurilmalarida yengil titrash
+attachHaptics(); // tugma bosilganda yengil titrash (Telegram/ilova/Android/iOS Safari 18+)
 installTapGuard();
 // Yangi versiyadan keyin eski bo'lak topilmasa (masalan tugma bosilganda yuklanadigan modul) — sahifa bir marta yangilanadi
 // Fonda (yashirin) qayta yuklanmaydi — iOS Telegram Mini App'da qaytganda oq ekran bo'lardi (lib/lazyRetry.ts)

@@ -205,7 +205,10 @@ pre, code, kbd, samp { font-family: ui-monospace, "JetBrains Mono", Consolas, mo
 /* ══ Pastki navigatsiya (telefon/planshet) — mavzuga mos shisha ═════════════ */
 .ios-bottom-bar {
   left: 12px; right: 12px;
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
+  /* Owner 2026-10-30: "pastda katta joy qolib ketgan". Xavfsiz chekkaga yana
+     10px qo'shilardi — iPhone'da bu 44px bo'sh joy bo'lib ko'rinardi. Endi
+     panel xavfsiz chekkaning o'zida turadi (eng kami 8px). */
+  bottom: max(env(safe-area-inset-bottom, 0px), 8px);
   border-radius: 24px;
   padding: 6px !important;
   background: color-mix(in srgb, var(--card) 84%, transparent);

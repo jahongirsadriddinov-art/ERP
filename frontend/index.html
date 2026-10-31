@@ -63,7 +63,12 @@
       <!-- Apple PWA -->
       <meta name="apple-mobile-web-app-capable" content="yes" />
       <meta name="mobile-web-app-capable" content="yes" />
-      <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+      <!-- Owner 2026-10-30: "saytni ilova qilib iOS da chiqarsam tepasida blur bor,
+           ishlatishga noqulay; boshqa saytda tepasi toza ko'rinib turibdi".
+           Sabab aynan shu meta edi: "black-translucent" ilova kontentini status bar
+           OSTIGA chiqaradi va iOS u yerga yarim shaffof qatlam chizadi. "black" bilan
+           status bar to'q va alohida turadi — kontent uning tagiga kirmaydi. -->
+      <meta name="apple-mobile-web-app-status-bar-style" content="black" />
       <meta name="apple-mobile-web-app-title" content="QurilishERP" />
       <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 

@@ -191,7 +191,14 @@ router.get('/unmet', wrap(async (req, res) => {
 router.get('/contacts/candidates', wrap(async (req, res) => {
   const { listCandidates, limits } = await import('../telegram/contactImport');
   const companyId = typeof req.query.companyId === 'string' ? req.query.companyId : undefined;
-  res.json({ users: await listCandidates(companyId ? { companyId } : {}), limits });
+  // ?all=1 — allaqachon qo'shilganlarni ham ko'rsatish (tekshirish uchun)
+  const includeDone = String(req.query.all || '') === '1';
+  const { connectedAccountIds } = await import('../telegram/accountService');
+  res.json({
+    users: await listCandidates({ ...(companyId ? { companyId } : {}), includeDone }),
+    limits,
+    accounts: await connectedAccountIds().catch(() => []),
+  });
 }));
 
 router.post('/contacts/import', wrap(async (req, res) => {

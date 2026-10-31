@@ -247,34 +247,86 @@ export async function resolveContact(companyId: string, employeeId: string, now:
  * bitta yurishda nechtasi borishini cheklaydi, aks holda akkaunt PeerFlood
  * yoki ban olishi mumkin — aynan shundan qochyapmiz.
  */
-export async function importContactNow(companyId: string, employeeId: string, now: Date = new Date()): Promise<string> {
+/** Ulangan barcha AI Telegram akkauntlari: 'platform' + hovuzdagilar. */
+export async function connectedAccountIds(): Promise<string[]> {
+  const out: string[] = [];
+  const conn: any = await getConnection();
+  if (conn && conn.status === 'connected') out.push('platform');
+  try {
+    const AiTgAccount = (await import('../../models/AiTgAccount')).default;
+    const rows: any[] = await AiTgAccount.find({ status: 'connected' }).select('_id').lean();
+    for (const r of rows) out.push(String(r._id));
+  } catch { /* hovuz bo'lmasa — faqat platforma */ }
+  return out;
+}
+
+export interface ImportOneResult {
+  /** Har bir akkaunt uchun natija: akkaunt id → holat. */
+  byAccount: Record<string, string>;
+  added: number;
+  total: number;
+}
+
+/**
+ * QO'LDA kontakt qo'shish (owner 2026-10-30: "kontaktga ulangan BARCHA
+ * akkauntlarga qo'shsin bittada — asosiysiga ham, @erpfirma ga ham").
+ *
+ * resolveContact'dan farqi: avtomatik "soatiga 3 ta" oynasi QO'LLANMAYDI —
+ * qaror odamniki. Lekin xavfsizlik butunlay olib tashlanmaydi: chaqiruvchi
+ * (contactImport) importlar orasida tanaffus qo'yadi va bitta yurishdagi
+ * sonini cheklaydi, aks holda akkaunt PeerFlood yoki ban olishi mumkin —
+ * aynan shundan qochyapmiz.
+ *
+ * Qaysi akkauntga qo'shilgani telegram.importedAccounts ga yoziladi: shu
+ * tufayli allaqachon qo'shilgan xodim ro'yxatga qayta chiqmaydi.
+ */
+export async function importContactNow(companyId: string, employeeId: string, now: Date = new Date()): Promise<ImportOneResult> {
+  const fail = (why: string): ImportOneResult => ({ byAccount: { all: why }, added: 0, total: 0 });
   await ensureContactTgUserId(companyId, employeeId);
   const ct: any = await AiEmployeeContact.findOne({ companyId, employeeId }).lean();
   const tg = ct?.telegram;
-  if (!tg?.tgUserId) return 'no_telegram';
-  if (!(await getCallConsent(companyId, employeeId, { contact: ct })).allowed) return 'no_consent';
+  if (!tg?.tgUserId) return fail('no_telegram');
+  if (!(await getCallConsent(companyId, employeeId, { contact: ct })).allowed) return fail('no_consent');
   const u: any = await User.findOne({ _id: employeeId, companyId }).select('phone').lean();
-  if (!u?.phone) return 'no_phone';
-  try {
-    const r = await callWorker('contact.resolve', {
-      employeeId, expectedTgUserId: String(tg.tgUserId), username: cleanUsername(tg.username),
-      phone: String(u.phone), allowImport: true,
-    });
-    const set: Record<string, unknown> = {};
-    switch (r.status) {
-      case 'resolved': set['telegram.resolveStatus'] = 'resolved'; set['telegram.resolvedAt'] = now; set['telegram.checkedAt'] = now; break;
-      case 'privacy_restricted': set['telegram.resolveStatus'] = 'privacy_restricted'; break;
-      case 'not_found': case 'mismatch': set['telegram.resolveStatus'] = 'not_found'; break;
-      case 'flood_wait': if (r.retryAfterSec) await setFloodWait(now.getTime() + r.retryAfterSec * 1000); break;
+  if (!u?.phone) return fail('no_phone');
+
+  const accounts = await connectedAccountIds();
+  if (!accounts.length) return fail('no_account');
+
+  const already: string[] = Array.isArray(tg.importedAccounts) ? tg.importedAccounts.map(String) : [];
+  const byAccount: Record<string, string> = {};
+  const addedTo: string[] = [];
+  let lastResolved = false;
+
+  for (const acc of accounts) {
+    if (already.includes(acc)) { byAccount[acc] = 'already'; continue; }
+    try {
+      const r = await callWorker('contact.resolve', {
+        employeeId, expectedTgUserId: String(tg.tgUserId), username: cleanUsername(tg.username),
+        phone: String(u.phone), allowImport: true,
+        ...(acc === 'platform' ? {} : { account: acc }),
+      });
+      byAccount[acc] = r.status;
+      if (r.status === 'resolved') { addedTo.push(acc); lastResolved = true; }
+      if (r.status === 'flood_wait' && r.retryAfterSec) await setFloodWait(now.getTime() + r.retryAfterSec * 1000);
+    } catch (e) {
+      if (e instanceof WorkerRpcFailure && e.code === 'flood_wait' && e.retryAfterSec) await setFloodWait(now.getTime() + e.retryAfterSec * 1000);
+      byAccount[acc] = e instanceof WorkerRpcFailure ? e.code : 'error';
     }
-    if (Object.keys(set).length) {
-      await AiEmployeeContact.updateOne({ _id: ct._id, 'telegram.tgUserId': String(tg.tgUserId) }, { $set: set });
-    }
-    return r.status;
-  } catch (e) {
-    if (e instanceof WorkerRpcFailure && e.code === 'flood_wait' && e.retryAfterSec) await setFloodWait(now.getTime() + e.retryAfterSec * 1000);
-    return e instanceof WorkerRpcFailure ? e.code : 'error';
   }
+
+  const set: Record<string, unknown> = {};
+  if (lastResolved) { set['telegram.resolveStatus'] = 'resolved'; set['telegram.resolvedAt'] = now; set['telegram.checkedAt'] = now; }
+  if (Object.keys(set).length || addedTo.length) {
+    await AiEmployeeContact.updateOne(
+      { _id: ct._id, 'telegram.tgUserId': String(tg.tgUserId) },
+      {
+        ...(Object.keys(set).length ? { $set: set } : {}),
+        ...(addedTo.length ? { $addToSet: { 'telegram.importedAccounts': { $each: addedTo } } } : {}),
+      },
+    ).catch(() => undefined);
+  }
+  return { byAccount, added: addedTo.length, total: accounts.length };
 }
 
 /** Kutilayotgan bog'lash kodlari (xeshlari) workerga yuboriladi — worker DM'dagi kodni bot bilgan tgUserId bilan solishtiradi. */

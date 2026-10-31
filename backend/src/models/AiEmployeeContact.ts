@@ -21,6 +21,12 @@ export interface IAiEmployeeContact extends Document {
     consentTokenExpiresAt?: Date;
     bindingCodeHash?: string;       // t.me/<akkaunt> ga yuboriladigan bir martalik kod (A2)
     bindingCodeExpiresAt?: Date;
+    /**
+     * Qaysi AI Telegram akkauntlarining KONTAKTIGA qo'shilgan (owner 2026-10-30).
+     * 'platform' — asosiy akkaunt (@erpfirma), qolganlari — hovuz akkaunti id'si.
+     * Shu ro'yxat tufayli allaqachon qo'shilgan xodim qayta ro'yxatga chiqmaydi.
+     */
+    importedAccounts?: string[];
   };
   optOut: { calls: boolean; reminders: boolean; all: boolean; at?: Date; via?: string };
   /** AI tanishtiruv xabarini yuborgan vaqti (ikkinchi marta yozilmaydi). */
@@ -60,6 +66,7 @@ const AiEmployeeContactSchema = new Schema<IAiEmployeeContact>({
     consentTokenExpiresAt: Date,
     bindingCodeHash: { type: String, select: false },
     bindingCodeExpiresAt: Date,
+    importedAccounts: { type: [String], default: [] },
   },
   optOut: {
     calls: { type: Boolean, default: false },

@@ -26,6 +26,9 @@ export interface ImportCandidate {
   /** Telegram'i ulanganmi (ulanmagani importdan foyda bermaydi). */
   linked: boolean;
   status: string;
+  /** Nechta ulangan akkauntga qo'shilgan (panelda ko'rsatish uchun). */
+  accounts: number;
+  accountsTotal: number;
 }
 
 export interface ImportProgress {
@@ -50,7 +53,7 @@ export function requestStop(): void {
 }
 
 /** Tanlash uchun foydalanuvchilar ro'yxati (firma bo'yicha ham filtrlanadi). */
-export async function listCandidates(opts: { companyId?: string } = {}): Promise<ImportCandidate[]> {
+export async function listCandidates(opts: { companyId?: string; includeDone?: boolean } = {}): Promise<ImportCandidate[]> {
   const AiEmployeeContact = (await import('../../models/AiEmployeeContact')).default;
   const filter: Record<string, unknown> = { isBlocked: { $ne: true }, role: { $ne: 'dasturchi' } };
   if (opts.companyId) filter.companyId = String(opts.companyId);
@@ -59,9 +62,21 @@ export async function listCandidates(opts: { companyId?: string } = {}): Promise
   const companies: any[] = await Company.find({ _id: { $in: companyIds } }).select('name').lean().catch(() => []);
   const nameOf = new Map(companies.map((c) => [String(c._id), String(c.name || '')]));
   const contacts: any[] = await AiEmployeeContact.find({ employeeId: { $in: users.map((u) => String(u._id)) } })
-    .select('employeeId telegram.tgUserId telegram.resolveStatus').lean().catch(() => []);
+    .select('employeeId telegram.tgUserId telegram.resolveStatus telegram.importedAccounts').lean().catch(() => []);
   const byEmp = new Map(contacts.map((c: any) => [String(c.employeeId), c]));
-  return users.map((u) => {
+
+  // Owner 2026-10-30: "kontaktga qo'shilgan userlar ro'yxatga chiqmasin".
+  // "Qo'shilgan" = HOZIR ulangan har bir akkauntga qo'shilgan. Yangi akkaunt
+  // ulansa — o'sha xodim yana chiqadi, chunki yangi akkauntda u hali yo'q.
+  const { connectedAccountIds } = await import('./accountService');
+  const connected = await connectedAccountIds().catch(() => [] as string[]);
+  const doneFor = (c: any): boolean => {
+    if (!connected.length) return false;
+    const have: string[] = Array.isArray(c?.telegram?.importedAccounts) ? c.telegram.importedAccounts.map(String) : [];
+    return connected.every((a) => have.includes(a));
+  };
+
+  return users.filter((u) => opts.includeDone || !doneFor(byEmp.get(String(u._id)))).map((u) => {
     const c: any = byEmp.get(String(u._id));
     return {
       id: String(u._id),
@@ -71,6 +86,9 @@ export async function listCandidates(opts: { companyId?: string } = {}): Promise
       companyName: nameOf.get(String(u.companyId || '')) || '—',
       linked: !!c?.telegram?.tgUserId,
       status: String(c?.telegram?.resolveStatus || ''),
+      // Nechta ulangan akkauntga qo'shilgan — panelda ko'rinadi
+      accounts: (Array.isArray(c?.telegram?.importedAccounts) ? c.telegram.importedAccounts.length : 0),
+      accountsTotal: connected.length,
     };
   });
 }
@@ -100,12 +118,17 @@ export async function startImport(userIds: string[]): Promise<{ started: boolean
       progress.current = name;
       let status = 'error';
       try {
-        status = await importContactNow(String(u.companyId || ''), String(u._id));
+        // Bitta chaqiruv — BARCHA ulangan akkauntlarga (platforma + hovuz)
+        const r = await importContactNow(String(u.companyId || ''), String(u._id));
+        status = r.added > 0
+          ? `${r.added}/${r.total} akkauntga qo'shildi`
+          : Object.values(r.byAccount)[0] || 'error';
+        if (r.added > 0) progress.ok++; else progress.failed++;
       } catch (e) {
         status = String((e as Error)?.message || e).slice(0, 60);
+        progress.failed++;
       }
       progress.done++;
-      if (status === 'resolved') progress.ok++; else progress.failed++;
       progress.results.push({ name, status });
       // Oxirgisidan keyin kutishning hojati yo'q
       if (i < users.length - 1 && !progress.stopRequested) {

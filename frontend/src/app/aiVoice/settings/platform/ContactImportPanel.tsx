@@ -17,7 +17,12 @@ import { toast } from "sonner";
 // Jarayon UZOQ (har biri orasida tanaffus — akkaunt bloklanmasligi uchun),
 // shuning uchun fonda ketadi va holati shu yerda ko'rinib turadi.
 
-type Cand = { id: string; name: string; role: string; companyId: string; companyName: string; linked: boolean; status: string };
+type Cand = {
+  id: string; name: string; role: string; companyId: string; companyName: string;
+  linked: boolean; status: string;
+  /** Nechta ulangan akkauntga qo'shilgan. */
+  accounts: number; accountsTotal: number;
+};
 type Progress = {
   running: boolean; total: number; done: number; ok: number; failed: number;
   startedAt: string | null; finishedAt: string | null; current: string | null;
@@ -48,6 +53,11 @@ async function api(path: string, init?: RequestInit): Promise<any> {
 export default function ContactImportPanel() {
   const [users, setUsers] = useState<Cand[]>([]);
   const [limits, setLimits] = useState<Limits>({ maxPerRun: 60, gapSeconds: 20 });
+  // Ulangan AI Telegram akkauntlari — kontakt HAMMASIGA bittada qo'shiladi
+  const [accounts, setAccounts] = useState<string[]>([]);
+  // Allaqachon qo'shilganlar odatda ro'yxatda ko'rinmaydi (owner 2026-10-30);
+  // tekshirish kerak bo'lsa shu bilan ko'rsatiladi.
+  const [showDone, setShowDone] = useState(false);
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [q, setQ] = useState("");
   const [company, setCompany] = useState("");
@@ -56,10 +66,10 @@ export default function ContactImportPanel() {
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const load = useCallback(() => {
-    api("/contacts/candidates")
-      .then((d) => { setUsers(d.users || []); if (d.limits) setLimits(d.limits); })
+    api(`/contacts/candidates${showDone ? "?all=1" : ""}`)
+      .then((d) => { setUsers(d.users || []); if (d.limits) setLimits(d.limits); setAccounts(d.accounts || []); })
       .catch((e) => toast.error(String(e.message)));
-  }, []);
+  }, [showDone]);
 
   const pollStatus = useCallback(() => {
     api("/contacts/import/status").then((p: Progress) => {
@@ -137,9 +147,16 @@ export default function ContactImportPanel() {
         <p className="text-[12px] text-muted-foreground leading-relaxed">
           Telegram notanish odamga qo'ng'iroq qilishni cheklaydi. Xodim AI akkauntining
           kontaktida bo'lsa — cheklov unga tegmaydi va qo'ng'iroq o'tadi.
+          Kontakt <b>ulangan barcha akkauntlarga bittada</b> qo'shiladi
+          {accounts.length ? ` (hozir ${accounts.length} ta)` : ""} — asosiysiga ham, qolganlariga ham.
           Bitta yurishda {limits.maxPerRun} tagacha, orasida {limits.gapSeconds} soniya tanaffus
           bilan — tez qo'shish akkauntni bloklanishga olib keladi.
         </p>
+        <label className="flex items-center gap-2 text-[12px] text-muted-foreground cursor-pointer">
+          <input type="checkbox" checked={showDone} onChange={(e) => setShowDone(e.target.checked)}
+            data-testid="contact-import-show-done" className="w-4 h-4 accent-[var(--primary)]" />
+          Allaqachon qo'shilganlarni ham ko'rsatish
+        </label>
       </div>
 
       {prog?.running && (
@@ -203,7 +220,11 @@ export default function ContactImportPanel() {
         </div>
 
         <div className="max-h-[46vh] overflow-y-auto scrollbar-hide space-y-1">
-          {!shown.length && <p className="text-[12px] text-muted-foreground">Hech kim topilmadi.</p>}
+          {!shown.length && (
+            <p className="text-[12px] text-muted-foreground">
+              {showDone ? "Hech kim topilmadi." : "Hammasi qo'shilgan — qo'shiladigan odam qolmadi."}
+            </p>
+          )}
           {shown.map((u) => (
             <label key={u.id} className={`flex items-center gap-2.5 px-3 py-2 rounded-xl border liquid-transition cursor-pointer ${
               sel.has(u.id) ? "border-primary bg-primary/10" : "border-border hover:bg-muted/50"
@@ -215,7 +236,7 @@ export default function ContactImportPanel() {
                 <span className="text-[11px] text-muted-foreground truncate block">
                   {u.companyName} · {u.role}
                   {!u.linked && " · Telegram ulanmagan"}
-                  {u.status === "resolved" && " · allaqachon kontaktda"}
+                  {u.accountsTotal > 0 && u.accounts > 0 && ` · ${u.accounts}/${u.accountsTotal} akkauntda bor`}
                 </span>
               </span>
             </label>

@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Bosh ekrandagi widget ko'rinishi (owner 2026-10-31).
+     Ranglar ilovaning o'zi bilan bir xil: to'q ko'k fon, amber urg'u.
+     Matn o'lchamlari ataylab katta — widget bir qarashda o'qilishi kerak. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/w_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="14dp"
+    android:background="@drawable/erp_widget_bg">
+
+    <TextView
+        android:id="@+id/w_company"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:textSize="12sp"
+        android:textColor="#9FB3D9"
+        android:text="QurilishERP" />
+
+    <TextView
+        android:id="@+id/w_main"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:textSize="26sp"
+        android:textStyle="bold"
+        android:textColor="#F59E0B"
+        android:text="—" />
+
+    <TextView
+        android:id="@+id/w_main_label"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:maxLines="1"
+        android:textSize="11sp"
+        android:textColor="#9FB3D9"
+        android:text="bugungi chiqim" />
+
+    <TextView
+        android:id="@+id/w_sub"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:maxLines="2"
+        android:ellipsize="end"
+        android:textSize="12sp"
+        android:textColor="#E6EDF7"
+        android:text="" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:orientation="horizontal"
+        android:weightSum="3">
+
+        <TextView
+            android:id="@+id/w_btn_checkin"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="34dp"
+            android:layout_marginEnd="6dp"
+            android:gravity="center"
+            android:maxLines="1"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:textColor="#0A162B"
+            android:background="@drawable/erp_widget_btn"
+            android:text="Davomat" />
+
+        <TextView
+            android:id="@+id/w_btn_expense"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="34dp"
+            android:layout_marginEnd="6dp"
+            android:gravity="center"
+            android:maxLines="1"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:textColor="#E6EDF7"
+            android:background="@drawable/erp_widget_btn_ghost"
+            android:text="Chiqim" />
+
+        <TextView
+            android:id="@+id/w_btn_chat"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="34dp"
+            android:gravity="center"
+            android:maxLines="1"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:textColor="#E6EDF7"
+            android:background="@drawable/erp_widget_btn_ghost"
+            android:text="Xabarlar" />
+    </LinearLayout>
+</LinearLayout>

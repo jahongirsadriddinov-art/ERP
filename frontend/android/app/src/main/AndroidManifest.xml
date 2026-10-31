@@ -44,6 +44,19 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
+
+        <!-- Bosh ekrandagi widget (owner 2026-10-31) — ErpWidgetProvider.java -->
+        <receiver
+            android:name=".ErpWidgetProvider"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/erp_widget_info" />
+        </receiver>
+
     </application>
 
     <!-- Permissions -->

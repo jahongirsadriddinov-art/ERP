@@ -47,6 +47,7 @@ import aiOpenChatRoutes from './routes/aiOpenChat';
 import aiHealthRoutes from './routes/aiHealth';
 import marketPriceRoutes from './routes/marketPrice';
 import brigadeRoutes from './routes/brigades';
+import widgetRoutes from './routes/widget';
 import botUiRoutes, { stickerImageRouter as botUiStickerRoutes } from './routes/botUi';
 import insightsRoutes from './routes/insights';
 import worklogsRoutes from './routes/worklogs';
@@ -332,6 +333,8 @@ app.use('/api/market-price',    requireAuth, marketPriceRoutes); // Narx razvedk
 // Brigada reytingi: ma'lumotnoma firmalar uchun UMUMIY (shuning uchun scoped() yo'q),
 // baho yozish va tasdiqlash esa qat'iy o'z firmasi doirasida — routes/brigades.ts.
 app.use('/api/brigades',        requireAuth, blockDeveloper, brigadeRoutes);
+// Telefon ekranidagi widget — ixcham, rolga mos ma'lumot (routes/widget.ts)
+app.use('/api/widget',          requireAuth, blockDeveloper, widgetRoutes);
 app.use('/api/bot-ui-sticker',  botUiStickerRoutes); // faqat qo'shilgan emoji paketlari rasmlari (<img> token yubormaydi)
 // publicClientRoutes — mijoz portali, ATAYLAB auth shart emas (mijoz tizim
 // foydalanuvchisi emas) — o'zining ichida taxmin qilib bo'lmaydigan token bilan himoyalangan.

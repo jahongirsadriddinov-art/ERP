@@ -1,6 +1,7 @@
 package uz.erp_firma.qurilisherp;
 
 import android.Manifest;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
@@ -35,6 +36,29 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onResume() { super.onResume(); inForeground = true; }
 
+    // Widget tugmasi bosilganda ilova shu yo'nalish bilan ochiladi. Veb ilova
+    // uni window.__erpWidgetRoute orqali o'qiydi (lib/widget.ts) va o'sha
+    // bo'limga o'tadi. Ilova allaqachon ochiq bo'lsa — onNewIntent keladi.
+    private void applyWidgetRoute(Intent intent) {
+        if (intent == null) return;
+        String route = intent.getStringExtra(ErpWidgetProvider.EXTRA_ROUTE);
+        if (route == null || route.isEmpty()) return;
+        intent.removeExtra(ErpWidgetProvider.EXTRA_ROUTE);
+        final String safe = route.replaceAll("[^a-z]", "");
+        if (safe.isEmpty() || this.bridge == null) return;
+        runOnUiThread(() -> this.bridge.getWebView().evaluateJavascript(
+                "window.__erpWidgetRoute='" + safe + "';"
+                        + "window.dispatchEvent(new CustomEvent('erp:widget-route',{detail:'" + safe + "'}));",
+                null));
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        applyWidgetRoute(intent);
+    }
+
     @Override
     public void onPause() { inForeground = false; super.onPause(); }
 
@@ -44,6 +68,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(AppUpdaterPlugin.class);
         registerPlugin(FileSaverPlugin.class);
         registerPlugin(BackgroundPlugin.class);
+        registerPlugin(WidgetPlugin.class);
         super.onCreate(savedInstanceState);
 
         // Android 13+ (API 33) — bildirishnoma ko'rsatish uchun runtime
@@ -58,6 +83,8 @@ public class MainActivity extends BridgeActivity {
                 ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.POST_NOTIFICATIONS}, NOTIFICATION_PERMISSION_REQUEST_CODE);
             }
         }
+
+        applyWidgetRoute(getIntent());
 
         this.bridge.getWebView().setWebChromeClient(new BridgeWebChromeClient(this.bridge) {
             @Override

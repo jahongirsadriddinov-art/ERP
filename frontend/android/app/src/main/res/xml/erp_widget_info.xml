@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- updatePeriodMillis: Android eng kami 30 daqiqani qabul qiladi, undan tez
+     so'raganda ham baribir 30 daqiqada bir marta yangilanadi. Darhol kerak
+     bo'lsa ilova ichidan WidgetPlugin.refreshNow() chaqiriladi. -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="250dp"
+    android:minHeight="110dp"
+    android:targetCellWidth="4"
+    android:targetCellHeight="2"
+    android:updatePeriodMillis="1800000"
+    android:initialLayout="@layout/erp_widget"
+    android:previewLayout="@layout/erp_widget"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen" />

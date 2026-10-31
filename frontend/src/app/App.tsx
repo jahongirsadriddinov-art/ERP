@@ -13,6 +13,7 @@ import { CountUp } from "./components/CountUp";
 import { useState, useRef, useEffect, useMemo, Suspense, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
 import { lazyRetry as lazy } from "./lib/lazyRetry";
+import { onWidgetRoute, takeWidgetRoute, widgetClear, widgetSetAuth } from "./lib/widget";
 import type { BlockedInfo } from "./SubscriptionBlocked";
 import SyncStatusBar from "./SyncStatusBar";
 import { useScrollMemory } from "./lib/persistentState";
@@ -2224,14 +2225,14 @@ export default function App() {
   // Obuna tugagan/rad etilgan (API 402) — sessiya yopiladi, kirish ekranida obuna holati ko'rsatiladi
   useEffect(() => {
     const onSubBlocked = () => {
-      localStorage.removeItem("currentUser"); localStorage.removeItem("token");
+      localStorage.removeItem("currentUser"); localStorage.removeItem("token"); void widgetClear();
       setCurrentUser(null); setAuthView("login");
     };
     window.addEventListener('erp:subscription-blocked', onSubBlocked);
     // Hisob o'chirilgan yoki sessiya bekor qilingan (401) — xuddi shunday chiqish, faqat kirgan bo'lsa
     const onSessionEnded = () => {
       if (!localStorage.getItem("token")) return;
-      localStorage.removeItem("currentUser"); localStorage.removeItem("token");
+      localStorage.removeItem("currentUser"); localStorage.removeItem("token"); void widgetClear();
       setCurrentUser(null); setAuthView("login");
       toast.message(tApp('profile.sessionRevokedNotice'));
     };
@@ -2259,6 +2260,19 @@ export default function App() {
   const [page, setPage] = useState<NavPage>(() => {
     return (localStorage.getItem("page") as NavPage) || "dashboard";
   });
+  // Bosh ekrandagi widget (owner 2026-10-31): kirish tokeni native tomonga
+  // beriladi (widget o'zi ma'lumot oladi) va widget tugmasi bosilganda shu
+  // yerdan kerakli bo'limga o'tiladi. Ilova bo'lmagan joyda hech narsa qilmaydi.
+  useEffect(() => {
+    const token = localStorage.getItem("token") || "";
+    if (token) void widgetSetAuth(token, localStorage.getItem("erp_companyName") || "");
+    // "attendance" alohida sahifa emas — davomat asosiy ekranda
+    const go = (r: string) => setPage((r === "attendance" ? "dashboard" : r) as NavPage);
+    const first = takeWidgetRoute();
+    if (first) go(first);
+    return onWidgetRoute(go);
+  }, []);
+
   const [selProject, setSelProject] = useState<Project|null>(null);
   const [showSend, setShowSend] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
@@ -2970,7 +2984,7 @@ export default function App() {
       // chiqariladi (backend/src/services/socket.ts kickSession).
       const onSessionRevoked = () => {
         playSound("lock");
-        localStorage.removeItem("currentUser"); localStorage.removeItem("token");
+        localStorage.removeItem("currentUser"); localStorage.removeItem("token"); void widgetClear();
         setCurrentUser(null); setAuthView("login");
         toast.message(tApp('profile.sessionRevokedNotice'));
       };
@@ -3157,7 +3171,7 @@ export default function App() {
       onCancel={() => setForgotPin(false)}
       onLogout={() => {
         setForgotPin(false); clearPin();
-        localStorage.removeItem("currentUser"); localStorage.removeItem("token");
+        localStorage.removeItem("currentUser"); localStorage.removeItem("token"); void widgetClear();
         setCurrentUser(null); setAuthView("login");
       }} />
   ) : (
@@ -3165,7 +3179,7 @@ export default function App() {
       onForgot={() => setForgotPin(true)}
       onLockedOut={() => {
         toast.error("Ko'p marta noto'g'ri PIN kiritildi — xavfsizlik uchun qayta kirishingiz kerak.");
-        localStorage.removeItem("currentUser"); localStorage.removeItem("token");
+        localStorage.removeItem("currentUser"); localStorage.removeItem("token"); void widgetClear();
         setCurrentUser(null); setAuthView("login");
       }} />
   );
@@ -3367,7 +3381,7 @@ export default function App() {
             {attendancePending ? <MorphIcon icon={Loader2} className="w-5 h-5 animate-spin" /> : <MorphIcon icon={MapPin} className="w-5 h-5" />}
             {tApp('checkinGate.checkInBtn')}
           </button>
-          <button onClick={()=>{playSound("lock");markManualLogout();localStorage.removeItem("currentUser"); localStorage.removeItem("token"); setCurrentUser(null); setAuthView("login");}}
+          <button onClick={()=>{playSound("lock");markManualLogout();localStorage.removeItem("currentUser"); localStorage.removeItem("token"); void widgetClear(); setCurrentUser(null); setAuthView("login");}}
             className="text-xs text-muted-foreground hover:text-foreground underline">{tApp('checkinGate.logout')}</button>
         </motion.div>
       </main>

@@ -47,8 +47,10 @@ const OfficeMediaHost = lazy(() => import("./aiVoice/settings/platform/office/Me
 // ─── Developer Panel ────────────────────────────────────────────────────────────
 export default function DeveloperPanel({ currentUser, onLogout, profileEl }: { currentUser: AppUser; onLogout: () => void; /** Profil tabi — sayt ko'rinishi (App.tsx beradi) */ profileEl?: ReactNode }) {
   const { t } = useTranslation();
-  const [tab, setTab] = usePersistentState<"firms" | "users" | "subscriptions" | "messages" | "plans" | "promocodes" | "announcements" | "aiVoice" | "botUi" | "server" | "backup" | "errors" | "prices" | "office" | "profile">(
-    "dev.tab", "subscriptions", oneOf(["firms", "users", "subscriptions", "messages", "plans", "promocodes", "announcements", "aiVoice", "botUi", "server", "backup", "errors", "prices", "office", "profile"]));
+  // "appBuilds" (ilova relizlari) tabi ro'yxatdan TUSHIB QOLGAN edi: tugma ishlardi,
+  // lekin refreshdan keyin `oneOf` uni rad etib "subscriptions"ga qaytarardi (2026-10-31).
+  const [tab, setTab] = usePersistentState<"firms" | "users" | "subscriptions" | "messages" | "plans" | "promocodes" | "announcements" | "aiVoice" | "botUi" | "server" | "backup" | "errors" | "prices" | "office" | "appBuilds" | "profile">(
+    "dev.tab", "subscriptions", oneOf(["firms", "users", "subscriptions", "messages", "plans", "promocodes", "announcements", "aiVoice", "botUi", "server", "backup", "errors", "prices", "office", "appBuilds", "profile"]));
   const [annReload, setAnnReload] = useState(0);
   const [companies, setCompanies] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);

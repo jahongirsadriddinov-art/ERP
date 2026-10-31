@@ -220,6 +220,46 @@ async function invariantChecks() {
     return r.code === 0 || { ok: false, note: 'taqiqlangan dialog topildi' };
   });
 
+  // Ilova ichidagi yangilanish faqat O'Z manzillarimizdan yuklaydi — bu to'g'ri.
+  // Lekin ro'yxat KODDA yozilgani uchun server ko'chganda qolib ketishi mumkin,
+  // va o'shanda hech qanday test yiqilmaydi: ilova shunchaki "URL ruxsat
+  // etilmagan" deb jim to'xtaydi. Aynan shunday bo'lgan (2026-10-31: backend
+  // Railway'ga, sayt Cloudflare'ga ko'chgach Android'da yangilanish butunlay
+  // ishlamay qolgan, Windows tomoni esa alohida tuzatilgan edi). Shu qoida
+  // jonli serverdagi HAQIQIY apkUrl/exeUrl shu ro'yxatlardan o'tadimi — tekshiradi.
+  await check('qoida', "yangilanish havolasi ilovadagi ruxsat ro'yxatidan o'tadi", async () => {
+    const d = await getJson(`${API}/api/deploy/latest`).catch(() => null);
+    if (!d || !d.apkUrl || !d.exeUrl) return { ok: false, note: 'reliz manzillari olinmadi' };
+
+    // Android: frontend/android/.../ErpHosts.java — host aniq solishtiriladi
+    const javaPath = join(FRONTEND, 'android/app/src/main/java/uz/erp_firma/qurilisherp/ErpHosts.java');
+    if (!existsSync(javaPath)) return { ok: false, note: 'ErpHosts.java topilmadi' };
+    const java = readFileSync(javaPath, 'utf8');
+    const block = /HOSTS\s*=\s*\{([\s\S]*?)\}/.exec(java);
+    if (!block) return { ok: false, note: "ErpHosts.java: HOSTS ro'yxati topilmadi" };
+    const hosts = [...block[1].matchAll(/"([^"]+)"/g)].map((m) => m[1].toLowerCase());
+    const apkHost = new URL(d.apkUrl).hostname.toLowerCase();
+    const apkPath = new URL(d.apkUrl).pathname;
+    if (!hosts.includes(apkHost)) {
+      return { ok: false, note: `APK manzili (${apkHost}) ErpHosts.java ro'yxatida yo'q — Android'da yangilanish ishlamaydi` };
+    }
+    if (!/^\/(files|uploads)\//.test(apkPath)) {
+      return { ok: false, note: `APK yo'li (${apkPath}) ruxsat etilgan yo'llardan emas (/files/ yoki /uploads/)` };
+    }
+
+    // Windows: frontend/src-tauri/src/lib.rs — to'liq prefiks ro'yxati
+    const rsPath = join(FRONTEND, 'src-tauri/src/lib.rs');
+    if (!existsSync(rsPath)) return { ok: false, note: 'src-tauri/src/lib.rs topilmadi' };
+    const rs = readFileSync(rsPath, 'utf8');
+    const rsBlock = /ALLOWED:\s*\[&str;\s*\d+\]\s*=\s*\[([\s\S]*?)\]/.exec(rs);
+    if (!rsBlock) return { ok: false, note: "lib.rs: ALLOWED ro'yxati topilmadi" };
+    const prefixes = [...rsBlock[1].matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+    if (!prefixes.some((pre) => d.exeUrl.startsWith(pre))) {
+      return { ok: false, note: `EXE manzili lib.rs ALLOWED ro'yxatidan o'tmaydi — Windows'da yangilanish ishlamaydi` };
+    }
+    return { note: `apk ${apkHost} · exe ro'yxatdan o'tdi` };
+  });
+
   await check('qoida', 'narx indeksida maxfiylik chegaralari saqlangan', () => {
     const src = readFileSync(join(BACKEND, 'src/services/marketPrice.ts'), 'utf8');
     const pts = /MIN_POINTS\s*=\s*(\d+)/.exec(src);

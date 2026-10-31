@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type KeyboardEventHandler } from "react";
 import { fetchLiveCurrencyRates, fmt, LIVE_EUR_RATE, LIVE_KAPITAL, LIVE_RATE_SOURCE, LIVE_USD_RATE, type Expense } from "../App";
 import { usePersistentState } from "../lib/persistentState";
 import { fmtNumber, formatMoneyInput, parseMoney } from "../lib/money";
@@ -100,11 +100,14 @@ export function toUzs(amount: string | number, currency: Cur, side: "buy" | "sel
 /** Narx kiritish + valyuta tanlash (owner 2026-10-26: "har qanday narx kiritadigan joyga valyuta tanlash").
  *  Tashqariga DOIM so'mdagi qiymat beriladi — shu sababli hech bir forma/serverni o'zgartirmasdan ishlaydi.
  *  Sarlavha (label) joyida qoladi: bu faqat maydonning o'zi. */
-export function PriceField({ value, onChange, className, placeholder, side = "sell", testId, autoFocus, required, disabled, wrapClassName = "" }: {
+export function PriceField({ value, onChange, className, placeholder, side = "sell", testId, autoFocus, required, disabled, wrapClassName = "", onKeyDown }: {
   value: string; onChange: (uzs: string) => void; className: string; placeholder?: string;
   side?: "buy" | "sell"; testId?: string; autoFocus?: boolean; required?: boolean; disabled?: boolean;
   /** tashqi o'ramga sinf (masalan flex qatorda kenglik) */
   wrapClassName?: string;
+  /** Klaviatura (masalan Enter bilan keyingi qator qo'shish) — ilgari berilgan bo'lsa ham
+   *  maydonga UZATILMAY tashlanardi, shuning uchun Enter ishlamasdi (2026-10-31). */
+  onKeyDown?: KeyboardEventHandler<HTMLInputElement>;
 }) {
   const [cur, setCur] = useState<Cur>("UZS");
   const [text, setText] = useState(value);
@@ -120,7 +123,7 @@ export function PriceField({ value, onChange, className, placeholder, side = "se
     <div className={wrapClassName}>
       <div className="flex gap-1.5">
         <MoneyInput autoFocus={autoFocus} required={required} disabled={disabled} value={text} currency={cur}
-          placeholder={placeholder ?? "0"} data-testid={testId} onChange={(v) => put(v, cur)}
+          placeholder={placeholder ?? "0"} data-testid={testId} onChange={(v) => put(v, cur)} onKeyDown={onKeyDown}
           className={`${className} flex-1 min-w-0 tabular-nums`} />
         <div className="flex p-0.5 rounded-lg bg-muted flex-shrink-0" role="radiogroup" aria-label="Valyuta">
           {(["UZS", "USD"] as Cur[]).map((c) => (

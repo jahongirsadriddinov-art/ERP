@@ -70,9 +70,13 @@ async fn download_update(app: tauri::AppHandle, url: String) -> Result<(), Strin
     // 2026-10-28: server Render'dan ko'chgach yangilanish havolasi erp-firma.uz/files/...
     // bo'ldi, ro'yxatda esa faqat eski Render manzili qolgani uchun ilova ichidagi
     // yangilash "URL ruxsat etilmagan" deb to'xtab qolgandi.
-    const ALLOWED: [&str; 3] = [
+    // 2026-10-31: zaxira nom (cf.erp-firma.uz) ham qo'shildi — provayder asosiy
+    // nomni to'sib qo'yganda sayt o'sha nomdan ochiladi va yangilanish havolasi
+    // ham shu nomga tushadi (Android tomoni: ErpHosts.java).
+    const ALLOWED: [&str; 4] = [
         "https://erp-firma.uz/files/",
         "https://www.erp-firma.uz/files/",
+        "https://cf.erp-firma.uz/files/",
         "https://erpfirma-backend.up.railway.app/uploads/",
     ];
     if !ALLOWED.iter().any(|p| url.starts_with(p)) {

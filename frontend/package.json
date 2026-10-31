@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "vite build",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p worker/tsconfig.json",
     "dev": "vite",
     "test": "vitest run",
     "tauri": "tauri",
@@ -44,6 +45,7 @@
     "uisfx": "^0.4.0"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261031.1",
     "@playwright/test": "^1.64.0",
     "@tailwindcss/vite": "4.1.12",
     "@tauri-apps/cli": "^2.11.4",

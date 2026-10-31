@@ -18,9 +18,9 @@ public class BackgroundPlugin extends Plugin {
     @PluginMethod
     public void start(PluginCall call) {
         String token = call.getString("token");
-        String api = call.getString("apiBase", BackgroundService.ALLOWED_API);
+        String api = call.getString("apiBase", BackgroundService.DEFAULT_API);
         if (token == null || token.isEmpty()) { call.reject("token kerak"); return; }
-        if (api == null || !api.startsWith(BackgroundService.ALLOWED_API)) { call.reject("API ruxsat etilmagan"); return; }
+        if (!ErpHosts.isOurs(api)) { call.reject("API ruxsat etilmagan"); return; }
         int interval = call.getInt("intervalSec", 60);
         boolean track = Boolean.TRUE.equals(call.getBoolean("trackLocation", false));
         try {

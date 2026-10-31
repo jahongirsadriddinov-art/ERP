@@ -14,7 +14,8 @@ const fmt = (s: number) => {
 // Telegram kabi: bir vaqtda faqat BITTA ovoz/video ijro etiladi
 const PLAY_EVT = "erp:media-play";
 const announcePlay = (el: HTMLMediaElement) => window.dispatchEvent(new CustomEvent(PLAY_EVT, { detail: el }));
-function usePauseOthers(ref: React.RefObject<HTMLMediaElement>) {
+// `RefObject<T | null>` — useRef<T>(null) aynan shu tipni qaytaradi (React 19 tiplari).
+function usePauseOthers(ref: React.RefObject<HTMLMediaElement | null>) {
   useEffect(() => {
     const on = (e: Event) => { const el = ref.current; if (el && (e as CustomEvent).detail !== el && !el.paused) el.pause(); };
     window.addEventListener(PLAY_EVT, on);

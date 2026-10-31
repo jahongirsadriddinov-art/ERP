@@ -22,8 +22,9 @@ import java.net.URL;
 // Android buni sukut ostida qilishga ruxsat bermaydi).
 @CapacitorPlugin(name = "AppUpdater")
 public class AppUpdaterPlugin extends Plugin {
-    // Faqat o'zimizning backend'dan — boshqa manzildan APK yuklab o'rnatishga yo'l yo'q.
-    private static final String ALLOWED_PREFIX = "https://qurilisherp-backend.onrender.com/uploads/";
+    // Faqat o'zimizning manzillardan — boshqa joydan APK yuklab o'rnatishga yo'l yo'q
+    // (ro'yxat ErpHosts.java'da; ilgari bu yerda bitta eski manzil qotirib yozilgani
+    // uchun yangilanish butunlay ishlamay qolgandi).
     private static final long MIN_APK_BYTES = 1_000_000L;
 
     private File apkFile() {
@@ -35,7 +36,7 @@ public class AppUpdaterPlugin extends Plugin {
     @PluginMethod
     public void download(final PluginCall call) {
         final String url = call.getString("url");
-        if (url == null || !url.startsWith(ALLOWED_PREFIX)) {
+        if (!ErpHosts.isApkUrl(url)) {
             call.reject("URL ruxsat etilmagan");
             return;
         }

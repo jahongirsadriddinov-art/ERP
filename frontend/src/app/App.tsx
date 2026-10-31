@@ -229,6 +229,13 @@ export function useModalPresenceWhen(active: boolean) {
 export type Role = "direktor" | "orinbosar" | "prorab" | "brigadir" | "ishchi" | "dasturchi";
 type NavPage = "dashboard" | "finance" | "reports" | "chat" | "profile" | "gps";
 export type ExpType = "oylik" | "material" | "jihozlar" | "transport" | "boshqa";
+// Kirim ham AYNI shu yozuvda saqlanadi (backend Transaction.type'da 'income' bor),
+// lekin u chiqim TURI emas — shuning uchun ExpType'ga qo'shilmaydi (aks holda
+// "income" chiqim kategoriyalari ro'yxatiga va diagrammasiga tushib ketardi).
+// Saqlangan yozuvning turi shu kengaytirilgan tip bilan ifodalanadi; `expense.type
+// === "income"` tekshiruvlari shuning uchun kerak (ilgari tip bo'yicha "hech qachon
+// rost emas" bo'lib turardi, 2026-10-31).
+export type ExpRecordType = ExpType | "income";
 type TStatus = "pending" | "confirmed" | "rejected";
 type EStatus = "pending" | "confirmed" | "rejected";
 
@@ -258,7 +265,7 @@ export interface Transfer {
   price?: number; // yuboruvchi kiritgan birlik narxi (so'm) — tasdiqlanganda chiqim shundan hisoblanadi
 }
 export interface Expense {
-  id: string; type: ExpType; amount: number; toUserId?: string;
+  id: string; type: ExpRecordType; amount: number; toUserId?: string;
   projectId: string; description: string; date: string;
   status: EStatus; createdById: string; confirmedById?: string;
   requiresAdminApproval?: boolean;
@@ -390,10 +397,10 @@ export const EXP_LABELS: Record<ExpType, string> = {
   oylik: "Oylik", material: "Material",
   jihozlar: "Jihozlar", transport: "Transport", boshqa: "Boshqa"
 };
-export function expLabel(t: (key: string) => string, type: ExpType): string {
+export function expLabel(t: (key: string) => string, type: ExpRecordType): string {
   // Noma'lum tur (masalan eski bot yozuvlari: 'expense') xom kalit matni bo'lib chiqmasin.
   const v = t(`finance.types.${type}`);
-  return v && !v.startsWith('finance.types.') ? v : (EXP_LABELS[type] || EXP_LABELS.boshqa);
+  return v && !v.startsWith('finance.types.') ? v : ((EXP_LABELS as Record<string, string>)[type] || EXP_LABELS.boshqa);
 }
 
 // Chat — sidebar/last-message preview label uchun (audio/rasm/video/joylashuv/

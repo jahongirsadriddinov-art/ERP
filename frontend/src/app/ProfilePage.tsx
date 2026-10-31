@@ -362,7 +362,10 @@ function SecuritySettingsCard() {
 }
 
 /** Qurilmada saqlangan vaqtinchalik ma'lumotlar (owner 2026-10-26). Kirish, PIN va mavzu saqlanadi. */
-async function clearDeviceCache(t: (k: string, d?: string) => string): Promise<void> {
+// i18next `t` — ko'p variantli (overloaded) funksiya, shuning uchun qat'iy
+// `(k: string, d?: string) => string` tipiga to'g'ri kelmaydi; bu yerda bizga
+// faqat "kalit + zaxira matn" kerak.
+async function clearDeviceCache(t: (k: string, d?: any) => string): Promise<void> {
   if (!await confirmDialog(t('profile.clearCacheAsk', "Shu qurilmadagi vaqtinchalik ma'lumotlar o'chirilsinmi? Serverdagilar qoladi."), { danger: true })) return;
   const KEEP = /^(token|currentUser|erp_pin|erp_lastActiveAt|erp_forceLocked|erp_lockTimeoutMin|erp_themeMode|erp_colorTheme|erp_profileBg|erp_font|erp_lang|i18nextLng)/;
   try { for (const k of Object.keys(localStorage)) if (!KEEP.test(k)) localStorage.removeItem(k); } catch { /* */ }
@@ -375,7 +378,7 @@ async function clearDeviceCache(t: (k: string, d?: string) => string): Promise<v
 
 export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onLogout, onUpdateUser, onCompanyNameChange, onCompanyLogoChange, onBgChange, onColorThemeChange, colorTheme, themeMode, onThemeModeChange, canEditCompany, todayAttendance, onCheckIn, onCheckOut, gpsTracking, gpsStatus, onLockNow, canBackup, backupLoading, onBackup, importLoading, onImportBackup, importFileRef, devMode }:
   { currentUser: AppUser; projects: Project[]; onUpdateAvatar: (url: string) => void; onLogout: () => void; onUpdateUser: (u: AppUser) => void; onCompanyNameChange: (name: string) => void; onCompanyLogoChange: (logo: string) => void; onBgChange: (bg: string) => void; onColorThemeChange: (id: string) => void; colorTheme: string; themeMode: "light"|"dark"|"system"; onThemeModeChange: (m: "light"|"dark"|"system") => void; canEditCompany?: boolean; todayAttendance: null | { status: string; checkIn?: string; checkOut?: string; workHours?: number }; onCheckIn: () => void; onCheckOut: () => void; gpsTracking: boolean; onLockNow: () => void; gpsStatus?: GpsStatus;
-    canBackup?: boolean; backupLoading?: boolean; onBackup?: () => void; importLoading?: boolean; onImportBackup?: (e: React.ChangeEvent<HTMLInputElement>) => void; importFileRef?: React.RefObject<HTMLInputElement>;
+    canBackup?: boolean; backupLoading?: boolean; onBackup?: () => void; importLoading?: boolean; onImportBackup?: (e: React.ChangeEvent<HTMLInputElement>) => void; importFileRef?: React.RefObject<HTMLInputElement | null>;
     /** Dasturchi paneli (owner 2026-10-23): faqat xavfsizlik va sayt ko'rinishi bo'limlari */
     devMode?: boolean; }) {
   const { t, i18n } = useTranslation();

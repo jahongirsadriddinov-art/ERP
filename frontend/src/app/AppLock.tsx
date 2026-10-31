@@ -196,7 +196,11 @@ export async function isWebAuthnAvailable(): Promise<boolean> {
   }
 }
 
-function randomBytes(n: number): Uint8Array {
+// Qaytish tipi `Uint8Array<ArrayBuffer>`: WebAuthn/DOM'dagi BufferSource aynan
+// ArrayBuffer'ga tayangan ko'rinishni talab qiladi (TS 5.7'dan Uint8Array bufer
+// turi bo'yicha generic — oddiy `Uint8Array` esa SharedArrayBuffer'ni ham o'z
+// ichiga oladi va to'g'ri kelmaydi).
+function randomBytes(n: number): Uint8Array<ArrayBuffer> {
   const arr = new Uint8Array(n);
   crypto.getRandomValues(arr);
   return arr;
@@ -204,7 +208,7 @@ function randomBytes(n: number): Uint8Array {
 function toBase64(buf: ArrayBuffer): string {
   return btoa(String.fromCharCode(...new Uint8Array(buf)));
 }
-function fromBase64(s: string): Uint8Array {
+function fromBase64(s: string): Uint8Array<ArrayBuffer> {
   return Uint8Array.from(atob(s), c => c.charCodeAt(0));
 }
 

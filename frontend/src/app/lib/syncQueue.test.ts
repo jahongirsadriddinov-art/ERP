@@ -11,7 +11,8 @@ describe('offline queue replay rules', () => {
     expect(classifyReplay(400, 1, 'Summa noto\'g\'ri')).toEqual({ action: 'failed', reason: "Server qabul qilmadi (400): Summa noto'g'ri" });
     expect(classifyReplay(403, 1).action).toBe('failed');
     expect(classifyReplay(404, 1).action).toBe('failed');
-    expect(classifyReplay(401, 1).reason).toMatch(/qayta kiring/);
+    // `reason` faqat retry/failed variantlarida bor — tipni toraytirib o'qiymiz
+    expect(classifyReplay(401, 1)).toMatchObject({ reason: expect.stringMatching(/qayta kiring/) });
   });
 
   it('network / 5xx / 409 / 429 are retried, then marked failed after MAX_ATTEMPTS — never silently dropped', () => {

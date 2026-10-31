@@ -1,0 +1,20 @@
+{
+  // Cloudflare Worker (sayt oldidagi ko'prik — wrangler.jsonc "main") ALOHIDA
+  // tekshiriladi: uning global tiplari (Request.cf, caches.default,
+  // ExecutionContext) brauzer DOM tiplari bilan BIR PROGRAMMADA to'qnashadi.
+  // Shuning uchun ildizdagi tsconfig.json'ga `worker` kirmaydi, bu esa faqat
+  // shu papkani oladi. Ikkisi ham `npm run typecheck` bilan tekshiriladi.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["@cloudflare/workers-types"],
+    "noEmit": true,
+    "strict": false,
+    "isolatedModules": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true
+  },
+  "include": ["."]
+}

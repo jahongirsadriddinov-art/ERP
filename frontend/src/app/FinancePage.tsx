@@ -261,7 +261,7 @@ export function AddExpenseModal({ currentUser, projects, allUsers, onClose, onAd
     scanAbort.current?.abort();
     const ac = new AbortController(); scanAbort.current = ac;
     try {
-      const res = await scanReceiptFile(file, { resize: resizeImageFile, fetch: (...a) => fetch(...a), url: `${API_BASE}/api/transactions/scan-receipt` }, { signal: ac.signal, onStage: setScanStage });
+      const res = await scanReceiptFile(file, { resize: resizeImageFile, fetch: (input, init) => fetch(input, init), url: `${API_BASE}/api/transactions/scan-receipt` }, { signal: ac.signal, onStage: setScanStage });
       if (!res.ok) { if (res.kind !== 'cancelled') setErr(res.message); return; }
       const d = res.data;
       const type = (["oylik", "material", "jihozlar", "transport", "boshqa"].includes(d.category) ? d.category : "material") as ExpType;

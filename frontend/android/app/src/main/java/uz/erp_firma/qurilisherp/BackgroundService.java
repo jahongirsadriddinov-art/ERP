@@ -49,7 +49,8 @@ public class BackgroundService extends Service implements LocationListener {
     static final String CH_SERVICE = "erp_bg_service";
     static final String CH_NOTIF = "erp_notifications";
     static final int ONGOING_ID = 7001;
-    static final String ALLOWED_API = "https://qurilisherp-backend.onrender.com";
+    /** Zaxira (saqlangan manzil bo'lmasa). Ruxsat tekshiruvi — ErpHosts.isOurs(). */
+    static final String DEFAULT_API = "https://erp-firma.uz";
     static volatile boolean running = false;
 
     private HandlerThread thread;
@@ -223,8 +224,8 @@ public class BackgroundService extends Service implements LocationListener {
     /** Oddiy HTTP so'rov (token bilan). 401 — tizimdan chiqilgan: xizmat to'xtaydi. */
     private String http(String method, String path, String json) {
         SharedPreferences p = prefs();
-        String token = p.getString("token", null), api = p.getString("api", ALLOWED_API);
-        if (token == null || api == null || !api.startsWith(ALLOWED_API)) return null;
+        String token = p.getString("token", null), api = p.getString("api", DEFAULT_API);
+        if (token == null || !ErpHosts.isOurs(api)) return null;
         HttpURLConnection c = null;
         try {
             c = (HttpURLConnection) new URL(api + path).openConnection();

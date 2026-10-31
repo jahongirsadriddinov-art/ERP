@@ -147,7 +147,7 @@ describe("diffPatch", () => {
     expect(Object.keys(p.attendance as object)).toEqual(["shifts"]);
     expect((p.attendance as any).shifts[0]).toMatchObject({ workStart: "07:30", callLeadMin: 15, callTime: "07:15" });
     expect(diffPatch(a, settings())).toEqual({});
-    expect(diffPatch(a, settings({ enabled: true, limits: { ...a.limits, monthlyBudgetUsd: 50 } }))).toEqual({ enabled: true, limits: { monthlyBudgetUsd: 50 } });
+    expect(diffPatch(a, settings({ enabled: true, limits: { ...a.limits!, monthlyBudgetUsd: 50 } }))).toEqual({ enabled: true, limits: { monthlyBudgetUsd: 50 } });
   });
 });
 

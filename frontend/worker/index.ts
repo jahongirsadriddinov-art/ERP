@@ -56,7 +56,21 @@ export default {
         return new Response('Method Not Allowed', { status: 405 });
       }
       // /files/<nom> → <backend>/uploads/<nom>
-      const target = `${backend}/uploads/${url.pathname.slice('/files/'.length)}${url.search}`;
+      //
+      // XAVFSIZLIK (2026-10-31): nom AVVAL tekshiriladi. Ilgari u to'g'ridan-to'g'ri
+      // target satriga qo'shilardi, `fetch()` esa manzilni qayta normallashtirar edi —
+      // `%2e%2e` ("..") yo'l bo'lagiga aylanib, so'rov `/uploads/` dan CHIQIB ketardi.
+      // Ya'ni `/files/%2e%2e/health` backend'ning `/health`iga tushardi va javob
+      // `Access-Control-Allow-Origin: *` bilan, Cloudflare chetida ochiq keshlanib
+      // qaytarilardi (jonli tekshirildi). Backend'da `/uploads/:name` — BITTA bo'lak,
+      // shuning uchun bu yerda ham aynan bitta oddiy fayl nomi qabul qilinadi.
+      const name = url.pathname.slice('/files/'.length);
+      // Faqat harf/raqam/`.`/`-`/`_` va eng kamida bitta belgi; `/`, `\`, `%` (kodlangan
+      // belgilar) va ".." butunlay yo'q.
+      if (!/^[A-Za-z0-9._-]{1,200}$/.test(name) || name.includes('..')) {
+        return new Response('Topilmadi', { status: 404 });
+      }
+      const target = `${backend}/uploads/${name}${url.search}`;
 
       const cache = caches.default;
       const cacheKey = new Request(url.toString(), { method: 'GET' });

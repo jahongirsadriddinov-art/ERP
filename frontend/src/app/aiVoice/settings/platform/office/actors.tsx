@@ -173,7 +173,9 @@ export const Agent = memo(function Agent({ agent, desk, poi, tour, crowd, select
     const s = st.current;
     const status = agent.task?.status;
     if (status === "done" && s.prevTask !== "done") {
-      const fresh = !agent.task?.finishedAt || Date.now() - Date.parse(agent.task.finishedAt) < 30_000 || (s.prevTask && s.prevTask !== "done");
+      // `s.prevTask !== "done"` yuqoridagi shartda allaqachon tekshirilgan — shu yerda
+      // takrorlanishi ortiqcha edi (doim rost). Qolgani: oldin biror holatni ko'rganmizmi.
+      const fresh = !agent.task?.finishedAt || Date.now() - Date.parse(agent.task.finishedAt) < 30_000 || !!s.prevTask;
       if (fresh) s.celebrateAt = performance.now() / 1000;
     }
     s.prevTask = status;

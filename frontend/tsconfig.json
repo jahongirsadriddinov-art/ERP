@@ -1,0 +1,49 @@
+{
+  // Frontend'da TypeScript tekshiruvi UMUMAN yo'q edi: `vite build` faqat
+  // esbuild bilan tiplarni OLIB TASHLAB yig'adi, hech narsani tekshirmaydi.
+  // Natijada import qilinmagan nom (masalan `useCallback`) yig'ilmadan
+  // muvaffaqiyatli o'tib, faqat JONLI ilovada "Can't find variable" bo'lib
+  // yiqilardi (owner xabari 2026-10-31, finance ekrani, SubscriptionBlocked).
+  //
+  // Shu config `npm run typecheck` uchun. Qat'iy (strict) rejim hozircha
+  // o'chirilgan — maqsadi mavjud kodni qayta yozish emas, balki MANA SHU
+  // sinfdagi xatoni (yo'q nom, yo'q import, xato modul yo'li) yig'ilmadan
+  // oldin tutib qolish.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023", "DOM", "DOM.Iterable", "WebWorker"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "types": ["node", "vite/client"],
+
+    "noEmit": true,
+    // main.tsx import yo'llarida ".tsx"/".ts" aniq yozilgan (Vite ruxsat beradi)
+    "allowImportingTsExtensions": true,
+    "allowJs": false,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+
+    // Hozircha yumshoq: yo'q nomlarni tutadi, lekin eski kodni buzmaydi.
+    "strict": false,
+    // strictNullChecks YOQILGAN: bu nafaqat null/undefined xatolarini tutadi,
+    // balki ayirboshlanadigan (discriminated) union'larni TO'G'RI toraytiradi —
+    // u o'chirilganda `if (!res.ok)` ichida `res.message` ko'rinmay qolardi.
+    "strictNullChecks": true,
+    "noImplicitAny": false,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+
+    // baseUrl'siz: TS 5+ da `paths` tsconfig joylashgan papkaga nisbatan hisoblanadi
+    // (baseUrl TS 7.0'da ishlashdan to'xtaydi).
+    "paths": { "@/*": ["./src/*"] }
+  },
+  // `worker` — o'z tsconfig'i bilan alohida (Cloudflare global tiplari DOM bilan
+  // to'qnashadi; worker/tsconfig.json izohiga qarang).
+  "include": ["src", "vite.config.ts", "vitest.config.ts"],
+  "exclude": ["node_modules", "dist", "e2e", "worker", "android", "ios", "src-tauri"]
+}

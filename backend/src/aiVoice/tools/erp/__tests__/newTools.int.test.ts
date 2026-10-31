@@ -209,6 +209,24 @@ describe('requestCallback', () => {
     expect(new Date(job.runAt).getTime() - Date.now()).toBeGreaterThan(50_000);
   });
 
+  it("qayta so'ralsa — faol qo'ng'iroq bo'lmasa YANGI ish yaratiladi (owner 2026-10-31)", async () => {
+    // "Bir marta qildi, keyin yana aytdim — qilmadi": so'rov 2 daqiqalik dedupe
+    // oynasiga tushib, ish umuman yaratilmasdi. Endi faol qo'ng'iroq bo'lmasa —
+    // takroriy so'rov baribir qabul qilinadi.
+    const { A } = env;
+    avail.telegram_call = true; avail.inapp_call = 'offline';
+    await AiJob.deleteMany({ type: CALLBACK_JOB });
+
+    const first: any = (await call(A.workerId, A.companyId, 'requestCallback', { channel: 'telegram' }, { channel: 'bot' })).result;
+    expect(first.status).toBe('ok');
+    expect(await AiJob.countDocuments({ type: CALLBACK_JOB })).toBe(1);
+
+    const second: any = (await call(A.workerId, A.companyId, 'requestCallback', { channel: 'telegram' }, { channel: 'bot' })).result;
+    expect(second.status).toBe('ok');
+    expect(second.message).toMatch(/qo'ng'iroq qilaman/);
+    expect(await AiJob.countDocuments({ type: CALLBACK_JOB })).toBe(2);
+  });
+
   it("Telegram roziligi yo'q, ilova ochiq — ilova orqali qo'ng'iroq, sababini aytadi", async () => {
     const { A } = env;
     avail.telegram_call = 'no_consent'; avail.inapp_call = true;

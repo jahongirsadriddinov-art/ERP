@@ -27,6 +27,8 @@ export const CALLBACK_WATCH_JOB = 'ai.callback.watch';
 const WATCH_AFTER_MS = 180_000;
 const MAX_AHEAD_MS = 7 * 24 * 3600_000;
 const START_DELAY_MS = 5_000;          // AI javobi foydalanuvchiga yetib borsin
+/** Takror so'rovni to'sish oynasi (ms) — qisqa, ataylab qayta so'rashga xalaqit qilmasin. */
+const DEDUPE_MS = 30_000;
 const IN_CALL_MIN_DELAY_MS = 45_000;    // qo'ng'iroq ichidan: avval joriy qo'ng'iroq tugasin
 const SOON_MS = 90_000;                 // shundan yaqin — "hozir" (kanal hozir mavjud bo'lishi kerak)
 const CALL_CHANNELS: ChannelName[] = ['inapp_call', 'telegram_call'];
@@ -452,18 +454,41 @@ export const requestCallback: AiToolDef<{ channel?: 'inapp' | 'telegram'; delayM
     const wantsAppWake = args.channel === 'inapp' && APP_WAKE.has(String(pre.reasons.inapp_call));
     if (soon && pre.available.length && !pre.available.includes(first) && !wantsAppWake) order = [pre.available[0], ...order.filter((c) => c !== pre.available[0])];
 
+    // Sabab bo'lmasa ham AI qo'ng'iroqda nega qo'ng'iroq qilayotganini aytadi
+    const payloadReason = (args.reason && String(args.reason).trim().slice(0, 300))
+      || L(ctx, `foydalanuvchi ${args.when ? `soat ${args.when} da` : args.delayMinutes ? `${args.delayMinutes} daqiqadan keyin` : 'keyinroq'} qayta qo'ng'iroq qilishni so'ragan`, `пользователь попросил перезвонить ${args.when ? `в ${args.when}` : args.delayMinutes ? `через ${args.delayMinutes} мин` : 'позже'}`);
     const r = await q.enqueue({
       type: CALLBACK_JOB, companyId: ctx.companyId, employeeId: ctx.userId, refId: ctx.userId,
-      payload: {
-        order, lang, userRequested: true,
-        // Sabab bo'lmasa ham AI qo'ng'iroqda nega qo'ng'iroq qilayotganini aytadi
-        reason: (args.reason && String(args.reason).trim().slice(0, 300))
-          || L(ctx, `foydalanuvchi ${args.when ? `soat ${args.when} da` : args.delayMinutes ? `${args.delayMinutes} daqiqadan keyin` : 'keyinroq'} qayta qo'ng'iroq qilishni so'ragan`, `пользователь попросил перезвонить ${args.when ? `в ${args.when}` : args.delayMinutes ? `через ${args.delayMinutes} мин` : 'позже'}`),
-      },
+      payload: { order, lang, userRequested: true, reason: payloadReason },
       runAt, maxAttempts: 6, correlationId: ctx.correlationId,
-      // Bir foydalanuvchiga 2 daqiqalik oynada bitta qo'ng'iroq (takror bosish / model takrori)
-      dedupeKey: `aicb:${ctx.userId}:${Math.floor(runAt.getTime() / 120_000)}`,
+      // Takror bosish / model takrorini to'sish uchun qisqa oyna.
+      //
+      // Owner 2026-10-31: "bir marta qildi, keyin yana aytdim — qilmadi".
+      // Oyna 2 DAQIQA edi va u sobit "chelak" bo'yicha hisoblanardi: qo'ng'iroq
+      // tugaganidan keyin ham foydalanuvchi qayta so'rasa, so'rov o'sha
+      // chelakka tushib, ish UMUMAN yaratilmasdi — AI esa "navbatda" deb
+      // javob berardi. Endi oyna 30 soniya: ikki marta bosilishini baribir
+      // to'sadi, lekin odam ataylab qayta so'raganda to'smaydi.
+      dedupeKey: `aicb:${ctx.userId}:${Math.floor(runAt.getTime() / DEDUPE_MS)}`,
     });
+
+    // KAFOLAT: "takror" deb topilgan bo'lsa ham, agar hozir FAOL qo'ng'iroq
+    // bo'lmasa — demak oldingisi allaqachon tugagan va odam ataylab qayta
+    // so'rayapti. Bunday holatda o'tkazib yuborish aynan owner shikoyat
+    // qilgan holat ("bir marta qildi, keyin qilmadi"). Yangi kalit bilan
+    // qayta navbatga qo'yamiz.
+    if (r.duplicate && !(await AiCallSession.exists({ companyId: ctx.companyId, employeeId: ctx.userId, isActive: true }).catch(() => null))) {
+      const again = await q.enqueue({
+        type: CALLBACK_JOB, companyId: ctx.companyId, employeeId: ctx.userId, refId: ctx.userId,
+        payload: { order, lang, userRequested: true, reason: payloadReason },
+        runAt, maxAttempts: 6, correlationId: ctx.correlationId,
+        dedupeKey: `aicb:${ctx.userId}:${runAt.getTime()}`,
+      });
+      if (!again.duplicate) {
+        console.log(`[aiVoice/callback] takroriy so'rov qabul qilindi id=${again.id} (faol qo'ng'iroq yo'q edi)`);
+        r.id = again.id; r.duplicate = false;
+      }
+    }
     // Navbatga tushganini logda ko'rsatamiz: "qo'ng'iroq qilaman" deyilgan, lekin ish
     // umuman yaratilmagan holatni (takror/dedupe) shusiz aniqlab bo'lmaydi.
     console.log(`[aiVoice/callback] navbatga qo'yildi id=${r.id} takror=${r.duplicate} kanal=${order.join('>')} vaqt=${runAt.toISOString()}`);

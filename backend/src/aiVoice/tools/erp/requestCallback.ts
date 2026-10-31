@@ -101,6 +101,14 @@ export function missingText(ch: ChannelName, reason: string, c: Lg): string {
   if (ch === 'telegram_call') {
     switch (reason) {
       case 'no_consent': return l("AI qo'ng'iroqlari rahbariyat tomonidan o'chirilgan", 'звонки AI отключены руководством');
+      // Owner 2026-10-31: "ko'tarsam o'chib qoldi". Telegram shu holatni
+      // "declined" deb qaytaradi — rad etilgan ham, ulanolmay uzilgan ham
+      // shunday ko'rinadi. Ataylab qayta qo'ng'iroq qilmaymiz (rostdan rad
+      // etgan bo'lsa bezor qilish bo'ladi), lekin sababini aniq aytamiz.
+      case 'declined': return l("qo'ng'iroq ulanmadi (rad etildi yoki ko'tarilgan payt uzildi) — \"telefon qil\" deb qayta aytsangiz, yana urinaman",
+        'звонок не соединился (отклонён или оборвался при ответе) — скажите «позвони» ещё раз, попробую снова');
+      case 'busy': return l("telefoningiz band edi", 'у вас было занято');
+      case 'no_answer': return l("javob bo'lmadi", 'не ответили');
       case 'not_bound': return l("ERP botiga telefon raqamingizni ulashing (shunda Telegram'ingiz ulanadi)", 'поделитесь номером телефона в ERP-боте (так подключится ваш Telegram)');
       case 'peer_limited':
       case 'import_limited':

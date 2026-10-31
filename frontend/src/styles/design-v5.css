@@ -376,3 +376,14 @@ html.privacy-cover body::after { content: ""; position: fixed; inset: 0; z-index
 .app-loader__spin { width: 30px; height: 30px; border-radius: 50%; border: 3px solid color-mix(in srgb, var(--foreground) 14%, transparent); border-top-color: var(--primary); animation: app-loader-spin 0.7s linear infinite; }
 @keyframes app-loader-spin { to { transform: rotate(360deg); } }
 @supports not (color: color-mix(in srgb, red, blue)) { .app-loader__spin { border-color: var(--border); border-top-color: var(--primary); } }
+
+/* ══ Ilova qulfi (owner 2026-10-30) ═════════════════════════════════════════
+   "PIN kodni bossam ham orqasidagi o'zgaryapti" — qulf ustida turgan bo'lsa
+   ham bosishlar orqadagi ilovaga yetib borardi.
+   Qulf qatlami <body> ga portal qilinadi (App.tsx), ya'ni #root dan TASHQARIDA.
+   Shuning uchun qulflanganda #root butunlay bosilmaydigan qilinadi — qatlamning
+   o'zi esa tashqarida bo'lgani uchun odatdagidek ishlayveradi.
+   `inert` ham qo'yiladi (klaviatura/skrinrider uchun), bu esa qo'shimcha,
+   brauzerga bog'liq bo'lmagan kafolat. */
+html.app-locked #root { pointer-events: none !important; }
+html.app-locked [data-testid="pin-lock-layer"] { pointer-events: auto !important; }

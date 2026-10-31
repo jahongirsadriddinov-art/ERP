@@ -11,6 +11,7 @@ import { PriceField } from "./components/Money";
 import { MarketPriceHint } from "./components/MarketPriceHint";
 import { CountUp } from "./components/CountUp";
 import { useState, useRef, useEffect, useMemo, Suspense, useLayoutEffect } from "react";
+import { createPortal } from "react-dom";
 import { lazyRetry as lazy } from "./lib/lazyRetry";
 import type { BlockedInfo } from "./SubscriptionBlocked";
 import SyncStatusBar from "./SyncStatusBar";
@@ -3168,10 +3169,29 @@ export default function App() {
         setCurrentUser(null); setAuthView("login");
       }} />
   );
-  const lockLayer = lockEl && (
+  // Owner 2026-10-30: "PIN vaqtida orqasida menu turardi — PIN maydonidan
+  // boshqa joyni bossam ishlayapti, orqada narsalar o'zgaryapti".
+  //
+  // Qatlam `position: fixed` edi, lekin fixed element TRANSFORM yoki FILTER
+  // qo'yilgan ota-elementga nisbatan joylashadi (CSS qoidasi) — animatsiyali
+  // o'ramlar aynan shunday qiladi. Natijada qulf butun ekranni qoplamay,
+  // chetlari ochiq qolib, orqadagi ilova bosilaverardi.
+  //
+  // Portal bu xavfni butunlay yo'q qiladi: qatlam to'g'ridan-to'g'ri <body>
+  // ichiga chiqadi, ya'ni hech qanday ota-element unga ta'sir qilolmaydi.
+  // `inert` ham o'z joyida qoladi (klaviatura bilan ham kirib bo'lmasin).
+  const lockLayer = lockEl && createPortal((
     <div className="fixed inset-0 z-[999990] overflow-y-auto bg-background" data-testid="pin-lock-layer">{lockEl}</div>
-  );
+  ), document.body);
   const inertProps = appLocked ? ({ inert: "" } as Record<string, string>) : {};
+  // #root butunlay bosilmaydigan bo'ladi (styles/design-v5.css: html.app-locked).
+  // `inert` brauzer qo'llab-quvvatlashiga bog'liq, bu esa oddiy CSS — ikkalasi
+  // birga ishlaydi va qulf ostidagi ilovaga bitta ham bosish o'tmaydi.
+  useEffect(() => {
+    const el = document.documentElement;
+    el.classList.toggle('app-locked', !!appLocked);
+    return () => el.classList.remove('app-locked');
+  }, [appLocked]);
   // Dasturchi (super-admin) — alohida panel: barcha firmalar va foydalanuvchilar
   if (liveUser.role === "dasturchi") return (
     <>

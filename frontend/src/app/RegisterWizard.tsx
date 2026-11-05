@@ -25,6 +25,30 @@ import { openExternalUrl, isNative } from "./platform";
 // "Firma ochish" bosilganda yuklanadi (asosiy bundle kichrayadi).
 type RegStep = "warn" | "tarif" | "payment" | "phone" | "bot" | "owner" | "company" | "brand" | "summary" | "done";
 
+// Clipboard'ga nusxalash — navigator.clipboard ko'pincha MAVJUD (funksiya
+// sifatida), lekin chaqirilganda RAD ETISHI mumkin (masalan sahifa hali
+// "focus"da emas — marshrut o'zgarganidan keyingi birinchi bosishda tez-tez
+// uchraydi, yoki WebView/ruxsat siyosati cheklagan) — avvalgi kod bunday
+// rad etishni jim yutib yuborardi va foydalanuvchiga HECH narsa ko'rinmasdi
+// ("copy bosilsa ham ishlamayapti"). Endi RAD ETILSA eski execCommand
+// usuliga o'tiladi, u ham ishlamasa — chaqiruvchi false qaytarib xato
+// ko'rsatadi.
+async function copyText(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard?.writeText) { await navigator.clipboard.writeText(text); return true; }
+    throw new Error("clipboard API yo'q");
+  } catch {
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.focus(); ta.select();
+      const ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+      return ok;
+    } catch { return false; }
+  }
+}
+
 // Modul darajasida (render ichida emas) — aks holda input fokusini yo'qotadi
 function RegField({ label, children, hint }: { label: string; children: any; hint?: string }) {
   return (
@@ -67,8 +91,22 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
   // — quyidagi kartalardagi narx shu yerdan (haqiqiy, jonli qiymat) olinadi.
   const [allPlans, setAllPlans] = useState<{ key: string; label: string; amount: number; days: number; features: string[]; period?: string; tier?: number }[]>([]);
   const [featureRegistry, setFeatureRegistry] = useState<{ key: string; label: string }[]>([]);
+  // Tariflar yuklanishi: avval jim xato yutib yuborilardi (har qanday
+  // tarmoq/503 xatosi "umuman tarif yo'q" bilan bir xil ko'rinardi — foydalanuvchi
+  // bo'sh ekranda qolardi, qayta urinish yo'li ham yo'q edi). Endi xato aniq
+  // ko'rsatiladi va "Qayta urinish" tugmasi bor.
+  const [plansLoading, setPlansLoading] = useState(true);
+  const [plansError, setPlansError] = useState(false);
+  const loadPlans = useRef<() => void>(() => {});
+  loadPlans.current = () => {
+    setPlansLoading(true); setPlansError(false);
+    fetch(`${API_BASE}/api/plans`)
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+      .then((list: any[]) => { setAllPlans(list); setPlansLoading(false); })
+      .catch(() => { setPlansError(true); setPlansLoading(false); });
+  };
   useEffect(() => {
-    fetch(`${API_BASE}/api/plans`).then(r => r.ok ? r.json() : []).then((list: any[]) => setAllPlans(list)).catch(() => {});
+    loadPlans.current();
     fetch(`${API_BASE}/api/plans/features`).then(r => r.ok ? r.json() : []).then((list: any[]) => setFeatureRegistry(list)).catch(() => {});
   }, []);
   const livePlans = Object.fromEntries(allPlans.map(p => [p.key, { amount: p.amount, days: p.days, label: p.label }]));
@@ -451,6 +489,21 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
 
               {/* Shu davr uchun 3 daraja (Oddiy/Standart/Premium) — narx va
                   funksiyalar admin panelidan (Dasturchi paneli → Tariflar) keladi. */}
+              {plansLoading ? (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  {[0, 1, 2].map(i => <div key={i} className="rounded-3xl border-2 border-border/50 bg-white/40 dark:bg-black/20 p-6 h-56 animate-pulse" />)}
+                </div>
+              ) : plansError || tieredPlans(planPeriod).length === 0 ? (
+                <div className="rounded-2xl border border-border/50 bg-white/40 dark:bg-black/20 p-6 text-center space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    {plansError ? t('register.plansLoadError', "Tariflarni yuklab bo'lmadi — internet yoki server vaqtincha javob bermadi.") : t('register.plansEmpty', "Bu davr uchun tarif topilmadi.")}
+                  </p>
+                  <button type="button" onClick={() => loadPlans.current()}
+                    className="inline-flex items-center gap-2 text-xs font-bold px-4 py-2.5 rounded-full bg-primary text-white active:scale-95 liquid-transition">
+                    <MorphIcon icon={Loader2} className="w-4 h-4" />{t('register.plansRetry', "Qayta urinish")}
+                  </button>
+                </div>
+              ) : (
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 {tieredPlans(planPeriod).map((plan, i) => {
                   const selected = selectedPlan === plan.key;
@@ -499,6 +552,7 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
                   );
                 })}
               </div>
+              )}
               {/* Owner 2026-10-27: "O'zim tanlayman" tarifi olib tashlandi — faqat tayyor tariflar qoladi */}
               <p className="text-xs text-center text-muted-foreground pt-1">{t('register.tarifFooter')}</p>
             </div>
@@ -631,11 +685,10 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
                 <MorphIcon icon={Send} className="w-5 h-5"  /> {t('register.goToBot')}
               </a>
               {/* Bosib to'liq /start <token> nusxalanadi (kesilmaydi) */}
-              <button type="button" onClick={() => {
-                const txt = `/start ${reg.token}`;
-                const done = () => toast.success(t('register.copySuccess'));
-                if (navigator.clipboard?.writeText) navigator.clipboard.writeText(txt).then(done).catch(()=>{});
-                else { try { const ta=document.createElement("textarea"); ta.value=txt; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta); done(); } catch {} }
+              <button type="button" onClick={async () => {
+                const ok = await copyText(`/start ${reg.token}`);
+                if (ok) toast.success(t('register.copySuccess'));
+                else toast.error(t('register.copyFailed'));
               }} className="w-full bg-white/50 dark:bg-black/20 rounded-xl p-3 border border-border/50 text-left active:scale-[0.99] transition-transform">
                 <div className="flex items-center justify-between mb-1">
                   <p className="text-[11px] text-muted-foreground">{t('register.copyHint')}</p>
@@ -836,7 +889,7 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
                       ].join('\n')}
                     </div>
                     <button
-                      onClick={() => {
+                      onClick={async () => {
                         const text = [
                           `📋 YANGI FIRMA RO'YXATI`,
                           `─────────────────────────`,
@@ -848,10 +901,9 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
                           ...(regDoneInfo.branchId ? [`🔑 ID: ${regDoneInfo.branchId}`] : []),
                           `─────────────────────────`,
                         ].join('\n');
-                        navigator.clipboard.writeText(text).then(() => {
-                          setDoneCopied(true);
-                          setTimeout(() => setDoneCopied(false), 2500);
-                        });
+                        const ok = await copyText(text);
+                        if (ok) { setDoneCopied(true); setTimeout(() => setDoneCopied(false), 2500); }
+                        else toast.error(t('register.copyFailed'));
                       }}
                       className={`absolute top-3 right-3 flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-xl transition-all ${doneCopied ? 'bg-green-500 text-white' : 'bg-white/10 text-white hover:bg-white/20'}`}>
                       {doneCopied ? <><MorphIcon icon={Check} className="w-3 h-3" />{t('register.copied')}</> : <><MorphIcon icon={Copy} className="w-3 h-3" />{t('register.copyAction2')}</>}

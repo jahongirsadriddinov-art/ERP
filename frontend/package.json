@@ -11,9 +11,13 @@
     "tauri": "tauri",
     "build:windows": "vite build && tauri build",
     "dev:windows": "tauri dev",
+    "build:mac": "vite build && tauri build --config src-tauri/tauri.macos.conf.json",
+    "dev:mac": "tauri dev --config src-tauri/tauri.macos.conf.json",
     "build:android": "vite build && cap sync android && cap open android",
+    "build:ios": "vite build && cap sync ios && cap open ios",
     "cap:sync": "cap sync",
     "cap:run:android": "cap run android",
+    "cap:run:ios": "cap run ios",
     "test:e2e": "playwright test"
   },
   "dependencies": {

@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { useTranslation } from "react-i18next";
 import { API_BASE } from "./api";
 import { compareVersions } from "./lib/version";
-import { isNative, isAndroid, isTauri, openExternalUrl } from "./platform";
+import { isNative, isAndroid, isTauri, isMac, openExternalUrl } from "./platform";
 
 type Phase = "downloading" | "ready" | "installing" | "permission" | "error";
 
@@ -34,12 +34,19 @@ export default function UpdateChecker() {
     if (!isNative()) return;
     const check = () => {
       fetch(`${API_BASE}/api/deploy/latest`).then(r => r.ok ? r.json() : null).then(d => {
-        if (!d?.available || !d.version) return;
-        const url = isAndroid() ? d.apkUrl : isTauri() ? d.exeUrl : undefined;
-        if (!url) return; // shu platforma uchun build yo'q (masalan iOS)
+        if (!d?.available) return;
+        // 2026-11-05: har bir qurilma turi ENDI ALOHIDA chiqariladi — shu
+        // sabab avval platformaga mos nested maydondan (`android`/`windows`/
+        // `macos`) o'qiladi; u yo'q bo'lsa (eski server/eski reliz) tepadagi
+        // umumiy version/apkUrl/exeUrl'ga tushiladi (moslik ko'prigi).
+        const platformData = isAndroid() ? d.android : (isTauri() && isMac()) ? d.macos : isTauri() ? d.windows : undefined;
+        const version = platformData?.version || d.version;
+        const notes = platformData?.notes ?? d.notes;
+        const url = platformData?.url || (isAndroid() ? d.apkUrl : (isTauri() && isMac()) ? d.dmgUrl : isTauri() ? d.exeUrl : undefined);
+        if (!url || !version) return; // shu platforma uchun build yo'q (masalan iOS)
         // Aynan shu versiya o'rnatilgan bo'lsa (CI build'i) — qayta taklif qilinmaydi.
-        if (d.version !== __APP_VERSION__ && compareVersions(d.version, __APP_VERSION__) >= 0) {
-          setInfo(prev => (prev?.version === d.version ? prev : { version: d.version, notes: d.notes, url }));
+        if (version !== __APP_VERSION__ && compareVersions(version, __APP_VERSION__) >= 0) {
+          setInfo(prev => (prev?.version === version ? prev : { version, notes, url }));
         }
       }).catch(() => {});
     };

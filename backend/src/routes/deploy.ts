@@ -57,13 +57,25 @@ router.get('/latest', async (_req, res) => {
       const s = viaSite(u);
       return s ? `${s}${s.includes('?') ? '&' : '?'}v=${v}` : null;
     };
+    // 2026-11-05: har bir qurilma turi endi ALOHIDA versiya/havolaga ega
+    // bo'lishi mumkin (owner: "hammasiga alohida qil"). Tepadagi
+    // version/apkUrl/exeUrl ESKI (shu o'zgarishdan oldin o'rnatilgan)
+    // ilovalar uchun ko'prik sifatida qoladi — ular bitta umumiy versiyani
+    // biladi, xolos. YANGI mijozlar (UpdateChecker.tsx) endi platformaga
+    // mos nested maydondan (`android`/`windows`/`macos`) o'qiydi.
+    const platformOut = (p?: { version: string; notes?: string; url?: string; updatedAt?: Date }) =>
+      p ? { version: p.version, notes: p.notes || '', url: withVersion(p.url), updatedAt: p.updatedAt } : null;
     res.json({
       available: true,
       version: rel.version,
       notes: rel.notes || '',
       apkUrl: withVersion(rel.apkUrl),
       exeUrl: withVersion(rel.exeUrl),
+      dmgUrl: withVersion(rel.dmgUrl),
       updatedAt: rel.updatedAt,
+      android: platformOut(rel.android),
+      windows: platformOut(rel.windows),
+      macos: platformOut(rel.macos),
     });
   } catch (err) {
     console.error('[deploy/latest]', err);
@@ -107,7 +119,8 @@ router.post('/upload-artifact', requireDeploySecret, upload.single('file'), asyn
     if (!req.file) return res.status(400).json({ error: 'file talab etiladi (multipart/form-data)' });
 
     const kind = typeof req.body?.kind === 'string' ? req.body.kind : undefined;
-    const ext = (kind === 'apk' || kind === 'exe') ? `.${kind}` : (path.extname(req.file.originalname || '') || '.bin');
+    const isKnownKind = kind === 'apk' || kind === 'exe' || kind === 'dmg';
+    const ext = isKnownKind ? `.${kind}` : (path.extname(req.file.originalname || '') || '.bin');
     const destDir = path.join(process.cwd(), 'uploads');
     if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
     // kind berilsa — O'ZGARMAS (stable) nom bilan yoziladi (har safar bir xil
@@ -115,7 +128,7 @@ router.post('/upload-artifact', requireDeploySecret, upload.single('file'), asyn
     // tugmalari shu doim-bir-xil URL'ga ishonadi, DB'da alohida "eng oxirgi
     // versiya" yozuvi saqlash shart emas. `kind` berilmasa — vaqt tamg'asi
     // bilan noyob nom.
-    const stableName = (kind === 'apk' || kind === 'exe') ? `QurilishERP-latest${ext}` : `artifact-${Date.now()}${ext}`;
+    const stableName = isKnownKind ? `QurilishERP-latest${ext}` : `artifact-${Date.now()}${ext}`;
     const destPath = path.join(destDir, stableName);
     fs.copyFileSync(req.file.path, destPath);
     fs.unlinkSync(req.file.path);
@@ -170,9 +183,9 @@ router.post('/broadcast-update', async (req, res) => {
       return res.status(401).json({ error: 'Ruxsat yo\'q' });
     }
 
-    const { version, apkUrl, exeUrl, notes } = req.body || {};
-    if (!version || (!apkUrl && !exeUrl)) {
-      return res.status(400).json({ error: 'version va kamida bitta havola (apkUrl/exeUrl) talab etiladi' });
+    const { version, apkUrl, exeUrl, dmgUrl, notes } = req.body || {};
+    if (!version || (!apkUrl && !exeUrl && !dmgUrl)) {
+      return res.status(400).json({ error: 'version va kamida bitta havola (apkUrl/exeUrl/dmgUrl) talab etiladi' });
     }
 
     const users = await User.find({
@@ -188,7 +201,7 @@ router.post('/broadcast-update', async (req, res) => {
     // ko'rsatib turadi.
     await AppBuild.findOneAndUpdate(
       { version },
-      { $set: { version, notes: notes || '', apkUrl: apkUrl || undefined, exeUrl: exeUrl || undefined } },
+      { $set: { version, notes: notes || '', apkUrl: apkUrl || undefined, exeUrl: exeUrl || undefined, dmgUrl: dmgUrl || undefined } },
       { upsert: true, setDefaultsOnInsert: true }
     ).then(() => console.log(`[broadcast-update] AppBuild saqlandi (chiqarilmagan): v${version}`))
       .catch(err => console.error('[broadcast-update] AppBuild saqlash xatosi:', err));
@@ -238,6 +251,7 @@ router.post('/broadcast-update', async (req, res) => {
     };
     let apkBuffer: Buffer | null = null; let apkFileId: string | undefined; let apkTooLarge = false;
     let exeBuffer: Buffer | null = null; let exeFileId: string | undefined; let exeTooLarge = false;
+    let dmgBuffer: Buffer | null = null; let dmgFileId: string | undefined; let dmgTooLarge = false;
     if (apkUrl) {
       try { apkBuffer = await fetchBuffer(apkUrl); }
       catch (err) { console.error('[broadcast-update] APK fetchBuffer xatosi:', (err as Error).message); apkTooLarge = true; }
@@ -246,6 +260,10 @@ router.post('/broadcast-update', async (req, res) => {
       try { exeBuffer = await fetchBuffer(exeUrl); }
       catch (err) { console.error('[broadcast-update] EXE fetchBuffer xatosi:', (err as Error).message); exeTooLarge = true; }
     }
+    if (dmgUrl) {
+      try { dmgBuffer = await fetchBuffer(dmgUrl); }
+      catch (err) { console.error('[broadcast-update] DMG fetchBuffer xatosi:', (err as Error).message); dmgTooLarge = true; }
+    }
 
     let sent = 0, failed = 0;
     for (const u of users) {
@@ -253,6 +271,7 @@ router.post('/broadcast-update', async (req, res) => {
         const buttons: any[][] = [];
         if (apkTooLarge) buttons.push([{ text: '📱 Android (APK) — havola', url: apkUrl }]);
         if (exeTooLarge) buttons.push([{ text: '💻 Windows dasturi — havola', url: exeUrl }]);
+        if (dmgTooLarge) buttons.push([{ text: '🍎 macOS dasturi — havola', url: dmgUrl }]);
         await bot.sendMessage(u.telegramChatId, introText, {
           parse_mode: 'Markdown',
           reply_markup: buttons.length ? { inline_keyboard: buttons } : undefined,
@@ -283,6 +302,19 @@ router.post('/broadcast-update', async (req, res) => {
           }
         } else if (exeUrl && exeTooLarge) {
           await bot.sendMessage(u.telegramChatId, `💻 Windows dasturi: ${exeUrl}`).catch(() => {});
+        }
+        if (dmgUrl && !dmgTooLarge && dmgBuffer) {
+          try {
+            const msg = await bot.sendDocument(u.telegramChatId, dmgFileId || dmgBuffer, {},
+              dmgFileId ? undefined : { filename: 'QurilishERP.dmg', contentType: 'application/x-apple-diskimage' });
+            if (!dmgFileId) dmgFileId = msg.document?.file_id;
+          } catch (docErr) {
+            console.error('[broadcast-update] DMG sendDocument xatosi (havolaga o\'tiladi):', (docErr as Error).message);
+            dmgTooLarge = true;
+            await bot.sendMessage(u.telegramChatId, `🍎 macOS dasturi: ${dmgUrl}`).catch(() => {});
+          }
+        } else if (dmgUrl && dmgTooLarge) {
+          await bot.sendMessage(u.telegramChatId, `🍎 macOS dasturi: ${dmgUrl}`).catch(() => {});
         }
         sent++;
       } catch (err) {

@@ -12,19 +12,28 @@ fn greet(name: &str) -> String {
 // band bo'lib qolgan bo'lsa ham yozish xatosi bermaydi).
 static UPDATE_FILE: std::sync::Mutex<Option<std::path::PathBuf>> = std::sync::Mutex::new(None);
 
+// Windows'da NSIS o'rnatuvchi (.exe), macOS'da disk tasviri (.dmg) yuklanadi —
+// qaysi platformada qurilayotganiga qarab kengaytma tanlanadi (bitta kod
+// bazasi ikkala desktop OS uchun ham ishlaydi).
+fn update_file_ext() -> &'static str {
+    if cfg!(target_os = "macos") { "dmg" } else { "exe" }
+}
+
 fn new_update_path() -> std::path::PathBuf {
     let dir = std::env::temp_dir();
+    let ext = update_file_ext();
+    let suffix = format!(".{}", ext);
     // Eski yuklamalarni tozalash (band bo'lsa — jim o'tkazib yuboriladi)
     if let Ok(entries) = std::fs::read_dir(&dir) {
         for e in entries.flatten() {
             let name = e.file_name().to_string_lossy().to_string();
-            if name.starts_with("QurilishERP-update") && name.ends_with(".exe") {
+            if name.starts_with("QurilishERP-update") && name.ends_with(&suffix) {
                 let _ = std::fs::remove_file(e.path());
             }
         }
     }
     let ts = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
-    dir.join(format!("QurilishERP-update-{}.exe", ts))
+    dir.join(format!("QurilishERP-update-{}.{}", ts, ext))
 }
 
 async fn try_download(app: &tauri::AppHandle, url: &str) -> Result<std::path::PathBuf, String> {
@@ -52,9 +61,12 @@ async fn try_download(app: &tauri::AppHandle, url: &str) -> Result<std::path::Pa
     }
     file.flush().map_err(|e| format!("Fayl: {}", e))?;
     drop(file);
+    // NSIS o'rnatuvchi (Windows) "MZ" bilan boshlanadi — .dmg (macOS) boshqa
+    // formatda (UDIF), shu sabab header tekshiruvi faqat Windows'da qattiq.
     let mut head = [0u8; 2];
     std::fs::File::open(&path).and_then(|mut f| f.read_exact(&mut head)).map_err(|e| format!("Fayl: {}", e))?;
-    if downloaded < 1_000_000 || &head != b"MZ" || (total > 0 && downloaded != total) {
+    let header_ok = cfg!(target_os = "macos") || &head == b"MZ";
+    if downloaded < 1_000_000 || !header_ok || (total > 0 && downloaded != total) {
         let _ = std::fs::remove_file(&path);
         return Err("Yuklangan fayl to'liq emas".into());
     }
@@ -99,33 +111,109 @@ async fn download_update(app: tauri::AppHandle, url: String) -> Result<(), Strin
     Err(last_err)
 }
 
-// 2-bosqich: yuklangan o'rnatuvchini "passive" rejimda (faqat progress oynasi) ishga tushiradi va
-// ilovadan chiqadi — o'rnatuvchi tugagach yangi versiyani o'zi ochadi (/UPDATE).
+// 2-bosqich: yuklangan o'rnatuvchini ishga tushiradi va ilovadan chiqadi.
+// Windows (.exe, NSIS) — "passive" rejimda o'rnatadi, tugagach ilovani o'zi qayta ochadi.
+// macOS (.dmg) — owner tanlovi (2026-11-0x, AskUserQuestion: "to'liq avtomatik"): diskni
+// o'zi ulaydi, .app'ni topib /Applications'ga (eskisini almashtirib) ko'chiradi, diskni
+// ajratadi va yangi versiyani o'zi ochadi — foydalanuvchi hech narsa qo'lda qilmaydi.
 #[tauri::command]
 fn install_update(app: tauri::AppHandle) -> Result<(), String> {
     let path = UPDATE_FILE.lock().unwrap().clone().ok_or("Yangilanish fayli topilmadi")?;
     if !path.exists() {
         return Err("Yangilanish fayli topilmadi".into());
     }
+    #[cfg(target_os = "macos")]
+    {
+        install_update_macos(&path)?;
+        app.exit(0);
+        return Ok(());
+    }
+    #[cfg(windows)]
+    {
+        install_update_windows(&path)?;
+        app.exit(0);
+        return Ok(());
+    }
+    #[cfg(not(any(target_os = "macos", windows)))]
+    {
+        let _ = &app;
+        Err("Bu platformada avtomatik o'rnatish qo'llab-quvvatlanmaydi".into())
+    }
+}
+
+#[cfg(windows)]
+fn install_update_windows(path: &std::path::Path) -> Result<(), String> {
     // /R — o'rnatish tugagach ilova avtomatik qayta ochiladi (owner 2026-10-19; Tauri NSIS: passive rejimda ishlaydi)
-    let direct = std::process::Command::new(&path).args(["/P", "/UPDATE", "/R"]).spawn();
+    let direct = std::process::Command::new(path).args(["/P", "/UPDATE", "/R"]).spawn();
     if let Err(e) = direct {
         // Masalan, administrator ruxsati (UAC) kerak bo'lsa (os error 740) — ShellExecute orqali
         // ishga tushiramiz, Windows o'zi ruxsat so'raydi.
-        #[cfg(windows)]
-        {
-            use std::os::windows::process::CommandExt;
-            const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-            std::process::Command::new("cmd")
-                .args(["/C", "start", "", &path.to_string_lossy(), "/P", "/UPDATE", "/R"])
-                .creation_flags(CREATE_NO_WINDOW)
-                .spawn()
-                .map_err(|e2| format!("{} / {}", e, e2))?;
-        }
-        #[cfg(not(windows))]
-        return Err(e.to_string());
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        std::process::Command::new("cmd")
+            .args(["/C", "start", "", &path.to_string_lossy(), "/P", "/UPDATE", "/R"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .spawn()
+            .map_err(|e2| format!("{} / {}", e, e2))?;
     }
-    app.exit(0);
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn install_update_macos(dmg_path: &std::path::Path) -> Result<(), String> {
+    use std::process::Command;
+
+    // 1) Diskni UI ko'rsatmasdan ulaymiz (-nobrowse: Finder oynasi ochilmaydi, -noautoopen: ichidagi
+    // o'rnatuvchi oynasi avtomatik ochilmaydi — biz o'zimiz boshqaramiz).
+    let attach = Command::new("hdiutil")
+        .args(["attach", "-nobrowse", "-noautoopen", &dmg_path.to_string_lossy()])
+        .output()
+        .map_err(|e| format!("hdiutil attach: {}", e))?;
+    if !attach.status.success() {
+        return Err(format!("Disk ulanmadi: {}", String::from_utf8_lossy(&attach.stderr)));
+    }
+    let attach_out = String::from_utf8_lossy(&attach.stdout);
+    let mount_point = attach_out
+        .lines()
+        .find_map(|line| line.find("/Volumes/").map(|i| line[i..].trim().to_string()))
+        .ok_or("Ulangan diskning joylashuvi topilmadi")?;
+
+    // Tozalash yordamchisi — xatolik bo'lsa ham diskni "band" qilib qoldirmaslik uchun ajratamiz.
+    let detach = |mp: &str| { let _ = Command::new("hdiutil").args(["detach", mp, "-quiet"]).status(); };
+
+    // 2) Ulangan disk ichidan .app bog'lamini topamiz.
+    let app_name = match std::fs::read_dir(&mount_point) {
+        Ok(entries) => entries.flatten().find_map(|e| {
+            let name = e.file_name().to_string_lossy().to_string();
+            if name.ends_with(".app") { Some(name) } else { None }
+        }),
+        Err(e) => { detach(&mount_point); return Err(format!("Disk o'qilmadi: {}", e)); }
+    };
+    let app_name = match app_name {
+        Some(n) => n,
+        None => { detach(&mount_point); return Err("Diskdan .app topilmadi".into()); }
+    };
+    let source = std::path::Path::new(&mount_point).join(&app_name);
+    let target = std::path::Path::new("/Applications").join(&app_name);
+
+    // 3) Eski nusxani almashtiramiz: avval eskisini o'chiramiz, so'ng yangisini ko'chiramiz
+    // (`ditto` — macOS'ning .app bog'lamlarini metama'lumoti bilan birga to'g'ri nusxalaydigan rasmiy vositasi).
+    if target.exists() {
+        if let Err(e) = std::fs::remove_dir_all(&target) {
+            detach(&mount_point);
+            return Err(format!("Eski versiyani o'chirib bo'lmadi (ruxsat kerak bo'lishi mumkin): {}", e));
+        }
+    }
+    let copy = Command::new("ditto").args([&source, &target]).status();
+    detach(&mount_point);
+    match copy {
+        Ok(s) if s.success() => {}
+        Ok(s) => return Err(format!("Nusxalash muvaffaqiyatsiz (kod {:?})", s.code())),
+        Err(e) => return Err(format!("Nusxalash: {}", e)),
+    }
+
+    // 4) Yangi versiyani ochamiz — chaqiruvchi (install_update) shundan keyin joriy jarayonni yopadi.
+    Command::new("open").arg(&target).spawn().map_err(|e| format!("Yangi versiya ochilmadi: {}", e))?;
     Ok(())
 }
 

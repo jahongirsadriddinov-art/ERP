@@ -267,6 +267,12 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
         if (stop) return;
         setBotStatus(d.step);
         if (d.step === "EXPIRED") { setError(t('register.sessionExpired')); clearReg(); setStep("phone"); return; }
+        // Owner 2026-11-06: "bitta Telegram = bitta firma" — forma to'ldirilishidan
+        // OLDIN, bot tasdiqlashi bilanoq aniqlansa, foydalanuvchi butun formani
+        // to'ldirib oxirida rad etilmaydi. reg DARHOL tozalanadi — aks holda sahifa
+        // yangilansa/qayta kirilsa shu bekor bo'lmaydigan sessiya yana "bot"
+        // qadamiga qaytarib, cheksiz tsiklga tushirardi.
+        if (d.alreadyOwner) { setError(d.error || t('register.alreadyOwner', 'Bu Telegram akkaunt allaqachon bitta firmaning egasi.')); clearReg(); setTimeout(onBack, 2200); return; }
         if (d.consentGiven) { nextStep("owner"); return; }
       } catch { /* tarmoq — keyingi urinishda */ }
     };
@@ -344,7 +350,12 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
         }),
       });
       const d = await res.json();
-      if (!res.ok) { setError(d.error || t('common.error')); setLoading(false); if (d.trialUsed) { setTrialBlocked(d.error); setEditReturn(false); setStep("tarif"); } return; }
+      if (!res.ok) {
+        setError(d.error || t('common.error')); setLoading(false);
+        if (d.trialUsed) { setTrialBlocked(d.error); setEditReturn(false); setStep("tarif"); return; }
+        if (d.alreadyOwner) { clearReg(); setTimeout(onBack, 2200); return; }
+        return;
+      }
       // Server endi JWT bermaydi — pending holatida admin tasdiqini kutamiz
       clearReg();
       setRegDoneInfo({
@@ -374,6 +385,9 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
       warn: null, tarif: "warn", payment: "tarif", phone: "payment",
       bot: "phone", owner: "bot", company: "owner", brand: "company", summary: "brand", done: null
     };
+    // Eski qadamning xato bannerini olib tashlaymiz — aks holda orqaga
+    // qaytilganda unga aloqasi yo'q xato hali ham ko'rinaverardi.
+    setError("");
     // Tahrirlash rejimida orqaga — to'g'ri xulosaga
     if (editReturn && step !== "payment" && step !== "bot") { setEditReturn(false); setStep("summary"); return; }
     const prev = map[step];

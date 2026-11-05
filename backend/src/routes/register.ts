@@ -110,10 +110,23 @@ router.get('/status', async (req, res) => {
       step = 'EXPIRED';
     }
 
+    // Owner 2026-11-06: "bitta Telegram = bitta firma" tekshiruvi avval faqat
+    // /complete'da (forma TO'LIQ to'ldirilgandan keyin) bo'lardi — foydalanuvchi
+    // hamma maydonni to'ldirib, oxirida to'satdan rad etilardi. Endi bot
+    // tasdiqlashi bilanoq (CONSENT_GIVEN) tekshiramiz, forma ko'rsatilmasdan oldin.
+    let alreadyOwner = false;
+    if (reg.telegramUserId && (step === 'CONSENT_GIVEN' || step === 'COMPLETED')) {
+      const owners = await User.find({ telegramUserId: reg.telegramUserId, isOwner: true }).select('companyId').lean();
+      for (const o of owners) {
+        if (o.companyId && (await Company.exists({ _id: o.companyId }))) { alreadyOwner = true; break; }
+      }
+    }
+
     return res.json({
       step,
       telegramConfirmed: step === 'PHONE_CONFIRMED' || step === 'CONSENT_GIVEN' || step === 'COMPLETED',
       consentGiven: step === 'CONSENT_GIVEN' || step === 'COMPLETED',
+      alreadyOwner,
       expiresAt: reg.expiresAt,
     });
   } catch (err) {
@@ -236,7 +249,7 @@ router.post('/complete', async (req, res) => {
         if (liveCompany) {
           // Owner 2026-10-28: firma NOMI aytilmaydi — raqam/akkaunt qaysi firmada
           // ekanini oshkor qilish xavfsizlikka to'g'ri kelmaydi.
-          return res.status(409).json({ error: 'Bu Telegram akkaunt allaqachon bitta firmaning egasi. Bitta akkaunt bitta firma ocha oladi.' });
+          return res.status(409).json({ error: 'Bu Telegram akkaunt allaqachon bitta firmaning egasi. Bitta akkaunt bitta firma ocha oladi.', alreadyOwner: true });
         }
         // firmasi yo'q (o'chirilgan) — eski bog'lanish olib tashlanadi, yangi firma ochishga yo'l ochiladi
         await User.updateOne({ _id: prev._id }, { $unset: { telegramUserId: 1, telegramChatId: 1 } });

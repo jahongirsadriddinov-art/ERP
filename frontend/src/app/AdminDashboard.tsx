@@ -6,7 +6,7 @@ import { CountUp } from "./components/CountUp";
 const n0 = (n: number) => String(Math.round(n));
 import { parseMoney } from "./lib/money";
 import { confirmDialog } from "./lib/confirmDialog";
-import { useState, useRef, useEffect, Suspense, lazy } from "react";
+import { useState, useRef, useEffect, useMemo, Suspense, lazy } from "react";
 // Brigada reytingi — alohida bo'lak, faqat ochilganda yuklanadi
 const BrigadePanel = lazy(() => import("./BrigadePanel"));
 import Building2 from "@hugeicons/core-free-icons/Building02Icon";
@@ -109,7 +109,46 @@ export function AdminDashboard({ currentUser, users, projects, transfers, setUse
 
   const { backupLoading, handleBackup, importFileRef, importLoading, handleImportBackup } = useBackupActions();
 
-  const brigades = [...new Set(users.filter(u => u.brigade).map(u => u.brigade!))];
+  // Pastdagi desktop (lg:grid) va mobil (lg:hidden) ko'rinishlari HAR DOIM
+  // ikkisi ham render bo'ladi (faqat CSS bilan yashiriladi, ekran kengligiga
+  // qarab) — shuning uchun users/transfers/projects bo'yicha filtrlash avval
+  // ikki marta (har bir ko'rinish uchun alohida) va ba'zan ichma-ich
+  // (.find()/.filter() boshqa .map() ichida — O(n*m)) bajarilardi. Endi bir
+  // marta hisoblanib useMemo'da saqlanadi va Map orqali O(1) qidiriladi.
+  const brigades = useMemo(() => [...new Set(users.filter(u => u.brigade).map(u => u.brigade!))], [users]);
+  const directors = useMemo(() => users.filter(u => u.role === "direktor"), [users]);
+  const viceDirectors = useMemo(() => users.filter(u => u.role === "orinbosar"), [users]);
+  const topStaff = useMemo(() => users.filter(u => ["orinbosar", "prorab"].includes(u.role)), [users]);
+  const fieldWorkers = useMemo(() => users.filter(u => u.role === "ishchi" || u.role === "brigadir"), [users]);
+  const usersById = useMemo(() => new Map(users.map(u => [u.id, u])), [users]);
+  const roleCounts = useMemo(() => {
+    const m = new Map<Role, number>();
+    for (const u of users) m.set(u.role, (m.get(u.role) || 0) + 1);
+    return m;
+  }, [users]);
+  const usersByBrigade = useMemo(() => {
+    const m = new Map<string, AppUser[]>();
+    for (const u of users) {
+      if (!u.brigade) continue;
+      const arr = m.get(u.brigade);
+      if (arr) arr.push(u); else m.set(u.brigade, [u]);
+    }
+    return m;
+  }, [users]);
+  const pendingTransfersToMe = useMemo(
+    () => transfers.filter(t => t.toUserId === currentUser.id && t.status === "pending"),
+    [transfers, currentUser.id]
+  );
+  const pendingTransferCountByProject = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const t of transfers) { if (t.status === "pending") m.set(t.projectId, (m.get(t.projectId) || 0) + 1); }
+    return m;
+  }, [transfers]);
+  const projectStatusCounts = useMemo(() => {
+    const c: Record<string, number> = { active: 0, paused: 0, completed: 0 };
+    for (const p of projects) { if (c[p.status] !== undefined) c[p.status]++; }
+    return c;
+  }, [projects]);
 
   const sections = [
     { key: "rahbariyat", label: t('dashboard.leadership'), icon: Building2, tone: "blue" as IconTone },
@@ -220,12 +259,12 @@ export function AdminDashboard({ currentUser, users, projects, transfers, setUse
           <h2 className="text-sm font-bold font-display">{t('dashboard.leadership')}</h2>
         </div>
         <div className="flex-1 overflow-y-auto p-3 scrollbar-hide">
-          {users.filter(u => u.role === "direktor").map(u => (
+          {directors.map(u => (
             <div key={u.id} className="mb-2">
               <div className="bg-primary text-white rounded-md p-3 flex items-center gap-2">
                 <Avatar user={u} size="sm"/><div><p className="text-sm font-semibold">{u.name}</p><p className="text-sm text-white/90">{roleLabel(t, u.role)}</p></div>
               </div>
-              {users.filter(u2 => u2.role === "orinbosar").map(u2 => (
+              {viceDirectors.map(u2 => (
                 <div key={u2.id} className="ml-4 mt-2 border-l-2 border-dashed border-primary/30 pl-3">
                   <div className="bg-secondary rounded-md p-3 flex items-center gap-2">
                     <Avatar user={u2} size="sm"/><div><p className="text-sm font-semibold">{u2.name}</p><p className="text-sm text-muted-foreground">{roleLabel(t, u2.role)}</p><p className="text-sm text-muted-foreground font-mono">{u2.phone}</p></div>
@@ -242,7 +281,7 @@ export function AdminDashboard({ currentUser, users, projects, transfers, setUse
             {(["direktor","orinbosar","prorab","brigadir","ishchi"] as Role[]).map(r => (
               <div key={r} className="flex items-center justify-between py-1">
                 <span className="text-sm text-muted-foreground">{roleLabel(t, r)}</span>
-                <span className="text-sm font-mono font-semibold">{users.filter(u=>u.role===r).length}</span>
+                <span className="text-sm font-mono font-semibold">{roleCounts.get(r) || 0}</span>
               </div>
             ))}
           </div>
@@ -257,7 +296,7 @@ export function AdminDashboard({ currentUser, users, projects, transfers, setUse
           <button onClick={() => setShowAddUser(true)} className="text-sm bg-primary/10 text-primary px-2 py-1 rounded hover:bg-primary/20 font-semibold flex items-center gap-1"><MorphIcon icon={UserPlus} className="w-2.5 h-2.5" />{t('common.add')}</button>
         </div>
         <div className="flex-1 overflow-y-auto scrollbar-hide divide-y divide-border/50">
-          {users.filter(u => ["orinbosar","prorab"].includes(u.role)).map(u => (
+          {topStaff.map(u => (
             <div key={u.id} className="flex items-center gap-2.5 py-2 px-3 hover:bg-muted/40 transition-colors group">
               <Avatar user={u} size="sm"/>
               <div className="flex-1 min-w-0"><p className="text-sm font-semibold truncate">{u.name}</p><p className="text-sm text-muted-foreground font-mono">{u.phone}</p>{u.brigade&&<p className="text-[9px] text-muted-foreground">{u.brigade}</p>}</div>
@@ -283,9 +322,9 @@ export function AdminDashboard({ currentUser, users, projects, transfers, setUse
             <div key={brigade} className="mb-3">
               <div className="flex items-center justify-between px-3 py-1.5 bg-secondary rounded-md mb-1">
                 <span className="text-[11px] font-semibold text-secondary-foreground">{brigade}</span>
-                <span className="text-sm text-muted-foreground">{t('dashboard.peopleCount', { count: users.filter(u=>u.brigade===brigade).length })}</span>
+                <span className="text-sm text-muted-foreground">{t('dashboard.peopleCount', { count: usersByBrigade.get(brigade)?.length || 0 })}</span>
               </div>
-              {users.filter(u => u.brigade===brigade).map(m => (
+              {(usersByBrigade.get(brigade) || []).map(m => (
                 <div key={m.id} className="flex items-center gap-2 py-1.5 px-3 hover:bg-muted/40 rounded transition-colors group">
                   <Avatar user={m} size="sm"/>
                   <div className="flex-1 min-w-0"><p className="text-sm text-foreground truncate">{m.name}</p></div>
@@ -298,17 +337,17 @@ export function AdminDashboard({ currentUser, users, projects, transfers, setUse
               ))}
             </div>
           ))}
-          {transfers.filter(t=>t.toUserId===currentUser.id&&t.status==="pending").length > 0 && (
+          {pendingTransfersToMe.length > 0 && (
             <div className="mt-3 pt-3 border-t border-border">
               <p className="text-sm font-semibold text-amber-800 dark:text-amber-400 uppercase mb-2 flex items-center gap-1"><MorphIcon icon={Package} className="w-2.5 h-2.5" />{t('dashboard.incomingShort')}</p>
-              {transfers.filter(t=>t.toUserId===currentUser.id&&t.status==="pending").map(t => (
+              {pendingTransfersToMe.map(t => (
                 <TransferRow key={t.id} t={t} currentUser={currentUser} allUsers={users} projects={projects} onConfirm={onConfirmTransfer} onReject={onRejectTransfer}/>
               ))}
             </div>
           )}
           <div className="mt-3 pt-3 border-t border-border">
             <p className="text-sm font-semibold text-muted-foreground uppercase mb-2">{t('dashboard.allWorkers')}</p>
-            {users.filter(u => u.role==="ishchi" || u.role==="brigadir").map(m => (
+            {fieldWorkers.map(m => (
               <div key={m.id} className="flex items-center gap-2 py-1.5 px-3 hover:bg-muted/40 rounded transition-colors group mb-1">
                 <Avatar user={m} size="sm"/>
                 <div className="flex-1 min-w-0"><p className="text-sm text-foreground truncate">{m.name}</p></div>
@@ -334,14 +373,14 @@ export function AdminDashboard({ currentUser, users, projects, transfers, setUse
           <div className="grid grid-cols-3 gap-1.5 mb-3">
             {[["active",t('dashboard.statusActive'),"text-green-800 dark:text-green-400"],["paused",t('dashboard.statusPausedShort'),"text-amber-500"],["completed",t('dashboard.statusCompleted'),"text-blue-500"]].map(([s,l,c])=>(
               <div key={s} className="bg-muted/40 rounded-lg p-2 text-center">
-                <p className={`text-sm font-bold font-mono ${c}`}>{projects.filter(p=>p.status===s).length}</p>
+                <p className={`text-sm font-bold font-mono ${c}`}>{projectStatusCounts[String(s)] || 0}</p>
                 <p className="text-[9px] text-muted-foreground">{l}</p>
               </div>
             ))}
           </div>
           {projects.map(p => {
-            const pend = transfers.filter(t=>t.projectId===p.id&&t.status==="pending").length;
-            const foreman = users.find(u=>u.id===p.foremanId);
+            const pend = pendingTransferCountByProject.get(p.id) || 0;
+            const foreman = usersById.get(p.foremanId);
             return (
               <div key={p.id} onClick={()=>onSelectProject(p)} className="surface rounded-xl p-3 cursor-pointer hover:border-primary/40 liquid-transition group mb-2">
                 <div className="flex items-start justify-between gap-1">
@@ -388,13 +427,13 @@ export function AdminDashboard({ currentUser, users, projects, transfers, setUse
               <div className="animate-slide-up-fade">
                 {section.key === "rahbariyat" && (
                   <div className="p-4 space-y-3">
-                    {users.filter(u => u.role === "direktor").map(u => (
+                    {directors.map(u => (
                       <div key={u.id}>
                         <div className="bg-primary text-white rounded-xl p-3 flex items-center gap-3">
                           <Avatar user={u} size="sm"/>
                           <div><p className="text-sm font-semibold">{u.name}</p><p className="text-[11px] text-white/90">{roleLabel(t, u.role)}</p></div>
                         </div>
-                        {users.filter(u2 => u2.role === "orinbosar").map(u2 => (
+                        {viceDirectors.map(u2 => (
                           <div key={u2.id} className="ml-6 mt-2 border-l-2 border-dashed border-primary/30 pl-3">
                             <div className="bg-secondary rounded-xl p-3 flex items-center gap-2">
                               <Avatar user={u2} size="sm"/>
@@ -412,7 +451,7 @@ export function AdminDashboard({ currentUser, users, projects, transfers, setUse
                       {(["direktor","orinbosar","prorab","brigadir","ishchi"] as Role[]).map(r => (
                         <div key={r} className="flex items-center justify-between py-1.5 border-b border-border/30 last:border-0">
                           <span className="text-sm text-muted-foreground">{roleLabel(t, r)}</span>
-                          <span className="text-sm font-mono font-bold">{users.filter(u=>u.role===r).length}</span>
+                          <span className="text-sm font-mono font-bold">{roleCounts.get(r) || 0}</span>
                         </div>
                       ))}
                     </div>
@@ -424,7 +463,7 @@ export function AdminDashboard({ currentUser, users, projects, transfers, setUse
                     <div className="flex justify-end px-4 py-2 border-b border-border/30">
                       <button onClick={() => setShowAddUser(true)} className="flex items-center gap-1.5 text-sm bg-primary text-white px-3 py-1.5 rounded-full font-semibold"><MorphIcon icon={UserPlus} className="w-3 h-3" />{t('common.add')}</button>
                     </div>
-                    {users.filter(u => ["orinbosar","prorab"].includes(u.role)).map(u => (
+                    {topStaff.map(u => (
                       <div key={u.id} className="flex items-center gap-3 py-3 px-4 border-b border-border/40 hover:bg-muted/30">
                         <Avatar user={u} size="sm"/>
                         <div className="flex-1"><p className="text-sm font-semibold">{u.name}</p><p className="text-sm text-muted-foreground font-mono">{u.phone}</p></div>
@@ -447,9 +486,9 @@ export function AdminDashboard({ currentUser, users, projects, transfers, setUse
                       <div key={brigade} className="bg-muted/30 rounded-xl overflow-hidden">
                         <div className="flex items-center justify-between px-3 py-2 bg-secondary">
                           <span className="text-sm font-semibold">{brigade}</span>
-                          <span className="text-sm text-muted-foreground">{t('dashboard.peopleCount', { count: users.filter(u=>u.brigade===brigade).length })}</span>
+                          <span className="text-sm text-muted-foreground">{t('dashboard.peopleCount', { count: usersByBrigade.get(brigade)?.length || 0 })}</span>
                         </div>
-                        {users.filter(u => u.brigade===brigade).map(m => (
+                        {(usersByBrigade.get(brigade) || []).map(m => (
                           <div key={m.id} className="flex items-center gap-3 py-2.5 px-3 border-t border-border/30">
                             <Avatar user={m} size="sm"/>
                             <div className="flex-1"><p className="text-sm">{m.name}</p></div>
@@ -464,7 +503,7 @@ export function AdminDashboard({ currentUser, users, projects, transfers, setUse
                     ))}
                     <div className="pt-2 border-t border-border">
                       <p className="text-sm font-semibold text-muted-foreground uppercase mb-2">{t('dashboard.allWorkers')}</p>
-                      {users.filter(u => u.role==="ishchi" || u.role==="brigadir").map(m => (
+                      {fieldWorkers.map(m => (
                         <div key={m.id} className="flex items-center gap-3 py-2.5 px-2 border-b border-border/30">
                           <Avatar user={m} size="sm"/>
                           <div className="flex-1"><p className="text-sm">{m.name}</p></div>
@@ -476,10 +515,10 @@ export function AdminDashboard({ currentUser, users, projects, transfers, setUse
                         </div>
                       ))}
                     </div>
-                    {transfers.filter(t=>t.toUserId===currentUser.id&&t.status==="pending").length > 0 && (
+                    {pendingTransfersToMe.length > 0 && (
                       <div className="pt-2 border-t border-border">
                         <p className="text-sm font-semibold text-amber-800 dark:text-amber-400 uppercase mb-2 flex items-center gap-1"><MorphIcon icon={Package} className="w-3 h-3" />{t('dashboard.incomingMaterials')}</p>
-                        {transfers.filter(t=>t.toUserId===currentUser.id&&t.status==="pending").map(t => (
+                        {pendingTransfersToMe.map(t => (
                           <TransferRow key={t.id} t={t} currentUser={currentUser} allUsers={users} projects={projects} onConfirm={onConfirmTransfer} onReject={onRejectTransfer}/>
                         ))}
                       </div>
@@ -495,14 +534,14 @@ export function AdminDashboard({ currentUser, users, projects, transfers, setUse
                     <div className="grid grid-cols-3 gap-2 mb-4">
                       {[["active",t('dashboard.statusActive'),"text-green-800 dark:text-green-400","bg-green-500/10"],["paused",t('dashboard.statusPausedFull'),"text-amber-500","bg-amber-500/10"],["completed",t('dashboard.statusCompleted'),"text-blue-500 dark:text-blue-400","bg-blue-500/10"]].map(([s,l,c,bg])=>(
                         <div key={s} className={`${bg} border border-border rounded-xl p-3 text-center`}>
-                          <p className={`text-lg font-bold font-mono ${c}`}>{projects.filter(p=>p.status===s).length}</p>
+                          <p className={`text-lg font-bold font-mono ${c}`}>{projectStatusCounts[String(s)] || 0}</p>
                           <p className="text-sm text-muted-foreground">{l}</p>
                         </div>
                       ))}
                     </div>
                     {projects.map(p => {
-                      const pend = transfers.filter(t=>t.projectId===p.id&&t.status==="pending").length;
-                      const foreman = users.find(u=>u.id===p.foremanId);
+                      const pend = pendingTransferCountByProject.get(p.id) || 0;
+                      const foreman = usersById.get(p.foremanId);
                       return (
                         <div key={p.id} onClick={()=>onSelectProject(p)} className="surface rounded-xl p-4 cursor-pointer hover:border-primary/50 liquid-transition mb-3 active:scale-98">
                           <div className="flex items-start justify-between gap-2">

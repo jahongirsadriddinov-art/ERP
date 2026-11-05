@@ -1,7 +1,7 @@
 import "./i18n/aiVoiceNs";
 import type { ReactNode } from "react";
 import { confirmDialog } from "./lib/confirmDialog";
-import { useState, useRef, useEffect, Suspense } from "react";
+import { useState, useRef, useEffect, useMemo, Suspense } from "react";
 import { lazyRetry as lazy } from "./lib/lazyRetry";
 import { oneOf, usePersistentState } from "./lib/persistentState";
 import { useTranslation } from "react-i18next";
@@ -49,8 +49,8 @@ export default function DeveloperPanel({ currentUser, onLogout, profileEl }: { c
   const { t } = useTranslation();
   // "appBuilds" (ilova relizlari) tabi ro'yxatdan TUSHIB QOLGAN edi: tugma ishlardi,
   // lekin refreshdan keyin `oneOf` uni rad etib "subscriptions"ga qaytarardi (2026-10-31).
-  const [tab, setTab] = usePersistentState<"firms" | "users" | "subscriptions" | "messages" | "plans" | "promocodes" | "announcements" | "aiVoice" | "botUi" | "server" | "backup" | "errors" | "prices" | "office" | "appBuilds" | "profile">(
-    "dev.tab", "subscriptions", oneOf(["firms", "users", "subscriptions", "messages", "plans", "promocodes", "announcements", "aiVoice", "botUi", "server", "backup", "errors", "prices", "office", "appBuilds", "profile"]));
+  const [tab, setTab] = usePersistentState<"subscriptions" | "firms" | "users" | "messages" | "plans" | "promocodes" | "announcements" | "aiVoice" | "botUi" | "office" | "prices" | "server" | "errors" | "backup" | "appBuilds" | "profile">(
+    "dev.tab", "subscriptions", oneOf(["subscriptions", "firms", "users", "messages", "plans", "promocodes", "announcements", "aiVoice", "botUi", "office", "prices", "server", "errors", "backup", "appBuilds", "profile"]));
   const [annReload, setAnnReload] = useState(0);
   const [companies, setCompanies] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
@@ -279,8 +279,14 @@ export default function DeveloperPanel({ currentUser, onLogout, profileEl }: { c
     setSubLoading(null);
   };
 
-  const companyName = (cid: string) => companies.find(c => c.id === cid)?.name || "—";
-  const planLabel = (key: string) => plans.find(p => p.key === key)?.label || key;
+  // O(1) qidiruv uchun — avval har chaqiriqda butun companies/plans massivi
+  // skanerlanardi (subscriptions ro'yxatida har bir obuna uchun .find(),
+  // ya'ni N obuna x M tarif — endi bitta Map tuzilib O(1)da o'qiladi).
+  const companiesById = useMemo(() => new Map(companies.map((c: any) => [c.id, c])), [companies]);
+  const plansByKey = useMemo(() => new Map(plans.map((p: any) => [p.key, p])), [plans]);
+  const usersById = useMemo(() => new Map(users.map((u: any) => [u.id, u])), [users]);
+  const companyName = (cid: string) => companiesById.get(cid)?.name || "—";
+  const planLabel = (key: string) => plansByKey.get(key)?.label || key;
 
   const deleteCompany = async (c: any) => {
     if (!await confirmDialog(t('devPanel.confirm.deleteCompany', { name: c.name, userCount: c.userCount, objectCount: c.objectCount }))) return;
@@ -317,10 +323,18 @@ export default function DeveloperPanel({ currentUser, onLogout, profileEl }: { c
   };
 
   // Umumiy ko'rinish statistikasi — allaqachon yuklangan companies/users/subs
-  // massivlaridan hisoblanadi, alohida so'rov shart emas.
-  const activeSubsCount = subs.filter(s => s.status === "active").length;
-  const pendingSubsCount = subs.filter(s => s.status === "pending").length;
-  const expiringSoonCount = subs.filter(s => s.status === "active" && typeof s.daysLeft === "number" && s.daysLeft <= 3).length;
+  // massivlaridan hisoblanadi, alohida so'rov shart emas. Bitta o'tishda
+  // hisoblanadi (avval har render'da subs massivi 3 marta alohida .filter()
+  // bilan to'liq aylanib chiqilardi, shu jumladan tab tugmasidagi badge uchun
+  // yana bir marta — pastda shu qiymat qayta ishlatiladi).
+  const { activeSubsCount, pendingSubsCount, expiringSoonCount } = useMemo(() => {
+    let active = 0, pending = 0, expiring = 0;
+    for (const s of subs) {
+      if (s.status === "active") { active++; if (typeof s.daysLeft === "number" && s.daysLeft <= 3) expiring++; }
+      else if (s.status === "pending") pending++;
+    }
+    return { activeSubsCount: active, pendingSubsCount: pending, expiringSoonCount: expiring };
+  }, [subs]);
 
   return (
     <div className={`h-[100dvh] flex flex-col ${tab === "office" ? "overflow-hidden" : "overflow-y-auto md:overflow-hidden"} overscroll-contain bg-background`} style={{ paddingTop: "env(safe-area-inset-top)" }}>
@@ -366,7 +380,7 @@ export default function DeveloperPanel({ currentUser, onLogout, profileEl }: { c
       <div className="mx-4 md:mx-6 xl:mx-auto xl:max-w-7xl xl:w-[calc(100%-3rem)] mt-3 flex items-center gap-2 flex-shrink-0 sticky top-[3.75rem] md:static z-10 bg-background md:bg-transparent py-1 md:py-0">
         <div className="flex-1 min-w-0 flex gap-1 p-1 rounded-full bg-card overflow-x-auto scrollbar-hide">
           <button onClick={() => setTab("subscriptions")} className={`relative py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "subscriptions" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
-            {t('devPanel.tabs.subscriptions')} {subs.filter(s => s.status === "pending").length > 0 && <span className="ml-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full badge-pulse">{subs.filter(s => s.status === "pending").length}</span>}
+            {t('devPanel.tabs.subscriptions')} {pendingSubsCount > 0 && <span className="ml-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full badge-pulse">{pendingSubsCount}</span>}
           </button>
           <button onClick={() => setTab("firms")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "firms" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>{t('devPanel.tabs.firms', { count: companies.length })}</button>
           <button onClick={() => setTab("users")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "users" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>{t('devPanel.tabs.users')}</button>
@@ -382,32 +396,43 @@ export default function DeveloperPanel({ currentUser, onLogout, profileEl }: { c
           <button onClick={() => setTab("announcements")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "announcements" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
             {t('devPanel.tabs.announcements')}
           </button>
-          <button onClick={() => setTab("office")} data-testid="dev-tab-office" className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "office" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
-            🏢 {t('devPanel.tabs.office', { defaultValue: 'AI ofis' })}
-          </button>
+          {/* AI platforma guruhi — ovozli AI, bot ko'rinishi, AI ofis va narx
+              manbalari (AI yordamida kanal topish) birga, ketma-ket turadi
+              (owner: "bo'limlar joylashuvi ham tartibsiz" — avval "AI ofis"
+              announcements bilan aiVoice orasiga tiqilib, "Narx manbalari"
+              esa Profil'dan keyin alohida yotardi). */}
           <button onClick={() => setTab("aiVoice")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "aiVoice" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
             {t('aiVoice.platform.title')}
           </button>
           <button onClick={() => setTab("botUi")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "botUi" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
             {t('devPanel.tabs.botUi')}
           </button>
-          <button onClick={() => setTab("server")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "server" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
-            {t('devPanel.tabs.server')}
-          </button>
-          <button onClick={() => setTab("appBuilds")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "appBuilds" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
-            📲 Ilova
-          </button>
-          <button onClick={() => setTab("backup")} data-testid="dev-tab-backup" className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "backup" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
-            {t('devPanel.tabs.backup')}
-          </button>
-          <button onClick={() => setTab("profile")} data-testid="dev-tab-profile" className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "profile" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
-            👤 {t('devPanel.tabs.profile', { defaultValue: 'Profil' })}
+          <button onClick={() => setTab("office")} data-testid="dev-tab-office" className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "office" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
+            🏢 {t('devPanel.tabs.office', { defaultValue: 'AI ofis' })}
           </button>
           <button onClick={() => setTab("prices")} data-testid="dev-tab-prices" className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "prices" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
             💰 {t('devPanel.tabs.prices', { defaultValue: 'Narx manbalari' })}
           </button>
+          {/* Infra/monitoring guruhi — server, xatolar, zaxira, qurilmalar
+              reliz'lari birga (avval "appBuilds"/"backup" orasiga "Profil"
+              kirib, "errors" esa butunlay oxirda, "Narx manbalari"dan ham
+              keyin yotardi). */}
+          <button onClick={() => setTab("server")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "server" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
+            {t('devPanel.tabs.server')}
+          </button>
           <button onClick={() => setTab("errors")} data-testid="dev-tab-errors" className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "errors" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
             {t('devPanel.tabs.errors')}
+          </button>
+          <button onClick={() => setTab("backup")} data-testid="dev-tab-backup" className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "backup" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
+            {t('devPanel.tabs.backup')}
+          </button>
+          <button onClick={() => setTab("appBuilds")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "appBuilds" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
+            📲 Ilova
+          </button>
+          {/* Profil — shaxsiy/sayt sozlamalari, ro'yxat oxirida (sozlamalar
+              odatda eng oxirida bo'ladi, boshqa biznes tablar bilan aralashmaydi). */}
+          <button onClick={() => setTab("profile")} data-testid="dev-tab-profile" className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "profile" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
+            👤 {t('devPanel.tabs.profile', { defaultValue: 'Profil' })}
           </button>
         </div>
         {/* Ma'lumotlar FAQAT panel birinchi ochilganda yuklanardi — keyin
@@ -627,7 +652,7 @@ export default function DeveloperPanel({ currentUser, onLogout, profileEl }: { c
                     {devMsgs.length === 0 && <p className="text-xs text-muted-foreground text-center py-8">{t('devPanel.messages.empty')}</p>}
                     {devMsgs.map(m => {
                       const mine = m.fromUserId === currentUser.id;
-                      const sender = !mine ? users.find((u: any) => u.id === m.fromUserId) : null;
+                      const sender = !mine ? usersById.get(m.fromUserId) : null;
                       return (
                         <div key={m.id} className={`flex ${mine?'justify-end':'justify-start'}`}>
                           <div className={`max-w-[80%] px-3 py-2 rounded-2xl text-xs ${mine?'bg-gradient-to-br from-primary to-primary/90 text-white':'bg-muted'}`}>

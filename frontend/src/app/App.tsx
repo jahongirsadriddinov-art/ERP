@@ -76,7 +76,7 @@ import { setSiteLanguage, SiteLang } from "./i18n";
 import { isTelegramMiniApp, getTelegramInitData, markManualLogout, clearManualLogout, telegramAutoLoginAllowed } from "./telegramWebApp";
 import { isChatMuted, useChatPrefs } from "./chat/chatPrefs";
 import { buildEntries as buildChatEntries, navUnreadCount } from "./chat/chatModel";
-import { installAndroidBackHandler, isAndroid, saveOrShareBlob, isNative, isTabletOrLarger, notifyOS, ensureNotifyPermission, appInForeground } from "./platform";
+import { installAndroidBackHandler, isAndroid, saveOrShareBlob, isNative, isTabletOrLarger, notifyOS, ensureNotifyPermission, appInForeground, setStatusBarColor } from "./platform";
 
 import { openMediaViewer } from "./MediaViewer";
 import { VoicePlayer, VideoPlayer } from "./MediaPlayers";
@@ -2456,6 +2456,10 @@ export default function App() {
       const vars = isDark ? t.dark : t.light;
       for (const [k, v] of Object.entries(vars)) r.style.setProperty(k, v);
       r.style.colorScheme = isDark ? "dark" : "light";
+      // Android/iOS tizim status-bar'i — ilovaning joriy fon rangi va
+      // light/dark holatiga mos keladi (aks holda masalan qora mavzuda
+      // status-bar oq qolib, soat/batareya belgilari ko'rinmay qolishi mumkin).
+      setStatusBarColor(vars["--background"], isDark);
     };
 
     apply();
@@ -2536,6 +2540,18 @@ export default function App() {
   const { locked: appLocked, unlock: unlockApp, lock: lockAppNow } = useAppLock(!!liveUser && pinIsSet);
   // Boshlang'ich/fondan qaytgandagi maxfiylik qoplamasi — qulf ekrani (yoki ochiq ilova) chizilgach olinadi
   useEffect(() => { if (!pinSyncing) hidePrivacyCover(); }, [appLocked, liveUser?.id, pinSyncing]);
+  // #root butunlay bosilmaydigan bo'ladi (styles/design-v5.css: html.app-locked).
+  // `inert` brauzer qo'llab-quvvatlashiga bog'liq, bu esa oddiy CSS — ikkalasi
+  // birga ishlaydi va qulf ostidagi ilovaga bitta ham bosish o'tmaydi.
+  // MUHIM: bu hook pastda, `if (!liveUser) return ...` kabi ERTA
+  // RETURN'LARDAN KEYIN turgan edi — React xatosi #310'ga sabab bo'lardi
+  // (quyida izoh qoldirilgan joyga qarang), shu uchun shart-sharoitsiz,
+  // barcha erta return'lardan OLDIN bu yerga ko'chirildi.
+  useEffect(() => {
+    const el = document.documentElement;
+    el.classList.toggle('app-locked', !!appLocked);
+    return () => el.classList.remove('app-locked');
+  }, [appLocked]);
   const isWorkerRole = liveUser ? ['ishchi', 'prorab', 'brigadir'].includes(liveUser.role) : false;
 
   // Tarifga qarab qaysi funksiyalar yoqilganini bilish uchun — admin
@@ -3208,11 +3224,16 @@ export default function App() {
   // #root butunlay bosilmaydigan bo'ladi (styles/design-v5.css: html.app-locked).
   // `inert` brauzer qo'llab-quvvatlashiga bog'liq, bu esa oddiy CSS — ikkalasi
   // birga ishlaydi va qulf ostidagi ilovaga bitta ham bosish o'tmaydi.
-  useEffect(() => {
-    const el = document.documentElement;
-    el.classList.toggle('app-locked', !!appLocked);
-    return () => el.classList.remove('app-locked');
-  }, [appLocked]);
+  // MUHIM: bu useEffect avval shu yerda — `if (!liveUser) return ...` kabi
+  // ERTA RETURN'LARDAN PASTDA — turardi. React xatosi #310 ("Rendered more
+  // hooks than during the previous render"): login qilinmagan holatda bu
+  // hook UMUMAN chaqirilmasdi (funksiya tepadagi erta return'lardan birida
+  // to'xtab qolardi), lekin login qilingach `liveUser`/`pinIsSet` paydo
+  // bo'lib, SHU KOMPONENT qayta render qilinganda (remount bo'lmasdan) hook
+  // birdan chaqirila boshlardi — hooklar soni render'lar orasida farq
+  // qilib, React'ni yiqitardi. Shu sabab bu endi `appLocked` e'lon
+  // qilingandan keyin, BARCHA erta return'lardan OLDIN, shart-sharoitsiz
+  // chaqiriladi (quyida ko'chirilgan joy esga olinsin).
   // Dasturchi (super-admin) — alohida panel: barcha firmalar va foydalanuvchilar
   if (liveUser.role === "dasturchi") return (
     <>

@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Davomat widgeti (2x2): bugun ishda nechta odam borligi katta raqamda,
+     pastda bitta "Davomat" tugmasi. Prorab/brigadir uchun eng kerakli
+     ko'rsatkich — pulga umuman tegmaydi, shuning uchun har qanday xodim
+     telefonida xavfsiz turadi. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/w_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="14dp"
+    android:background="@drawable/erp_widget_bg">
+
+    <TextView
+        android:id="@+id/w_company"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:textSize="11sp"
+        android:textColor="#9FB3D9"
+        android:text="QurilishERP" />
+
+    <TextView
+        android:id="@+id/w_main"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:maxLines="1"
+        android:textSize="30sp"
+        android:textStyle="bold"
+        android:textColor="#F59E0B"
+        android:text="—" />
+
+    <TextView
+        android:id="@+id/w_main_label"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:maxLines="1"
+        android:textSize="11sp"
+        android:textColor="#9FB3D9"
+        android:text="bugun ishda" />
+
+    <TextView
+        android:id="@+id/w_sub"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:maxLines="2"
+        android:ellipsize="end"
+        android:textSize="11sp"
+        android:textColor="#E6EDF7"
+        android:text="" />
+
+    <TextView
+        android:id="@+id/w_btn_checkin"
+        android:layout_width="match_parent"
+        android:layout_height="32dp"
+        android:layout_marginTop="8dp"
+        android:gravity="center"
+        android:maxLines="1"
+        android:textSize="11sp"
+        android:textStyle="bold"
+        android:textColor="#0A162B"
+        android:background="@drawable/erp_widget_btn"
+        android:text="Davomat" />
+</LinearLayout>

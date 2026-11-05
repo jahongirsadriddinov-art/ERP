@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Kichik widget (2x1): faqat bitta raqam. Bosh ekranda joy kam bo'lganda
+     yoki boshqa widgetlar yonida "bir qarashda" ko'rish uchun.
+     Raqam birlik bilan ("... so'm") — owner 2026-11-02. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/w_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center_vertical"
+    android:padding="12dp"
+    android:background="@drawable/erp_widget_bg">
+
+    <TextView
+        android:id="@+id/w_main"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:textColor="#F59E0B"
+        android:text="—" />
+
+    <TextView
+        android:id="@+id/w_main_label"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="1dp"
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:textSize="11sp"
+        android:textColor="#9FB3D9"
+        android:text="bugungi chiqim" />
+</LinearLayout>

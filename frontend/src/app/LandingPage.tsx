@@ -296,7 +296,7 @@ export default function LandingPage({ onLogin, onRegister, focus }: { onLogin: (
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mt-8">
               <button onClick={onRegister}
-                className="group w-full sm:w-auto bg-gradient-to-r from-primary via-primary to-blue-700 text-white text-sm font-bold px-7 py-3.5 rounded-full shadow-xl shadow-primary/30 hover:shadow-2xl hover:shadow-primary/40 hover:-translate-y-0.5 active:scale-[0.98] liquid-transition flex items-center justify-center gap-2">
+                className="group w-full sm:w-auto bg-gradient-to-r from-primary via-primary to-accent text-white text-sm font-bold px-7 py-3.5 rounded-full shadow-xl shadow-primary/30 hover:shadow-2xl hover:shadow-primary/40 hover:-translate-y-0.5 active:scale-[0.98] liquid-transition flex items-center justify-center gap-2">
                 {t('landing.ctaRegister')} <MorphIcon icon={ArrowRight} className="w-4 h-4 group-hover:translate-x-0.5 liquid-transition"  />
               </button>
               <button onClick={onLogin} className="w-full sm:w-auto btn btn-outline text-sm font-semibold px-7 py-3.5 rounded-full">
@@ -337,7 +337,7 @@ export default function LandingPage({ onLogin, onRegister, focus }: { onLogin: (
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mt-9">
               <button onClick={onRegister}
-                className="group w-full sm:w-auto bg-gradient-to-r from-primary via-primary to-blue-700 text-white text-sm font-bold px-8 py-4 rounded-full shadow-xl shadow-primary/30 hover:shadow-2xl hover:shadow-primary/40 hover:-translate-y-0.5 active:scale-[0.98] liquid-transition flex items-center justify-center gap-2">
+                className="group w-full sm:w-auto bg-gradient-to-r from-primary via-primary to-accent text-white text-sm font-bold px-8 py-4 rounded-full shadow-xl shadow-primary/30 hover:shadow-2xl hover:shadow-primary/40 hover:-translate-y-0.5 active:scale-[0.98] liquid-transition flex items-center justify-center gap-2">
                 {t('landing.ctaRegister')} <MorphIcon icon={ArrowRight} className="w-4 h-4 group-hover:translate-x-0.5 liquid-transition"  />
               </button>
               <button onClick={onLogin}
@@ -592,7 +592,7 @@ export default function LandingPage({ onLogin, onRegister, focus }: { onLogin: (
 
       {/* ── Final CTA ───────────────────────────────────────────────────── */}
       <section className="max-w-5xl mx-auto px-5 pb-20">
-        <div className="relative overflow-hidden rounded-[2.5rem] bg-gradient-to-br from-primary via-primary to-blue-800 px-6 py-14 md:py-20 text-center">
+        <div className="relative overflow-hidden rounded-[2.5rem] bg-gradient-to-br from-primary via-primary to-accent px-6 py-14 md:py-20 text-center">
           <div className="absolute inset-0 opacity-[0.15] pointer-events-none"
             style={{ backgroundImage: "radial-gradient(white 1px, transparent 1px)", backgroundSize: "24px 24px" }} />
           <div className="absolute top-[-30%] right-[-10%] w-[55%] h-[90%] bg-accent/30 rounded-full blur-[110px] pointer-events-none" />

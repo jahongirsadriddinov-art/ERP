@@ -454,9 +454,9 @@ function PendingList({ items, onChanged }: { items: Review[]; onChanged: () => v
             className="text-[11px] text-primary hover:underline break-all inline-block">Manbani ochib tekshirish</a>
           <div className="flex gap-2 pt-1">
             <button type="button" disabled={busyId === r.id} onClick={() => act(r.id, "approve")}
-              className="btn btn-primary flex-1 text-sm py-2 rounded-xl disabled:opacity-60">Tasdiqlash</button>
+              className="btn btn-success flex-1 text-sm py-2 rounded-xl disabled:opacity-60">Tasdiqlash</button>
             <button type="button" disabled={busyId === r.id} onClick={() => act(r.id, "reject")}
-              className="btn btn-outline text-sm py-2 px-3 rounded-xl text-destructive border-destructive/40 disabled:opacity-60">Rad etish</button>
+              className="btn btn-danger text-sm py-2 px-3 rounded-xl disabled:opacity-60">Rad etish</button>
           </div>
         </div>
       ))}

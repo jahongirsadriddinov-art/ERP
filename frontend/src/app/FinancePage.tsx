@@ -499,9 +499,9 @@ export function AddExpenseModal({ currentUser, projects, allUsers, onClose, onAd
           )}
 
           <div className="flex gap-2 pt-1">
-            <button type="button" onClick={onClose} className="flex-1 text-sm border border-border rounded-xl px-3 py-2.5 hover:bg-muted liquid-transition font-medium">{t('addExpense.cancel')}</button>
+            <button type="button" onClick={onClose} className="flex-1 text-sm border border-red-500/30 text-red-700 dark:text-red-400 rounded-xl px-3 py-2.5 hover:bg-red-500/10 liquid-transition font-medium">{t('addExpense.cancel')}</button>
             <button type="submit" className="flex-1 text-sm text-white rounded-xl px-3 py-2.5 font-bold liquid-transition shadow-sm"
-              style={{ background: "linear-gradient(135deg, #D2440F 0%, #c03d0d 100%)" }}>
+              style={{ background: "linear-gradient(135deg, #16a34a 0%, #15803d 100%)" }}>
               {t('addExpense.submit')}
             </button>
           </div>
@@ -634,8 +634,8 @@ export function EditExpenseModal({ expense, projects, onClose, onSaved }: { expe
             </select></label>
         </div>
         <div className="flex gap-2 pt-1">
-          <button type="button" onClick={onClose} className="flex-1 h-12 rounded-xl border border-border font-semibold">{t('common.cancel', { defaultValue: 'Bekor qilish' })}</button>
-          <button type="button" disabled={busy || !parseAmount(amount)} onClick={save} className="flex-1 h-12 rounded-xl bg-primary text-white font-semibold disabled:opacity-50 inline-flex items-center justify-center gap-2" data-testid="edit-expense-save">
+          <button type="button" onClick={onClose} className="flex-1 h-12 rounded-xl border border-red-500/30 text-red-700 dark:text-red-400 hover:bg-red-500/10 font-semibold">{t('common.cancel', { defaultValue: 'Bekor qilish' })}</button>
+          <button type="button" disabled={busy || !parseAmount(amount)} onClick={save} className="flex-1 h-12 rounded-xl bg-green-600 hover:bg-green-700 text-white font-semibold disabled:opacity-50 inline-flex items-center justify-center gap-2" data-testid="edit-expense-save">
             {busy && <MorphIcon icon={Loader2} className="w-4 h-4 animate-spin" />}{t('common.save', { defaultValue: 'Saqlash' })}
           </button>
         </div>

@@ -11,7 +11,7 @@ const LANGS: SiteLang[] = ['uz', 'uz-cyrl', 'ru'];
 export default function LanguageSwitcher({ value, onChange, size = "md" }: { value: SiteLang; onChange: (lang: SiteLang) => void; size?: "sm" | "md" }) {
   const pad = size === "sm" ? "px-3 py-1.5 text-[11px]" : "px-4 py-2 text-xs";
   return (
-    <div className={`inline-flex items-center gap-0.5 flex-wrap justify-center rounded-full border border-border/50 bg-white/40 dark:bg-black/25 backdrop-blur-xl shadow-inner ${size === "sm" ? "p-0.5" : "p-1"}`}>
+    <div className={`flex w-fit mx-auto items-center gap-0.5 flex-wrap justify-center rounded-full border border-border/50 bg-white/40 dark:bg-black/25 backdrop-blur-xl shadow-inner ${size === "sm" ? "p-0.5" : "p-1"}`}>
       {LANGS.map(l => {
         const active = value === l;
         return (

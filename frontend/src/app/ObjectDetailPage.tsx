@@ -381,9 +381,9 @@ export function ObjectDetailPage({ project, currentUser, users, transfers, onBac
                     className="w-full flex-1 text-sm rounded-xl border border-border bg-background/60 px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-primary/40" />
                   <div className="flex gap-2">
                     <button onClick={() => setPendingMedia(null)} disabled={uploadingMedia}
-                      className="flex-1 sm:flex-none h-10 px-4 rounded-xl text-sm font-semibold border border-border hover:bg-muted liquid-transition disabled:opacity-50">{t('common.cancel')}</button>
+                      className="flex-1 sm:flex-none h-10 px-4 rounded-xl text-sm font-semibold btn btn-danger liquid-transition disabled:opacity-50">{t('common.cancel')}</button>
                     <button onClick={submitPendingMedia} disabled={uploadingMedia}
-                      className="flex-1 sm:flex-none h-10 px-5 rounded-xl text-sm font-bold bg-primary text-primary-foreground flex items-center justify-center gap-2 hover:opacity-90 liquid-transition disabled:opacity-60">
+                      className="flex-1 sm:flex-none h-10 px-5 rounded-xl text-sm font-bold btn btn-success flex items-center justify-center gap-2 liquid-transition disabled:opacity-60">
                       {uploadingMedia ? <MorphIcon icon={Loader2} className="w-4 h-4 animate-spin" /> : <MorphIcon icon={Send} className="w-4 h-4" />}
                       {uploadingMedia ? t('objectDetail.mediaUploading') : t('objectDetail.mediaPublish', "Joylash")}
                     </button>
@@ -442,8 +442,8 @@ export function ObjectDetailPage({ project, currentUser, users, transfers, onBac
                         </div>
                         {canManage && (editing ? (
                           <>
-                            <button onClick={() => setEditingCaption(null)} aria-label={t('common.cancel')} className="w-9 h-9 rounded-xl flex items-center justify-center text-muted-foreground hover:bg-muted liquid-transition"><MorphIcon icon={X} className="w-4 h-4" /></button>
-                            <button onClick={saveCaption} aria-label={t('common.save')} className="w-9 h-9 rounded-xl flex items-center justify-center bg-primary text-primary-foreground hover:opacity-90 liquid-transition"><MorphIcon icon={Check} className="w-4 h-4" /></button>
+                            <button onClick={() => setEditingCaption(null)} aria-label={t('common.cancel')} className="w-9 h-9 rounded-xl flex items-center justify-center btn btn-danger liquid-transition"><MorphIcon icon={X} className="w-4 h-4" /></button>
+                            <button onClick={saveCaption} aria-label={t('common.save')} className="w-9 h-9 rounded-xl flex items-center justify-center btn btn-success liquid-transition"><MorphIcon icon={Check} className="w-4 h-4" /></button>
                           </>
                         ) : (
                           <>
@@ -548,8 +548,8 @@ export function MaterialDetailsModal({ mat, confT, pendT, objectId, canEdit, onC
               <PriceField value={ePrice} onChange={setEPrice} className="text-base sm:text-sm border border-border rounded-lg px-3 py-2 bg-input-background focus:outline-none" />
             </div>
             <div className="flex gap-2 pt-1">
-              <button onClick={()=>setEditing(false)} className="btn btn-outline flex-1 py-2">{tt('common.cancel')}</button>
-              <button onClick={saveEdit} disabled={saving} className="btn btn-primary flex-1 py-2 disabled:opacity-50">{tt('common.save')}</button>
+              <button onClick={()=>setEditing(false)} className="btn btn-danger flex-1 py-2">{tt('common.cancel')}</button>
+              <button onClick={saveEdit} disabled={saving} className="btn btn-success flex-1 py-2 disabled:opacity-50">{tt('common.save')}</button>
             </div>
           </div>
         ) : (

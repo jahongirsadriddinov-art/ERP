@@ -237,8 +237,8 @@ export function AnnouncementComposer({ endpoint, onPosted, onCancel }: { endpoin
       </div>
 
       <div className="flex gap-2">
-        {onCancel && <button onClick={onCancel} className="btn btn-outline flex-1 py-2 text-sm">{t('common.cancel')}</button>}
-        <button onClick={post} disabled={posting || uploading || !title.trim() || !body.trim()} className="btn btn-primary flex-1 py-2 text-sm disabled:opacity-50">{t('announcements.postBtn')}</button>
+        {onCancel && <button onClick={onCancel} className="btn btn-danger flex-1 py-2 text-sm">{t('common.cancel')}</button>}
+        <button onClick={post} disabled={posting || uploading || !title.trim() || !body.trim()} className="btn btn-success flex-1 py-2 text-sm disabled:opacity-50">{t('announcements.postBtn')}</button>
       </div>
     </div>
   );

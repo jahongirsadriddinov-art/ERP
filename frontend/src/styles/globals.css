@@ -118,6 +118,17 @@
   .btn-outline:hover { background: color-mix(in srgb, var(--foreground) 5%, transparent); border-color: color-mix(in srgb, var(--foreground) 25%, transparent); }
   .btn-ghost { background: transparent; color: var(--muted-foreground); }
   .btn-ghost:hover { background: color-mix(in srgb, var(--foreground) 6%, transparent); color: var(--foreground); }
+  /* Bekor qilish/rad etish va tasdiqlash/qo'shish uchun — mavzu rangidan mustaqil,
+     har doim qizil/yashil (owner 2026-11-06: "qoshishni yashil bekor qilish ni
+     qizil qil hamma joyda"). */
+  .btn-danger { background: transparent; border: 1.5px solid color-mix(in srgb, var(--destructive) 55%, transparent); color: var(--destructive); }
+  .btn-danger:hover { background: color-mix(in srgb, var(--destructive) 10%, transparent); border-color: color-mix(in srgb, var(--destructive) 75%, transparent); }
+  .btn-success {
+    background: linear-gradient(135deg, var(--success), color-mix(in srgb, var(--success) 85%, #000));
+    color: var(--success-foreground);
+    box-shadow: 0 2px 8px color-mix(in srgb, var(--success) 30%, transparent);
+  }
+  .btn-success:hover { box-shadow: 0 6px 20px color-mix(in srgb, var(--success) 45%, transparent); transform: translateY(-1px); }
 
   /* Desktop nav capsule */
   .nav-pill-desktop {

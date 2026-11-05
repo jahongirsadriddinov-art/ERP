@@ -1023,11 +1023,10 @@ export function SendTransferModal({ currentUser, projects, allUsers, onClose, on
         </div>
 
           <div className="flex gap-2 p-4 pt-3 border-t border-border flex-shrink-0">
-            <button type="button" onClick={onClose} className="flex-1 text-sm border border-border rounded-xl px-3 py-2.5 hover:bg-muted liquid-transition font-medium">{t('sendTransfer.cancel')}</button>
+            <button type="button" onClick={onClose} className="flex-1 text-sm btn btn-danger rounded-xl px-3 py-2.5 liquid-transition font-medium">{t('sendTransfer.cancel')}</button>
             <button type="submit"
               disabled={selMats.length === 0 && !customMats.some(m => m.name.trim())}
-              className="flex-1 text-sm text-white rounded-xl px-3 py-2.5 font-bold liquid-transition disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
-              style={{ background: "linear-gradient(135deg, #1B3A6B 0%, #243F6E 100%)" }}>
+              className="flex-1 text-sm btn btn-success rounded-xl px-3 py-2.5 font-bold liquid-transition disabled:opacity-40 disabled:cursor-not-allowed">
               {t('sendTransfer.submit')}
             </button>
           </div>

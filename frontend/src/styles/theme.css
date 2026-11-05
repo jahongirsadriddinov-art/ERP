@@ -27,6 +27,10 @@
   --accent-foreground: #FFFFFF;
   --destructive: #C0392B;
   --destructive-foreground: #FFFFFF;
+  /* Bekor/tasdiqlash tugmalari uchun — mavzu rangidan mustaqil, har doim
+     qizil/yashil (COLOR_THEMES qaysi rang tanlanganidan qat'i nazar). */
+  --success: #16A34A;
+  --success-foreground: #FFFFFF;
 
   /* Inputs */
   --border: rgba(10, 22, 40, 0.10);
@@ -103,6 +107,8 @@
   --accent-foreground: #FFFFFF;
   --destructive: #EF4444;
   --destructive-foreground: #FFFFFF;
+  --success: #22C55E;
+  --success-foreground: #FFFFFF;
 
   --border: rgba(255,255,255,0.08);
   --input: transparent;
@@ -152,6 +158,8 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-input-background: var(--input-background);

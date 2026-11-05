@@ -350,8 +350,8 @@ export default function QRScanner({ onClose, onResult, onLoginQrVerified, token 
                 <p className="mt-1 text-sm text-muted-foreground">{t('qrScanner.confirmDesc')}</p>
                 <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-xs font-semibold text-foreground">💻 {loginConfirm.device || "Kompyuter"}</div>
                 <div className="mt-5 grid grid-cols-2 gap-2">
-                  <button type="button" disabled={approving} onClick={() => answerLogin(false)} className="btn btn-outline h-12 rounded-2xl">{t('qrScanner.confirmNo')}</button>
-                  <button type="button" disabled={approving} onClick={() => answerLogin(true)} className="btn btn-primary h-12 rounded-2xl">{approving ? "…" : t('qrScanner.confirmYes')}</button>
+                  <button type="button" disabled={approving} onClick={() => answerLogin(false)} className="btn btn-danger h-12 rounded-2xl">{t('qrScanner.confirmNo')}</button>
+                  <button type="button" disabled={approving} onClick={() => answerLogin(true)} className="btn btn-success h-12 rounded-2xl">{approving ? "…" : t('qrScanner.confirmYes')}</button>
                 </div>
               </motion.div>
             </motion.div>

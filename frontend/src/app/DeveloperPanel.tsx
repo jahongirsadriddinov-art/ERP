@@ -926,8 +926,8 @@ export default function DeveloperPanel({ currentUser, onLogout, profileEl }: { c
                   })}
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={createPlan} className="flex-1 py-2 rounded-xl text-xs font-bold bg-primary text-white">{t('devPanel.plans.create')}</button>
-                  <button onClick={() => setNewPlan(null)} className="px-3 py-2 rounded-xl text-xs font-bold border border-border/60">{t('common.cancel')}</button>
+                  <button onClick={createPlan} className="flex-1 py-2 rounded-xl text-xs font-bold btn btn-success">{t('devPanel.plans.create')}</button>
+                  <button onClick={() => setNewPlan(null)} className="px-3 py-2 rounded-xl text-xs font-bold btn btn-danger">{t('common.cancel')}</button>
                 </div>
               </div>
             ) : (
@@ -979,8 +979,8 @@ export default function DeveloperPanel({ currentUser, onLogout, profileEl }: { c
                     className="text-xs border border-border/60 rounded-lg px-2 py-1.5 bg-transparent font-mono" />
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={createPromo} className="flex-1 py-2 rounded-xl text-xs font-bold bg-primary text-white">{t('devPanel.promocodes.create')}</button>
-                  <button onClick={() => setNewPromo(null)} className="px-3 py-2 rounded-xl text-xs font-bold border border-border/60">{t('common.cancel')}</button>
+                  <button onClick={createPromo} className="flex-1 py-2 rounded-xl text-xs font-bold btn btn-success">{t('devPanel.promocodes.create')}</button>
+                  <button onClick={() => setNewPromo(null)} className="px-3 py-2 rounded-xl text-xs font-bold btn btn-danger">{t('common.cancel')}</button>
                 </div>
               </div>
             ) : (

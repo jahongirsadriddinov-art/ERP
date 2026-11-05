@@ -713,8 +713,8 @@ export function AddUserModal({ currentUser, users, projects, onClose, onAdd }:
             </div>
           )}
           <div className="flex gap-2 pt-1">
-            <button type="button" onClick={onClose} disabled={submitting} className="flex-1 text-sm border border-border rounded px-3 py-2 hover:bg-muted transition-colors disabled:opacity-50">{t('addUser.cancel')}</button>
-            <button type="submit" disabled={submitting} className="flex-1 text-sm bg-primary text-white rounded px-3 py-2 hover:bg-primary/90 transition-colors font-semibold disabled:opacity-60 flex items-center justify-center gap-1.5">
+            <button type="button" onClick={onClose} disabled={submitting} className="flex-1 text-sm border border-red-500/30 text-red-700 dark:text-red-400 rounded px-3 py-2 hover:bg-red-500/10 transition-colors disabled:opacity-50">{t('addUser.cancel')}</button>
+            <button type="submit" disabled={submitting} className="flex-1 text-sm bg-green-600 text-white rounded px-3 py-2 hover:bg-green-700 transition-colors font-semibold disabled:opacity-60 flex items-center justify-center gap-1.5">
               {submitting && <MorphIcon icon={Loader2} className="w-3.5 h-3.5 animate-spin" />}{t('common.add')}
             </button>
           </div>
@@ -782,8 +782,8 @@ export function EditUserModal({ user, currentUser, onClose, onUpdate }: { user: 
             </div>
           )}
           <div className="flex gap-2 pt-1">
-            <button type="button" onClick={onClose} className="flex-1 text-sm border border-border rounded px-3 py-2 hover:bg-muted transition-colors">{t('editUser.cancel')}</button>
-            <button type="submit" className="flex-1 text-sm bg-primary text-white rounded px-3 py-2 hover:bg-primary/90 font-semibold">{t('editUser.save')}</button>
+            <button type="button" onClick={onClose} className="flex-1 text-sm border border-red-500/30 text-red-700 dark:text-red-400 rounded px-3 py-2 hover:bg-red-500/10 transition-colors">{t('editUser.cancel')}</button>
+            <button type="submit" className="flex-1 text-sm bg-green-600 text-white rounded px-3 py-2 hover:bg-green-700 font-semibold">{t('editUser.save')}</button>
           </div>
         </form>
       </div>
@@ -882,7 +882,7 @@ export function AddObjectModal({ users, onClose, onAdd }:
               </div>
             )}
           </div>
-          <div className="flex gap-2 pt-1"><button type="button" onClick={onClose} className="flex-1 text-sm border border-border rounded px-3 py-2 hover:bg-muted">{t('addObject.cancel')}</button><button type="submit" disabled={loading} className="flex-1 text-sm bg-accent text-white rounded px-3 py-2 font-semibold hover:bg-accent/90">{loading?t('addObject.smetaLoading'):t('addObject.submit')}</button></div>
+          <div className="flex gap-2 pt-1"><button type="button" onClick={onClose} className="flex-1 text-sm border border-red-500/30 text-red-700 dark:text-red-400 rounded px-3 py-2 hover:bg-red-500/10">{t('addObject.cancel')}</button><button type="submit" disabled={loading} className="flex-1 text-sm bg-green-600 text-white rounded px-3 py-2 font-semibold hover:bg-green-700">{loading?t('addObject.smetaLoading'):t('addObject.submit')}</button></div>
         </form>
       </div>
     </div>

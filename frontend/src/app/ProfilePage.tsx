@@ -225,8 +225,8 @@ function CurrencyPanel({ canEdit }: { canEdit: boolean }) {
           </div>
           {/* Yevro olib tashlandi (owner 2026-10-26: "hamma joydan euroni olib tashla") — faqat so'm va dollar */}
           <div className="flex gap-2 pt-1">
-            <button onClick={saveCustom} disabled={saving} className="flex-1 btn btn-primary text-sm py-2.5 rounded-xl disabled:opacity-60">{t('currency.save')}</button>
-            <button onClick={() => setEditing(false)} disabled={saving} className="flex-1 btn btn-outline text-sm py-2.5 rounded-xl">{t('currency.cancel')}</button>
+            <button onClick={saveCustom} disabled={saving} className="flex-1 btn btn-success text-sm py-2.5 rounded-xl disabled:opacity-60">{t('currency.save')}</button>
+            <button onClick={() => setEditing(false)} disabled={saving} className="flex-1 btn btn-danger text-sm py-2.5 rounded-xl">{t('currency.cancel')}</button>
           </div>
           {isCustom && (
             <button onClick={resetToCbu} disabled={saving} data-testid="currency-reset" className="w-full btn btn-outline text-sm py-2.5 rounded-xl">{t('currency.resetToCbuBtn')}</button>
@@ -1207,8 +1207,8 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
                 <div className="bg-amber-500/10 border border-amber-500/25 text-amber-700 dark:text-amber-300 text-xs p-3 rounded-2xl flex items-start gap-2 text-left"><MorphIcon icon={AlertCircle} className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" /><p>{t('profile.phoneChangeWarning')}</p></div>
               )}
               <div className="flex gap-2 pt-1">
-                <button onClick={() => setIsEditing(false)} className="flex-1 text-sm font-semibold py-3 rounded-full border border-border/60 text-muted-foreground hover:bg-muted liquid-transition">{t('common.cancel')}</button>
-                <button onClick={handleSave} className="flex-1 bg-gradient-to-r from-primary to-primary/90 text-white text-sm font-bold py-3 rounded-full shadow-lg shadow-primary/25 hover:shadow-primary/40 hover:-translate-y-0.5 liquid-transition">{t('profile.save')}</button>
+                <button onClick={() => setIsEditing(false)} className="flex-1 btn btn-danger text-sm font-semibold py-3 rounded-full">{t('common.cancel')}</button>
+                <button onClick={handleSave} className="flex-1 btn btn-success text-sm font-bold py-3 rounded-full hover:-translate-y-0.5 liquid-transition">{t('profile.save')}</button>
               </div>
             </div>
           ) : (

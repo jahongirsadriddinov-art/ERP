@@ -1,0 +1,216 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   LIQUID GLASS (2026-11-05) — Apple uslubidagi suyuq-shisha dizayn.
+   index.css'da ENG OXIRIDA ulanadi — shu sabab avvalgi barcha qoidalarni
+   (globals.css, design-v5.css) ustidan yozadi. Qatlamga (@layer) o'ralmagan
+   oddiy CSS — Tailwind'ning o'z utility klasslaridan ham kuchli.
+
+   Strategiya: yuzlab fayldagi har bir <button>/<div>ni alohida tahrirlash
+   o'rniga — Tailwind o'zi generatsiya qiladigan umumiy klasslarni
+   (.bg-primary, .bg-card, .btn-primary va h.k.) shu yerda qayta yozamiz.
+   Natijada BUTUN ilova (frontend/src/app/** — 90+ fayl) bir joydan
+   "liquid" ko'rinishga o'tadi.
+
+   Ishlash tezligi: backdrop-filter (blur) faqat KATTA/strukturaviy
+   yuzalarga (tugmalar, kartalar, modal, nav) qo'llanadi. `.bg-muted` kabi
+   sahifada o'nlab marta takrorlanadigan kichik chip/qator elementlariga esa
+   faqat shaffoflik beriladi (blur'siz) — aks holda eski Android
+   qurilmalarda ro'yxatlar sakrab-sakrab aylanadi (jank). */
+
+:root {
+  --liquid-blur: blur(20px) saturate(1.7);
+  --liquid-blur-sm: blur(12px) saturate(1.5);
+  --liquid-highlight: rgba(255, 255, 255, 0.5);
+  --liquid-highlight-soft: rgba(255, 255, 255, 0.22);
+  --liquid-edge: rgba(255, 255, 255, 0.35);
+}
+.dark {
+  --liquid-highlight: rgba(255, 255, 255, 0.14);
+  --liquid-highlight-soft: rgba(255, 255, 255, 0.07);
+  --liquid-edge: rgba(255, 255, 255, 0.10);
+}
+
+/* ── Umumiy "shisha" aralashmasi — har qanday elementga qo'yish mumkin ─── */
+.liquid,
+.liquid-glass,
+.liquid-glass-dark,
+.glass,
+.glass-modal,
+.glass-btn,
+.nav-pill-desktop {
+  -webkit-backdrop-filter: var(--liquid-blur);
+  backdrop-filter: var(--liquid-blur);
+  position: relative;
+  isolation: isolate;
+}
+
+/* Yorug'lik chizig'i — shishaning tepa qirrasida nozik ялтироq (specular) */
+.liquid::before,
+.btn::before,
+.surface::before,
+.glass-card::before,
+.stat-card::before,
+.glass-modal::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(180deg, var(--liquid-edge), transparent 42%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* ── Tugmalar (.btn tizimi) — kuchliroq, shaffof, suyuq shisha ──────────── */
+.btn {
+  -webkit-backdrop-filter: var(--liquid-blur-sm);
+  backdrop-filter: var(--liquid-blur-sm);
+  position: relative;
+  isolation: isolate;
+}
+.btn-primary {
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--primary) 88%, transparent),
+    color-mix(in srgb, var(--primary) 72%, transparent)
+  ) !important;
+  box-shadow:
+    inset 0 1px 0 var(--liquid-highlight),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.08),
+    0 2px 10px color-mix(in srgb, var(--primary) 35%, transparent),
+    0 8px 24px color-mix(in srgb, var(--primary) 22%, transparent) !important;
+  border: 0.5px solid color-mix(in srgb, white 30%, var(--primary) 40%);
+}
+.btn-accent {
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--accent) 88%, transparent),
+    color-mix(in srgb, var(--accent) 72%, transparent)
+  ) !important;
+  box-shadow:
+    inset 0 1px 0 var(--liquid-highlight),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.08),
+    0 2px 10px color-mix(in srgb, var(--accent) 35%, transparent),
+    0 8px 24px color-mix(in srgb, var(--accent) 22%, transparent) !important;
+  border: 0.5px solid color-mix(in srgb, white 30%, var(--accent) 40%);
+}
+.btn-outline,
+.btn-ghost {
+  background: color-mix(in srgb, var(--foreground) 5%, transparent) !important;
+  border: 0.5px solid var(--liquid-edge);
+  box-shadow: inset 0 1px 0 var(--liquid-highlight-soft);
+}
+
+/* ── Barcha xomaki <button>/[role=button] — Tailwind sinfidan qat'i nazar
+   (.btn-* bo'lmaganlar ham) nozik shisha chrome oladi: blur + qirra
+   yorug'i. Fon rangini (background-color) MAJBURAN o'zgartirmaymiz — aks
+   holda "xavfli" (o'chirish, rad etish) tugmalarning rangi yo'qolib,
+   foydalanuvchi uchun xavfli bo'lib qoladi. ───────────────────────────── */
+button:not(.btn):not(.icon-chip):not(.icon-chip-accent),
+[role="button"]:not(.btn) {
+  -webkit-backdrop-filter: var(--liquid-blur-sm);
+  backdrop-filter: var(--liquid-blur-sm);
+}
+
+/* ── Tailwind'ning o'zi generatsiya qilgan rang-klasslar — BUTUN ilova
+   bo'ylab (90+ fayl) bitta joydan "liquid" qilinadi. ────────────────────── */
+.bg-primary {
+  background-color: color-mix(in srgb, var(--primary) 86%, transparent) !important;
+  -webkit-backdrop-filter: var(--liquid-blur-sm);
+  backdrop-filter: var(--liquid-blur-sm);
+}
+.bg-accent {
+  background-color: color-mix(in srgb, var(--accent) 86%, transparent) !important;
+  -webkit-backdrop-filter: var(--liquid-blur-sm);
+  backdrop-filter: var(--liquid-blur-sm);
+}
+.bg-destructive {
+  background-color: color-mix(in srgb, var(--destructive) 86%, transparent) !important;
+  -webkit-backdrop-filter: var(--liquid-blur-sm);
+  backdrop-filter: var(--liquid-blur-sm);
+}
+.bg-secondary {
+  background-color: color-mix(in srgb, var(--secondary) 80%, transparent) !important;
+  -webkit-backdrop-filter: var(--liquid-blur-sm);
+  backdrop-filter: var(--liquid-blur-sm);
+}
+
+/* Kartalar / panellar / modal / popover — asosiy "shisha yuza" */
+.bg-card,
+.surface,
+.glass-card,
+.stat-card,
+.glass-modal {
+  background-color: color-mix(in srgb, var(--card) 82%, transparent) !important;
+  -webkit-backdrop-filter: var(--liquid-blur);
+  backdrop-filter: var(--liquid-blur);
+  border: 0.5px solid var(--liquid-edge);
+}
+.bg-popover {
+  background-color: color-mix(in srgb, var(--popover) 85%, transparent) !important;
+  -webkit-backdrop-filter: var(--liquid-blur);
+  backdrop-filter: var(--liquid-blur);
+}
+
+/* `.bg-muted` — sahifada o'nlab marta takrorlanadigan kichik chip/qator
+   (performance uchun blur'SIZ — faqat shaffoflik). */
+.bg-muted {
+  background-color: color-mix(in srgb, var(--muted) 72%, transparent) !important;
+}
+
+/* Yon panel (sidebar) — qoraygan, kuchli shisha fon */
+.bg-sidebar {
+  background-color: color-mix(in srgb, var(--sidebar) 88%, transparent) !important;
+  -webkit-backdrop-filter: var(--liquid-blur);
+  backdrop-filter: var(--liquid-blur);
+}
+
+/* Press/hover — "suyuqlik" tuyg'usi uchun yumshoq spring harakat */
+button, [role="button"] {
+  transition: transform 0.16s cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 0.2s ease, background-color 0.2s ease;
+}
+button:active, [role="button"]:active { transform: scale(0.96); }
+
+/* ── Sichqoncha-asosiy platformalar (macOS/Windows Tauri ilovasi, desktop
+   brauzer) — tugma/karta ustida nozik "lift" + porlash. `(hover: hover) and
+   (pointer: fine)` FAQAT haqiqiy sichqoncha/trackpad bo'lganda true bo'ladi —
+   teginish ekranlarida (iOS/Android) BUTUNLAY yuklanmaydi. XATO TUZATILDI:
+   avval `.btn-outline:hover`/`.btn-ghost:hover` hech qanday shartsiz edi —
+   telefon/planshetda bosilgandan keyin ":hover" holati "yopishib qolardi"
+   (keyingi bosishgacha tugma "faol" ko'rinishda qolib ketardi). ─────────── */
+@media (hover: hover) and (pointer: fine) {
+  .btn-outline:hover,
+  .btn-ghost:hover {
+    background: color-mix(in srgb, var(--foreground) 10%, transparent) !important;
+  }
+
+  .btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+    filter: brightness(1.04);
+  }
+
+  .glass-card:hover,
+  .stat-card:hover {
+    transform: translateY(-1px);
+    box-shadow:
+      inset 0 1px 0 var(--liquid-highlight),
+      0 10px 28px color-mix(in srgb, var(--foreground) 12%, transparent);
+  }
+}
+
+/* Eski brauzer (color-mix yo'q) — shaffoflik/blur o'rniga qattiq rang */
+@supports not (color: color-mix(in srgb, red, red)) {
+  .bg-primary, .bg-accent, .bg-destructive, .bg-secondary,
+  .bg-card, .surface, .glass-card, .stat-card, .glass-modal,
+  .bg-popover, .bg-muted, .bg-sidebar,
+  .btn-primary, .btn-accent, .btn-outline, .btn-ghost {
+    background: var(--card) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+  .btn-primary { background: var(--primary) !important; }
+  .btn-accent { background: var(--accent) !important; }
+}

@@ -3,6 +3,7 @@ import { lazyRetry as lazy, reloadWhenVisible } from "./app/lib/lazyRetry";
 import { isTelegramMiniApp } from "./app/telegramWebApp";
 import { installTelegramLifecycle } from "./app/lib/telegramLifecycle";
 import { startAutoUpdate } from "./app/lib/autoUpdate";
+import { applyPlatformClasses } from "./app/platform";
 
 import { createRoot } from "react-dom/client";
 import { MotionConfig } from "motion/react";
@@ -42,6 +43,10 @@ import { applyAppFont, applyFontScale, applyFontWeight } from "./app/lib/fonts";
 installErrorReporting();
 installNativeContextMenuGuard();
 installDevtoolsGuard();
+// Platforma klasslari (.platform-ios / .platform-macos / .platform-windows /
+// .platform-android) — birinchi chizishdan OLDIN, aks holda ba'zi CSS
+// qoidalari (masalan macOS/Windows'ga xos hover) keyinroq "sakrab" qo'llanadi.
+applyPlatformClasses();
 // PIN so'raladigan bo'lsa — birinchi kadrdan ilova ichi yopiq (App qulf ekranini chizgach olinadi)
 if (shouldStartLocked()) {
   showPrivacyCover();

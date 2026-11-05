@@ -76,9 +76,57 @@ export function setStatusBarColor(color: string, isDark = false) {
   import('@capacitor/status-bar')
     .then(({ StatusBar, Style }) => {
       StatusBar.setBackgroundColor({ color });
+      // iOS'da StatusBar.setStyle "qora/oq matn" (content) rangini belgilaydi:
+      // fon TO'Q bo'lsa matn OQ (Style.Dark), fon YORUG' bo'lsa matn QORA
+      // (Style.Light) kerak — shu sabab shu yerda `isDark` ilovaning joriy
+      // dark-mode holatiga mos keladi.
       StatusBar.setStyle({ style: isDark ? Style.Dark : Style.Light });
     })
     .catch(() => {});
+}
+
+// ── Platform aniqlash: Tauri ichida macOS vs Windows, va iOS (Capacitor/Safari) ──
+// Tauri OS plagini (`@tauri-apps/plugin-os`) loyihaga ulanmagan (yangi og'ir
+// dependency qo'shmaslik uchun) — shu sabab eng arzon ishonchli usul: navigator
+// sniffing (`userAgentData.platform` / `navigator.platform` / UA matni).
+export const isIOS = (): boolean => {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  // iPadOS 13+ Safari o'zini "Macintosh" deb ko'rsatadi (desktop-mode UA) —
+  // lekin teginish nuqtalari (maxTouchPoints) borligi uni Mac'dan ajratadi.
+  const iPadOS = /Macintosh/.test(ua) && typeof navigator.maxTouchPoints === 'number' && navigator.maxTouchPoints > 1;
+  return /iPhone|iPad|iPod/.test(ua) || iPadOS;
+};
+
+export const isMac = (): boolean => {
+  if (typeof navigator === 'undefined' || isIOS()) return false;
+  const platform = (navigator as any).userAgentData?.platform || navigator.platform || navigator.userAgent || '';
+  return /Mac/i.test(platform);
+};
+
+export const isWindowsOS = (): boolean => {
+  if (typeof navigator === 'undefined') return false;
+  const platform = (navigator as any).userAgentData?.platform || navigator.platform || navigator.userAgent || '';
+  return /Win/i.test(platform);
+};
+
+// <html> elementiga platforma klasslarini qo'yadi — CSS shu orqali har
+// platforma uchun alohida (faqat qo'shimcha, standart uslublarni
+// o'zgartirmaydigan) qoida yoza oladi: .platform-ios / .platform-macos /
+// .platform-windows / .platform-android. Ilova birinchi marta chizilishidan
+// OLDIN (main.tsx) bir marta chaqiriladi — aks holda CSS keyinroq
+// qo'llanganda sahifa "sakrab" ko'rinishi mumkin (flash of wrong layout).
+export function applyPlatformClasses() {
+  if (typeof document === 'undefined') return;
+  const r = document.documentElement;
+  // iOS: Capacitor ichida (haqiqiy ilova) ham, telefon Safari/PWA'da ham —
+  // ikkalasida ham notch/home-indicator bor, shu sabab ikkalasiga ham beriladi.
+  r.classList.toggle('platform-ios', isIOS());
+  r.classList.toggle('platform-android', isAndroid());
+  // macOS/Windows — faqat Tauri ilovasi ichida (oddiy desktop brauzerda
+  // vazifa doirasi bo'yicha maxsus moslash so'ralmagan).
+  r.classList.toggle('platform-macos', isTauri() && isMac());
+  r.classList.toggle('platform-windows', isTauri() && isWindowsOS());
 }
 
 // Sahifa nomini native title bar'ga o'rnatish (Tauri)

@@ -30,16 +30,24 @@ const ddmm = (s: string) => s.slice(5).split("-").reverse().join(".");
 type Range = "7" | "30" | "month" | "90" | "year" | "all" | "custom";
 
 // Telefon (≤767px): filtr paneli yig'iladi, grafiklar pastroq, jadval o'rniga kartalar.
-function useNarrow() {
+// Owner 2026-11-06: faqat OYNA kengligiga qarab hisoblanardi — Windows/macOS
+// ilovasida yon menyu joy egallagani uchun oyna o'zi 767px'dan keng bo'lsa ham
+// sarlavha qatori (sarlavha + "Moliya/Nazorat" + "Excel'ga yuklab olish" to'liq
+// matni) sig'may, tugma chetga "bo'rtib" chiqardi. Endi sarlavha QUTISINING
+// o'ZI tor bo'lsa ham (oyna qanchalik keng bo'lishidan qat'iy nazar) tor rejim
+// yoqiladi.
+function useNarrow(containerRef: React.RefObject<HTMLElement | null>) {
   const q = "(max-width: 767px)";
   const [narrow, setNarrow] = useState(() => typeof window !== "undefined" && !!window.matchMedia?.(q).matches);
   useEffect(() => {
     const m = window.matchMedia?.(q);
-    if (!m) return;
-    const on = () => setNarrow(m.matches);
-    m.addEventListener?.("change", on);
-    return () => m.removeEventListener?.("change", on);
-  }, []);
+    const check = () => setNarrow(!!m?.matches || (containerRef.current ? containerRef.current.clientWidth < 560 : false));
+    check();
+    m?.addEventListener?.("change", check);
+    const ro = containerRef.current ? new ResizeObserver(check) : null;
+    if (containerRef.current && ro) ro.observe(containerRef.current);
+    return () => { m?.removeEventListener?.("change", check); ro?.disconnect(); };
+  }, [containerRef]);
   return narrow;
 }
 
@@ -91,7 +99,8 @@ function ShareRow({ label, sub, value, pct, color }: { label: string; sub?: stri
 export default function ReportsPage({ projects, expenses, incomes, users, showIncome = false }:
   { projects: Project[]; expenses: Expense[]; incomes: Expense[]; users: AppUser[]; showIncome?: boolean }) {
   const { t } = useTranslation();
-  const narrow = useNarrow();
+  const headerRef = useRef<HTMLDivElement>(null);
+  const narrow = useNarrow(headerRef);
   const [selProj, setSelProj] = useState("all");
   const [range, setRange] = useState<Range>("30");
   const [customFrom, setCustomFrom] = useState("");
@@ -103,7 +112,6 @@ export default function ReportsPage({ projects, expenses, incomes, users, showIn
   // Owner 2026-10-22: telefonda filtr paneli ekrandan chiqib ketardi — endi yig'iladigan: tepada ixcham qator
   // (joriy davr · obyekt), bosilganda to'liq panel ochiladi; tashqariga bosilganda yoki aylantirilganda yopiladi.
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const headerRef = useRef<HTMLDivElement>(null);
   // Owner 2026-10-19: "Nazorat" — o'g'irlik, narx, hujjat muddati, texnika va funksiyalar sozlamasi
   const [view, setView] = usePersistentState<"finance" | "control">("reports.view", "finance", oneOf(["finance", "control"]));
   // Owner 2026-10-22: kirim va chiqim ALOHIDA hisoblanadi; balans (kirim − chiqim) faqat foydalanuvchi yoqsa

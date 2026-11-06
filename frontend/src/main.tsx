@@ -38,6 +38,7 @@ import { installExternalLinkGuard } from "./app/lib/externalLinks";
 import { installLegacyColorFallback, installDvhFallback } from "./app/lib/legacyCss";
 import { installKeyboardAvoid } from "./app/lib/keyboardAvoid";
 import { installEnterSubmit } from "./app/lib/enterSubmit";
+import { installDesktopReload } from "./app/lib/desktopReload";
 import { applyAppFont, applyFontScale, applyFontWeight } from "./app/lib/fonts";
 
 installErrorReporting();
@@ -55,6 +56,7 @@ if (shouldStartLocked()) {
 }
 installScrollEdgeFade();
 installExternalLinkGuard();
+installDesktopReload();
 // Eski Android WebView (Chrome < 111): ranglar va ekran balandligi uchun moslik
 installDvhFallback();
 installLegacyColorFallback();

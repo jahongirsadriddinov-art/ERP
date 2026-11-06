@@ -3340,29 +3340,29 @@ export default function App() {
           </button>
         )}
         <button onClick={()=>setGlobalSearch(true)} title={tApp('search.title')} aria-label={tApp('search.title')}
-          className="btn btn-ghost w-9 h-9 p-0 rounded-full">
-          <MorphIcon icon={Search} className="w-[18px] h-[18px]" />
+          className="rounded-full active:scale-90 liquid-transition">
+          <IconTile icon={Search} tone="slate" size="sm" variant="soft" />
         </button>
         <button onClick={()=>setShowAnnouncements(true)} title={tApp('announcements.title')} aria-label={tApp('announcements.title')}
-          className="btn btn-ghost w-9 h-9 p-0 rounded-full hidden lg:inline-flex">
-          <MorphIcon icon={Megaphone} className="w-[18px] h-[18px]" />
+          className="rounded-full active:scale-90 liquid-transition hidden lg:inline-flex">
+          <IconTile icon={Megaphone} tone="orange" size="sm" variant="soft" />
         </button>
         {hasFeature('qr_tools') && (
           <button onClick={()=>setQrScanOpen(true)} title={tApp('qrScanner.title')} aria-label={tApp('qrScanner.title')}
-            className="btn btn-ghost w-9 h-9 p-0 rounded-full hidden lg:inline-flex">
-            <MorphIcon icon={QrCode} className="w-[18px] h-[18px]" />
+            className="rounded-full active:scale-90 liquid-transition hidden lg:inline-flex">
+            <IconTile icon={QrCode} tone="violet" size="sm" variant="soft" />
           </button>
         )}
         <button onClick={lockAppNow} title={tApp('profile.lockNowBtn')} aria-label={tApp('profile.lockNowBtn')}
-          className="btn btn-ghost w-9 h-9 p-0 rounded-full hidden lg:inline-flex">
-          <MorphIcon icon={Lock} className="w-[18px] h-[18px]" />
+          className="rounded-full active:scale-90 liquid-transition hidden lg:inline-flex">
+          <IconTile icon={Lock} tone="slate" size="sm" variant="soft" />
         </button>
         <Suspense fallback={null}><NotificationCenter messages={messages} transfers={transfers} expenses={expenses} users={users} currentUser={liveUser}
           onOpenChat={()=>{setPage("chat");setSelProject(null);}} onOpenDashboard={()=>{setPage("dashboard");setSelProject(null);}}/></Suspense>
         <button onClick={cycleThemeMode} title={themeMode==="light"?"Yorug'":themeMode==="dark"?"Qorong'i":"Tizim bo'yicha"}
           aria-label={themeMode==="light"?"Yorug'":themeMode==="dark"?"Qorong'i":"Tizim bo'yicha"}
-          className="btn btn-ghost w-9 h-9 p-0 rounded-full hidden lg:inline-flex">
-          <MorphIcon icon={themeMode==="light"?Sun:themeMode==="dark"?Moon:(deviceKind()==="phone"?Smartphone:deviceKind()==="tablet"?TabletIcon:Monitor)} className="w-[18px] h-[18px]" />
+          className="rounded-full active:scale-90 liquid-transition hidden lg:inline-flex">
+          <IconTile icon={themeMode==="light"?Sun:themeMode==="dark"?Moon:(deviceKind()==="phone"?Smartphone:deviceKind()==="tablet"?TabletIcon:Monitor)} tone="amber" size="sm" variant="soft" />
         </button>
         <HeaderMoreMenu label={tApp('common.more', "Yana")} items={[
           { key: "ann", icon: Megaphone, tone: "orange", label: tApp('announcements.title'), onClick: () => setShowAnnouncements(true) },

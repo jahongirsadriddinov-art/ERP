@@ -21,6 +21,7 @@ import Computer from "@hugeicons/core-free-icons/ComputerIcon";
 import ArrowRight from "@hugeicons/core-free-icons/ArrowRight01Icon";
 import AiSparkles from "@hugeicons/core-free-icons/AiSparklesIcon";
 import { MorphIcon } from "morphicons/react";
+import { IconTile } from "./components/IconTile";
 import { motion, AnimatePresence } from "motion/react";
 import { API_BASE } from "./api";
 import { playSound } from "./sound";
@@ -304,8 +305,8 @@ export default function NotificationCenter({ messages, transfers, expenses, user
   return (
     <div className="relative" ref={ref}>
       <button onClick={() => setOpen(o => !o)} title={t("notifications.title")} aria-label={t("notifications.title")}
-        className="btn btn-ghost w-9 h-9 p-0 rounded-full relative">
-        <MorphIcon icon={Bell} className="w-[18px] h-[18px]" />
+        className="rounded-full active:scale-90 liquid-transition relative">
+        <IconTile icon={Bell} tone="blue" size="sm" variant="soft" />
         {unreadTotal > 0 && (
           <span className="badge-pulse absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 bg-accent text-accent-foreground rounded-full text-[9px] flex items-center justify-center font-bold shadow-sm">
             {unreadTotal > 99 ? "99+" : unreadTotal}

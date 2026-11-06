@@ -60,25 +60,14 @@ RESULT=$(curl -sf -X POST "$BACKEND_URL/api/deploy/broadcast-update" \
   -d "$BODY")
 echo "Broadcast natijasi: $RESULT"
 
-# TEKSHIRUV (owner 2026-10-30): build YASHIL tugadi, lekin serverdagi reliz
-# eski qoldi — broadcast-update yozgandan keyin GET /latest ba'zan birrov
-# eski qiymatni qaytaradi (bir necha soniyalik yozish-o'qish kechikishi).
-# Shuning uchun BIR MARTA emas, bir necha marta (kichik kutish bilan)
-# tekshiriladi — faqat haqiqatan ham yozilmagan bo'lsa QIZIL bo'ladi.
-for i in 1 2 3 4 5; do
-  LIVE=$(curl -s --max-time 60 "$BACKEND_URL/api/deploy/latest" | node -e "
-    let d=''; process.stdin.on('data',c=>d+=c); process.stdin.on('end',()=>{
-      try { const j = JSON.parse(d); console.log((j['${KIND}' === 'apk' ? 'android' : '${KIND}' === 'exe' ? 'windows' : 'macos']||{}).version || j.version || ''); }
-      catch(e) { console.log(''); }
-    });
-  ")
-  echo "Urinish ${i}: serverdagi ${KIND} versiyasi: $LIVE (kutilgan: $VERSION)"
-  if [ "$LIVE" = "$VERSION" ]; then
-    echo "Reliz chiqdi."
-    exit 0
-  fi
-  sleep 4
-done
-
-echo "::error::Server hali ham eski versiyani ko'rsatyapti (${KIND}) — reliz yozilmadi."
-exit 1
+# Owner 2026-11-06: BU YERDA /api/deploy/latest'ni tekshirish NOTO'G'RI edi —
+# routes/deploy.ts'dagi /broadcast-update ATAYLAB AppRelease('latest')ni
+# YANGILAMAYDI (owner 2026-10-28, aniq talab: "yangi versiya chiqasa yuborma
+# botga ozim yuboraman automatik yuborma faqat admin yani dasturchiga yubor
+# boshqa hichkimga yuborma"). Build faqat "nomzod" (AppBuild) sifatida
+# saqlanadi va FAQAT dasturchiga Telegram orqali xabar boradi — hammaga
+# chiqarish qarori dasturchi panelidagi "Chiqarish" tugmasi bilan QO'LDA
+# qilinadi (routes/appBuilds.ts). Shu sabab bu yerda "reliz chiqdimi"
+# tekshiruvi HAR DOIM muvaffaqiyatsiz bo'lardi — buning o'rniga yuqoridagi
+# broadcast-update javobi (`curl -sf`, xato bo'lsa `set -e` bilan to'xtaydi)
+# yetarli: CI vazifasi shu yergacha — qolgani dasturchining qo'lida.

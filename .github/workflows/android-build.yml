@@ -1,15 +1,18 @@
 name: Build & release apps
 
-# Har safar main'ga frontend o'zgarishi bilan push qilinganda: APK (Android)
-# va exe (Windows) ikkalasi ham quriladi, so'ng backend orqali ochiq
-# (login talab qilmaydigan) URL'ga yuklanadi va Telegram bot orqali
-# dasturchidan boshqa BARCHA foydalanuvchiga "yangi versiya chiqdi"
-# xabari avtomatik yuboriladi — aniq foydalanuvchi talabi bo'yicha, har
-# push'da (qo'lda ishga tushirish shart emas).
+# Har safar main'ga frontend o'zgarishi bilan push qilinganda: Android/Windows/macOS
+# har biri mustaqil quriladi, so'ng backend orqali ochiq (login talab qilmaydigan)
+# URL'ga yuklanadi va "nomzod" (AppBuild) sifatida saqlanadi.
+#
+# MUHIM (owner 2026-10-28, aniq talab): bu yerdan HECH KIMGA avtomatik
+# yuborilmaydi — faqat DASTURCHIGA Telegram orqali "yangi versiya tayyor"
+# xabari boradi. Hammaga chiqarish (AppRelease'ni yangilash) dasturchi
+# panelidagi "Ilova" bo'limida "Chiqarish" tugmasi bilan QO'LDA qilinadi
+# (backend/src/routes/appBuilds.ts). CI'ning vazifasi shu yergacha.
 #
 # Buning uchun "DEPLOY_BROADCAST_SECRET" nomli Actions secret shu repo'da
 # o'rnatilgan bo'lishi kerak (Settings > Secrets and variables > Actions),
-# qiymati Render'dagi bir xil nomdagi environment variable bilan BIR XIL.
+# qiymati Railway'dagi bir xil nomdagi environment variable bilan BIR XIL.
 # Secret yo'q/bo'sh bo'lsa — broadcast qadami xatosiz o'tkazib yuboriladi
 # (build'ning o'zi buzilmaydi), faqat xabar yuborilmaydi.
 on:

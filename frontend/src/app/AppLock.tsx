@@ -9,7 +9,7 @@ import X from "@hugeicons/core-free-icons/Cancel01Icon";
 import { MorphIcon } from "morphicons/react";
 import { motion, AnimatePresence } from "motion/react";
 import { useTranslation } from "react-i18next";
-import { isAndroid, isDesktopPointer, haptic } from "./platform";
+import { isAndroid, isIOSApp, isDesktopPointer, haptic } from "./platform";
 import { API_BASE } from "./api";
 import ArrowLeft from "@hugeicons/core-free-icons/ArrowLeft01Icon";
 
@@ -172,9 +172,13 @@ export function setBiometricEnabled(v: boolean): void {
 }
 const WEBAUTHN_CRED_KEY = "erp_webauthnCredId";
 
-// Android — @capacitor/native-biometric, avvaldan tayyor, ro'yxatdan
-// o'tish shart emas.
-export const nativeBiometricSupported = (): boolean => isAndroid();
+// Android VA iOS — @capacitor/native-biometric (ikkalasida ham ilovaning
+// Xcode/Gradle loyihasiga ulangan), avvaldan tayyor, ro'yxatdan o'tish
+// shart emas. Owner 2026-11-06: oldin faqat Android tekshirilardi — iOS
+// shu sabab Face ID/Touch ID'ni ishlatish o'rniga pastdagi WebAuthn
+// zaxirasiga tushib ketardi (brauzerga/Google Parol menejeriga bog'liq,
+// ishonchsiz) — holbuki native plugin iOS'da ham to'liq ishlaydi.
+export const nativeBiometricSupported = (): boolean => isAndroid() || isIOSApp();
 
 // Veb (shu jumladan iOS Safari, Windows exe'ning WebView'i, va h.k.) —
 // WebAuthn ("Face ID/Touch ID/Windows Hello ilova kod so'ramasdan turib

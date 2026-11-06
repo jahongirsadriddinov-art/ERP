@@ -14,6 +14,7 @@ import { issueTokenWithSession } from '../services/sessions';
 import { GuardCaller, checkRoleAssign, checkTargetAccess, formatPhone, phoneTaken, auditUserAction } from '../utils/userGuards';
 import { onPhoneChanged } from '../services/telegramIdentity';
 import { enqueueIntroduce } from '../aiVoice/telegram/introduce';
+import { botLinkedTgId } from '../aiVoice/telegram/tgLink';
 
 const router = Router();
 
@@ -493,7 +494,12 @@ router.post('/telegram-webapp', async (req, res) => {
     const botToken = process.env.TELEGRAM_BOT_TOKEN;
     const tgId = botToken ? verifyTelegramInitData(String(req.body?.initData || ''), botToken) : null;
     if (!tgId) return res.status(401).json({ error: "Telegram ma'lumoti tasdiqlanmadi" });
-    const users = await User.find({ telegramChatId: tgId }).limit(2);
+    // Owner 2026-11-06: faqat telegramChatId tekshirilardi — lekin xodimning bot
+    // bog'lanishi aynan telegramUserId'da bo'lib, telegramChatId eskirgan/bo'sh
+    // qolgan hollarda (tgLink.ts'dagi bilan bir xil holat) Mini App avto-kirish
+    // "hisob topilmadi" deb 404 qaytarardi — holbuki xodim ERP botga bog'langan edi.
+    const candidates = await User.find({ $or: [{ telegramUserId: tgId }, { telegramChatId: tgId }] }).limit(5);
+    const users = candidates.filter((u) => botLinkedTgId(u) === tgId);
     // Bir Telegram'ga bir nechta hisob ulangan bo'lsa — qaysi biri ekanini taxmin qilmaymiz.
     if (users.length !== 1) return res.status(404).json({ error: 'Bu Telegram hisobiga ulangan yagona foydalanuvchi topilmadi' });
     if (users[0].role === 'dasturchi') return res.status(403).json({ error: 'Dasturchi faqat parol bilan kiradi' });

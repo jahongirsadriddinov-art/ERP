@@ -30,6 +30,10 @@ export const isCapacitor = (): boolean =>
 export const isAndroid = (): boolean =>
   isCapacitor() && (window as any).Capacitor?.getPlatform?.() === 'android';
 
+// Haqiqiy iOS ilova (Capacitor) — Safari'dagi iPhone emas (u WebAuthn'ga tushadi).
+export const isIOSApp = (): boolean =>
+  isCapacitor() && (window as any).Capacitor?.getPlatform?.() === 'ios';
+
 export const isNative = (): boolean => isTauri() || isCapacitor();
 
 // "Sichqoncha asosiy kirish qurilmasi" — laptop/desktop (Windows exe yoki

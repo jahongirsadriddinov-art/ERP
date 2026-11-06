@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSCameraUsageDescription</key>
+	<string>QR kod skanerlash uchun kameraga ruxsat kerak.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Ovozli yordamchi va qo'ng'iroqlar uchun mikrofonga ruxsat kerak.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>"Ishga keldim" belgisini qo'yish uchun joylashuvingiz kerak.</string>
+	<key>NSLocationUsageDescription</key>
+	<string>"Ishga keldim" belgisini qo'yish uchun joylashuvingiz kerak.</string>
+</dict>
+</plist>

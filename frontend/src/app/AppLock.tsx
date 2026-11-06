@@ -191,11 +191,14 @@ export const nativeBiometricSupported = (): boolean => isAndroid() || isIOSApp()
 // uchun mahalliy qulf).
 export async function isWebAuthnAvailable(): Promise<boolean> {
   try {
-    if (!window.PublicKeyCredential) return false;
+    if (!window.PublicKeyCredential) { console.warn('[biometric] PublicKeyCredential yo\'q (isSecureContext=', window.isSecureContext, ')'); return false; }
     const fn = (window.PublicKeyCredential as any).isUserVerifyingPlatformAuthenticatorAvailable;
-    if (typeof fn !== 'function') return false;
-    return await fn.call(window.PublicKeyCredential);
-  } catch {
+    if (typeof fn !== 'function') { console.warn('[biometric] isUserVerifyingPlatformAuthenticatorAvailable yo\'q'); return false; }
+    const ok = await fn.call(window.PublicKeyCredential);
+    if (!ok) console.warn('[biometric] platform authenticator (Touch ID/Face ID/Windows Hello) topilmadi');
+    return ok;
+  } catch (e) {
+    console.warn('[biometric] isWebAuthnAvailable xato:', e);
     return false;
   }
 }
@@ -241,11 +244,12 @@ export async function registerWebAuthnBiometric(userId: string): Promise<boolean
         timeout: 60000,
       },
     }) as PublicKeyCredential | null;
-    if (!cred) return false;
+    if (!cred) { console.warn('[biometric] registerWebAuthnBiometric: cred null qaytdi'); return false; }
     localStorage.setItem(WEBAUTHN_CRED_KEY, toBase64(cred.rawId));
     return true;
-  } catch {
-    return false; // bekor qilindi yoki qurilmada platform authenticator yo'q
+  } catch (e) {
+    console.warn('[biometric] registerWebAuthnBiometric xato (bekor qilindi yoki qurilmada platform authenticator yo\'q):', e);
+    return false;
   }
 }
 
@@ -266,7 +270,8 @@ async function verifyWebAuthnBiometric(): Promise<boolean> {
       },
     });
     return !!assertion;
-  } catch {
+  } catch (e) {
+    console.warn('[biometric] verifyWebAuthnBiometric xato:', e);
     return false;
   }
 }

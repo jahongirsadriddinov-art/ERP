@@ -1894,11 +1894,15 @@ function LoginScreen({ onLogin, onRegister, onBack }: { onLogin: (u: any, compan
   };
 
   return (
-    <main className="min-h-[100dvh] bg-background flex flex-col items-center justify-center p-4 py-8 liquid-transition relative overflow-y-auto scrollbar-hide" style={{ paddingTop: "max(2rem, env(safe-area-inset-top))", paddingBottom: "max(2rem, env(safe-area-inset-bottom))" }}>
-      {/* Background decorations */}
-      <div className="absolute top-[-8%] left-[-12%] w-[45%] h-[45%] bg-primary/15 rounded-full blur-[120px] blob-anim pointer-events-none" />
-      <div className="absolute bottom-[-8%] right-[-12%] w-[45%] h-[45%] bg-accent/15 rounded-full blur-[120px] blob-anim-slow pointer-events-none" />
-      <div className="absolute top-[40%] right-[-5%] w-[25%] h-[25%] bg-primary/10 rounded-full blur-[80px] blob-anim pointer-events-none" style={{ animationDelay: '4s' }} />
+    <main className="h-[100dvh] bg-background flex flex-col items-center justify-center p-4 py-8 liquid-transition relative overflow-y-auto scrollbar-hide" style={{ paddingTop: "max(2rem, env(safe-area-inset-top))", paddingBottom: "max(2rem, env(safe-area-inset-bottom))" }}>
+      {/* Background decorations — o'z o'ramida: bo'lmasa fon "bleed"i main'ning
+          scrollHeight'iga qo'shilib, ekranda hech narsa yo'q joyda keraksiz scroll
+          hosil qilardi (owner: "pastda narsa yo'q nimaga ortiqcha scroll bo'lyapdi"). */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-[-8%] left-[-12%] w-[45%] h-[45%] bg-primary/15 rounded-full blur-[120px] blob-anim" />
+        <div className="absolute bottom-[-8%] right-[-12%] w-[45%] h-[45%] bg-accent/15 rounded-full blur-[120px] blob-anim-slow" />
+        <div className="absolute top-[40%] right-[-5%] w-[25%] h-[25%] bg-primary/10 rounded-full blur-[80px] blob-anim" style={{ animationDelay: '4s' }} />
+      </div>
 
       {onBack && !isNative() && !isTelegramMiniApp() && (
         <button type="button" onClick={onBack}
@@ -3390,10 +3394,12 @@ export default function App() {
   // foydalanuvchining yangi, aniq so'rovi bilan bekor qilindi.
   if (shiftClosed) return (
     <>
-      <main className="min-h-[100dvh] bg-background flex flex-col items-center justify-center p-4 py-8 liquid-transition relative overflow-y-auto scrollbar-hide"
+      <main className="h-[100dvh] bg-background flex flex-col items-center justify-center p-4 py-8 liquid-transition relative overflow-y-auto scrollbar-hide"
         style={{ paddingTop: "max(2rem, env(safe-area-inset-top))", paddingBottom: "max(2rem, env(safe-area-inset-bottom))" }}>
-        <div className="absolute top-[-8%] left-[-12%] w-[45%] h-[45%] bg-primary/15 rounded-full blur-[120px] blob-anim pointer-events-none" />
-        <div className="absolute bottom-[-8%] right-[-12%] w-[45%] h-[45%] bg-accent/15 rounded-full blur-[120px] blob-anim-slow pointer-events-none" />
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute top-[-8%] left-[-12%] w-[45%] h-[45%] bg-primary/15 rounded-full blur-[120px] blob-anim" />
+          <div className="absolute bottom-[-8%] right-[-12%] w-[45%] h-[45%] bg-accent/15 rounded-full blur-[120px] blob-anim-slow" />
+        </div>
         <motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 300, damping: 26 }}
           className="w-full max-w-sm surface rounded-3xl p-8 text-center space-y-5 relative">
           <div className="w-16 h-16 rounded-full flex items-center justify-center overflow-hidden bg-gradient-to-br from-accent to-accent/75 shadow-sm mx-auto">

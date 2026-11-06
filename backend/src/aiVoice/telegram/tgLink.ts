@@ -86,7 +86,18 @@ export async function findEmployeeByTgId(tgId: string): Promise<{ companyId: str
   if (!TG_ID_RE.test(tgId)) return null;
   const ct: any = await AiEmployeeContact.findOne({ 'telegram.tgUserId': tgId }).select('companyId employeeId').lean();
   const ctState = ct ? await linkState(String(ct.employeeId), tgId) : 'other';
-  if (ct && ctState === 'yes') return { companyId: String(ct.companyId), employeeId: String(ct.employeeId) };
+  if (ct && ctState === 'yes') {
+    // Owner 2026-11-06 (jonli DB'da topildi): AiEmployeeContact.companyId eskirib qolishi mumkin — masalan
+    // tenant-bug tuzatilganda yoki firma qayta ochilganda User.companyId qayta biriktiriladi, lekin kontakt
+    // eski (endi aloqasi yo'q) firmada qolib ketadi. Xodim hali shu Telegram'ga bog'langani aniq (ctState
+    // 'yes'), shu sabab JORIY User.companyId ishlatiladi, eski kontakt esa darhol tuzatiladi.
+    const u: any = await User.findById(ct.employeeId).select('companyId').lean();
+    const liveCompanyId = u?.companyId ? String(u.companyId) : String(ct.companyId);
+    if (liveCompanyId !== String(ct.companyId)) {
+      await AiEmployeeContact.updateOne({ _id: ct._id }, { $set: { companyId: liveCompanyId } }).catch(() => undefined);
+    }
+    return { companyId: liveCompanyId, employeeId: String(ct.employeeId) };
+  }
   // Bot bog'lanishi: telegramUserId yoki shaxsiy chat id (bitta chat — bitta xodim, bot.ts kafolatlaydi)
   const users: any[] = await User.find({
     $or: [{ telegramUserId: tgId }, { telegramChatId: tgId }], isBlocked: { $ne: true }, companyId: { $exists: true, $ne: null },

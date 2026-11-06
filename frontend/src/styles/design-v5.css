@@ -63,7 +63,14 @@ pre, code, kbd, samp { font-family: ui-monospace, "JetBrains Mono", Consolas, mo
   .btn.p-0 { min-width: 2.5rem; min-height: 2.5rem; }
 }
 
-/* ── Maydonlar (input/select) ──────────────────────────────────────────── */
+/* ── Maydonlar (input/select) ──────────────────────────────────────────────
+   Owner 2026-11-06: "hamma joyda tartipsiz katta kichik bolip yotipdi" —
+   sabab topildi: balandlik faqat telefonda (pointer:coarse) majburlangan
+   edi, kompyuterda har bir forma o'zining py-1.5/py-2/py-2.5/py-3 aralashmasi
+   bilan qolib ketgan (--control-h-sm shu uchun yaratilgan edi, lekin hech
+   qayerda ulanmagan). Endi IKKALASIDA ham — bitta aniq balandlik. */
+input:is([type=text], [type=tel], [type=number], [type=search], [type=email], [type=password], [type=date], [type=time], [type=month], :not([type])):not([class*=" h-"]):not([class^="h-"]),
+select:not([class*=" h-"]):not([class^="h-"]) { min-height: var(--control-h-sm); }
 @media (pointer: coarse), (max-width: 640px) {
   input:is([type=text], [type=tel], [type=number], [type=search], [type=email], [type=password], [type=date], [type=time], [type=month], :not([type])):not([class*=" h-"]):not([class^="h-"]),
   select:not([class*=" h-"]):not([class^="h-"]) { min-height: var(--control-h); }

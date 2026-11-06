@@ -95,6 +95,28 @@ public class AppUpdaterPlugin extends Plugin {
         }
     }
 
+    // Owner 2026-11-06: "appstore/playmarket'ga qo'yilgandan keyin" fundamenti — Play Marketdan
+    // o'rnatilgan ilova o'zini APK yuklab/o'rnatib YANGILAY OLMAYDI (Android bunga ruxsat
+    // bermaydi/qoidalarga zid) — shu sabab frontend avval shu metodni so'rab, Play Marketdan
+    // o'rnatilganini bilib olishi, aniqlansa APK yuklash o'rniga Play Market sahifasiga
+    // yo'naltirishi kerak (UpdateChecker.tsx).
+    @PluginMethod
+    public void installSource(PluginCall call) {
+        String installer = null;
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                installer = getContext().getPackageManager()
+                    .getInstallSourceInfo(getContext().getPackageName()).getInstallingPackageName();
+            } else {
+                installer = getContext().getPackageManager().getInstallerPackageName(getContext().getPackageName());
+            }
+        } catch (Exception e) { /* noma'lum — xavfsiz-standart: Play Market EMAS deb hisoblanadi */ }
+        JSObject d = new JSObject();
+        d.put("installer", installer);
+        d.put("isPlayStore", "com.android.vending".equals(installer));
+        call.resolve(d);
+    }
+
     @PluginMethod
     public void install(PluginCall call) {
         File f = apkFile();

@@ -29,6 +29,24 @@ export default function UpdateChecker() {
   // "Keyinroq" bosilsa yopiladi, pastdagi kichik tugma orqali qayta ochiladi.
   const [open, setOpen] = useState(false);
   const startedFor = useRef<string | null>(null);
+  // Owner 2026-11-06: "appstore/playmarket'ga qo'yilgandan keyin" fundamenti — Play Marketdan
+  // o'rnatilgan ilova o'z-o'zini APK bilan yangilay OLMAYDI (Android bunga yo'l qo'ymaydi).
+  // Shu sabab o'rnatish manbasi bir marta so'raladi: Play Market bo'lsa, pastdagi butun oqim
+  // APK yuklash o'rniga faqat Play Market sahifasiga yo'naltiradi. iOS — allaqachon xavfsiz:
+  // /api/deploy/latest'da iOS uchun url/version umuman yo'q, shu sabab pastdagi tekshiruv
+  // hech qachon ishga tushmaydi (Apple sideload orqali yangilashga ruxsat bermaydi).
+  const playStoreId = useRef<string | null>(null);
+  useEffect(() => {
+    if (!isAndroid()) return;
+    (async () => {
+      try {
+        const { registerPlugin } = await import("@capacitor/core");
+        const AppUpdater = registerPlugin<any>("AppUpdater");
+        const r = await AppUpdater.installSource();
+        if (r?.isPlayStore) playStoreId.current = "uz.erp_firma.qurilisherp";
+      } catch { /* noma'lum — xavfsiz-standart: odatdagi APK oqimi davom etadi */ }
+    })();
+  }, []);
 
   useEffect(() => {
     if (!isNative()) return;
@@ -95,11 +113,20 @@ export default function UpdateChecker() {
   useEffect(() => {
     if (!info?.url || startedFor.current === info.version) return;
     startedFor.current = info.version;
+    // Play Marketdan o'rnatilgan bo'lsa — APK'ni o'zimiz yuklamaymiz, shunchaki
+    // "tayyor" holatini ko'rsatamiz (tugma bosilganda Play Market sahifasi ochiladi).
+    if (playStoreId.current) { setPhase("ready"); setOpen(true); return; }
     download(info.url);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [info?.version]);
 
   const install = async () => {
+    if (playStoreId.current) {
+      // openExternalUrl faqat http(s)/mailto/tel'ga ruxsat beradi (xavfsizlik) — "market:"
+      // sxemasi o'tmaydi; https havolasi Play Market ilovasi o'rnatilgan bo'lsa ham to'g'ri ochadi.
+      openExternalUrl(`https://play.google.com/store/apps/details?id=${playStoreId.current}`);
+      return;
+    }
     setPhase("installing");
     try {
       if (isTauri()) {
@@ -135,8 +162,8 @@ export default function UpdateChecker() {
             </div>
             <div className="p-5 space-y-4">
               <div>
-                <p className="font-semibold text-foreground">{phase === "error" ? t('update.errorText', { version: info.version, defaultValue: `Yangi versiya (${info.version}) yuklab olinmadi.` }) : phase === "downloading" ? t('update.downloadingText', { version: info.version, defaultValue: `Yangi versiya (${info.version}) yuklanmoqda...` }) : t('update.readyText', { version: info.version })}</p>
-                <p className="text-sm text-muted-foreground mt-1">{phase === "error" ? t('update.errorHint', "Internet yoki server vaqtincha javob bermadi. \"Qayta urinish\"ni bosing yoki o'rnatuvchini qo'lda yuklab oling.") : phase === "downloading" ? "" : t('update.readyQuestion')}</p>
+                <p className="font-semibold text-foreground">{phase === "error" ? t('update.errorText', { version: info.version, defaultValue: `Yangi versiya (${info.version}) yuklab olinmadi.` }) : phase === "downloading" ? t('update.downloadingText', { version: info.version, defaultValue: `Yangi versiya (${info.version}) yuklanmoqda...` }) : playStoreId.current ? t('update.playStoreText', { version: info.version }) : t('update.readyText', { version: info.version })}</p>
+                <p className="text-sm text-muted-foreground mt-1">{phase === "error" ? t('update.errorHint', "Internet yoki server vaqtincha javob bermadi. \"Qayta urinish\"ni bosing yoki o'rnatuvchini qo'lda yuklab oling.") : phase === "downloading" || playStoreId.current ? "" : t('update.readyQuestion')}</p>
               </div>
               {info.notes && (
                 <div className="bg-muted/50 rounded-2xl p-3.5 max-h-40 overflow-y-auto">
@@ -169,7 +196,7 @@ export default function UpdateChecker() {
                   {phase !== "downloading" && <button onClick={phase === "error" ? () => download(info.url!, 2) : install}
                     className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold text-white shadow-lg shadow-primary/25" style={btnStyle}>
                     <MorphIcon icon={Download} className="w-4 h-4" />
-                    {phase === "error" ? t('update.retry') : t('update.installRestart')}
+                    {phase === "error" ? t('update.retry') : playStoreId.current ? t('update.playStoreBtn') : t('update.installRestart')}
                   </button>}
                   <button onClick={() => setOpen(false)}
                     className="w-full py-3 rounded-xl text-sm font-semibold border border-border text-muted-foreground hover:bg-muted">
@@ -177,7 +204,7 @@ export default function UpdateChecker() {
                   </button>
                 </div>
               )}
-              {phase === "ready" && isAndroid() && <p className="text-[10px] text-muted-foreground text-center leading-relaxed">{t('update.installHintAndroid')}</p>}
+              {phase === "ready" && isAndroid() && !playStoreId.current && <p className="text-[10px] text-muted-foreground text-center leading-relaxed">{t('update.installHintAndroid')}</p>}
             </div>
           </motion.div>
         </motion.div>

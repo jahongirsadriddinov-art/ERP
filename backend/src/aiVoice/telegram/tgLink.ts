@@ -63,8 +63,18 @@ export async function ensureContactTgUserId(
   } catch (e: any) {
     if (e?.code !== 11000) throw e;
   }
+  const other: any = await AiEmployeeContact.findOne({ 'telegram.tgUserId': derived }).select('employeeId companyId').lean();
+  // Owner 2026-11-06 (jonli DB'da topildi): konflikt qiluvchi kontakt AYNAN SHU xodimniki bo'lishi mumkin —
+  // shunchaki eski (endi noto'g'ri) companyId'da qolib ketgan (masalan tenant-bug tuzatilganda User.companyId
+  // qayta biriktirilgan). Bu "boshqa birov" emas — yangi hujjat yaratish o'rniga joyidagi companyId to'g'rilanadi.
+  if (other && String(other.employeeId) === String(employeeId)) {
+    await AiEmployeeContact.updateOne(
+      { _id: other._id },
+      { $set: { companyId, 'telegram.tgUserId': derived, 'telegram.resolveStatus': 'unknown' }, $unset: { 'telegram.resolvedAt': 1 } },
+    );
+    return derived;
+  }
   // Boshqa xodimda shu id: u endi bu Telegram'ga bog'lanmagan bo'lsa — eskirgan, olib tashlanadi
-  const other: any = await AiEmployeeContact.findOne({ 'telegram.tgUserId': derived }).select('employeeId').lean();
   if (other && String(other.employeeId) !== String(employeeId) && !(await stillLinked(String(other.employeeId), derived))) {
     await AiEmployeeContact.updateOne(
       { _id: other._id, 'telegram.tgUserId': derived },

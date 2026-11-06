@@ -194,134 +194,165 @@ jobs:
             frontend/src-tauri/target/release/bundle/msi/*.msi
           retention-days: 30
 
-  # APK va exe ikkalasi ham tayyor bo'lgach — backend'ga yuklab, botdan
-  # broadcast qiladi. Push'da HAR DOIM ishga tushadi (aniq talab bo'yicha);
-  # qo'lda ishga tushirilsa ham xuddi shunday, faqat versiya/izoh qo'lda
-  # kiritilgan bo'lishi mumkin.
-  broadcast:
-    needs: [meta, build-android, build-windows]
+  build-macos:
+    needs: meta
+    runs-on: macos-latest
+    env:
+      VITE_APP_VERSION: ${{ needs.meta.outputs.version }}
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # Intel va Apple Silicon ikkalasida ham ochiladigan "universal" .dmg
+      # uchun ikki Rust target ham kerak (owner 2026-11-06: "macos ham
+      # chiqsin, kim ishlatsa ham ochilsin").
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Cache Cargo registry + target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            frontend/src-tauri/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('frontend/src-tauri/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Install frontend deps
+        run: npm ci
+
+      - name: Remove stale installers from cache
+        run: rm -rf src-tauri/target/*/release/bundle src-tauri/target/release/bundle
+
+      - name: Set unique app version
+        run: |
+          sed -i '' 's/"version": "1.2.0"/"version": "1.2.${{ github.run_number }}"/' src-tauri/tauri.conf.json
+          grep -n '"version"' src-tauri/tauri.conf.json
+
+      # Apple Developer ID yo'q — imzolanmagan .dmg (mahalliy qo'lda build
+      # bilan bir xil). Ochganda Gatekeeper "noma'lum dasturchi" deb
+      # ogohlantiradi — foydalanuvchi "ctrl+bos > Open" bilan davom etadi.
+      - name: Build web bundle + Tauri (macOS universal dmg)
+        run: npm run build:mac -- --target universal-apple-darwin
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qurilisherp-macos-dmg
+          path: frontend/src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+          retention-days: 30
+
+  # Android, Windows va macOS endi MUSTAQIL chiqariladi — biri muvaffaqiyatsiz
+  # bo'lsa (masalan Windows/NSIS), qolganlari baribir backend'ga yuklanadi
+  # va botdan xabar ketadi (owner 2026-11-06: "har bir qurilma turi alohida
+  # chiqsin, bittasi ishlamasa boshqasiga tegmasin").
+  broadcast-android:
+    needs: [meta, build-android]
     runs-on: ubuntu-latest
-    if: always() && needs.build-android.result == 'success' && needs.build-windows.result == 'success'
+    if: always() && needs.build-android.result == 'success'
     steps:
       - uses: actions/download-artifact@v4
         with:
           name: qurilisherp-debug-apk
           path: artifacts/apk
 
+      - name: Upload APK, notify all users via bot
+        env:
+          DEPLOY_SECRET: ${{ secrets.DEPLOY_BROADCAST_SECRET }}
+          BACKEND_URL: https://erpfirma-backend.up.railway.app
+          VERSION_INPUT: ${{ needs.meta.outputs.version }}
+          NOTES: ${{ inputs.notes }}
+          KIND: apk
+          FIELD: apkUrl
+        run: |
+          APK_PATH=$(find artifacts/apk -iname "*.apk" | head -1)
+          bash .github/scripts/publish-build.sh "$APK_PATH"
+
+  broadcast-windows:
+    needs: [meta, build-windows]
+    runs-on: ubuntu-latest
+    if: always() && needs.build-windows.result == 'success'
+    steps:
       - uses: actions/download-artifact@v4
         with:
           name: qurilisherp-windows-exe
           path: artifacts/exe
 
-      - name: Upload APK + exe, notify all users via bot
+      - name: Upload exe, notify all users via bot
         env:
           DEPLOY_SECRET: ${{ secrets.DEPLOY_BROADCAST_SECRET }}
-          # MUHIM: yuklash erp-firma.uz orqali EMAS, to'g'ridan-to'g'ri backend'ga ketadi.
-          # Cloudflare'ning bot himoyasi GitHub Actions'dan kelgan so'rovni 403 ("Just a
-          # moment...") bilan to'sib qo'yardi — shuning uchun APK/EXE serverga umuman
-          # yuklanmay, botga ham xabar bormay qolgandi (2026-10-27).
-          # Foydalanuvchiga ko'rinadigan yuklab olish havolasini backend baribir
-          # erp-firma.uz/files/... ko'rinishida qaytaradi (routes/deploy.ts).
           BACKEND_URL: https://erpfirma-backend.up.railway.app
           VERSION_INPUT: ${{ needs.meta.outputs.version }}
           NOTES: ${{ inputs.notes }}
+          KIND: exe
+          FIELD: exeUrl
         run: |
-          set -e
-          if [ -z "$DEPLOY_SECRET" ]; then
-            echo "::warning::DEPLOY_BROADCAST_SECRET o'rnatilmagan (Settings > Secrets and variables > Actions) — build tayyor, lekin bildirishnoma YUBORILMAYDI."
-            exit 0
-          fi
-
-          VERSION="$VERSION_INPUT"
-          if [ -z "$VERSION" ]; then
-            VERSION="$(date -u +%Y.%m.%d)-${GITHUB_SHA::7}"
-          fi
-
-          APK_PATH=$(find artifacts/apk -iname "*.apk" | head -1)
           EXE_PATH=$(ls -t $(find artifacts/exe -iname "*setup*.exe") 2>/dev/null | head -1)
-          echo "EXE fayl: $EXE_PATH"
+          bash .github/scripts/publish-build.sh "$EXE_PATH"
 
-          # kind=apk/exe -> backend O'ZGARMAS (stable, overwrite:true) URL bilan
-          # yuklaydi — landing page/Profildagi "yuklab olish" tugmalari doim
-          # shu bitta havolaga ishonadi, har safar yangi (timestamp'li) URL
-          # kerak emas.
-          # MUHIM: avval "curl -sf" ishlatilardi — xato holatida JIM (hech
-          # qanday sabab ko'rsatmasdan) muvaffaqiyatsiz bo'lardi, log'da
-          # faqat "Na APK, na exe yuklanmadi" ko'rinardi, HAQIQIY sabab
-          # (HTTP status, server javobi) hech qayerda ko'rinmasdi. Endi
-          # status va javob tanasi ANIQ log'ga yoziladi.
-          upload() {
-            local path="$1" kind="$2"
-            local resp status body
-            resp=$(curl -s --max-time 120 -w '\n%{http_code}' -X POST "$BACKEND_URL/api/deploy/upload-artifact" \
-              -H "X-Deploy-Secret: $DEPLOY_SECRET" \
-              -F "file=@${path}" -F "kind=${kind}")
-            status=$(echo "$resp" | tail -n1)
-            body=$(echo "$resp" | sed '$d')
-            if [ "$status" != "200" ]; then
-              echo "::warning::${kind} yuklash muvaffaqiyatsiz (HTTP ${status}): ${body}" >&2
-              return 0
-            fi
-            echo "$body" | node -e "
-              let d = '';
-              process.stdin.on('data', c => d += c);
-              process.stdin.on('end', () => {
-                try { console.log(JSON.parse(d).url || ''); }
-                catch (e) { console.error('JSON tahlil xatosi:', e.message, '| tana:', d); }
-              });
-            "
-          }
+  broadcast-macos:
+    needs: [meta, build-macos]
+    runs-on: ubuntu-latest
+    if: always() && needs.build-macos.result == 'success'
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: qurilisherp-macos-dmg
+          path: artifacts/dmg
 
-          APK_URL=""
-          EXE_URL=""
-          if [ -n "$APK_PATH" ]; then APK_URL=$(upload "$APK_PATH" "apk"); echo "APK: $APK_URL"; fi
-          if [ -n "$EXE_PATH" ]; then EXE_URL=$(upload "$EXE_PATH" "exe"); echo "EXE: $EXE_URL"; fi
+      - name: Upload dmg, notify all users via bot
+        env:
+          DEPLOY_SECRET: ${{ secrets.DEPLOY_BROADCAST_SECRET }}
+          BACKEND_URL: https://erpfirma-backend.up.railway.app
+          VERSION_INPUT: ${{ needs.meta.outputs.version }}
+          NOTES: ${{ inputs.notes }}
+          KIND: dmg
+          FIELD: dmgUrl
+        run: |
+          DMG_PATH=$(find artifacts/dmg -iname "*.dmg" | head -1)
+          bash .github/scripts/publish-build.sh "$DMG_PATH"
 
-          if [ -z "$APK_URL" ] && [ -z "$EXE_URL" ]; then
-            echo "::error::Na APK, na exe yuklanmadi — broadcast o'tkazib yuborildi."
-            exit 1
-          fi
-
-          BODY=$(jq -n --arg version "$VERSION" --arg apkUrl "$APK_URL" --arg exeUrl "$EXE_URL" --arg notes "$NOTES" \
-            '{version: $version} + (if $apkUrl != "" then {apkUrl: $apkUrl} else {} end) + (if $exeUrl != "" then {exeUrl: $exeUrl} else {} end) + (if $notes != "" then {notes: $notes} else {} end)')
-          RESULT=$(curl -sf -X POST "$BACKEND_URL/api/deploy/broadcast-update" \
-            -H "X-Deploy-Secret: $DEPLOY_SECRET" \
-            -H "Content-Type: application/json" \
-            -d "$BODY")
-          echo "Broadcast natijasi: $RESULT"
-
-          # TEKSHIRUV (owner 2026-10-30): build YASHIL tugadi, lekin serverdagi
-          # reliz 3 kun eski qoldi — ilova ichidagi yangilanish eski versiyani
-          # ko'rsatib turardi va buni hech kim sezmadi. Endi oxirida server
-          # ROSTDAN yangi versiyani qaytarayotgani tekshiriladi; mos kelmasa
-          # ish QIZIL bo'ladi.
-          LIVE=$(curl -s --max-time 60 "$BACKEND_URL/api/deploy/latest" | jq -r '.version // ""')
-          echo "Serverdagi versiya: $LIVE (kutilgan: $VERSION)"
-          if [ "$LIVE" != "$VERSION" ]; then
-            echo "::error::Server hali ham '$LIVE' versiyasini ko'rsatyapti — reliz yozilmadi."
-            exit 1
-          fi
-
-  # QOROVUL (owner 2026-10-30): reliz qadami O'TKAZIB YUBORILSA, ish baribir
-  # YASHIL ko'rinardi — chunki GitHub'da "skipped" job natijani buzmaydi.
-  # Aynan shu sabab ilova uch kun eski qolib ketdi va hech kim sezmadi:
-  # tez ketma-ket push qilinganda yangi push eskisini bekor qiladi, bekor
-  # bo'lgan build'dan keyin broadcast ishlamaydi, lekin ro'yxatda ✓ turadi.
-  #
-  # Endi shunday hol QIZIL bo'ladi — ya'ni ko'rinadi va qayta ishga tushiriladi.
-  # (Bekor qilingan ishda bu job ham bekor bo'ladi; ogohlantirish kerak bo'lgan
-  # holat — build'lar o'tgan, lekin reliz chiqmagan holat.)
+  # QOROVUL (owner 2026-10-30, kengaytirildi 2026-11-06): har bir qurilma
+  # turi endi mustaqil — shuning uchun BIR platforma QIZIL bo'lsa ham
+  # ikkinchisi chiqadi. Bu job faqat "qurildi-yu, lekin reliz chiqmadi"
+  # holatini ko'rsatadi (masalan broadcast xato bo'lsa), build'ning o'zi
+  # muvaffaqiyatsiz bo'lgan platformani QAYTADAN qizil qilmaydi (allaqachon
+  # o'zining build-* ishida ko'ringan).
   release-check:
-    needs: [build-android, build-windows, broadcast]
+    needs: [build-android, build-windows, build-macos, broadcast-android, broadcast-windows, broadcast-macos]
     runs-on: ubuntu-latest
     if: always() && !cancelled()
     steps:
       - name: Reliz chiqqanini tekshirish
         run: |
-          echo "android=${{ needs.build-android.result }} windows=${{ needs.build-windows.result }} broadcast=${{ needs.broadcast.result }}"
-          if [ "${{ needs.broadcast.result }}" = "success" ]; then
-            echo "Reliz chiqdi."
-            exit 0
+          echo "android: build=${{ needs.build-android.result }} broadcast=${{ needs.broadcast-android.result }}"
+          echo "windows: build=${{ needs.build-windows.result }} broadcast=${{ needs.broadcast-windows.result }}"
+          echo "macos: build=${{ needs.build-macos.result }} broadcast=${{ needs.broadcast-macos.result }}"
+          FAIL=0
+          if [ "${{ needs.build-android.result }}" = "success" ] && [ "${{ needs.broadcast-android.result }}" != "success" ]; then
+            echo "::error::Android quridi, lekin reliz CHIQMADI (broadcast-android: ${{ needs.broadcast-android.result }})."
+            FAIL=1
           fi
-          echo "::error::Reliz CHIQMADI (broadcast: ${{ needs.broadcast.result }}). Ilova eski qoladi — ishni qayta ishga tushiring (Re-run jobs)."
-          exit 1
+          if [ "${{ needs.build-windows.result }}" = "success" ] && [ "${{ needs.broadcast-windows.result }}" != "success" ]; then
+            echo "::error::Windows quridi, lekin reliz CHIQMADI (broadcast-windows: ${{ needs.broadcast-windows.result }})."
+            FAIL=1
+          fi
+          if [ "${{ needs.build-macos.result }}" = "success" ] && [ "${{ needs.broadcast-macos.result }}" != "success" ]; then
+            echo "::error::macOS quridi, lekin reliz CHIQMADI (broadcast-macos: ${{ needs.broadcast-macos.result }})."
+            FAIL=1
+          fi
+          if [ "$FAIL" = "1" ]; then
+            echo "::error::Ilova (kamida bitta qurilma turida) eski qoladi — ishni qayta ishga tushiring (Re-run jobs)."
+            exit 1
+          fi
+          echo "Reliz chiqdi (yoki chiqaradigan narsa yo'q edi)."

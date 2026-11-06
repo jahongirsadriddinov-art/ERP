@@ -157,6 +157,10 @@ export async function onBotLinked(userId: string): Promise<void> {
     const u: any = await User.findById(userId).select('companyId telegramChatId telegramUserId role').lean();
     if (!u?.companyId || u.role === 'dasturchi') return;
     await ensureContactTgUserId(String(u.companyId), String(u._id), { user: u });
+    // Dinamik import — companyGroup.ts shu faylni (botLinkedTgId) import qiladi,
+    // statik import aylanma bog'lanish (circular import) yaratardi.
+    const { inviteEmployeeToCompanyGroup } = await import('./companyGroup');
+    await inviteEmployeeToCompanyGroup(userId).catch(() => {});
   } catch (e) {
     console.error('[aiVoice/telegram] bot bog\'lanishi backfill xatosi:', (e as Error)?.name || 'Error');
   }

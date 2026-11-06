@@ -60,6 +60,13 @@ export interface IAppSettings extends Document {
   // emoji/formatlash saqlanishi uchun).
   subscribeGateMsg?: { text: string; entities?: any[] } | string;
   customPlanPricing?: any; // "O'zim tanlayman" tarifi narxlari (config/customPlan.ts)
+  // Owner 2026-11-06: har firma uchun Telegram mavzu (forum topic) shu bitta
+  // "ERP-Firma community" supergruppasi ichida avtomatik ochiladi (bot shu
+  // yerda admin, forum rejimi yoqilgan). Dasturchi o'sha guruh ichida
+  // "/community" buyrug'ini yuborganda shu yerga yoziladi (aiVoice/telegram/companyGroup.ts).
+  communityChatId?: string;
+  /** Community'ga bitta umumiy taklif havolasi — birinchi ehtiyojda yaratilib shu yerda keshlanadi. */
+  communityInviteLink?: string;
   updatedAt: Date;
 }
 
@@ -81,6 +88,8 @@ const AppSettingsSchema = new Schema<IAppSettings>({
   discoveredChats: { type: Schema.Types.Mixed, default: [] },
   subscribeGateMsg: { type: Schema.Types.Mixed, default: undefined },
   customPlanPricing: { type: Schema.Types.Mixed, default: undefined },
+  communityChatId: { type: String, default: undefined },
+  communityInviteLink: { type: String, default: undefined },
   updatedAt: { type: Date, default: Date.now },
 });
 

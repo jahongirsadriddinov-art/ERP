@@ -20,6 +20,10 @@ export interface ICompany extends Document {
   plan: 'FREE' | 'PRO' | 'ENTERPRISE'; // hozir hamma FREE
   features?: { briefing?: boolean; theft?: boolean; prices?: boolean; docs?: boolean; equipment?: boolean; photoAi?: boolean; piecework?: boolean };
   trialEndsAt?: Date;      // hozir null / uzoq sana
+  // Owner 2026-11-06: har firma uchun ERP-Firma community ichida avtomatik
+  // ochiladigan Telegram mavzu (forum topic) — aiVoice/telegram/companyGroup.ts.
+  telegramTopicId?: number;
+  telegramTopicInviteLink?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -43,6 +47,8 @@ const CompanySchema: Schema = new Schema({
   plan: { type: String, enum: ['FREE', 'PRO', 'ENTERPRISE'], default: 'FREE' },
   trialEndsAt: { type: Date },
   lastMonthlySummary: { type: String }, // 'YYYY-MM' — oylik xulosa yuborilgan oxirgi oy
+  telegramTopicId: { type: Number },
+  telegramTopicInviteLink: { type: String },
   // Ixtiyoriy funksiyalar (owner 2026-10-19): firma o'zi yoqadi/o'chiradi — services/insights.ts, ishbay hisob
   features: {
     briefing: { type: Boolean, default: true },     // ertalabki kunlik brifing (xabar)

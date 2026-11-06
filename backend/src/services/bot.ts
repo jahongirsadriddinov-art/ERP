@@ -1820,6 +1820,18 @@ bot.on('message', async (msg: any) => {
   // shaxsiy (private) chatlar uchun mo'ljallangan).
   if (msg.chat.type !== 'private') {
     recordDiscoveredChat(String(msg.chat.id), msg.chat.title || msg.chat.username || String(msg.chat.id), msg.chat.type).catch(() => {});
+    // Owner 2026-11-06: "har firma uchun community ichida mavzu ochsin" — qaysi guruh "ERP-Firma
+    // community"ligini taxmin qilish (nom bo'yicha) xavfli (boshqa guruh bilan adashishi mumkin).
+    // Shu sabab dasturchi O'ZI shu guruh ICHIDA "/community" yuboradi — bot aynan SHU xabar
+    // kelgan chat.id'ni yozib oladi (aiVoice/telegram/companyGroup.ts shundan foydalanadi).
+    if (String(msg.text || '').trim() === '/community' && msg.from?.id) {
+      const isDevSender = await User.exists({ $or: [{ telegramUserId: String(msg.from.id) }, { telegramChatId: String(msg.from.id) }], role: 'dasturchi' });
+      if (isDevSender) {
+        await AppSettings.findOneAndUpdate({ key: 'global' }, { $set: { key: 'global', communityChatId: String(msg.chat.id), updatedAt: new Date() } }, { upsert: true });
+        await bot.sendMessage(chatId, `✅ Shu guruh "ERP-Firma community" sifatida saqlandi (chatId=${msg.chat.id}). Endi har yangi firma uchun bot shu yerda avtomatik mavzu (topic) ochadi — guruhda "Mavzular" (Topics) yoqilgan bo'lishi kerak.`).catch(() => {});
+      }
+      return;
+    }
     // Guruh/kanal buyruqlari (owner 2026-10-26): firmaga bog'langan guruhda firma buyruqlari,
     // umumiy guruh va kanalda esa ochiq buyruqlar ishlaydi. Qolgan barcha mantiq — faqat shaxsiy chatda.
     await runGroupCommand(msg);

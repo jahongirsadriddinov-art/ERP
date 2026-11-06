@@ -44,6 +44,7 @@ export async function ensureContactTgUserId(
   const user: any = opts.user !== undefined ? opts.user
     : await User.findOne({ _id: employeeId, companyId }).select('telegramChatId telegramUserId').lean();
   const ct: any = await AiEmployeeContact.findOne({ companyId, employeeId }).select('telegram.tgUserId').lean();
+  const ctId = ct?._id;
   const current = typeof ct?.telegram?.tgUserId === 'string' && TG_ID_RE.test(ct.telegram.tgUserId) ? ct.telegram.tgUserId : undefined;
   const derived = botLinkedTgId(user);
   if (!derived || derived === current) return current;
@@ -68,6 +69,21 @@ export async function ensureContactTgUserId(
   // shunchaki eski (endi noto'g'ri) companyId'da qolib ketgan (masalan tenant-bug tuzatilganda User.companyId
   // qayta biriktirilgan). Bu "boshqa birov" emas — yangi hujjat yaratish o'rniga joyidagi companyId to'g'rilanadi.
   if (other && String(other.employeeId) === String(employeeId)) {
+    if (ctId && String(ctId) !== String(other._id)) {
+      // Owner 2026-11-06: ikkala hujjat ham bor — joriy companyId'da bo'sh kontakt (ctId) VA eski
+      // companyId'da tgUserId'li kontakt (other). other'ga companyId ko'chirilsa {companyId,employeeId}
+      // unikal indeksi buziladi (ctId allaqachon o'sha joyni egallagan) — shu sabab tgUserId ctId'ga
+      // ko'chiriladi, other'dan esa olib tashlanadi (ikki alohida yozuv, ikkisi ham xavfsiz/shartli).
+      await AiEmployeeContact.updateOne(
+        { _id: other._id },
+        { $unset: { 'telegram.tgUserId': 1, 'telegram.resolvedAt': 1 }, $set: { 'telegram.resolveStatus': 'unknown' } },
+      );
+      await AiEmployeeContact.updateOne(
+        { _id: ctId },
+        { $set: { 'telegram.tgUserId': derived, 'telegram.resolveStatus': 'unknown' }, $unset: { 'telegram.resolvedAt': 1 } },
+      );
+      return derived;
+    }
     await AiEmployeeContact.updateOne(
       { _id: other._id },
       { $set: { companyId, 'telegram.tgUserId': derived, 'telegram.resolveStatus': 'unknown' }, $unset: { 'telegram.resolvedAt': 1 } },
@@ -104,7 +120,19 @@ export async function findEmployeeByTgId(tgId: string): Promise<{ companyId: str
     const u: any = await User.findById(ct.employeeId).select('companyId').lean();
     const liveCompanyId = u?.companyId ? String(u.companyId) : String(ct.companyId);
     if (liveCompanyId !== String(ct.companyId)) {
-      await AiEmployeeContact.updateOne({ _id: ct._id }, { $set: { companyId: liveCompanyId } }).catch(() => undefined);
+      await AiEmployeeContact.updateOne({ _id: ct._id }, { $set: { companyId: liveCompanyId } }).catch(async (e: any) => {
+        if (e?.code !== 11000) return;
+        // {companyId,employeeId} unikal indeksi: joriy companyId'da allaqachon (bo'sh) kontakt bor — tgUserId
+        // o'sha hujjatga ko'chiriladi, eski hujjatdan esa olib tashlanadi (ensureContactTgUserId'dagi kabi).
+        await AiEmployeeContact.updateOne(
+          { companyId: liveCompanyId, employeeId: String(ct.employeeId) },
+          { $set: { 'telegram.tgUserId': tgId, 'telegram.resolveStatus': 'unknown' }, $unset: { 'telegram.resolvedAt': 1 } },
+        ).catch(() => undefined);
+        await AiEmployeeContact.updateOne(
+          { _id: ct._id },
+          { $unset: { 'telegram.tgUserId': 1, 'telegram.resolvedAt': 1 }, $set: { 'telegram.resolveStatus': 'unknown' } },
+        ).catch(() => undefined);
+      });
     }
     return { companyId: liveCompanyId, employeeId: String(ct.employeeId) };
   }

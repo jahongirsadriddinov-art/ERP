@@ -323,6 +323,90 @@ fn touch_id_available() -> bool { false }
 #[tauri::command]
 fn touch_id_verify(_reason: String) -> Result<bool, String> { Err("Bu platformada yo'q".into()) }
 
+// Owner 2026-11-06: WKWebView macOS'da `navigator.geolocation` tizim ruxsat
+// oynasini umuman ko'rsatmaydi (xatolik ham chiqmaydi) — WKWebView CoreLocation'ga
+// avtomatik ulanmagan. Shu sabab "mening joylashuvim" tugmasi bosilganda hech
+// narsa bo'lmasdi. Yechim: CoreLocation'ni (CLLocationManager) to'g'ridan-to'g'ri
+// chaqiramiz. CLLocationManager run loop bo'lgan thread'da (asosiy thread) turishi
+// SHART — shu sabab yaratish va har bir so'rov asosiy thread orqali (run_on_main_thread)
+// amalga oshiriladi, natija esa kanal (channel) orqali ishchi thread'ga qaytariladi.
+// Delegate klassi yozishdan qochildi (objc2'ning declare_class! murakkab va xato
+// qilish ehtimoli yuqori) — o'rniga oddiy so'rov: ruxsat so'ralgandan keyin
+// `location()` xususiyati davriy tekshiriladi (polling), bu CoreLocation'da
+// keng tarqalgan va ishonchli usul.
+#[cfg(target_os = "macos")]
+struct MacLocMgr(objc2::rc::Retained<objc2_core_location::CLLocationManager>);
+// XAVFSIZLIK: CLLocationManager o'zi Send/Sync emas (Objective-C klassi), lekin
+// unga HAR DOIM faqat `run_on_main_thread` ichidan murojaat qilinadi — shu sabab
+// uni thread'lar orasida (Arc<Mutex<..>> ichida) tashish xavfsiz.
+#[cfg(target_os = "macos")]
+unsafe impl Send for MacLocMgr {}
+
+#[cfg(target_os = "macos")]
+#[tauri::command]
+fn get_current_location(app: tauri::AppHandle) -> Result<(f64, f64, f64), String> {
+    use objc2_core_location::{CLAuthorizationStatus, CLLocationManager};
+    use std::sync::{mpsc, Arc, Mutex};
+    use std::time::{Duration, Instant};
+
+    let slot: Arc<Mutex<Option<MacLocMgr>>> = Arc::new(Mutex::new(None));
+    let slot2 = slot.clone();
+    app.run_on_main_thread(move || {
+        let mgr = unsafe { CLLocationManager::new() };
+        unsafe {
+            mgr.requestWhenInUseAuthorization();
+            mgr.startUpdatingLocation();
+        }
+        *slot2.lock().unwrap() = Some(MacLocMgr(mgr));
+    }).map_err(|e| e.to_string())?;
+
+    let stop = |slot: Arc<Mutex<Option<MacLocMgr>>>| {
+        let _ = app.run_on_main_thread(move || {
+            if let Some(m) = slot.lock().unwrap().as_ref() {
+                unsafe { m.0.stopUpdatingLocation(); }
+            }
+        });
+    };
+
+    let deadline = Instant::now() + Duration::from_secs(25);
+    while Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(300));
+        let slot3 = slot.clone();
+        let (tx, rx) = mpsc::channel::<(i32, Option<(f64, f64, f64)>)>();
+        let sent = app.run_on_main_thread(move || {
+            let guard = slot3.lock().unwrap();
+            if let Some(m) = guard.as_ref() {
+                let status = unsafe { m.0.authorizationStatus() };
+                let coord = unsafe { m.0.location() }.map(|loc| {
+                    let c = unsafe { loc.coordinate() };
+                    let acc = unsafe { loc.horizontalAccuracy() };
+                    (c.latitude, c.longitude, acc)
+                });
+                let _ = tx.send((status.0, coord));
+            }
+        });
+        if sent.is_err() { continue; }
+        if let Ok((status, coord)) = rx.recv_timeout(Duration::from_secs(3)) {
+            if status == CLAuthorizationStatus::Denied.0 || status == CLAuthorizationStatus::Restricted.0 {
+                stop(slot);
+                return Err("Joylashuvga ruxsat berilmagan. Tizim sozlamalari → Maxfiylik → Joylashuv xizmatlarida QurilishERP'ga ruxsat bering.".into());
+            }
+            if let Some((lat, lon, acc)) = coord {
+                stop(slot);
+                return Ok((lat, lon, acc.max(1.0)));
+            }
+        }
+    }
+    stop(slot);
+    Err("Joylashuvni aniqlash vaqti tugadi. Qaytadan urinib ko'ring.".into())
+}
+
+#[cfg(not(target_os = "macos"))]
+#[tauri::command]
+fn get_current_location(_app: tauri::AppHandle) -> Result<(f64, f64, f64), String> {
+    Err("Bu platformada yo'q".into())
+}
+
 fn show_main(app: &tauri::AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.show();
@@ -379,7 +463,7 @@ pub fn run() {
                 }
             }
         })
-        .invoke_handler(tauri::generate_handler![greet, download_update, install_update, save_to_downloads, reveal_file, open_external, touch_id_available, touch_id_verify])
+        .invoke_handler(tauri::generate_handler![greet, download_update, install_update, save_to_downloads, reveal_file, open_external, touch_id_available, touch_id_verify, get_current_location])
         .run(tauri::generate_context!())
         .expect("QurilishERP ishga tushmadi");
 }

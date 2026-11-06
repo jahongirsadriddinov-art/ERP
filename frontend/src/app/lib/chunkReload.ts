@@ -10,6 +10,22 @@ export function isChunkError(e: unknown): boolean {
   return CHUNK_RE.test(String(msg));
 }
 
+// Owner 2026-11-06: Mac Tauri ilovasida yangilanishdan keyin "Yangi versiya
+// chiqdi" ekrani yolg'ondan chiqib, "Yangilash" tugmasi bosilsa ham hech narsa
+// o'zgarmasdi. Sabab: `window.location.reload()` WKWebView'ning HTTP keshidan
+// ESKI index.html'ni qaytarardi — bu kesh ilova yangilanganda (yangi .app fayllari
+// disk ustiga yozilganda) TOZALANMAYDI, chunki WebKit keshi ilova bundle'iga
+// emas, foydalanuvchi profiliga bog'langan. Natijada eski index.html eski (endi
+// o'chirilgan) JS bo'lak nomlarini so'rayverardi — reload har safar bir xil
+// xatoga qaytib kelardi. Yechim: shunchaki reload emas, URL'ga o'zgaruvchi
+// so'rov parametri qo'shib ketish — bu WKWebView'ni keshni chetlab, haqiqiy
+// (yangi) index.html'ni diskdan qayta o'qishga majburlaydi.
+export function hardReload(): void {
+  const u = new URL(window.location.href);
+  u.searchParams.set("_r", String(Date.now()));
+  window.location.replace(u.toString());
+}
+
 /** Bir daqiqada ko'pi bilan bir marta qayta yuklaydi. Qayta yuklash boshlangan bo'lsa true. */
 export function reloadForNewVersion(): boolean {
   try {
@@ -17,6 +33,6 @@ export function reloadForNewVersion(): boolean {
     if (Date.now() - last < 60_000) return false;
     sessionStorage.setItem(KEY, String(Date.now()));
   } catch { /* sessionStorage yo'q — baribir yangilaymiz */ }
-  window.location.reload();
+  hardReload();
   return true;
 }

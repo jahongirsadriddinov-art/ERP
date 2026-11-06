@@ -3382,12 +3382,21 @@ export default function App() {
     </header>
   );
 
+  // Owner 2026-11-06: "zagruzka (skeleton) ko'rinadi, keyin PIN so'raydi — hech
+  // qanday kechikishlarsiz PIN'ni darhol so'rashi kerak". Sabab: {lockLayer}
+  // avval faqat ASOSIY (initialLoading tugagandan keyingi) return'larda
+  // chiqarilardi — shu bo'lak esa initialLoading hali TRUE bo'lganda bundan
+  // OLDIN qaytib ketardi, shu sabab qulf qatlami hali umuman render
+  // qilinmagan bo'lardi va foydalanuvchi bir lahza oddiy skeletonni ko'rardi.
+  // appLocked holati (localStorage'dan) initialLoading bilan BIR VAQTDA,
+  // sinxron tayyor bo'lgani uchun, qulfni shu yerda ham chiqarish kerak.
   if (initialLoading || (isWorkerRole && !attendanceChecked)) return (
     <>
       <div className="min-h-screen bg-background flex flex-col">
         {headerEl}
         <SkeletonPage variant="dashboard" />
       </div>
+      {lockLayer}
       <AppToaster/>
     </>
   );

@@ -9,6 +9,7 @@ import { API_BASE } from "./api";
 import { motion, AnimatePresence } from "motion/react";
 import { useTranslation } from "react-i18next";
 import { playSound } from "./sound";
+import { isDesktopPointer } from "./platform";
 
 interface QRScanResult {
   type: "material" | "object" | "transaction";
@@ -52,6 +53,15 @@ export default function QRScanner({ onClose, onResult, onLoginQrVerified, token 
   const [result, setResult] = useState<QRScanResult | null>(null);
   const [cameraIssue, setCameraIssue] = useState<CameraIssue | null>(null);
   const [stalled, setStalled] = useState(false);
+  // Owner 2026-11-06: "kamera teskari ko'rsatdi". Orqa kamera ("environment")
+  // so'ralgan — unda oyna kerak emas. Lekin noutbuk/kompyuterda (masalan Mac
+  // ilovasi) orqa kamera YO'Q, shu sabab brauzer/OS jimgina YAGONA mavjud
+  // (OLDI, selfie) kamerani berib qo'yadi. Oldi kamera CSS bilan ko'zguga
+  // o'xshatib ko'rsatilmasa — odam o'ziga "teskari" ko'rinadi (CallOverlay'da
+  // video qo'ng'iroqda xuddi shu sabab allaqachon oynalanadi). QR skanerlash
+  // canvas orqali xomaki piksellardan ishlaydi (CSS transform'ga bog'liq
+  // emas), shu sabab bu faqat ko'rinishga ta'sir qiladi, skanerlashga yo'q.
+  const [actualFacing, setActualFacing] = useState<"user" | "environment" | "">("");
 
   // Laptop/planshetga "QR kod orqali kirish" — App.tsx'dagi QrLoginPanel'da
   // ko'rsatilgan "qrlogin:<sessionId>:<code>" matnini o'qiganda ishga
@@ -92,6 +102,11 @@ export default function QRScanner({ onClose, onResult, onLoginQrVerified, token 
         video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
       });
       streamRef.current = stream;
+      const settings = stream.getVideoTracks()[0]?.getSettings();
+      // Ba'zi desktop WebKit/WebView'lar (masalan Mac ilovasi) built-in kamera
+      // uchun `facingMode`ni umuman bermaydi — shu holatda "sichqoncha
+      // asosiy" (desktop) qurilma bo'lsa, bu deyarli har doim oldi kamera.
+      setActualFacing(settings?.facingMode === "user" || (!settings?.facingMode && isDesktopPointer()) ? "user" : "");
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
@@ -307,7 +322,8 @@ export default function QRScanner({ onClose, onResult, onLoginQrVerified, token 
 
       {/* Camera view */}
       <div className="flex-1 relative overflow-hidden flex items-center justify-center">
-        <video ref={videoRef} className="w-full h-full object-cover" playsInline muted />
+        <video ref={videoRef} className="w-full h-full object-cover" playsInline muted
+          style={actualFacing === "user" ? { transform: "scaleX(-1)" } : undefined} />
         <canvas ref={canvasRef} className="hidden" />
 
         {/* Scanning overlay */}

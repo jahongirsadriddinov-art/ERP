@@ -1,6 +1,6 @@
 import { Component, ReactNode } from "react";
 import { reportError } from "./lib/monitoring";
-import { isChunkError, reloadForNewVersion } from "./lib/chunkReload";
+import { isChunkError, reloadForNewVersion, hardReload } from "./lib/chunkReload";
 import { reloadWhenVisible } from "./lib/lazyRetry";
 
 interface Props { children: ReactNode; }
@@ -34,7 +34,7 @@ export class ErrorBoundary extends Component<Props, State> {
             background: "var(--background, #f8fafc)", color: "var(--foreground, #0f172a)", fontFamily: "system-ui, sans-serif", padding: "2rem", textAlign: "center" }}>
             <p style={{ fontSize: "1rem", fontWeight: 700 }}>Yangi versiya chiqdi</p>
             <p style={{ fontSize: "0.875rem", opacity: 0.7, maxWidth: 360 }}>Davom etish uchun sahifani yangilang.</p>
-            <button onClick={() => window.location.reload()}
+            <button onClick={hardReload}
               style={{ background: "var(--primary, #4f46e5)", color: "#fff", border: "none", borderRadius: "0.9rem", padding: "0.7rem 1.6rem", fontSize: "0.9rem", fontWeight: 700, cursor: "pointer" }}>
               Yangilash
             </button>

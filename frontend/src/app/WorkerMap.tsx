@@ -11,10 +11,12 @@ import GpsIcon from "@hugeicons/core-free-icons/Gps01Icon";
 import SatIcon from "@hugeicons/core-free-icons/Satellite01Icon";
 import MapIcon from "@hugeicons/core-free-icons/MapsIcon";
 import { MorphIcon } from "morphicons/react";
+import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import { AppUser } from "./App";
 import { memojiHtml } from "./components/UserAvatar";
 import { isMapAlive, withMap, disposeMap } from "./lib/leafletSafe";
+import { getCurrentPositionCompat, watchPositionCompat, clearWatchCompat } from "./lib/geoCompat";
 
 interface GpsPoint { userId: string; lat: number; lng: number; accuracy?: number; timestamp: string; source?: 'site'|'bot_live'|'bot_once'; speed?: number; battery?: number; charging?: boolean; network?: string }
 
@@ -143,9 +145,13 @@ export default function WorkerMap({ users, gpsLocations, objects, focusUserId, t
   };
   const locateMe = () => {
     const map = mapRef.current;
-    if (!map || !navigator.geolocation) return;
+    if (!map) return;
     // GPS javobi bir necha soniyadan keyin keladi — shu orada sahifa yopilgan bo'lishi mumkin
-    navigator.geolocation.getCurrentPosition((p) => withMap(mapRef.current, (m) => m.flyTo([p.coords.latitude, p.coords.longitude], 16, { duration: 0.6 })), () => {}, { enableHighAccuracy: true, timeout: 8000 });
+    getCurrentPositionCompat(
+      (p) => withMap(mapRef.current, (m) => m.flyTo([p.coords.latitude, p.coords.longitude], 16, { duration: 0.6 })),
+      (err) => { toast.error(err instanceof Error ? err.message : String(err)); },
+      { enableHighAccuracy: true, timeout: 8000 },
+    );
   };
 
   // ── Obyektlar: belgisi + geozona doirasi (owner 2026-10-27) ──
@@ -183,7 +189,6 @@ export default function WorkerMap({ users, gpsLocations, objects, focusUserId, t
   // Ko'k puls nuqta + aniqlik doirasi; joylashuv o'zgarsa darhol suriladi. Ruxsat berilmasa — hech narsa
   // ko'rsatilmaydi (xatolik ham chiqmaydi), xarita avvalgidek ishlayveradi.
   useEffect(() => {
-    if (!navigator.geolocation) return;
     let dot: L.Marker | null = null;
     let ring: L.Circle | null = null;
     const icon = L.divIcon({
@@ -191,7 +196,7 @@ export default function WorkerMap({ users, gpsLocations, objects, focusUserId, t
       html: '<div class="wm-me"><span class="wm-me-pulse"></span><span class="wm-me-dot"></span></div>',
       iconSize: [22, 22], iconAnchor: [11, 11],
     });
-    const id = navigator.geolocation.watchPosition((p) => {
+    const id = watchPositionCompat((p) => {
       const ll: [number, number] = [p.coords.latitude, p.coords.longitude];
       const acc = Math.max(8, Math.min(200, p.coords.accuracy || 25));
       withMap(mapRef.current, (m) => {
@@ -207,7 +212,7 @@ export default function WorkerMap({ users, gpsLocations, objects, focusUserId, t
       });
     }, () => { /* ruxsat yo'q — nuqta ko'rsatilmaydi */ }, { enableHighAccuracy: true, maximumAge: 10_000, timeout: 20_000 });
     return () => {
-      navigator.geolocation.clearWatch(id);
+      clearWatchCompat(id);
       withMap(mapRef.current, (m) => { if (dot) m.removeLayer(dot); if (ring) m.removeLayer(ring); });
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

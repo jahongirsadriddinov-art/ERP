@@ -33,10 +33,11 @@ base64 = "0.22"
 tauri-plugin-single-instance = "2"
 
 [target.'cfg(target_os = "macos")'.dependencies]
-block2 = "0.5"
-objc2 = "0.5"
-objc2-foundation = "0.2"
-objc2-local-authentication = { version = "0.2", features = ["LAContext", "LAError", "LAPublicDefines", "block2"] }
+block2 = "0.6"
+objc2 = "0.6"
+objc2-core-location = { version = "0.3", features = ["CLLocation", "CLLocationManager", "CLLocationManagerDelegate", "CLError"] }
+objc2-foundation = "0.3"
+objc2-local-authentication = { version = "0.3", features = ["LAContext", "LAError", "LAPublicDefines", "block2"] }
 
 [profile.release]
 panic = "abort"

@@ -759,6 +759,12 @@ export function PinLockScreen({ onUnlock, onForgot, onLockedOut }: { onUnlock: (
   };
 
   useEffect(() => {
+    // Owner 2026-11-06: Mac'da avtomatik urinish macOS'ning o'zining TIZIM
+    // oynasini (Touch ID/parol) darhol ochib, PIN maydonini to'sib qo'yardi
+    // ("kod kiritadigan joy yo'q" — aslida bor edi, lekin tizim oynasi
+    // ustida turardi). Endi Mac'da faqat tugma bosilganda so'raladi,
+    // boshqa platformalarda (Android/iOS/Windows) avvalgidek avtomatik.
+    if (isMacTauriBiometric()) return;
     if (isBiometricEnabled() && biometricSupported()) attemptBiometric();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

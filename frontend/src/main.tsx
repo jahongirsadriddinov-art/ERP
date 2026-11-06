@@ -32,7 +32,7 @@ document.addEventListener('error', (e) => {
 }, true);
 import { installNativeContextMenuGuard } from "./app/lib/nativeContextMenu";
 import { installDevtoolsGuard } from "./app/lib/devtoolsGuard";
-import { shouldStartLocked, showPrivacyCover } from "./app/AppLock";
+import { shouldStartLocked, showPrivacyCover, warmBiometricCache } from "./app/AppLock";
 import { installScrollEdgeFade } from "./app/lib/scrollFade";
 import { installExternalLinkGuard } from "./app/lib/externalLinks";
 import { installLegacyColorFallback, installDvhFallback } from "./app/lib/legacyCss";
@@ -57,6 +57,7 @@ if (shouldStartLocked()) {
 installScrollEdgeFade();
 installExternalLinkGuard();
 installDesktopReload();
+warmBiometricCache();
 // Eski Android WebView (Chrome < 111): ranglar va ekran balandligi uchun moslik
 installDvhFallback();
 installLegacyColorFallback();

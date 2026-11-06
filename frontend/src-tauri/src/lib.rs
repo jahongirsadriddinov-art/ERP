@@ -266,6 +266,63 @@ fn open_external(app: tauri::AppHandle, url: String) -> Result<(), String> {
     app.opener().open_url(url, None::<&str>).map_err(|e| e.to_string())
 }
 
+// Owner 2026-11-06: "touch id brauzerda ishlayapti ilovalarda ishlamayapdi" —
+// sabab: WebAuthn platform authenticator (Face ID/Touch ID uchun Secure
+// Enclave kaliti) ilovaning kod imzosiga (Team ID) bog'liq, bizning .dmg esa
+// imzolanmagan (Apple Developer ID yo'q) — shu sabab WKWebView ichida
+// ishlamaydi, Safari'da esa (Apple o'zi imzolagani uchun) ishlaydi. Yechim:
+// WebAuthn'ga umuman tayanmasdan, macOS'ning LocalAuthentication
+// freymvorkini (LAContext) to'g'ridan-to'g'ri chaqiramiz — bu shunchaki
+// "ushbu qurilma egasimisiz?" so'rovi, kalit yaratmaydi, shu sabab
+// imzosiz ilovada ham ishlaydi.
+#[cfg(target_os = "macos")]
+#[tauri::command]
+fn touch_id_available() -> bool {
+    use objc2_local_authentication::{LAContext, LAPolicy};
+    unsafe {
+        let ctx = LAContext::new();
+        ctx.canEvaluatePolicy_error(LAPolicy::DeviceOwnerAuthenticationWithBiometrics).is_ok()
+    }
+}
+
+#[cfg(target_os = "macos")]
+#[tauri::command]
+fn touch_id_verify(reason: String) -> Result<bool, String> {
+    use objc2_foundation::NSString;
+    use objc2_local_authentication::{LAContext, LAPolicy};
+    use std::sync::mpsc;
+
+    let ctx = unsafe { LAContext::new() };
+    unsafe { ctx.canEvaluatePolicy_error(LAPolicy::DeviceOwnerAuthenticationWithBiometrics) }
+        .map_err(|e| e.to_string())?;
+
+    let (tx, rx) = mpsc::channel::<(bool, Option<String>)>();
+    let ns_reason = NSString::from_str(&reason);
+    let block = block2::RcBlock::new(move |success: objc2::runtime::Bool, error: *mut objc2_foundation::NSError| {
+        let ok = success.as_bool();
+        let msg = if error.is_null() { None } else { Some(unsafe { (*error).localizedDescription() }.to_string()) };
+        let _ = tx.send((ok, msg));
+    });
+    unsafe {
+        ctx.evaluatePolicy_localizedReason_reply(LAPolicy::DeviceOwnerAuthenticationWithBiometrics, &ns_reason, &block);
+    }
+    match rx.recv_timeout(std::time::Duration::from_secs(60)) {
+        Ok((true, _)) => Ok(true),
+        Ok((false, msg)) => Err(msg.unwrap_or_else(|| "Rad etildi".into())),
+        Err(_) => Err("Vaqt tugadi".into()),
+    }
+}
+
+// Boshqa platformalarda (Windows/Linux) LocalAuthentication yo'q — WebAuthn
+// (Windows Hello) o'zi WKWebView bilan bir xil imzolangan jarayonda ishlaydi,
+// shu sabab bu yerda muammo yo'q, komanda shunchaki mavjud emas deb qaytadi.
+#[cfg(not(target_os = "macos"))]
+#[tauri::command]
+fn touch_id_available() -> bool { false }
+#[cfg(not(target_os = "macos"))]
+#[tauri::command]
+fn touch_id_verify(_reason: String) -> Result<bool, String> { Err("Bu platformada yo'q".into()) }
+
 fn show_main(app: &tauri::AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.show();
@@ -322,7 +379,7 @@ pub fn run() {
                 }
             }
         })
-        .invoke_handler(tauri::generate_handler![greet, download_update, install_update, save_to_downloads, reveal_file, open_external])
+        .invoke_handler(tauri::generate_handler![greet, download_update, install_update, save_to_downloads, reveal_file, open_external, touch_id_available, touch_id_verify])
         .run(tauri::generate_context!())
         .expect("QurilishERP ishga tushmadi");
 }

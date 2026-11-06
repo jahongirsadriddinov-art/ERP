@@ -9,7 +9,7 @@ import X from "@hugeicons/core-free-icons/Cancel01Icon";
 import { MorphIcon } from "morphicons/react";
 import { motion, AnimatePresence } from "motion/react";
 import { useTranslation } from "react-i18next";
-import { isAndroid, isIOSApp, isDesktopPointer, haptic } from "./platform";
+import { isAndroid, isIOSApp, isDesktopPointer, haptic, isTauri, isMac } from "./platform";
 import { API_BASE } from "./api";
 import ArrowLeft from "@hugeicons/core-free-icons/ArrowLeft01Icon";
 
@@ -178,7 +178,37 @@ const WEBAUTHN_CRED_KEY = "erp_webauthnCredId";
 // shu sabab Face ID/Touch ID'ni ishlatish o'rniga pastdagi WebAuthn
 // zaxirasiga tushib ketardi (brauzerga/Google Parol menejeriga bog'liq,
 // ishonchsiz) — holbuki native plugin iOS'da ham to'liq ishlaydi.
-export const nativeBiometricSupported = (): boolean => isAndroid() || isIOSApp();
+//
+// Mac (Tauri): "touch id brauzerda ishlaydi, ilovada ishlamaydi" — sabab:
+// WebAuthn platform authenticator ilovaning kod imzosiga (Team ID) bog'liq,
+// bizning .dmg imzolanmagan — shu sabab WKWebView ichida doim rad etiladi.
+// Shu uchun Mac'da WebAuthn'ga umuman tayanmaymiz — src-tauri/src/lib.rs'dagi
+// `touch_id_available`/`touch_id_verify` Rust komandalari to'g'ridan-to'g'ri
+// macOS LocalAuthentication (LAContext) orqali ishlaydi, ro'yxatdan o'tish
+// shart emas (kalit yaratmaydi — faqat "shu qurilma egasimisiz" so'rovi).
+export const isMacTauriBiometric = (): boolean => isTauri() && isMac();
+export const nativeBiometricSupported = (): boolean => isAndroid() || isIOSApp() || isMacTauriBiometric();
+
+// PIN qulf ekrani ("barmoq izi bilan ochish" tugmasini ko'rsatish/avtomatik
+// urinish) sinxron biometricSupported()'ga tayanadi — shu sabab keshni ilova
+// ochilishi bilanoq (main.tsx) ilgari-isitib qo'yish kerak, aks holda birinchi
+// qulf ekranida (Profil hali ochilmagan bo'lsa) hali bo'sh bo'lib qoladi.
+export function warmBiometricCache(): void {
+  if (isMacTauriBiometric()) void macTouchIdAvailable();
+}
+
+let macTouchIdCache: boolean | null = null;
+async function macTouchIdAvailable(): Promise<boolean> {
+  if (macTouchIdCache !== null) return macTouchIdCache;
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    macTouchIdCache = await invoke<boolean>('touch_id_available');
+  } catch (e) {
+    console.warn('[biometric] touch_id_available xato:', e);
+    macTouchIdCache = false;
+  }
+  return macTouchIdCache;
+}
 
 // Veb (shu jumladan iOS Safari, Windows exe'ning WebView'i, va h.k.) —
 // WebAuthn ("Face ID/Touch ID/Windows Hello ilova kod so'ramasdan turib
@@ -280,7 +310,8 @@ async function verifyWebAuthnBiometric(): Promise<boolean> {
 // tayyorlik shart emas, boshqa platformalarda esa avval ro'yxatdan
 // o'tilgan bo'lishi kerak (registerWebAuthnBiometric chaqirilgan bo'lsin).
 export async function biometricAvailable(): Promise<boolean> {
-  if (nativeBiometricSupported()) return true;
+  if (isMacTauriBiometric()) return macTouchIdAvailable();
+  if (nativeBiometricSupported()) return true; // Android/iOS — capacitor plugin avvaldan tayyor
   return (await isWebAuthnAvailable()) ; // ro'yxatdan o'tish keyinroq, yoqish paytida
 }
 // Sinxron, tezkor tekshiruv (masalan qulf ekranida darhol chaqirish uchun)
@@ -288,10 +319,22 @@ export async function biometricAvailable(): Promise<boolean> {
 // moslikni emas (shu uchun useEffect'da avval biometricAvailable() bilan
 // asinxron tekshirilgan bo'lishi kerak, bu funksiya faqat "ishlatsa
 // bo'ladimi" degan tezkor savolga javob beradi).
-export const biometricSupported = (): boolean => nativeBiometricSupported() || isWebAuthnRegistered();
+export const biometricSupported = (): boolean => {
+  if (isMacTauriBiometric()) return macTouchIdCache === true;
+  return isAndroid() || isIOSApp() || isWebAuthnRegistered();
+};
 
 export async function tryBiometricUnlock(): Promise<boolean> {
-  if (nativeBiometricSupported()) {
+  if (isMacTauriBiometric()) {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      return await invoke<boolean>('touch_id_verify', { reason: "Ilovaga kirish uchun tasdiqlang" });
+    } catch (e) {
+      console.warn('[biometric] touch_id_verify xato:', e);
+      return false;
+    }
+  }
+  if (isAndroid() || isIOSApp()) {
     try {
       const { NativeBiometric } = await import('capacitor-native-biometric');
       const avail = await NativeBiometric.isAvailable();

@@ -261,6 +261,8 @@ jobs:
     runs-on: ubuntu-latest
     if: always() && needs.build-android.result == 'success'
     steps:
+      - uses: actions/checkout@v4
+
       - uses: actions/download-artifact@v4
         with:
           name: qurilisherp-debug-apk
@@ -283,6 +285,8 @@ jobs:
     runs-on: ubuntu-latest
     if: always() && needs.build-windows.result == 'success'
     steps:
+      - uses: actions/checkout@v4
+
       - uses: actions/download-artifact@v4
         with:
           name: qurilisherp-windows-exe
@@ -305,6 +309,8 @@ jobs:
     runs-on: ubuntu-latest
     if: always() && needs.build-macos.result == 'success'
     steps:
+      - uses: actions/checkout@v4
+
       - uses: actions/download-artifact@v4
         with:
           name: qurilisherp-macos-dmg

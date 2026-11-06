@@ -493,13 +493,13 @@ function subscribeGateKeyboard(missing: { url: string; title: string }[], lang?:
 // /start'da ham, oddiy xabarlarda ham bir xil chaqiriladi — obuna to'liq
 // bo'lmasa, gate xabarini yuboradi va `true` qaytaradi (chaqiruvchi shu
 // holatda qolgan qayta ishlashni to'xtatishi kerak).
-async function enforceSubscriptionGate(chatId: number, telegramUserId: number, lang: BotLang | undefined, force = false): Promise<boolean> {
-  const missing = await getMissingSubscriptions(telegramUserId, force);
-  if (missing.length === 0) return false;
-  const settings = await getAppSettingsCached();
-  const m = subscribeGateEffectiveMsg(settings, lang);
-  await bot.sendMessage(chatId, m.text, { entities: m.entities, reply_markup: subscribeGateKeyboard(missing, lang) }).catch(() => {});
-  return true;
+// Owner 2026-11-06: "majburiy obunani ochirip qoy kerak emas butunlay olip
+// tashla" — bot endi hech kimni hech qanday kanal/guruhga obuna bo'lishga
+// majburlamaydi. Pastdagi tekshiruv/sozlash kodi (getMissingSubscriptions,
+// admin menyusi) ATAYLAB o'chirilmadi — chaqirilmaydi, zararsiz "o'lik" kod
+// sifatida qoladi — lekin shu yagona chaqiruv nuqtasi hech qachon bloklamaydi.
+async function enforceSubscriptionGate(_chatId: number, _telegramUserId: number, _lang: BotLang | undefined, _force = false): Promise<boolean> {
+  return false;
 }
 
 // Bot biror kanal/guruhga a'zo/administrator sifatida QO'SHILGANDA Telegram

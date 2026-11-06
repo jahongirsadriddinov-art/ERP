@@ -44,12 +44,23 @@
   --font-weight-medium: 550;
   --font-weight-normal: 400;
 
-  /* Charts */
-  --chart-1: #D2440F;
-  --chart-2: #16A34A;
-  --chart-3: #1B3A6B;
-  --chart-4: #D97706;
-  --chart-5: #7C3AED;
+  /* Grafik kategoriyali palitrasi — dataviz skill validatori bilan tekshirilgan
+     (8 slot, qat'iy tartib: CVD-xavfsizlik tartibga bog'liq, aralashtirmaslik
+     kerak). COLOR_THEMES (App.tsx) bu qiymatlarga tegmaydi — mavzu qanday
+     tanlanishidan qat'iy nazar grafik ranglari bir xil qoladi. */
+  --chart-1: #2a78d6;
+  --chart-2: #eb6834;
+  --chart-3: #1baf7a;
+  --chart-4: #eda100;
+  --chart-5: #e87ba4;
+  --chart-6: #008300;
+  --chart-7: #6250d6;
+  --chart-8: #e34948;
+  /* Holat ranglari (owner: byudjet % va shunga o'xshash ko'rsatkichlar) —
+     har doim bir xil, mavzu/light-dark'ga bog'liq emas (dataviz skill). */
+  --status-good: #0ca30c;
+  --status-warning: #fab219;
+  --status-critical: #d03b3b;
 
   /* Radius scale (v5: biroz yumshoqroq) */
   --radius: 1rem;
@@ -117,11 +128,14 @@
 
   --ring: #4577C4;
 
-  --chart-1: #F97316;
-  --chart-2: #34D399;
-  --chart-3: #60A5FA;
-  --chart-4: #FBBF24;
-  --chart-5: #A78BFA;
+  --chart-1: #3987e5;
+  --chart-2: #d95926;
+  --chart-3: #199e70;
+  --chart-4: #c98500;
+  --chart-5: #d55181;
+  --chart-6: #008300;
+  --chart-7: #9085e9;
+  --chart-8: #e66767;
 
   --sidebar: #0F1925;
   --sidebar-foreground: #E8EEF9;

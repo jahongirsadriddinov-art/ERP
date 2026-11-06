@@ -18,10 +18,13 @@ import { Suspense } from "react";
 import { lazyRetry as lazy } from "./lib/lazyRetry";
 const ControlPanel = lazy(() => import("./ControlPanel"));
 
-// Yorqin, bir-biridan aniq ajraladigan ranglar (qorong'i va yorug' fonda ham o'qiladi)
-const PALETTE = ["#6366F1", "#F97316", "#10B981", "#F43F5E", "#06B6D4", "#EAB308", "#A855F7", "#3B82F6"];
-const TYPE_COLOR: Record<string, string> = { material: "#F97316", oylik: "#6366F1", jihozlar: "#06B6D4", transport: "#10B981", boshqa: "#A855F7" };
-const INC = "#10B981", EXP = "#F97316", BAL = "#6366F1";
+// Grafik ranglari — theme.css'dagi --chart-1..8 (dataviz skill validatori bilan
+// tekshirilgan, qat'iy tartibli kategoriyali palitra; mavzu/light-dark'dan mustaqil).
+// Har bir turkum (TYPE_COLOR) O'ZINING slotiga doim bog'langan — filtr/davr
+// o'zgarganda ham rang entitydan ajralmaydi (reyting bo'yicha qayta bo'yalmaydi).
+const PALETTE = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)", "var(--chart-5)", "var(--chart-6)", "var(--chart-7)", "var(--chart-8)"];
+const TYPE_COLOR: Record<string, string> = { material: "var(--chart-1)", oylik: "var(--chart-2)", jihozlar: "var(--chart-3)", transport: "var(--chart-4)", boshqa: "var(--chart-5)" };
+const INC = "var(--success)", EXP = "var(--chart-2)", BAL = "var(--chart-1)";
 const short = (n: number) => { const a = Math.abs(n), s = n < 0 ? "−" : ""; return a >= 1e9 ? `${s}${(a / 1e9).toFixed(1)} mlrd` : a >= 1e6 ? `${s}${(a / 1e6).toFixed(1)} mln` : a >= 1e3 ? `${s}${Math.round(a / 1e3)} ming` : `${s}${Math.round(a)}`; };
 const iso = (d: Date) => { const z = new Date(d.getTime() - d.getTimezoneOffset() * 60000); return z.toISOString().slice(0, 10); };
 const daysBetween = (a: string, b: string) => Math.round((new Date(b).getTime() - new Date(a).getTime()) / 86400000) + 1;
@@ -527,12 +530,14 @@ export default function ReportsPage({ projects, expenses, incomes, users, showIn
           <Card title={t('reports.byWeekday', { defaultValue: "Hafta kunlari bo'yicha" })} delay={0.1}>
             <ResponsiveContainer width="100%" height={chartH(200)}>
               <BarChart data={byWeekday} margin={{ left: 0, right: 4 }}>
-                <defs><linearGradient id="gWd" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#6366F1" /><stop offset="100%" stopColor="#A855F7" /></linearGradient></defs>
+                {/* Bitta turkum — bitta rang (sequential), ikki xil kategoriyali rangni
+                    gradientga aralashtirish o'rniga shu rangning o'zi, faqat ustki qirrasi
+                    yumaloqlangan (dataviz skill: "thin marks, rounded data-ends"). */}
                 <CartesianGrid strokeDasharray="3 3" stroke="currentColor" strokeOpacity={0.08} vertical={false} />
                 <XAxis dataKey="name" tick={{ fontSize: 11, fill: "currentColor", opacity: 0.7 }} tickLine={false} axisLine={false} />
                 <YAxis tickFormatter={short} tick={axisTick} tickLine={false} axisLine={false} width={yW} />
                 <Tooltip content={<ChartTooltip />} cursor={{ fill: "currentColor", opacity: 0.05 }} />
-                <Bar dataKey="chiqim" name={t('reports.expense')} fill="url(#gWd)" radius={[8, 8, 2, 2]} maxBarSize={42} />
+                <Bar dataKey="chiqim" name={t('reports.expense')} fill="var(--chart-1)" radius={[8, 8, 2, 2]} maxBarSize={42} />
               </BarChart>
             </ResponsiveContainer>
           </Card>
@@ -550,6 +555,7 @@ export default function ReportsPage({ projects, expenses, incomes, users, showIn
                 <Legend wrapperStyle={{ fontSize: 11 }} iconType="circle" iconSize={8} />
                 {Object.keys(EXP_LABELS).map((k, i, arr) => (
                   <Bar key={k} dataKey={k} stackId="a" name={expLabel(t, k as ExpType)} fill={TYPE_COLOR[k]} maxBarSize={22}
+                    stroke="var(--card)" strokeWidth={2}
                     radius={i === arr.length - 1 ? [0, 8, 8, 0] : [0, 0, 0, 0]} />
                 ))}
               </BarChart>
@@ -565,7 +571,7 @@ export default function ReportsPage({ projects, expenses, incomes, users, showIn
               <div className="space-y-3">
                 {budgetRows.map(r => {
                   const p = r.percent || 0;
-                  const color = p >= 100 ? "#F43F5E" : p >= 80 ? "#EAB308" : "#10B981";
+                  const color = p >= 100 ? "var(--status-critical)" : p >= 80 ? "var(--status-warning)" : "var(--status-good)";
                   return (
                     <div key={r.id} className="min-w-0">
                       <div className="flex items-center gap-2 text-xs min-w-0">

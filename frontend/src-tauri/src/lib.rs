@@ -213,7 +213,12 @@ fn install_update_macos(dmg_path: &std::path::Path) -> Result<(), String> {
     }
 
     // 4) Yangi versiyani ochamiz — chaqiruvchi (install_update) shundan keyin joriy jarayonni yopadi.
-    Command::new("open").arg(&target).spawn().map_err(|e| format!("Yangi versiya ochilmadi: {}", e))?;
+    // Owner 2026-11-06: "yangilash ishladi lekin qaytib kirmadi" — sabab: shu nuqtada ESKI jarayon
+    // hali butunlay o'chmagan, bitta bundle ID uchun "open" shu ID allaqachon ishga tushgan bo'lsa
+    // YANGI nusxa o'rniga o'sha ESKI (hozir o'chayotgan) jarayonni oldinga chiqaradi — keyin u
+    // zudlik bilan exit(0) bilan yopiladi, natijada hech narsa ochiq qolmaydi. "-n" ESKI jarayon
+    // holatidan qat'iy nazar har doim YANGI nusxadan jarayon boshlashga majburlaydi.
+    Command::new("open").args(["-n", &target.to_string_lossy()]).spawn().map_err(|e| format!("Yangi versiya ochilmadi: {}", e))?;
     Ok(())
 }
 

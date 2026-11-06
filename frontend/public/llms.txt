@@ -1,0 +1,43 @@
+# QurilishERP
+
+> QurilishERP — qurilish (construction) kompaniyalari uchun ERP boshqaruv tizimi (Uzbekistan). Veb-sayt, Android ilova va Windows/macOS dasturi orqali ishlaydi. Obyektlar (loyihalar), smeta, materiallar va ombor hisobi, xarajat/kirim, ishchilar davomati (GPS nazorat bilan), maosh hisoblash, elektron hujjat va imzo, AI yordamchi hamda Telegram bot integratsiyasini bitta tizimda beradi.
+
+QurilishERP is a construction-company ERP (enterprise resource planning) platform built for the Uzbekistan market, available as a website, Android app, and Windows/macOS desktop app. It digitizes site/project management, cost estimation (smeta), materials and warehouse accounting, expense/income tracking, worker attendance with GPS check-in, payroll, e-signature documents, an AI assistant, and a Telegram bot — in one system.
+
+## Asosiy imkoniyatlar (Key features)
+
+- Obyekt (loyiha) boshqaruvi — construction site/project management
+- Smeta tahlili (Excel'dan import) — cost estimate analysis
+- Materiallar va ombor hisobi — materials and warehouse accounting
+- Xarajat va kirim hisobi — expense and income tracking
+- Ishchilar davomati va GPS nazorat — worker attendance with GPS check-in
+- Maosh hisoblash — payroll calculation
+- Elektron hujjat va imzo (shartnoma, dalolatnoma, yuk xati) — e-signature documents
+- 1C uchun eksport — export for 1C accounting software
+- Real-time chat va bildirishnomalar
+- AI yordamchi (ovozli va matnli)
+- Telegram bot integratsiyasi
+
+## Platformalar (Platforms)
+
+- Veb-sayt: https://erp-firma.uz/
+- Android ilova
+- Windows va macOS desktop dastur
+
+## Kimlar uchun (Who it's for)
+
+Qurilish firmalari, pudratchilar, prorablar va qurilish loyihalarini boshqaruvchi tashkilotlar (Uzbekistan).
+Construction companies, contractors, site managers (prorab), and organizations managing construction projects in Uzbekistan.
+
+## Sahifalar (Pages)
+
+- Bosh sahifa: https://erp-firma.uz/
+- Xususiyatlar: https://erp-firma.uz/xususiyatlar
+- Qanday ishlaydi: https://erp-firma.uz/qanday-ishlaydi
+- Kimlar uchun: https://erp-firma.uz/kimlar-uchun
+- Savollar (FAQ): https://erp-firma.uz/savollar
+
+## Aloqa (Contact)
+
+- Telegram bot: https://t.me/qurilish_erp_bot
+- Telegram (aloqa): https://t.me/Sadriddinov_Jahongir

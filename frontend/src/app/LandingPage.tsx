@@ -203,14 +203,14 @@ export default function LandingPage({ onLogin, onRegister, focus }: { onLogin: (
     if (descTag) descTag.setAttribute('content', meta?.desc || descWithTrial());
     const canonicalTag = document.querySelector('link[rel="canonical"]');
     const path = focus ? FOCUS_PATH[focus] : '/';
-    if (canonicalTag) canonicalTag.setAttribute('href', `https://www.erp-firma.uz${path}`);
+    if (canonicalTag) canonicalTag.setAttribute('href', `https://erp-firma.uz${path}`);
     // Sahifadan chiqilganda standart qiymatlarga qaytarish — masalan
     // login/ilova ekraniga o'tilganda eski (boshqa bo'lim) title qolib
     // ketmasin.
     return () => {
       document.title = DEFAULT_TITLE;
       if (descTag) descTag.setAttribute('content', descWithTrial());
-      if (canonicalTag) canonicalTag.setAttribute('href', 'https://www.erp-firma.uz/');
+      if (canonicalTag) canonicalTag.setAttribute('href', 'https://erp-firma.uz/');
     };
   }, [focus, t]);
 

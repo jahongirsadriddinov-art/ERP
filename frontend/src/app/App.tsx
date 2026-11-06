@@ -100,6 +100,7 @@ if (typeof window !== "undefined" && localStorage.getItem("token")) {
   if (ric) ric(preloadCall, { timeout: 10000 }); else setTimeout(preloadCall, 6000);
 }
 const RegisterWizard = lazy(() => import("./RegisterWizard"));
+const OnboardingCarousel = lazy(() => import("./OnboardingCarousel"));
 const DeveloperPanel = lazy(() => import("./DeveloperPanel"));
 const AIAssistant = lazy(() => import("./AIAssistant"));
 const AiVoiceRoot = lazy(() => import("./aiVoice/AiVoiceRoot"));
@@ -2202,6 +2203,8 @@ export default function App() {
   // keyingi ochilishlarda ("erp_visited" localStorage'da bor) to'g'ridan-
   // to'g'ri login ochiladi. Ro'yxatdan o'tish niyati aniq bo'lsa
   // (link/localStorage) landing'ni baribir chetlab o'tamiz.
+  // Ro'yxatdan YANGI o'tganlarga bir martalik tanishtiruv (RegisterWizard onDone'da yoqiladi).
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const [authView, setAuthView] = useState<"landing"|"login"|"register">(()=>{
     // Windows .exe (Tauri) / Android APK / iOS — bular marketing sayti
     // EMAS, o'rnatilgan ilova: har qanday boshqa ilova kabi ochilganda
@@ -3172,7 +3175,7 @@ export default function App() {
             </Suspense>
           : authView === "register"
           ? <Suspense fallback={<div className="min-h-screen bg-background"><SkeletonPage variant="form" /></div>}>
-              <RegisterWizard onBack={()=>setAuthView("login")} onDone={(u,company)=>{playSound("success");setCurrentUser(u);setPage("dashboard");setAuthView("login");applyCompany(company);}}/>
+              <RegisterWizard onBack={()=>setAuthView("login")} onDone={(u,company)=>{playSound("success");setCurrentUser(u);setPage("dashboard");setAuthView("login");applyCompany(company);setShowOnboarding(true);}}/>
             </Suspense>
           : <LoginScreen onLogin={(u,company)=>{playSound("unlock");clearManualLogout();setCurrentUser(u);setPage("dashboard");applyCompany(company);}} onRegister={()=>setAuthView("register")} onBack={(isTelegramMiniApp() || isNative()) ? undefined : ()=>setAuthView("landing")}/>}
         <AppToaster/>
@@ -3222,6 +3225,9 @@ export default function App() {
   // `inert` ham o'z joyida qoladi (klaviatura bilan ham kirib bo'lmasin).
   const lockLayer = lockEl && createPortal((
     <div className="fixed inset-0 z-[999990] overflow-y-auto bg-background" data-testid="pin-lock-layer">{lockEl}</div>
+  ), document.body);
+  const onboardingLayer = showOnboarding && !appLocked && createPortal((
+    <Suspense fallback={null}><OnboardingCarousel onDone={() => setShowOnboarding(false)} /></Suspense>
   ), document.body);
   const inertProps = appLocked ? ({ inert: "" } as Record<string, string>) : {};
   // #root butunlay bosilmaydigan bo'ladi (styles/design-v5.css: html.app-locked).
@@ -4088,6 +4094,7 @@ export default function App() {
       <AppToaster/>
     </div>
     {lockLayer}
+    {onboardingLayer}
     </>
   );
 }

@@ -61,3 +61,7 @@ Thumbs.db
 
 # Wrangler (Cloudflare) mahalliy kesh
 .wrangler/
+
+# ─── Lokal vositalar (shaxsiy, repo'ga aloqasi yo'q) ─────────────
+.freebuff/
+postman/postman/

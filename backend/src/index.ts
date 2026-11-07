@@ -49,6 +49,7 @@ import marketPriceRoutes from './routes/marketPrice';
 import brigadeRoutes from './routes/brigades';
 import widgetRoutes from './routes/widget';
 import botUiRoutes, { stickerImageRouter as botUiStickerRoutes } from './routes/botUi';
+import devSettingsResetRoutes from './routes/devSettingsReset';
 import insightsRoutes from './routes/insights';
 import worklogsRoutes from './routes/worklogs';
 import importRoutes from './routes/importExcel';
@@ -327,6 +328,7 @@ app.use('/api/dev/uptime',      requireAuth, requireDeveloper, uptimeRoutes); //
 app.use('/api/dev/turn',        requireAuth, requireDeveloper, turnStatusRoutes); // TURN (qo'ng'iroq relay) holati va trafik sarfi
 app.use('/api/dev/app-builds',  requireAuth, requireDeveloper, appBuildRoutes); // CI qurgan build'lar — qo'lda chiqarish
 app.use('/api/dev/bot-ui',      requireAuth, requireDeveloper, botUiRoutes); // Bot dizayni: tugma matni/premium emoji/rang, buyruqlar
+app.use('/api/dev/settings-reset', requireAuth, requireDeveloper, devSettingsResetRoutes); // Sozlamalarni standartga qaytarish (userlar/malumotlarga tegmaydi)
 app.use('/api/dev/ai-open-chat', requireAuth, requireDeveloper, aiOpenChatRoutes); // "Ochiq muloqot" — tanlangan odamga AI mavzu chegarasisiz
 app.use('/api/dev/ai-health',   requireAuth, requireDeveloper, aiHealthRoutes); // AI nega javob bermayapti: kalitlar, tgcall-worker, jonli sinov
 app.use('/api/market-price',    requireAuth, marketPriceRoutes); // Narx razvedkasi: O'zbekiston bo'yicha o'rtacha bozor narxi

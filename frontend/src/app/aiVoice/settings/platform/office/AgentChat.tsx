@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { officeApi, type ChatMsg, type OfficeAgent } from "./officeApi";
 import { blobToWav16k, speakAgent } from "./sound";
+import { PremiumEmoji } from "../../../../components/PremiumEmoji";
 
 // AI ofis — agent bilan suhbat (owner 2026-10-23): yozib yoki MIKROFON bilan gapiring → matn (Gemini transkripsiya) → agent o'z ishi
 // haqida javob beradi (Gemini) → javob ovoz chiqarib o'qiladi (ovoz yoqilgan bo'lsa) va 3D'da gap pufagi chiqadi.
@@ -91,7 +92,7 @@ export default function AgentChat({ agent, taskable, onCommand, onSpeak }: {
       <div className="flex items-end gap-1.5">
         <button type="button" onClick={mic} data-multi-tap data-testid="ai-office-mic" aria-pressed={rec === "rec"} title={k("chat.mic")} aria-label={k("chat.mic")}
           className={`w-10 h-10 flex-shrink-0 rounded-full grid place-items-center text-lg ${rec === "rec" ? "bg-red-500 text-white animate-pulse" : rec === "stt" ? "bg-muted opacity-60" : "bg-muted hover:bg-muted/70"}`}>
-          {rec === "stt" ? "…" : "🎤"}
+          {rec === "stt" ? "…" : <PremiumEmoji code="1f3a4" char="🎤" className="w-5 h-5" />}
         </button>
         <input value={text} onChange={(e) => setText(e.target.value)} placeholder={rec === "rec" ? k("chat.listening") : k("chat.placeholder")} data-testid="ai-office-chat-input"
           onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Enter") { e.preventDefault(); send(); } }}

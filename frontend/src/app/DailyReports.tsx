@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
 import { API_BASE } from "./api";
 import { RecordMenu, EditRecordModal, sendJson } from "./components/RecordEdit";
+import { PremiumEmoji } from "./components/PremiumEmoji";
 
 // ─── Kunlik hisobotlar (owner 2026-10-19: "ovozli hisobot") ────────────────────────────────────────────────
 // Botda ovoz bilan yuborilgan yoki shu yerda yozilgan hisobotlar; AI tartibga soladi, saqlashdan oldin ko'rsatiladi.
@@ -14,10 +15,10 @@ function ReportCard({ r }: { r: Report }) {
   return (
     <div className="space-y-1 text-xs">
       <p className="text-sm">{r.summary}</p>
-      {r.workDone.length > 0 && <p className="text-muted-foreground">🔨 {r.workDone.join("; ")}</p>}
-      {r.materialsUsed.length > 0 && <p className="text-muted-foreground">📦 {r.materialsUsed.map((m) => `${m.name} ${m.qty} ${m.unit}`).join(", ")}</p>}
-      {r.workersCount !== undefined && r.workersCount !== null && <p className="text-muted-foreground">👷 {t("reportsX.workers")}: {r.workersCount}</p>}
-      {r.issues.map((i, k) => <p key={k} className={i.severity === "low" ? "text-amber-700 dark:text-amber-300" : "text-red-600 dark:text-red-400"}>⚠️ {i.text}</p>)}
+      {r.workDone.length > 0 && <p className="text-muted-foreground"><PremiumEmoji code="1f528" char="🔨" className="w-3.5 h-3.5 inline-block align-[-2px]" /> {r.workDone.join("; ")}</p>}
+      {r.materialsUsed.length > 0 && <p className="text-muted-foreground"><PremiumEmoji code="1f4e6" char="📦" className="w-3.5 h-3.5 inline-block align-[-2px]" /> {r.materialsUsed.map((m) => `${m.name} ${m.qty} ${m.unit}`).join(", ")}</p>}
+      {r.workersCount !== undefined && r.workersCount !== null && <p className="text-muted-foreground"><PremiumEmoji code="1f477" char="👷" className="w-3.5 h-3.5 inline-block align-[-2px]" /> {t("reportsX.workers")}: {r.workersCount}</p>}
+      {r.issues.map((i, k) => <p key={k} className={i.severity === "low" ? "text-amber-700 dark:text-amber-300" : "text-red-600 dark:text-red-400"}><PremiumEmoji code="26a0" char="⚠️" className="w-3.5 h-3.5 inline-block align-[-2px]" /> {i.text}</p>)}
     </div>
   );
 }

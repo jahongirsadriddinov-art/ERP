@@ -10,6 +10,7 @@ import Telegram from "@hugeicons/core-free-icons/TelegramIcon";
 import Users from "@hugeicons/core-free-icons/UserMultiple02Icon";
 import Archive from "@hugeicons/core-free-icons/Archive02Icon";
 import History from "@hugeicons/core-free-icons/File01Icon";
+import { PremiumEmoji } from "../../../components/PremiumEmoji";
 import Search from "@hugeicons/core-free-icons/Search01Icon";
 import Chevron from "@hugeicons/core-free-icons/ArrowDown01Icon";
 import Back from "@hugeicons/core-free-icons/ArrowLeft01Icon";
@@ -388,7 +389,7 @@ function UnmetTab() {
                 </div>
                 <p className="text-sm break-words"><b className="text-muted-foreground font-semibold">{k("user")}:</b> {it.userText || "—"}</p>
                 <p className="text-sm break-words text-muted-foreground"><b className="font-semibold">{k("ai")}:</b> {it.aiReply || "—"}</p>
-                {it.toolName && <p className="text-xs font-mono break-words text-muted-foreground">🔧 {it.toolName}{it.toolMessage ? `: ${it.toolMessage}` : ""}</p>}
+                {it.toolName && <p className="text-xs font-mono break-words text-muted-foreground"><PremiumEmoji code="1f527" char="🔧" className="w-3.5 h-3.5 inline-block align-[-2px]" /> {it.toolName}{it.toolMessage ? `: ${it.toolMessage}` : ""}</p>}
               </li>
             ))}
           </ul>

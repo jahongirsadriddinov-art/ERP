@@ -13,6 +13,7 @@ import { Notice, Skeleton } from "../../ui";
 import { officeApi, TEAMS, type AgentProfile, type OfficeAgent, type Setup } from "./officeApi";
 import AgentPanel, { NewAgentForm, activityTone, agoText } from "./AgentPanel";
 import type { ErpLink } from "./Desktop";
+import { PremiumEmoji } from "../../../../components/PremiumEmoji";
 import { MediaHost, MuteButton } from "./MediaPanel";
 import WeatherChip, { useOfficeWeather } from "./WeatherChip";
 import { currentMovie, mediaStore, useMedia as useMediaState, youtubeThumb } from "./mediaStore";
@@ -220,12 +221,12 @@ export default function AiOffice({ fill = false, onNavigate, erpLinks = [], exte
           <MuteButton k={k} />
           <button type="button" onClick={() => (mm.music === "full" ? mediaStore.minimizeMusic() : mediaStore.openMusic())} aria-pressed={mm.music === "full"} data-testid="ai-office-media-open" disabled={!mm.media}
             className="h-8 px-3 rounded-full border border-border bg-card/60 text-[12px] font-semibold inline-flex items-center gap-1.5">
-            🎵 {k("media.title")}
+            <PremiumEmoji code="1f3b5" char="🎵" className="w-3.5 h-3.5 inline-block align-[-2px]" /> {k("media.title")}
           </button>
           {webgl && (
             <button type="button" onClick={() => { setSelected(null); setWalking(true); }} disabled={!agents} data-testid="ai-office-enter"
               className="h-8 px-3 rounded-full text-[12px] font-semibold inline-flex items-center gap-1.5 bg-foreground text-background disabled:opacity-50">
-              🚪 {k("walk.enter")}
+              <PremiumEmoji code="1f6aa" char="🚪" className="w-3.5 h-3.5 inline-block align-[-2px]" /> {k("walk.enter")}
             </button>
           )}
           <button type="button" onClick={() => select("manager")} data-testid="ai-office-goal"
@@ -252,7 +253,7 @@ export default function AiOffice({ fill = false, onNavigate, erpLinks = [], exte
           {!webgl ? (
             <div className="absolute inset-0 grid place-items-center p-6 text-center text-sm text-muted-foreground" data-testid="ai-office-nowebgl">{k("noWebgl")}</div>
           ) : walking || settling ? (
-            <div className="absolute inset-0 grid place-items-center text-sm text-muted-foreground">🚶 {k("walk.inside")}</div>
+            <div className="absolute inset-0 grid place-items-center text-sm text-muted-foreground"><PremiumEmoji code="1f6b6" char="🚶" className="w-4 h-4 inline-block align-[-3px]" /> {k("walk.inside")}</div>
           ) : agents ? (
             <Suspense fallback={<div className="absolute inset-0 p-4"><Skeleton h="h-full" /></div>}>
               <OfficeScene key={sceneKey} agents={agents} selectedId={selected} onSelect={select} showAllLabels={showAll} compact={compact} dark={dark}

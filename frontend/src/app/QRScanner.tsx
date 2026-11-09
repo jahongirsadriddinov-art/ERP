@@ -6,6 +6,7 @@ import AlertCircle from "@hugeicons/core-free-icons/AlertCircleIcon";
 import CheckCircle from "@hugeicons/core-free-icons/CheckmarkCircle01Icon";
 import { MorphIcon } from "morphicons/react";
 import { API_BASE } from "./api";
+import { PremiumEmoji } from "./components/PremiumEmoji";
 import { motion, AnimatePresence } from "motion/react";
 import { useTranslation } from "react-i18next";
 import { playSound } from "./sound";
@@ -364,7 +365,7 @@ export default function QRScanner({ onClose, onResult, onLoginQrVerified, token 
                 </div>
                 <p className="text-base font-bold text-foreground">{t('qrScanner.confirmTitle')}</p>
                 <p className="mt-1 text-sm text-muted-foreground">{t('qrScanner.confirmDesc')}</p>
-                <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-xs font-semibold text-foreground">💻 {loginConfirm.device || "Kompyuter"}</div>
+                <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-xs font-semibold text-foreground"><PremiumEmoji code="1f4bb" char="💻" className="w-3.5 h-3.5 inline-block align-[-2px]" /> {loginConfirm.device || "Kompyuter"}</div>
                 <div className="mt-5 grid grid-cols-2 gap-2">
                   <button type="button" disabled={approving} onClick={() => answerLogin(false)} className="btn btn-danger h-12 rounded-2xl">{t('qrScanner.confirmNo')}</button>
                   <button type="button" disabled={approving} onClick={() => answerLogin(true)} className="btn btn-success h-12 rounded-2xl">{approving ? "…" : t('qrScanner.confirmYes')}</button>

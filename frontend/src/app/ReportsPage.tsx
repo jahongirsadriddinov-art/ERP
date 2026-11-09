@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { oneOf, usePersistentState } from "./lib/persistentState";
 import { CountUp } from "./components/CountUp";
+import { PremiumEmoji } from "./components/PremiumEmoji";
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   AreaChart, Area, CartesianGrid, Legend, ComposedChart, Line,
@@ -644,7 +645,7 @@ export default function ReportsPage({ projects, expenses, incomes, users, showIn
                   <div key={e.id} className="rounded-xl border border-border/60 px-3 py-2 min-w-0">
                     <div className="flex items-start gap-2 min-w-0">
                       <p className="text-sm font-medium min-w-0 flex-1 break-words line-clamp-2">
-                        {e.anomaly && <span className="mr-1 text-[9px] font-bold px-1 py-0.5 rounded bg-amber-500/15 text-amber-600">⚠</span>}
+                        {e.anomaly && <span className="mr-1 text-[9px] font-bold px-1 py-0.5 rounded bg-amber-500/15 text-amber-600"><PremiumEmoji code="26a0" char="⚠" className="w-2.5 h-2.5 inline-block" /></span>}
                         {e.description || (isIncTable ? t('reports.pnlIncome') : expLabel(t, e.type))}
                       </p>
                       <span className={`text-sm font-bold font-mono whitespace-nowrap ${isIncTable ? "text-emerald-600 dark:text-emerald-400" : ""}`}>{isIncTable ? "+" : ""}{fmt(e.amount)}</span>
@@ -676,7 +677,7 @@ export default function ReportsPage({ projects, expenses, incomes, users, showIn
                       <tr key={e.id} className="border-b border-border/50 hover:bg-muted/20">
                         <td className="px-3 py-2 font-mono text-muted-foreground whitespace-nowrap">{e.date}</td>
                         <td className="px-3 py-2 max-w-[220px] truncate">
-                          {e.anomaly && <span className="mr-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600" title={t('reports.anomaly', { defaultValue: "G'ayrioddiy katta chiqim" })}>⚠</span>}
+                          {e.anomaly && <span className="mr-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600" title={t('reports.anomaly', { defaultValue: "G'ayrioddiy katta chiqim" })}><PremiumEmoji code="26a0" char="⚠" className="w-2.5 h-2.5 inline-block" /></span>}
                           {e.description || (isIncTable ? t('reports.pnlIncome') : expLabel(t, e.type))}
                         </td>
                         <td className="px-3 py-2 whitespace-nowrap"><span className="text-[10px] font-semibold px-2 py-0.5 rounded-full text-white" style={{ background: isIncTable ? INC : TYPE_COLOR[e.type] || PALETTE[0] }}>{isIncTable ? t('reports.pnlIncome') : expLabel(t, e.type)}</span></td>

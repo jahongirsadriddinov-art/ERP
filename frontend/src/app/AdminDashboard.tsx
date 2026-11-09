@@ -1,6 +1,7 @@
 import { MoneyInput } from "./components/MoneyInput";
 import { PriceField } from "./components/Money";
 import { CountUp } from "./components/CountUp";
+import { PremiumEmoji } from "./components/PremiumEmoji";
 
 // Raqamlar 0 dan sanab chiqadi (owner 2026-10-26: hamma joyda)
 const n0 = (n: number) => String(Math.round(n));
@@ -234,7 +235,7 @@ export function AdminDashboard({ currentUser, users, projects, transfers, setUse
         <MorphIcon icon={AlertTriangle} className="w-3.5 h-3.5 text-amber-500" />{t('management.safety')}
       </button>
       <button onClick={() => setShowESign(true)} className="flex items-center gap-1.5 text-xs border border-primary/40 bg-primary/5 text-primary rounded-lg px-3 py-1.5 hover:bg-primary/10 active:scale-95 liquid-transition flex-shrink-0 whitespace-nowrap font-semibold">
-        ✍️ {t('management.esign', { defaultValue: "E-hujjat va imzo" })}
+        <PremiumEmoji code="270d" char="✍️" className="w-3.5 h-3.5 inline-block align-[-2px]" /> {t('management.esign', { defaultValue: "E-hujjat va imzo" })}
       </button>
       <button onClick={() => setShowDocuments(true)} className="flex items-center gap-1.5 text-xs border border-border rounded-lg px-3 py-1.5 hover:bg-muted active:scale-95 liquid-transition flex-shrink-0 whitespace-nowrap">
         <MorphIcon icon={FileText} className="w-3.5 h-3.5 text-blue-500" />{t('management.documents')}

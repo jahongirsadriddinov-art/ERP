@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
 import { API_BASE } from "./api";
+import { PremiumEmoji } from "./components/PremiumEmoji";
 
 // ─── Plan-fakt (owner 2026-10-19: "asosiysi") ────────────────────────────────────────────────────────────────
 // Obyekt bo'yicha: bajarilish, muddat, byudjet va material — reja bilan solishtirish va shu sur'atdagi prognoz.
@@ -162,7 +163,7 @@ export function PlanFactCard({ objectId, canEdit }: { objectId: string; canEdit:
         <ul className="space-y-1.5">
           {pf.notes.map((n, i) => (
             <motion.li key={n} initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.05 * i }}
-              className="text-xs rounded-xl px-3 py-2 bg-amber-500/10 text-amber-800 dark:text-amber-200">⚠️ {n}</motion.li>
+              className="text-xs rounded-xl px-3 py-2 bg-amber-500/10 text-amber-800 dark:text-amber-200"><PremiumEmoji code="26a0" char="⚠️" className="w-3.5 h-3.5 inline-block align-[-2px]" /> {n}</motion.li>
           ))}
         </ul>
       )}

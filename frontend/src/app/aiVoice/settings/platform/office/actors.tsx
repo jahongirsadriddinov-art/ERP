@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import { Html } from "@react-three/drei";
 import * as THREE from "three";
@@ -7,6 +7,7 @@ import { BOUNDS, ROOMS, cellIndex, doorPoint, entryCell, cellCenter, hash as has
 import { lerpAngle, type Crowd, type Goal } from "./crowd";
 import { BOX, CLAUDE, CYL, EYE, SPHERE, mix } from "./props";
 import { PLAYER_START, SEATS, TEA_SPOTS, type SeatKind, type SeatTarget, type Target, type WalkBridge } from "./walk";
+import { PremiumEmoji } from "../../../../components/PremiumEmoji";
 
 // AI ofis — tirik mavjudotlar: agentlar (Claude Code maskoti uslubida) va o'yinchi (egasi, toj + "Siz").
 // Harakat — Crowd (crowd.ts) orqali: A* yo'l, bir-biriga urilmaslik. Bu yerda faqat poza/animatsiya va kamera.
@@ -250,7 +251,10 @@ export const Agent = memo(function Agent({ agent, desk, poi, tour, crowd, select
   const statusDot = agent.activity === "task" ? "#5ea8ff" : agent.activity === "call" ? "#2dd4bf" : agent.activity === "chat" ? "#a78bfa"
     : agent.activity === "review" ? "#ffb020" : failed ? "#ff3b30" : agent.task?.status === "done" ? "#34c759" : "#b8b2aa";
   const label = showLabel || hover || near || talking || !!speech;
-  const bubbleText = speech ? (speech.length > 90 ? `${speech.slice(0, 88)}…` : speech) : talking ? "👋 …" : bubble && agent.activity === "call" ? "📞 Alo, …" : null;
+  const bubbleText: ReactNode = speech ? (speech.length > 90 ? `${speech.slice(0, 88)}…` : speech)
+    : talking ? <><PremiumEmoji code="1f44b" char="👋" className="w-3.5 h-3.5 inline-block align-[-2px]" /> …</>
+    : bubble && agent.activity === "call" ? <><PremiumEmoji code="1f4de" char="📞" className="w-3.5 h-3.5 inline-block align-[-2px]" /> Alo, …</>
+    : null;
   return (
     <group ref={root} onClick={click}
       onPointerOver={(e) => { e.stopPropagation(); document.body.style.cursor = "pointer"; setHover(true); }}

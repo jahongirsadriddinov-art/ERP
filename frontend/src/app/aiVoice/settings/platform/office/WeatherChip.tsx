@@ -2,7 +2,8 @@ import "../../../../i18n/aiVoiceNs";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { WEATHER_MODES, tashkentTime } from "./sky";
-import { effectiveHour, effectiveMode, useWeather, WEATHER_ICON, weatherStore } from "./weatherStore";
+import { effectiveHour, effectiveMode, useWeather, WEATHER_ICON, WEATHER_CODE, weatherStore } from "./weatherStore";
+import { PremiumEmoji } from "../../../../components/PremiumEmoji";
 
 // AI ofis — sarlavhadagi ob-havo: belgisi + harorat (Toshkent, haqiqiy); bosilsa — tanlash: Avto / Quyosh / Bulut / Yomg'ir /
 // Qor / Tuman va kun vaqti (Avto — Toshkentning hozirgi vaqti yoki qo'lda soat).
@@ -22,7 +23,9 @@ export default function WeatherChip({ dark = false }: { dark?: boolean }) {
   const { mode, hour, w } = useOfficeWeather();
   const [open, setOpen] = useState(false);
   const night = hour < 6 || hour >= 19.5;
-  const icon = mode === "sunny" && night ? "🌙" : WEATHER_ICON[mode];
+  const isMoon = mode === "sunny" && night;
+  const icon = isMoon ? "🌙" : WEATHER_ICON[mode];
+  const iconCode = isMoon ? "1f319" : WEATHER_CODE[mode];
   const temp = w.real?.temp;
   const hh = (h: number) => `${String(Math.floor(h)).padStart(2, "0")}:${String(Math.floor((h % 1) * 60)).padStart(2, "0")}`;
   return (
@@ -30,7 +33,7 @@ export default function WeatherChip({ dark = false }: { dark?: boolean }) {
       <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} data-testid="ai-office-weather" title={k(`weather.${mode}`)}
         className={dark ? "h-9 px-3 rounded-full bg-black/60 text-white text-[13px] font-semibold backdrop-blur inline-flex items-center gap-1.5"
           : "h-8 px-3 rounded-full border border-border bg-card/60 text-[12px] font-semibold inline-flex items-center gap-1.5"}>
-        <span>{icon}</span>
+        <PremiumEmoji code={iconCode} char={icon} className="w-3.5 h-3.5 inline-block" />
         {temp !== null && temp !== undefined && <span className="tabular-nums" data-testid="ai-office-temp">{Math.round(temp)}°</span>}
         <span className="opacity-70 tabular-nums">{hh(hour)}</span>
       </button>
@@ -41,13 +44,17 @@ export default function WeatherChip({ dark = false }: { dark?: boolean }) {
             {(["auto", ...WEATHER_MODES] as const).map((m) => (
               <button key={m} type="button" onClick={() => weatherStore.setMode(m)} aria-pressed={w.override === m} data-testid={`ai-office-weather-${m}`}
                 className={`h-9 rounded-xl text-[12px] font-semibold ${w.override === m ? "bg-foreground text-background" : "bg-muted hover:bg-muted/70"}`}>
-                {m === "auto" ? "🛰 " : `${WEATHER_ICON[m]} `}{k(`weather.${m}`)}
+                {m === "auto"
+                  ? <PremiumEmoji code="1f6f0" char="🛰" className="w-3 h-3 inline-block align-[-1px]" />
+                  : <PremiumEmoji code={WEATHER_CODE[m]} char={WEATHER_ICON[m]} className="w-3 h-3 inline-block align-[-1px]" />} {k(`weather.${m}`)}
               </button>
             ))}
           </div>
           {w.override === "auto" && (
             <p className="text-[11.5px] text-muted-foreground" data-testid="ai-office-weather-real">
-              {w.real ? `${k("weather.real")}: ${WEATHER_ICON[w.real.mode]} ${k(`weather.${w.real.mode}`)}${w.real.temp !== null ? `, ${Math.round(w.real.temp)}°C` : ""}` : "…"}
+              {w.real
+                ? <>{k("weather.real")}: <PremiumEmoji code={WEATHER_CODE[w.real.mode]} char={WEATHER_ICON[w.real.mode]} className="w-3 h-3 inline-block align-[-1px]" /> {k(`weather.${w.real.mode}`)}{w.real.temp !== null ? `, ${Math.round(w.real.temp)}°C` : ""}</>
+                : "…"}
             </p>
           )}
           <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">{k("weather.time")}</p>

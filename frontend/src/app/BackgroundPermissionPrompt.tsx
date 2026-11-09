@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { backgroundPermission, openAppSettings, requestBackgroundPermission } from "./lib/background";
+import { PremiumEmoji } from "./components/PremiumEmoji";
 
 const SNOOZE_KEY = "erp_bgPermSnoozeUntil";
 const SNOOZE_MS = 3 * 24 * 3600_000;
@@ -65,7 +66,7 @@ export default function BackgroundPermissionPrompt({ userId }: { userId?: string
       <div role="dialog" aria-modal="true" data-testid="bg-permission"
         className="glass-modal w-full sm:max-w-sm rounded-t-3xl sm:rounded-2xl p-5 animate-slide-up-fade"
         style={{ paddingBottom: "max(1.25rem, env(safe-area-inset-bottom))" }} onClick={(e) => e.stopPropagation()}>
-        <div className="mx-auto mb-3 w-14 h-14 rounded-2xl bg-primary/15 flex items-center justify-center text-3xl" aria-hidden>🔔</div>
+        <div className="mx-auto mb-3 w-14 h-14 rounded-2xl bg-primary/15 flex items-center justify-center" aria-hidden><PremiumEmoji code="1f514" char="🔔" className="w-8 h-8" /></div>
         <h3 className="text-center font-bold text-base">{tx.title}</h3>
         <p className="text-center text-sm text-muted-foreground mt-1.5">{tx.body}</p>
         <ol className="mt-4 space-y-2">

@@ -5,6 +5,7 @@ import { Badge } from "../../../ui";
 import { smmApi, SMM_FORMATS, type SmmFormat, type SmmMode, type SmmRunRow, type SmmSettings, type SmmStatus } from "./smmApi";
 import { downloadBlob, extOf, fmtBytes, smmStore, type SmmLocal } from "./smmStore";
 import { smmErr } from "./SmmPostCard";
+import { PremiumEmoji } from "../../../../../components/PremiumEmoji";
 
 // SMM sozlamalari (owner 2026-10-23): ulanishlar (Telegram kanal, Instagram — qo'llanma bilan), avtopilot (off / tasdiq bilan /
 // to'liq avto), jadval (kunlar × vaqtlar, Toshkent), formatlar, til, kunlik limit, favqulodda to'xtatish; qurilmadagi fayllar.
@@ -173,7 +174,7 @@ function DeviceFiles({ k }: { k: K }) {
       <p className="text-[11px] text-muted-foreground">{k("deviceFilesHint")}</p>
       {list.slice(0, 30).map((x) => (
         <div key={x.id} className="flex items-center gap-2 text-[11.5px]">
-          <span className="flex-1 min-w-0 truncate">{x.kind === "video" ? "🎬" : "🖼"} {x.title || x.id}</span>
+          <span className="flex-1 min-w-0 truncate">{x.kind === "video" ? <PremiumEmoji code="1f3ac" char="🎬" className="w-3.5 h-3.5 inline-block align-[-2px]" /> : <PremiumEmoji code="1f5bc" char="🖼" className="w-3.5 h-3.5 inline-block align-[-2px]" />} {x.title || x.id}</span>
           <span className="text-muted-foreground tabular-nums">{fmtBytes(x.size)}</span>
           <button type="button" className="underline" onClick={async () => { const r = await smmStore.get(x.id); if (r) downloadBlob(r.blob, `qurilisherp-${x.id}.${extOf(r.blob.type)}`); }}>{k("save")}</button>
           <button type="button" className="text-red-600 underline" onClick={() => smmStore.remove(x.id)}>{k("delete")}</button>

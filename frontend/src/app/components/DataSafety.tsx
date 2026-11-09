@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { API_BASE } from "../api";
+import { PremiumEmoji } from "./PremiumEmoji";
 
 // Shaxsiy zaxira nusxalar (vaqt bo'yicha ro'yxat, bir bosishda tiklash) va "Xavfli zona" (tanlab tozalash).
 // Faqat direktor / o'rinbosar ko'radi; server ham shuni tekshiradi.
@@ -111,7 +112,7 @@ export function DangerZone({ companyName, onDone }: { companyName: string; onDon
   return (
     <div className="rounded-2xl border-2 border-red-500/40 bg-red-500/[0.04] p-4 space-y-3">
       <div>
-        <p className="text-sm font-extrabold text-red-600 dark:text-red-400">⚠️ {t("safety.dangerTitle", "Xavfli zona — ma'lumotlarni tozalash")}</p>
+        <p className="text-sm font-extrabold text-red-600 dark:text-red-400"><PremiumEmoji code="26a0" char="⚠️" className="w-4 h-4 inline-block align-[-3px]" /> {t("safety.dangerTitle", "Xavfli zona — ma'lumotlarni tozalash")}</p>
         <p className="text-xs text-muted-foreground mt-0.5">{t("safety.dangerHint", "Tanlangan bo'limlar butunlay o'chiriladi. O'chirishdan oldin avtomatik zaxira nusxa olinadi — yuqoridagi ro'yxatdan qaytarish mumkin.")}</p>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">

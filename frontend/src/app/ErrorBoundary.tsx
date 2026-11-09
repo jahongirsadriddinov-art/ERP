@@ -2,6 +2,7 @@ import { Component, ReactNode } from "react";
 import { reportError } from "./lib/monitoring";
 import { isChunkError, reloadForNewVersion, hardReload } from "./lib/chunkReload";
 import { reloadWhenVisible } from "./lib/lazyRetry";
+import { PremiumEmoji } from "./components/PremiumEmoji";
 
 interface Props { children: ReactNode; }
 interface State { error: Error | null; }
@@ -48,7 +49,7 @@ export class ErrorBoundary extends Component<Props, State> {
           background: "#090F1C", color: "#E8EEF9", fontFamily: "system-ui, sans-serif",
           padding: "2rem", textAlign: "center",
         }}>
-          <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>⚠️</div>
+          <div style={{ marginBottom: "1rem", display: "flex", justifyContent: "center" }}><PremiumEmoji code="26a0" char="⚠️" className="w-12 h-12" /></div>
           <h1 style={{ fontSize: "1.25rem", fontWeight: 700, marginBottom: "0.5rem" }}>
             Kutilmagan xatolik
           </h1>

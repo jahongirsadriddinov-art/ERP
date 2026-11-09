@@ -37,3 +37,5 @@ export const effectiveMode = (s: WState): WeatherMode => (s.override !== "auto" 
 /** Amaldagi Toshkent soati (qo'lda tanlangan yoki hozirgi). */
 export const effectiveHour = (s: WState, d = new Date()) => (s.hourOverride ?? tashkentTime(d).hour);
 export const WEATHER_ICON: Record<WeatherMode, string> = { sunny: "☀️", cloudy: "☁️", rain: "🌧️", snow: "❄️", fog: "🌫️" };
+/** PremiumEmoji uchun Noto kod nuqtalari (WEATHER_ICON bilan bir xil tartibda). */
+export const WEATHER_CODE: Record<WeatherMode, string> = { sunny: "2600", cloudy: "2601", rain: "1f327", snow: "2744", fog: "1f32b" };

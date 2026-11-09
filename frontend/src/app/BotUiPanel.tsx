@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { API_BASE } from "./api";
 import { SkeletonList } from "./Skeleton";
+import { PremiumEmoji } from "./components/PremiumEmoji";
 
 // Bot dizayni (owner 2026-10-22): har bir bot tugmasining matni (uz/ru), premium emoji ikonkasi, rangi;
 // xabarlardagi premium emoji; buyruqlar; emoji paketlari; "AI bilan bezash" qoralamasi. Backend: /api/dev/bot-ui.
@@ -29,7 +30,7 @@ const LEAD = /^[\p{Extended_Pictographic}\p{Regional_Indicator}‍️⃣]+\s*/u;
 const TXT = {
   uz: {
     title: "Bot dizayni", hint: "Tugmalarga premium emoji va rang (Telegram Bot API: icon_custom_emoji_id, style), xabarlarga premium emoji. Ishlashi uchun bot EGASINING Telegram akkauntida Premium bo'lishi kerak. Bo'sh maydon — standart matn.",
-    packs: "Emoji paketlari", packPh: "https://t.me/addemoji/PaketNomi", add: "Qo'shish", ai: "✨ AI bilan bezash", reset: "Standartga qaytarish", save: "Saqlash", saved: "Saqlandi — bot 1 daqiqa ichida yangilanadi",
+    packs: "Emoji paketlari", packPh: "https://t.me/addemoji/PaketNomi", add: "Qo'shish", ai: "AI bilan bezash", reset: "Standartga qaytarish", save: "Saqlash", saved: "Saqlandi — bot 1 daqiqa ichida yangilanadi",
     resetAsk: "Barcha tugma matnlari, emoji, rang va buyruqlar standartga qaytsinmi? (Paketlar qoladi)", draft: "Qoralama", apply: "Qo'llash", discard: "Bekor qilish",
     draftInfo: (b: number, m: number) => `${b} ta tugma, ${m} ta xabar emojisi taklif qilindi`, buttons: "Tugmalar", preview: "Ko'rinishi", none: "Yo'q", pick: "Emoji tanlash",
     style: { "": "Standart", primary: "Ko'k", success: "Yashil", danger: "Qizil" } as Record<Style, string>,
@@ -38,7 +39,7 @@ const TXT = {
   },
   ru: {
     title: "Дизайн бота", hint: "Премиум-эмодзи и цвет на кнопках (Telegram Bot API: icon_custom_emoji_id, style), премиум-эмодзи в сообщениях. Работает, если у ВЛАДЕЛЬЦА бота есть Telegram Premium. Пустое поле — стандартный текст.",
-    packs: "Наборы эмодзи", packPh: "https://t.me/addemoji/ИмяНабора", add: "Добавить", ai: "✨ Оформить с ИИ", reset: "Сбросить", save: "Сохранить", saved: "Сохранено — бот обновится в течение минуты",
+    packs: "Наборы эмодзи", packPh: "https://t.me/addemoji/ИмяНабора", add: "Добавить", ai: "Оформить с ИИ", reset: "Сбросить", save: "Сохранить", saved: "Сохранено — бот обновится в течение минуты",
     resetAsk: "Сбросить все тексты кнопок, эмодзи, цвета и команды? (Наборы останутся)", draft: "Черновик", apply: "Применить", discard: "Отменить",
     draftInfo: (b: number, m: number) => `Предложено: ${b} кнопок, ${m} эмодзи сообщений`, buttons: "Кнопки", preview: "Предпросмотр", none: "Нет", pick: "Выбрать эмодзи",
     style: { "": "Обычный", primary: "Синий", success: "Зелёный", danger: "Красный" } as Record<Style, string>,
@@ -196,7 +197,7 @@ export default function BotUiPanel() {
         <p className="text-xs text-muted-foreground mt-1">{L.hint}</p>
         <div className="flex flex-wrap gap-2 mt-3">
           <button type="button" disabled={busy || decorating || !data.packs.length} data-testid="botui-ai" onClick={() => run(async () => adopt(await call("/auto-decorate", { method: "POST", body: "{}" }), true))}
-            className="px-3.5 py-2 rounded-full bg-primary text-white text-sm font-semibold disabled:opacity-50">{L.ai}</button>
+            className="px-3.5 py-2 rounded-full bg-primary text-white text-sm font-semibold disabled:opacity-50"><PremiumEmoji code="2728" char="✨" className="w-3.5 h-3.5 inline-block align-[-2px]" /> {L.ai}</button>
           <button type="button" disabled={busy} data-testid="botui-reset" onClick={async () => { if (await confirmDialog(L.resetAsk, { danger: true })) void run(async () => adopt(await call("/reset", { method: "POST", body: "{}" }))); }}
             className="px-3.5 py-2 rounded-full bg-muted text-sm font-semibold">{L.reset}</button>
         </div>

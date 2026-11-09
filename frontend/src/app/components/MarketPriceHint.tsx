@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { API_BASE } from "../api";
 import { fmtNumber } from "../lib/money";
+import { PremiumEmoji } from "./PremiumEmoji";
 
 // Narx razvedkasi ko'rsatkichi (owner 2026-10-29: "prorab qimmatga olib qo'ysa
 // ogohlantirsin; qimmatligini O'zbekiston bo'yicha o'rtacha narxdan biladi").
@@ -51,7 +52,7 @@ export function MarketPriceHint({ name, unit, price }: { name: string; unit: str
       data-testid="market-price-hint"
       className={`text-[11px] mt-1 leading-snug ${expensive ? "text-amber-700 dark:text-amber-400" : "text-emerald-700 dark:text-emerald-400"}`}
     >
-      {expensive ? "⚠️ " : "✓ "}
+      {expensive ? <><PremiumEmoji code="26a0" char="⚠️" className="w-3 h-3 inline-block align-[-2px]" /> </> : "✓ "}
       Bozor narxi: <b>{fmtNumber(res.median)}</b> so'm/{res.unit}
       {" — "}
       {expensive ? `siz ${pct}% qimmat olyapsiz` : `siz ${Math.abs(pct)}% arzon olyapsiz`}

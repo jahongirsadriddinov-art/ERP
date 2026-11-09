@@ -7,6 +7,7 @@ import XIcon from "@hugeicons/core-free-icons/Cancel01Icon";
 import Navigation from "@hugeicons/core-free-icons/Navigation01Icon";
 import ChevronRight from "@hugeicons/core-free-icons/ArrowRight01Icon";
 import { MorphIcon } from "morphicons/react";
+import { PremiumEmoji } from "./components/PremiumEmoji";
 import { useTranslation } from "react-i18next";
 import { AppUser, Avatar, Transfer, Expense, roleLabel } from "./App";
 import { API_BASE } from "./api";
@@ -232,13 +233,13 @@ export default function GpsTrackingPage({ users, gpsLocations, projects, refresh
               return (
                 <span className={n.inside ? 'text-amber-700 dark:text-amber-400 font-semibold' : 'text-muted-foreground'}
                   title={n.inside ? t('gps.atObject', { defaultValue: 'Obyekt hududida' }) : t('gps.nearObject', { defaultValue: 'Eng yaqin obyekt' })}>
-                  🏗 {n.name}{n.inside ? '' : ` · ${n.meters >= 1000 ? (n.meters / 1000).toFixed(1) + ' km' : n.meters + ' m'}`}
+                  <PremiumEmoji code="1f3d7" char="🏗" className="w-3.5 h-3.5 inline-block align-[-2px]" /> {n.name}{n.inside ? '' : ` · ${n.meters >= 1000 ? (n.meters / 1000).toFixed(1) + ' km' : n.meters + ' m'}`}
                 </span>
               );
             })()}
             {loc?.battery != null && (
               <span className={loc.battery <= 20 && !loc.charging ? 'text-red-600 dark:text-red-400 font-semibold' : 'text-muted-foreground'}>
-                🔋{Math.round(loc.battery)}%{loc.charging ? '⚡' : ''}
+                <PremiumEmoji code="1f50b" char="🔋" className="w-3.5 h-3.5 inline-block align-[-2px]" />{Math.round(loc.battery)}%{loc.charging ? <PremiumEmoji code="26a1" char="⚡" className="w-3.5 h-3.5 inline-block align-[-2px]" /> : ''}
               </span>
             )}
           </div>

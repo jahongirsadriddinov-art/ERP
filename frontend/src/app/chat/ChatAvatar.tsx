@@ -4,6 +4,7 @@ import { MorphIcon } from "morphicons/react";
 import Users2 from "@hugeicons/core-free-icons/UserGroup02Icon";
 import { avatarColor } from "./chatModel";
 import { UserAvatar } from "../components/UserAvatar";
+import { PremiumEmoji } from "../components/PremiumEmoji";
 
 export function ChatAvatar({ name, src, seed, size = 48, online, group, support }: {
   name: string; src?: string; seed: string; size?: number; online?: boolean; group?: boolean; support?: boolean;
@@ -19,7 +20,7 @@ export function ChatAvatar({ name, src, seed, size = 48, online, group, support 
       ) : src && !bad ? (
         <img src={src} alt="" loading="lazy" decoding="async" className="w-full h-full rounded-full object-cover" onError={() => setBad(true)} draggable={false} />
       ) : support ? (
-        <span className="w-full h-full rounded-full flex items-center justify-center bg-orange-500/15" style={{ fontSize: size * 0.45 }}>🛠</span>
+        <span className="w-full h-full rounded-full flex items-center justify-center bg-orange-500/15"><PremiumEmoji code="1f6e0" char="🛠" className="" style={{ width: size * 0.5, height: size * 0.5 }} /></span>
       ) : (
         <span className="w-full h-full rounded-full flex items-center justify-center text-white font-semibold select-none"
           style={{ background: `linear-gradient(160deg, ${avatarColor(seed)}, ${avatarColor(seed)}cc)`, fontSize: Math.round(size * 0.36) }}>

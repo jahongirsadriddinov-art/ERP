@@ -84,6 +84,13 @@ export default function NotificationCenter({ messages, transfers, expenses, user
   const ref = useRef<HTMLDivElement>(null);
   const token = typeof window !== "undefined" ? localStorage.getItem("token") || "" : "";
   const auth = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token]);
+  // Owner 2026-11-09: "galochkani bossam yana qaytyapdi" — PATCH tugamasdan 90s'lik
+  // poll yoki panelni qayta ochish GET'i poyga qilib, serverda hali "read" bo'lmagan
+  // holatni qaytarib, o'qilgan deb belgilangan bildirishnomani yana "yangi" qilib
+  // ko'rsatardi. Shu session davomida o'qilgan/o'chirilgan _id'lar shu yerda abadiy
+  // saqlanadi — keyingi har qanday GET javobi ularni qayta "unread" qila olmaydi.
+  const pendingReadRef = useRef<Set<string>>(new Set());
+  const pendingDeleteRef = useRef<Set<string>>(new Set());
 
   const timeAgo = (iso?: string) => {
     if (!iso) return "";
@@ -102,7 +109,12 @@ export default function NotificationCenter({ messages, transfers, expenses, user
       fetch(`${API_BASE}/api/announcements`, { headers: auth }).then(x => x.ok ? x.json() : null),
       fetch(`${API_BASE}/api/deploy/latest`).then(x => x.ok ? x.json() : null),
     ]);
-    if (n.status === "fulfilled" && n.value?.notifications) setServerNotifs(n.value.notifications);
+    if (n.status === "fulfilled" && n.value?.notifications) {
+      const list = (n.value.notifications as ServerNotif[])
+        .filter(x => !pendingDeleteRef.current.has(x._id))
+        .map(x => pendingReadRef.current.has(x._id) ? { ...x, read: true } : x);
+      setServerNotifs(list);
+    }
     if (a.status === "fulfilled" && Array.isArray(a.value)) setAnns(a.value);
     if (r.status === "fulfilled" && r.value?.available) setRelease({ version: r.value.version, notes: r.value.notes || "", updatedAt: r.value.updatedAt });
   }, [token, auth]);
@@ -202,11 +214,22 @@ export default function NotificationCenter({ messages, transfers, expenses, user
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  // PATCH/DELETE darhol muvaffaqiyatli bo'lmasa — jim qolib ketmasin, bir necha
+  // marta urinib ko'radi (server vaqtincha javob bermasa ham, oxir-oqibat yetib boradi).
+  const patchWithRetry = (url: string, method: "PATCH" | "DELETE", attempt = 0) => {
+    fetch(`${API_BASE}${url}`, { method, headers: auth }).then(res => {
+      if (!res.ok && attempt < 3) setTimeout(() => patchWithRetry(url, method, attempt + 1), 1500 * (attempt + 1));
+    }).catch(() => {
+      if (attempt < 3) setTimeout(() => patchWithRetry(url, method, attempt + 1), 1500 * (attempt + 1));
+    });
+  };
+
   const markRead = (it: Item) => {
     if (it.read) return;
     if (it.notifId) {
+      pendingReadRef.current.add(it.notifId);
       setServerNotifs(p => p.map(n => n._id === it.notifId ? { ...n, read: true } : n));
-      fetch(`${API_BASE}/api/notifications/${it.notifId}/read`, { method: "PATCH", headers: auth }).catch(() => {});
+      patchWithRetry(`/api/notifications/${it.notifId}/read`, "PATCH");
     } else if (it.ann) {
       setAnns(p => p.map(a => a.id === it.ann!.id ? { ...a, seen: true } : a));
       fetch(`${API_BASE}/api/announcements/${it.ann.id}/seen`, { method: "POST", headers: auth }).catch(() => {});
@@ -221,8 +244,9 @@ export default function NotificationCenter({ messages, transfers, expenses, user
     const unread = items.filter(i => !i.read);
     if (!unread.length) return;
     if (unread.some(i => i.notifId)) {
+      for (const it of unread) if (it.notifId) pendingReadRef.current.add(it.notifId);
       setServerNotifs(p => p.map(n => ({ ...n, read: true })));
-      fetch(`${API_BASE}/api/notifications/read-all`, { method: "PATCH", headers: auth }).catch(() => {});
+      patchWithRetry(`/api/notifications/read-all`, "PATCH");
     }
     for (const it of unread) if (!it.notifId) markRead(it);
     setDismissed(p => { const s = new Set(p); unread.filter(i => !i.notifId && !i.ann && !i.release).forEach(i => s.add(i.key)); writeLS(LS_DISMISSED, [...s].slice(-300).join("|")); return s; });
@@ -230,8 +254,9 @@ export default function NotificationCenter({ messages, transfers, expenses, user
 
   const remove = (it: Item) => {
     if (!it.notifId) return;
+    pendingDeleteRef.current.add(it.notifId);
     setServerNotifs(p => p.filter(n => n._id !== it.notifId));
-    fetch(`${API_BASE}/api/notifications/${it.notifId}`, { method: "DELETE", headers: auth }).catch(() => {});
+    patchWithRetry(`/api/notifications/${it.notifId}`, "DELETE");
   };
 
   const activate = (it: Item, inFull: boolean) => {

@@ -749,6 +749,13 @@ export function PinLockScreen({ onUnlock, onForgot, onLockedOut }: { onUnlock: (
   const [attemptsLeft, setAttemptsLeft] = useState<number | null>(null);
   const [biometricTried, setBiometricTried] = useState(false);
   const [biometricBusy, setBiometricBusy] = useState(false);
+  const [skipBiometric, setSkipBiometric] = useState(false);
+
+  // Owner 2026-11-09: Telegram'dagidek — Face ID/Touch ID yoqilgan bo'lsa,
+  // ilovaga kirganda ENG BIRINCHI shu so'raladi, PIN klaviaturasi emas.
+  // PIN faqat biometrik rad etilsa/ishlamasa yoki foydalanuvchi o'zi
+  // "PIN kiritish" tugmasini bossa ko'rinadi.
+  const biometricFirst = !isMacTauriBiometric() && isBiometricEnabled() && biometricSupported() && !biometricTried && !skipBiometric;
 
   const attemptBiometric = async () => {
     setBiometricBusy(true);
@@ -799,25 +806,41 @@ export function PinLockScreen({ onUnlock, onForgot, onLockedOut }: { onUnlock: (
       </div>
       <h1 className="text-xl font-bold mb-1.5">{t('pinLock.lockedTitle')}</h1>
       <p className="text-sm text-muted-foreground mb-8">{t('pinLock.lockedSubtitle')}</p>
-      <motion.div animate={error ? { x: [0, -10, 10, -10, 10, 0] } : {}} transition={{ duration: 0.4 }}>
-        <PinDots length={PIN_LEN} filled={pin.length} />
-      </motion.div>
-      {error && (
-        <p className="text-xs text-red-500 mb-4">
-          {t('pinLock.wrongPin')}{attemptsLeft != null && attemptsLeft <= 3 ? t('pinLock.attemptsLeft', { count: attemptsLeft }) : ''}
-        </p>
-      )}
-      <PinPad value={pin} onDigit={onDigit} onDelete={() => setPinInput(pin.slice(0, -1))} />
 
-      {isBiometricEnabled() && biometricSupported() && (
-        <button onClick={attemptBiometric} disabled={biometricBusy}
-          className="mt-6 flex items-center gap-2 text-sm text-primary font-semibold py-2 px-4 rounded-full hover:bg-primary/10 disabled:opacity-50">
-          <MorphIcon icon={Fingerprint} className="w-4 h-4"  /> {biometricBusy ? t('pinLock.checking') : t('pinLock.biometricBtn')}
-        </button>
+      {biometricFirst ? (
+        <>
+          <motion.div animate={{ scale: [1, 1.08, 1] }} transition={{ duration: 1.4, repeat: Infinity }}
+            className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-6">
+            <MorphIcon icon={Fingerprint} className="w-7 h-7 text-primary" />
+          </motion.div>
+          <p className="text-sm text-muted-foreground mb-8">{t('pinLock.biometricWaiting', 'Face ID / Touch ID kutilmoqda…')}</p>
+          <button onClick={() => setSkipBiometric(true)} className="text-sm text-primary font-semibold hover:underline">
+            {t('pinLock.enterPinInstead', 'PIN kodni kiritish')}
+          </button>
+        </>
+      ) : (
+        <>
+          <motion.div animate={error ? { x: [0, -10, 10, -10, 10, 0] } : {}} transition={{ duration: 0.4 }}>
+            <PinDots length={PIN_LEN} filled={pin.length} />
+          </motion.div>
+          {error && (
+            <p className="text-xs text-red-500 mb-4">
+              {t('pinLock.wrongPin')}{attemptsLeft != null && attemptsLeft <= 3 ? t('pinLock.attemptsLeft', { count: attemptsLeft }) : ''}
+            </p>
+          )}
+          <PinPad value={pin} onDigit={onDigit} onDelete={() => setPinInput(pin.slice(0, -1))} />
+
+          {isBiometricEnabled() && biometricSupported() && (
+            <button onClick={() => { setSkipBiometric(false); setBiometricTried(false); attemptBiometric(); }} disabled={biometricBusy}
+              className="mt-6 flex items-center gap-2 text-sm text-primary font-semibold py-2 px-4 rounded-full hover:bg-primary/10 disabled:opacity-50">
+              <MorphIcon icon={Fingerprint} className="w-4 h-4"  /> {biometricBusy ? t('pinLock.checking') : t('pinLock.biometricBtn')}
+            </button>
+          )}
+          <button onClick={onForgot} className="mt-4 text-sm text-primary font-semibold hover:underline">
+            {t('pinLock.forgotPin')}
+          </button>
+        </>
       )}
-      <button onClick={onForgot} className="mt-4 text-sm text-primary font-semibold hover:underline">
-        {t('pinLock.forgotPin')}
-      </button>
     </main>
   );
 }

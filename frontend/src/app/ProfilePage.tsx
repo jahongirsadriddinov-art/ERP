@@ -1123,7 +1123,7 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
 
       {/* ── Company Banner ─────────────────────────── */}
       <motion.div initial={{ opacity: 0, scale: 1.04 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-        className="relative overflow-hidden flex-shrink-0 h-[140px] md:h-[150px] lg:h-[160px] md:mx-6 md:mt-4 md:rounded-3xl border border-border/60" style={{ ...bannerStyle }}>
+        className="relative overflow-hidden flex-shrink-0 h-[140px] md:h-[150px] lg:h-[160px] md:mx-6 md:mt-4 md:rounded-3xl border border-border/60" style={{ ...bannerStyle, backgroundColor: "#1B3A6B" }}>
         <div className="absolute inset-0" style={{ background: "linear-gradient(to bottom, rgba(0,0,0,0.12) 0%, rgba(0,0,0,0.58) 100%)" }}/>
         {canEditCompany && (
           <button onClick={() => bgRef.current?.click()}

@@ -265,10 +265,14 @@ html.page-simple-surface:not(.platform-ios):not(.platform-macos) .glass-modal::b
    edi — ko'rinishda nosoz shaffoflik chiqib, "o'chir" deyilgan va olib
    tashlangan. Shu sabab bu yerda FAQAT CSS — native chrome QAYTA
    qo'shilmaydi. ────────────────────────────────────────────────────── */
+/* Owner 2026-11-09: avvalgi kuchli qiymat (34px) macOS Simulator'da haqiqiy
+   render bugiga sabab bo'ldi (ba'zi panellar orqasidan desktop fon rasmi
+   "ko'rinib" qoldi — WKWebView compositing xatosi). Qiymat asosiy (web)
+   darajaga yaqinlashtirilib pasaytirildi. */
 .platform-ios,
 .platform-macos {
-  --liquid-blur: blur(34px) saturate(1.9);
-  --liquid-blur-sm: blur(18px) saturate(1.6);
+  --liquid-blur: blur(22px) saturate(1.7);
+  --liquid-blur-sm: blur(14px) saturate(1.5);
 }
 .platform-ios .glass-card,
 .platform-macos .glass-card,
@@ -283,7 +287,10 @@ html.page-simple-surface:not(.platform-ios):not(.platform-macos) .glass-modal::b
    "lensing" ko'rinishini taqlid qiladi (statik, lekin yo'nalishli). Mavjud
    chiziqli qirra yorug'i (::before) ustiga qo'yiladi, uni almashtirmaydi.
    FAQAT ::before allaqachon ishlatilgan selektorlarga (position:relative
-   ta'minlangan) — .bg-card/.bg-popover/.bg-sidebar'da bu kafolatlanmagan. */
+   ta'minlangan) — .bg-card/.bg-popover/.bg-sidebar'da bu kafolatlanmagan.
+   Owner 2026-11-09: `mix-blend-mode: overlay` olib tashlandi — backdrop-filter
+   bilan birga WKWebView'da compositing xatosiga (panel ortidan desktop
+   ko'rinib qolish) sabab bo'lgan ehtimoliy omillardan biri edi. */
 .platform-ios .glass-card::after,
 .platform-macos .glass-card::after,
 .platform-ios .stat-card::after,
@@ -295,8 +302,7 @@ html.page-simple-surface:not(.platform-ios):not(.platform-macos) .glass-modal::b
   inset: 0;
   border-radius: inherit;
   background: radial-gradient(120% 90% at 18% -10%, var(--liquid-highlight), transparent 55%);
-  opacity: 0.55;
-  mix-blend-mode: overlay;
+  opacity: 0.35;
   pointer-events: none;
   z-index: 1;
 }
@@ -319,6 +325,25 @@ html.page-simple-surface:not(.platform-ios):not(.platform-macos) .glass-modal::b
   background: color-mix(in srgb, var(--card) 78%, transparent) !important;
   -webkit-backdrop-filter: var(--liquid-blur) !important;
   backdrop-filter: var(--liquid-blur) !important;
+}
+/* Yon panel va nav — xuddi shu qatlam muammosidan himoya (yuqoridagi izoh) */
+.platform-ios .ios-bottom-bar,
+.platform-macos .ios-bottom-bar,
+.platform-ios .nav-pill-desktop,
+.platform-macos .nav-pill-desktop {
+  background: color-mix(in srgb, var(--card) 80%, transparent) !important;
+  -webkit-backdrop-filter: var(--liquid-blur) !important;
+  backdrop-filter: var(--liquid-blur) !important;
+}
+/* Tepadagi sarlavha orti (.nav-blur-top::before) — owner 2026-10-19'da atayin
+   qattiq (blur'siz) qilingan edi ("xunuk ko'rinardi"), lekin shu qaror FAQAT
+   web/Android/Windows uchun amal qiladi — iOS/macOS'da "full liquid" so'ralgan
+   (2026-11-09), shu sabab shu yerda shaffof+blur qaytariladi. */
+.platform-ios .nav-blur-top::before,
+.platform-macos .nav-blur-top::before {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--background) 82%, transparent) 0%, color-mix(in srgb, var(--background) 60%, transparent) 70%, transparent 100%) !important;
+  -webkit-backdrop-filter: var(--liquid-blur-sm) !important;
+  backdrop-filter: var(--liquid-blur-sm) !important;
 }
 
 /* Reduce Transparency (Sozlamalar → Maxsus imkoniyatlar → Shaffoflikni

@@ -82,6 +82,11 @@ export default function NotificationCenter({ messages, transfers, expenses, user
   const [dismissed, setDismissed] = useState<Set<string>>(() => new Set(readLS(LS_DISMISSED).split("|").filter(Boolean)));
   const [releaseSeen, setReleaseSeen] = useState(() => readLS(LS_RELEASE));
   const ref = useRef<HTMLDivElement>(null);
+  // Kichik popover endi document.body'ga portal qilinadi (pastda) — shu sabab
+  // uning ichidagi bosishlar `ref`ga (qo'ng'iroqcha tugmasi) "tegishli" emas
+  // deb hisoblanib, "tashqariga bosish" logikasi uni darhol yopib qo'yardi.
+  // Alohida ref bilan popover ichini ham "tashqarida emas" deb belgilaymiz.
+  const popoverRef = useRef<HTMLDivElement>(null);
   const token = typeof window !== "undefined" ? localStorage.getItem("token") || "" : "";
   const auth = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token]);
   // Owner 2026-11-09: "galochkani bossam yana qaytyapdi" — PATCH tugamasdan 90s'lik
@@ -128,7 +133,12 @@ export default function NotificationCenter({ messages, transfers, expenses, user
 
   useEffect(() => {
     if (!open) return;
-    const onDoc = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    const onDoc = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (ref.current?.contains(t)) return;
+      if (popoverRef.current?.contains(t)) return;
+      setOpen(false);
+    };
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
   }, [open]);
@@ -339,14 +349,22 @@ export default function NotificationCenter({ messages, transfers, expenses, user
         )}
       </button>
 
-      {/* Kichik oyna — faqat yangilari */}
+      {/* Kichik oyna — faqat yangilari. Owner 2026-11-09: "notification centre
+          telefonga mos emas" — bu panel portal qilinmagan edi, shu sabab
+          sahifa o'tish animatsiyasi (motion.div, transform) ota-elementlar
+          zanjirida bo'lsa, `fixed` pozitsiyasi butun ekran o'rniga O'SHA
+          transformlangan ota-elementga nisbatan ishlardi (CSS qoidasi:
+          transform'li ota-element fixed uchun yangi containing block yaratadi)
+          — natijada panel tor va noto'g'ri joyda chiqardi. Endi "full" panel
+          kabi document.body'ga portal qilinadi. */}
+      {createPortal(
       <AnimatePresence>
         {open && (
           <>
             <div className="fixed inset-0 z-40 sm:hidden" onClick={() => setOpen(false)} />
-            <motion.div initial={{ opacity: 0, y: -10, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -10, scale: 0.96 }}
+            <motion.div ref={popoverRef} initial={{ opacity: 0, y: -10, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -10, scale: 0.96 }}
               transition={{ type: "spring", stiffness: 420, damping: 32 }}
-              className="notif-glass fixed left-3 right-3 top-[max(4.25rem,env(safe-area-inset-top))] sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2 sm:w-[370px] rounded-3xl z-50 overflow-hidden text-foreground">
+              className="notif-glass fixed left-3 right-3 top-[max(4.25rem,env(safe-area-inset-top))] sm:left-auto sm:right-4 sm:w-[370px] rounded-3xl z-50 overflow-hidden text-foreground">
               <div className="flex items-center justify-between gap-2 px-4 pt-3.5 pb-2.5">
                 <div className="min-w-0">
                   <p className="text-[15px] font-extrabold tracking-tight">{t("notifications.title")}</p>
@@ -375,7 +393,9 @@ export default function NotificationCenter({ messages, transfers, expenses, user
             </motion.div>
           </>
         )}
-      </AnimatePresence>
+      </AnimatePresence>,
+        document.body
+      )}
 
       {/* Katta panel — hammasi */}
       {createPortal(

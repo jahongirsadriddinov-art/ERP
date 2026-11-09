@@ -124,10 +124,14 @@ export function buildLiveConfig(opts: VoiceOpenOpts, o: { search?: boolean; thin
       // 700 ms: gap orasidagi qisqa pauzada buyruq yarmida kesilmasin. Telefonda (owner 2026-10-19: "bo'linib
       // gapiradi, aytganimni eshitmayapti") — telefon aks-sadosi/shovqin "foydalanuvchi gapirdi" deb AI'ni o'z gapini
       // to'xtatishga majbur qilardi: nutq boshlanishiga sezgirlik past va 300 ms uzluksiz ovoz talab qilinadi.
+      // TUZATILDI (2026-11-09): bu himoya avval "plain" (eng oxirgi, qidiruv/fikrlashsiz) ulanishda OLIB
+      // TASHLANARDI — aks-sado/shovqin himoyasi aynan shu zaxira yo'lda yo'qolib, qo'ng'iroq ko'proq
+      // band bo'lgan (ko'p tool chaqiruvli, qayta ulanishga ko'proq tushgan) akkauntlarda "gap uzilib-uzilib
+      // chiqishi"ga olib kelardi. Sezgirlik qidiruv/fikrlash bilan bog'liq emas — har doim qo'llanadi.
       : { automaticActivityDetection: {
           silenceDurationMs: 700,
           prefixPaddingMs: opts.telephony ? 300 : 200,
-          ...(opts.telephony && !o.plain && process.env.AI_LIVE_START_SENSITIVITY !== 'default' ? { startOfSpeechSensitivity: StartSensitivity.START_SENSITIVITY_LOW } : {}),
+          ...(opts.telephony && process.env.AI_LIVE_START_SENSITIVITY !== 'default' ? { startOfSpeechSensitivity: StartSensitivity.START_SENSITIVITY_LOW } : {}),
         } },
     contextWindowCompression: { slidingWindow: {} },
     // Har doim yoqiladi — server SessionResumptionUpdate yuboradi (GoAway'da qayta ulanish uchun)
@@ -326,10 +330,10 @@ export class GeminiLiveProvider implements VoiceProvider {
         const plain = i === plan.length - 1 && i > 0;
         try {
           const s = await connectOnce(key, sq, th, plain);
-          // Owner 2026-10-28 ("AI gapi uzilib qolyapti"): "plain" zaxira sozlamasida telefon uchun
-          // nutq boshlanishiga PAST sezgirlik (aks-sado himoyasi) tushib qoladi — qo'ng'iroq
-          // shovqinidan AI o'z gapini to'xtatib qo'yishi mumkin. Logda ko'rinib tursin.
-          if (plain && opts.telephony) console.warn(`[aiVoice] ${model}: zaxira ("plain") sozlamada ulandi — telefon aks-sado himoyasi yo'q`);
+          // Owner 2026-10-28 ("AI gapi uzilib qolyapti") / 2026-11-09: "plain" zaxira sozlamaga tushish —
+          // telefon aks-sado himoyasi endi bu holatda ham saqlanadi (yuqoridagi buildLiveConfig), lekin
+          // qidiruv/fikrlashsiz ishlagani uchun logda ko'rinib tursin (diagnostika).
+          if (plain && opts.telephony) console.warn(`[aiVoice] ${model}: zaxira ("plain") sozlamada ulandi (qidiruv/fikrlashsiz)`);
           if (search && !sq) {
             searchUnsupported.add(model);
             console.warn(`[aiVoice] ${model}: Live Google qidiruvi qabul qilinmadi — o'chirildi (${(lastErr as Error)?.message?.slice(0, 80)})`);

@@ -194,19 +194,30 @@ export class CascadeSession extends VoiceEmitter implements VoiceSession {
     }
   }
 
+  // TUZATILDI (owner: "g'alati gaplar... uzilib-uzilib gapirvotti"): avval HAR BIR gap o'z audiosi
+  // CHIQARILGANDAN KEYIN sintez qilinardi — qisqa gaplarda (ijro vaqti TTS so'rovidan tezroq tugaydi)
+  // keyingi gap tayyor bo'lguncha ovozda jim pauza/"uzilish" eshitilardi. Endi KEYINGI gap HOZIRGI
+  // gap hali kutilayotganda (bir qadam oldinda) sintez qilina boshlaydi — real tarmoq kechikishida
+  // ham gaplar orasida deyarli bo'shliq qolmaydi.
   private async speak(text: string, ac: AbortController) {
     if (!this.d.tts) { this.ttsFailed(); return; }
-    for (const sentence of splitSentences(text)) {
+    const sentences = splitSentences(text);
+    if (!sentences.length) return;
+    const synth = (s: string) => this.d.tts!.synth(s, { voiceName: this.opts.voiceName, lang: this.lang, model: this.d.ttsModel, signal: ac.signal });
+    let pending: Promise<Buffer> | null = synth(sentences[0]);
+    for (let i = 0; i < sentences.length; i++) {
       if (ac.signal.aborted || this.closed) return;
+      const next = i + 1 < sentences.length ? synth(sentences[i + 1]) : null;
       let pcm: Buffer;
       try {
-        pcm = await this.d.tts.synth(sentence, { voiceName: this.opts.voiceName, lang: this.lang, model: this.d.ttsModel, signal: ac.signal });
+        pcm = await pending!;
       } catch (e) {
         if (ac.signal.aborted) return;
         console.warn('[aiVoice] kaskad TTS xatosi:', (e as Error).message);
         this.ttsFailed();
         return;
       }
+      pending = next;
       if (ac.signal.aborted || this.closed) return;
       const now = this.now();
       this.speakingUntil = Math.max(now, this.speakingUntil) + pcmDurationMs(pcm.length, OUT_RATE);

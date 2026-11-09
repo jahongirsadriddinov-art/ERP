@@ -253,6 +253,90 @@ html.page-simple-surface:not(.platform-ios):not(.platform-macos) .glass-modal::b
   display: none;
 }
 
+/* ══════════════════════════════════════════════════════════════════════
+   iOS / macOS — Apple'ning haqiqiy "Liquid Glass" (WWDC25) materialiga
+   yaqinlashtirilgan versiya. ESLATMA: .glassEffect()/GlassEffectContainer
+   kabi real lensing-shader faqat SwiftUI/UIKit'da ishlaydi va WKWebView
+   ICHIDAGI HTML'ga tegmaydi (faqat Apple'ning o'z chrome'iga — tab bar,
+   sheet, toolbar). Bu ilova to'liq WebView ekanida haqiqiy shader yo'q —
+   shu sabab bu yerda CSS bilan ENG YAQIN ko'rinish (specular yorug'lik,
+   "continuous" burchak, moslashuvchan tint) qilinadi. Owner 2026-11-09:
+   macOS'da butun oynaga NSVisualEffectView (haqiqiy native) qo'yilgan
+   edi — ko'rinishda nosoz shaffoflik chiqib, "o'chir" deyilgan va olib
+   tashlangan. Shu sabab bu yerda FAQAT CSS — native chrome QAYTA
+   qo'shilmaydi. ────────────────────────────────────────────────────── */
+.platform-ios,
+.platform-macos {
+  --liquid-blur: blur(34px) saturate(1.9);
+  --liquid-blur-sm: blur(18px) saturate(1.6);
+}
+.platform-ios .glass-card,
+.platform-macos .glass-card,
+.platform-ios .stat-card,
+.platform-macos .stat-card,
+.platform-ios .glass-modal,
+.platform-macos .glass-modal {
+  /* "Continuous" (squircle-ga yaqin) burchak — Apple qurilma korpusi bilan konsentrik */
+  border-radius: 20px;
+}
+/* Specular highlight — yorug'lik manbai yuqori-chapdan, materialning haqiqiy
+   "lensing" ko'rinishini taqlid qiladi (statik, lekin yo'nalishli). Mavjud
+   chiziqli qirra yorug'i (::before) ustiga qo'yiladi, uni almashtirmaydi.
+   FAQAT ::before allaqachon ishlatilgan selektorlarga (position:relative
+   ta'minlangan) — .bg-card/.bg-popover/.bg-sidebar'da bu kafolatlanmagan. */
+.platform-ios .glass-card::after,
+.platform-macos .glass-card::after,
+.platform-ios .stat-card::after,
+.platform-macos .stat-card::after,
+.platform-ios .glass-modal::after,
+.platform-macos .glass-modal::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(120% 90% at 18% -10%, var(--liquid-highlight), transparent 55%);
+  opacity: 0.55;
+  mix-blend-mode: overlay;
+  pointer-events: none;
+  z-index: 1;
+}
+.platform-ios .bg-sidebar,
+.platform-macos .bg-sidebar {
+  background-color: color-mix(in srgb, var(--sidebar) 78%, transparent) !important;
+}
+
+/* Reduce Transparency (Sozlamalar → Maxsus imkoniyatlar → Shaffoflikni
+   kamaytirish) — Apple'ning o'zi ham shu holatda materialni qattiq fonga
+   almashtiradi; biz ham shunday qilamiz. */
+@media (prefers-reduced-transparency: reduce) {
+  .platform-ios .bg-card, .platform-macos .bg-card,
+  .platform-ios .surface, .platform-macos .surface,
+  .platform-ios .glass-card, .platform-macos .glass-card,
+  .platform-ios .stat-card, .platform-macos .stat-card,
+  .platform-ios .glass-modal, .platform-macos .glass-modal,
+  .platform-ios .bg-popover, .platform-macos .bg-popover,
+  .platform-ios .bg-sidebar, .platform-macos .bg-sidebar {
+    background-color: var(--card) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+  .platform-ios .glass-card::after, .platform-macos .glass-card::after,
+  .platform-ios .stat-card::after, .platform-macos .stat-card::after,
+  .platform-ios .glass-modal::after, .platform-macos .glass-modal::after {
+    display: none;
+  }
+}
+/* Reduce Motion — "suyuqlik" spring harakati va lift o'chiriladi */
+@media (prefers-reduced-motion: reduce) {
+  .platform-ios button, .platform-macos button,
+  .platform-ios [role="button"], .platform-macos [role="button"] {
+    transition: none !important;
+  }
+  .platform-macos .glass-card:hover, .platform-macos .stat-card:hover {
+    transform: none !important;
+  }
+}
+
 /* Eski brauzer (color-mix yo'q) — shaffoflik/blur o'rniga qattiq rang */
 @supports not (color: color-mix(in srgb, red, red)) {
   .bg-primary, .bg-accent, .bg-destructive, .bg-secondary,

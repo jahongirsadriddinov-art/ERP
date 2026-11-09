@@ -6,6 +6,7 @@ import ChevronLeft from "@hugeicons/core-free-icons/ArrowLeft01Icon";
 import { toast } from "sonner";
 import { API_BASE } from "./api";
 import { SkeletonList } from "./Skeleton";
+import { PremiumEmoji } from "./components/PremiumEmoji";
 
 // Dasturchi paneli → "Xatolar" (owner 2026-10-22): server/sayt/bot/fon ishlari xatolari guruhlangan holda
 // (backend services/errorTracker.ts → GET /api/errors/events). Tafsilot: qayerda, kod joyi, ekran va oxirgi
@@ -121,7 +122,7 @@ export default function ErrorLogPanel() {
             ].filter(Boolean).join("\n");
             navigator.clipboard?.writeText(lines).then(() => toast.success(t("devPanel.errorLog.copied", { defaultValue: "Nusxa olindi" })))
               .catch(() => toast.error(t("devPanel.errorLog.copyFailed", { defaultValue: "Nusxa olib bo'lmadi" })));
-          }} className="px-3.5 py-2 rounded-full text-[13px] font-semibold bg-muted hover:bg-muted/70">📋 {t("devPanel.errorLog.copy", { defaultValue: "Nusxa olish" })}</button>
+          }} className="px-3.5 py-2 rounded-full text-[13px] font-semibold bg-muted hover:bg-muted/70"><PremiumEmoji code="1f4cb" char="📋" className="w-3.5 h-3.5 inline-block align-[-2px]" /> {t("devPanel.errorLog.copy", { defaultValue: "Nusxa olish" })}</button>
           {detail.resolved ? (
             <button type="button" data-testid="err-reopen" onClick={() => void setResolved(false)}
               className="px-3.5 py-2 rounded-full text-[13px] font-semibold bg-muted hover:bg-muted/70">{t("devPanel.errorLog.reopen")}</button>

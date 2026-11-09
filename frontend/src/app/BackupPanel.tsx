@@ -5,6 +5,7 @@ import RefreshCw from "@hugeicons/core-free-icons/Refresh01Icon";
 import { toast } from "sonner";
 import { API_BASE } from "./api";
 import { SkeletonList } from "./Skeleton";
+import { PremiumEmoji } from "./components/PremiumEmoji";
 
 // Dasturchi paneli → "Zaxira" (owner 2026-10-26: "serverda biror narsa bo'lsa ma'lumot boshqa joyda turishi kerak").
 // Backend: services/offsiteBackup + routes/devBackup.ts. Ko'rsatiladi: har bir manzil (S3/R2 va Telegram) bo'yicha
@@ -211,7 +212,7 @@ export default function BackupPanel() {
             return (
               <div key={k} className={`rounded-2xl border p-3 ${tg.configured ? (tg.lastError ? "border-amber-500/30 bg-amber-500/[0.05]" : "border-border bg-card/60") : "border-dashed border-border bg-card/40"}`} data-testid={`backup-target-${k}`}>
                 <p className="text-xs font-bold flex items-center gap-1.5">
-                  <span>{tg.configured ? (tg.lastSuccessAt && !tg.lastError ? "✅" : tg.lastError ? "⚠️" : "⏳") : "➖"}</span>{label}
+                  <span>{tg.configured ? (tg.lastSuccessAt && !tg.lastError ? <PremiumEmoji code="2705" char="✅" className="w-3.5 h-3.5 inline-block" /> : tg.lastError ? <PremiumEmoji code="26a0" char="⚠️" className="w-3.5 h-3.5 inline-block" /> : <PremiumEmoji code="23f3" char="⏳" className="w-3.5 h-3.5 inline-block" />) : "➖"}</span>{label}
                 </p>
                 <p className="text-[11px] text-muted-foreground mt-1 break-words">
                   {k === "s3"
@@ -238,7 +239,7 @@ export default function BackupPanel() {
             <div className="space-y-1">
               {st.checklist.map((c) => (
                 <div key={c.key} className="flex items-start gap-2 text-[11px]">
-                  <span className="flex-shrink-0">{c.ok ? "✅" : c.required ? "❌" : "➖"}</span>
+                  <span className="flex-shrink-0">{c.ok ? <PremiumEmoji code="2705" char="✅" className="w-3.5 h-3.5 inline-block" /> : c.required ? <PremiumEmoji code="274c" char="❌" className="w-3.5 h-3.5 inline-block" /> : "➖"}</span>
                   <span className="font-mono break-all">{c.key}</span>
                   {c.note && <span className="text-muted-foreground break-words">— {c.note}</span>}
                 </div>

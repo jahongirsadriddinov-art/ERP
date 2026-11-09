@@ -7,6 +7,7 @@ import { player, sound, useMuted, usePlayer } from "./sound";
 import { openExternalUrl } from "../../../../platform";
 import { currentMovie, mediaStore, useMedia, useScreenAnchor, yandexEmbed } from "./mediaStore";
 import { fmtSize, localMedia, UPLOAD_LIMIT } from "./localMedia";
+import { PremiumEmoji } from "../../../../components/PremiumEmoji";
 
 // AI ofis — musiqa va kino (owner 2026-10-23). MediaHost Dasturchi paneli ILDIZIDA bir marta o'rnatiladi (tab, ofis/yurish
 // rejimi almashganda ham yashaydi): <audio> va Yandex <iframe> shu yerda — ofis, kompyuter va tugmalar faqat boshqaradi.
@@ -22,7 +23,7 @@ export function MuteButton({ k, dark = false }: { k: K; dark?: boolean }) {
   return (
     <button type="button" onClick={() => sound.setMuted(!muted)} aria-pressed={!muted} data-multi-tap data-testid="ai-office-mute" title={muted ? k("media.unmute") : k("media.mute")}
       className={dark ? "relative h-9 px-3 rounded-full bg-black/60 text-white text-[13px] font-semibold backdrop-blur" : "relative h-8 px-3 rounded-full border border-border bg-card/60 text-[12px] font-semibold inline-flex items-center gap-1.5"}>
-      {muted ? "🔇" : "🔊"}<span className="sr-only">{muted ? k("media.unmute") : k("media.mute")}</span>
+      {muted ? <PremiumEmoji code="1f507" char="🔇" className="w-4 h-4 inline-block" /> : <PremiumEmoji code="1f50a" char="🔊" className="w-4 h-4 inline-block" />}<span className="sr-only">{muted ? k("media.unmute") : k("media.mute")}</span>
     </button>
   );
 }
@@ -60,7 +61,7 @@ function MiniPlayer({ k }: { k: K }) {
   const title = ps.playing && tr ? tr.name : m.yandexOn ? "Yandex Music" : tr?.name || "—";
   return (
     <div className="fixed z-[120] left-2 bottom-2 sm:left-4 sm:bottom-4 flex items-center gap-1.5 rounded-full bg-card text-foreground border border-border shadow-2xl pl-3 pr-1 py-1 max-w-[calc(100vw-16px)]" data-multi-tap data-testid="ai-office-mini">
-      <span className="text-[12px] font-semibold truncate max-w-[160px]">🎵 {title}</span>
+      <span className="text-[12px] font-semibold truncate max-w-[160px]"><PremiumEmoji code="1f3b5" char="🎵" className="w-3.5 h-3.5 inline-block align-[-2px]" /> {title}</span>
       {!!ps.tracks.length && <button type="button" onClick={() => player.toggle()} className="w-8 h-8 rounded-full hover:bg-muted" aria-label="play/pause" data-testid="ai-office-mini-toggle">{ps.playing ? "⏸" : "▶"}</button>}
       {!!ps.tracks.length && <button type="button" onClick={() => player.next()} className="w-8 h-8 rounded-full hover:bg-muted" aria-label="next">⏭</button>}
       <button type="button" onClick={() => mediaStore.openMusic()} className="w-8 h-8 rounded-full hover:bg-muted" aria-label={k("media.expand")} title={k("media.expand")} data-testid="ai-office-mini-expand">⤢</button>
@@ -90,7 +91,7 @@ function CinemaWindow({ k }: { k: K }) {
         : full ? "fixed z-[121] left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[min(94vw,1100px)] rounded-2xl overflow-hidden bg-black shadow-2xl border border-white/10"
         : "fixed z-[121] left-2 bottom-16 sm:left-4 w-[min(300px,60vw)] rounded-xl overflow-hidden bg-black shadow-2xl border border-white/10"}>
       <div className={onScreen ? "absolute z-10 right-1 top-1 flex items-center gap-1 px-1 rounded-full bg-black/60 text-white text-[12px] pointer-events-auto" : "flex items-center gap-1 px-2 py-1 bg-[#15171c] text-white text-[12px]"}>
-        <span className={onScreen ? "hidden" : "font-semibold mr-auto truncate"}>🎬 {k("media.cinema")}</span>
+        <span className={onScreen ? "hidden" : "font-semibold mr-auto truncate"}><PremiumEmoji code="1f3ac" char="🎬" className="w-3.5 h-3.5 inline-block align-[-2px]" /> {k("media.cinema")}</span>
         {full && <button type="button" onClick={() => { try { void box.current?.requestFullscreen?.(); } catch { /* */ } }} className="h-7 px-2 rounded-full hover:bg-white/10" data-testid="ai-office-cinema-big">⛶ {k("media.bigger")}</button>}
         <button type="button" onClick={() => (full || onScreen ? mediaStore.minimizeCinema() : mediaStore.watch("full"))} className="w-7 h-7 rounded-full hover:bg-white/10" aria-label={full || onScreen ? k("media.minimize") : k("media.expand")} data-testid="ai-office-cinema-min">{full || onScreen ? "–" : "⤢"}</button>
         <button type="button" onClick={() => mediaStore.stopCinema()} className="w-7 h-7 rounded-full hover:bg-white/10 text-red-400" aria-label={k("media.stop")} data-testid="ai-office-cinema-stop">■</button>
@@ -182,7 +183,7 @@ export function MediaPanel({ k, embedded = false }: { k: K; embedded?: boolean }
         {(["music", "cinema"] as const).map((x) => (
           <button key={x} type="button" onClick={() => mediaStore.setTab(x)} aria-pressed={tab === x} data-testid={`ai-office-media-tab-${x}`}
             className={`h-8 px-3 rounded-full text-[12.5px] font-semibold ${tab === x ? "bg-foreground text-background" : "text-muted-foreground hover:bg-muted"}`}>
-            {x === "music" ? "🎵 " : "🎬 "}{k(`media.${x}`)}
+            {x === "music" ? <PremiumEmoji code="1f3b5" char="🎵" className="w-3.5 h-3.5 inline-block align-[-2px]" /> : <PremiumEmoji code="1f3ac" char="🎬" className="w-3.5 h-3.5 inline-block align-[-2px]" />} {k(`media.${x}`)}
           </button>
         ))}
         <span className="ml-auto" />
@@ -201,12 +202,12 @@ export function MediaPanel({ k, embedded = false }: { k: K; embedded?: boolean }
               {!!yandex.trim() && !parseYandexMusic(yandex) && <p className="text-[11.5px] text-red-600" data-testid="ai-office-yandex-invalid">{k("media.badYandex")}</p>}
               <div className="flex flex-wrap gap-1.5" data-testid="ai-office-yandex-links">
                 {[
-                  { k: "wave", label: "🌊 Moya volna", url: "https://music.yandex.ru/" },
-                  { k: "mine", label: "❤️ Mening pleylistlarim", url: "https://music.yandex.ru/home/collection" },
-                  { k: "search", label: "🔍 Qo'shiq qidirish", url: "https://music.yandex.ru/search" },
+                  { k: "wave", code: "1f30a", char: "🌊", label: "Moya volna", url: "https://music.yandex.ru/" },
+                  { k: "mine", code: "2764", char: "❤️", label: "Mening pleylistlarim", url: "https://music.yandex.ru/home/collection" },
+                  { k: "search", code: "1f50d", char: "🔍", label: "Qo'shiq qidirish", url: "https://music.yandex.ru/search" },
                 ].map((b) => (
                   <button key={b.k} type="button" onClick={() => void openExternalUrl(b.url)} data-testid={`ai-office-yandex-open-${b.k}`}
-                    className="h-8 px-3 rounded-full bg-muted text-[12px] font-semibold hover:bg-muted/70">{b.label}</button>
+                    className="h-8 px-3 rounded-full bg-muted text-[12px] font-semibold hover:bg-muted/70"><PremiumEmoji code={b.code} char={b.char} className="w-3.5 h-3.5 inline-block align-[-2px]" /> {b.label}</button>
                 ))}
               </div>
               {ym && !embedded && (muted ? (
@@ -238,12 +239,12 @@ export function MediaPanel({ k, embedded = false }: { k: K; embedded?: boolean }
                       <button type="button" onClick={() => (cur && ps.playing ? player.pause() : void player.play(i))} className="w-8 h-8 rounded-full bg-muted grid place-items-center flex-shrink-0" data-testid={`ai-office-track-play-${i}`}>
                         {cur && ps.playing ? "⏸" : "▶"}
                       </button>
-                      <span className="flex-1 min-w-0 truncate text-[12.5px]">{tr.name}{tr.local && <span className="ml-1 text-[10.5px] text-muted-foreground">💻 {tr.size ? fmtSize(tr.size) : ""}</span>}</span>
+                      <span className="flex-1 min-w-0 truncate text-[12.5px]">{tr.name}{tr.local && <span className="ml-1 text-[10.5px] text-muted-foreground"><PremiumEmoji code="1f4bb" char="💻" className="w-3 h-3 inline-block" /> {tr.size ? fmtSize(tr.size) : ""}</span>}</span>
                       {si >= 0 && <>
                         <button type="button" onClick={() => move(si, -1)} className="w-6 h-7 rounded hover:bg-muted text-muted-foreground" aria-label="up">↑</button>
                         <button type="button" onClick={() => move(si, 1)} className="w-6 h-7 rounded hover:bg-muted text-muted-foreground" aria-label="down">↓</button>
                       </>}
-                      {tr.local && <button type="button" onClick={() => toServer(tr.local!, "audio")} className="h-7 px-2 rounded-full hover:bg-muted text-[11px]" title={k("media.toServer")}>☁</button>}
+                      {tr.local && <button type="button" onClick={() => toServer(tr.local!, "audio")} className="h-7 px-2 rounded-full hover:bg-muted text-[11px]" title={k("media.toServer")}><PremiumEmoji code="2601" char="☁" className="w-3.5 h-3.5 inline-block" /></button>}
                       <button type="button" onClick={() => (tr.local ? mediaStore.removeLocal(tr.local) : save({ tracks: media.tracks.filter((x) => x.id !== tr.id) }))} aria-label={k("actions.remove")} className="w-7 h-7 rounded-full hover:bg-muted text-muted-foreground">✕</button>
                     </div>
                   );
@@ -288,7 +289,7 @@ export function MediaPanel({ k, embedded = false }: { k: K; embedded?: boolean }
               </div>
             ) : vid ? (
               <div className="space-y-2">
-                <p className="text-[12px] text-muted-foreground" data-testid="ai-office-cinema-ok">✅ {k("media.cinemaReady", { kind: vid.kind === "file" ? k("media.file") : vid.kind === "youtube" ? "YouTube" : vid.kind === "vk" ? "VK Video" : "Rutube" })}</p>
+                <p className="text-[12px] text-muted-foreground" data-testid="ai-office-cinema-ok"><PremiumEmoji code="2705" char="✅" className="w-3.5 h-3.5 inline-block align-[-2px]" /> {k("media.cinemaReady", { kind: vid.kind === "file" ? k("media.file") : vid.kind === "youtube" ? "YouTube" : vid.kind === "vk" ? "VK Video" : "Rutube" })}</p>
                 <button type="button" onClick={() => mediaStore.watch("full")} className="w-full h-11 rounded-xl bg-[#e5484d] text-white text-[14px] font-bold" data-testid="ai-office-watch">▶ {k("media.watch")}</button>
               </div>
             ) : (
@@ -301,7 +302,7 @@ export function MediaPanel({ k, embedded = false }: { k: K; embedded?: boolean }
                   <div key={v.id} className={`flex items-center gap-1.5 rounded-xl border px-2 py-1 ${m.cinemaLocal === v.id ? "border-primary bg-primary/5" : "border-border"}`}>
                     <button type="button" onClick={async () => { await mediaStore.setCinemaLocal(v.id); mediaStore.watch("full"); }} className="w-8 h-8 rounded-full bg-muted">▶</button>
                     <span className="flex-1 min-w-0 truncate text-[12.5px]">{v.name} <span className="text-[10.5px] text-muted-foreground">{fmtSize(v.size)}</span></span>
-                    <button type="button" onClick={() => toServer(v.id, "video")} className="h-7 px-2 rounded-full hover:bg-muted text-[11px]" title={k("media.toServer")}>☁ {k("media.toServerShort")}</button>
+                    <button type="button" onClick={() => toServer(v.id, "video")} className="h-7 px-2 rounded-full hover:bg-muted text-[11px]" title={k("media.toServer")}><PremiumEmoji code="2601" char="☁" className="w-3.5 h-3.5 inline-block align-[-2px]" /> {k("media.toServerShort")}</button>
                     <button type="button" onClick={() => mediaStore.removeLocal(v.id)} aria-label={k("actions.remove")} className="w-7 h-7 rounded-full hover:bg-muted text-muted-foreground">✕</button>
                   </div>
                 ))}

@@ -33,6 +33,7 @@ import { PriceField } from "./components/Money";
 import { parseMoney } from "./lib/money";
 import { openMediaViewer } from "./MediaViewer";
 import { SkeletonList } from "./Skeleton";
+import { PremiumEmoji } from "./components/PremiumEmoji";
 import { EscClose, LocationInput, SMETA_GROUP_LABEL, SMETA_GROUP_ORDER, SafeImg, SendTransferModal, TransferRow, fmt, fmtNum, hwheel, isAdmin, useModalPresence, type AppUser, type Project, type ReqMat, type SmetaResourceRow, type SmetaResult, type SmetaWorkRow, type Transfer } from "./App";
 
 export function ObjectDetailPage({ project, currentUser, users, transfers, onBack, onSendTransfer, onConfirm, onReject, onSmetaUploaded, onUpdateStatus, onUpdateProject, onDeleteProject }:
@@ -365,7 +366,7 @@ export function ObjectDetailPage({ project, currentUser, users, transfers, onBac
               </button>
               <button onClick={() => mediaFileRef.current?.click()} disabled={uploadingMedia}
                 className="flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-bold border-2 border-dashed border-border/60 text-muted-foreground hover:border-primary/40 hover:text-primary liquid-transition disabled:opacity-50">
-                <span aria-hidden>🖼</span>{t('objectDetail.mediaGallery', "Galereya")}
+                <PremiumEmoji code="1f5bc" char="🖼" className="w-4 h-4 inline-block" />{t('objectDetail.mediaGallery', "Galereya")}
               </button>
             </div>
             {pendingMedia && (
@@ -428,9 +429,9 @@ export function ObjectDetailPage({ project, currentUser, users, transfers, onBac
                       {/* AI foto-nazorat bahosi (bosqich, foiz, xavfsizlik) */}
                       {m.aiAnalysis && (m.aiAnalysis.stage || m.aiAnalysis.safety?.length) ? (
                         <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }} className="rounded-lg bg-primary/[0.06] px-2 py-1.5 text-[10.5px] leading-snug space-y-0.5">
-                          <p className="font-semibold text-primary">🤖 {m.aiAnalysis.stage || t('objectDetail.aiPhoto')}{typeof m.aiAnalysis.progressPercent === 'number' ? ` · ~${m.aiAnalysis.progressPercent}%` : ''}</p>
+                          <p className="font-semibold text-primary"><PremiumEmoji code="1f916" char="🤖" className="w-4 h-4 inline-block align-[-3px]" /> {m.aiAnalysis.stage || t('objectDetail.aiPhoto')}{typeof m.aiAnalysis.progressPercent === 'number' ? ` · ~${m.aiAnalysis.progressPercent}%` : ''}</p>
                           {(m.aiAnalysis.safety || []).filter(s => s.severity !== 'low').slice(0, 2).map((s, i) => (
-                            <p key={i} className="text-red-600 dark:text-red-400">⚠️ {s.issue}</p>
+                            <p key={i} className="text-red-600 dark:text-red-400"><PremiumEmoji code="26a0" char="⚠️" className="w-3.5 h-3.5 inline-block align-[-2px]" /> {s.issue}</p>
                           ))}
                           {(m.aiAnalysis.quality || []).slice(0, 1).map((q, i) => <p key={i} className="text-amber-700 dark:text-amber-300">• {q}</p>)}
                         </motion.div>

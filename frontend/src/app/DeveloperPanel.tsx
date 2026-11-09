@@ -1,6 +1,7 @@
 import "./i18n/aiVoiceNs";
 import type { ReactNode } from "react";
 import { confirmDialog } from "./lib/confirmDialog";
+import { PremiumEmoji } from "./components/PremiumEmoji";
 import { useState, useRef, useEffect, useMemo, Suspense } from "react";
 import { lazyRetry as lazy } from "./lib/lazyRetry";
 import { oneOf, usePersistentState } from "./lib/persistentState";
@@ -362,7 +363,7 @@ export default function DeveloperPanel({ currentUser, onLogout, profileEl }: { c
       <Suspense fallback={null}><OfficeMediaHost /></Suspense>
       <header className="glass sticky top-0 z-20 px-4 py-3 flex items-center justify-between gap-2 border-b border-border/50 flex-shrink-0">
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-slate-700 to-slate-900 text-white flex items-center justify-center text-sm font-bold shadow-sm shrink-0">🛠</div>
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-slate-700 to-slate-900 text-white flex items-center justify-center text-sm font-bold shadow-sm shrink-0"><PremiumEmoji code="1f6e0" char="🛠" className="w-5 h-5" /></div>
           <div className="min-w-0">
             <p className="text-sm font-bold leading-tight truncate">{t('devPanel.title')}</p>
             <p className="text-[11px] text-muted-foreground leading-tight truncate">{t('devPanel.headerSubtitle', { name: currentUser.name })}</p>
@@ -392,7 +393,7 @@ export default function DeveloperPanel({ currentUser, onLogout, profileEl }: { c
       )}
       {expiringSoonCount > 0 && (
         <div className="mx-4 md:mx-6 xl:mx-auto xl:max-w-7xl xl:w-[calc(100%-3rem)] mt-2.5 flex items-center gap-2 text-[11px] font-semibold text-orange-700 dark:text-orange-400 bg-orange-500/10 border border-orange-500/20 rounded-xl px-3 py-2 flex-shrink-0">
-          ⚠️ {expiringSoonCount} {t('devPanel.stats.expiringSoon')}
+          <PremiumEmoji code="26a0" char="⚠️" className="w-4 h-4 inline-block align-[-3px]" /> {expiringSoonCount} {t('devPanel.stats.expiringSoon')}
         </div>
       )}
 
@@ -428,10 +429,10 @@ export default function DeveloperPanel({ currentUser, onLogout, profileEl }: { c
             {t('devPanel.tabs.botUi')}
           </button>
           <button onClick={() => setTab("office")} data-testid="dev-tab-office" className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "office" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
-            🏢 {t('devPanel.tabs.office', { defaultValue: 'AI ofis' })}
+            <PremiumEmoji code="1f3e2" char="🏢" className="w-3.5 h-3.5 inline-block align-[-2px]" /> {t('devPanel.tabs.office', { defaultValue: 'AI ofis' })}
           </button>
           <button onClick={() => setTab("prices")} data-testid="dev-tab-prices" className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "prices" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
-            💰 {t('devPanel.tabs.prices', { defaultValue: 'Narx manbalari' })}
+            <PremiumEmoji code="1f4b0" char="💰" className="w-3.5 h-3.5 inline-block align-[-2px]" /> {t('devPanel.tabs.prices', { defaultValue: 'Narx manbalari' })}
           </button>
           {/* Infra/monitoring guruhi — server, xatolar, zaxira, qurilmalar
               reliz'lari birga (avval "appBuilds"/"backup" orasiga "Profil"
@@ -447,12 +448,12 @@ export default function DeveloperPanel({ currentUser, onLogout, profileEl }: { c
             {t('devPanel.tabs.backup')}
           </button>
           <button onClick={() => setTab("appBuilds")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "appBuilds" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
-            📲 Ilova
+            <PremiumEmoji code="1f4f2" char="📲" className="w-3.5 h-3.5 inline-block align-[-2px]" /> Ilova
           </button>
           {/* Profil — shaxsiy/sayt sozlamalari, ro'yxat oxirida (sozlamalar
               odatda eng oxirida bo'ladi, boshqa biznes tablar bilan aralashmaydi). */}
           <button onClick={() => setTab("profile")} data-testid="dev-tab-profile" className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "profile" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
-            👤 {t('devPanel.tabs.profile', { defaultValue: 'Profil' })}
+            <PremiumEmoji code="1f464" char="👤" className="w-3.5 h-3.5 inline-block align-[-2px]" /> {t('devPanel.tabs.profile', { defaultValue: 'Profil' })}
           </button>
         </div>
         {/* Ma'lumotlar FAQAT panel birinchi ochilganda yuklanardi — keyin
@@ -494,7 +495,7 @@ export default function DeveloperPanel({ currentUser, onLogout, profileEl }: { c
                   </div>
                 </div>
                 <div className="flex items-center justify-between text-[12px] text-muted-foreground mb-3">
-                  <span>📦 {s.selectedPlan ? planLabel(s.selectedPlan) : "—"}</span>
+                  <span><PremiumEmoji code="1f4e6" char="📦" className="w-3.5 h-3.5 inline-block align-[-2px]" /> {s.selectedPlan ? planLabel(s.selectedPlan) : "—"}</span>
                   <span className="font-semibold text-foreground">{s.amount ? t('devPanel.subscriptions.amount', { amount: s.amount.toLocaleString() }) : "—"}</span>
                 </div>
                 {s.requestedAt && <p className="text-[11px] text-muted-foreground mb-3">{t('devPanel.subscriptions.requestedAt')} {new Date(s.requestedAt).toLocaleString("uz-UZ", { timeZone: "Asia/Tashkent" })}</p>}
@@ -548,11 +549,11 @@ export default function DeveloperPanel({ currentUser, onLogout, profileEl }: { c
                     <div className="flex gap-2">
                       <button onClick={() => { setRenewPlan(prev => ({ ...prev, [s.id]: prev[s.id] || 'bepul' })); approveSub(s.id); }} disabled={subLoading === s.id}
                         className="flex-1 py-2 rounded-xl text-xs font-bold bg-green-600 text-white hover:bg-green-700 disabled:opacity-60 flex items-center justify-center gap-1">
-                        {subLoading === s.id ? <MorphIcon icon={Loader2} className="w-3.5 h-3.5 animate-spin"  /> : "✅"} {t('devPanel.subscriptions.approve')}
+                        {subLoading === s.id ? <MorphIcon icon={Loader2} className="w-3.5 h-3.5 animate-spin"  /> : <PremiumEmoji code="2705" char="✅" className="w-3.5 h-3.5 inline-block" />} {t('devPanel.subscriptions.approve')}
                       </button>
                       <button onClick={() => rejectSub(s.id)} disabled={subLoading === s.id}
                         className="flex-1 py-2 rounded-xl text-xs font-bold border border-red-500/30 text-red-600 hover:bg-red-500/10 disabled:opacity-60 flex items-center justify-center gap-1">
-                        {subLoading === s.id ? <MorphIcon icon={Loader2} className="w-3.5 h-3.5 animate-spin"  /> : "❌"} {t('devPanel.subscriptions.reject')}
+                        {subLoading === s.id ? <MorphIcon icon={Loader2} className="w-3.5 h-3.5 animate-spin"  /> : <PremiumEmoji code="274c" char="❌" className="w-3.5 h-3.5 inline-block" />} {t('devPanel.subscriptions.reject')}
                       </button>
                     </div>
                   </div>
@@ -569,7 +570,7 @@ export default function DeveloperPanel({ currentUser, onLogout, profileEl }: { c
                       </select>
                       <button onClick={() => renewSub(s.id)} disabled={subLoading === s.id}
                         className="px-3 py-2 rounded-lg text-xs font-bold bg-primary text-white hover:bg-primary/90 disabled:opacity-60 flex items-center gap-1 shrink-0">
-                        {subLoading === s.id ? <MorphIcon icon={Loader2} className="w-3.5 h-3.5 animate-spin"  /> : "🔄"} {t('devPanel.subscriptions.renew')}
+                        {subLoading === s.id ? <MorphIcon icon={Loader2} className="w-3.5 h-3.5 animate-spin"  /> : <PremiumEmoji code="1f504" char="🔄" className="w-3.5 h-3.5 inline-block" />} {t('devPanel.subscriptions.renew')}
                       </button>
                     </div>
                   </div>
@@ -662,7 +663,7 @@ export default function DeveloperPanel({ currentUser, onLogout, profileEl }: { c
               ) : (
                 <>
                   <div className="px-3 py-2 border-b border-border/40 flex items-center gap-2 flex-shrink-0">
-                    <div className="w-7 h-7 rounded-full bg-orange-500/15 flex items-center justify-center text-[14px] flex-shrink-0">🛠</div>
+                    <div className="w-7 h-7 rounded-full bg-orange-500/15 flex items-center justify-center text-[14px] flex-shrink-0"><PremiumEmoji code="1f6e0" char="🛠" className="w-4 h-4" /></div>
                     <div className="min-w-0">
                       <p className="text-xs font-semibold leading-none truncate">{selDevFirm.name}</p>
                       <p className="text-[10px] text-muted-foreground">{t('devPanel.messages.subtitle')}</p>

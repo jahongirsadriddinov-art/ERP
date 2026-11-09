@@ -60,6 +60,7 @@ import { MoneyInput } from "./components/MoneyInput";
 import { amountToInput, fmtNumber, parseMoney } from "./lib/money";
 import AiPhone from "@hugeicons/core-free-icons/AiPhone01Icon";
 import AiVoiceIcon from "@hugeicons/core-free-icons/AiVoiceIcon";
+import { PremiumEmoji } from "./components/PremiumEmoji";
 // AI ovozli yordamchi sozlamalari — alohida chunk (faqat panel ochilganda yuklanadi)
 const AiSettingsPanel = lazy(() => import("./aiVoice/settings/AiSettingsPanel"));
 const MyAiPrefsPanel = lazy(() => import("./aiVoice/settings/MyAiPrefsPanel"));
@@ -1064,7 +1065,7 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
                     {subData.status !== 'pending' && subData.status !== 'expired' && (
                       <details className="px-5 py-4 group">
                         <summary className="cursor-pointer text-sm font-bold flex items-center justify-between gap-2 list-none" data-testid="plan-change-toggle">
-                          <span>🔁 {t('plan.change', 'Tarifni almashtirish')}</span>
+                          <span><PremiumEmoji code="1f501" char="🔁" className="w-4 h-4 inline-block align-[-3px]" /> {t('plan.change', 'Tarifni almashtirish')}</span>
                           <span className="text-muted-foreground group-open:rotate-180 transition-transform">▾</span>
                         </summary>
                         <div className="mt-3 space-y-2">
@@ -1261,7 +1262,7 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
                 <div className="mb-3 space-y-2">
                   {(gpsStatus.state === 'denied' || gpsStatus.state === 'unavailable' || gpsStatus.state === 'timeout') && (
                     <p className="text-[11px] rounded-lg px-2.5 py-1.5 bg-red-500/10 text-red-600 dark:text-red-400">
-                      ⚠ {t(gpsStatus.state === 'denied' ? 'gps.warnDenied' : gpsStatus.state === 'timeout' ? 'gps.warnTimeout' : 'gps.warnUnavailable')}
+                      <PremiumEmoji code="26a0" char="⚠" className="w-3.5 h-3.5 inline-block align-[-2px]" /> {t(gpsStatus.state === 'denied' ? 'gps.warnDenied' : gpsStatus.state === 'timeout' ? 'gps.warnTimeout' : 'gps.warnUnavailable')}
                     </p>
                   )}
                   <div className="grid grid-cols-2 gap-1.5 text-[11px]">
@@ -1287,7 +1288,7 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
                     </div>
                   </div>
                   {(gpsStatus.queued > 0 || gpsStatus.network === 'offline') && (
-                    <p className="text-[11px] text-amber-700 dark:text-amber-400">📡 {t('gps.queuedNote', { count: gpsStatus.queued })}</p>
+                    <p className="text-[11px] text-amber-700 dark:text-amber-400"><PremiumEmoji code="1f4e1" char="📡" className="w-3.5 h-3.5 inline-block align-[-2px]" /> {t('gps.queuedNote', { count: gpsStatus.queued })}</p>
                   )}
                 </div>
               )}

@@ -22,6 +22,7 @@ import { openExternalUrl } from "../platform";
 import { getSocket } from "../socket";
 import { ChatAvatar } from "./ChatAvatar";
 import { avatarColor, dayLabel, fmtClock, tashkentDayKey } from "./chatModel";
+import { PremiumEmoji } from "../components/PremiumEmoji";
 
 const RUN_GAP_MS = 5 * 60_000;
 const SWIPE_REPLY_PX = 56; // shuncha surilsa — javob
@@ -221,7 +222,7 @@ export function MessageList(p: MessageListProps) {
     <span className={`inline-flex items-center gap-1 text-[11px] leading-none whitespace-nowrap select-none
       ${overlay ? "bg-black/50 text-white rounded-full px-1.5 py-1" : mine ? "text-primary-foreground/70" : "text-muted-foreground"}`}>
       {m.edited && <span className="italic">{t("chat.editedLabel")}</span>}
-      {m.pinned && <span>📌</span>}
+      {m.pinned && <PremiumEmoji code="1f4cc" char="📌" className="w-3.5 h-3.5 inline-block" />}
       <span className="tabular-nums">{fmtClock(m.timestamp)}</span>
       {mine && (m.status === "sending" ? <MorphIcon icon={Loader2} className="w-3.5 h-3.5 animate-spin" />
         : m.status === "failed" ? null

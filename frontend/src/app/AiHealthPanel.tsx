@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { MorphIcon } from "morphicons/react";
 import RefreshCw from "@hugeicons/core-free-icons/Refresh01Icon";
 import { API_BASE } from "./api";
+import { PremiumEmoji } from "./components/PremiumEmoji";
 
 // "AI nega javob bermayapti?" — logsiz aniqlash uchun (owner 2026-10-29).
 // Tekshirish tugmasi bosilganda serverda HAQIQIY savol yuboriladi: foydalanuvchi
@@ -59,7 +60,9 @@ export default function AiHealthPanel() {
         <div className="space-y-3">
           <div className={`rounded-xl px-3 py-2.5 ${data.test.ok ? "bg-emerald-500/10" : "bg-red-500/10"}`}>
             <p className={`text-[12px] font-bold ${data.test.ok ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}>
-              {data.test.ok ? `✅ AI javob berdi (${(data.test.ms / 1000).toFixed(1)} s)` : "❌ AI javob bermadi"}
+              {data.test.ok
+                ? <><PremiumEmoji code="2705" char="✅" className="w-3.5 h-3.5 inline-block" /> AI javob berdi ({(data.test.ms / 1000).toFixed(1)} s)</>
+                : <><PremiumEmoji code="274c" char="❌" className="w-3.5 h-3.5 inline-block" /> AI javob bermadi</>}
             </p>
             <p className="text-[11px] text-muted-foreground mt-1 break-words">
               {data.test.ok ? data.test.reply : data.test.error}

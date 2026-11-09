@@ -19,6 +19,7 @@ import { API_BASE, uploadChatMedia } from "./api";
 import { setSiteLanguage, SiteLang } from "./i18n";
 import LanguageSwitcher from "./i18n/LanguageSwitcher";
 import { openExternalUrl, isNative } from "./platform";
+import { PremiumEmoji } from "./components/PremiumEmoji";
 
 // v1.2 self-signup — faqat yangi firma ochayotgan foydalanuvchi ko'radi,
 // shuning uchun alohida faylga chiqarilib React.lazy orqali faqat
@@ -482,7 +483,7 @@ export default function RegisterWizard({ onBack, onDone }: { onBack: () => void;
                   <div>
                     <p className="text-sm font-bold">{t('register.freeTrialTitle')}</p>
                     <p className="text-[11px] text-muted-foreground mt-0.5">{t('register.daysCount', { count: freePlan.days })} · {t('register.freeTrialDesc')}</p>
-                    {trialBlocked !== null && <p className="text-[11px] text-red-600 dark:text-red-400 font-semibold mt-1">🔒 {trialBlocked || "Bu qurilmada bepul sinov allaqachon ishlatilgan"}</p>}
+                    {trialBlocked !== null && <p className="text-[11px] text-red-600 dark:text-red-400 font-semibold mt-1"><PremiumEmoji code="1f512" char="🔒" className="w-3.5 h-3.5 inline-block align-[-2px]" /> {trialBlocked || "Bu qurilmada bepul sinov allaqachon ishlatilgan"}</p>}
                   </div>
                   <p className="text-lg font-bold text-green-700 dark:text-green-400 flex-shrink-0 ml-3">{t('register.free')}</p>
                 </button>

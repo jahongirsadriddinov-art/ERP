@@ -22,6 +22,7 @@ import { API_BASE } from "./api";
 import { reportError } from "./lib/monitoring";
 import { classifyMediaError, isUserMediaState, mediaErrorMessage, permissionHowTo, detectMediaPlatform } from "./lib/mediaErrors";
 import { UserAvatar } from "./components/UserAvatar";
+import { PremiumEmoji } from "./components/PremiumEmoji";
 
 // Qo'ng'iroq oynasi (WebRTC) — kamdan-kam ishlatiladi (faqat qo'ng'iroq
 // paytida), shuning uchun alohida faylga chiqarilib React.lazy orqali
@@ -689,7 +690,7 @@ export default function CallOverlay({ currentUser, users, call, onClose, onSendM
       {audioBlocked && (
         <button onClick={() => { window.dispatchEvent(new CustomEvent('erp:call-audio-unlock')); setAudioBlocked(false); }}
           className="absolute top-[max(1rem,env(safe-area-inset-top))] left-1/2 -translate-x-1/2 z-20 px-5 py-2.5 rounded-full bg-white text-black text-sm font-bold shadow-2xl animate-pulse">
-          🔊 {t('call.tapForSound', "Ovozni yoqish uchun bosing")}
+          <PremiumEmoji code="1f50a" char="🔊" className="w-4 h-4 inline-block align-[-3px]" /> {t('call.tapForSound', "Ovozni yoqish uchun bosing")}
         </button>
       )}
       {/* Video/masofaviy */}

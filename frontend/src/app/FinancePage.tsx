@@ -40,6 +40,7 @@ import { API_BASE } from "./api";
 import { guessExpType } from "./lib/expense";
 import { EXP_LABELS, EscClose, expLabel, exportExpensesToCsv, fmt, fmtUsd, isAdmin, resizeImageFile, roleLabel, type AppUser, type ExpType, type Expense, type Project } from "./App";
 import { scanReceiptFile, type ScanStage } from "./lib/receiptScan";
+import { PremiumEmoji } from "./components/PremiumEmoji";
 
 // ─── Finance Page ──────────────────────────────────────────────────────────────
 /** `arr.find(x => x.id === id)` bilan bir xil natija (birinchi moslik), lekin O(1) */
@@ -196,7 +197,7 @@ export function FinancePage({ currentUser, users, projects, expenses, onAddExpen
                         {e.status==="confirmed"
                           ?<span className="fin-chip" style={{ ["--chip" as any]: "#10b981" }}><MorphIcon icon={CheckCircle} className="w-3 h-3" />{t('finance.confirmed')}</span>
                           :<span className="fin-chip" style={{ ["--chip" as any]: "#f59e0b" }}><MorphIcon icon={Clock} className="w-3 h-3" />{t('finance.pending')}</span>}
-                        {e.anomaly && <span className="fin-chip" style={{ ["--chip" as any]: "#f59e0b" }}>⚠ {t('finance.anomaly', { defaultValue: "G'ayrioddiy" })}</span>}
+                        {e.anomaly && <span className="fin-chip" style={{ ["--chip" as any]: "#f59e0b" }}><PremiumEmoji code="26a0" char="⚠" className="w-3 h-3 inline-block align-[-1px]" /> {t('finance.anomaly', { defaultValue: "G'ayrioddiy" })}</span>}
                         {e.requiresAdminApproval&&e.status==="pending"&&<span className="fin-chip" style={{ ["--chip" as any]: "#e5633a" }}>{t('approvalChain.needsApproval')}</span>}
                       </div>
                         {m.sub && <p className="text-[11px] text-muted-foreground whitespace-nowrap tabular-nums flex-shrink-0 leading-5">{m.sub}</p>}
@@ -359,11 +360,11 @@ export function AddExpenseModal({ currentUser, projects, allUsers, onClose, onAd
               <div className="grid grid-cols-2 gap-2">
                 <button type="button" onClick={() => receiptCamRef.current?.click()}
                   className="h-11 rounded-xl border-2 border-dashed border-primary/40 bg-primary/[0.04] text-primary text-sm font-bold flex items-center justify-center gap-2 hover:bg-primary/10 liquid-transition">
-                  <span aria-hidden>📷</span>{t('addExpense.receiptCamera', "Kamera")}
+                  <PremiumEmoji code="1f4f7" char="📷" className="w-4 h-4 inline-block" />{t('addExpense.receiptCamera', "Kamera")}
                 </button>
                 <button type="button" onClick={() => receiptRef.current?.click()}
                   className="h-11 rounded-xl border-2 border-dashed border-primary/40 bg-primary/[0.04] text-primary text-sm font-bold flex items-center justify-center gap-2 hover:bg-primary/10 liquid-transition">
-                  <span aria-hidden>🖼</span>{t('addExpense.receiptGallery', "Galereya")}
+                  <PremiumEmoji code="1f5bc" char="🖼" className="w-4 h-4 inline-block" />{t('addExpense.receiptGallery', "Galereya")}
                 </button>
               </div>
             </div>
@@ -451,7 +452,7 @@ export function AddExpenseModal({ currentUser, projects, allUsers, onClose, onAd
                   return g && g !== form.type && g !== "boshqa" ? (
                     <button type="button" onClick={() => setForm({ ...form, type: g })}
                       className="mt-1.5 inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-full bg-primary/10 text-primary hover:bg-primary/15">
-                      🤖 {t('addExpense.aiSuggest', { defaultValue: "Tavsif bo'yicha tur" })}: <b>{expLabel(t, g)}</b> — {t('addExpense.apply', { defaultValue: "qo'llash" })}
+                      <PremiumEmoji code="1f916" char="🤖" className="w-3.5 h-3.5 inline-block align-[-2px]" /> {t('addExpense.aiSuggest', { defaultValue: "Tavsif bo'yicha tur" })}: <b>{expLabel(t, g)}</b> — {t('addExpense.apply', { defaultValue: "qo'llash" })}
                     </button>
                   ) : null;
                 })()}

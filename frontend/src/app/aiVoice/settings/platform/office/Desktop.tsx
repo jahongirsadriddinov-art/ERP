@@ -10,6 +10,7 @@ import { call } from "../../api";
 import { MediaPanel } from "./MediaPanel";
 import { mediaStore, useMedia } from "./mediaStore";
 import { fmtSize } from "./localMedia";
+import { PremiumEmoji } from "../../../../components/PremiumEmoji";
 
 // AI ofis — egasining kompyuteri ("Mening ofisim" stolida o'tirganda ochiladi): ish stoli uslubidagi oyna va ilovalar —
 // Claude (Boshliqqa buyruq), Vazifalar, Musiqa, Kino, Fayllar, O'yinlar (TV'dagi bilan bir xil canvas), ERP yorliqlari.
@@ -27,11 +28,11 @@ export function Desktop({ hub, links, onLink, onClose }: { hub: ScreenHub | null
   const apps = [
     { key: "claude" as const, icon: "✳", label: "Claude" },
     { key: "tasks" as const, icon: "☰", label: k("pc.tasks") },
-    { key: "music" as const, icon: "🎵", label: k("media.music") },
-    { key: "cinema" as const, icon: "🎬", label: k("media.cinema") },
-    { key: "files" as const, icon: "📁", label: k("pc.files") },
-    { key: "game" as const, icon: "🎮", label: k("pc.game") },
-    ...(links.length ? [{ key: "erp" as const, icon: "🏗", label: "ERP" }] : []),
+    { key: "music" as const, icon: "🎵", code: "1f3b5", label: k("media.music") },
+    { key: "cinema" as const, icon: "🎬", code: "1f3ac", label: k("media.cinema") },
+    { key: "files" as const, icon: "📁", code: "1f4c1", label: k("pc.files") },
+    { key: "game" as const, icon: "🎮", code: "1f3ae", label: k("pc.game") },
+    ...(links.length ? [{ key: "erp" as const, icon: "🏗", code: "1f3d7", label: "ERP" }] : []),
   ];
   return (
     <div className="absolute inset-0 z-40 grid place-items-center p-2 sm:p-6 bg-black/40 backdrop-blur-sm" data-testid="ai-office-pc">
@@ -42,7 +43,9 @@ export function Desktop({ hub, links, onLink, onClose }: { hub: ScreenHub | null
             {apps.map((a) => (
               <button key={a.key} type="button" onClick={() => setApp(a.key)} data-testid={`ai-office-pc-app-${a.key}`} aria-pressed={app === a.key}
                 className={`rounded-xl py-2 flex flex-col items-center gap-1 text-[11px] font-semibold text-white/90 ${app === a.key ? "bg-white/20" : "hover:bg-white/10"}`}>
-                <span className="w-9 h-9 rounded-lg grid place-items-center text-lg" style={{ background: a.key === "claude" ? "#D97757" : "rgba(255,255,255,.14)" }}>{a.icon}</span>
+                <span className="w-9 h-9 rounded-lg grid place-items-center text-lg" style={{ background: a.key === "claude" ? "#D97757" : "rgba(255,255,255,.14)" }}>
+                  {"code" in a && a.code ? <PremiumEmoji code={a.code} char={a.icon} className="w-5 h-5" /> : a.icon}
+                </span>
                 <span className="truncate max-w-full">{a.label}</span>
               </button>
             ))}
@@ -149,20 +152,20 @@ function FilesApp({ k }: { k: K }) {
   const row = "flex items-center gap-2 rounded-lg border border-border px-2.5 py-1.5";
   return (
     <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3" data-testid="ai-office-pc-files">
-      <p className="text-[13px] font-bold">☁ {k("pc.onServer")}</p>
+      <p className="text-[13px] font-bold"><PremiumEmoji code="2601" char="☁" className="w-4 h-4 inline-block align-[-3px]" /> {k("pc.onServer")}</p>
       {!media?.tracks.length && !media?.cinema && <p className="text-xs text-muted-foreground">{k("empty")}</p>}
       {media?.tracks.map((t) => (
-        <div key={t.id} className={row}><span>🎵</span><span className="flex-1 min-w-0 truncate text-[12.5px]">{t.name}</span>
+        <div key={t.id} className={row}><PremiumEmoji code="1f3b5" char="🎵" className="w-4 h-4" /><span className="flex-1 min-w-0 truncate text-[12.5px]">{t.name}</span>
           <button type="button" onClick={() => mediaStore.save({ tracks: media.tracks.filter((x) => x.id !== t.id) })} className="w-7 h-7 rounded-full hover:bg-muted" aria-label={k("actions.remove")}>✕</button></div>
       ))}
       {media?.cinema && (
-        <div className={row}><span>🎬</span><span className="flex-1 min-w-0 truncate text-[12.5px]">{media.cinema}</span>
+        <div className={row}><PremiumEmoji code="1f3ac" char="🎬" className="w-4 h-4" /><span className="flex-1 min-w-0 truncate text-[12.5px]">{media.cinema}</span>
           <button type="button" onClick={() => mediaStore.save({ cinema: "" })} className="w-7 h-7 rounded-full hover:bg-muted" aria-label={k("actions.remove")}>✕</button></div>
       )}
-      <p className="text-[13px] font-bold">💻 {k("pc.onThisPc")}</p>
+      <p className="text-[13px] font-bold"><PremiumEmoji code="1f4bb" char="💻" className="w-4 h-4 inline-block align-[-3px]" /> {k("pc.onThisPc")}</p>
       {!m.local.length && <p className="text-xs text-muted-foreground">{k("empty")}</p>}
       {m.local.map((f) => (
-        <div key={f.id} className={row} data-testid={`ai-office-file-${f.id}`}><span>{f.kind === "audio" ? "🎵" : "🎬"}</span>
+        <div key={f.id} className={row} data-testid={`ai-office-file-${f.id}`}>{f.kind === "audio" ? <PremiumEmoji code="1f3b5" char="🎵" className="w-4 h-4" /> : <PremiumEmoji code="1f3ac" char="🎬" className="w-4 h-4" />}
           <span className="flex-1 min-w-0 truncate text-[12.5px]">{f.name}</span><span className="text-[11px] text-muted-foreground">{fmtSize(f.size)}</span>
           <button type="button" onClick={() => mediaStore.removeLocal(f.id)} className="w-7 h-7 rounded-full hover:bg-muted" aria-label={k("actions.remove")}>✕</button></div>
       ))}
@@ -171,6 +174,7 @@ function FilesApp({ k }: { k: K }) {
 }
 
 const GAME_ICON: Record<GameId, string> = { pong: "🏓", snake: "🐍", blocks: "🧱", g2048: "🔢", breakout: "🧨", racer: "🏎", ttt: "❌⭕" };
+const GAME_ICON_CODE: Partial<Record<GameId, string>> = { pong: "1f3d3", snake: "1f40d", blocks: "1f9f1", g2048: "1f522", breakout: "1f9e8", racer: "1f3ce" };
 /**
  * Mini-o'yinlar: TV'dagi bilan bitta canvas (PlayStation'da o'ynalsa TV'da ham ko'rinadi). Boshqaruv: strelkalar/WASD,
  * Space/Enter — A; telefonda — D-pad + A, canvas'ni surish (yo'nalish) yoki tegish (X-O).
@@ -237,7 +241,7 @@ export function GameView({ hub, k, big = false }: { hub: ScreenHub | null; k: K;
         {GAME_IDS.map((g) => (
           <button key={g} type="button" onClick={() => setId(g)} aria-pressed={id === g} data-testid={`ai-office-game-${g}`}
             className={`h-8 px-2.5 rounded-full text-[12px] font-semibold whitespace-nowrap ${id === g ? "bg-white text-[#070b1a]" : "bg-white/10 text-white/85"}`}>
-            {GAME_ICON[g]} {k(`games.${g}`)}
+            {GAME_ICON_CODE[g] ? <PremiumEmoji code={GAME_ICON_CODE[g]!} char={GAME_ICON[g]} className="w-4 h-4 inline-block align-[-3px]" /> : GAME_ICON[g]} {k(`games.${g}`)}
           </button>
         ))}
       </div>

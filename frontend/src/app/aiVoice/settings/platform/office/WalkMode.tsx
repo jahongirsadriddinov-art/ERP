@@ -11,6 +11,7 @@ import { Desktop, GameView, type ErpLink } from "./Desktop";
 import { newBridge, places, readSens, SENS_KEY, type SeatKind, type Target } from "./walk";
 import type { ScreenHub } from "./screens";
 import type { OfficeSceneProps } from "./OfficeScene";
+import { PremiumEmoji } from "../../../../components/PremiumEmoji";
 
 // AI ofis — "Ofisga kirish": to'liq ekran (Fullscreen API; bo'lmasa — sahifa ustidagi qatlam), o'yin uslubidagi boshqaruv.
 //  Kompyuter: WASD/strelkalar — yurish, Shift — yugurish, sichqoncha — qarash (bosilganda Pointer Lock), E — harakat, V — ko'rinish.
@@ -231,10 +232,10 @@ export default function WalkMode({ agents, profiles, setup, scene, onExit, onCha
       <div data-ui className="absolute top-2 left-2 right-2 flex items-start gap-2 pointer-events-none" style={{ paddingTop: "env(safe-area-inset-top)" }}>
         <div className="pointer-events-auto flex gap-1.5">
           <button type="button" onClick={onExit} data-testid="ai-office-exit" className="h-9 px-3.5 rounded-full bg-black/60 text-white text-[13px] font-semibold backdrop-blur">✕ {k("walk.exit")}</button>
-          <button type="button" onClick={() => setMenu((v) => !v)} data-testid="ai-office-goto" aria-expanded={menu} className="h-9 px-3.5 rounded-full bg-black/60 text-white text-[13px] font-semibold backdrop-blur">🧭 {k("walk.goto")}</button>
+          <button type="button" onClick={() => setMenu((v) => !v)} data-testid="ai-office-goto" aria-expanded={menu} className="h-9 px-3.5 rounded-full bg-black/60 text-white text-[13px] font-semibold backdrop-blur"><PremiumEmoji code="1f9ed" char="🧭" className="w-4 h-4 inline-block align-[-3px]" /> {k("walk.goto")}</button>
           <MuteButton k={k} dark />
           <WeatherChip dark />
-          <button type="button" onClick={() => (mm.music === "full" ? mediaStore.minimizeMusic() : mediaStore.openMusic())} data-testid="ai-office-media-open" className="h-9 px-3 rounded-full bg-black/60 text-white text-[13px] font-semibold backdrop-blur">🎵</button>
+          <button type="button" onClick={() => (mm.music === "full" ? mediaStore.minimizeMusic() : mediaStore.openMusic())} data-testid="ai-office-media-open" className="h-9 px-3 rounded-full bg-black/60 text-white text-[13px] font-semibold backdrop-blur"><PremiumEmoji code="1f3b5" char="🎵" className="w-4 h-4" /></button>
           {movie && <button type="button" onClick={() => mediaStore.watch("full")} data-testid="ai-office-walk-watch" className="h-9 px-3 rounded-full bg-[#e5484d] text-white text-[13px] font-semibold">▶ {k("media.watch")}</button>}
           {!touch && <button type="button" onClick={() => { bridge.input.fp = !bridge.input.fp; setFp(bridge.input.fp); }} className="h-9 px-3 rounded-full bg-black/60 text-white text-[12px] font-semibold backdrop-blur">{fp ? "1P" : "3P"}</button>}
         </div>
@@ -249,7 +250,7 @@ export default function WalkMode({ agents, profiles, setup, scene, onExit, onCha
             {!q && places().map((p) => (
               <button key={p.key} type="button" data-testid={`ai-office-goto-place-${p.key}`}
                 onClick={() => { bridge.cmds.push({ type: "goto", key: p.key, x: p.x, z: p.z, face: p.face }); setMenu(false); }}
-                className="w-full text-left px-3 py-2 rounded-lg text-[13px] hover:bg-muted">📍 {p.key === "computer" ? k("zones.owner") : k(`zones.${p.zone}`)}</button>
+                className="w-full text-left px-3 py-2 rounded-lg text-[13px] hover:bg-muted"><PremiumEmoji code="1f4cd" char="📍" className="w-3.5 h-3.5 inline-block align-[-2px]" /> {p.key === "computer" ? k("zones.owner") : k(`zones.${p.zone}`)}</button>
             ))}
             {list.map((a) => (
               <button key={a.id} type="button" data-testid={`ai-office-goto-agent-${a.id}`}
@@ -268,13 +269,13 @@ export default function WalkMode({ agents, profiles, setup, scene, onExit, onCha
           <button type="button" onClick={interact} data-testid="ai-office-interact"
             className="h-12 pl-2 pr-5 rounded-full bg-white text-[#1f2328] shadow-2xl font-semibold text-[14px] inline-flex items-center gap-2.5">
             {!touch && <kbd className="w-8 h-8 rounded-full bg-[#1f2328] text-white grid place-items-center text-[13px] font-bold">E</kbd>}
-            {touch && <span className="w-8 h-8 rounded-full bg-[#D97757] text-white grid place-items-center">✋</span>}
+            {touch && <span className="w-8 h-8 rounded-full bg-[#D97757] text-white grid place-items-center"><PremiumEmoji code="270b" char="✋" className="w-5 h-5" /></span>}
             {prompt}
           </button>
         </div>
       )}
       {note && <div className="absolute left-1/2 -translate-x-1/2 top-16 z-20 px-4 py-2 rounded-full bg-black/70 text-white text-[13px]" data-testid="ai-office-note">{note}</div>}
-      {seat === "cinema" && <div className="absolute left-1/2 -translate-x-1/2 top-16 z-20 px-4 py-2 rounded-full bg-black/60 text-white text-[12px]">🎬 {k("walk.movie")}</div>}
+      {seat === "cinema" && <div className="absolute left-1/2 -translate-x-1/2 top-16 z-20 px-4 py-2 rounded-full bg-black/60 text-white text-[12px]"><PremiumEmoji code="1f3ac" char="🎬" className="w-3.5 h-3.5 inline-block align-[-2px]" /> {k("walk.movie")}</div>}
       {touch && portrait && !rotateOk && (
         <div data-ui className="absolute inset-0 z-50 grid place-items-center bg-black/85 text-white text-center p-6" data-testid="ai-office-rotate">
           <div className="space-y-3">
@@ -289,7 +290,7 @@ export default function WalkMode({ agents, profiles, setup, scene, onExit, onCha
       {touch && !overlay && <Joystick onMove={(x, z, run) => { bridge.input.mx = x; bridge.input.mz = z; bridge.input.run = run; }} />}
       {help && !overlay && !menu && (
         <div data-ui className="absolute z-30 right-2 top-14 w-[min(300px,calc(100vw-16px))] rounded-2xl bg-black/75 text-white backdrop-blur p-3 space-y-2 text-[12px]" data-testid="ai-office-walk-help">
-          <div className="flex items-center"><p className="font-bold text-[13px] flex-1">🎮 {k("walk.helpTitle")}</p>
+          <div className="flex items-center"><p className="font-bold text-[13px] flex-1"><PremiumEmoji code="1f3ae" char="🎮" className="w-4 h-4 inline-block align-[-3px]" /> {k("walk.helpTitle")}</p>
             <button type="button" onClick={closeHelp} className="w-7 h-7 rounded-full hover:bg-white/15" aria-label={k("close")} data-testid="ai-office-walk-help-close">✕</button></div>
           <p className="whitespace-pre-line leading-relaxed opacity-90">{touch ? k("walk.helpTouch") : k("walk.helpKeys")}</p>
           <label className="flex items-center gap-2"><span className="opacity-80">{k("walk.sens")}</span>

@@ -120,6 +120,7 @@ const AnnouncementComposer = lazy(() => import("./AnnouncementParts").then(m => 
 const AnnouncementContent = lazy(() => import("./AnnouncementParts").then(m => ({ default: m.AnnouncementContent })));
 const AnnouncementPopup = lazy(() => import("./AnnouncementParts").then(m => ({ default: m.AnnouncementPopup })));
 import type { LandingFocus } from "./LandingPage";
+import { PremiumEmoji } from "./components/PremiumEmoji";
 
 // SEO: har bir marketing bo'limining O'Z (indekslanadigan) manzili —
 // LandingPage.tsx'dagi FOCUS_PATH bilan BIR XIL bo'lishi SHART (u yerdagi
@@ -2021,7 +2022,7 @@ function LoginScreen({ onLogin, onRegister, onBack }: { onLogin: (u: any, compan
             </div>
             {devNeedCode && (
               <div className="bg-primary/5 border border-primary/15 rounded-xl p-3 space-y-2">
-                <p className="text-xs text-muted-foreground text-center">🔐 {t('login.dev2faHint', { defaultValue: "Telegram botga 6 xonali kirish kodi yuborildi" })}</p>
+                <p className="text-xs text-muted-foreground text-center"><PremiumEmoji code="1f510" char="🔐" className="w-3.5 h-3.5 inline-block align-[-2px]" /> {t('login.dev2faHint', { defaultValue: "Telegram botga 6 xonali kirish kodi yuborildi" })}</p>
                 <input type="text" inputMode="numeric" autoFocus placeholder="••••••" value={devCode}
                   onChange={e => { setError(""); setDevCode(e.target.value.replace(/\D/g, "").slice(0, 6)); }}
                   className="w-full text-xl tracking-[0.4em] text-center font-mono border border-border/50 rounded-xl px-4 py-2.5 bg-white/50 dark:bg-black/20 focus:outline-none focus:ring-2 focus:ring-primary/50" />
@@ -2156,7 +2157,7 @@ export function ClientViewPage({ token }: { token: string }) {
             {(data as any).progressSource === 'ai_photo' ? "Bajarilish — obyekt rasmlari bo'yicha AI bahosi" : (data as any).progressSource === 'manual' ? "Bajarilish — prorab/rahbar bahosi" : "Material yetkazib berish progressi"} (moliyaviy ma'lumot ko'rsatilmaydi)
             {(data as any).endDate && <> · Reja bo'yicha tugash: <b>{(data as any).endDate}</b></>}
           </p>
-          {(data as any).aiNote && <p className="text-xs mt-2 rounded-xl bg-muted/50 px-3 py-2">🤖 {(data as any).aiNote}</p>}
+          {(data as any).aiNote && <p className="text-xs mt-2 rounded-xl bg-muted/50 px-3 py-2"><PremiumEmoji code="1f916" char="🤖" className="w-3.5 h-3.5 inline-block align-[-2px]" /> {(data as any).aiNote}</p>}
         </div>
 
         <div>
@@ -3141,7 +3142,7 @@ export default function App() {
       <>
         <div className="min-h-screen bg-background flex items-center justify-center p-6 text-center">
           <div className="max-w-sm space-y-4">
-            <div className="text-5xl">🛠️</div>
+            <PremiumEmoji code="1f6e0" char="🛠️" className="w-12 h-12" />
             <h1 className="text-xl font-semibold text-foreground">{tApp('maintenance.title', { surface })}</h1>
             <p className="text-sm text-muted-foreground">{tApp('maintenance.subtitle')}</p>
             <button

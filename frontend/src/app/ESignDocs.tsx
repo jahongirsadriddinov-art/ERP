@@ -9,6 +9,7 @@ import { FONTS, fontById, ensureFont } from "./lib/fonts";
 import { beautifySignature, BeautifyResult, Stroke } from "./lib/signatureBeautify";
 import { scanInk, CropBox } from "./lib/scanInk";
 import { EscClose } from "./App";
+import { PremiumEmoji } from "./components/PremiumEmoji";
 
 // ─── Imzo maydoni (barmoq / sichqoncha / stilus) ─────────────────────────────
 // Chizilgan har bir harakat (nuqtalar) saqlanadi — "✨ Tekislash" shu asosida imzoni qayta, tekis va toza
@@ -70,7 +71,7 @@ export function SignaturePad({ onChange }: { onChange: (dataUrl: string | null) 
       </div>
       {raw && fixed && (fixed.needsFix ? (
         <div className="rounded-xl border border-primary/25 bg-primary/[0.04] p-2.5 space-y-2">
-          <p className="text-[11px] font-semibold">✨ Imzo tekislandi {Math.abs(fixed.angleDeg) >= 3 ? `(qiyshiqlik ${Math.abs(fixed.angleDeg)}° to'g'rilandi)` : "(xusnixat bo'yicha chiroyli, bir tekis qiyalikda qayta yozildi)"} — qaysi biri qo'yilsin?</p>
+          <p className="text-[11px] font-semibold"><PremiumEmoji code="2728" char="✨" className="w-3.5 h-3.5 inline-block align-[-2px]" /> Imzo tekislandi {Math.abs(fixed.angleDeg) >= 3 ? `(qiyshiqlik ${Math.abs(fixed.angleDeg)}° to'g'rilandi)` : "(xusnixat bo'yicha chiroyli, bir tekis qiyalikda qayta yozildi)"} — qaysi biri qo'yilsin?</p>
           <div className="flex gap-2">{opt("fixed", "✨ Tekislangan", fixed.dataUrl)}{opt("raw", "✍️ O'zim chizganim", raw)}</div>
         </div>
       ) : (
@@ -95,7 +96,7 @@ function StampPlacer({ image, stamp, pos, onChange }: { image: string | null; st
   };
   return (
     <div className="rounded-xl border border-border p-2.5 space-y-2">
-      <p className="text-xs font-semibold">🔵 Pechat joyi va o'lchami <span className="font-normal text-muted-foreground">— sudrab joylang</span></p>
+      <p className="text-xs font-semibold"><PremiumEmoji code="1f535" char="🔵" className="w-3.5 h-3.5 inline-block align-[-2px]" /> Pechat joyi va o'lchami <span className="font-normal text-muted-foreground">— sudrab joylang</span></p>
       {/* Blok nisbati: 480 × 215 (PDF'dagi imzo ustuni) */}
       <div ref={box} className="relative w-full bg-white rounded-lg ring-1 ring-black/10 overflow-hidden touch-none select-none" style={{ aspectRatio: "480 / 215" }}
         onPointerMove={move} onPointerUp={() => { drag.current = null; }} onPointerCancel={() => { drag.current = null; }}>
@@ -159,7 +160,7 @@ function CropEditor({ src, initial, title, onDone, onCancel }: { src: string; in
       </div>
       <div className="flex gap-2 w-full max-w-sm">
         <button type="button" onClick={onCancel} className="flex-1 h-11 rounded-xl bg-white/10 text-white text-sm font-semibold">Bekor qilish</button>
-        <button type="button" onClick={() => onDone(b)} className="flex-1 h-11 rounded-xl bg-sky-500 text-white text-sm font-bold">✂️ Shu hududdan olish</button>
+        <button type="button" onClick={() => onDone(b)} className="flex-1 h-11 rounded-xl bg-sky-500 text-white text-sm font-bold"><PremiumEmoji code="2702" char="✂️" className="w-4 h-4 inline-block align-[-3px]" /> Shu hududdan olish</button>
       </div>
     </div>,
     document.body
@@ -219,20 +220,20 @@ export function SignatureInput({ onChange }: { onChange: (v: { image: string | n
               : <span className="text-xs text-slate-500 px-6 text-center">Qog'ozdagi imzoni suratga oling — imzoning o'zi avtomatik topilib, fon olib tashlanadi</span>}
           </div>
           <div className="flex gap-2">
-            <button type="button" disabled={!!busy} onClick={() => sigCam.current?.click()} className={btn}>📷 Kamera bilan</button>
-            <button type="button" disabled={!!busy} onClick={() => sigFile.current?.click()} className={btn}>🖼️ Rasmdan</button>
+            <button type="button" disabled={!!busy} onClick={() => sigCam.current?.click()} className={btn}><PremiumEmoji code="1f4f7" char="📷" className="w-4 h-4 inline-block align-[-3px]" /> Kamera bilan</button>
+            <button type="button" disabled={!!busy} onClick={() => sigFile.current?.click()} className={btn}><PremiumEmoji code="1f5bc" char="🖼️" className="w-4 h-4 inline-block align-[-3px]" /> Rasmdan</button>
           </div>
-          {lastScan.sig && <button type="button" onClick={() => setCropFor("sig")} className="w-full text-[11px] font-bold text-primary hover:underline">✂️ Aniq olinmadimi? Imzo turgan joyni o'zingiz belgilang</button>}
+          {lastScan.sig && <button type="button" onClick={() => setCropFor("sig")} className="w-full text-[11px] font-bold text-primary hover:underline"><PremiumEmoji code="2702" char="✂️" className="w-3.5 h-3.5 inline-block align-[-2px]" /> Aniq olinmadimi? Imzo turgan joyni o'zingiz belgilang</button>}
         </div>
       )}
       <label className="flex items-center justify-between gap-3 rounded-xl border border-border px-3 py-2">
-        <span className="text-xs font-semibold">📅 Imzo sanasi</span>
+        <span className="text-xs font-semibold"><PremiumEmoji code="1f4c5" char="📅" className="w-4 h-4 inline-block align-[-3px]" /> Imzo sanasi</span>
         <input type="date" value={date} onChange={e => e.target.value && setDate(e.target.value)}
           className="text-sm bg-transparent border border-border rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-primary/40" />
       </label>
       <div className="flex items-center gap-3 rounded-xl border border-border p-2.5">
         <div className="w-16 h-16 rounded-lg bg-white border border-border flex items-center justify-center overflow-hidden flex-shrink-0">
-          {busy === "stamp" ? <span className="text-[10px] text-slate-500">...</span> : stamp ? <img src={stamp} alt="" className="max-w-full max-h-full object-contain" /> : <span className="text-2xl opacity-40">🔵</span>}
+          {busy === "stamp" ? <span className="text-[10px] text-slate-500">...</span> : stamp ? <img src={stamp} alt="" className="max-w-full max-h-full object-contain" /> : <PremiumEmoji code="1f535" char="🔵" className="w-6 h-6 opacity-40" />}
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-xs font-semibold">Pechat (muhr) — ixtiyoriy</p>
@@ -240,9 +241,9 @@ export function SignatureInput({ onChange }: { onChange: (v: { image: string | n
           <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1">
             <input ref={stCam} type="file" accept="image/*" capture="environment" className="hidden" onChange={e => pick(e, "stamp")} />
             <input ref={stFile} type="file" accept="image/*" className="hidden" onChange={e => pick(e, "stamp")} />
-            <button type="button" disabled={!!busy} onClick={() => stCam.current?.click()} className="text-[11px] font-bold text-primary hover:underline">📷 Skanerlash</button>
-            <button type="button" disabled={!!busy} onClick={() => stFile.current?.click()} className="text-[11px] font-bold text-primary hover:underline">🖼️ Rasmdan</button>
-            {lastScan.stamp && <button type="button" onClick={() => setCropFor("stamp")} className="text-[11px] font-bold text-primary hover:underline">✂️ Qo'lda belgilash</button>}
+            <button type="button" disabled={!!busy} onClick={() => stCam.current?.click()} className="text-[11px] font-bold text-primary hover:underline"><PremiumEmoji code="1f4f7" char="📷" className="w-3.5 h-3.5 inline-block align-[-2px]" /> Skanerlash</button>
+            <button type="button" disabled={!!busy} onClick={() => stFile.current?.click()} className="text-[11px] font-bold text-primary hover:underline"><PremiumEmoji code="1f5bc" char="🖼️" className="w-3.5 h-3.5 inline-block align-[-2px]" /> Rasmdan</button>
+            {lastScan.stamp && <button type="button" onClick={() => setCropFor("stamp")} className="text-[11px] font-bold text-primary hover:underline"><PremiumEmoji code="2702" char="✂️" className="w-3.5 h-3.5 inline-block align-[-2px]" /> Qo'lda belgilash</button>}
             {stamp && <button type="button" onClick={() => setStamp(null)} className="text-[11px] font-bold text-red-500 hover:underline">Olib tashlash</button>}
           </div>
         </div>
@@ -618,14 +619,14 @@ export default function ESignDocs({ onClose, companyName, currentUserName, proje
                 )}
                 <DocFontPicker value={draft.font} onChange={id => setDraft({ ...draft, font: id })} />
                 <button onClick={create} disabled={saving} className="w-full btn btn-primary py-3 rounded-2xl text-sm font-bold disabled:opacity-60">
-                  {saving ? "Saqlanmoqda..." : editingId ? "💾 O'zgarishlarni saqlash" : "Hujjatni yaratish"}
+                  {saving ? "Saqlanmoqda..." : editingId ? <><PremiumEmoji code="1f4be" char="💾" className="w-4 h-4 inline-block align-[-3px]" /> O'zgarishlarni saqlash</> : "Hujjatni yaratish"}
                 </button>
               </div>
               <div className="min-w-0 lg:col-span-3">
                 <div className="flex items-center justify-between gap-2 mb-2">
                   <div className="flex gap-1 p-1 rounded-xl bg-muted/60">
-                    <button type="button" onClick={() => setPaperTab("edit")} className={`px-3 py-1.5 rounded-lg text-xs font-bold ${paperTab === "edit" ? "bg-card shadow-sm" : "text-muted-foreground"}`}>✏️ Hujjatda tahrirlash</button>
-                    <button type="button" onClick={() => setPaperTab("preview")} className={`px-3 py-1.5 rounded-lg text-xs font-bold ${paperTab === "preview" ? "bg-card shadow-sm" : "text-muted-foreground"}`}>📄 Sahifalar (PDF)</button>
+                    <button type="button" onClick={() => setPaperTab("edit")} className={`px-3 py-1.5 rounded-lg text-xs font-bold ${paperTab === "edit" ? "bg-card shadow-sm" : "text-muted-foreground"}`}><PremiumEmoji code="270f" char="✏️" className="w-3.5 h-3.5 inline-block align-[-2px]" /> Hujjatda tahrirlash</button>
+                    <button type="button" onClick={() => setPaperTab("preview")} className={`px-3 py-1.5 rounded-lg text-xs font-bold ${paperTab === "preview" ? "bg-card shadow-sm" : "text-muted-foreground"}`}><PremiumEmoji code="1f4c4" char="📄" className="w-3.5 h-3.5 inline-block align-[-2px]" /> Sahifalar (PDF)</button>
                   </div>
                   {paperTab === "edit" && <span className="text-[11px] text-muted-foreground hidden sm:inline">Istalgan matnga bosib yozing</span>}
                 </div>
@@ -642,11 +643,11 @@ export default function ESignDocs({ onClose, companyName, currentUserName, proje
               <div className="lg:col-span-2 space-y-4">
                 <span className={`inline-block text-[11px] font-bold px-2.5 py-1 rounded-full ${STATUS[open.status]?.[1]}`}>{STATUS[open.status]?.[0]}</span>
                 {!(open.signatures?.length) && (
-                  <button onClick={startEdit} className="w-full rounded-xl border border-primary/30 bg-primary/[0.06] text-primary py-2.5 text-sm font-bold hover:bg-primary/10">✏️ Matn, shrift va maydonlarni tahrirlash</button>
+                  <button onClick={startEdit} className="w-full rounded-xl border border-primary/30 bg-primary/[0.06] text-primary py-2.5 text-sm font-bold hover:bg-primary/10"><PremiumEmoji code="270f" char="✏️" className="w-4 h-4 inline-block align-[-3px]" /> Matn, shrift va maydonlarni tahrirlash</button>
                 )}
                 <div className="grid grid-cols-2 gap-2">
                   <button onClick={() => downloadPdf(open)} className="rounded-xl border border-border py-2.5 text-sm font-semibold hover:bg-muted">⬇ PDF</button>
-                  <button onClick={share} className="rounded-xl border border-border py-2.5 text-sm font-semibold hover:bg-muted">🔗 Mijozga havola</button>
+                  <button onClick={share} className="rounded-xl border border-border py-2.5 text-sm font-semibold hover:bg-muted"><PremiumEmoji code="1f517" char="🔗" className="w-4 h-4 inline-block align-[-3px]" /> Mijozga havola</button>
                 </div>
                 {!executorSigned ? (
                   <div className="rounded-2xl border border-border p-4 space-y-3">
@@ -654,7 +655,7 @@ export default function ESignDocs({ onClose, companyName, currentUserName, proje
                     <input className={input} value={sigName} onChange={e => setSigName(e.target.value)} placeholder="F.I.O." />
                     <SignatureInput onChange={v => { setSigImg(v.image); setSigStamp(v.stamp); setSigDate(v.date); setSigStampPos(v.stampPos); }} />
                     <button onClick={sign} disabled={!sigImg || !sigName.trim() || signing} className="w-full btn btn-primary py-2.5 rounded-xl text-sm font-bold disabled:opacity-50">
-                      {signing ? "..." : "✍️ Imzolash"}
+                      {signing ? "..." : <><PremiumEmoji code="270d" char="✍️" className="w-4 h-4 inline-block align-[-3px]" /> Imzolash</>}
                     </button>
                   </div>
                 ) : (
@@ -712,7 +713,7 @@ export function PublicSignPage({ token }: { token: string }) {
             <input className="w-full text-sm border border-border rounded-xl px-3 py-2 bg-input-background" placeholder="F.I.O." value={name} onChange={e => setName(e.target.value)} />
             <SignatureInput onChange={v => { setImg(v.image); setStamp(v.stamp); setDate(v.date); setStampPos(v.stampPos); }} />
             <p className="text-[11px] text-muted-foreground">Imzolash orqali hujjat mazmuniga roziligingizni tasdiqlaysiz.</p>
-            <button onClick={submit} disabled={!img || name.trim().length < 2 || busy} className="w-full btn btn-primary py-3 rounded-xl font-bold disabled:opacity-50">{busy ? "..." : "✍️ Imzolash"}</button>
+            <button onClick={submit} disabled={!img || name.trim().length < 2 || busy} className="w-full btn btn-primary py-3 rounded-xl font-bold disabled:opacity-50">{busy ? "..." : <><PremiumEmoji code="270d" char="✍️" className="w-4 h-4 inline-block align-[-3px]" /> Imzolash</>}</button>
           </div>
         )}
         {doc && customerSigned && (

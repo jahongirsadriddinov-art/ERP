@@ -304,6 +304,22 @@ html.page-simple-surface:not(.platform-ios):not(.platform-macos) .glass-modal::b
 .platform-macos .bg-sidebar {
   background-color: color-mix(in srgb, var(--sidebar) 78%, transparent) !important;
 }
+/* Owner 2026-11-09: ".glass" (login karta, AI panel va h.k.) foni globals.css'da
+   @layer utilities ICHIDA — CSS Cascade Layers qoidasiga ko'ra har qanday
+   QATLAMSIZ (unlayered) oddiy qoida undan ustun turadi, shu sabab boshqa
+   fayldagi biror qatlamsiz qoida bu fonni bilmasdan bosib ketishi mumkin edi.
+   Shu yerda !important bilan to'g'ridan-to'g'ri majburlanadi — qatlam
+   tartibidan qat'i nazar g'alaba qiladi. */
+.platform-ios .glass,
+.platform-macos .glass,
+.platform-ios .glass-btn,
+.platform-macos .glass-btn,
+.platform-ios .ai-glass-panel,
+.platform-macos .ai-glass-panel {
+  background: color-mix(in srgb, var(--card) 78%, transparent) !important;
+  -webkit-backdrop-filter: var(--liquid-blur) !important;
+  backdrop-filter: var(--liquid-blur) !important;
+}
 
 /* Reduce Transparency (Sozlamalar → Maxsus imkoniyatlar → Shaffoflikni
    kamaytirish) — Apple'ning o'zi ham shu holatda materialni qattiq fonga

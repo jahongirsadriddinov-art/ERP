@@ -15,6 +15,8 @@ PODS:
     - Capacitor
   - CapacitorShare (7.0.4):
     - Capacitor
+  - CapacitorSplashScreen (7.0.5):
+    - Capacitor
   - CapacitorStatusBar (7.0.6):
     - Capacitor
   - IONFilesystemLib (1.1.4)
@@ -28,6 +30,7 @@ DEPENDENCIES:
   - "CapacitorHaptics (from `../../node_modules/@capacitor/haptics`)"
   - CapacitorNativeBiometric (from `../../node_modules/capacitor-native-biometric`)
   - "CapacitorShare (from `../../node_modules/@capacitor/share`)"
+  - "CapacitorSplashScreen (from `../../node_modules/@capacitor/splash-screen`)"
   - "CapacitorStatusBar (from `../../node_modules/@capacitor/status-bar`)"
 
 SPEC REPOS:
@@ -51,6 +54,8 @@ EXTERNAL SOURCES:
     :path: "../../node_modules/capacitor-native-biometric"
   CapacitorShare:
     :path: "../../node_modules/@capacitor/share"
+  CapacitorSplashScreen:
+    :path: "../../node_modules/@capacitor/splash-screen"
   CapacitorStatusBar:
     :path: "../../node_modules/@capacitor/status-bar"
 
@@ -63,9 +68,10 @@ SPEC CHECKSUMS:
   CapacitorHaptics: 1b145fa83c622e5383a3bac04ea81e2514f0b0f5
   CapacitorNativeBiometric: 78cf21304251a512e4597437325b5e9b0cd9f7b3
   CapacitorShare: 25f7fc5dd0e4edbde5d6801c6de5d14a8b450a41
+  CapacitorSplashScreen: 409eeaaeac603d264f209c0fcb718aa22fe1f7bb
   CapacitorStatusBar: 416e9e53fd6397e668d4a181cd2131617d949bd6
   IONFilesystemLib: e6610c2b260d15e4b9cb9d5e37a87095479b669e
 
-PODFILE CHECKSUM: fc87ee172c4ae108b4b58ed546815206c1d546ac
+PODFILE CHECKSUM: aa123b33fd150136217270b1023f25cfbf72769f
 
 COCOAPODS: 1.17.0

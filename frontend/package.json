@@ -27,6 +27,7 @@
     "@capacitor/haptics": "^7.0.5",
     "@capacitor/ios": "^7.6.8",
     "@capacitor/share": "^7.0.4",
+    "@capacitor/splash-screen": "^7.0.5",
     "@capacitor/status-bar": "^7.0.6",
     "@hugeicons/core-free-icons": "^4.3.4",
     "@react-three/drei": "^9.122.0",

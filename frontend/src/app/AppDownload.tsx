@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import Smartphone from "@hugeicons/core-free-icons/SmartPhone01Icon";
 import Laptop from "@hugeicons/core-free-icons/LaptopIcon";
+import Apple from "@hugeicons/core-free-icons/AppleIcon";
 import Download from "@hugeicons/core-free-icons/Download01Icon";
 import Loader2 from "@hugeicons/core-free-icons/Loading03Icon";
 import ShieldCheck from "@hugeicons/core-free-icons/ShieldCheckIcon";
@@ -15,6 +16,7 @@ interface LatestRelease {
   notes?: string;
   apkUrl?: string | null;
   exeUrl?: string | null;
+  dmgUrl?: string | null;
   updatedAt?: string;
 }
 
@@ -48,19 +50,24 @@ export function AppDownloadCards({ compact, title, loadingFallback = true }: { c
       </div>
     );
   }
-  // Hali CI birorta ham APK/exe chiqarmagan bo'lsa — HECH NARSA (sarlavha
+  // Hali CI birorta ham APK/exe/dmg chiqarmagan bo'lsa — HECH NARSA (sarlavha
   // ham) ko'rsatilmaydi, bo'sh bo'lim chiqib qolmasin.
-  if (!release || !release.available || (!release.apkUrl && !release.exeUrl)) return null;
+  if (!release || !release.available || (!release.apkUrl && !release.exeUrl && !release.dmgUrl)) return null;
 
   const items = [
     release.apkUrl ? { icon: Smartphone, label: t('appDownload.androidLabel'), hint: t('appDownload.androidHint'), url: release.apkUrl } : null,
     release.exeUrl ? { icon: Laptop, label: t('appDownload.windowsLabel'), hint: t('appDownload.windowsHint'), url: release.exeUrl } : null,
+    // Owner 2026-11-09: "hamma joyga ilova o'rnatsa bo'ladigan joyga mac'ni
+    // ham qo'sh, fayli qolganlari kabi ishlasin" — backend (/api/deploy/latest)
+    // dmgUrl'ni allaqachon qaytaradi (routes/deploy.ts), faqat shu kartochka
+    // yetishmayotgan edi.
+    release.dmgUrl ? { icon: Apple, label: t('appDownload.macosLabel'), hint: t('appDownload.macosHint'), url: release.dmgUrl } : null,
   ].filter(Boolean) as { icon: IconNode; label: string; hint: string; url: string }[];
 
   return (
     <div className={compact ? "space-y-2" : "space-y-3"}>
       {title && <p className="text-sm font-semibold">{title}</p>}
-      <div className={`grid ${items.length > 1 ? "sm:grid-cols-2" : ""} gap-3`}>
+      <div className={`grid ${items.length >= 3 ? "sm:grid-cols-3" : items.length > 1 ? "sm:grid-cols-2" : ""} gap-3`}>
         {items.map(item => (
           <button key={item.label} onClick={() => openExternalUrl(item.url)}
             className={`surface rounded-2xl flex items-center gap-3 text-left hover:-translate-y-0.5 liquid-transition ${compact ? "p-3" : "p-4"}`}>

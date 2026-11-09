@@ -201,6 +201,58 @@ button:active, [role="button"]:active { transform: scale(0.96); }
   }
 }
 
+/* ── Owner 2026-11-09: "butun ilova qotib ishlayapti" ────────────────────
+   Bosh sahifa (AdminDashboard) va Profil (ProfilePage) — ko'p sonli
+   .bg-card/.stat-card/.surface takrorlanadigan zich sahifalar — bu yerda
+   o'nlab backdrop-filter qatlami yig'ilib web/Android/Windows'da butun UI
+   qotib (frizlanib) qolardi. iOS/macOS'da (WKWebView) backdrop-filter
+   apparat darajasida tezlashtirilgan, shu sabab FAQAT o'sha ikki
+   platformada (`.platform-ios` / `.platform-macos`, ko'ring: platform.ts
+   `applyPlatformClasses()`) liquid saqlanadi; qolgan hamma joyda (web,
+   Android APK, Windows exe) bu ikki sahifa oddiy — blur'siz — fonga
+   qaytadi. Tugmalar (.btn, button, [role=button]) BUTUN o'zgarmaydi —
+   ular shu ikki sahifada ham, hamma joyda ham liquid bo'lib qolaveradi.
+   Qamrov: `usePageSimpleSurface()` (platform.ts) shu sahifalar
+   mount/unmount bo'lganda <html>'ga "page-simple-surface" klassini
+   qo'yadi/olib tashlaydi. ────────────────────────────────────────────── */
+html.page-simple-surface:not(.platform-ios):not(.platform-macos) .bg-card,
+html.page-simple-surface:not(.platform-ios):not(.platform-macos) .surface,
+html.page-simple-surface:not(.platform-ios):not(.platform-macos) .glass-card,
+html.page-simple-surface:not(.platform-ios):not(.platform-macos) .stat-card,
+html.page-simple-surface:not(.platform-ios):not(.platform-macos) .glass-modal,
+html.page-simple-surface:not(.platform-ios):not(.platform-macos) .bg-popover,
+html.page-simple-surface:not(.platform-ios):not(.platform-macos) .bg-sidebar,
+html.page-simple-surface:not(.platform-ios):not(.platform-macos) .bg-primary,
+html.page-simple-surface:not(.platform-ios):not(.platform-macos) .bg-accent,
+html.page-simple-surface:not(.platform-ios):not(.platform-macos) .bg-secondary,
+html.page-simple-surface:not(.platform-ios):not(.platform-macos) .bg-destructive,
+html.page-simple-surface:not(.platform-ios):not(.platform-macos) .bg-muted {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+html.page-simple-surface:not(.platform-ios):not(.platform-macos) .bg-card,
+html.page-simple-surface:not(.platform-ios):not(.platform-macos) .surface,
+html.page-simple-surface:not(.platform-ios):not(.platform-macos) .glass-card,
+html.page-simple-surface:not(.platform-ios):not(.platform-macos) .stat-card,
+html.page-simple-surface:not(.platform-ios):not(.platform-macos) .glass-modal {
+  background-color: var(--card) !important;
+  border-color: var(--border) !important;
+}
+html.page-simple-surface:not(.platform-ios):not(.platform-macos) .bg-popover { background-color: var(--popover) !important; }
+html.page-simple-surface:not(.platform-ios):not(.platform-macos) .bg-sidebar { background-color: var(--sidebar) !important; }
+html.page-simple-surface:not(.platform-ios):not(.platform-macos) .bg-primary { background-color: var(--primary) !important; }
+html.page-simple-surface:not(.platform-ios):not(.platform-macos) .bg-accent { background-color: var(--accent) !important; }
+html.page-simple-surface:not(.platform-ios):not(.platform-macos) .bg-secondary { background-color: var(--secondary) !important; }
+html.page-simple-surface:not(.platform-ios):not(.platform-macos) .bg-destructive { background-color: var(--destructive) !important; }
+html.page-simple-surface:not(.platform-ios):not(.platform-macos) .bg-muted { background-color: var(--muted) !important; }
+/* Shisha qirrasi yorug'i (::before) — tugma bo'lmagan yuzalarda shu sahifada kerak emas */
+html.page-simple-surface:not(.platform-ios):not(.platform-macos) .surface::before,
+html.page-simple-surface:not(.platform-ios):not(.platform-macos) .glass-card::before,
+html.page-simple-surface:not(.platform-ios):not(.platform-macos) .stat-card::before,
+html.page-simple-surface:not(.platform-ios):not(.platform-macos) .glass-modal::before {
+  display: none;
+}
+
 /* Eski brauzer (color-mix yo'q) — shaffoflik/blur o'rniga qattiq rang */
 @supports not (color: color-mix(in srgb, red, red)) {
   .bg-primary, .bg-accent, .bg-destructive, .bg-secondary,

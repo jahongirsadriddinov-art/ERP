@@ -191,6 +191,8 @@ const uz = {
     androidHint: "Telefon/planshet uchun",
     windowsLabel: "Windows dasturi",
     windowsHint: "Kompyuter uchun (.exe)",
+    macosLabel: "macOS dasturi",
+    macosHint: "Mac kompyuter uchun (.dmg)",
     sourceNote: "Fayl to'g'ridan-to'g'ri bizning serverimizdan (Cloudinary orqali) keladi",
   },
   landing: {
@@ -1377,6 +1379,8 @@ const ru: TranslationShape = {
     androidHint: "Для телефона/планшета",
     windowsLabel: "Программа для Windows",
     windowsHint: "Для компьютера (.exe)",
+    macosLabel: "Программа для macOS",
+    macosHint: "Для Mac (.dmg)",
     sourceNote: "Файл поступает напрямую с нашего сервера (через Cloudinary)",
   },
   landing: {

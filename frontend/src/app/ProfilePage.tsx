@@ -48,7 +48,7 @@ import { API_BASE } from "./api";
 import { motion } from "motion/react";
 import { setSiteLanguage, SiteLang, langLabel } from "./i18n";
 import { markManualLogout } from "./telegramWebApp";
-import { saveOrShareBlob, openExternalUrl, isNative } from "./platform";
+import { saveOrShareBlob, openExternalUrl, isNative, usePageSimpleSurface } from "./platform";
 import { AppDownloadCards } from "./AppDownload";
 import LanguageSwitcher from "./i18n/LanguageSwitcher";
 import { SkeletonList } from "./Skeleton";
@@ -382,6 +382,7 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
     /** Dasturchi paneli (owner 2026-10-23): faqat xavfsizlik va sayt ko'rinishi bo'limlari */
     devMode?: boolean; }) {
   const { t, i18n } = useTranslation();
+  usePageSimpleSurface();
   const changeLanguage = async (lang: SiteLang) => {
     setSiteLanguage(lang);
     onUpdateUser({ ...currentUser, language: lang });

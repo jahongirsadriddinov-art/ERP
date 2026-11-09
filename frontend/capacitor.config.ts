@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'uz.erp_firma.qurilisherp',
+  appId: 'uz.erp-firma.qurilisherp',
   appName: 'QurilishERP',
   webDir: 'dist',
   server: {

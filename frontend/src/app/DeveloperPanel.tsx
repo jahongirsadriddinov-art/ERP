@@ -288,6 +288,26 @@ export default function DeveloperPanel({ currentUser, onLogout, profileEl }: { c
   const companyName = (cid: string) => companiesById.get(cid)?.name || "—";
   const planLabel = (key: string) => plansByKey.get(key)?.label || key;
 
+  // Owner 2026-11-09: "hammasini o'zini firmasiga ajratip" — foydalanuvchilar
+  // ro'yxati avval BITTA tekis ro'yxat edi (bir necha firma aralash chiqardi,
+  // faqat kichik kulrang yozuv bilan ajralardi). Endi har bir firma o'z
+  // sarlavhasi ostida GURUHLANADI — qaysi xodim qaysi firmaga tegishli ekani
+  // darhol ko'rinadi. Firmasiz/dasturchi foydalanuvchilar ("__none__") ro'yxat
+  // OXIRIDA alohida bo'lim sifatida chiqadi.
+  const usersByCompany = useMemo(() => {
+    const groups = new Map<string, any[]>();
+    for (const u of users) {
+      const key = u.companyId || "__none__";
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(u);
+    }
+    return Array.from(groups.entries()).sort(([a], [b]) => {
+      if (a === "__none__") return 1;
+      if (b === "__none__") return -1;
+      return companyName(a).localeCompare(companyName(b));
+    });
+  }, [users, companiesById]);
+
   const deleteCompany = async (c: any) => {
     if (!await confirmDialog(t('devPanel.confirm.deleteCompany', { name: c.name, userCount: c.userCount, objectCount: c.objectCount }))) return;
     const res = await fetch(`${API_BASE}/api/companies/${c.id}`, { method: "DELETE" });
@@ -704,45 +724,58 @@ export default function DeveloperPanel({ currentUser, onLogout, profileEl }: { c
           </div>
         ) : tab === "users" ? (
           users.length === 0 ? <p className="text-center text-sm text-muted-foreground py-12">{t('devPanel.users.empty')}</p> :
-          users.map(u => (
-            <div key={u.id} className={`surface rounded-2xl p-3.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 ${u.isBlocked ? "ring-1 ring-red-500/40" : ""}`}>
-              <div className="min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <p className="text-sm font-semibold truncate">{u.name}</p>
-                  {u.isBlocked && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-600 dark:text-red-400 shrink-0">{t('devPanel.users.blockedBadge')}</span>}
+          <div className="space-y-5">
+            {usersByCompany.map(([cid, group]) => (
+              <div key={cid} className="space-y-2">
+                <p className="flex items-center gap-2 px-1 text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                  <MorphIcon icon={Building2} className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">{cid === "__none__" ? t('devPanel.users.noCompany') : companyName(cid)}</span>
+                  <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">{group.length}</span>
+                </p>
+                <div className="space-y-2">
+                  {group.map(u => (
+                    <div key={u.id} className={`surface rounded-2xl p-3.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 ${u.isBlocked ? "ring-1 ring-red-500/40" : ""}`}>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-sm font-semibold truncate">{u.name}</p>
+                          {u.isBlocked && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-600 dark:text-red-400 shrink-0">{t('devPanel.users.blockedBadge')}</span>}
+                        </div>
+                        <p className="text-[11px] text-muted-foreground font-mono">{u.phone}</p>
+                        <p className={`text-[11px] truncate ${u.companyId ? "text-muted-foreground" : "text-red-500 font-semibold"}`}>{u.companyId ? companyName(u.companyId) : t('devPanel.users.noCompany')}{u.isOwner ? t('devPanel.users.ownerSuffix') : ""}</p>
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap sm:shrink-0">
+                        {u.role !== "dasturchi" && (
+                          <select value={u.companyId || ""} onChange={e => assignCompany(u, e.target.value)}
+                            title={t('devPanel.users.assignTitle')}
+                            className={`flex-1 sm:flex-initial min-w-0 text-xs border rounded-lg px-2 py-1.5 bg-transparent sm:max-w-[110px] ${u.companyId ? "border-border/60" : "border-red-500/50 text-red-600"}`}>
+                            <option value="">{t('devPanel.users.noCompanyOption')}</option>
+                            {companies.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                          </select>
+                        )}
+                        <select value={u.role} onChange={e => changeRole(u, e.target.value)} disabled={u.role === "dasturchi"}
+                          className="flex-1 sm:flex-initial min-w-0 text-xs border border-border/60 rounded-lg px-2 py-1.5 bg-transparent">
+                          {["direktor","orinbosar","prorab","brigadir","ishchi"].map(r => <option key={r} value={r}>{ROLE_LABELS[r as Role]}</option>)}
+                          {u.role === "dasturchi" && <option value="dasturchi">{t('devPanel.users.developerOption')}</option>}
+                        </select>
+                        {u.role !== "dasturchi" && !u.isOwner && (
+                          <button onClick={() => toggleBlock(u)} disabled={u.id === currentUser.id}
+                            aria-label={u.isBlocked ? t('devPanel.users.unblockAria') : t('devPanel.users.blockAria')}
+                            title={u.isBlocked ? t('devPanel.users.unblockAria') : t('devPanel.users.blockAria')}
+                            className={`w-9 h-9 rounded-lg border flex items-center justify-center disabled:opacity-30 shrink-0 liquid-transition ${u.isBlocked ? "border-green-500/30 text-green-600 hover:bg-green-500/10" : "border-orange-500/30 text-orange-600 hover:bg-orange-500/10"}`}>
+                            <MorphIcon icon={u.isBlocked ? Unlock : Lock} className="w-4 h-4" />
+                          </button>
+                        )}
+                        <button onClick={() => deleteUser(u)} disabled={u.id === currentUser.id} aria-label={t('devPanel.users.deleteAria')}
+                          className="w-9 h-9 rounded-lg border border-red-500/30 text-red-600 hover:bg-red-500/10 flex items-center justify-center disabled:opacity-30 shrink-0">
+                          <MorphIcon icon={Trash2} className="w-4 h-4"  />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                <p className="text-[11px] text-muted-foreground font-mono">{u.phone}</p>
-                <p className={`text-[11px] truncate ${u.companyId ? "text-muted-foreground" : "text-red-500 font-semibold"}`}>{u.companyId ? companyName(u.companyId) : t('devPanel.users.noCompany')}{u.isOwner ? t('devPanel.users.ownerSuffix') : ""}</p>
               </div>
-              <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap sm:shrink-0">
-                {u.role !== "dasturchi" && (
-                  <select value={u.companyId || ""} onChange={e => assignCompany(u, e.target.value)}
-                    title={t('devPanel.users.assignTitle')}
-                    className={`flex-1 sm:flex-initial min-w-0 text-xs border rounded-lg px-2 py-1.5 bg-transparent sm:max-w-[110px] ${u.companyId ? "border-border/60" : "border-red-500/50 text-red-600"}`}>
-                    <option value="">{t('devPanel.users.noCompanyOption')}</option>
-                    {companies.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
-                )}
-                <select value={u.role} onChange={e => changeRole(u, e.target.value)} disabled={u.role === "dasturchi"}
-                  className="flex-1 sm:flex-initial min-w-0 text-xs border border-border/60 rounded-lg px-2 py-1.5 bg-transparent">
-                  {["direktor","orinbosar","prorab","brigadir","ishchi"].map(r => <option key={r} value={r}>{ROLE_LABELS[r as Role]}</option>)}
-                  {u.role === "dasturchi" && <option value="dasturchi">{t('devPanel.users.developerOption')}</option>}
-                </select>
-                {u.role !== "dasturchi" && !u.isOwner && (
-                  <button onClick={() => toggleBlock(u)} disabled={u.id === currentUser.id}
-                    aria-label={u.isBlocked ? t('devPanel.users.unblockAria') : t('devPanel.users.blockAria')}
-                    title={u.isBlocked ? t('devPanel.users.unblockAria') : t('devPanel.users.blockAria')}
-                    className={`w-9 h-9 rounded-lg border flex items-center justify-center disabled:opacity-30 shrink-0 liquid-transition ${u.isBlocked ? "border-green-500/30 text-green-600 hover:bg-green-500/10" : "border-orange-500/30 text-orange-600 hover:bg-orange-500/10"}`}>
-                    <MorphIcon icon={u.isBlocked ? Unlock : Lock} className="w-4 h-4" />
-                  </button>
-                )}
-                <button onClick={() => deleteUser(u)} disabled={u.id === currentUser.id} aria-label={t('devPanel.users.deleteAria')}
-                  className="w-9 h-9 rounded-lg border border-red-500/30 text-red-600 hover:bg-red-500/10 flex items-center justify-center disabled:opacity-30 shrink-0">
-                  <MorphIcon icon={Trash2} className="w-4 h-4"  />
-                </button>
-              </div>
-            </div>
-          ))
+            ))}
+          </div>
         ) : tab === "profile" ? (
           // Profil o'z ustunlarini ichida aylantiradi (asosiy ilovadagidek) — balandlik shu yerda beriladi; aks holda
           // ustunlardagi overscroll-contain g'ildirakni "yutib", sahifa umuman aylanmasdi (owner 2026-10-23)

@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { confirmDialog } from "./lib/confirmDialog";
 // Platform detection + Capacitor/Tauri bridge
 // Web, Android (Capacitor), Windows (Tauri) — barcha platformalar uchun bir xil API.
@@ -131,6 +132,22 @@ export function applyPlatformClasses() {
   // vazifa doirasi bo'yicha maxsus moslash so'ralmagan).
   r.classList.toggle('platform-macos', isTauri() && isMac());
   r.classList.toggle('platform-windows', isTauri() && isWindowsOS());
+}
+
+// Owner 2026-11-09: "butun ilova qotib ishlayapti" — liquid-glass.css'dagi
+// backdrop-filter global qoidalari (.bg-card/.surface/.stat-card va h.k.)
+// BUTUN ilovaga qo'llanadi, lekin ko'p-karta/ro'yxatli zich sahifalarda
+// (Bosh sahifa — AdminDashboard, Profil — ProfilePage) bu o'nlab blur qatlami
+// yig'ilib web/Android/Windows'da UI'ni qotirib qo'yardi. iOS/macOS'da
+// WKWebView backdrop-filter'ni apparat darajasida tezlashtiradi — shu
+// sabab faqat O'SHA ikki platformada liquid saqlanadi (CSS: liquid-glass.css
+// "page-simple-surface" bloki), qolgan platformalarda shu ikki sahifa oddiy
+// (blur'siz) fonga qaytadi — TUGMALAR esa hamma joyda liquid bo'lib qoladi.
+export function usePageSimpleSurface() {
+  useEffect(() => {
+    document.documentElement.classList.add('page-simple-surface');
+    return () => { document.documentElement.classList.remove('page-simple-surface'); };
+  }, []);
 }
 
 // Sahifa nomini native title bar'ga o'rnatish (Tauri)

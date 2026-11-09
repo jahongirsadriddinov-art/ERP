@@ -38,7 +38,7 @@ import { useTranslation } from "react-i18next";
 import { API_BASE, parseSmetaFile, uploadChatMedia } from "./api";
 import { motion, AnimatePresence } from "motion/react";
 import { EquipmentDetails } from "./EquipmentExtras";
-import { saveOrShareBlob, openExternalUrl } from "./platform";
+import { saveOrShareBlob, openExternalUrl, usePageSimpleSurface } from "./platform";
 import { SkeletonList } from "./Skeleton";
 import { Avatar, ESignDocs, EscClose, LocationInput, ROLE_LABELS, RoleBadge, SendTransferModal, TransferRow, fmt, isAdmin, roleLabel, useBackupActions, type AppUser, type Project, type Role, type SmetaResult, type Transfer, ManagementModalShell } from "./App";
 
@@ -55,6 +55,7 @@ export function AdminDashboard({ currentUser, users, projects, transfers, setUse
     hasFeature: (key: string) => boolean;
   }) {
   const { t } = useTranslation();
+  usePageSimpleSurface();
   const [showAddUser, setShowAddUser] = useState(false);
   const [showSend, setShowSend] = useState(false);
   const [showAddObject, setShowAddObject] = useState(false);

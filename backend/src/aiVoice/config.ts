@@ -38,10 +38,13 @@ export const aiConfig = {
    * (2026-10-14): pilot Render FREE (0.1 CPU) da, Starter+ ga o'tilganda env bilan oshiriladi.
    */
   // Owner 2026-10-19: "kimdir ilovada AI bilan gaplashsa, boshqalar qo'ng'iroq qila olmayapti" — standart endi
-  // kalitlar soniga qarab (har Gemini kaliti ~3 ta parallel Live sessiya), 3..10. Env berilsa — o'sha.
+  // kalitlar soniga qarab (har Gemini kaliti ~3 ta parallel Live sessiya). Env berilsa — o'sha.
+  // Owner 2026-11-09: "boshliq akkountida javob kechikishi" — avvalgi standart 10 tagacha
+  // qotirib qo'yardi (12+ kalit ulangan bo'lsa ham). Endi 10'ga cheklanmaydi — faqat
+  // haqiqiy xavfsizlik chegarasi bo'lgan `int()`ning max=100 qiymati bilan cheklanadi.
   get liveMaxConcurrent() {
     const keys = new Set(`${process.env.GEMINI_API_KEYS || ''},${process.env.GEMINI_API_KEY || ''}`.split(',').map((k) => k.trim()).filter(Boolean)).size;
-    return int('AI_LIVE_MAX_CONCURRENT', Math.min(10, Math.max(3, keys * 3)), 1, 100);
+    return int('AI_LIVE_MAX_CONCURRENT', Math.max(3, keys * 3), 1, 100);
   },
   /** Telegram akkaunti bo'yicha bir vaqtdagi qo'ng'iroqlar (A1: rasmiy mijozlarda 1 ta). */
   get tgMaxConcurrent() { return int('AI_TG_MAX_CONCURRENT', 1, 1, 2); },

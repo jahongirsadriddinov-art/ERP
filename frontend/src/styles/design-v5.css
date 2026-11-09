@@ -359,16 +359,28 @@ select:not([class*=" h-"]):not([class^="h-"]) { min-height: var(--control-h-sm);
 .sheet-action--primary { color: var(--primary); background: color-mix(in oklab, var(--primary) 9%, transparent); border-color: color-mix(in oklab, var(--primary) 28%, transparent); }
 
 /* ══ Blur o'chirildi (owner 2026-10-23: "saytni aylanib chiq, keraksiz blurlarni o'chir") ══════════════
-   Shaffof + blur panellar endi to'liq rangli — orqa fon ko'rinmaydi, telefonlarda ham tezroq. */
-*, *::before, *::after { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
-.glass, .glass-btn, .ai-glass-panel, .nav-pill-desktop, .ios-bottom-bar, .dark .ios-bottom-bar { background: var(--card) !important; }
+   Shaffof + blur panellar endi to'liq rangli — orqa fon ko'rinmaydi, telefonlarda ham tezroq.
+   Owner 2026-11-09: faqat iOS/macOS ilovasida haqiqiy "Liquid Glass" qaytarilsin (WKWebView'da
+   backdrop-filter apparat darajasida tezlashtirilgan — bu yerdagi qotish xavfi yo'q), shu sabab
+   bu bo'lim endi `.platform-ios`/`.platform-macos` BO'LMAGAN joyda ishlaydi (web/Android/Windows
+   avvalgidek tez va flat qoladi). Qarang: liquid-glass.css. */
+html:not(.platform-ios):not(.platform-macos) *,
+html:not(.platform-ios):not(.platform-macos) *::before,
+html:not(.platform-ios):not(.platform-macos) *::after { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+html:not(.platform-ios):not(.platform-macos) .glass,
+html:not(.platform-ios):not(.platform-macos) .glass-btn,
+html:not(.platform-ios):not(.platform-macos) .ai-glass-panel,
+html:not(.platform-ios):not(.platform-macos) .nav-pill-desktop,
+html:not(.platform-ios):not(.platform-macos) .ios-bottom-bar,
+html.dark:not(.platform-ios):not(.platform-macos) .ios-bottom-bar { background: var(--card) !important; }
 .liquid-glass, .liquid-glass-dark { background: #0e121e !important; }
 .with-bg header, .with-bg [class*="glass-card"], .with-bg [class*="bg-card"], .with-bg [class*="surface"], .with-bg [class*="stat-card"] { background: var(--card) !important; }
 .with-bg [class*="bg-background"] { background: var(--background) !important; }
 [data-sonner-toaster] [data-sonner-toast].erp-toast { background: var(--card) !important; }
 .dark [data-sonner-toaster] [data-sonner-toast].erp-toast { background: var(--card) !important; }
 /* komponentlardagi "bg-card/70 backdrop-blur" kabi juftliklar — endi to'liq rangli (qoraytirish fonlari o'zgarmaydi) */
-[class*="backdrop-blur"][class*="bg-card"], [class*="backdrop-blur"][class*="bg-background"] { background-color: var(--card) !important; }
+html:not(.platform-ios):not(.platform-macos) [class*="backdrop-blur"][class*="bg-card"],
+html:not(.platform-ios):not(.platform-macos) [class*="backdrop-blur"][class*="bg-background"] { background-color: var(--card) !important; }
 .modal-backdrop { background-color: rgba(0, 0, 0, 0.55); }
 /* Sarlavha foni pastga (Jami chiqimlar ustiga) xira bo'lib tushmasin — panel bir xil rangda tursin (owner 2026-10-23) */
 .nav-blur-top::before { inset: 0 !important; background: var(--background) !important; }

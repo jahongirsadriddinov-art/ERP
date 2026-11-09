@@ -310,30 +310,42 @@ html.page-simple-surface:not(.platform-ios):not(.platform-macos) .glass-modal::b
 .platform-macos .bg-sidebar {
   background-color: color-mix(in srgb, var(--sidebar) 78%, transparent) !important;
 }
-/* Owner 2026-11-09: ".glass" (login karta, AI panel va h.k.) foni globals.css'da
-   @layer utilities ICHIDA — CSS Cascade Layers qoidasiga ko'ra har qanday
-   QATLAMSIZ (unlayered) oddiy qoida undan ustun turadi, shu sabab boshqa
-   fayldagi biror qatlamsiz qoida bu fonni bilmasdan bosib ketishi mumkin edi.
-   Shu yerda !important bilan to'g'ridan-to'g'ri majburlanadi — qatlam
-   tartibidan qat'i nazar g'alaba qiladi. */
-.platform-ios .glass,
-.platform-macos .glass,
-.platform-ios .glass-btn,
-.platform-macos .glass-btn,
-.platform-ios .ai-glass-panel,
-.platform-macos .ai-glass-panel {
-  background: color-mix(in srgb, var(--card) 78%, transparent) !important;
-  -webkit-backdrop-filter: var(--liquid-blur) !important;
-  backdrop-filter: var(--liquid-blur) !important;
-}
-/* Yon panel va nav — xuddi shu qatlam muammosidan himoya (yuqoridagi izoh) */
+/* Owner 2026-11-09 tuzatish (2-urinish): avval shu yerda ".glass"/".ios-bottom-bar"
+   uchun color-mix() asosidagi !important qoplamalar bor edi — "qatlam muammosi"dan
+   himoya deb o'ylangan edi. ".glass" uchun bu chindan ortiqcha ekan (haqiqiy sabab
+   faqat design-v5.css'dagi keng qamrovli backdrop-filter:none!important kaliti edi,
+   yuqorida .platform-ios/.platform-macos'dan tashqari qilib tuzatilgan) — shu
+   qoplama olib tashlandi, globals.css'dagi .glass o'zi to'g'ri ishlaydi.
+
+   LEKIN ".ios-bottom-bar" uchun bu YETARLI emas ekan: design-v5.css'da (@layer'siz,
+   oddiy qoida) IKKINCHI, mustaqil ".ios-bottom-bar"/".dark .ios-bottom-bar" qoidasi
+   bor (design-v5.css:213-234) — u o'zining "v5" fonini (color-mix(var(--card))
+   asosida, mavzuga qarab o'zgaruvchi, iliq gradient/brightness'siz) beradi.
+   globals.css'dagi ASL, doim-qora Apple Watch uslubidagi shisha (rgba(10,14,26,.70)
+   gradient + blur(28px) brightness(1.06), @layer utilities ICHIDA) CSS Cascade
+   Layers qoidasiga ko'ra bu QATLAMSIZ v5 qoidadan pastda qoladi (muhimlik
+   belgilanmagan bo'lsa, qatlamsiz har doim g'alaba qiladi) — demak iOS/macOS'da
+   ham HAR DOIM v5'ning och, mavzuga bog'liq ko'rinishi chiqadi, native Watch
+   dizayni hech qachon ko'rinmaydi. Shu sabab pastda ASL globals.css qiymatlari
+   (color-mix emas, oddiy rgba — Lightning CSS fallback shubhasidan xoli) bilan
+   !important orqali majburlanadi. */
 .platform-ios .ios-bottom-bar,
-.platform-macos .ios-bottom-bar,
-.platform-ios .nav-pill-desktop,
-.platform-macos .nav-pill-desktop {
-  background: color-mix(in srgb, var(--card) 80%, transparent) !important;
-  -webkit-backdrop-filter: var(--liquid-blur) !important;
-  backdrop-filter: var(--liquid-blur) !important;
+.platform-macos .ios-bottom-bar {
+  background:
+    linear-gradient(180deg,
+      rgba(255,255,255,0.16) 0%,
+      rgba(255,255,255,0.04) 40%,
+      rgba(0,0,0,0.08) 100%
+    ),
+    rgba(10,14,26,0.70) !important;
+  border: 1px solid rgba(255,255,255,0.20) !important;
+  box-shadow:
+    0 24px 48px rgba(0,0,0,0.45),
+    0 6px 18px rgba(0,0,0,0.30),
+    inset 0 1.5px 0 rgba(255,255,255,0.50),
+    inset 0 -1px 6px rgba(255,255,255,0.06) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(1.8) brightness(1.06) !important;
+  backdrop-filter: blur(28px) saturate(1.8) brightness(1.06) !important;
 }
 /* Tepadagi sarlavha orti (.nav-blur-top::before) — owner 2026-10-19'da atayin
    qattiq (blur'siz) qilingan edi ("xunuk ko'rinardi"), lekin shu qaror FAQAT

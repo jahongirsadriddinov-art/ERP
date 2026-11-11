@@ -67,7 +67,12 @@ export function AppDownloadCards({ compact, title, loadingFallback = true }: { c
   return (
     <div className={compact ? "space-y-2" : "space-y-3"}>
       {title && <p className="text-sm font-semibold">{title}</p>}
-      <div className={`grid ${items.length >= 3 ? "sm:grid-cols-3" : items.length > 1 ? "sm:grid-cols-2" : ""} gap-3`}>
+      {/* Owner 2026-11-11: compact (Profil sahifasi) tor ustunda joylashadi —
+          "sm:" o'lchov butun EKRAN kengligiga qarab ishlaydi, konteyner
+          kengligiga emas, shuning uchun tor ustunda ham 3 ustunga
+          siqilib, matnlar bo'g'inlab yozilib qolardi ("Telefon/plan" /
+          "shet"). Compact rejimda doim 1 ustun — karta to'liq kenglikda. */}
+      <div className={`grid ${compact ? "" : items.length >= 3 ? "sm:grid-cols-3" : items.length > 1 ? "sm:grid-cols-2" : ""} gap-3`}>
         {items.map(item => (
           <button key={item.label} onClick={() => openExternalUrl(item.url)}
             className={`surface rounded-2xl flex items-center gap-3 text-left hover:-translate-y-0.5 liquid-transition ${compact ? "p-3" : "p-4"}`}>

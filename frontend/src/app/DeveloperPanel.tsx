@@ -397,24 +397,30 @@ export default function DeveloperPanel({ currentUser, onLogout, profileEl }: { c
         </div>
       )}
 
-      {/* Tablar qatori (owner 2026-10-23: orqasidagi ortiqcha fon/chegara olib tashlandi) */}
+      {/* Tablar qatori (owner 2026-10-23: orqasidagi ortiqcha fon/chegara olib tashlandi).
+          Owner 2026-11-11: 16 ta tab bitta qatorga sig'maydi — "flex-1" har bir
+          tugmani teng bo'lishga majburlab siqib qo'yardi va scrollbar-hide
+          tufayli chapga/o'ngga yana tugma borligi umuman bilinmasdi ("tartibsiz"
+          ko'rinardi). Endi tugmalar o'z tabiiy kengligida (flex-shrink-0) va
+          qirralarda xiralashish (mask) orqali "bu yerda yana bor" ko'rinadi. */}
       <div className="mx-4 md:mx-6 xl:mx-auto xl:max-w-7xl xl:w-[calc(100%-3rem)] mt-3 flex items-center gap-2 flex-shrink-0 sticky top-[3.75rem] md:static z-10 bg-background md:bg-transparent py-1 md:py-0">
-        <div className="flex-1 min-w-0 flex gap-1 p-1 rounded-full bg-card overflow-x-auto scrollbar-hide">
-          <button onClick={() => setTab("subscriptions")} className={`relative py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "subscriptions" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
+        <div className="flex-1 min-w-0 flex gap-1 p-1 rounded-full bg-card overflow-x-auto scrollbar-hide"
+          style={{ WebkitMaskImage: "linear-gradient(90deg, transparent 0, #000 14px, #000 calc(100% - 14px), transparent 100%)", maskImage: "linear-gradient(90deg, transparent 0, #000 14px, #000 calc(100% - 14px), transparent 100%)" }}>
+          <button onClick={() => setTab("subscriptions")} className={`relative py-2 rounded-full text-[13px] font-semibold liquid-transition flex-shrink-0 whitespace-nowrap px-3.5 ${tab === "subscriptions" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
             {t('devPanel.tabs.subscriptions')} {pendingSubsCount > 0 && <span className="ml-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full badge-pulse">{pendingSubsCount}</span>}
           </button>
-          <button onClick={() => setTab("firms")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "firms" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>{t('devPanel.tabs.firms', { count: companies.length })}</button>
-          <button onClick={() => setTab("users")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "users" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>{t('devPanel.tabs.users')}</button>
-          <button onClick={() => setTab("messages")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "messages" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
+          <button onClick={() => setTab("firms")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-shrink-0 whitespace-nowrap px-3.5 ${tab === "firms" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>{t('devPanel.tabs.firms', { count: companies.length })}</button>
+          <button onClick={() => setTab("users")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-shrink-0 whitespace-nowrap px-3.5 ${tab === "users" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>{t('devPanel.tabs.users')}</button>
+          <button onClick={() => setTab("messages")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-shrink-0 whitespace-nowrap px-3.5 ${tab === "messages" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
             {t('devPanel.tabs.messages')}
           </button>
-          <button onClick={() => setTab("plans")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "plans" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
+          <button onClick={() => setTab("plans")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-shrink-0 whitespace-nowrap px-3.5 ${tab === "plans" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
             {t('devPanel.tabs.plans')}
           </button>
-          <button onClick={() => setTab("promocodes")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "promocodes" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
+          <button onClick={() => setTab("promocodes")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-shrink-0 whitespace-nowrap px-3.5 ${tab === "promocodes" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
             {t('devPanel.tabs.promocodes')}
           </button>
-          <button onClick={() => setTab("announcements")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "announcements" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
+          <button onClick={() => setTab("announcements")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-shrink-0 whitespace-nowrap px-3.5 ${tab === "announcements" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
             {t('devPanel.tabs.announcements')}
           </button>
           {/* AI platforma guruhi — ovozli AI, bot ko'rinishi, AI ofis va narx
@@ -422,37 +428,37 @@ export default function DeveloperPanel({ currentUser, onLogout, profileEl }: { c
               (owner: "bo'limlar joylashuvi ham tartibsiz" — avval "AI ofis"
               announcements bilan aiVoice orasiga tiqilib, "Narx manbalari"
               esa Profil'dan keyin alohida yotardi). */}
-          <button onClick={() => setTab("aiVoice")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "aiVoice" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
+          <button onClick={() => setTab("aiVoice")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-shrink-0 whitespace-nowrap px-3.5 ${tab === "aiVoice" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
             {t('aiVoice.platform.title')}
           </button>
-          <button onClick={() => setTab("botUi")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "botUi" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
+          <button onClick={() => setTab("botUi")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-shrink-0 whitespace-nowrap px-3.5 ${tab === "botUi" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
             {t('devPanel.tabs.botUi')}
           </button>
-          <button onClick={() => setTab("office")} data-testid="dev-tab-office" className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "office" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
+          <button onClick={() => setTab("office")} data-testid="dev-tab-office" className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-shrink-0 whitespace-nowrap px-3.5 ${tab === "office" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
             <PremiumEmoji code="1f3e2" char="🏢" className="w-3.5 h-3.5 inline-block align-[-2px]" /> {t('devPanel.tabs.office', { defaultValue: 'AI ofis' })}
           </button>
-          <button onClick={() => setTab("prices")} data-testid="dev-tab-prices" className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "prices" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
+          <button onClick={() => setTab("prices")} data-testid="dev-tab-prices" className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-shrink-0 whitespace-nowrap px-3.5 ${tab === "prices" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
             <PremiumEmoji code="1f4b0" char="💰" className="w-3.5 h-3.5 inline-block align-[-2px]" /> {t('devPanel.tabs.prices', { defaultValue: 'Narx manbalari' })}
           </button>
           {/* Infra/monitoring guruhi — server, xatolar, zaxira, qurilmalar
               reliz'lari birga (avval "appBuilds"/"backup" orasiga "Profil"
               kirib, "errors" esa butunlay oxirda, "Narx manbalari"dan ham
               keyin yotardi). */}
-          <button onClick={() => setTab("server")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "server" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
+          <button onClick={() => setTab("server")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-shrink-0 whitespace-nowrap px-3.5 ${tab === "server" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
             {t('devPanel.tabs.server')}
           </button>
-          <button onClick={() => setTab("errors")} data-testid="dev-tab-errors" className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "errors" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
+          <button onClick={() => setTab("errors")} data-testid="dev-tab-errors" className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-shrink-0 whitespace-nowrap px-3.5 ${tab === "errors" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
             {t('devPanel.tabs.errors')}
           </button>
-          <button onClick={() => setTab("backup")} data-testid="dev-tab-backup" className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "backup" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
+          <button onClick={() => setTab("backup")} data-testid="dev-tab-backup" className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-shrink-0 whitespace-nowrap px-3.5 ${tab === "backup" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
             {t('devPanel.tabs.backup')}
           </button>
-          <button onClick={() => setTab("appBuilds")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "appBuilds" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
+          <button onClick={() => setTab("appBuilds")} className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-shrink-0 whitespace-nowrap px-3.5 ${tab === "appBuilds" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
             <PremiumEmoji code="1f4f2" char="📲" className="w-3.5 h-3.5 inline-block align-[-2px]" /> Ilova
           </button>
           {/* Profil — shaxsiy/sayt sozlamalari, ro'yxat oxirida (sozlamalar
               odatda eng oxirida bo'ladi, boshqa biznes tablar bilan aralashmaydi). */}
-          <button onClick={() => setTab("profile")} data-testid="dev-tab-profile" className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-1 whitespace-nowrap px-3.5 ${tab === "profile" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
+          <button onClick={() => setTab("profile")} data-testid="dev-tab-profile" className={`py-2 rounded-full text-[13px] font-semibold liquid-transition flex-shrink-0 whitespace-nowrap px-3.5 ${tab === "profile" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}>
             <PremiumEmoji code="1f464" char="👤" className="w-3.5 h-3.5 inline-block align-[-2px]" /> {t('devPanel.tabs.profile', { defaultValue: 'Profil' })}
           </button>
         </div>

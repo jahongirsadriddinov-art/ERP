@@ -31,7 +31,6 @@ import currencyRoutes from './routes/currency';
 import tickerRoutes from './routes/ticker';
 import dashboardRoutes from './routes/dashboard';
 import clientErrorRoutes from './routes/clientErrors';
-import avatarsRoutes from './routes/avatars';
 import backupRoutes from './routes/backup';
 import devBackupRoutes from './routes/devBackup';
 import { startOffsiteBackupScheduler } from './services/offsiteBackup';
@@ -215,7 +214,13 @@ app.use('/api', idempotency());
 // ovoz darhol, tarmoqqa chiqmasdan ko'rinadi.
 // helmet standarti CORP "same-origin" — frontend (erp-firma.uz / tauri.localhost / Android) boshqa origin'da,
 // shu sabab rasm/video/ovoz BLOKLANARDI. Faqat fayl yo'llari uchun "cross-origin" (API javoblari himoyada qoladi).
-app.use(['/uploads', '/api/files'], (_req, res, next) => { res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin'); next(); });
+app.use(['/uploads', '/api/files', '/api/avatars/builtin'], (_req, res, next) => { res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin'); next(); });
+// Tayyor avatar tanlash uchun litsenziyali to'plam: Microsoft Fluent Emoji 3D (MIT) —
+// xuddi shu fayllar frontend/public/avatars'da avtomatik tayinlash uchun ishlatiladi
+// (qarang: frontend/src/app/avatars/manifest.ts, NOTICE.txt). Backend'dan ham xizmat
+// qilinishi SHART — profil avatar URL'i faqat Cloudinary yoki shu backend hostiga
+// ruxsat etiladi (users.ts: isAllowedAvatarUrl), frontend domeniga emas.
+app.use('/api/avatars/builtin', express.static('public/avatars', { maxAge: '365d', immutable: true }));
 // XAVFSIZLIK (audit 2026-10-19): yuklangan fayllar — nosniff; media/pdf'dan boshqasi brauzerda OCHILMAYDI (html → XSS bo'lardi)
 const INLINE_UPLOAD = /\.(png|jpe?g|gif|webp|heic|heif|avif|mp4|webm|mov|m4v|ogg|oga|opus|mp3|m4a|wav|aac|pdf)$/i;
 app.use('/uploads', express.static('uploads', {
@@ -313,7 +318,6 @@ app.use('/api/geocode',         requireAuth, geocodeRoutes);
 app.use('/api/currency',        optionalAuth, currencyRoutes);
 app.use('/api/ticker',          optionalAuth, tickerRoutes); // sarlavha satri: kurs, ob-havo, yangiliklar
 app.use('/api/files',           filesRoutes); // Cloudinary proksi — auth shart emas (bloklangan tarmoqlar uchun)
-app.use('/api/avatars',         avatarsRoutes); // DiceBear (Avataaars) tayyor avatar generatsiyasi — auth shart emas (<img> tegi uchun)
 app.use('/api/status',          statusRoutes); // sayt yoqiq/o'chiqligi — login ekranidan OLDIN ham so'raladi, auth shart emas
 app.use('/api/equipment',       requireAuth, blockDeveloper, equipmentRoutes);
 app.use('/api/safety',          requireAuth, blockDeveloper, safetyRoutes);

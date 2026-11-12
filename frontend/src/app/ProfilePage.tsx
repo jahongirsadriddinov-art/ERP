@@ -19,6 +19,7 @@ import ChevronDown from "@hugeicons/core-free-icons/ArrowDown01Icon";
 import ChevronUp from "@hugeicons/core-free-icons/ArrowUp01Icon";
 import LogOut from "@hugeicons/core-free-icons/Logout01Icon";
 import Camera from "@hugeicons/core-free-icons/Camera01Icon";
+import WandSparkles from "@hugeicons/core-free-icons/WandSparklesIcon";
 import TextFont from "@hugeicons/core-free-icons/TextFontIcon";
 import { FONTS, fontById, getAppFont, applyAppFont, ensureFont, FONT_SCALES, getFontScale, applyFontScale, FONT_WEIGHTS, getFontWeight, applyFontWeight, type FontWeightMode } from "./lib/fonts";
 import Edit from "@hugeicons/core-free-icons/Edit02Icon";
@@ -61,6 +62,7 @@ import { amountToInput, fmtNumber, parseMoney } from "./lib/money";
 import AiPhone from "@hugeicons/core-free-icons/AiPhone01Icon";
 import AiVoiceIcon from "@hugeicons/core-free-icons/AiVoiceIcon";
 import { PremiumEmoji } from "./components/PremiumEmoji";
+import AvatarPicker from "./AvatarPicker";
 // AI ovozli yordamchi sozlamalari — alohida chunk (faqat panel ochilganda yuklanadi)
 const AiSettingsPanel = lazy(() => import("./aiVoice/settings/AiSettingsPanel"));
 const MyAiPrefsPanel = lazy(() => import("./aiVoice/settings/MyAiPrefsPanel"));
@@ -432,6 +434,21 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
       toast.success(t('profile.photoSaved', "Profil rasmi saqlandi"));
     } catch (err) { toast.error(err instanceof Error && err.message ? err.message : t('profile.imageUploadError')); }
     finally { e.target.value = ""; }
+  };
+  const [showAvatarPicker, setShowAvatarPicker] = useState(false);
+  const selectReadyAvatar = async (url: string) => {
+    onUpdateAvatar(url); // darhol ko'rinsin
+    try {
+      const token = localStorage.getItem('token') || '';
+      const res = await fetch(`${API_BASE}/api/users/${currentUser.id}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ avatar: url }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || t('profile.serverError'));
+      onUpdateAvatar(url);
+      toast.success(t('profile.photoSaved', "Profil rasmi saqlandi"));
+    } catch (err) { toast.error(err instanceof Error && err.message ? err.message : t('profile.imageUploadError')); }
   };
   const handleLogoFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return;
@@ -1185,6 +1202,9 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
             <button onClick={() => fileRef.current?.click()} aria-label={t('profile.changePhotoAria')} className="absolute bottom-0 right-0 w-7 h-7 bg-primary text-white rounded-full flex items-center justify-center hover:bg-primary/90 border-2 border-white shadow-lg liquid-transition">
               <MorphIcon icon={Camera} className="w-3.5 h-3.5" />
             </button>
+            <button onClick={() => setShowAvatarPicker(true)} aria-label={t('profile.pickReadyAvatarAria', { defaultValue: 'Tayyor avatar tanlash' })} className="absolute bottom-0 left-0 w-7 h-7 bg-card text-foreground rounded-full flex items-center justify-center hover:bg-muted border-2 border-white shadow-lg liquid-transition">
+              <MorphIcon icon={WandSparkles} className="w-3.5 h-3.5" />
+            </button>
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile}/>
           </div>
           {isEditing ? (
@@ -1405,6 +1425,7 @@ export default function ProfilePage({ currentUser, projects, onUpdateAvatar, onL
 
         </div>
       </div>
+      {showAvatarPicker && <AvatarPicker onClose={() => setShowAvatarPicker(false)} onSelect={selectReadyAvatar} />}
     </div>
   );
 }

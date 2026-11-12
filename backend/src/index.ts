@@ -31,6 +31,7 @@ import currencyRoutes from './routes/currency';
 import tickerRoutes from './routes/ticker';
 import dashboardRoutes from './routes/dashboard';
 import clientErrorRoutes from './routes/clientErrors';
+import avatarsRoutes from './routes/avatars';
 import backupRoutes from './routes/backup';
 import devBackupRoutes from './routes/devBackup';
 import { startOffsiteBackupScheduler } from './services/offsiteBackup';
@@ -312,6 +313,7 @@ app.use('/api/geocode',         requireAuth, geocodeRoutes);
 app.use('/api/currency',        optionalAuth, currencyRoutes);
 app.use('/api/ticker',          optionalAuth, tickerRoutes); // sarlavha satri: kurs, ob-havo, yangiliklar
 app.use('/api/files',           filesRoutes); // Cloudinary proksi — auth shart emas (bloklangan tarmoqlar uchun)
+app.use('/api/avatars',         avatarsRoutes); // DiceBear (Avataaars) tayyor avatar generatsiyasi — auth shart emas (<img> tegi uchun)
 app.use('/api/status',          statusRoutes); // sayt yoqiq/o'chiqligi — login ekranidan OLDIN ham so'raladi, auth shart emas
 app.use('/api/equipment',       requireAuth, blockDeveloper, equipmentRoutes);
 app.use('/api/safety',          requireAuth, blockDeveloper, safetyRoutes);

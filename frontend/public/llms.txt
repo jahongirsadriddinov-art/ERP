@@ -26,8 +26,44 @@ QurilishERP is a construction-company ERP (enterprise resource planning) platfor
 
 ## Kimlar uchun (Who it's for)
 
-Qurilish firmalari, pudratchilar, prorablar va qurilish loyihalarini boshqaruvchi tashkilotlar (Uzbekistan).
-Construction companies, contractors, site managers (prorab), and organizations managing construction projects in Uzbekistan.
+- Qurilish firmalari — bir nechta obyektni bir vaqtda boshqaruvchi tashkilotlar
+- Pudratchi tashkilotlar — subpudrat ishlari va hisob-kitobni tartibga solish
+- Remont-ta'mirlash jamoalari — kichik jamoalar uchun sodda, tezkor boshqaruv
+- Loyiha menejerlari — bir nechta obyektni masofadan nazorat qilish
+
+Construction companies, contractors, renovation/repair teams, and project managers who oversee multiple construction sites remotely (Uzbekistan market).
+
+## Qanday ishlaydi (How it works)
+
+1. Ro'yxatdan o'ting — firma ma'lumotlarini kiriting, kredit karta shart emas, bir necha daqiqa vaqt oladi.
+2. Jamoangizni qo'shing — xodimlaringizni taklif qiling, har biriga o'z roliga mos huquq beriladi (direktor, o'rinbosar, prorab, brigadir, ishchi).
+3. Boshqarishni boshlang — loyiha, moliya va xodimlarni bir joydan: veb, Android yoki Telegram orqali nazorat qiling.
+
+## Ko'p beriladigan savollar (FAQ)
+
+Q: Ma'lumotlarim xavfsizmi?
+A: Ha. Har bir firmaning ma'lumotlari bir-biridan to'liq izolyatsiyalangan — boshqa firma xodimlari sizning loyiha, moliya yoki xodimlaringizni hech qachon ko'ra olmaydi.
+
+Q: Necha kishi ishlata oladi?
+A: Direktor, o'rinbosar, prorab, brigadir va oddiy ishchilar — barcha xodimlaringizni tizimga qo'shishingiz mumkin, har biri o'z roliga mos huquqlarga ega bo'ladi.
+
+Q: Telegram bot orqali ham ishlaydimi?
+A: Ha — xodimlar ishga kelish/ketishni, joylashuvni va bildirishnomalarni Telegram bot orqali ham boshqarishlari mumkin, sayt yoki ilovaga kirmasdan ham.
+
+Q: Qanday boshlashim mumkin?
+A: "Bepul boshlash" tugmasini bosib, firmangizni bir necha daqiqada ro'yxatdan o'tkazasiz — birinchi oy bepul.
+
+Q: Qurilish firmasini elektronlashtirish (raqamlashtirish) nima beradi?
+A: Daftar, Excel va Telegram guruhlardagi tarqoq hisob bitta tizimga yig'iladi: har bir obyekt bo'yicha xarajat, material, ishchilar davomati va pul harakati real vaqtda ko'rinadi. Direktor ofisda bo'lmasa ham telefondan nazorat qiladi, yo'qotish va o'g'irlik kamayadi.
+
+Q: Smeta, ombor va materiallar hisobini yuritsa bo'ladimi?
+A: Ha. Smetani Excel'dan yuklaysiz, tizim kerakli materiallarni hisoblaydi; har bir obyektga qancha material yuborilgani, qancha qolgani va qancha kerakligi ko'rinadi. Chiqim va kirimlar tasdiqlash bilan yuritiladi.
+
+Q: 1C yoki Excel o'rniga ishlatsa bo'ladimi?
+A: Ha — QurilishERP aynan qurilish firmalari uchun qilingan: prorab va ishchilar ham telefondan ishlata oladi, o'rnatish va dasturchi kerak emas. Kerak bo'lsa ma'lumotlarni 1C uchun eksport qilish mumkin.
+
+Q: Telefonda ishlaydimi?
+A: Ha. Saytda (erp-firma.uz), Android ilovada, Windows dasturida va Telegram botda ishlaydi — o'zbek (lotin va kirill) va rus tillarida.
 
 ## Sahifalar (Pages)
 

@@ -162,6 +162,47 @@
       }
       </script>
 
+      <!-- FAQPage: LandingPage.tsx bu sxemani FAQ bo'limi ko'rinayotganda JS orqali
+           ham qo'shadi (matn bilan sinxron) — lekin GoogleBot'dan boshqa ko'p AI
+           botlar (GPTBot, ClaudeBot, PerplexityBot, CCBot va h.k.) JS'ni bajarmaydi,
+           ular faqat shu statik HTML'ni o'qiydi. Shu sababli bir xil mazmun bu yerda
+           ham (duplikat, yashirin/soxta emas — cloaking emas) qo'shildi, AI/qidiruv
+           botlar JS'siz ham savol-javoblarni to'g'ridan-to'g'ri topsin uchun. -->
+      <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          { "@type": "Question", "name": "Ma'lumotlarim xavfsizmi?", "acceptedAnswer": { "@type": "Answer", "text": "Ha. Har bir firmaning ma'lumotlari bir-biridan to'liq izolyatsiyalangan — boshqa firma xodimlari sizning loyiha, moliya yoki xodimlaringizni hech qachon ko'ra olmaydi." } },
+          { "@type": "Question", "name": "Necha kishi ishlata oladi?", "acceptedAnswer": { "@type": "Answer", "text": "Direktor, o'rinbosar, prorab, brigadir va oddiy ishchilar — barcha xodimlaringizni tizimga qo'shishingiz mumkin, har biri o'z roliga mos huquqlarga ega bo'ladi." } },
+          { "@type": "Question", "name": "Telegram bot orqali ham ishlaydimi?", "acceptedAnswer": { "@type": "Answer", "text": "Ha — xodimlar ishga kelish/ketishni, joylashuvni va bildirishnomalarni Telegram bot orqali ham boshqarishlari mumkin, sayt yoki ilovaga kirmasdan ham." } },
+          { "@type": "Question", "name": "Qanday boshlashim mumkin?", "acceptedAnswer": { "@type": "Answer", "text": "\"Bepul boshlash\" tugmasini bosib, firmangizni bir necha daqiqada ro'yxatdan o'tkazasiz — birinchi oy bepul." } },
+          { "@type": "Question", "name": "Qurilish firmasini elektronlashtirish (raqamlashtirish) nima beradi?", "acceptedAnswer": { "@type": "Answer", "text": "Daftar, Excel va Telegram guruhlardagi tarqoq hisob bitta tizimga yig'iladi: har bir obyekt bo'yicha xarajat, material, ishchilar davomati va pul harakati real vaqtda ko'rinadi. Direktor ofisda bo'lmasa ham telefondan nazorat qiladi, yo'qotish va o'g'irlik kamayadi." } },
+          { "@type": "Question", "name": "Smeta, ombor va materiallar hisobini yuritsa bo'ladimi?", "acceptedAnswer": { "@type": "Answer", "text": "Ha. Smetani Excel'dan yuklaysiz, tizim kerakli materiallarni hisoblaydi; har bir obyektga qancha material yuborilgani, qancha qolgani va qancha kerakligi ko'rinadi. Chiqim va kirimlar tasdiqlash bilan yuritiladi." } },
+          { "@type": "Question", "name": "1C yoki Excel o'rniga ishlatsa bo'ladimi?", "acceptedAnswer": { "@type": "Answer", "text": "Ha — QurilishERP aynan qurilish firmalari uchun qilingan: prorab va ishchilar ham telefondan ishlata oladi, o'rnatish va dasturchi kerak emas. Kerak bo'lsa ma'lumotlarni 1C uchun eksport qilish mumkin." } },
+          { "@type": "Question", "name": "Telefonda ishlaydimi?", "acceptedAnswer": { "@type": "Answer", "text": "Ha. Saytda (erp-firma.uz), Android ilovada, Windows dasturida va Telegram botda ishlaydi — o'zbek (lotin va kirill) va rus tillarida." } }
+        ]
+      }
+      </script>
+
+      <!-- SiteNavigationElement: saytning barcha bo'lim-sahifalarini bitta joyda
+           ro'yxatlaydi — bot/AI JS'siz ham qaysi sahifalar borligini shu yerdan
+           bilib oladi (sitemap.xml'ga qo'shimcha, chunki bu HTML'ning o'zida). -->
+      <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "ItemList",
+        "name": "QurilishERP sahifalari",
+        "itemListElement": [
+          { "@type": "SiteNavigationElement", "position": 1, "name": "Bosh sahifa", "url": "https://erp-firma.uz/" },
+          { "@type": "SiteNavigationElement", "position": 2, "name": "Xususiyatlar", "url": "https://erp-firma.uz/xususiyatlar" },
+          { "@type": "SiteNavigationElement", "position": 3, "name": "Qanday ishlaydi", "url": "https://erp-firma.uz/qanday-ishlaydi" },
+          { "@type": "SiteNavigationElement", "position": 4, "name": "Kimlar uchun", "url": "https://erp-firma.uz/kimlar-uchun" },
+          { "@type": "SiteNavigationElement", "position": 5, "name": "Savollar", "url": "https://erp-firma.uz/savollar" }
+        ]
+      }
+      </script>
+
       <!-- Fonts — preconnect + async (render-blocking emas) -->
       <link rel="preconnect" href="https://fonts.googleapis.com" />
       <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
